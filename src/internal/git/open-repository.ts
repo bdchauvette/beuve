@@ -10,6 +10,7 @@ import type { GitError } from './git-error.ts';
 import { isVersionAtLeast } from './is-version-at-least.ts';
 import { parseGitVersion } from './parse-git-version.ts';
 import type { GitVersion } from './parse-git-version.ts';
+import { execGit } from './exec-git.ts';
 import { runGit } from './run-git.ts';
 
 /** The absolute top-level directory of a non-bare repository's main worktree, as git reports it. */
@@ -21,6 +22,17 @@ export interface GitRepository {
   readonly version: GitVersion;
   /** Runs git in `root` with the hardening and limits this repository was opened with. */
   readonly run: (args: readonly string[]) => Promise<Result<string, GitError>>;
+  /** Like `run`, with `input` on stdin and raw stdout, for byte-exact output such as blobs. */
+  readonly exec: (
+    args: readonly string[],
+    options: GitExecOptions,
+  ) => Promise<Result<Buffer, GitError>>;
+}
+
+export interface GitExecOptions {
+  readonly input?: string;
+  /** Overrides the repository's output cap for this call. */
+  readonly maxBufferBytes?: number;
 }
 
 export interface OpenRepositoryOptions {
@@ -69,5 +81,7 @@ export async function openRepository(
     root,
     version,
     run: async (args): Promise<Result<string, GitError>> => runIn(root, args),
+    exec: async (args, execOptions): Promise<Result<Buffer, GitError>> =>
+      execGit({ ...options, ...execOptions, cwd: root, args }),
   });
 }

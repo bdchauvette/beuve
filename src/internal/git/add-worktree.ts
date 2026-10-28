@@ -12,6 +12,7 @@ import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import type { Worktree } from './parse-worktree-list.ts';
 import { planWorktreePath } from './plan-worktree-path.ts';
+import { pruneWorktrees } from './prune-worktrees.ts';
 
 export interface AddWorktreeRequest {
   /** Absolute directory that holds review worktrees; created if missing. */
@@ -22,7 +23,7 @@ export interface AddWorktreeRequest {
 /**
  * Checks `commit` out as a detached worktree at its deterministic path under `root` (see
  * `planWorktreePath`). Idempotent: an existing worktree at that path on that commit is returned as
- * is. Hooks don't run (`core.hooksPath` is disabled for every command).
+ * is; a registered worktree whose directory has gone is pruned and checked out again. Hooks don't run (`core.hooksPath` is disabled for every command).
  */
 export async function addWorktree(
   repository: GitRepository,
@@ -41,7 +42,12 @@ export async function addWorktree(
     return existing;
   }
   const found = existing.value.find((worktree) => worktree.path === target.value);
-  if (found !== undefined) {
+  if (found?.prunable !== undefined) {
+    const pruned = await pruneWorktrees(repository);
+    if (!pruned.ok) {
+      return pruned;
+    }
+  } else if (found !== undefined) {
     return found.head === request.commit
       ? ok(found)
       : err({

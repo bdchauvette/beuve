@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -70,6 +70,22 @@ describe('addWorktree', () => {
       ok: false,
       error: { kind: 'worktree-conflict', path: added.value.path },
     });
+  });
+
+  it('checks a worktree out again when its directory was deleted behind git', async () => {
+    repo.write('a.txt', 'one\n');
+    const commit = repo.commit('one');
+    const root = repo.scratch();
+    const added = await addWorktree(git, { root, commit });
+    if (!added.ok) {
+      throw new Error(added.error.kind);
+    }
+    rmSync(added.value.path, { recursive: true, force: true });
+    await expect(addWorktree(git, { root, commit })).resolves.toMatchObject({
+      ok: true,
+      value: { path: added.value.path, head: commit },
+    });
+    expect(readFileSync(path.join(added.value.path, 'a.txt'), 'utf8')).toBe('one\n');
   });
 
   it('requires an absolute root', async () => {
