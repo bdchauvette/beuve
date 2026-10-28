@@ -27,3 +27,4 @@ Template: [0000-template.md](0000-template.md)
 | [0019](0019-review-model-port-and-claude-code-cli-adapter.md) | Review model port and Claude Code CLI adapter                       | Accepted |
 | [0020](0020-session-head-worktrees.md)                        | Session head checkouts in beuve-owned worktrees                     | Accepted |
 | [0021](0021-impactgate-and-lsp-wiring.md)                     | Wiring ImpactGate and language servers into main                    | Accepted |
+| [0022](0022-opt-in-preliminary-review-via-chat-command.md)    | Opt-in preliminary review, run from a chat command                  | Accepted |
