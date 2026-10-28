@@ -24,5 +24,6 @@ Template: [0000-template.md](0000-template.md)
 | [0016](0016-in-house-lsp-client-read-only.md)                 | In-house read-only LSP client                                       | Accepted |
 | [0017](0017-language-server-discovery-trust-and-lifecycle.md) | Language server discovery, trust and lifecycle                      | Accepted |
 | [0018](0018-pierre-diffs-and-trees-integration.md)            | @pierre/diffs and @pierre/trees integration                         | Accepted |
+| [0019](0019-review-model-port-and-claude-code-cli-adapter.md) | Review model port and Claude Code CLI adapter                       | Accepted |
 | [0020](0020-session-head-worktrees.md)                        | Session head checkouts in beuve-owned worktrees                     | Accepted |
 | [0021](0021-impactgate-and-lsp-wiring.md)                     | Wiring ImpactGate and language servers into main                    | Accepted |

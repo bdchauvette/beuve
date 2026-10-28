@@ -1,0 +1,118 @@
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
+
+/**
+ * Writes a scripted stand-in for the `claude` CLI (plain JavaScript, run with `process.execPath`)
+ * into `directory` and returns its path. It speaks the stream-json shapes of the real capture in
+ * `claude-code-stream-fixture.ts`. Its first argument picks the behaviour, the second is an
+ * optional file for its own and a child's pid; Claude Code's argv follows.
+ * - `echo`: succeeds with `{ args, stdin, cwd, envKeys }` as structured output.
+ * - `text-result`: succeeds with the JSON only in `result`, no `structured_output`.
+ * - `garbage`: prints lines that aren't JSON and exits 0.
+ * - `mismatch`: succeeds with structured output that matches no schema.
+ * - `fail`: writes to stderr and exits 2.
+ * - `not-logged-in`: an error result asking to `/login`, exit 1.
+ * - `rate-limited`: a rejected rate-limit event and a 429 error result, exit 1.
+ * - `budget`: an `error_max_budget_usd` result, exit 1.
+ * - `hang`: starts a child that also hangs, records both pids, and never exits.
+ * - `stubborn`: like `hang`, but ignores SIGTERM.
+ * - `flood`: writes megabytes of `stream_event` lines.
+ */
+export function writeFakeClaude(directory: string): string {
+  const file = path.join(directory, 'fake-claude.mjs');
+  writeFileSync(file, source);
+  return file;
+}
+
+const source = String.raw`
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+
+const [mode, pidFile, ...args] = process.argv.slice(2);
+const emit = (event) => process.stdout.write(JSON.stringify(event) + '\n');
+const init = () => emit({ type: 'system', subtype: 'init', cwd: process.cwd(), model: 'fake-model-1',
+  claude_code_version: '0.0.0-fake', tools: ['Glob', 'Grep', 'Read', 'StructuredOutput'] });
+const result = (fields) => emit({ type: 'result', subtype: 'success', is_error: false,
+  api_error_status: null, duration_ms: 5, num_turns: 2, total_cost_usd: 0.01,
+  permission_denials: [], ...fields });
+
+let stdin = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { stdin += chunk; });
+process.stdin.on('end', () => {
+  switch (mode) {
+    case 'echo': {
+      init();
+      emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
+      emit({ type: 'stream_event', event: { type: 'message_stop' } });
+      const value = { args, stdin, cwd: process.cwd(), envKeys: Object.keys(process.env).sort() };
+      result({ result: JSON.stringify(value), structured_output: value,
+        permission_denials: [{ tool_name: 'Bash' }] });
+      break;
+    }
+    case 'text-result': {
+      init();
+      result({ result: JSON.stringify({ args: [], stdin, cwd: process.cwd(), envKeys: [] }) });
+      break;
+    }
+    case 'garbage': {
+      process.stdout.write('this is not json\n{"half":\n');
+      break;
+    }
+    case 'mismatch': {
+      init();
+      result({ result: '{"wrong":1}', structured_output: { wrong: 1 } });
+      break;
+    }
+    case 'fail': {
+      process.stderr.write('fake claude crashed\n');
+      process.exitCode = 2;
+      break;
+    }
+    case 'not-logged-in': {
+      init();
+      result({ subtype: 'success', is_error: true, result: 'Not logged in · Please run /login' });
+      process.exitCode = 1;
+      break;
+    }
+    case 'rate-limited': {
+      init();
+      emit({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: 1793224800 } });
+      result({ subtype: 'success', is_error: true, api_error_status: 429,
+        result: 'API Error: Request rejected (429)' });
+      process.exitCode = 1;
+      break;
+    }
+    case 'budget': {
+      init();
+      result({ subtype: 'error_max_budget_usd', is_error: true });
+      process.exitCode = 1;
+      break;
+    }
+    case 'hang':
+    case 'stubborn': {
+      if (mode === 'stubborn') {
+        process.on('SIGTERM', () => {});
+      }
+      init();
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+      writeFileSync(pidFile, JSON.stringify({ self: process.pid, child: child.pid }));
+      setInterval(() => {}, 1000);
+      break;
+    }
+    case 'flood': {
+      init();
+      const line = JSON.stringify({ type: 'stream_event', event: { pad: 'x'.repeat(1000) } }) + '\n';
+      for (let i = 0; i < 4000; i += 1) {
+        process.stdout.write(line);
+      }
+      result({ structured_output: {} });
+      break;
+    }
+    default: {
+      process.stderr.write('unknown mode ' + mode + '\n');
+      process.exitCode = 64;
+    }
+  }
+});
+`;
