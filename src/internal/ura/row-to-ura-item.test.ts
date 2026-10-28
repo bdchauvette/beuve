@@ -1,0 +1,74 @@
+import type { SQLOutputValue } from 'node:sqlite';
+
+import { describe, expect, it } from 'vitest';
+
+import { rowToUraItem } from './row-to-ura-item.ts';
+import { createTestUraItem } from './testing/create-test-ura-item.ts';
+import { toUraItemRow } from './to-ura-item-row.ts';
+
+const item = createTestUraItem();
+
+/** The row SQLite would return for the fixture item, with NULLs for unset columns. */
+function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQLOutputValue> {
+  const nullable = [
+    'insight_id',
+    'chat_message_id',
+    'impact_metric',
+    'impact_function',
+    'impact_value',
+    'impact_threshold',
+    'impact_percentile',
+    'patch',
+    'addressed_sha',
+    'addressed_by',
+  ];
+  // eslint-disable-next-line unicorn/no-null -- SQLite returns NULL columns as null
+  const nulls = Object.fromEntries(nullable.map((column) => [column, null]));
+  return {
+    ...nulls,
+    position: 0,
+    ...(toUraItemRow(item) as Record<string, SQLOutputValue>),
+    ...overrides,
+  };
+}
+
+function reasonOf(overrides: Record<string, SQLOutputValue>): string | undefined {
+  const result = rowToUraItem(row(overrides));
+  return result.ok ? undefined : result.error.reason;
+}
+
+describe('rowToUraItem', () => {
+  it('maps a valid row, with integers as numbers or bigints', () => {
+    expect(rowToUraItem(row())).toEqual({ ok: true, value: item });
+    expect(rowToUraItem(row({ line_start: 10n, line_end: 12n }))).toEqual({
+      ok: true,
+      value: item,
+    });
+  });
+
+  it.each([
+    ['id', 'x', 'id or session_id is not a UUID'],
+    ['head_sha', 'ABC', 'head_sha is not a commit id'],
+    ['severity', 'major', 'severity is unknown'],
+    ['title', 7, 'title or body is not text'],
+    ['patch', 7, 'patch is not text'],
+    ['updated_at', 'now', 'created_at or updated_at is not an ISO-8601 UTC timestamp'],
+    ['anchor_kind', 'hunk', 'anchor_kind is unknown'],
+    ['line_end', 1.5, 'path, line_start or line_end is missing'],
+    ['origin_kind', 'bot', 'origin_kind is unknown'],
+    ['status', 'pending', 'status is unknown'],
+    ['line_start', 20, 'invalid-anchor: the end line comes before the start line'],
+  ])('reports a bad %s', (column, value, reason) => {
+    expect(reasonOf({ [column]: value })).toBe(reason);
+  });
+
+  it('reports incomplete origins and statuses', () => {
+    expect(reasonOf({ origin_kind: 'agent-insight' })).toBe('insight_id is not a UUID');
+    expect(reasonOf({ origin_kind: 'impact-finding', impact_metric: 'cognitive-complexity' })).toBe(
+      'the ImpactGate columns are incomplete',
+    );
+    expect(reasonOf({ status: 'addressed', addressed_sha: 'b'.repeat(40) })).toBe(
+      'addressed_sha or addressed_by is invalid',
+    );
+  });
+});
