@@ -1,0 +1,162 @@
+import type { Logger } from '#pkg/logger/create-logger.ts';
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+
+import { buildGithubHttpRequest } from './build-github-http-request.ts';
+import type { HttpRequest } from './build-github-http-request.ts';
+import { classifyGithubResponse } from './classify-github-response.ts';
+import type {
+  FetchLike,
+  GithubClient,
+  GithubRequest,
+  GithubResponse,
+  TokenSource,
+} from './github-client.ts';
+import type { GithubError } from './github-error.ts';
+import { normalizeGithubHost } from './normalize-github-host.ts';
+import { resolveGithubApiBase } from './resolve-github-api-base.ts';
+
+const invalidJson = Symbol('invalid-json');
+
+export interface GithubClientOptions<E> {
+  /** `github.com` or a GitHub Enterprise Server hostname. */
+  readonly host: string;
+  /** Asked for a token before every request; cache in the source (ADR 0034), not here. */
+  readonly getToken: TokenSource<E>;
+  /** Defaults to the global `fetch`. */
+  readonly fetch?: FetchLike;
+  /** Per request, including reading the body. Defaults to 20 s. */
+  readonly timeoutMs?: number;
+  /** Sent as `X-GitHub-Api-Version`. Defaults to `2022-11-28`. */
+  readonly apiVersion?: string;
+  readonly userAgent?: string;
+  readonly now?: () => Date;
+  /** Gets method, path, status, duration and remaining rate limit; never the token or a query. */
+  readonly logger?: Logger;
+}
+
+/**
+ * A small typed GitHub REST client (ADR 0035): no Octokit, Node's `fetch`, one host. Each request
+ * asks `getToken` for a token, sends it once as a bearer header and drops it. 2xx and 304 are
+ * successes; other statuses, network failures, timeouts and non-JSON bodies are a
+ * {@link GithubError}. It doesn't retry: on `unauthorized` the caller invalidates the credential.
+ */
+export function createGithubClient<E>(
+  options: GithubClientOptions<E>,
+): Result<GithubClient<E>, string> {
+  const host = normalizeGithubHost(options.host);
+  if (host === undefined) {
+    return err(`not a GitHub hostname: ${options.host}`);
+  }
+  const base = resolveGithubApiBase(host);
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? 20_000;
+  const now = options.now ?? ((): Date => new Date());
+
+  const send = async (request: GithubRequest): Promise<Result<GithubResponse, GithubError<E>>> => {
+    const token = await options.getToken(host);
+    if (!token.ok) {
+      return err({ kind: 'credentials', error: token.error });
+    }
+    const built = buildGithubHttpRequest(request, {
+      base,
+      token: token.value.reveal(),
+      apiVersion: options.apiVersion ?? '2022-11-28',
+      userAgent: options.userAgent ?? 'beuve',
+    });
+    if (!built.ok) {
+      return err({ kind: 'invalid-request', reason: built.error });
+    }
+    const started = performance.now();
+    const response = await exchange(built.value, fetchImpl, timeoutMs, request.signal);
+    options.logger?.debug('github: request', {
+      method: request.method,
+      path: new URL(built.value.url).pathname,
+      status: response.ok ? response.value.status : response.error.kind,
+      durationMs: Math.round(performance.now() - started),
+      rateLimitRemaining: response.ok ? response.value.rateLimitRemaining : undefined,
+    });
+    if (!response.ok) {
+      return response;
+    }
+    const { status, headers, text } = response.value;
+    if (status === 304) {
+      return ok({
+        status,
+        body: undefined,
+        etag: headers.get('etag') ?? undefined,
+        link: undefined,
+      });
+    }
+    const body = parseBody(text);
+    if (status < 200 || status > 299) {
+      return err(
+        classifyGithubResponse({ status, headers }, body === invalidJson ? undefined : body, now()),
+      );
+    }
+    if (body === invalidJson) {
+      return err({ kind: 'unexpected-shape', reason: 'the response is not JSON' });
+    }
+    return ok({
+      status,
+      body,
+      etag: headers.get('etag') ?? undefined,
+      link: headers.get('link') ?? undefined,
+    });
+  };
+
+  return ok({ host, send });
+}
+
+interface Exchange {
+  readonly status: number;
+  readonly headers: Headers;
+  readonly text: string;
+  readonly rateLimitRemaining: string | undefined;
+}
+
+async function exchange(
+  request: HttpRequest,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<Result<Exchange, GithubError<never>>> {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  try {
+    const response = await fetchImpl(request.url, {
+      method: request.method,
+      headers: request.headers,
+      ...(request.body !== undefined && { body: request.body }),
+      // Renamed repositories answer 301; fetch drops Authorization on a cross-origin redirect.
+      redirect: 'follow',
+      signal: signal === undefined ? timeout : AbortSignal.any([timeout, signal]),
+    });
+    const text = await response.text();
+    return ok({
+      status: response.status,
+      headers: response.headers,
+      text,
+      rateLimitRemaining: response.headers.get('x-ratelimit-remaining') ?? undefined,
+    });
+  } catch (error: unknown) {
+    if (timeout.aborted) {
+      return err({ kind: 'timeout', timeoutMs });
+    }
+    return err({
+      kind: 'network',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function parseBody(text: string): unknown {
+  if (text.trim() === '') {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return invalidJson;
+  }
+}

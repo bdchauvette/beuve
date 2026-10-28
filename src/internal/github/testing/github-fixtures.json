@@ -1,0 +1,198 @@
+{
+  "baseSha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+  "headSha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+  "pullRequest": {
+    "url": "https://api.github.com/repos/octo-org/hello-world/pulls/1347",
+    "id": 1,
+    "node_id": "MDExOlB1bGxSZXF1ZXN0MQ==",
+    "html_url": "https://github.com/octo-org/hello-world/pull/1347",
+    "number": 1347,
+    "state": "open",
+    "locked": false,
+    "title": "Amazing new feature",
+    "user": {
+      "login": "octocat",
+      "id": 1,
+      "type": "User"
+    },
+    "body": "REQ-1: users can do the amazing thing.\n\nFixes #1200.",
+    "labels": [],
+    "created_at": "2026-10-01T19:01:12Z",
+    "updated_at": "2026-10-02T19:01:12Z",
+    "closed_at": null,
+    "merged_at": null,
+    "draft": false,
+    "head": {
+      "label": "forker:new-topic",
+      "ref": "new-topic",
+      "sha": "6DCB09B5B57875F334F61AEBED695E2E4193DB5E",
+      "user": {
+        "login": "forker"
+      },
+      "repo": {
+        "id": 2,
+        "name": "hello-world",
+        "full_name": "forker/hello-world",
+        "owner": {
+          "login": "forker"
+        },
+        "private": false,
+        "clone_url": "https://github.com/forker/hello-world.git"
+      }
+    },
+    "base": {
+      "label": "octo-org:main",
+      "ref": "main",
+      "sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "user": {
+        "login": "octo-org"
+      },
+      "repo": {
+        "id": 1,
+        "name": "hello-world",
+        "full_name": "octo-org/hello-world",
+        "owner": {
+          "login": "octo-org"
+        },
+        "private": false,
+        "clone_url": "https://github.com/octo-org/hello-world.git"
+      }
+    },
+    "merged": false,
+    "mergeable": true,
+    "rebaseable": true,
+    "mergeable_state": "clean",
+    "comments": 10,
+    "commits": 3,
+    "additions": 100,
+    "deletions": 3,
+    "changed_files": 5
+  },
+  "commits": [
+    {
+      "sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+      "commit": {
+        "author": {
+          "name": "Monalisa Octocat",
+          "email": "mona@github.com",
+          "date": "2026-10-01T16:00:49Z"
+        },
+        "message": "Fix all the bugs\n\nAnd explain why."
+      },
+      "parents": [
+        {
+          "sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "sha": "bbcd538c8e72b8c175046e27cc8f907076331401",
+      "filename": "src/feature.ts",
+      "status": "modified",
+      "additions": 103,
+      "deletions": 21,
+      "changes": 124,
+      "patch": "@@ -132,7 +132,7 @@ module Test @@ -1000,7 +1000,7 @@ module Test"
+    },
+    {
+      "sha": "ccd538c8e72b8c175046e27cc8f907076331402a",
+      "filename": "assets/logo.png",
+      "previous_filename": "logo.png",
+      "status": "renamed",
+      "additions": 0,
+      "deletions": 0,
+      "changes": 0
+    }
+  ],
+  "combinedStatus": {
+    "state": "success",
+    "sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+    "total_count": 2,
+    "statuses": [
+      {
+        "state": "success",
+        "description": "Build has completed successfully",
+        "target_url": "https://ci.example.com/1000/output",
+        "context": "continuous-integration/jenkins",
+        "created_at": "2026-10-01T16:00:00Z",
+        "updated_at": "2026-10-01T16:05:00Z"
+      },
+      {
+        "state": "pending",
+        "description": "Deploying",
+        "target_url": null,
+        "context": "deploy/preview",
+        "created_at": "2026-10-01T16:01:00Z",
+        "updated_at": "2026-10-01T16:01:00Z"
+      }
+    ]
+  },
+  "checkRuns": {
+    "total_count": 3,
+    "check_runs": [
+      {
+        "id": 4,
+        "head_sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+        "name": "test",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/octo-org/hello-world/runs/4",
+        "details_url": "https://example.com",
+        "started_at": "2026-10-01T16:00:10Z",
+        "completed_at": "2026-10-01T16:03:10Z",
+        "app": {
+          "slug": "github-actions"
+        }
+      },
+      {
+        "id": 5,
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "skipped",
+        "html_url": "https://github.com/octo-org/hello-world/runs/5",
+        "started_at": "2026-10-01T16:00:10Z",
+        "completed_at": "2026-10-01T16:00:11Z"
+      },
+      {
+        "id": 6,
+        "name": "e2e",
+        "status": "in_progress",
+        "conclusion": null,
+        "html_url": "https://github.com/octo-org/hello-world/runs/6",
+        "started_at": "2026-10-01T16:00:10Z",
+        "completed_at": null
+      }
+    ]
+  },
+  "review": {
+    "id": 80,
+    "node_id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3ODA=",
+    "user": {
+      "login": "reviewer"
+    },
+    "body": "Looks good.",
+    "state": "COMMENTED",
+    "html_url": "https://github.com/octo-org/hello-world/pull/1347#pullrequestreview-80",
+    "commit_id": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+    "submitted_at": "2026-10-03T10:00:00Z"
+  },
+  "mergedFromDeletedFork": {
+    "state": "closed",
+    "merged_at": "2026-10-05T00:00:00Z",
+    "user": null,
+    "body": null,
+    "draft": true,
+    "mergeable": null,
+    "head": {
+      "label": "forker:new-topic",
+      "ref": "new-topic",
+      "sha": "6DCB09B5B57875F334F61AEBED695E2E4193DB5E",
+      "user": {
+        "login": "forker"
+      },
+      "repo": null
+    }
+  }
+}

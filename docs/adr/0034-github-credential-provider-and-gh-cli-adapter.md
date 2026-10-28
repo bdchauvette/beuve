@@ -1,0 +1,23 @@
+# 0034. GitHub credential provider port, and the GitHub CLI as the first adapter
+
+- Status: Accepted
+- Date: 2026-10-28
+
+## Context
+
+Reviewing GitHub pull requests (spec 1, "Unified agent and human workflows") needs an API token. Users who review with beuve almost always have the GitHub CLI installed and logged in, often to github.com and a GitHub Enterprise Server host. Running our own OAuth app, storing tokens and refreshing them is a security surface we don't want yet, but the mechanism must be replaceable (an OAuth device flow with the macOS Keychain, or a personal access token) without touching the GitHub client or main's call sites.
+
+## Decision
+
+- **Port** (`src/internal/auth/github-credential-provider.ts`): `getToken({ host }) → Promise<Result<GithubToken, AuthError>>`, `invalidate({ host, token? })` and `describe({ host }) → Result<CredentialDescription, AuthError>` (provider kind, host, account login, OAuth scopes and whether the provider's last check passed, when known). Nothing rejects. `AuthError` is `invalid-host | cli-not-installed | not-logged-in | host-not-configured | timeout | command-failed`; the login errors carry a `remedy` command (`gh auth login --hostname <host>`).
+- **`GithubToken`** is a class whose secret sits in a private field (nominal, so a string can't stand in for it) and is read only by `reveal()` when a request is sent. `toString`, template literals, `JSON.stringify` and `util.inspect` print `[redacted]`.
+- **Token rules**: beuve never persists a token, never logs one (stderr is redacted for token-shaped text before it is kept), never sends one to the renderer or over IPC (only `describe()` output crosses), and keeps it in memory only in `createCachedCredentialProvider` for a short TTL (5 minutes by default). Concurrent requests share one lookup; failures aren't cached; `invalidate` after a 401 drops the token, or only the one passed, so a late 401 for an old token doesn't evict a fresh one.
+- **gh adapter** (`createGhCliCredentialProvider`): `gh auth token --hostname <host>` for the token, `gh auth status --hostname <host> --json hosts` for `describe` (both checked against `gh --help` for 2.89.0; `--json` falls back to "account unknown" on a gh that rejects it with `unknown flag: --json`). No shell, stdin closed, `cwd` the home directory (never a repository under review), a 10 s timeout (15 s for `status`, which calls the API), SIGKILL on timeout, a 1 MiB output cap. Hosts are validated as bare DNS names before they become an argument.
+- **Environment**: an allow-list: `PATH`, `HOME`, `USER`, temp and locale variables, `GH_CONFIG_DIR`, the XDG directories, `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` (gh's Linux keyring), proxy and CA variables; plus `GH_PROMPT_DISABLED`, `GH_NO_UPDATE_NOTIFIER`, `NO_COLOR`. `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GH_HOST` are dropped, so the answer is always the login gh stored, not whatever the launching shell exported.
+- **Finding gh** (`resolveGhCommand`): macOS GUI apps start with a minimal `PATH`, so try `BEUVE_GH_PATH` (a broken override fails rather than silently using another gh), `/opt/homebrew/bin/gh`, `/usr/local/bin/gh`, `~/.local/bin/gh`, then absolute `PATH` entries.
+- **Failure mapping**, from gh 2.89 run against an empty and a throwaway config: `auth token` prints `no oauth token found for <host>` and exits 1 both when nothing is logged in and when only other hosts are, so `github.com` maps to `not-logged-in` and other hosts to `host-not-configured`. `auth status --json` exits 0 even when logged out, printing `{"hosts":{}}` and a notice on stderr; an account whose check failed has `state: "error"` and an `error` text. Anything else is `command-failed` with the last stderr line.
+- **Swap path**: a device-flow provider (`POST /login/device/code`, poll `/login/oauth/access_token`, Keychain via Electron `safeStorage`) or a PAT provider implements the same port, with `describe().provider` gaining a variant. The cache wrapper and every caller stay as they are.
+
+## Consequences
+
+beuve inherits the user's gh scopes: a classic `gh auth login` token has `repo` and `read:org`, enough for everything in ADR 0035; fine-grained or SSO-restricted tokens surface as `forbidden` with GitHub's message. We depend on a CLI we don't ship, and on its stderr wording, which is not a documented interface; unknown texts fall back to `command-failed` with the message kept. Each token lookup costs a process start (tens of milliseconds) at most once per TTL per host. On a shared machine anything that can run as the user can also run `gh auth token`, so beuve adds no exposure beyond what gh already has.

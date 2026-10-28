@@ -39,3 +39,5 @@ Template: [0000-template.md](0000-template.md)
 | [0031](0031-read-only-qa-chat.md)                              | Read-only Q&A chat                                                        | Accepted |
 | [0032](0032-chat-wiring-one-answer-per-session.md)             | Chat wiring: one answer per session, refused not queued                   | Accepted |
 | [0033](0033-open-in-editor.md)                                 | Opening the current line in the reviewer's editor                         | Accepted |
+| [0034](0034-github-credential-provider-and-gh-cli-adapter.md)  | GitHub credential provider and gh CLI adapter                             | Accepted |
+| [0035](0035-github-rest-client-scope.md)                       | GitHub REST client scope                                                  | Accepted |
