@@ -25,10 +25,10 @@ export function insertSession(
       ).run(...common, source.headRef, ...timestamps);
     } else {
       db.prepare(
-        `INSERT INTO sessions (id, kind, repo_path, base_ref, head_sha, owner, repo, pr_number,
+        `INSERT INTO sessions (id, kind, repo_path, base_ref, head_sha, host, owner, repo, pr_number,
                                created_at, updated_at)
-         VALUES (?, 'github-pull-request', ?, ?, ?, ?, ?, ?, ?, ?);`,
-      ).run(...common, source.owner, source.repo, source.number, ...timestamps);
+         VALUES (?, 'github-pull-request', ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      ).run(...common, source.host, source.owner, source.repo, source.number, ...timestamps);
     }
   } catch (error: unknown) {
     if (sqliteErrorCode(error) === uniqueViolation && isSourceConflict(error)) {

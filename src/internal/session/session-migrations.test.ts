@@ -19,6 +19,7 @@ describe('sessionMigrations', () => {
     expect(runMigrations(db, sessionMigrations)).toEqual([
       'session-0001-sessions-and-checkpoints',
       'session-0002-checkpoint-base',
+      'session-0003-pull-request-host',
     ]);
     expect(runMigrations(db, sessionMigrations)).toEqual([]);
   });
@@ -38,6 +39,7 @@ describe('sessionMigrations', () => {
     ['a non-UTC timestamp', { created_at: '2026-10-28T12:00:00+01:00' }],
     ['a missing head ref', { head_ref: undefined }],
     ['a pull request field on a local session', { pr_number: 3 }],
+    ['a host', { host: 'github.com' }],
   ])('rejects a local session with %s', (_label, overrides) => {
     expect(() => {
       insertLocal(setup(), overrides);
@@ -48,6 +50,8 @@ describe('sessionMigrations', () => {
     ['a missing owner', { owner: undefined }],
     ['a non-positive number', { pr_number: 0 }],
     ['a head ref', { head_ref: 'feature' }],
+    ['an uppercase host', { host: 'GitHub.com' }],
+    ['a host with a scheme', { host: 'https://github.com' }],
   ])('rejects a pull request session with %s', (_label, overrides) => {
     expect(() => {
       insertPull(setup(), overrides);
@@ -95,7 +99,9 @@ describe('session-0002-checkpoint-base', () => {
     runMigrations(db, sessionMigrations.slice(0, 1));
     insertLocal(db, {});
     db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?);').run(checkpointId, id, sha, time);
-    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0002-checkpoint-base']);
+    expect(runMigrations(db, sessionMigrations.slice(0, 2))).toEqual([
+      'session-0002-checkpoint-base',
+    ]);
     expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toEqual({ n: 0 });
     expect(db.prepare('SELECT count(*) AS n FROM sessions;').get()).toEqual({ n: 1 });
   });
@@ -112,6 +118,28 @@ describe('session-0002-checkpoint-base', () => {
         time,
       );
     }).toThrow('CHECK constraint failed');
+  });
+});
+
+describe('session-0003-pull-request-host', () => {
+  it('backfills github.com for existing pull requests and keys them by host', () => {
+    const db = openDatabase(':memory:');
+    runMigrations(db, sessionMigrations.slice(0, 2));
+    insertLocal(db, {});
+    insertPull(db, { id: otherId, host: undefined });
+    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0003-pull-request-host']);
+    expect(
+      db.prepare("SELECT kind, coalesce(host, '-') AS host FROM sessions ORDER BY kind;").all(),
+    ).toEqual([
+      { kind: 'github-pull-request', host: 'github.com' },
+      { kind: 'local', host: '-' },
+    ]);
+    expect(() => {
+      insertPull(db, { id: checkpointId, host: 'ghe.example.com' });
+    }).not.toThrow();
+    expect(() => {
+      insertPull(db, { id: '00000000-0000-4000-8000-00000000000d' });
+    }).toThrow('UNIQUE constraint failed');
   });
 });
 
@@ -144,6 +172,7 @@ function insertPull(db: DatabaseSync, overrides: Record<string, unknown>): void 
     owner: 'acme',
     repo: 'beuve',
     pr_number: 7,
+    host: 'github.com',
     head_sha: sha,
     created_at: time,
     updated_at: time,

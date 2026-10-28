@@ -19,8 +19,8 @@ export function findSessionBySource(
         )
       : selectSessions(
           db,
-          "s.kind = 'github-pull-request' AND s.repo_path = ? AND s.owner = ? AND s.repo = ? AND s.pr_number = ?",
-          [source.repoPath, source.owner, source.repo, source.number],
+          "s.kind = 'github-pull-request' AND s.repo_path = ? AND s.host = ? AND s.owner = ? AND s.repo = ? AND s.pr_number = ?",
+          [source.repoPath, source.host, source.owner, source.repo, source.number],
         );
   return found.ok ? { ok: true, value: found.value[0] } : found;
 }

@@ -25,6 +25,7 @@ const pull: SessionSource = {
   kind: 'github-pull-request',
   repoPath: '/repo',
   baseRef: 'main',
+  host: 'github.com',
   owner: 'acme',
   repo: 'beuve',
   number: 7,
@@ -49,6 +50,17 @@ describe('insertSession', () => {
     expect(findSession(db, missing)).toEqual({ ok: true, value: undefined });
     expect(findSessionBySource(db, local)).toEqual({ ok: true, value: undefined });
     expect(findSessionBySource(db, { ...pull, number: 8 })).toEqual({ ok: true, value: undefined });
+  });
+
+  it('keeps the same pull request number on two hosts apart', () => {
+    const db = setup();
+    const enterprise: SessionSource = { ...pull, host: 'ghe.example.com' };
+    const first = make(pull, 1);
+    const second = make(enterprise, 2);
+    expect(insertSession(db, first).ok).toBe(true);
+    expect(insertSession(db, second).ok).toBe(true);
+    expect(findSessionBySource(db, enterprise)).toEqual({ ok: true, value: second });
+    expect(findSessionBySource(db, pull)).toEqual({ ok: true, value: first });
   });
 
   it('refuses a second session for the same change', () => {

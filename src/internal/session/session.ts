@@ -9,7 +9,10 @@ export type CheckpointId = Brand<string, 'CheckpointId'>;
 /** A full, lowercase commit id: 40 hex digits (SHA-1) or 64 (SHA-256 repositories). */
 export type CommitSha = Brand<string, 'CommitSha'>;
 
-/** What is under review. `baseRef` is the branch the change merges into. */
+/**
+ * What is under review. `baseRef` is the branch the change merges into: for a pull request, the
+ * local ref main fetches its base branch into.
+ */
 export type SessionSource =
   | {
       readonly kind: 'local';
@@ -21,6 +24,8 @@ export type SessionSource =
       readonly kind: 'github-pull-request';
       readonly repoPath: string;
       readonly baseRef: string;
+      /** `github.com` or a GitHub Enterprise Server hostname, lowercase. */
+      readonly host: string;
       readonly owner: string;
       readonly repo: string;
       readonly number: number;

@@ -68,6 +68,28 @@ export const sessionMigrations: readonly Migration[] = [
       CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
     `,
   },
+  {
+    // A pull request's host (ADR 0037), so GitHub Enterprise pull requests can be resumed. Rows
+    // written before hosts existed were github.com. The table isn't rebuilt: `checkpoints` and
+    // later domains' tables cascade from it.
+    id: 'session-0003-pull-request-host',
+    up: `
+      ALTER TABLE sessions ADD COLUMN host TEXT CHECK (
+        host IS NULL OR (
+          kind = 'github-pull-request'
+          AND length(host) BETWEEN 1 AND 253
+          AND host NOT GLOB '*[^a-z0-9.-]*'
+          AND host NOT GLOB '[.-]*'
+        )
+      );
+
+      UPDATE sessions SET host = 'github.com' WHERE kind = 'github-pull-request';
+
+      DROP INDEX sessions_pull_request;
+      CREATE UNIQUE INDEX sessions_pull_request
+        ON sessions (repo_path, host, owner, repo, pr_number) WHERE kind = 'github-pull-request';
+    `,
+  },
 ];
 
 function sha(column: string): string {

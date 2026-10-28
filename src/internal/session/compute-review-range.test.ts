@@ -18,6 +18,7 @@ const session: Session = {
     kind: 'github-pull-request',
     repoPath: '/repo',
     baseRef: 'main',
+    host: 'github.com',
     owner: 'acme',
     repo: 'beuve',
     number: 7,

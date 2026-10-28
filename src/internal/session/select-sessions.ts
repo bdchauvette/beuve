@@ -26,7 +26,7 @@ export function selectSessions(
 ): Result<Session[], CorruptRow> {
   const rows = db
     .prepare(
-      `SELECT s.id, s.kind, s.repo_path, s.base_ref, s.head_ref, s.owner, s.repo, s.pr_number,
+      `SELECT s.id, s.kind, s.repo_path, s.base_ref, s.head_ref, s.host, s.owner, s.repo, s.pr_number,
               s.head_sha, s.created_at, s.updated_at,
               c.id AS checkpoint_id, c.session_id AS checkpoint_session_id,
               c.base_sha AS checkpoint_base_sha, c.head_sha AS checkpoint_head_sha,
@@ -89,7 +89,7 @@ function rowToSession(row: Row): Result<Session, CorruptRow> {
 
 function rowToSource(row: Row): SessionSource | string {
   const { kind, repo_path: repoPath, base_ref: baseRef, head_ref: headRef } = row;
-  const { owner, repo, pr_number: number } = row;
+  const { host, owner, repo, pr_number: number } = row;
   if (typeof repoPath !== 'string' || typeof baseRef !== 'string') {
     return 'repo_path and base_ref must be text';
   }
@@ -97,6 +97,7 @@ function rowToSource(row: Row): SessionSource | string {
   if (
     kind === 'local' &&
     typeof headRef === 'string' &&
+    host === null &&
     owner === null &&
     repo === null &&
     number === null
@@ -105,11 +106,12 @@ function rowToSource(row: Row): SessionSource | string {
   } else if (
     kind === 'github-pull-request' &&
     headRef === null &&
+    typeof host === 'string' &&
     typeof owner === 'string' &&
     typeof repo === 'string' &&
     typeof number === 'number'
   ) {
-    source = { kind, repoPath, baseRef, owner, repo, number };
+    source = { kind, repoPath, baseRef, host, owner, repo, number };
   } else {
     return 'kind and source columns disagree';
   }
