@@ -203,6 +203,11 @@ export class BeuveDiffStream extends LitElement {
       this.toggleFocusedInsight(event.key === 'y' ? 'promoted' : 'dismissed');
       return;
     }
+    if (event.key === 'o') {
+      event.preventDefault();
+      this.openInEditor();
+      return;
+    }
     if (event.key === 'm') {
       event.preventDefault();
       this.openComposer();
@@ -371,6 +376,22 @@ export class BeuveDiffStream extends LitElement {
   private async revealLine(index: number, line: number): Promise<void> {
     await this.updateComplete;
     await this.cards()[index]?.revealLine(line);
+  }
+
+  /** `o`: asks the shell to open the active card's file in the editor at the cursor line. */
+  private openInEditor(): void {
+    const file = this.review?.files[this.activeIndex];
+    const line = this.cards()[this.activeIndex]?.editorLine();
+    if (file === undefined || line === undefined) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-open-editor', {
+        detail: { path: file.path, line },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   /** `m`: a composer on the active card, staging what {@link BeuveFileCard.stageAnchor} names. */

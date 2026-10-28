@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('parseChatCommand', () => {
+  it('parses /editor with and without a choice', () => {
+    expect(parseChatCommand('/editor')).toEqual({ kind: 'editor' });
+    expect(parseChatCommand('/editor Zed')).toEqual({ kind: 'editor', editorId: 'zed' });
+    expect(parseChatCommand('/editor code')).toEqual({ kind: 'editor', editorId: 'vscode' });
+    expect(parseChatCommand('/editor cursor')).toEqual({ kind: 'editor', editorId: 'cursor' });
+    expect(parseChatCommand('/editor emacs')).toMatchObject({ kind: 'invalid' });
+    expect(parseChatCommand('/editor zed cursor')).toMatchObject({ kind: 'invalid' });
+  });
+
   it('parses /review for the whole session', () => {
     expect(parseChatCommand('  /review ')).toEqual({
       kind: 'review',

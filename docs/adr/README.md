@@ -38,3 +38,4 @@ Template: [0000-template.md](0000-template.md)
 | [0030](0030-llm-domain-and-structural-model-ports.md)          | The llm domain and structural model ports                                 | Accepted |
 | [0031](0031-read-only-qa-chat.md)                              | Read-only Q&A chat                                                        | Accepted |
 | [0032](0032-chat-wiring-one-answer-per-session.md)             | Chat wiring: one answer per session, refused not queued                   | Accepted |
+| [0033](0033-open-in-editor.md)                                 | Opening the current line in the reviewer's editor                         | Accepted |

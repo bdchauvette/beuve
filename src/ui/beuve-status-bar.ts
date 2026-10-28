@@ -4,7 +4,9 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
 
-/** Bottom bar: focused zone, MCP server state and app version. */
+import type { StatusNotice } from './describe-editor-open.ts';
+
+/** Bottom bar: focused zone, a transient notice, MCP server state and app version. */
 @customElement('beuve-status-bar')
 export class BeuveStatusBar extends LitElement {
   static override styles = css`
@@ -49,6 +51,16 @@ export class BeuveStatusBar extends LitElement {
       background: var(--beuve-danger);
     }
 
+    .notice {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--beuve-text);
+    }
+
+    .notice.error {
+      color: var(--beuve-danger);
+    }
+
     kbd {
       font: var(--beuve-font-mono);
       font-size: 11px;
@@ -57,6 +69,7 @@ export class BeuveStatusBar extends LitElement {
 
   @property() accessor zoneLabel = '';
   @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
+  @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
 
   private renderMcp(): TemplateResult {
@@ -87,6 +100,11 @@ export class BeuveStatusBar extends LitElement {
   override render(): TemplateResult {
     return html`
       <span>Focus: <span class="zone">${this.zoneLabel}</span></span>
+      ${
+        this.notice === undefined
+          ? nothing
+          : html`<span class="notice ${this.notice.tone}" role="status">${this.notice.text}</span>`
+      }
       <span class="spacer"></span>
       ${this.renderMcp()}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}

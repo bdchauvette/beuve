@@ -9,6 +9,8 @@ import type {
   ChatCitationView,
   ChatDeltaView,
   CreateLocalSessionRequest,
+  EditorId,
+  EditorSettingsView,
   FilePairView,
   FlowFailureKind,
   FlowGraphResponse,
@@ -45,6 +47,10 @@ import type {
   ReviewChatEntry,
 } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
+import { currentEditorName } from './current-editor-name.ts';
+import { describeEditorOpen } from './describe-editor-open.ts';
+import { describeEditorSettings } from './describe-editor-settings.ts';
+import type { StatusNotice } from './describe-editor-open.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 import { planChatStage } from './plan-chat-stage.ts';
@@ -133,6 +139,7 @@ export class BeuveApp extends LitElement {
   /** The file the diff stream's cursor is on, sent as the question's focus. */
   private activePath: string | undefined;
   private jumpNonce = 0;
+  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   /** The latest `review:progress` event per run, for runs whose handle hasn't arrived yet. */
   private readonly runEvents = new Map<string, ReviewProgressView>();
 
@@ -208,6 +215,10 @@ export class BeuveApp extends LitElement {
 
   private readonly onChatCite = (event: CustomEvent<{ citation: ChatCitationView }>): void => {
     this.openCitation(event.detail.citation);
+  };
+
+  private readonly onOpenEditor = (event: CustomEvent<{ path: string; line: number }>): void => {
+    void this.openInEditor(event.detail.path, event.detail.line);
   };
 
   private readonly onActiveFile = (event: CustomEvent<{ path: string | undefined }>): void => {
@@ -332,6 +343,8 @@ export class BeuveApp extends LitElement {
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor chatOpen = false;
   @state() accessor overlayOpen = false;
+  @state() accessor statusNotice: StatusNotice | undefined;
+  @state() accessor editorSettings: EditorSettingsView | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
   @state() accessor sessionNote = 'Loading sessions…';
@@ -414,6 +427,7 @@ export class BeuveApp extends LitElement {
       unsubscribe();
     }
     this.unsubscribes = [];
+    clearTimeout(this.noticeTimer);
   }
 
   private async loadInitialState(): Promise<void> {
@@ -430,6 +444,47 @@ export class BeuveApp extends LitElement {
       this.dataset['platform'] = info.value.platform;
     }
     this.applySessions(sessions);
+    const editors = await bridge.invoke('editor:get-settings');
+    this.editorSettings = editors.ok ? editors.value : undefined;
+  }
+
+  private showNotice(notice: StatusNotice): void {
+    this.statusNotice = notice;
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => {
+      this.statusNotice = undefined;
+    }, 8000);
+  }
+
+  /** `o`: opens the head-side file in the reviewer's editor (ADR 0033). */
+  private async openInEditor(path: string, line: number): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    const opened = await bridge.invoke('editor:open', { sessionId: review.session.id, path, line });
+    this.showNotice(
+      opened.ok ? describeEditorOpen(opened.value) : { tone: 'error', text: opened.error.message },
+    );
+  }
+
+  /** `/editor [id]`: shows or sets the editor `o` opens. */
+  private async runEditorCommand(editorId: EditorId | undefined): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const result =
+      editorId === undefined
+        ? await bridge.invoke('editor:get-settings')
+        : await bridge.invoke('editor:set-preferred', { editorId });
+    if (!result.ok) {
+      this.note('error', result.error.message);
+      return;
+    }
+    this.editorSettings = result.value;
+    this.note('info', ...describeEditorSettings(result.value));
   }
 
   private applySessions(sessions: IpcResult<readonly SessionSummary[]>): void {
@@ -700,6 +755,11 @@ export class BeuveApp extends LitElement {
       case 'invalid': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         this.addEntry({ id: 0, kind: 'note', tone: 'error', lines: [command.message] });
+        return;
+      }
+      case 'editor': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.runEditorCommand(command.editorId);
         return;
       }
       case 'review': {
@@ -1188,6 +1248,7 @@ export class BeuveApp extends LitElement {
         @beuve-diff-rendered=${this.onDiffRendered}
         @beuve-ura-create=${this.onUraCreate}
         @beuve-active-file=${this.onActiveFile}
+        @beuve-open-editor=${this.onOpenEditor}
         @beuve-ura-stage-finding=${this.onStageFinding}
       ></beuve-diff-stream>
       <beuve-ura-dock
@@ -1202,6 +1263,7 @@ export class BeuveApp extends LitElement {
         .notice=${this.dockNotice}
         ?exporting=${this.exporting}
         @beuve-ura-jump=${this.onUraJump}
+        @beuve-open-editor=${this.onOpenEditor}
         @beuve-ura-update=${this.onUraUpdate}
         @beuve-ura-transition=${this.onUraTransition}
         @beuve-ura-reorder=${this.onUraReorder}
@@ -1224,6 +1286,7 @@ export class BeuveApp extends LitElement {
               @beuve-chat-cancel=${this.onChatCancel}
               @beuve-chat-stage=${this.onChatStage}
               @beuve-chat-cite=${this.onChatCite}
+              @beuve-open-editor=${this.onOpenEditor}
               @beuve-citation=${this.onCitation}
             ></beuve-chat-drawer>`
           : nothing
@@ -1232,8 +1295,15 @@ export class BeuveApp extends LitElement {
         .zoneLabel=${zones.find(({ id }) => id === this.focusedZone)?.label ?? ''}
         .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
+        .notice=${this.statusNotice}
       ></beuve-status-bar>
-      ${this.overlayOpen ? html`<beuve-keybinding-overlay></beuve-keybinding-overlay>` : nothing}
+      ${
+        this.overlayOpen
+          ? html`<beuve-keybinding-overlay
+              .editorName=${currentEditorName(this.editorSettings)}
+            ></beuve-keybinding-overlay>`
+          : nothing
+      }
     `;
   }
 

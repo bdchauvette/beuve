@@ -17,7 +17,7 @@ import { zoneStyles } from './zone-styles.ts';
  * questions, the answers (streamed live, then rendered as a safe Markdown subset with a pill for
  * each citation) and the commands' results. Nothing typed here can change the worktree.
  * Presentational: emits `beuve-chat-submit`, `beuve-chat-escape`, `beuve-chat-cycle` (Tab),
- * `beuve-chat-cancel`, `beuve-chat-stage`, `beuve-chat-cite` and `beuve-citation` (an insight);
+ * `beuve-chat-cancel`, `beuve-chat-stage`, `beuve-chat-cite`, `beuve-citation` (an insight) and `beuve-open-editor` (`o` on a pill);
  * `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the arrow
  * keys move between the transcript's buttons (pills, Cancel, Stage) and the input.
  */
@@ -289,6 +289,14 @@ export class BeuveChatDrawer extends LitElement {
       this.emit('beuve-chat-escape');
       return;
     }
+    if (event.key === 'o') {
+      const { path, line } = target.dataset;
+      if (path !== undefined && line !== undefined) {
+        event.preventDefault();
+        this.emit('beuve-open-editor', { path, line: Number(line) });
+      }
+      return;
+    }
     const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[event.key];
     if (step === undefined) {
       return;
@@ -492,6 +500,8 @@ export class BeuveChatDrawer extends LitElement {
       type="button"
       class="cite ${isOutside ? 'outside' : ''}"
       data-nav
+      data-path=${citation.path}
+      data-line=${citation.startLine}
       title=${isOutside ? `${title} (not in this diff)` : `${title} (show in the diff)`}
       @click=${(): void => {
         this.emit('beuve-chat-cite', { citation });
@@ -514,6 +524,8 @@ export class BeuveChatDrawer extends LitElement {
                   html`<button
                     type="button"
                     class="pill ${citation.status}"
+                    data-path=${citation.path}
+                    data-line=${citation.line}
                     title="${citation.severity}: ${citation.title} (jump to it)"
                     @click=${this.cite(citation)}
                   >

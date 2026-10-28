@@ -31,6 +31,7 @@ import { placeInsights } from './place-insights.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
 import { planStageAnchor } from './plan-stage-anchor.ts';
+import { planEditorLine } from './plan-editor-line.ts';
 import type { SelectedLines } from './plan-stage-anchor.ts';
 import { splitPatch } from './split-patch.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
@@ -622,6 +623,14 @@ ${splitPatch(file.patch).map(
     return file === undefined
       ? undefined
       : planStageAnchor(file.path, file.hunks[this.activeHunk], this.lineSelection);
+  }
+
+  /** The head line `o` opens in the editor: the selected lines, else the active hunk or file. */
+  editorLine(): number | undefined {
+    const { file } = this;
+    return file === undefined
+      ? undefined
+      : planEditorLine(file, this.activeHunk, this.lineSelection);
   }
 
   /** Scrolls head line `line` into view (or the card's header without one), mounting the diff. */

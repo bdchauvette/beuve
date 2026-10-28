@@ -13,6 +13,8 @@ import type {
   ChatCancelledView,
   ChatClearedView,
   ChatListView,
+  EditorOpenResponse,
+  EditorSettingsView,
   FilePairView,
   FlowGraphResponse,
   ImpactView,
@@ -183,6 +185,14 @@ const chatAskRequest = z.strictObject({
 });
 
 const chatCancelRequest = z.strictObject({ messageId: uuid });
+
+const editorOpenRequest = z.strictObject({
+  sessionId,
+  path: pathPrefix,
+  line,
+  column: z.number().int().min(1).max(100_000).optional(),
+});
+const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
@@ -356,6 +366,22 @@ export function createIpcHandlers(
     'chat:clear': (request): IpcResult<ChatClearedView> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.chat.clear(parsed.data) : invalid(parsed.error);
+    },
+    'editor:open': async (request): Promise<IpcResult<EditorOpenResponse>> => {
+      const parsed = editorOpenRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { column, ...required } = parsed.data;
+      return services.editor.open({ ...required, ...(column !== undefined && { column }) });
+    },
+    'editor:get-settings': async (request): Promise<IpcResult<EditorSettingsView>> => {
+      const parsed = noRequest.safeParse(request);
+      return parsed.success ? services.editor.getSettings() : invalid(parsed.error);
+    },
+    'editor:set-preferred': async (request): Promise<IpcResult<EditorSettingsView>> => {
+      const parsed = preferredEditorRequest.safeParse(request);
+      return parsed.success ? services.editor.setPreferred(parsed.data) : invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

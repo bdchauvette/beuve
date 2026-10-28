@@ -5,6 +5,7 @@ export const chatHelp: readonly string[] = Object.freeze([
   '/review <path-prefix>… — only files at or under these paths, e.g. /review src/ui docs/adr',
   '/review --fresh — rerun even if this head was reviewed (replaces its insights)',
   '/review --effort=low|medium|high — how hard Claude Code thinks',
+  '/editor zed|vscode|cursor — choose the editor the o key opens (just /editor shows the current one)',
   '/clear — delete this session’s chat (stops an answer in progress)',
   '/help — this list.',
 ]);

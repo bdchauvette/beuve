@@ -1,6 +1,6 @@
 import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 import { keybindings } from './keybindings.ts';
 
@@ -79,6 +79,9 @@ export class BeuveKeybindingOverlay extends LitElement {
     }
   `;
 
+  /** The name of the editor `o` opens, e.g. “Zed”; absent while unknown. */
+  @property() accessor editorName = '';
+
   override render(): TemplateResult {
     return html`
       <div class="panel" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
@@ -94,6 +97,10 @@ export class BeuveKeybindingOverlay extends LitElement {
             `,
           )}
         </table>
+        <footer>
+          Editor for <kbd>o</kbd>: ${this.editorName === '' ? 'first one found' : this.editorName} ·
+          change with <code>/editor zed|vscode|cursor</code> in the chat
+        </footer>
         <footer><kbd>Esc</kbd> or <kbd>?</kbd> closes</footer>
       </div>
     `;

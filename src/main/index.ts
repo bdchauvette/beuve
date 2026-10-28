@@ -1,11 +1,12 @@
 import path from 'node:path';
 import process from 'node:process';
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 
 import { createLogger } from '#pkg/logger/create-logger.ts';
 
 import { createMainServices } from './create-main-services.ts';
+import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
 import { startApp } from './start-app.ts';
 
@@ -40,6 +41,16 @@ async function launch(): Promise<void> {
         db,
         logger,
         worktreeRoot,
+        editor: {
+          settingsPath: path.join(userData, 'settings.json'),
+          platform: createSystemEditorPlatform({
+            openExternal: async (url) => shell.openExternal(url),
+            ...(!app.isPackaged &&
+              process.env['BEUVE_EDITOR_LAUNCH_LOG'] !== undefined && {
+                launchLog: process.env['BEUVE_EDITOR_LAUNCH_LOG'],
+              }),
+          }),
+        },
         syntax: { wasmDirectory: path.join(import.meta.dirname, 'wasm') },
       }),
       preloadPath: path.join(import.meta.dirname, '../preload/index.cjs'),

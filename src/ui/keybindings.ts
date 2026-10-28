@@ -50,5 +50,9 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   },
   { keys: ['r'], action: 'Run trace probe', available: false },
   { keys: ['e'], action: 'Inline edit', available: false },
-  { keys: ['o'], action: 'Open in IDE', available: false },
+  {
+    keys: ['o'],
+    action: 'Open in your editor at this line (diff stream, dock item or chat citation)',
+    available: true,
+  },
 ]);

@@ -906,6 +906,55 @@ export interface WriteClipboardRequest {
   readonly text: string;
 }
 
+/** Editors beuve can open a file in (ADR 0033). */
+export type EditorId = 'zed' | 'vscode' | 'cursor';
+
+/**
+ * Opens a head-side file at a line in the reviewer's editor. `path` is repository-relative, with
+ * `/` separators and no `..`; `line` and `column` are 1-based.
+ */
+export interface EditorOpenRequest {
+  readonly sessionId: string;
+  readonly path: string;
+  readonly line: number;
+  readonly column?: number;
+}
+
+export type EditorOpenFailure = 'no-editor-found' | 'file-unavailable' | 'launch-failed';
+
+/**
+ * `opened` says which editor and which copy of the file: `working-tree` is the reviewer's own
+ * checkout, `beuve-checkout` the head worktree beuve manages (ADR 0020). `failed` is an expected
+ * failure with a message for the status bar.
+ */
+export type EditorOpenResponse =
+  | {
+      readonly kind: 'opened';
+      readonly editorId: EditorId;
+      readonly editorName: string;
+      readonly location: 'working-tree' | 'beuve-checkout';
+      readonly path: string;
+      readonly line: number;
+    }
+  | { readonly kind: 'failed'; readonly failure: EditorOpenFailure; readonly message: string };
+
+export interface EditorChoiceView {
+  readonly id: EditorId;
+  readonly name: string;
+  readonly installed: boolean;
+}
+
+/** The editor preference and what is installed, in order of preference. */
+export interface EditorSettingsView {
+  /** Absent until the reviewer chooses; then the first installed editor is used. */
+  readonly preferred?: EditorId;
+  readonly editors: readonly EditorChoiceView[];
+}
+
+export interface SetPreferredEditorRequest {
+  readonly editorId: EditorId;
+}
+
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
 export interface UraChangedView {
   readonly sessionId: string;
@@ -1041,6 +1090,18 @@ export interface InvokeChannelMap {
   'clipboard:write-text': {
     readonly request: WriteClipboardRequest;
     readonly response: IpcResult<{ readonly length: number }>;
+  };
+  'editor:open': {
+    readonly request: EditorOpenRequest;
+    readonly response: IpcResult<EditorOpenResponse>;
+  };
+  'editor:get-settings': {
+    readonly request: undefined;
+    readonly response: IpcResult<EditorSettingsView>;
+  };
+  'editor:set-preferred': {
+    readonly request: SetPreferredEditorRequest;
+    readonly response: IpcResult<EditorSettingsView>;
   };
 }
 

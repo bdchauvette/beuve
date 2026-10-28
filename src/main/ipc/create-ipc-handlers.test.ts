@@ -447,6 +447,60 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
   });
 });
 
+describe('createIpcHandlers for the editor', () => {
+  const opened = ok({
+    kind: 'opened' as const,
+    editorId: 'zed' as const,
+    editorName: 'Zed',
+    location: 'working-tree' as const,
+    path: 'src/a.ts',
+    line: 3,
+  });
+
+  it('validates editor:open and normalizes the path before delegating', async () => {
+    const calls: unknown[] = [];
+    const services: MainServices = {
+      ...stubServices({}),
+      editor: {
+        ...stubServices({}).editor,
+        open: async (request) => {
+          calls.push(request);
+          await Promise.resolve();
+          return opened;
+        },
+      },
+    };
+    const handlers = createIpcHandlers(services, appInfo);
+    const base = { sessionId: 's1', path: 'src/a.ts', line: 3 };
+    for (const bad of [
+      undefined,
+      { ...base, path: '../etc/passwd' },
+      { ...base, path: 'src/../../x' },
+      { ...base, path: '/etc/passwd' },
+      { ...base, path: 'C:/x' },
+      { ...base, path: 'a\0b' },
+      { ...base, path: '' },
+      { ...base, line: 0 },
+      { ...base, line: 1.5 },
+      { ...base, column: 0 },
+      { ...base, extra: true },
+    ]) {
+      await expectInvalid(handlers['editor:open'](bad));
+    }
+    expect(await handlers['editor:open']({ ...base, path: './src//a.ts', column: 4 })).toEqual(
+      opened,
+    );
+    expect(calls).toEqual([{ sessionId: 's1', path: 'src/a.ts', line: 3, column: 4 }]);
+  });
+
+  it('accepts only known editors for editor:set-preferred', async () => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo);
+    await expectInvalid(handlers['editor:set-preferred']({ editorId: 'emacs' }));
+    await expectInvalid(handlers['editor:set-preferred']({}));
+    await expectInvalid(handlers['editor:get-settings']({ x: 1 }));
+  });
+});
+
 async function expectInvalid(response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
@@ -465,6 +519,11 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
     files: { getTree: async () => notWired, getFilePair: async () => notWired },
     lsp: { callHierarchy: async () => notWired },
     flow: { getGraph: async () => notWired },
+    editor: {
+      open: async () => notWired,
+      getSettings: async () => notWired,
+      setPreferred: async () => notWired,
+    },
     review: {
       run: async () => notWired,
       listInsights: async () => notWired,

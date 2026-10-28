@@ -30,4 +30,7 @@ export const invokeChannels = Object.freeze([
   'chat:cancel',
   'chat:clear',
   'clipboard:write-text',
+  'editor:open',
+  'editor:get-settings',
+  'editor:set-preferred',
 ] as const satisfies readonly InvokeChannel[]);

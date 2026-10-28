@@ -13,6 +13,10 @@ import type { Logger } from '#pkg/logger/create-logger.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
+import { createEditorServices } from './editor/create-editor-services.ts';
+import { createEditorSettings } from './editor/create-editor-settings.ts';
+import type { EditorPlatform } from './editor/editor-platform.ts';
+import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { createFileServices } from './files/create-file-services.ts';
 import { createFlowServices } from './flow/create-flow-services.ts';
 import { createImpactServices } from './impact/create-impact-services.ts';
@@ -43,6 +47,14 @@ export interface MainServicesOptions {
   readonly lsp?: LspMultiplexerOptions;
   /** How the review and the chat find and run Claude Code (ADR 0022, 0031); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
+  /**
+   * The editor launcher (ADR 0033): `settingsPath` is the JSON file holding the preferred editor
+   * (in memory without it), `platform` replaces the real machine. Tests must pass a fake platform.
+   */
+  readonly editor?: {
+    readonly settingsPath?: string;
+    readonly platform?: EditorPlatform;
+  };
 }
 
 /**
@@ -106,6 +118,12 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     files: createFileServices({ context }),
     lsp,
     flow: createFlowServices({ context, parse: parser.parse }),
+    editor: createEditorServices({
+      context,
+      worktrees,
+      settings: createEditorSettings(options.editor?.settingsPath),
+      platform: options.editor?.platform ?? createSystemEditorPlatform(),
+    }),
     review,
     chat,
     ura,

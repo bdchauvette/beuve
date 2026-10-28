@@ -48,7 +48,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * Zone 3: the Universal Review Artifact staging dock (ADR 0023, 0027). Lists the session's staged
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: `j`/`k`
- * move, Enter jumps the diff stream to the item, Space opens its editor (title, body, severity),
+ * move, Enter jumps the diff stream to the item, `o` opens it in the editor (`beuve-open-editor`), Space opens its editor (title, body, severity),
  * `x` withdraws or restores it, `a` marks it addressed (or restages it), and `Shift+J`/`Shift+K`
  * move it down or up the export order. A verdict selector shows the derived default and refuses
  * approving over a staged blocker; export buttons copy the compiled review. Presentational: emits
@@ -327,6 +327,13 @@ export class BeuveUraDock extends LitElement {
         }
         return;
       }
+      case 'o': {
+        event.preventDefault();
+        if (current !== undefined) {
+          this.openInEditor(current);
+        }
+        return;
+      }
       case ' ': {
         event.preventDefault();
         if (current !== undefined) {
@@ -383,6 +390,17 @@ export class BeuveUraDock extends LitElement {
       ...this.items.filter((item) => item.status.kind === 'staged'),
       ...this.items.filter((item) => item.status.kind !== 'staged'),
     ];
+  }
+
+  /** `o`: the item's file at its current first line (line 1 for file notes and outdated items). */
+  private openInEditor(item: UraItemView): void {
+    const target = item.placement.kind === 'current' ? item.placement.anchor : item.anchor;
+    if (target.kind === 'change') {
+      return;
+    }
+    const line =
+      target.kind === 'lines' && item.placement.kind === 'current' ? target.startLine : 1;
+    this.emit('beuve-open-editor', { path: target.path, line });
   }
 
   private emit(name: string, detail: unknown): void {

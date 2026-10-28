@@ -1,4 +1,4 @@
-import type { ReviewEffort } from '#contract/ipc-contract.ts';
+import type { EditorId, ReviewEffort } from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 
 /** What the reviewer typed into the chat drawer, parsed (ADR 0022). */
@@ -7,6 +7,8 @@ export type ChatCommand =
   | { readonly kind: 'help' }
   /** Deletes the open session's transcript (ADR 0031). */
   | { readonly kind: 'clear' }
+  /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
+  | { readonly kind: 'editor'; readonly editorId?: EditorId }
   | {
       readonly kind: 'review';
       readonly pathPrefixes: readonly string[];
@@ -23,6 +25,7 @@ const whitespace = /\s+/u;
 
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`, and
+ * `/editor [zed|vscode|cursor]`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -46,6 +49,9 @@ export function parseChatCommand(input: string): ChatCommand {
         ? { kind: 'clear' }
         : invalid('/clear takes no arguments. Type /help for the commands.');
     }
+    case '/editor': {
+      return parseEditor(args);
+    }
     case '/review': {
       return parseReview(args);
     }
@@ -53,6 +59,23 @@ export function parseChatCommand(input: string): ChatCommand {
       return { kind: 'invalid', message: `Unknown command ${name}. Type /help for the commands.` };
     }
   }
+}
+
+const editorAliases: Readonly<Record<string, EditorId>> = {
+  zed: 'zed',
+  vscode: 'vscode',
+  code: 'vscode',
+  cursor: 'cursor',
+};
+
+function parseEditor(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'editor' };
+  }
+  const editorId = args.length === 1 ? editorAliases[(args[0] ?? '').toLowerCase()] : undefined;
+  return editorId === undefined
+    ? invalid('/editor takes zed, vscode or cursor, e.g. /editor zed.')
+    : { kind: 'editor', editorId };
 }
 
 function parseReview(args: readonly string[]): ChatCommand {
