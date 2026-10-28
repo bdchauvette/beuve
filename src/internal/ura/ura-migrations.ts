@@ -99,6 +99,25 @@ export const uraMigrations: readonly Migration[] = [
       ) STRICT;
     `,
   },
+  {
+    // ADR 0039: which staged items a posted GitHub review carried, so posting again sends only
+    // what is new. The item stays staged; the posting is a fact about it, not a status.
+    id: 'ura-0003-item-postings',
+    up: `
+      CREATE TABLE ura_item_postings (
+        item_id TEXT NOT NULL REFERENCES ura_items (id) ON DELETE CASCADE,
+        target TEXT NOT NULL CHECK (target IN ('github')),
+        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+        url TEXT NOT NULL CHECK (url GLOB 'http*://*'),
+        head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
+        placement TEXT NOT NULL CHECK (placement IN ('inline', 'body')),
+        posted_at TEXT NOT NULL CHECK (${timestamp('posted_at')}),
+        PRIMARY KEY (item_id, target)
+      ) STRICT;
+
+      CREATE INDEX ura_item_postings_by_session ON ura_item_postings (session_id, posted_at);
+    `,
+  },
 ];
 
 function allNull(columns: readonly string[]): string {
