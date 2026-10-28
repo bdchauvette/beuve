@@ -7,6 +7,9 @@ import path from 'node:path';
  * `claude-code-stream-fixture.ts`. Its first argument picks the behaviour, the second is an
  * optional file for its own and a child's pid; Claude Code's argv follows.
  * - `echo`: succeeds with `{ args, stdin, cwd, envKeys }` as structured output.
+ * - `review`: the second argument names a JSON file `{ insights, delayMs? }`; after `delayMs` it
+ *   succeeds with `{ insights }` as structured output, and appends `{ args, cwd }` as one line to
+ *   `<file>.calls` so tests can count runs and check the working directory and flags.
  * - `text-result`: succeeds with the JSON only in `result`, no `structured_output`.
  * - `garbage`: prints lines that aren't JSON and exits 0.
  * - `mismatch`: succeeds with structured output that matches no schema.
@@ -26,7 +29,7 @@ export function writeFakeClaude(directory: string): string {
 
 const source = String.raw`
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 const [mode, pidFile, ...args] = process.argv.slice(2);
 const emit = (event) => process.stdout.write(JSON.stringify(event) + '\n');
@@ -48,6 +51,18 @@ process.stdin.on('end', () => {
       const value = { args, stdin, cwd: process.cwd(), envKeys: Object.keys(process.env).sort() };
       result({ result: JSON.stringify(value), structured_output: value,
         permission_denials: [{ tool_name: 'Bash' }] });
+      break;
+    }
+    case 'review': {
+      const script = JSON.parse(readFileSync(pidFile, 'utf8'));
+      appendFileSync(pidFile + '.calls', JSON.stringify({ args, cwd: process.cwd() }) + '\n');
+      init();
+      emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: {} }] } });
+      setTimeout(() => {
+        emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
+        const value = { insights: script.insights };
+        result({ result: JSON.stringify(value), structured_output: value });
+      }, script.delayMs ?? 0);
       break;
     }
     case 'text-result': {
