@@ -1,6 +1,6 @@
 # 0022. Opt-in preliminary review, run from a chat command
 
-- Status: Accepted; run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md)
+- Status: Accepted; run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md); promotion stages a URA item since [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md)
 - Date: 2026-10-28
 
 ## Context
