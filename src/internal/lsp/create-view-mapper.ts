@@ -1,0 +1,112 @@
+import { convertRange } from './convert-range.ts';
+import type { LineIndex } from './line-index.ts';
+import type {
+  CallHierarchyNode,
+  DiagnosticSeverity,
+  DiagnosticView,
+  DocumentSymbolView,
+  HoverView,
+  LocationView,
+  Range,
+} from './lsp-model.ts';
+import type {
+  LspCallHierarchyItem,
+  LspDiagnostic,
+  LspDocumentSymbol,
+  LspLocation,
+  LspRange,
+  PositionEncoding,
+} from './lsp-protocol.ts';
+import { normalizeUri } from './normalize-uri.ts';
+import type { LspHover } from './parse-hover.ts';
+import type { WorkspaceRoot } from './resolve-workspace-root.ts';
+import { symbolKindName } from './symbol-kind-name.ts';
+import { toFileReference } from './to-file-reference.ts';
+import { positionEncodings } from './position-encodings.ts';
+
+export interface ViewMapperContext {
+  readonly root: WorkspaceRoot;
+  /** The server's negotiated encoding. */
+  readonly encoding: PositionEncoding;
+  /** Lines of a document by normalized URI, when known; needed unless the encoding is UTF-16. */
+  readonly lines: (uri: string) => LineIndex | undefined;
+}
+
+/** Converts checked protocol values into beuve's model: UTF-16 columns, root-relative files. */
+export interface ViewMapper {
+  readonly range: (uri: string, range: LspRange) => Range;
+  readonly location: (location: LspLocation) => LocationView;
+  readonly diagnostic: (uri: string, diagnostic: LspDiagnostic) => DiagnosticView;
+  readonly node: (id: string, item: LspCallHierarchyItem) => CallHierarchyNode;
+  readonly symbol: (uri: string, symbol: LspDocumentSymbol) => DocumentSymbolView;
+  readonly hover: (uri: string, hover: LspHover) => HoverView;
+}
+
+const severities: Readonly<Record<number, DiagnosticSeverity>> = {
+  1: 'error',
+  2: 'warning',
+  3: 'information',
+  4: 'hint',
+};
+
+/**
+ * Creates the mapper for one server's results. Columns in files whose lines are unknown (outside
+ * the root and not open) are passed through unconverted.
+ */
+export function createViewMapper(context: ViewMapperContext): ViewMapper {
+  const range = (uri: string, value: LspRange): Range =>
+    convertRange(
+      value,
+      context.lines(normalizeUri(uri)),
+      context.encoding,
+      positionEncodings.utf16,
+    );
+
+  const location = (value: LspLocation): LocationView => ({
+    file: toFileReference(context.root, value.uri),
+    range: range(value.uri, value.range),
+  });
+
+  const symbol = (uri: string, value: LspDocumentSymbol): DocumentSymbolView => ({
+    name: value.name,
+    kind: symbolKindName(value.kind),
+    detail: value.detail,
+    range: range(uri, value.range),
+    selectionRange: range(uri, value.selectionRange),
+    children: (value.children ?? []).map((child) => symbol(uri, child)),
+  });
+
+  return {
+    range,
+    location,
+    diagnostic: (uri, value): DiagnosticView => ({
+      range: range(uri, value.range),
+      severity: value.severity === undefined ? undefined : severities[value.severity],
+      code: value.code === undefined ? undefined : String(value.code),
+      source: value.source,
+      message: value.message,
+      tags: (value.tags ?? [])
+        .filter((tag) => tag === 1 || tag === 2)
+        .map((tag) => (tag === 1 ? 'unnecessary' : 'deprecated')),
+      related: (value.relatedInformation ?? []).map((related) => ({
+        location: location(related.location),
+        message: related.message,
+      })),
+    }),
+    node: (id, item): CallHierarchyNode => ({
+      id,
+      name: item.name,
+      kind: symbolKindName(item.kind),
+      detail: item.detail === '' ? undefined : item.detail,
+      file: toFileReference(context.root, item.uri),
+      range: range(item.uri, item.range),
+      selectionRange: range(item.uri, item.selectionRange),
+    }),
+    symbol,
+    hover: (uri, value): HoverView => ({
+      kind: value.kind,
+      value: value.value,
+      range: value.range === undefined ? undefined : range(uri, value.range),
+    }),
+  };
+}
