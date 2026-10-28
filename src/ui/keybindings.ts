@@ -9,8 +9,17 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['Tab', 'Shift+Tab'], action: 'Cycle zones', available: true },
   { keys: ['?'], action: 'Show this overlay', available: true },
   { keys: ['c'], action: 'Open / focus the chat input (again to close)', available: true },
-  { keys: ['Enter'], action: 'Chat: run the command (/review, /help)', available: true },
+  {
+    keys: ['Enter'],
+    action: 'Chat: ask a question, or run a command (/review, /clear, /help)',
+    available: true,
+  },
   { keys: ['Esc'], action: 'Chat: back to the diff stream', available: true },
+  {
+    keys: ['↑', '↓'],
+    action: 'Chat: move between citation pills and answer buttons (Enter activates)',
+    available: true,
+  },
   { keys: ['j', 'k'], action: 'Next / previous hunk (across files)', available: true },
   { keys: ['Space'], action: 'Expand / collapse', available: false },
   { keys: ['f'], action: 'Toggle diff-only tree', available: true },

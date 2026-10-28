@@ -64,6 +64,11 @@ describe('parseChatCommand', () => {
       kind: 'question',
       text: 'why does run_fast skip checks?',
     });
+    expect(parseChatCommand(' /CLEAR ')).toEqual({ kind: 'clear' });
+    expect(parseChatCommand('/clear now')).toEqual({
+      kind: 'invalid',
+      message: '/clear takes no arguments. Type /help for the commands.',
+    });
     expect(parseChatCommand('/explain foo')).toEqual({
       kind: 'invalid',
       message: 'Unknown command /explain. Type /help for the commands.',

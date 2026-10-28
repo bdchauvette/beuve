@@ -5,13 +5,15 @@ import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 export type ChatCommand =
   | { readonly kind: 'empty' }
   | { readonly kind: 'help' }
+  /** Deletes the open session's transcript (ADR 0031). */
+  | { readonly kind: 'clear' }
   | {
       readonly kind: 'review';
       readonly pathPrefixes: readonly string[];
       readonly fresh: boolean;
       readonly effort?: ReviewEffort;
     }
-  /** Plain text: a question for the Q&A chat, which doesn't exist yet. */
+  /** Plain text: a question about the change for the Q&A chat (ADR 0031). */
   | { readonly kind: 'question'; readonly text: string }
   /** An unknown command or a malformed one; `message` says how to fix it. */
   | { readonly kind: 'invalid'; readonly message: string };
@@ -20,7 +22,7 @@ const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 const whitespace = /\s+/u;
 
 /**
- * Parses one chat input line. Grammar: `/help` (or `/?`), and
+ * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -38,6 +40,11 @@ export function parseChatCommand(input: string): ChatCommand {
     case '/help':
     case '/?': {
       return { kind: 'help' };
+    }
+    case '/clear': {
+      return args.length === 0
+        ? { kind: 'clear' }
+        : invalid('/clear takes no arguments. Type /help for the commands.');
     }
     case '/review': {
       return parseReview(args);

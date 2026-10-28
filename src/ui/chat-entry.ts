@@ -1,15 +1,18 @@
 import type {
+  ChatMessageView,
   InsightStatusView,
   ReviewRunErrorView,
   ReviewRunSummaryView,
 } from '#contract/ipc-contract.ts';
 
 /**
- * One item of the chat drawer's transcript (kept in memory; `chat_messages` persistence arrives
- * with Q&A). `input` echoes what the reviewer typed.
+ * One item of the chat drawer's transcript. `message` entries are the session's stored Q&A
+ * (ADR 0031); `input`, `note` and `review` entries are this window's command echoes and results,
+ * kept in memory. `input` echoes what the reviewer typed.
  */
 export type ChatEntry =
   | ReviewChatEntry
+  | MessageChatEntry
   | { readonly id: number; readonly kind: 'input'; readonly text: string }
   | {
       readonly id: number;
@@ -17,6 +20,30 @@ export type ChatEntry =
       readonly tone: 'info' | 'error';
       readonly lines: readonly string[];
     };
+
+/** The entries this window makes up itself: command echoes, notes and review runs. */
+export type LocalChatEntry = Exclude<ChatEntry, MessageChatEntry>;
+
+/** A question or answer of the stored transcript; its `id` is the message's. */
+export interface MessageChatEntry {
+  readonly id: string;
+  readonly kind: 'message';
+  readonly message: ChatMessageView;
+}
+
+/** The transcript plus streamed text that arrived before its message was known. */
+export interface ChatTranscript {
+  readonly entries: readonly ChatEntry[];
+  /** By message id: events that beat the `chat:ask` response, replayed when it lands. */
+  readonly pending: Readonly<Record<string, PendingAnswer>>;
+}
+
+export interface PendingAnswer {
+  /** The raw text streamed so far. */
+  readonly text: string;
+  /** The final state, if the answer finished before the response landed. */
+  readonly settled?: ChatMessageView;
+}
 
 /** A `/review` command and what became of its run. */
 export interface ReviewChatEntry {

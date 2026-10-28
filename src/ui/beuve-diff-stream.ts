@@ -64,7 +64,8 @@ const unmountMargin = '6000px 0px';
  * it), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
  * to undo), and `m` opens a composer that stages the selected lines, the active hunk or the file
  * into the review dock (ADR 0027). Emits `beuve-mark-reviewed`, `beuve-peek-request`,
- * `beuve-peek-close`, `beuve-insight-status` and `beuve-ura-create`; `beuve-app` does the IPC.
+ * `beuve-peek-close`, `beuve-insight-status`, `beuve-ura-create` and `beuve-active-file` (the
+ * file the card cursor is on); `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
@@ -670,6 +671,15 @@ export class BeuveDiffStream extends LitElement {
   protected override updated(changed: PropertyValues<this>): void {
     if (changed.has('review')) {
       void this.observeCards();
+    }
+    if (changed.has('review') || changed.has('activeIndex')) {
+      this.dispatchEvent(
+        new CustomEvent('beuve-active-file', {
+          detail: { path: this.review?.files[this.activeIndex]?.path },
+          bubbles: true,
+          composed: true,
+        }),
+      );
     }
     const jump = this.insightJump;
     if (jump !== undefined && changed.has('insightJump')) {

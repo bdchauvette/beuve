@@ -37,3 +37,4 @@ Template: [0000-template.md](0000-template.md)
 | [0029](0029-flow-graph-channel-and-persisted-verdict.md)       | The flow graph channel, its portal, and the persisted reviewer verdict    | Accepted |
 | [0030](0030-llm-domain-and-structural-model-ports.md)          | The llm domain and structural model ports                                 | Accepted |
 | [0031](0031-read-only-qa-chat.md)                              | Read-only Q&A chat                                                        | Accepted |
+| [0032](0032-chat-wiring-one-answer-per-session.md)             | Chat wiring: one answer per session, refused not queued                   | Accepted |
