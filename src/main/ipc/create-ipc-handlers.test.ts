@@ -284,6 +284,65 @@ describe('createIpcHandlers for the preliminary review', () => {
   });
 });
 
+describe('createIpcHandlers for the chat', () => {
+  it('validates chat:ask and drops absent options', async () => {
+    const calls: unknown[] = [];
+    const base = stubServices({});
+    const handlers = createIpcHandlers(
+      {
+        ...base,
+        chat: {
+          ...base.chat,
+          ask: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    for (const bad of [
+      { sessionId: 's1' },
+      { sessionId: 's1', question: ' '.repeat(3) },
+      { sessionId: 's1', question: 'x'.repeat(8001) },
+      { sessionId: 's1', question: 'why?', focus: { path: '' } },
+      { sessionId: 's1', question: 'why?', focus: { path: 'a.ts', line: 0 } },
+      { sessionId: 's1', question: 'why?', extra: true },
+    ]) {
+      await expectInvalid(handlers['chat:ask'](bad));
+    }
+    await handlers['chat:ask']({ sessionId: 's1', question: '  why?  ' });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: 'why?',
+      focus: { path: 'src/a.ts', line: undefined },
+    });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: 'why?',
+      focus: { path: 'a', line: 3 },
+    });
+    expect(calls).toEqual([
+      { sessionId: 's1', question: 'why?' },
+      { sessionId: 's1', question: 'why?', focus: { path: 'src/a.ts' } },
+      { sessionId: 's1', question: 'why?', focus: { path: 'a', line: 3 } },
+    ]);
+  });
+
+  it('validates chat:list, chat:cancel and chat:clear', async () => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo);
+    await expectInvalid(handlers['chat:list']({}));
+    await expectInvalid(handlers['chat:clear']({ sessionId: '' }));
+    await expectInvalid(handlers['chat:cancel']({ messageId: 'not-a-uuid' }));
+    expect(handlers['chat:list']({ sessionId: 's1' })).toMatchObject({
+      error: { code: 'not-wired' },
+    });
+    expect(
+      handlers['chat:cancel']({ messageId: '00000000-0000-4000-8000-000000000001' }),
+    ).toMatchObject({ error: { code: 'not-wired' } });
+  });
+});
+
 describe('createIpcHandlers for the review dock and clipboard', () => {
   const id = '00000000-0000-4000-8000-000000000001';
 
@@ -331,6 +390,8 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { ...note, anchor: { kind: 'change', path: 'a' } },
       { ...note, headSha: 'abc' },
       { ...note, extra: 1 },
+      { ...note, origin: { kind: 'human' } },
+      { ...note, origin: { kind: 'chat-answer', messageId: 'm1' } },
     ]) {
       await expectInvalid(handlers['ura:create'](bad));
     }
@@ -344,6 +405,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(handlers['ura:list']({}));
 
     await handlers['ura:create'](note);
+    await handlers['ura:create']({ ...note, origin: { kind: 'chat-answer', messageId: id } });
     await handlers['ura:update']({ itemId: id, title: 'New' });
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
@@ -354,6 +416,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:set-verdict']({ sessionId: 's1' });
     expect(calls).toEqual([
       note,
+      { ...note, origin: { kind: 'chat-answer', messageId: id } },
       { itemId: id, title: 'New' },
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
@@ -407,6 +470,15 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       listInsights: async () => notWired,
       setInsightStatus: () => notWiredError,
       onProgress: () => doNothingSync,
+    },
+    chat: {
+      ask: async () => notWired,
+      list: () => notWiredError,
+      cancel: () => notWiredError,
+      clear: () => notWiredError,
+      onDelta: () => doNothingSync,
+      onMessageUpdated: () => doNothingSync,
+      dispose: doNothing,
     },
     ura: {
       list: async () => notWired,

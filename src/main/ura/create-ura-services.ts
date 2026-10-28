@@ -334,7 +334,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
           headSha: headSha as CommitSha,
           anchor: request.anchor,
           severity: request.severity,
-          origin: { kind: 'human' },
+          origin: request.origin ?? { kind: 'human' },
           title: request.title,
           body: request.body,
           ...(patch.trim() !== '' && { suggestion: patch }),

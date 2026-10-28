@@ -1,9 +1,3 @@
-import { constants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import process from 'node:process';
-
 import type {
   InsightListView,
   InsightStatusChangeView,
@@ -17,8 +11,6 @@ import type {
   ReviewRunSummaryView,
   SetInsightStatusRequest,
 } from '#contract/ipc-contract.ts';
-import { createClaudeCodeModel } from '#internal/llm/create-claude-code-model.ts';
-import type { ClaudeCodeModelOptions } from '#internal/llm/create-claude-code-model.ts';
 import type { LanguageModel } from '#internal/llm/language-model.ts';
 import type { AgentInsightId, CommitSha, SessionId } from '#internal/review/agent-insight.ts';
 import { findReviewRun } from '#internal/review/find-review-run.ts';
@@ -37,14 +29,14 @@ import type { Result } from '#pkg/result/result.ts';
 import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
-import { loadSession } from '../sessions/load-session.ts';
-import { refreshSession } from '../sessions/refresh-session.ts';
+import { refreshSessionHead } from '../sessions/refresh-session-head.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 
+import type { ClaudeCodeSettings } from './claude-code-settings.ts';
 import { modelErrorToRunError } from './model-error-to-run-error.ts';
 import type { AbortReason } from './model-error-to-run-error.ts';
-import { resolveClaudeCommand } from './resolve-claude-command.ts';
+import { resolveLanguageModel } from './resolve-language-model.ts';
 import { toAgentInsightView } from './to-agent-insight-view.ts';
 import { toReviewInput } from './to-review-input.ts';
 import { toReviewRunSummary } from './to-review-run-summary.ts';
@@ -63,20 +55,6 @@ export interface ReviewServices {
   readonly onProgress: (listener: (event: ReviewProgressView) => void) => () => void;
   /** Aborts every run and waits until their Claude Code processes are gone. */
   readonly dispose: () => Promise<void>;
-}
-
-/** How Claude Code is found and run. Every field has a production default. */
-export interface ClaudeCodeSettings {
-  /** A fixed executable (tests use Node with the fake script); otherwise resolved per run. */
-  readonly command?: string;
-  readonly leadingArgs?: readonly string[];
-  /** Where `BEUVE_CLAUDE_PATH`, `PATH` and Claude Code's allow-listed variables come from. */
-  readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly homeDirectory?: string;
-  /** Per run; defaults to the review domain's 10 minutes. */
-  readonly timeoutMs?: number;
-  readonly model?: string;
-  readonly killGraceMs?: number;
 }
 
 export interface ReviewServicesOptions {
@@ -110,7 +88,6 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
   const { context, impact, worktrees } = options;
   const { db, logger } = context;
   const claude = options.claude ?? {};
-  const env = claude.env ?? process.env;
   const jobs = new Map<string, Job>();
   const listeners = new Set<(event: ReviewProgressView) => void>();
   let isDisposed = false;
@@ -144,33 +121,8 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
   const resolveModel = async (
     request: ReviewRunRequest,
   ): Promise<Result<LanguageModel, ReviewRunErrorView>> => {
-    let { command } = claude;
-    if (command === undefined) {
-      const resolved = await resolveClaudeCommand({
-        env,
-        homeDirectory: claude.homeDirectory ?? os.homedir(),
-        platform: process.platform,
-        isExecutable,
-      });
-      if (resolved.kind === 'missing') {
-        return err({ code: 'not-installed', message: resolved.message });
-      }
-      command = resolved.command;
-    }
-    const modelOptions: ClaudeCodeModelOptions = {
-      command,
-      logger,
-      inheritedEnv: env,
-      ...(claude.leadingArgs !== undefined && { leadingArgs: claude.leadingArgs }),
-      ...(claude.model !== undefined && { model: claude.model }),
-      ...(claude.killGraceMs !== undefined && { killGraceMs: claude.killGraceMs }),
-      ...(request.effort !== undefined && { effort: request.effort }),
-      // A GUI app's PATH may lack the directory of the `node` an npm-installed `claude` needs.
-      ...(path.isAbsolute(command) && {
-        extraEnv: { PATH: withDirectory(path.dirname(command), env['PATH']) },
-      }),
-    };
-    return ok(createClaudeCodeModel(modelOptions));
+    const model = await resolveLanguageModel(claude, logger, request.effort);
+    return model.ok ? model : err({ code: 'not-installed', message: model.error.message });
   };
 
   const review = async (job: Job, request: ReviewRunRequest): Promise<RunOutcome> => {
@@ -333,7 +285,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
       if (isDisposed) {
         return err({ code: 'not-wired', message: 'beuve is quitting' });
       }
-      const head = await refreshHead(context, request.sessionId);
+      const head = await refreshSessionHead(context, request.sessionId);
       if (!head.ok) {
         return head;
       }
@@ -371,7 +323,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
     },
 
     listInsights: async ({ sessionId: requested }): Promise<IpcResult<InsightListView>> => {
-      const head = await refreshHead(context, requested);
+      const head = await refreshSessionHead(context, requested);
       if (!head.ok) {
         return head;
       }
@@ -423,41 +375,12 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
   };
 }
 
-async function isExecutable(file: string): Promise<boolean> {
-  try {
-    await access(file, constants.X_OK);
-    const stats = await stat(file);
-    return stats.isFile();
-  } catch {
-    return false;
-  }
-}
-
-function withDirectory(directory: string, searchPath = ''): string {
-  const entries = searchPath.split(path.delimiter).filter((entry) => entry !== '');
-  return [directory, ...entries.filter((entry) => entry !== directory)].join(path.delimiter);
-}
-
 function hasSameScope(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((prefix, index) => prefix === right[index]);
 }
 
 function identify(job: Job): { runId: string; sessionId: string; headSha: string } {
   return { runId: job.runId, sessionId: job.sessionId, headSha: job.headSha };
-}
-
-async function refreshHead(
-  context: SessionContext,
-  sessionId: string,
-): Promise<Result<{ sessionId: string; headSha: string }, IpcError>> {
-  const loaded = loadSession(context, sessionId);
-  if (!loaded.ok) {
-    return loaded;
-  }
-  const refreshed = await refreshSession(context, loaded.value);
-  return refreshed.ok
-    ? ok({ sessionId: refreshed.value.session.id, headSha: refreshed.value.session.headSha })
-    : refreshed;
 }
 
 function corrupt(context: SessionContext, error: unknown): Result<never, IpcError> {

@@ -11,6 +11,8 @@ import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
 import type { Logger } from '#pkg/logger/create-logger.ts';
 
+import { createChatServices } from './chat/create-chat-services.ts';
+import type { ChatServices } from './chat/create-chat-services.ts';
 import { createFileServices } from './files/create-file-services.ts';
 import { createFlowServices } from './flow/create-flow-services.ts';
 import { createImpactServices } from './impact/create-impact-services.ts';
@@ -19,7 +21,8 @@ import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import { createReviewServices } from './review/create-review-services.ts';
-import type { ClaudeCodeSettings, ReviewServices } from './review/create-review-services.ts';
+import type { ClaudeCodeSettings } from './review/claude-code-settings.ts';
+import type { ReviewServices } from './review/create-review-services.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
@@ -38,7 +41,7 @@ export interface MainServicesOptions {
   readonly syntax?: SyntaxParserOptions;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
-  /** How the preliminary review finds and runs Claude Code (ADR 0022); tests pass the fake. */
+  /** How the review and the chat find and run Claude Code (ADR 0022, 0031); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
 }
 
@@ -48,13 +51,15 @@ export interface MainServicesOptions {
  */
 export function createMainServices(options: MainServicesOptions): MainServices {
   const { logger } = options;
-  const heads: { review: ReviewServices | undefined; ura: UraServices | undefined } = {
-    review: undefined,
-    ura: undefined,
-  };
+  const heads: {
+    review: ReviewServices | undefined;
+    ura: UraServices | undefined;
+    chat: ChatServices | undefined;
+  } = { review: undefined, ura: undefined, chat: undefined };
   const onHeadMoved = (sessionId: string, headSha: string): void => {
     heads.review?.observeHead(sessionId, headSha);
     heads.ura?.observeHead(sessionId);
+    heads.chat?.observeHead(sessionId, headSha);
   };
   const context: SessionContext = {
     db: options.db,
@@ -86,6 +91,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ...(options.claude !== undefined && { claude: options.claude }),
   });
   heads.review = review;
+  const chat = createChatServices({
+    context,
+    impact,
+    worktrees,
+    ...(options.claude !== undefined && { claude: options.claude }),
+  });
+  heads.chat = chat;
   const ura = createUraServices({ context, impact });
   heads.ura = ura;
   return {
@@ -95,6 +107,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     lsp,
     flow: createFlowServices({ context, parse: parser.parse }),
     review,
+    chat,
     ura,
     mcpTools: createMcpTools({ context, impact, lsp, ura, openSessionId: () => open.sessionId }),
     pruneWorktrees: async (): Promise<void> => {
@@ -109,7 +122,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       );
     },
     dispose: async (): Promise<void> => {
-      await review.dispose();
+      await Promise.all([review.dispose(), chat.dispose()]);
       await multiplexer.dispose();
     },
   };

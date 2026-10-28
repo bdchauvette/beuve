@@ -17,6 +17,14 @@ describe('openAppDatabase', () => {
     expect(ids.findIndex((id) => id.startsWith('ura-'))).toBeGreaterThan(
       ids.findLastIndex((id) => id.startsWith('review-')),
     );
+    expect(ids.findIndex((id) => id.startsWith('chat-'))).toBeGreaterThan(
+      ids.findLastIndex((id) => id.startsWith('session-')),
+    );
+    expect(
+      db.prepare("SELECT name FROM sqlite_schema WHERE name = 'chat_messages';").get(),
+    ).toEqual({
+      name: 'chat_messages',
+    });
     expect(db.prepare("SELECT name FROM sqlite_schema WHERE name = 'ura_items';").get()).toEqual({
       name: 'ura_items',
     });

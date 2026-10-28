@@ -70,6 +70,27 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
       }),
     );
 
+  it('stages a chat answer as a note that remembers its message', async () => {
+    const messageId = '00000000-0000-4000-8000-0000000000aa';
+    const staged = value(
+      await services.ura.create({
+        sessionId,
+        anchor: { kind: 'change' },
+        severity: 'question',
+        title: 'From the chat',
+        body: 'An answer',
+        origin: { kind: 'chat-answer', messageId },
+      }),
+    );
+    expect(staged).toMatchObject({
+      origin: { kind: 'chat-answer', messageId },
+      status: { kind: 'staged' },
+    });
+    expect(value(await services.ura.list({ sessionId })).items.map((item) => item.origin)).toEqual([
+      { kind: 'chat-answer', messageId },
+    ]);
+  });
+
   it('creates, lists, edits, withdraws, restages and reorders human notes', async () => {
     const head = repo.git('rev-parse', 'feature');
     const first = await note(2, 3, 'Name the constant');

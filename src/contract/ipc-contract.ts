@@ -530,6 +530,114 @@ export type ReviewProgressView = {
   | { readonly kind: 'failed'; readonly error: ReviewRunErrorView }
 );
 
+/** The head-side lines an answer cites (ADR 0031); 1-based and inclusive. */
+export interface ChatCitationView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+/**
+ * Why an answer failed: `not-installed`, `not-authenticated`, `rate-limited`, `timeout`,
+ * `model-failed` (Claude Code ran but gave no usable answer), `chat-unavailable` (the diff or
+ * checkout failed) or `internal`.
+ */
+export type ChatErrorCode =
+  | 'not-installed'
+  | 'not-authenticated'
+  | 'rate-limited'
+  | 'timeout'
+  | 'model-failed'
+  | 'chat-unavailable'
+  | 'internal';
+
+/**
+ * One entry of a session's Q&A transcript (Zone 4). `content` is Markdown: while an assistant
+ * message `streaming` it is the raw, unvalidated preview (it may hold `[[…]]` markers that
+ * `citations` doesn't list); once `complete` its only markers are the listed citations. A
+ * `failed` message has an `errorCode` and a `errorMessage` that says what to do.
+ */
+export interface ChatMessageView {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly role: 'user' | 'assistant' | 'system-notice';
+  readonly content: string;
+  readonly citations: readonly ChatCitationView[];
+  readonly status: 'streaming' | 'complete' | 'failed' | 'cancelled';
+  readonly errorCode?: ChatErrorCode;
+  readonly errorMessage?: string;
+  readonly createdAt: string;
+}
+
+/** What the reviewer is looking at in the diff stream when asking. */
+export interface ChatFocusRequest {
+  readonly path: string;
+  readonly line?: number;
+}
+
+/**
+ * Asks a read-only question about the session's current change (ADR 0031). Answers at once with
+ * the stored question and the `streaming` answer; the text arrives as `chat:delta` events and the
+ * final state as `chat:message-updated`. One question can be in flight per session: asking while
+ * another streams is refused (`refused`).
+ */
+export interface ChatAskRequest {
+  readonly sessionId: string;
+  readonly question: string;
+  readonly focus?: ChatFocusRequest;
+}
+
+export interface ChatAskedView {
+  readonly question: ChatMessageView;
+  readonly answer: ChatMessageView;
+}
+
+export interface ChatListRequest {
+  readonly sessionId: string;
+}
+
+/** The session's whole transcript, oldest first. */
+export interface ChatListView {
+  readonly sessionId: string;
+  readonly messages: readonly ChatMessageView[];
+}
+
+export interface ChatCancelRequest {
+  readonly messageId: string;
+}
+
+/** `cancelled` is false when that answer was not streaming. */
+export interface ChatCancelledView {
+  readonly cancelled: boolean;
+}
+
+/** Deletes the session's transcript, stopping an answer in flight. */
+export interface ChatClearRequest {
+  readonly sessionId: string;
+}
+
+export interface ChatClearedView {
+  readonly removed: number;
+}
+
+/**
+ * Pushed on `chat:delta` while an answer streams. `append` adds text; `reset` drops what was
+ * streamed (the model wrote it before a tool call). The text is a raw preview.
+ */
+export interface ChatDeltaView {
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly kind: 'append' | 'reset';
+  /** Empty for `reset`. */
+  readonly text: string;
+}
+
+/** Pushed on `chat:message-updated` when an answer completes, fails or is cancelled. */
+export interface ChatMessageUpdatedView {
+  readonly message: ChatMessageView;
+}
+
 /** `pending` until the reviewer promotes (`y`) or dismisses (`d`) the insight. */
 export type InsightStatusView = 'pending' | 'promoted' | 'dismissed';
 
@@ -704,6 +812,8 @@ export interface CreateUraItemRequest {
   readonly title: string;
   readonly body: string;
   readonly suggestedPatch?: string;
+  /** Defaults to a note the reviewer wrote (`human`); `chat-answer` stages a chat answer. */
+  readonly origin?: { readonly kind: 'chat-answer'; readonly messageId: string };
 }
 
 /** Edits an item's text, severity or patch; an empty `suggestedPatch` removes the patch. */
@@ -918,6 +1028,16 @@ export interface InvokeChannelMap {
     readonly request: ExportUraRequest;
     readonly response: IpcResult<UraExportView>;
   };
+  'chat:ask': { readonly request: ChatAskRequest; readonly response: IpcResult<ChatAskedView> };
+  'chat:list': { readonly request: ChatListRequest; readonly response: IpcResult<ChatListView> };
+  'chat:cancel': {
+    readonly request: ChatCancelRequest;
+    readonly response: IpcResult<ChatCancelledView>;
+  };
+  'chat:clear': {
+    readonly request: ChatClearRequest;
+    readonly response: IpcResult<ChatClearedView>;
+  };
   'clipboard:write-text': {
     readonly request: WriteClipboardRequest;
     readonly response: IpcResult<{ readonly length: number }>;
@@ -939,6 +1059,8 @@ export type McpStatus =
 export interface EventChannelMap {
   'mcp:status': McpStatus;
   'review:progress': ReviewProgressView;
+  'chat:delta': ChatDeltaView;
+  'chat:message-updated': ChatMessageUpdatedView;
   'ura:changed': UraChangedView;
 }
 

@@ -8,6 +8,7 @@ import type {
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 
+import type { ChatServices } from './chat/create-chat-services.ts';
 import type { FileServices } from './files/create-file-services.ts';
 import type { FlowServices } from './flow/create-flow-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
@@ -36,10 +37,11 @@ export interface MainServices {
   readonly lsp: Pick<LspServices, 'callHierarchy'>;
   readonly flow: FlowServices;
   readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
+  readonly chat: Omit<ChatServices, 'observeHead'>;
   readonly ura: Omit<UraServices, 'observeHead' | 'readAgentReview'>;
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;
-  /** Aborts preliminary reviews and stops the language servers. Call once, on quit. */
+  /** Aborts preliminary reviews and chat answers and stops the language servers. Call once, on quit. */
   readonly dispose: () => Promise<void>;
 }

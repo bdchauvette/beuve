@@ -16,7 +16,7 @@ import { createLogger } from '#pkg/logger/create-logger.ts';
 import { createMainServices } from './create-main-services.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
-import type { ClaudeCodeSettings } from './review/create-review-services.ts';
+import type { ClaudeCodeSettings } from './review/claude-code-settings.ts';
 
 const featureLines = ['pub fn feature() -> u8 {', '  1', '}'];
 

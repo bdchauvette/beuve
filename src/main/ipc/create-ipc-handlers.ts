@@ -9,6 +9,10 @@ import type {
   AppInfo,
   CallHierarchyRequest,
   CallHierarchyView,
+  ChatAskedView,
+  ChatCancelledView,
+  ChatClearedView,
+  ChatListView,
   FilePairView,
   FlowGraphResponse,
   ImpactView,
@@ -135,6 +139,7 @@ const uraCreateRequest = z.strictObject({
   title: uraTitle,
   body: uraBody,
   suggestedPatch: uraPatch.optional(),
+  origin: z.strictObject({ kind: z.literal('chat-answer'), messageId: uuid }).optional(),
 });
 
 const uraUpdateRequest = z.strictObject({
@@ -170,6 +175,14 @@ const uraExportRequest = z.strictObject({
 });
 
 const verdictChoiceRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
+
+const chatAskRequest = z.strictObject({
+  sessionId,
+  question: z.string().trim().min(1).max(8000),
+  focus: z.strictObject({ path: repositoryPath, line: line.optional() }).optional(),
+});
+
+const chatCancelRequest = z.strictObject({ messageId: uuid });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
@@ -258,10 +271,11 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { headSha, suggestedPatch, ...required } = parsed.data;
+      const { headSha, suggestedPatch, origin, ...required } = parsed.data;
       return services.ura.create({
         ...required,
         ...(headSha !== undefined && { headSha }),
+        ...(origin !== undefined && { origin }),
         ...(suggestedPatch !== undefined && { suggestedPatch }),
       });
     },
@@ -317,6 +331,31 @@ export function createIpcHandlers(
       }
       const { verdict, ...required } = parsed.data;
       return services.ura.export({ ...required, ...(verdict !== undefined && { verdict }) });
+    },
+    'chat:ask': async (request): Promise<IpcResult<ChatAskedView>> => {
+      const parsed = chatAskRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { focus, ...required } = parsed.data;
+      return services.chat.ask({
+        ...required,
+        ...(focus !== undefined && {
+          focus: { path: focus.path, ...(focus.line !== undefined && { line: focus.line }) },
+        }),
+      });
+    },
+    'chat:list': (request): IpcResult<ChatListView> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.chat.list(parsed.data) : invalid(parsed.error);
+    },
+    'chat:cancel': (request): IpcResult<ChatCancelledView> => {
+      const parsed = chatCancelRequest.safeParse(request);
+      return parsed.success ? services.chat.cancel(parsed.data) : invalid(parsed.error);
+    },
+    'chat:clear': (request): IpcResult<ChatClearedView> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.chat.clear(parsed.data) : invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

@@ -25,5 +25,9 @@ export const invokeChannels = Object.freeze([
   'ura:stage-impact-finding',
   'ura:set-verdict',
   'ura:export',
+  'chat:ask',
+  'chat:list',
+  'chat:cancel',
+  'chat:clear',
   'clipboard:write-text',
 ] as const satisfies readonly InvokeChannel[]);
