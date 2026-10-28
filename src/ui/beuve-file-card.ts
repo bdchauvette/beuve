@@ -2,11 +2,17 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { DiffFileView } from '#contract/ipc-contract.ts';
+import type { DiffFileView, FileImpactView, ImpactFindingView } from '#contract/ipc-contract.ts';
 
+import './beuve-peek-portal.ts';
+import { describeFileImpact } from './describe-file-impact.ts';
+import type { PeekState } from './peek-state.ts';
 import { splitPatch } from './split-patch.ts';
 
-/** One file of the review diff: its path, status, line counts and raw patch. */
+/**
+ * One file of the review diff: its path, status, line counts and raw patch, with the ImpactGate
+ * banner once the impact check has run and the call-stack peek portal while it is open.
+ */
 @customElement('beuve-file-card')
 export class BeuveFileCard extends LitElement {
   static override styles = css`
@@ -96,11 +102,39 @@ export class BeuveFileCard extends LitElement {
     .note {
       color: var(--beuve-text-muted);
     }
+
+    .impact {
+      padding: var(--beuve-space-1) var(--beuve-space-3);
+      border-bottom: 1px solid var(--beuve-border);
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
+    .impact.warning {
+      background: color-mix(in srgb, var(--beuve-warn) 12%, transparent);
+      color: var(--beuve-warn);
+    }
+
+    .impact .label {
+      font-weight: 600;
+    }
   `;
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
   @property({ type: Boolean, reflect: true }) accessor active = false;
+  /** This file's ImpactGate entry; `undefined` until the check has run. */
+  @property({ attribute: false }) accessor impact: FileImpactView | undefined;
+  @property({ attribute: false }) accessor findings: readonly ImpactFindingView[] = [];
+  @property({ attribute: false }) accessor peek: PeekState | undefined;
 
+  private renderImpact(): TemplateResult | typeof nothing {
+    const banner = describeFileImpact(this.impact, this.findings);
+    return banner === undefined
+      ? nothing
+      : html`<div class="impact ${banner.tone}" title=${banner.title} role="status">
+          <span class="label">ImpactGate</span> ${banner.text}
+        </div>`;
+  }
   override render(): TemplateResult {
     const { file } = this;
     if (file === undefined) {
@@ -119,6 +153,8 @@ export class BeuveFileCard extends LitElement {
         <span class="additions">+${file.additions}</span>
         <span class="deletions">−${file.deletions}</span>
       </div>
+      ${this.renderImpact()}
+      ${this.peek === undefined ? nothing : html`<beuve-peek-portal .peek=${this.peek}></beuve-peek-portal>`}
       <pre>
 ${splitPatch(file.patch).map(
           (line) =>

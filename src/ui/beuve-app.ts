@@ -4,7 +4,9 @@ import { customElement, state } from 'lit/decorators.js';
 
 import type {
   AppInfo,
+  CallHierarchyView,
   CreateLocalSessionRequest,
+  ImpactView,
   IpcResult,
   McpStatus,
   ReviewView,
@@ -19,6 +21,7 @@ import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import { cycleZone } from './cycle-zone.ts';
+import type { PeekChildren, PeekState } from './peek-state.ts';
 import { zones } from './zones.ts';
 import type { ZoneId } from './zones.ts';
 
@@ -117,6 +120,20 @@ export class BeuveApp extends LitElement {
     void this.markReviewed();
   };
 
+  private readonly onPeekRequest = (
+    event: CustomEvent<{ path: string; line: number | undefined }>,
+  ): void => {
+    void this.openPeek(event.detail.path, event.detail.line);
+  };
+
+  private readonly onPeekExpand = (event: CustomEvent<{ nodeId: string }>): void => {
+    void this.expandPeek(event.detail.nodeId);
+  };
+
+  private readonly onPeekClose = (): void => {
+    this.peek = undefined;
+  };
+
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor chatOpen = false;
   @state() accessor overlayOpen = false;
@@ -126,6 +143,8 @@ export class BeuveApp extends LitElement {
   @state() accessor sessions: readonly SessionSummary[] = [];
   @state() accessor selectedId = '';
   @state() accessor review: ReviewView | undefined;
+  @state() accessor impact: ImpactView | undefined;
+  @state() accessor peek: PeekState | undefined;
   @state() accessor reviewLoading = false;
   @state() accessor reviewError = '';
   @state() accessor marking = false;
@@ -234,13 +253,96 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.reviewLoading = false;
+    this.peek = undefined;
     if (review.ok) {
       this.review = review.value;
       this.focusedZone = 'diff';
+      void this.loadImpact(review.value);
     } else {
       this.review = undefined;
       this.reviewError = review.error.message;
     }
+  }
+
+  /** ImpactGate runs after the review has rendered, so parsing never delays the diff. */
+  private async loadImpact(review: ReviewView): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined || review.files.length === 0) {
+      this.impact = undefined;
+      return;
+    }
+    if (this.impact?.headSha !== review.headSha || this.impact.sessionId !== review.session.id) {
+      this.impact = undefined;
+    }
+    const impact = await bridge.invoke('session:get-impact', { sessionId: review.session.id });
+    if (this.review !== review) {
+      return;
+    }
+    this.impact = impact.ok && impact.value.headSha === review.headSha ? impact.value : undefined;
+  }
+
+  private async openPeek(path: string, line: number | undefined): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    if (line === undefined) {
+      this.peek = {
+        path,
+        line,
+        status: 'error',
+        message: 'This file has no head-side change to peek at.',
+      };
+      return;
+    }
+    const pending: PeekState = { path, line, status: 'loading' };
+    this.peek = pending;
+    const answer = await bridge.invoke('lsp:call-hierarchy', {
+      sessionId: review.session.id,
+      path,
+      line,
+      direction: 'incoming',
+    });
+    if (this.peek !== pending || this.review !== review) {
+      return;
+    }
+    this.peek = toPeekState(path, line, answer);
+  }
+
+  private async expandPeek(nodeId: string): Promise<void> {
+    const bridge = beuveBridge();
+    const { review, peek } = this;
+    if (bridge === undefined || review === undefined || peek?.status !== 'ready') {
+      return;
+    }
+    const withChildren = (state: PeekState, children: PeekChildren): PeekState =>
+      state.status === 'ready'
+        ? { ...state, children: new Map(state.children).set(nodeId, children) }
+        : state;
+    this.peek = withChildren(peek, { status: 'loading' });
+    const answer = await bridge.invoke('lsp:call-hierarchy', {
+      sessionId: review.session.id,
+      path: peek.path,
+      line: peek.line ?? 1,
+      direction: 'incoming',
+      nodeId,
+    });
+    const current = this.currentPeek();
+    if (current?.status !== 'ready' || current.root.id !== peek.root.id) {
+      return;
+    }
+    this.peek = withChildren(
+      current,
+      answer.ok
+        ? { status: 'ready', calls: answer.value.calls }
+        : { status: 'error', message: answer.error.message },
+    );
+  }
+
+  /** Reads the peek state afresh after an await, when it may have changed. */
+  private currentPeek(): PeekState | undefined {
+    return this.peek;
   }
 
   private async markReviewed(): Promise<void> {
@@ -343,7 +445,12 @@ export class BeuveApp extends LitElement {
         ?loading=${this.reviewLoading}
         ?marking=${this.marking}
         .error=${this.reviewError}
+        .impact=${this.impact}
+        .peek=${this.peek}
         @beuve-mark-reviewed=${this.onMarkReviewed}
+        @beuve-peek-request=${this.onPeekRequest}
+        @beuve-peek-expand=${this.onPeekExpand}
+        @beuve-peek-close=${this.onPeekClose}
       ></beuve-diff-stream>
       <beuve-ura-dock
         data-zone="ura"
@@ -378,6 +485,22 @@ export class BeuveApp extends LitElement {
       element.focus();
     }
   }
+}
+
+function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchyView>): PeekState {
+  if (!answer.ok) {
+    return { path, line, status: 'error', message: answer.error.message };
+  }
+  const { root, calls } = answer.value;
+  return root === undefined
+    ? { path, line, status: 'error', message: 'The language server found nothing callable here.' }
+    : {
+        path,
+        line,
+        status: 'ready',
+        root,
+        children: new Map([[root.id, { status: 'ready', calls }]]),
+      };
 }
 
 function isEditable(event: KeyboardEvent): boolean {

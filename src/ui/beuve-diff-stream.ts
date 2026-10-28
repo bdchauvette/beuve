@@ -2,16 +2,20 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { ReviewView } from '#contract/ipc-contract.ts';
+import type { ImpactView, ReviewView } from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
+import { findFirstChangedLine } from './find-first-changed-line.ts';
+import type { PeekState } from './peek-state.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
  * Zone 2: the diff stream. Shows the open session's review as file cards with a header naming the
- * review kind; `j`/`k` move between cards while the zone has focus. Diff cards move to
- * `@pierre/diffs` in Phase 2. Emits `beuve-mark-reviewed`; `beuve-app` does the IPC.
+ * review kind and ImpactGate banners once they arrive; `j`/`k` move between cards and `p` toggles
+ * the focused card's call-stack peek (Escape closes it) while the zone has focus. Diff cards move
+ * to `@pierre/diffs` in Phase 2. Emits `beuve-mark-reviewed`, `beuve-peek-request` and
+ * `beuve-peek-close`; `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
@@ -103,6 +107,16 @@ export class BeuveDiffStream extends LitElement {
         cursor: default;
       }
 
+      .impact {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .impact.warning {
+        color: var(--beuve-warn);
+        font-weight: 600;
+      }
+
       .cards {
         display: flex;
         flex-direction: column;
@@ -113,6 +127,11 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) {
+      return;
+    }
+    if (event.key === 'p' || (event.key === 'Escape' && this.peek !== undefined)) {
+      event.preventDefault();
+      this.togglePeek(event.key === 'Escape');
       return;
     }
     const step = { j: 1, k: -1 }[event.key];
@@ -136,12 +155,30 @@ export class BeuveDiffStream extends LitElement {
   @property({ type: Boolean }) accessor loading = false;
   @property({ type: Boolean }) accessor marking = false;
   @property() accessor error = '';
+  /** ImpactGate for `review`, once `session:get-impact` has answered. */
+  @property({ attribute: false }) accessor impact: ImpactView | undefined;
+  @property({ attribute: false }) accessor peek: PeekState | undefined;
 
   @state() accessor activeIndex = 0;
 
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+  }
+
+  private togglePeek(isClosing: boolean): void {
+    const file = this.review?.files[this.activeIndex];
+    if (isClosing || file === undefined || this.peek?.path === file.path) {
+      this.dispatchEvent(new CustomEvent('beuve-peek-close', { bubbles: true, composed: true }));
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-peek-request', {
+        detail: { path: file.path, line: findFirstChangedLine(file.patch) },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private renderWelcome(): TemplateResult {
@@ -169,6 +206,7 @@ export class BeuveDiffStream extends LitElement {
           >${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} +${additions}
           −${deletions}</span
         >
+        ${this.renderImpactTotals()}
         <span class="spacer"></span>
         ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
         <button
@@ -188,6 +226,9 @@ export class BeuveDiffStream extends LitElement {
                   (file, index) =>
                     html`<beuve-file-card
                       .file=${file}
+                      .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
+                      .findings=${this.impact?.findings ?? []}
+                      .peek=${this.peek?.path === file.path ? this.peek : undefined}
                       ?active=${index === this.activeIndex}
                       @click=${(): void => {
                         this.activeIndex = index;
@@ -198,6 +239,20 @@ export class BeuveDiffStream extends LitElement {
         }
       </div>
     `;
+  }
+
+  private renderImpactTotals(): TemplateResult | typeof nothing {
+    const { impact } = this;
+    if (impact === undefined || impact.headSha !== this.review?.headSha) {
+      return nothing;
+    }
+    const count = impact.totals.findings;
+    return html`<span
+      class="impact ${count > 0 ? 'warning' : ''}"
+      title="ImpactGate computed in ${String(impact.computeMs)} ms"
+      >ImpactGate:
+      ${count === 0 ? 'no findings' : `${String(count)} ${count === 1 ? 'finding' : 'findings'}`}</span
+    >`;
   }
 
   override render(): TemplateResult {
