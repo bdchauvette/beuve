@@ -26,8 +26,8 @@ export interface StartAppOptions {
 }
 
 /**
- * Composes the running app once Electron is ready: security policy, IPC, the main window and
- * the MCP server. Call from `app.once('ready')`; never awaited at top level (see CLAUDE.md).
+ * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC, the
+ * main window and the MCP server; language servers are disposed before quitting. Call from `app.once('ready')`; never awaited at top level (see CLAUDE.md).
  */
 export async function startApp(app: App, options: StartAppOptions): Promise<void> {
   const { logger, services } = options;
@@ -45,6 +45,7 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     });
   };
 
+  void services.pruneWorktrees();
   hardenSession(session.defaultSession);
   app.on('web-contents-created', (_event, contents) => {
     hardenWebContents(contents, logger);
@@ -74,7 +75,10 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     port: options.mcpPort,
     onStatus: publishMcpStatus,
   });
-  stopBeforeQuit(app, stopMcp);
+  stopBeforeQuit(app, async (): Promise<void> => {
+    await stopMcp();
+    await services.dispose();
+  });
 }
 
 function readAppInfo(app: App): AppInfo {

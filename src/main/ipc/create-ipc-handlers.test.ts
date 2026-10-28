@@ -103,6 +103,57 @@ describe('createIpcHandlers', () => {
   });
 });
 
+describe('createIpcHandlers for impact and call hierarchy', () => {
+  it('validates session:get-impact before delegating', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        impact: {
+          getImpact: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    await expectInvalid(handlers['session:get-impact']({ sessionId: 's1', paths: [] }));
+    await handlers['session:get-impact']({ sessionId: 's1' });
+    expect(calls).toEqual([{ sessionId: 's1' }]);
+  });
+
+  it('validates lsp:call-hierarchy and drops absent optional fields', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          callHierarchy: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts', line: 3, direction: 'incoming' };
+    for (const bad of [
+      { ...good, line: 0 },
+      { ...good, line: 1.5 },
+      { ...good, character: -1 },
+      { ...good, direction: 'sideways' },
+      { ...good, path: '' },
+      { ...good, extra: true },
+    ]) {
+      await expectInvalid(handlers['lsp:call-hierarchy'](bad));
+    }
+    await handlers['lsp:call-hierarchy'](good);
+    await handlers['lsp:call-hierarchy']({ ...good, character: 4, nodeId: 'n1' });
+    expect(calls).toEqual([good, { ...good, character: 4, nodeId: 'n1' }]);
+  });
+});
+
 async function expectInvalid(response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
@@ -117,7 +168,11 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       markReviewed: async () => notWired,
       ...overrides,
     },
+    impact: { getImpact: async () => notWired },
+    lsp: { callHierarchy: async () => notWired },
     mcpTools: unimplementedMcpTools,
+    pruneWorktrees: doNothing,
+    dispose: doNothing,
   };
 }
 
@@ -153,4 +208,8 @@ function recording(name: Exclude<keyof SessionServices, 'list'>): {
     },
   };
   return { calls, services: stubServices(overrides[name]) };
+}
+
+async function doNothing(): Promise<void> {
+  // Stub services own no resources.
 }

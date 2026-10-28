@@ -9,7 +9,9 @@ const sessionId = z
   .min(1)
   .max(200)
   .optional()
-  .describe('Review session id. Defaults to the session open in beuve.');
+  .describe(
+    'Review session id. Defaults to the session open in beuve, or the only session if just one exists.',
+  );
 const path = z.string().min(1).max(4096).describe('File path, relative to the repository root.');
 
 /**
@@ -24,7 +26,10 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
     {
       title: 'LSP diagnostics',
       description:
-        'Language-server diagnostics (errors, warnings) for a file in the review worktree.',
+        'Language-server diagnostics (errors, warnings) for a file, checked in a detached checkout ' +
+        "of the review session's head commit (not the user's working tree). Lines and columns in " +
+        'the result are 1-based (columns count UTF-16 code units). `freshness` says whether the ' +
+        'server settled (`fresh`), kept its previous report (`assumed-unchanged`) or timed out.',
       inputSchema: { path, sessionId },
       annotations: { readOnlyHint: true },
     },
@@ -36,7 +41,10 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
     {
       title: 'ImpactGate check',
       description:
-        'Scores marginal change impact and flags methods over the cognitive complexity limit.',
+        "ImpactGate: scores how the review diff (base to the session's head) moves the complexity " +
+        'of the functions it touches, and lists findings: changed functions over the cognitive ' +
+        'complexity limit, with their trend against the base. Lines are 1-based; percentiles rank ' +
+        "against every head function in the review's analyzed files.",
       inputSchema: {
         sessionId,
         paths: z.array(path).max(1000).optional().describe('Limit the check to these files.'),
@@ -75,7 +83,15 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
 }
 
 function toToolResult(outcome: McpToolOutcome): CallToolResult {
-  return outcome.ok
-    ? { content: [{ type: 'text', text: JSON.stringify(outcome.value) }] }
-    : { isError: true, content: [{ type: 'text', text: outcome.error }] };
+  if (!outcome.ok) {
+    return { isError: true, content: [{ type: 'text', text: outcome.error }] };
+  }
+  const content: CallToolResult['content'] = [
+    { type: 'text', text: JSON.stringify(outcome.value) },
+  ];
+  return isRecord(outcome.value) ? { content, structuredContent: outcome.value } : { content };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

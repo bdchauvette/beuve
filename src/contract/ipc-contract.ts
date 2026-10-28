@@ -136,9 +136,192 @@ export interface ReviewView {
   readonly files: readonly DiffFileView[];
 }
 
+export interface GetImpactRequest {
+  readonly sessionId: string;
+}
+
+/** One function's complexity (ADR 0015). */
+export interface FunctionMetricsView {
+  readonly cognitive: number;
+  readonly cyclomatic: number;
+  readonly lines: number;
+  readonly maxNesting: number;
+  readonly parameters: number;
+}
+
+/** Where a function sat on one side of the change. Lines are 1-based and inclusive. */
+export interface FunctionSnapshotView {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly metrics: FunctionMetricsView;
+}
+
+interface FunctionImpactViewCommon {
+  readonly name: string;
+  /** Its lines intersect the diff. */
+  readonly inDiff: boolean;
+  /** Head minus base, an absent side counting as zeros. */
+  readonly delta: FunctionMetricsView;
+}
+
+/** How the change moved one function. `percentile` (0–100) ranks the head cognitive value. */
+export type FunctionImpactView = FunctionImpactViewCommon &
+  (
+    | {
+        readonly change: 'added';
+        readonly head: FunctionSnapshotView;
+        readonly percentile: number;
+      }
+    | { readonly change: 'removed'; readonly base: FunctionSnapshotView }
+    | {
+        readonly change: 'modified' | 'unchanged';
+        readonly base: FunctionSnapshotView;
+        readonly head: FunctionSnapshotView;
+        readonly percentile: number;
+      }
+    | {
+        readonly change: 'renamed';
+        readonly previousName: string;
+        readonly base: FunctionSnapshotView;
+        readonly head: FunctionSnapshotView;
+        readonly percentile: number;
+      }
+  );
+
+/** Totals for one file of the impact check. */
+export interface FileAggregateView {
+  readonly baseFunctions: number;
+  readonly headFunctions: number;
+  readonly baseCognitive: number;
+  readonly headCognitive: number;
+  readonly cognitiveDelta: number;
+  readonly maxCognitive: number;
+  readonly changedFunctions: number;
+  readonly findings: number;
+}
+
+/**
+ * Why a file was not analyzed: no rules for its language, a side over the size limit, a parse
+ * failure, a binary side, a submodule, or no text on either side.
+ */
+export type ImpactSkipReason =
+  'unsupported-language' | 'too-large' | 'parse-failed' | 'binary' | 'submodule' | 'no-source';
+
+export type FileImpactView =
+  | {
+      readonly status: 'analyzed';
+      readonly path: string;
+      readonly previousPath?: string;
+      readonly language: string;
+      readonly parseErrors: boolean;
+      readonly aggregate: FileAggregateView;
+      readonly functions: readonly FunctionImpactView[];
+    }
+  | {
+      readonly status: 'skipped';
+      readonly path: string;
+      readonly previousPath?: string;
+      readonly reason: ImpactSkipReason;
+    };
+
+/** A changed function over the cognitive limit, and how that compares with the base. */
+export interface ImpactFindingView {
+  readonly kind: 'cognitive-complexity';
+  readonly path: string;
+  readonly functionName: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly value: number;
+  readonly limit: number;
+  readonly baseValue?: number;
+  readonly trend: 'introduced' | 'worsened' | 'unchanged' | 'improved';
+  readonly percentile: number;
+}
+
+/**
+ * ImpactGate for the diff `session:get-review` shows for the same session, base and head
+ * (ADR 0015). Computed on demand and cached per diff, so it never delays the review itself.
+ */
+export interface ImpactView {
+  readonly sessionId: string;
+  readonly baseSha: string;
+  readonly headSha: string;
+  readonly cognitiveMax: number;
+  /** Head functions the percentiles rank against. */
+  readonly population: number;
+  readonly files: readonly FileImpactView[];
+  readonly findings: readonly ImpactFindingView[];
+  readonly totals: {
+    readonly analyzedFiles: number;
+    readonly skippedFiles: number;
+    readonly added: number;
+    readonly removed: number;
+    readonly modified: number;
+    readonly cognitiveDelta: number;
+    readonly findings: number;
+  };
+  /** Wall time of the computation that produced this report (blob reads and parsing). */
+  readonly computeMs: number;
+}
+
+/**
+ * Call hierarchy for the peek portal, run by the language server against a checkout of the
+ * session head. Without `nodeId`, the hierarchy is rooted at the callable at `line` (1-based) and
+ * `character` (0-based UTF-16), or, without `character`, at the innermost function, method or
+ * constructor enclosing `line`. With `nodeId` (from an earlier answer), that node is expanded.
+ */
+export interface CallHierarchyRequest {
+  readonly sessionId: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+  readonly line: number;
+  readonly character?: number;
+  readonly direction: 'incoming' | 'outgoing';
+  readonly nodeId?: string;
+}
+
+/**
+ * Whether a node's declaration overlaps the lines the review changed on the head side
+ * (`modified`), doesn't (`untouched`), or lies outside the repository (`external`).
+ */
+export type CallHierarchyBadgeView = 'modified' | 'untouched' | 'external';
+
+/** A callable in the hierarchy. Lines are 1-based and inclusive. */
+export interface CallHierarchyNodeView {
+  /** Pass back as `nodeId` to expand this node. */
+  readonly id: string;
+  readonly name: string;
+  /** `function`, `method`, `constructor`, … */
+  readonly kind: string;
+  readonly detail?: string;
+  readonly file:
+    | { readonly kind: 'workspace'; readonly path: string }
+    | { readonly kind: 'external'; readonly uri: string };
+  readonly startLine: number;
+  readonly endLine: number;
+  /** Where the name is. */
+  readonly selectionLine: number;
+  readonly badge: CallHierarchyBadgeView;
+}
+
+/** An edge: for incoming calls `node` is a caller, for outgoing a callee. */
+export interface CallHierarchyCallView {
+  readonly node: CallHierarchyNodeView;
+  /** 1-based lines of the call sites. */
+  readonly callSiteLines: readonly number[];
+}
+
+/** `root` is the node the hierarchy starts at; absent when an existing node was expanded. */
+export interface CallHierarchyView {
+  readonly direction: 'incoming' | 'outgoing';
+  readonly root?: CallHierarchyNodeView;
+  readonly calls: readonly CallHierarchyCallView[];
+}
+
 /**
  * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
- * yet; `stale-review` that the head moved after the reviewer last saw it.
+ * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
+ * language server handles the file; `lsp-failed` that the language server could not answer.
  */
 export type IpcErrorCode =
   | 'invalid-request'
@@ -149,6 +332,8 @@ export type IpcErrorCode =
   | 'git-unavailable'
   | 'git-failed'
   | 'stale-review'
+  | 'unsupported'
+  | 'lsp-failed'
   | 'internal';
 
 export interface IpcError {
@@ -181,6 +366,14 @@ export interface InvokeChannelMap {
   'session:mark-reviewed': {
     readonly request: MarkReviewedRequest;
     readonly response: IpcResult<SessionSummary>;
+  };
+  'session:get-impact': {
+    readonly request: GetImpactRequest;
+    readonly response: IpcResult<ImpactView>;
+  };
+  'lsp:call-hierarchy': {
+    readonly request: CallHierarchyRequest;
+    readonly response: IpcResult<CallHierarchyView>;
   };
 }
 

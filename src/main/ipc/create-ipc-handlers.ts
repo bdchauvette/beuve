@@ -6,6 +6,9 @@ import type { Err } from '#pkg/result/result.ts';
 
 import type {
   AppInfo,
+  CallHierarchyRequest,
+  CallHierarchyView,
+  ImpactView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
@@ -37,6 +40,15 @@ const markReviewedRequest = z.strictObject({
     .string()
     .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
     .optional(),
+});
+
+const callHierarchyRequest = z.strictObject({
+  sessionId,
+  path: z.string().min(1).max(4096),
+  line: z.number().int().min(1).max(10_000_000),
+  character: z.number().int().min(0).max(10_000_000).optional(),
+  direction: z.enum(['incoming', 'outgoing']),
+  nodeId: z.string().min(1).max(200).optional(),
 });
 
 /**
@@ -75,6 +87,25 @@ export function createIpcHandlers(services: MainServices, appInfo: AppInfo): Ipc
         expectedHeadSha === undefined ? { sessionId: id } : { sessionId: id, expectedHeadSha },
       );
     },
+    'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.impact.getImpact(parsed.data) : invalid(parsed.error);
+    },
+    'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
+      const parsed = callHierarchyRequest.safeParse(request);
+      return parsed.success
+        ? services.lsp.callHierarchy(withoutUndefined(parsed.data))
+        : invalid(parsed.error);
+    },
+  };
+}
+
+function withoutUndefined(request: z.infer<typeof callHierarchyRequest>): CallHierarchyRequest {
+  const { character, nodeId, ...required } = request;
+  return {
+    ...required,
+    ...(character !== undefined && { character }),
+    ...(nodeId !== undefined && { nodeId }),
   };
 }
 

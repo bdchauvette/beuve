@@ -29,12 +29,19 @@ if (app.requestSingleInstanceLock()) {
 
 async function launch(): Promise<void> {
   try {
-    const db = openAppDatabase(path.join(app.getPath('userData'), 'beuve.db'));
+    const userData = app.getPath('userData');
+    const worktreeRoot = path.join(userData, 'worktrees');
+    const db = openAppDatabase(path.join(userData, 'beuve.db'));
     app.once('quit', () => {
       db.close();
     });
     await startApp(app, {
-      services: createMainServices({ db, logger }),
+      services: createMainServices({
+        db,
+        logger,
+        worktreeRoot,
+        syntax: { wasmDirectory: path.join(import.meta.dirname, 'wasm') },
+      }),
       preloadPath: path.join(import.meta.dirname, '../preload/index.cjs'),
       indexHtmlPath: path.join(import.meta.dirname, '../ui/index.html'),
       mcpPort: parsePort(process.env['BEUVE_MCP_PORT']) ?? defaultMcpPort,
