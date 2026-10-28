@@ -33,6 +33,8 @@ export interface GitExecOptions {
   readonly input?: string;
   /** Overrides the repository's output cap for this call. */
   readonly maxBufferBytes?: number;
+  /** Overrides the repository's timeout for this call, e.g. for a network fetch. */
+  readonly timeoutMs?: number;
 }
 
 export interface OpenRepositoryOptions {
