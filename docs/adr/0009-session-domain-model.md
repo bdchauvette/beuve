@@ -1,6 +1,6 @@
 # 0009. Session domain model and schema
 
-- Status: Accepted
+- Status: Accepted; checkpoints amended by [0012](0012-checkpoint-base-and-review-composition.md)
 - Date: 2026-10-28
 
 ## Context

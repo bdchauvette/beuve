@@ -26,12 +26,23 @@ export type SessionSource =
       readonly number: number;
     };
 
-/** "I have reviewed up to `commitSha`." */
+/**
+ * "I have reviewed the change from `baseSha` to `headSha`." `baseSha` is the fork point the
+ * reviewer was shown (the merge-base of the base branch and `headSha` at the time), so a later
+ * interdiff can tell author changes from a rebase onto a moved base.
+ */
 export interface Checkpoint {
   readonly id: CheckpointId;
   readonly sessionId: SessionId;
-  readonly commitSha: CommitSha;
+  readonly baseSha: CommitSha;
+  readonly headSha: CommitSha;
   readonly createdAt: string;
+}
+
+/** The commits a reviewer signed off on: the diff from `baseSha` to `headSha`. */
+export interface ReviewedRange {
+  readonly baseSha: CommitSha;
+  readonly headSha: CommitSha;
 }
 
 /** Derived from the session's checkpoints: the latest one, if any. */
@@ -51,12 +62,18 @@ export interface Session {
 /** A session as {@link createSession} returns it, before any checkpoint. */
 export type UnreviewedSession = Session & { readonly review: { readonly kind: 'unreviewed' } };
 
-/** Which commits still need review; the git domain turns this into a diff. */
+/**
+ * Which commits still need review; main asks the git domain to turn this into a diff. An
+ * interdiff runs from the last reviewed `{fromBaseSha, fromHeadSha}` to `toHeadSha` against the
+ * base branch's current tip, which only git can resolve.
+ */
 export type ReviewRange =
   | { readonly kind: 'full'; readonly baseRef: string; readonly headSha: CommitSha }
   | {
       readonly kind: 'interdiff';
-      readonly fromReviewedSha: CommitSha;
+      readonly baseRef: string;
+      readonly fromBaseSha: CommitSha;
+      readonly fromHeadSha: CommitSha;
       readonly toHeadSha: CommitSha;
     }
   | { readonly kind: 'up-to-date'; readonly headSha: CommitSha };

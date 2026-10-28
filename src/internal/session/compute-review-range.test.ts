@@ -7,6 +7,7 @@ import type { CommitSha, Session, SessionDeps, SessionId } from './session.ts';
 
 const rev1 = '1'.repeat(40) as CommitSha;
 const rev2 = '2'.repeat(40) as CommitSha;
+const fork = 'f'.repeat(40) as CommitSha;
 const deps: SessionDeps = {
   now: (): Date => new Date('2026-10-28T12:00:00Z'),
   newId: (): string => '00000000-0000-4000-8000-0000000000c1',
@@ -33,15 +34,17 @@ describe('computeReviewRange', () => {
   });
 
   it('is up to date when the last checkpoint is the head', () => {
-    const reviewed = recordCheckpoint(session, rev1, deps).session;
+    const reviewed = recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, deps).session;
     expect(computeReviewRange(reviewed)).toEqual({ kind: 'up-to-date', headSha: rev1 });
   });
 
   it('asks for the interdiff once new commits arrive (Rev 1 to Rev 2)', () => {
-    const reviewed = recordCheckpoint(session, rev1, deps).session;
+    const reviewed = recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, deps).session;
     expect(computeReviewRange(advanceHead(reviewed, rev2, deps))).toEqual({
       kind: 'interdiff',
-      fromReviewedSha: rev1,
+      baseRef: 'main',
+      fromBaseSha: fork,
+      fromHeadSha: rev1,
       toHeadSha: rev2,
     });
   });

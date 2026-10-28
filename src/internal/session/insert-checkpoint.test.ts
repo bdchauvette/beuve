@@ -19,11 +19,16 @@ import { updateSessionHead } from './update-session-head.ts';
 
 const rev1 = '1'.repeat(40) as CommitSha;
 const rev2 = '2'.repeat(40) as CommitSha;
+const fork = 'f'.repeat(40) as CommitSha;
 
 describe('insertCheckpoint', () => {
   it('persists the checkpoint so the stored review state matches the pure one', () => {
     const { db, deps, session } = setup();
-    const { session: reviewed, checkpoint } = recordCheckpoint(session, rev1, deps);
+    const { session: reviewed, checkpoint } = recordCheckpoint(
+      session,
+      { baseSha: fork, headSha: rev1 },
+      deps,
+    );
     expect(insertCheckpoint(db, checkpoint)).toEqual({ ok: true, value: undefined });
     expect(findSession(db, session.id)).toEqual({ ok: true, value: reviewed });
     expect(listCheckpoints(db, session.id)).toEqual({ ok: true, value: [checkpoint] });
@@ -31,7 +36,7 @@ describe('insertCheckpoint', () => {
 
   it('drives the Rev 1 to Rev 2 interdiff across reloads', () => {
     const { db, deps, session } = setup();
-    const first = recordCheckpoint(session, rev1, deps);
+    const first = recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, deps);
     insertCheckpoint(db, first.checkpoint);
     const pushed = advanceHead(first.session, rev2, deps);
     expect(updateSessionHead(db, pushed)).toEqual({ ok: true, value: undefined });
@@ -39,11 +44,13 @@ describe('insertCheckpoint', () => {
     const loaded = findSession(db, session.id);
     expect(loaded.ok && loaded.value && computeReviewRange(loaded.value)).toEqual({
       kind: 'interdiff',
-      fromReviewedSha: rev1,
+      baseRef: 'main',
+      fromBaseSha: fork,
+      fromHeadSha: rev1,
       toHeadSha: rev2,
     });
 
-    const second = recordCheckpoint(pushed, rev2, deps);
+    const second = recordCheckpoint(pushed, { baseSha: fork, headSha: rev2 }, deps);
     insertCheckpoint(db, second.checkpoint);
     const reloaded = findSession(db, session.id);
     expect(reloaded.ok && reloaded.value && computeReviewRange(reloaded.value)).toEqual({
@@ -62,8 +69,11 @@ describe('insertCheckpoint', () => {
       now: (): Date => new Date(Date.UTC(2026, 9, 28, 13)),
       newId: counter(50),
     };
-    insertCheckpoint(db, recordCheckpoint(session, rev1, sameInstant).checkpoint);
-    const latest = recordCheckpoint(session, rev2, sameInstant);
+    insertCheckpoint(
+      db,
+      recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, sameInstant).checkpoint,
+    );
+    const latest = recordCheckpoint(session, { baseSha: fork, headSha: rev2 }, sameInstant);
     insertCheckpoint(db, latest.checkpoint);
     expect(findSession(db, session.id)).toEqual({ ok: true, value: latest.session });
   });
@@ -74,7 +84,8 @@ describe('insertCheckpoint', () => {
     const checkpoint = {
       id: '00000000-0000-4000-8000-0000000000fe' as CheckpointId,
       sessionId,
-      commitSha: rev1,
+      baseSha: fork,
+      headSha: rev1,
       createdAt: '2026-10-28T12:00:00.000Z',
     };
     expect(insertCheckpoint(db, checkpoint)).toEqual({

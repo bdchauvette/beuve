@@ -29,7 +29,8 @@ export function selectSessions(
       `SELECT s.id, s.kind, s.repo_path, s.base_ref, s.head_ref, s.owner, s.repo, s.pr_number,
               s.head_sha, s.created_at, s.updated_at,
               c.id AS checkpoint_id, c.session_id AS checkpoint_session_id,
-              c.commit_sha AS checkpoint_commit_sha, c.created_at AS checkpoint_created_at
+              c.base_sha AS checkpoint_base_sha, c.head_sha AS checkpoint_head_sha,
+              c.created_at AS checkpoint_created_at
          FROM sessions AS s
          LEFT JOIN checkpoints AS c ON c.id = (
            SELECT id FROM checkpoints WHERE session_id = s.id

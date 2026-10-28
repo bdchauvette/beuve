@@ -16,7 +16,10 @@ const time = '2026-10-28T12:00:00.000Z';
 describe('sessionMigrations', () => {
   it('uses session-prefixed ids and applies idempotently', () => {
     const db = openDatabase(':memory:');
-    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0001-sessions-and-checkpoints']);
+    expect(runMigrations(db, sessionMigrations)).toEqual([
+      'session-0001-sessions-and-checkpoints',
+      'session-0002-checkpoint-base',
+    ]);
     expect(runMigrations(db, sessionMigrations)).toEqual([]);
   });
 
@@ -68,7 +71,13 @@ describe('sessionMigrations', () => {
   it('rejects checkpoints for unknown sessions and cascades deletes', () => {
     const db = setup();
     const insertCheckpoint = (): void => {
-      db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?);').run(checkpointId, id, sha, time);
+      db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?);').run(
+        checkpointId,
+        id,
+        sha,
+        sha,
+        time,
+      );
     };
     expect(() => {
       insertCheckpoint();
@@ -77,6 +86,32 @@ describe('sessionMigrations', () => {
     insertCheckpoint();
     db.prepare('DELETE FROM sessions;').run();
     expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('session-0002-checkpoint-base', () => {
+  it('drops legacy checkpoints without a base, leaving their sessions unreviewed', () => {
+    const db = openDatabase(':memory:');
+    runMigrations(db, sessionMigrations.slice(0, 1));
+    insertLocal(db, {});
+    db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?);').run(checkpointId, id, sha, time);
+    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0002-checkpoint-base']);
+    expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT count(*) AS n FROM sessions;').get()).toEqual({ n: 1 });
+  });
+
+  it('requires a full base sha', () => {
+    const db = setup();
+    insertLocal(db, {});
+    expect(() => {
+      db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?);').run(
+        checkpointId,
+        id,
+        'abc',
+        sha,
+        time,
+      );
+    }).toThrow('CHECK constraint failed');
   });
 });
 

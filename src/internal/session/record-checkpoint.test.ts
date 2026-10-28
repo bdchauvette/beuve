@@ -17,13 +17,19 @@ const deps: SessionDeps = {
 };
 
 describe('recordCheckpoint', () => {
-  it('records the reviewed commit and makes it the review state', () => {
+  it('records the reviewed range and makes it the review state', () => {
     const reviewed = 'a'.repeat(40) as CommitSha;
-    const { session: next, checkpoint } = recordCheckpoint(session, reviewed, deps);
+    const fork = 'f'.repeat(40) as CommitSha;
+    const { session: next, checkpoint } = recordCheckpoint(
+      session,
+      { baseSha: fork, headSha: reviewed },
+      deps,
+    );
     expect(checkpoint).toEqual({
       id: '00000000-0000-4000-8000-0000000000c1',
       sessionId: session.id,
-      commitSha: reviewed,
+      baseSha: fork,
+      headSha: reviewed,
       createdAt: '2026-10-28T14:00:00.000Z',
     });
     expect(next).toEqual({

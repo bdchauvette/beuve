@@ -49,6 +49,25 @@ export const sessionMigrations: readonly Migration[] = [
       CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
     `,
   },
+  {
+    // ADR 0012: a checkpoint records the reviewed fork point as well as the head. No build ever
+    // wrote checkpoints (sessions weren't wired), so the table is rebuilt rather than migrated;
+    // any row that did exist is dropped and its session falls back to a full review.
+    id: 'session-0002-checkpoint-base',
+    up: `
+      DROP TABLE checkpoints;
+
+      CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY CHECK (length(id) = 36),
+        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+        base_sha TEXT NOT NULL CHECK (${sha('base_sha')}),
+        head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
+        created_at TEXT NOT NULL CHECK (${timestamp('created_at')})
+      ) STRICT;
+
+      CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
+    `,
+  },
 ];
 
 function sha(column: string): string {

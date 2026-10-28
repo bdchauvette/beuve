@@ -1,19 +1,21 @@
-import type { Checkpoint, CheckpointId, CommitSha, Session, SessionDeps } from './session.ts';
+import type { Checkpoint, CheckpointId, ReviewedRange, Session, SessionDeps } from './session.ts';
 import { systemSessionDeps } from './system-session-deps.ts';
 
 /**
- * Records that the reviewer has reviewed up to `reviewedSha`, usually the head they were
- * shown (which may be older than `session.headSha` if commits arrived meanwhile).
+ * Records that the reviewer has reviewed `reviewed`: usually the head they were shown (which may
+ * be older than `session.headSha` if commits arrived meanwhile) and the fork point it was diffed
+ * against.
  */
 export function recordCheckpoint(
   session: Session,
-  reviewedSha: CommitSha,
+  reviewed: ReviewedRange,
   deps: SessionDeps = systemSessionDeps,
 ): { readonly session: Session; readonly checkpoint: Checkpoint } {
   const checkpoint: Checkpoint = {
     id: deps.newId() as CheckpointId,
     sessionId: session.id,
-    commitSha: reviewedSha,
+    baseSha: reviewed.baseSha,
+    headSha: reviewed.headSha,
     createdAt: deps.now().toISOString(),
   };
   return {

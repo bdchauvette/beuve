@@ -21,8 +21,15 @@ export function insertCheckpoint(
   try {
     withTransaction(db, () => {
       db.prepare(
-        'INSERT INTO checkpoints (id, session_id, commit_sha, created_at) VALUES (?, ?, ?, ?);',
-      ).run(checkpoint.id, checkpoint.sessionId, checkpoint.commitSha, checkpoint.createdAt);
+        `INSERT INTO checkpoints (id, session_id, base_sha, head_sha, created_at)
+         VALUES (?, ?, ?, ?, ?);`,
+      ).run(
+        checkpoint.id,
+        checkpoint.sessionId,
+        checkpoint.baseSha,
+        checkpoint.headSha,
+        checkpoint.createdAt,
+      );
       db.prepare('UPDATE sessions SET updated_at = max(updated_at, ?) WHERE id = ?;').run(
         checkpoint.createdAt,
         checkpoint.sessionId,

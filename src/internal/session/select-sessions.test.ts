@@ -30,10 +30,10 @@ describe('selectSessions', () => {
   });
 
   it('reports a corrupt latest checkpoint', () => {
-    const db = corruptedDatabase(`UPDATE checkpoints SET commit_sha = 'abc';`);
+    const db = corruptedDatabase(`UPDATE checkpoints SET base_sha = 'abc';`);
     const expected = {
       ok: false,
-      error: { kind: 'corrupt-row', table: 'checkpoints', reason: 'commit_sha is not a commit id' },
+      error: { kind: 'corrupt-row', table: 'checkpoints', reason: 'base_sha is not a commit id' },
     };
     expect(selectSessions(db, '1 = 1')).toMatchObject(expected);
     expect(listCheckpoints(db, id as SessionId)).toMatchObject(expected);
@@ -47,9 +47,10 @@ function corruptedDatabase(corruption: string): DatabaseSync {
     `INSERT INTO sessions (id, kind, repo_path, base_ref, head_ref, head_sha, created_at, updated_at)
      VALUES (?, 'local', '/repo', 'main', 'feat', ?, ?, ?);`,
   ).run(id, sha, time, time);
-  db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?);').run(
+  db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?);').run(
     '00000000-0000-4000-8000-00000000000c',
     id,
+    sha,
     sha,
     time,
   );

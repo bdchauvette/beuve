@@ -2,19 +2,25 @@ import type { ReviewRange, Session } from './session.ts';
 
 /**
  * What still needs review: the whole change if never reviewed, nothing if the last
- * checkpoint is the head, otherwise the interdiff from the last reviewed commit to the head.
+ * checkpoint is the head, otherwise the interdiff from the last reviewed range to the head.
  */
 export function computeReviewRange(session: Session): ReviewRange {
-  const { review, headSha } = session;
+  const { review, headSha, source } = session;
   switch (review.kind) {
     case 'unreviewed': {
-      return { kind: 'full', baseRef: session.source.baseRef, headSha };
+      return { kind: 'full', baseRef: source.baseRef, headSha };
     }
     case 'reviewed': {
-      const reviewed = review.checkpoint.commitSha;
-      return reviewed === headSha
+      const { baseSha, headSha: reviewedSha } = review.checkpoint;
+      return reviewedSha === headSha
         ? { kind: 'up-to-date', headSha }
-        : { kind: 'interdiff', fromReviewedSha: reviewed, toHeadSha: headSha };
+        : {
+            kind: 'interdiff',
+            baseRef: source.baseRef,
+            fromBaseSha: baseSha,
+            fromHeadSha: reviewedSha,
+            toHeadSha: headSha,
+          };
     }
   }
 }
