@@ -1,18 +1,22 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
 import type { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import type { IpcResult, ReviewView } from '#contract/ipc-contract.ts';
+import type { IpcResult, ReviewProgressView, ReviewView } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import { writeFakeClaude } from '#internal/review/testing/write-fake-claude.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { createLogger } from '#pkg/logger/create-logger.ts';
 
 import { createMainServices } from './create-main-services.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
+import type { ClaudeCodeSettings } from './review/create-review-services.ts';
 
 const featureLines = ['pub fn feature() -> u8 {', '  1', '}'];
 
@@ -313,6 +317,250 @@ describe(
     });
   },
 );
+
+describe('createMainServices (integration: preliminary review with a fake claude)', () => {
+  let repo: TestRepository;
+  let db: DatabaseSync;
+  let services: MainServices | undefined;
+  let worktreeRoot: string;
+  let script: string;
+  let events: ReviewProgressView[];
+
+  beforeEach(() => {
+    repo = createTestRepository();
+    db = openAppDatabase(':memory:');
+    worktreeRoot = path.join(repo.scratch(), 'worktrees');
+    script = writeFakeClaude(repo.scratch());
+    events = [];
+    featureBranch(repo);
+  });
+
+  afterEach(async () => {
+    await services?.dispose();
+    services = undefined;
+    db.close();
+    repo.cleanup();
+  });
+
+  const start = async (claude: ClaudeCodeSettings): Promise<{ sessionId: string }> => {
+    services = createMainServices({
+      db,
+      logger: silentLogger(),
+      deps: steppingDeps(),
+      worktreeRoot,
+      claude: { killGraceMs: 200, ...claude },
+    });
+    services.review.onProgress((event) => {
+      events.push(event);
+    });
+    const { id } = value(
+      await services.sessions.createLocal({
+        repoPath: repo.directory,
+        baseRef: 'main',
+        headRef: 'feature',
+      }),
+    );
+    return { sessionId: id };
+  };
+
+  const scripted = (insights: readonly unknown[], delayMs = 0): ClaudeCodeSettings => {
+    const file = path.join(repo.scratch(), 'review.json');
+    writeFileSync(file, JSON.stringify({ insights, delayMs }));
+    return { command: process.execPath, leadingArgs: [script, 'review', file] };
+  };
+
+  const finished = async (runId: string): Promise<ReviewProgressView> => {
+    for (let waited = 0; waited < 15_000; waited += 20) {
+      const last = events.find(
+        (event) => event.runId === runId && (event.kind === 'completed' || event.kind === 'failed'),
+      );
+      if (last !== undefined) {
+        return last;
+      }
+      await delay(20);
+    }
+    throw new Error(`run ${runId} did not finish`);
+  };
+
+  it('runs, stores and lists insights; reuses, joins and freshly reruns the run for a head', async () => {
+    const claude = scripted(reviewInsights, 150);
+    const { sessionId } = await start(claude);
+    const review = must(services).review;
+    const head = repo.git('rev-parse', 'feature');
+
+    const first = value(await review.run({ sessionId }));
+    expect(first).toMatchObject({ status: 'started', sessionId, headSha: head });
+    expect(value(await review.run({ sessionId }))).toEqual({ ...first, status: 'attached' });
+    expect(value(await review.listInsights({ sessionId }))).toMatchObject({
+      activeRunId: first.runId,
+      insights: [],
+    });
+    const done = await finished(first.runId);
+    expect(done).toMatchObject({
+      kind: 'completed',
+      summary: {
+        headSha: head,
+        scope: 'full',
+        model: 'fake-model-1',
+        insightCount: 2,
+        droppedCount: 2,
+        dropped: { outsideDiff: 1, unknownFile: 1, lowConfidence: 0 },
+        fileCount: 2,
+      },
+    });
+    expect(events.filter((event) => event.runId === first.runId).map(({ kind }) => kind)).toEqual(
+      expect.arrayContaining(['started', 'progress', 'completed']),
+    );
+    const [call, ...others] = calls(claude);
+    expect(others).toEqual([]);
+    expect(call?.cwd).toBe(path.join(worktreeRoot, readdirSync(worktreeRoot)[0] ?? '', head));
+    expect(call?.args).toContain('--tools=Read,Grep,Glob');
+    expect(repo.git('status', '--porcelain')).toBe('');
+
+    const listed = value(await review.listInsights({ sessionId }));
+    expect(listed.activeRunId).toBeUndefined();
+    expect(listed.run).toMatchObject({ insightCount: 2, droppedCount: 2 });
+    expect(listed.insights.map((insight) => [insight.path, insight.lineStart])).toEqual([
+      ['app.rs', 2],
+      ['feature.rs', 2],
+    ]);
+    const [appInsight] = listed.insights;
+    expect(
+      review.setInsightStatus({ insightId: appInsight?.id ?? '', status: 'dismissed' }),
+    ).toEqual({ ok: true, value: { insightId: appInsight?.id, status: 'dismissed' } });
+    expect(
+      review.setInsightStatus({
+        insightId: '00000000-0000-4000-8000-00000000ffff',
+        status: 'promoted',
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'not-found' } });
+
+    const reused = value(await review.run({ sessionId, pathPrefixes: ['feature.rs'] }));
+    expect(reused).toMatchObject({
+      status: 'reused',
+      summary: { reviewRunId: done.kind === 'completed' ? done.summary.reviewRunId : '' },
+    });
+    expect(calls(claude)).toHaveLength(1);
+
+    const fresh = value(
+      await review.run({ sessionId, fresh: true, pathPrefixes: ['feature.rs'], effort: 'low' }),
+    );
+    expect(fresh.status).toBe('started');
+    expect(await finished(fresh.runId)).toMatchObject({
+      kind: 'completed',
+      summary: { insightCount: 1, fileCount: 1, pathPrefixes: ['feature.rs'] },
+    });
+    expect(calls(claude)[1]?.args).toContain('--effort=low');
+    const rerun = value(await review.listInsights({ sessionId }));
+    expect(rerun.insights.map((insight) => [insight.path, insight.status])).toEqual([
+      ['feature.rs', 'pending'],
+    ]);
+
+    const nothing = value(await review.run({ sessionId, fresh: true, pathPrefixes: ['docs'] }));
+    expect(await finished(nothing.runId)).toMatchObject({
+      kind: 'failed',
+      error: { code: 'nothing-to-review' },
+    });
+  });
+
+  it('aborts the in-flight run when the head moves, killing Claude Code', async () => {
+    const pidFile = path.join(repo.scratch(), 'pids.json');
+    const { sessionId } = await start({
+      command: process.execPath,
+      leadingArgs: [script, 'hang', pidFile],
+    });
+    const review = must(services).review;
+    const handle = value(await review.run({ sessionId }));
+    for (let waited = 0; !existsSync(pidFile) && waited < 10_000; waited += 20) {
+      await delay(20);
+    }
+    const { self } = JSON.parse(readFileSync(pidFile, 'utf8')) as { self: number };
+
+    repo.git('switch', '--quiet', 'feature');
+    repo.write('notes.md', 'moved\n');
+    const moved = repo.commit('move the head');
+    repo.git('switch', '--quiet', 'main');
+    value(await must(services).sessions.getReview({ sessionId }));
+
+    expect(await finished(handle.runId)).toMatchObject({
+      kind: 'failed',
+      error: { code: 'cancelled', reason: 'head-changed' },
+    });
+    expect(isAlive(self)).toBe(false);
+    expect(value(await review.listInsights({ sessionId }))).toMatchObject({
+      headSha: moved,
+      insights: [],
+    });
+    expect(value(await review.listInsights({ sessionId })).run).toBeUndefined();
+  });
+
+  it('reports a missing claude as not-installed, naming BEUVE_CLAUDE_PATH', async () => {
+    const { sessionId } = await start({
+      env: { BEUVE_CLAUDE_PATH: path.join(repo.scratch(), 'claude'), PATH: '' },
+    });
+    const handle = value(await must(services).review.run({ sessionId }));
+    const failed = await finished(handle.runId);
+    expect(failed).toMatchObject({ kind: 'failed', error: { code: 'not-installed' } });
+    expect(failed.kind === 'failed' && failed.error.message).toContain('BEUVE_CLAUDE_PATH');
+  });
+
+  it('maps a fixed command that does not exist to not-installed too', async () => {
+    const { sessionId } = await start({ command: path.join(repo.scratch(), 'nope') });
+    const handle = value(await must(services).review.run({ sessionId }));
+    expect(await finished(handle.runId)).toMatchObject({
+      kind: 'failed',
+      error: { code: 'not-installed' },
+    });
+  });
+});
+
+/** For the `featureBranch` diff: two insights on changed lines, one outside it, one elsewhere. */
+const reviewInsights = [
+  insight('feature.rs', 2, 'warning', 'The constant hides a missing computation'),
+  insight('app.rs', 2, 'risk', 'run_fast may skip validation'),
+  insight('app.rs', 40, 'info', 'Outside the diff'),
+  insight('missing.rs', 1, 'info', 'Not in the diff'),
+];
+
+function insight(path: string, line: number, severity: string, title: string): unknown {
+  return {
+    path,
+    lineStart: line,
+    lineEnd: line,
+    severity,
+    category: 'edge-case',
+    title,
+    body: `**${title}**: check \`${path}\` line ${String(line)}.`,
+    confidence: 0.8,
+  };
+}
+
+/** The fake's `review` mode logs one `{ args, cwd }` line per run. */
+function calls(settings: ClaudeCodeSettings): { args: string[]; cwd: string }[] {
+  const file = `${settings.leadingArgs?.[2] ?? ''}.calls`;
+  return existsSync(file)
+    ? readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { args: string[]; cwd: string })
+    : [];
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function must<T>(item: T | undefined): T {
+  if (item === undefined) {
+    throw new Error('expected a value');
+  }
+  return item;
+}
 
 /**
  * main: a TypeScript project with `validate` and its caller `handleRequest`. feature: changes

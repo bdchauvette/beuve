@@ -23,8 +23,8 @@ export interface RefreshedSession {
 
 /**
  * Opens the session's repository, resolves its base ref and, for local sessions, its head ref,
- * and persists the head if it moved. Pull-request heads are refreshed by the GitHub integration
- * (not built yet), so they keep the stored head.
+ * and persists the head if it moved, telling `context.onHeadMoved`. Pull-request heads are
+ * refreshed by the GitHub integration (not built yet), so they keep the stored head.
  */
 export async function refreshSession(
   context: SessionContext,
@@ -52,6 +52,7 @@ export async function refreshSession(
     if (!saved.ok) {
       return sessionFailure(logger, saved.error);
     }
+    context.onHeadMoved?.(advanced.id, advanced.headSha);
   }
   return ok({ session: advanced, repository: repository.value, baseTip: baseTip.value });
 }

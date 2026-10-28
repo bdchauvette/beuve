@@ -4,15 +4,20 @@ import { err } from '#pkg/result/err.ts';
 import { ok } from '#pkg/result/ok.ts';
 import type { Err } from '#pkg/result/result.ts';
 
+import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 import type {
   AppInfo,
   CallHierarchyRequest,
   CallHierarchyView,
   ImpactView,
+  InsightListView,
+  InsightStatusChangeView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
   IpcResult,
+  ReviewRunHandleView,
+  ReviewRunRequest,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -49,6 +54,30 @@ const callHierarchyRequest = z.strictObject({
   character: z.number().int().min(0).max(10_000_000).optional(),
   direction: z.enum(['incoming', 'outgoing']),
   nodeId: z.string().min(1).max(200).optional(),
+});
+
+const pathPrefix = z
+  .string()
+  .max(4096)
+  .transform((raw, context) => {
+    const normalized = normalizePathPrefix(raw);
+    if (normalized === undefined) {
+      context.addIssue({ code: 'custom', message: 'expected a repository-relative path prefix' });
+      return z.NEVER;
+    }
+    return normalized;
+  });
+
+const reviewRunRequest = z.strictObject({
+  sessionId,
+  pathPrefixes: z.array(pathPrefix).max(64).optional(),
+  fresh: z.boolean().optional(),
+  effort: z.enum(['low', 'medium', 'high']).optional(),
+});
+
+const insightStatusRequest = z.strictObject({
+  insightId: z.string().regex(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u),
+  status: z.enum(['pending', 'promoted', 'dismissed']),
 });
 
 /**
@@ -97,6 +126,20 @@ export function createIpcHandlers(services: MainServices, appInfo: AppInfo): Ipc
         ? services.lsp.callHierarchy(withoutUndefined(parsed.data))
         : invalid(parsed.error);
     },
+    'review:run': async (request): Promise<IpcResult<ReviewRunHandleView>> => {
+      const parsed = reviewRunRequest.safeParse(request);
+      return parsed.success
+        ? services.review.run(toRunRequest(parsed.data))
+        : invalid(parsed.error);
+    },
+    'review:list-insights': async (request): Promise<IpcResult<InsightListView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.review.listInsights(parsed.data) : invalid(parsed.error);
+    },
+    'review:set-insight-status': (request): IpcResult<InsightStatusChangeView> => {
+      const parsed = insightStatusRequest.safeParse(request);
+      return parsed.success ? services.review.setInsightStatus(parsed.data) : invalid(parsed.error);
+    },
   };
 }
 
@@ -106,6 +149,17 @@ function withoutUndefined(request: z.infer<typeof callHierarchyRequest>): CallHi
     ...required,
     ...(character !== undefined && { character }),
     ...(nodeId !== undefined && { nodeId }),
+  };
+}
+
+function toRunRequest(request: z.infer<typeof reviewRunRequest>): ReviewRunRequest {
+  const { pathPrefixes, fresh, effort, ...required } = request;
+  const prefixes = [...new Set(pathPrefixes)];
+  return {
+    ...required,
+    ...(prefixes.length > 0 && { pathPrefixes: prefixes }),
+    ...(fresh === true && { fresh }),
+    ...(effort !== undefined && { effort }),
   };
 }
 

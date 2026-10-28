@@ -154,6 +154,79 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
   });
 });
 
+describe('createIpcHandlers for the preliminary review', () => {
+  it('validates review:run and normalizes path prefixes', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        review: {
+          ...stubServices({}).review,
+          run: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    for (const bad of [
+      { sessionId: '' },
+      { sessionId: 's1', pathPrefixes: ['/etc'] },
+      { sessionId: 's1', pathPrefixes: ['../x'] },
+      { sessionId: 's1', pathPrefixes: 'src' },
+      { sessionId: 's1', effort: 'max' },
+      { sessionId: 's1', fresh: 'yes' },
+      { sessionId: 's1', extra: true },
+    ]) {
+      await expectInvalid(handlers['review:run'](bad));
+    }
+    await handlers['review:run']({ sessionId: 's1' });
+    await handlers['review:run']({
+      sessionId: 's1',
+      pathPrefixes: ['./src/ui/', 'src/ui', 'docs'],
+      fresh: true,
+      effort: 'low',
+    });
+    await handlers['review:run']({ sessionId: 's1', pathPrefixes: [], fresh: false });
+    expect(calls).toEqual([
+      { sessionId: 's1' },
+      { sessionId: 's1', pathPrefixes: ['src/ui', 'docs'], fresh: true, effort: 'low' },
+      { sessionId: 's1' },
+    ]);
+  });
+
+  it('validates review:list-insights and review:set-insight-status', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        review: {
+          ...stubServices({}).review,
+          listInsights: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+          setInsightStatus: (request) => {
+            calls.push(request);
+            return notWiredError;
+          },
+        },
+      },
+      appInfo,
+    );
+    const id = '00000000-0000-4000-8000-000000000001';
+    await expectInvalid(handlers['review:list-insights']({}));
+    await expectInvalid(
+      handlers['review:set-insight-status']({ insightId: 'x', status: 'pending' }),
+    );
+    await expectInvalid(handlers['review:set-insight-status']({ insightId: id, status: 'done' }));
+    await handlers['review:list-insights']({ sessionId: 's1' });
+    await handlers['review:set-insight-status']({ insightId: id, status: 'promoted' });
+    expect(calls).toEqual([{ sessionId: 's1' }, { insightId: id, status: 'promoted' }]);
+  });
+});
+
 async function expectInvalid(response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
@@ -170,6 +243,12 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
     },
     impact: { getImpact: async () => notWired },
     lsp: { callHierarchy: async () => notWired },
+    review: {
+      run: async () => notWired,
+      listInsights: async () => notWired,
+      setInsightStatus: () => notWiredError,
+      onProgress: () => doNothingSync,
+    },
     mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,
     dispose: doNothing,
@@ -208,6 +287,10 @@ function recording(name: Exclude<keyof SessionServices, 'list'>): {
     },
   };
   return { calls, services: stubServices(overrides[name]) };
+}
+
+function doNothingSync(): void {
+  // Stub subscriptions hold nothing.
 }
 
 async function doNothing(): Promise<void> {

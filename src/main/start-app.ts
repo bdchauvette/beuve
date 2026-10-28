@@ -26,8 +26,10 @@ export interface StartAppOptions {
 }
 
 /**
- * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC, the
- * main window and the MCP server; language servers are disposed before quitting. Call from `app.once('ready')`; never awaited at top level (see CLAUDE.md).
+ * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC and
+ * review progress events, the main window and the MCP server; preliminary reviews are aborted and
+ * language servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
+ * level (see CLAUDE.md).
  */
 export async function startApp(app: App, options: StartAppOptions): Promise<void> {
   const { logger, services } = options;
@@ -45,6 +47,11 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     });
   };
 
+  services.review.onProgress((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'review:progress', event);
+    }
+  });
   void services.pruneWorktrees();
   hardenSession(session.defaultSession);
   app.on('web-contents-created', (_event, contents) => {

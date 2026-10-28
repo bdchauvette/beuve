@@ -24,6 +24,7 @@ export interface SessionServicesOptions {
   /** Clock and id generator; defaults to the system ones. */
   readonly deps?: SessionDeps;
   readonly git?: OpenRepositoryOptions;
+  readonly onHeadMoved?: (sessionId: string, headSha: string) => void;
 }
 
 /**
@@ -36,6 +37,7 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
     logger: options.logger,
     deps: options.deps ?? systemSessionDeps,
     git: { ...options.git, logger: options.git?.logger ?? options.logger },
+    ...(options.onHeadMoved !== undefined && { onHeadMoved: options.onHeadMoved }),
   };
   return {
     list: (): IpcResult<readonly SessionSummary[]> => listSummaries(context),

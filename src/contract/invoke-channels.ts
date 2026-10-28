@@ -10,4 +10,7 @@ export const invokeChannels = Object.freeze([
   'session:mark-reviewed',
   'session:get-impact',
   'lsp:call-hierarchy',
+  'review:run',
+  'review:list-insights',
+  'review:set-insight-status',
 ] as const satisfies readonly InvokeChannel[]);

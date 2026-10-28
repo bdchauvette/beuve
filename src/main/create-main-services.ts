@@ -16,6 +16,8 @@ import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
+import { createReviewServices } from './review/create-review-services.ts';
+import type { ClaudeCodeSettings, ReviewServices } from './review/create-review-services.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
@@ -32,6 +34,8 @@ export interface MainServicesOptions {
   readonly syntax?: SyntaxParserOptions;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
+  /** How the preliminary review finds and runs Claude Code (ADR 0022); tests pass the fake. */
+  readonly claude?: ClaudeCodeSettings;
 }
 
 /**
@@ -40,14 +44,19 @@ export interface MainServicesOptions {
  */
 export function createMainServices(options: MainServicesOptions): MainServices {
   const { logger } = options;
+  const heads: { review: ReviewServices | undefined } = { review: undefined };
+  const onHeadMoved = (sessionId: string, headSha: string): void => {
+    heads.review?.observeHead(sessionId, headSha);
+  };
   const context: SessionContext = {
     db: options.db,
     logger,
     deps: options.deps ?? systemSessionDeps,
     git: { ...options.git, logger: options.git?.logger ?? logger },
+    onHeadMoved,
   };
   const open: { sessionId: string | undefined } = { sessionId: undefined };
-  const sessions = trackOpenSession(createSessionServices(options), open);
+  const sessions = trackOpenSession(createSessionServices({ ...options, onHeadMoved }), open);
   const parser = createSyntaxParser(options.syntax);
   const impact = createImpactServices({ context, parse: parser.parse });
   const multiplexer = createLspMultiplexer({
@@ -62,10 +71,18 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     git: context.git,
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
+  const review = createReviewServices({
+    context,
+    impact,
+    worktrees,
+    ...(options.claude !== undefined && { claude: options.claude }),
+  });
+  heads.review = review;
   return {
     sessions,
     impact,
     lsp,
+    review,
     mcpTools: createMcpTools({ context, impact, lsp, openSessionId: () => open.sessionId }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
@@ -78,7 +95,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
           : [],
       );
     },
-    dispose: async (): Promise<void> => multiplexer.dispose(),
+    dispose: async (): Promise<void> => {
+      await review.dispose();
+      await multiplexer.dispose();
+    },
   };
 }
 

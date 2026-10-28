@@ -10,4 +10,6 @@ export interface SessionContext {
   readonly deps: SessionDeps;
   readonly logger: Logger;
   readonly git: OpenRepositoryOptions;
+  /** Told whenever a refresh stores a new head, so main can abort work for the old one. */
+  readonly onHeadMoved?: (sessionId: string, headSha: string) => void;
 }

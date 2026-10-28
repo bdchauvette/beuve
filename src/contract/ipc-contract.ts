@@ -318,6 +318,164 @@ export interface CallHierarchyView {
   readonly calls: readonly CallHierarchyCallView[];
 }
 
+/** How hard Claude Code thinks during a preliminary review (`--effort`, ADR 0019). */
+export type ReviewEffort = 'low' | 'medium' | 'high';
+
+/**
+ * Start the opt-in preliminary agentic review of a session's current head (spec 5B, ADR 0022).
+ * `pathPrefixes` limits the review to files at or under these repository-relative paths; `fresh`
+ * reruns even when a stored run exists for the head (replacing it); `effort` is passed to Claude
+ * Code. Answers at once; progress arrives as `review:progress` events.
+ */
+export interface ReviewRunRequest {
+  readonly sessionId: string;
+  readonly pathPrefixes?: readonly string[];
+  readonly fresh?: boolean;
+  readonly effort?: ReviewEffort;
+}
+
+/** Insights validation dropped, by reason (ADR 0019). */
+export interface ReviewDropsView {
+  /** Not a head-side text file of the reviewed diff. */
+  readonly unknownFile: number;
+  /** In a diff file but outside every hunk. */
+  readonly outsideDiff: number;
+  readonly lowConfidence: number;
+  readonly duplicate: number;
+  readonly overLimit: number;
+}
+
+/** A completed preliminary review run of one (session, head). */
+export interface ReviewRunSummaryView {
+  readonly reviewRunId: string;
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly scope: 'full' | 'interdiff';
+  readonly model: string;
+  readonly insightCount: number;
+  readonly droppedCount: number;
+  /** Per reason, for a run that just finished; stored runs keep only the total. */
+  readonly dropped?: ReviewDropsView;
+  /** Files sent to the model, for a run that just finished. */
+  readonly fileCount?: number;
+  readonly pathPrefixes?: readonly string[];
+  readonly durationMs?: number;
+  /** Claude Code's estimate; notional on subscription logins. */
+  readonly costUsd?: number;
+  readonly createdAt: string;
+}
+
+/**
+ * The answer to `review:run`. `started`: a new background run; `attached`: a run for this head was
+ * already in flight and the request joined it; `reused`: a stored run exists for the head (pass
+ * `fresh` to rerun), and `summary` describes it. `runId` keys the `review:progress` events.
+ */
+export type ReviewRunHandleView =
+  | {
+      readonly status: 'started' | 'attached';
+      readonly runId: string;
+      readonly sessionId: string;
+      readonly headSha: string;
+    }
+  | {
+      readonly status: 'reused';
+      readonly runId: string;
+      readonly sessionId: string;
+      readonly headSha: string;
+      readonly summary: ReviewRunSummaryView;
+    };
+
+/**
+ * Why a preliminary review produced nothing. `not-installed`: no `claude` executable was found;
+ * `not-authenticated`: Claude Code is logged out; `cancelled`: the head moved, a fresh run replaced
+ * it, or beuve quit; `nothing-to-review`: no reviewable change (up to date, or no file under the
+ * prefixes); `review-unavailable`: the diff or checkout failed; `model-failed`: Claude Code ran but
+ * gave no usable answer.
+ */
+export type ReviewRunErrorView =
+  | { readonly code: 'not-installed'; readonly message: string }
+  | { readonly code: 'not-authenticated'; readonly message: string }
+  | { readonly code: 'rate-limited'; readonly message: string; readonly resetsAt?: string }
+  | { readonly code: 'timeout'; readonly message: string }
+  | {
+      readonly code: 'cancelled';
+      readonly reason: 'head-changed' | 'superseded' | 'app-quit';
+      readonly message: string;
+    }
+  | { readonly code: 'nothing-to-review'; readonly message: string }
+  | { readonly code: 'review-unavailable'; readonly message: string }
+  | { readonly code: 'model-failed'; readonly message: string };
+
+/** One step of a background review run, pushed on `review:progress`. */
+export type ReviewProgressView = {
+  readonly runId: string;
+  readonly sessionId: string;
+  readonly headSha: string;
+} & (
+  | { readonly kind: 'started' }
+  /** Coarse status text; never prompt or file content. */
+  | { readonly kind: 'progress'; readonly message: string }
+  | { readonly kind: 'completed'; readonly summary: ReviewRunSummaryView }
+  | { readonly kind: 'failed'; readonly error: ReviewRunErrorView }
+);
+
+/** `pending` until the reviewer promotes (`y`) or dismisses (`d`) the insight. */
+export type InsightStatusView = 'pending' | 'promoted' | 'dismissed';
+
+/**
+ * One agent insight (spec 5B). Lines are 1-based and inclusive on the head side, and touch a hunk
+ * of the diff the run reviewed. `body` is untrusted Markdown from the model: render it as text.
+ */
+export interface AgentInsightView {
+  readonly id: string;
+  readonly runId: string;
+  readonly path: string;
+  readonly lineStart: number;
+  readonly lineEnd: number;
+  readonly severity: 'info' | 'warning' | 'risk';
+  readonly category:
+    | 'edge-case'
+    | 'security'
+    | 'type-mismatch'
+    | 'error-handling'
+    | 'concurrency'
+    | 'scope-creep'
+    | 'complexity'
+    | 'other';
+  readonly title: string;
+  readonly body: string;
+  /** 0–1. */
+  readonly confidence: number;
+  readonly status: InsightStatusView;
+  readonly model: string;
+  readonly createdAt: string;
+}
+
+export interface ListInsightsRequest {
+  readonly sessionId: string;
+}
+
+/** The insights of a session's current head, every status, by path and line. */
+export interface InsightListView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  /** The stored run for the head, if any. */
+  readonly run?: ReviewRunSummaryView;
+  /** A run for this head in flight now, so a reloaded renderer can follow it. */
+  readonly activeRunId?: string;
+  readonly insights: readonly AgentInsightView[];
+}
+
+export interface SetInsightStatusRequest {
+  readonly insightId: string;
+  readonly status: InsightStatusView;
+}
+
+export interface InsightStatusChangeView {
+  readonly insightId: string;
+  readonly status: InsightStatusView;
+}
+
 /**
  * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
  * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
@@ -375,6 +533,18 @@ export interface InvokeChannelMap {
     readonly request: CallHierarchyRequest;
     readonly response: IpcResult<CallHierarchyView>;
   };
+  'review:run': {
+    readonly request: ReviewRunRequest;
+    readonly response: IpcResult<ReviewRunHandleView>;
+  };
+  'review:list-insights': {
+    readonly request: ListInsightsRequest;
+    readonly response: IpcResult<InsightListView>;
+  };
+  'review:set-insight-status': {
+    readonly request: SetInsightStatusRequest;
+    readonly response: IpcResult<InsightStatusChangeView>;
+  };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -391,6 +561,7 @@ export type McpStatus =
 /** Payloads main pushes to the renderer with `webContents.send`. */
 export interface EventChannelMap {
   'mcp:status': McpStatus;
+  'review:progress': ReviewProgressView;
 }
 
 export type EventChannel = keyof EventChannelMap;
