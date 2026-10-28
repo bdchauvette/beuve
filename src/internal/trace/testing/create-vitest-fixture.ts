@@ -1,7 +1,8 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { linkTestVitest } from './link-test-vitest.ts';
 
 /** A throwaway Vitest project for runner integration tests. */
 export interface VitestFixture {
@@ -15,8 +16,6 @@ export interface VitestFixture {
   readonly cleanup: () => void;
 }
 
-const require = createRequire(import.meta.url);
-
 /** Creates the fixture in a new temporary directory, with `files` relative to the worktree. */
 export function createVitestFixture(files: Readonly<Record<string, string>>): VitestFixture {
   const created = mkdtempSync(path.join(os.tmpdir(), 'beuve-trace-'));
@@ -24,12 +23,7 @@ export function createVitestFixture(files: Readonly<Record<string, string>>): Vi
   const worktree = path.join(base, 'worktree');
   const dependencyRoot = path.join(base, 'dependencies');
   const temporaryDirectory = path.join(base, 'tmp');
-  mkdirSync(path.join(dependencyRoot, 'node_modules'), { recursive: true });
-  symlinkSync(
-    path.dirname(require.resolve('vitest/package.json')),
-    path.join(dependencyRoot, 'node_modules', 'vitest'),
-    'dir',
-  );
+  linkTestVitest(dependencyRoot);
   const write = (file: string, content: string): void => {
     const target = path.join(worktree, file);
     mkdirSync(path.dirname(target), { recursive: true });

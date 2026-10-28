@@ -59,6 +59,32 @@ describe('buildChatPrompt', () => {
     });
   });
 
+  it('puts the stated intent after the head line, fenced as untrusted, and bounds it', () => {
+    const question = createChatQuestion({ intent: 'Fix the parser\n\nIt dropped the last part.' });
+    const built = buildChatPrompt(question, budget);
+    const intentAt = built.prompt.indexOf("## The author's stated intent");
+    expect(intentAt).toBeGreaterThan(built.prompt.indexOf('# Change under review'));
+    expect(intentAt).toBeLessThan(built.prompt.indexOf('## Diff'));
+    expect(built.prompt).toContain('```markdown\nFix the parser\n\nIt dropped the last part.\n```');
+    expect(built.report.intentTruncated).toBe(false);
+    expect(built.system).toContain("author's stated intent");
+
+    const long = buildChatPrompt(createChatQuestion({ intent: `${'x'.repeat(50)}\`\`\`tail` }), {
+      ...budget,
+      maxIntentChars: 20,
+    });
+    expect(long.report.intentTruncated).toBe(true);
+    expect(long.prompt).toContain('[beuve: intent truncated; first 20 of 57 characters shown]');
+    expect(long.prompt).not.toContain('tail');
+  });
+
+  it('omits the intent section when there is no intent or it is blank', () => {
+    expect(buildChatPrompt(createChatQuestion(), budget).prompt).not.toContain('stated intent');
+    expect(buildChatPrompt(createChatQuestion({ intent: '  \n ' }), budget).prompt).not.toContain(
+      'stated intent',
+    );
+  });
+
   it('states the read-only, authoring-resistant rules and the citation grammar', () => {
     const { system } = buildChatPrompt(createChatQuestion(), budget);
     expect(system).toContain('Read, Grep and Glob');

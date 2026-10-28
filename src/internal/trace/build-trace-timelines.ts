@@ -49,6 +49,7 @@ export function buildTraceTimelines(
       titles: outcome.titles,
       status: outcome.status,
       failure: outcome.failure,
+      durationMs: outcome.durationMs,
       entries: group === undefined ? [] : toEntries(plan, group.events),
       dropped: group?.dropped ?? 0,
     });
@@ -59,6 +60,7 @@ export function buildTraceTimelines(
       titles: group.titles,
       status: 'unknown',
       failure: undefined,
+      durationMs: undefined,
       entries: toEntries(plan, group.events),
       dropped: group.dropped,
     });

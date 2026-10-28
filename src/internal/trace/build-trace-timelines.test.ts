@@ -45,6 +45,7 @@ describe('buildTraceTimelines', () => {
         titles: ['one'],
         status: 'passed',
         failure: undefined,
+        durationMs: 1,
         dropped: 2,
         entries: [
           {
@@ -86,6 +87,7 @@ describe('buildTraceTimelines', () => {
         titles: ['two'],
         status: 'failed',
         failure: undefined,
+        durationMs: 1,
         dropped: 0,
         entries: [],
       },

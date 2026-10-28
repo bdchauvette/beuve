@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { isTestFile } from './is-test-file.ts';
+
 /** Why a test file was picked; `distance` is import hops from the changed file (0 for names). */
 export interface TestSelection {
   readonly path: string;
@@ -20,7 +22,6 @@ export interface SelectTestsInput {
   readonly maxDepth?: number;
 }
 
-const testPattern = /(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const testsDirectoryPattern = /(?:^|\/)__tests__$/u;
 const stemPattern = /(?:\.(?:test|spec))?\.[cm]?[jt]sx?$/u;
 
@@ -65,10 +66,6 @@ export function selectTests(input: SelectTestsInput): TestSelection[] {
     (left, right) => left.distance - right.distance || left.path.localeCompare(right.path),
   );
   return [...byName, ...byImports].slice(0, maxFiles);
-}
-
-function isTestFile(file: string): boolean {
-  return testPattern.test(file);
 }
 
 function stemOf(file: string): string {

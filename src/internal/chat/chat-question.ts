@@ -13,6 +13,11 @@ export interface ChatQuestion {
   readonly worktreePath: string;
   /** The reviewer's question, as typed. */
   readonly question: string;
+  /**
+   * What the change's author says it is for (a pull request's title and body). Untrusted text,
+   * shown to the model as context and bounded by the prompt budget.
+   */
+  readonly intent?: string;
   /** The reviewed diff, in diff order. */
   readonly files: readonly ChatFile[];
   /** ImpactGate findings for the head, if computed. */

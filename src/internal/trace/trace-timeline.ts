@@ -46,6 +46,8 @@ export interface TraceTimeline {
   readonly titles: readonly string[];
   readonly status: TestStatus | 'unknown';
   readonly failure: string | undefined;
+  /** How long Vitest says the test took, when it says. */
+  readonly durationMs: number | undefined;
   readonly entries: readonly TraceEntry[];
   /** Events the recorder dropped at its limits. */
   readonly dropped: number;

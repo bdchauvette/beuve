@@ -172,6 +172,37 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
   });
 });
 
+describe('createVitestTraceRunner cancelled during setup', { timeout: 60_000 }, () => {
+  it('stops a run whose signal aborted after the first check but before the process started', async () => {
+    const fixture = createVitestFixture({
+      'src/hang.test.ts': hangingTest,
+      'src/math.ts': math,
+    });
+    try {
+      const controller = new AbortController();
+      const running = createVitestTraceRunner({
+        nodePath: process.execPath,
+        inheritedEnvironment: process.env,
+        temporaryDirectory: fixture.temporaryDirectory,
+      }).run({
+        trusted: true,
+        worktree: fixture.worktree,
+        dependencyRoot: fixture.dependencyRoot,
+        testFiles: ['src/hang.test.ts'],
+        files: [],
+        timeoutMs: 30_000,
+        signal: controller.signal,
+      });
+      queueMicrotask(() => {
+        controller.abort();
+      });
+      await expect(running).resolves.toEqual({ ok: false, error: { kind: 'cancelled' } });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
 describe('createVitestTraceRunner refusals', () => {
   let fixture: VitestFixture;
 

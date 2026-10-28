@@ -9,6 +9,7 @@ export const defaultChatPromptBudget: ChatPromptBudget = {
   maxFileChars: 40_000,
   maxQuestionChars: 8000,
   maxFocusChars: 8000,
+  maxIntentChars: 6000,
   maxHistoryChars: 40_000,
   maxHistoryTurns: 20,
   maxImpactFindings: 20,

@@ -255,6 +255,9 @@ async function spawnVitest(
     stop('cancelled');
   };
   request.signal?.addEventListener('abort', onAbort, { once: true });
+  if (request.signal?.aborted === true) {
+    onAbort();
+  }
   try {
     return await new Promise<Exit>((resolve) => {
       child.once('error', (error) => {
