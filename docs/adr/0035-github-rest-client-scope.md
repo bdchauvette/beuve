@@ -1,6 +1,6 @@
 # 0035. A small GitHub REST client; diffs and history stay local in git
 
-- Status: Accepted
+- Status: Accepted; the pull request host is stored per [0037](0037-github-pull-request-sessions-and-local-clones.md)
 - Date: 2026-10-28
 
 ## Context

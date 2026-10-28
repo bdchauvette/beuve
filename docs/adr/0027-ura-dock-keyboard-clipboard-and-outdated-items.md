@@ -1,6 +1,6 @@
 # 0027. The URA dock: wiring, keyboard grammar, clipboard path and outdated items
 
-- Status: Accepted
+- Status: Accepted; GitHub posting amended by [0039](0039-posting-reviews-and-posted-items.md)
 - Date: 2026-10-28
 
 ## Context

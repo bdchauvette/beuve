@@ -8,7 +8,8 @@ import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
 /**
  * One exporter's output for a compiled artifact, as text: JSON is pretty-printed with two spaces
  * so it pastes readably. The GitHub payload is built without `commentableRanges`, since local
- * sessions have no pull request diff; posting it is the auth domain's job (not built).
+ * sessions have no pull request diff; pull request sessions post through `github:post-review`
+ * (ADR 0039) instead.
  */
 export function renderUraExport(artifact: UraArtifact, target: UraExportTarget): UraExportView {
   const { summary, verdict, entries } = artifact;

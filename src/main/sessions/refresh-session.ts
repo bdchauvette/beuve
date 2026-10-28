@@ -23,8 +23,8 @@ export interface RefreshedSession {
 
 /**
  * Opens the session's repository, resolves its base ref and, for local sessions, its head ref,
- * and persists the head if it moved, telling `context.onHeadMoved`. Pull-request heads are
- * refreshed by the GitHub integration (not built yet), so they keep the stored head.
+ * and persists the head if it moved, telling `context.onHeadMoved`. Pull-request heads keep the
+ * stored head here: the GitHub poller fetches, verifies and moves them (ADR 0038).
  */
 export async function refreshSession(
   context: SessionContext,
