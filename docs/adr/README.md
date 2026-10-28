@@ -14,3 +14,4 @@ Template: [0000-template.md](0000-template.md)
 | [0006](0006-domain-owned-persistence.md)       | Domains own their tables; main composes                   | Accepted |
 | [0007](0007-build-test-and-tooling-layout.md)  | Build, test and tooling layout                            | Accepted |
 | [0008](0008-ts-extension-import-specifiers.md) | Import specifiers use the `.ts` extension                 | Accepted |
+| [0009](0009-session-domain-model.md)           | Session domain model                                      | Accepted |
