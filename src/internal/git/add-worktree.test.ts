@@ -4,8 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { addWorktree } from './add-worktree.ts';
-import { createTestRepository } from './create-test-repository.ts';
-import type { TestRepository } from './create-test-repository.ts';
+import { createTestRepository } from './testing/create-test-repository.ts';
+import type { TestRepository } from './testing/create-test-repository.ts';
 import { openRepository } from './open-repository.ts';
 import type { GitRepository } from './open-repository.ts';
 

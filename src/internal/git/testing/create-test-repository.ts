@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import type { CommitSha } from './object-id.ts';
+import type { CommitSha } from '../object-id.ts';
 
 /** A throwaway repository for integration tests, driven synchronously. */
 export interface TestRepository {

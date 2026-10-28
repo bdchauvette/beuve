@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { computeInterdiff } from './compute-interdiff.ts';
-import { createTestRepository } from './create-test-repository.ts';
-import type { TestRepository } from './create-test-repository.ts';
+import { createTestRepository } from './testing/create-test-repository.ts';
+import type { TestRepository } from './testing/create-test-repository.ts';
 import type { DiffFile } from './diff-model.ts';
 import { diffObjects } from './diff-objects.ts';
 import type { CommitSha } from './object-id.ts';

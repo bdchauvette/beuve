@@ -73,6 +73,14 @@ export default {
       to: { path: '^src/[^/]+/index\\.ts$' },
     },
     {
+      name: 'testing-only-in-tests',
+      severity: 'error',
+      comment:
+        'Test helpers live in testing/ directories (ADR 0013); only tests and other helpers may import them, so no bundle can reach them.',
+      from: { path: '^src/', pathNot: ['\\.test\\.ts$', '/testing/'] },
+      to: { path: '/testing/' },
+    },
+    {
       name: 'no-dev-deps-in-src',
       severity: 'error',
       comment: 'Application code may not use devDependencies (electron is provided at runtime).',

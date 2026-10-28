@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createLogger } from '#pkg/logger/create-logger.ts';
 
-import { createTestRepository } from './create-test-repository.ts';
-import type { TestRepository } from './create-test-repository.ts';
+import { createTestRepository } from './testing/create-test-repository.ts';
+import type { TestRepository } from './testing/create-test-repository.ts';
 import { runGit } from './run-git.ts';
 
 describe('runGit', () => {
