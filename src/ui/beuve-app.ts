@@ -3,12 +3,15 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import type {
+  AgentInsightView,
   AppInfo,
   CallHierarchyView,
   CreateLocalSessionRequest,
   ImpactView,
+  InsightStatusView,
   IpcResult,
   McpStatus,
+  ReviewProgressView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -19,8 +22,14 @@ import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
+import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
+import type { InsightJump } from './beuve-diff-stream.ts';
+import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
+import { chatHelp } from './chat-help.ts';
 import { cycleZone } from './cycle-zone.ts';
+import { parseChatCommand } from './parse-chat-command.ts';
+import type { ChatCommand } from './parse-chat-command.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
 import { zones } from './zones.ts';
 import type { ZoneId } from './zones.ts';
@@ -93,7 +102,11 @@ export class BeuveApp extends LitElement {
     }
   `;
 
-  private unsubscribe: (() => void) | undefined;
+  private unsubscribes: (() => void)[] = [];
+  private nextEntryId = 1;
+  private jumpNonce = 0;
+  /** The latest `review:progress` event per run, for runs whose handle hasn't arrived yet. */
+  private readonly runEvents = new Map<string, ReviewProgressView>();
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.handleKey(event);
@@ -134,6 +147,26 @@ export class BeuveApp extends LitElement {
     this.peek = undefined;
   };
 
+  private readonly onChatSubmit = (event: CustomEvent<{ text: string }>): void => {
+    this.submitChat(event.detail.text);
+  };
+
+  private readonly onChatEscape = (): void => {
+    this.focusedZone = 'diff';
+  };
+
+  private readonly onCitation = (event: CustomEvent<{ insightId: string }>): void => {
+    this.jumpNonce += 1;
+    this.insightJump = { insightId: event.detail.insightId, nonce: this.jumpNonce };
+    this.focusedZone = 'diff';
+  };
+
+  private readonly onInsightStatus = (
+    event: CustomEvent<{ insightId: string; status: InsightStatusView }>,
+  ): void => {
+    void this.setInsightStatus(event.detail.insightId, event.detail.status);
+  };
+
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor chatOpen = false;
   @state() accessor overlayOpen = false;
@@ -150,6 +183,10 @@ export class BeuveApp extends LitElement {
   @state() accessor marking = false;
   @state() accessor opening = false;
   @state() accessor openError = '';
+  @state() accessor transcript: readonly ChatEntry[] = [];
+  /** Agent insights for the open review's head. */
+  @state() accessor insights: readonly AgentInsightView[] = [];
+  @state() accessor insightJump: InsightJump | undefined;
 
   constructor() {
     super();
@@ -171,17 +208,24 @@ export class BeuveApp extends LitElement {
       this.sessionNote = 'Running without the Electron bridge.';
       return;
     }
-    this.unsubscribe = bridge.on('mcp:status', (status) => {
-      this.mcpStatus = status;
-    });
+    this.unsubscribes = [
+      bridge.on('mcp:status', (status) => {
+        this.mcpStatus = status;
+      }),
+      bridge.on('review:progress', (event) => {
+        this.applyReviewProgress(event);
+      }),
+    ];
     void this.loadInitialState();
   }
 
   private disconnect(): void {
     removeEventListener('keydown', this.onKeyDown, { capture: true });
     this.removeEventListener('focusin', this.onFocusIn);
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    for (const unsubscribe of this.unsubscribes) {
+      unsubscribe();
+    }
+    this.unsubscribes = [];
   }
 
   private async loadInitialState(): Promise<void> {
@@ -244,6 +288,7 @@ export class BeuveApp extends LitElement {
     }
     if (sessionId !== this.selectedId) {
       this.review = undefined;
+      this.insights = [];
     }
     this.selectedId = sessionId;
     this.reviewLoading = true;
@@ -255,9 +300,13 @@ export class BeuveApp extends LitElement {
     this.reviewLoading = false;
     this.peek = undefined;
     if (review.ok) {
+      if (this.review?.headSha !== review.value.headSha) {
+        this.insights = [];
+      }
       this.review = review.value;
       this.focusedZone = 'diff';
       void this.loadImpact(review.value);
+      void this.refreshInsights(review.value.session.id);
     } else {
       this.review = undefined;
       this.reviewError = review.error.message;
@@ -366,6 +415,152 @@ export class BeuveApp extends LitElement {
     await this.selectSession(review.session.id);
   }
 
+  private submitChat(text: string): void {
+    const command = parseChatCommand(text);
+    if (command.kind === 'empty') {
+      return;
+    }
+    this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+    switch (command.kind) {
+      case 'help': {
+        this.addEntry({ id: 0, kind: 'note', tone: 'info', lines: chatHelp });
+        return;
+      }
+      case 'question': {
+        this.addEntry({
+          id: 0,
+          kind: 'note',
+          tone: 'info',
+          lines: [
+            'Questions about the change arrive with the Q&A chat. For now the drawer runs commands: /review asks Claude Code for a preliminary review, /help lists the rest.',
+          ],
+        });
+        return;
+      }
+      case 'invalid': {
+        this.addEntry({ id: 0, kind: 'note', tone: 'error', lines: [command.message] });
+        return;
+      }
+      case 'review': {
+        void this.startReview(command);
+        return;
+      }
+    }
+  }
+
+  private addEntry(entry: ChatEntry): number {
+    const id = this.nextEntryId;
+    this.nextEntryId += 1;
+    this.transcript = [...this.transcript, { ...entry, id }];
+    return id;
+  }
+
+  private updateEntry(id: number, update: (entry: ReviewChatEntry) => ReviewChatEntry): void {
+    this.transcript = this.transcript.map((entry) =>
+      entry.id === id && entry.kind === 'review' ? update(entry) : entry,
+    );
+  }
+
+  private async startReview(command: Extract<ChatCommand, { kind: 'review' }>): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      this.addEntry({
+        id: 0,
+        kind: 'note',
+        tone: 'error',
+        lines: ['Open a review session first, then type /review.'],
+      });
+      return;
+    }
+    const sessionId = review.session.id;
+    const id = this.addEntry({
+      id: 0,
+      kind: 'review',
+      sessionId,
+      status: 'requesting',
+      citations: [],
+    });
+    const handle = await bridge.invoke('review:run', {
+      sessionId,
+      ...(command.pathPrefixes.length > 0 && { pathPrefixes: command.pathPrefixes }),
+      ...(command.fresh && { fresh: true }),
+      ...(command.effort !== undefined && { effort: command.effort }),
+    });
+    if (!handle.ok) {
+      this.updateEntry(id, (entry) => ({
+        ...entry,
+        status: 'failed',
+        error: { code: 'request-failed', message: handle.error.message },
+      }));
+      return;
+    }
+    const { value } = handle;
+    if (value.status === 'reused') {
+      this.updateEntry(id, (entry) => ({
+        ...entry,
+        runId: value.runId,
+        status: 'completed',
+        joined: 'reused',
+        summary: value.summary,
+      }));
+      await this.refreshInsights(sessionId);
+      return;
+    }
+    this.updateEntry(id, (entry) => ({
+      ...entry,
+      runId: value.runId,
+      status: 'running',
+      ...(value.status === 'attached' && { joined: 'attached' as const }),
+    }));
+    const latest = this.runEvents.get(value.runId);
+    if (latest !== undefined) {
+      this.applyReviewProgress(latest);
+    }
+  }
+
+  private applyReviewProgress(event: ReviewProgressView): void {
+    this.runEvents.set(event.runId, event);
+    this.transcript = this.transcript.map((entry) =>
+      entry.kind === 'review' ? advanceReviewEntry(entry, event) : entry,
+    );
+    if (event.kind === 'completed' || event.kind === 'failed') {
+      void this.refreshInsights(event.sessionId);
+    }
+  }
+
+  /** Reloads the open head's insights and the citations of every finished review entry. */
+  private async refreshInsights(sessionId: string): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const listed = await bridge.invoke('review:list-insights', { sessionId });
+    if (!listed.ok) {
+      return;
+    }
+    const { review } = this;
+    if (review?.session.id === sessionId && review.headSha === listed.value.headSha) {
+      this.insights = listed.value.insights;
+    }
+    this.transcript = withCitations(this.transcript, listed.value.insights);
+  }
+
+  private async setInsightStatus(insightId: string, status: InsightStatusView): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const restatus = (insights: readonly AgentInsightView[]): AgentInsightView[] =>
+      insights.map((insight) => (insight.id === insightId ? { ...insight, status } : insight));
+    this.insights = restatus(this.insights);
+    this.transcript = withCitations(this.transcript, this.insights);
+    const changed = await bridge.invoke('review:set-insight-status', { insightId, status });
+    if (!changed.ok && this.review !== undefined) {
+      await this.refreshInsights(this.review.session.id);
+    }
+  }
+
   private handleKey(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey || isEditable(event)) {
       return;
@@ -403,9 +598,11 @@ export class BeuveApp extends LitElement {
     return zones.map(({ id }) => id).filter((id) => id !== 'chat' || this.chatOpen);
   }
 
+  /** `c`: opens the drawer, or focuses its input if it is open elsewhere; closes it from the drawer. */
   private toggleChat(): void {
-    this.chatOpen = !this.chatOpen;
-    this.focusedZone = this.chatOpen ? 'chat' : 'diff';
+    const isClosing = this.chatOpen && this.focusedZone === 'chat';
+    this.chatOpen = !isClosing;
+    this.focusedZone = isClosing ? 'diff' : 'chat';
   }
 
   private sessionLabel(): string {
@@ -447,7 +644,10 @@ export class BeuveApp extends LitElement {
         .error=${this.reviewError}
         .impact=${this.impact}
         .peek=${this.peek}
+        .insights=${this.insights}
+        .insightJump=${this.insightJump}
         @beuve-mark-reviewed=${this.onMarkReviewed}
+        @beuve-insight-status=${this.onInsightStatus}
         @beuve-peek-request=${this.onPeekRequest}
         @beuve-peek-expand=${this.onPeekExpand}
         @beuve-peek-close=${this.onPeekClose}
@@ -463,6 +663,11 @@ export class BeuveApp extends LitElement {
               data-zone="chat"
               tabindex="-1"
               ?focused=${this.focusedZone === 'chat'}
+              .transcript=${this.transcript}
+              ?hasSession=${this.review !== undefined}
+              @beuve-chat-submit=${this.onChatSubmit}
+              @beuve-chat-escape=${this.onChatEscape}
+              @beuve-citation=${this.onCitation}
             ></beuve-chat-drawer>`
           : nothing
       }
@@ -501,6 +706,32 @@ function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchy
         root,
         children: new Map([[root.id, { status: 'ready', calls }]]),
       };
+}
+
+/** Gives every finished review entry pills for its run's insights, with their current status. */
+function withCitations(
+  transcript: readonly ChatEntry[],
+  insights: readonly AgentInsightView[],
+): ChatEntry[] {
+  return transcript.map((entry) => {
+    const runId = entry.kind === 'review' ? entry.summary?.reviewRunId : undefined;
+    if (runId === undefined || entry.kind !== 'review') {
+      return entry;
+    }
+    const cited = insights.filter((insight) => insight.runId === runId);
+    if (cited.length === 0) {
+      return entry;
+    }
+    const citations = cited.map((insight): ChatCitation => ({
+      insightId: insight.id,
+      path: insight.path,
+      line: insight.lineStart,
+      title: insight.title,
+      severity: insight.severity,
+      status: insight.status,
+    }));
+    return { ...entry, citations };
+  });
 }
 
 function isEditable(event: KeyboardEvent): boolean {

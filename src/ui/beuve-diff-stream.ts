@@ -2,7 +2,12 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { ImpactView, ReviewView } from '#contract/ipc-contract.ts';
+import type {
+  AgentInsightView,
+  ImpactView,
+  InsightStatusView,
+  ReviewView,
+} from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
@@ -10,12 +15,19 @@ import { findFirstChangedLine } from './find-first-changed-line.ts';
 import type { PeekState } from './peek-state.ts';
 import { zoneStyles } from './zone-styles.ts';
 
+/** A request to focus an insight from outside (a chat citation); `nonce` repeats a jump. */
+export interface InsightJump {
+  readonly insightId: string;
+  readonly nonce: number;
+}
+
 /**
  * Zone 2: the diff stream. Shows the open session's review as file cards with a header naming the
- * review kind and ImpactGate banners once they arrive; `j`/`k` move between cards and `p` toggles
- * the focused card's call-stack peek (Escape closes it) while the zone has focus. Diff cards move
- * to `@pierre/diffs` in Phase 2. Emits `beuve-mark-reviewed`, `beuve-peek-request` and
- * `beuve-peek-close`; `beuve-app` does the IPC.
+ * review kind, ImpactGate banners and agent insights once they arrive. While the zone has focus,
+ * `j`/`k` move between cards, `p` toggles the focused card's call-stack peek (Escape closes it),
+ * `]`/`[` move between agent insights, and `y`/`d` promote or dismiss the focused one (again to
+ * undo). Diff cards move to `@pierre/diffs` in Phase 2. Emits `beuve-mark-reviewed`,
+ * `beuve-peek-request`, `beuve-peek-close` and `beuve-insight-status`; `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
@@ -134,6 +146,17 @@ export class BeuveDiffStream extends LitElement {
       this.togglePeek(event.key === 'Escape');
       return;
     }
+    const insightStep = { ']': 1, '[': -1 }[event.key];
+    if (insightStep !== undefined) {
+      event.preventDefault();
+      this.stepInsight(insightStep);
+      return;
+    }
+    if (event.key === 'y' || event.key === 'd') {
+      event.preventDefault();
+      this.toggleFocusedInsight(event.key === 'y' ? 'promoted' : 'dismissed');
+      return;
+    }
     const step = { j: 1, k: -1 }[event.key];
     const count = this.review?.files.length ?? 0;
     if (step === undefined || count === 0) {
@@ -145,6 +168,10 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onMarkClick = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-mark-reviewed', { bubbles: true, composed: true }));
+  };
+
+  private readonly onInsightFocus = (event: CustomEvent<{ insightId: string }>): void => {
+    this.focusInsight(event.detail.insightId);
   };
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
@@ -159,11 +186,83 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property({ attribute: false }) accessor peek: PeekState | undefined;
 
+  /** Agent insights for `review`'s head, every status. */
+  @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
+  @property({ attribute: false }) accessor insightJump: InsightJump | undefined;
+
   @state() accessor activeIndex = 0;
+  @state() accessor focusedInsightId: string | undefined;
 
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+    this.addEventListener('beuve-insight-focus', this.onInsightFocus as EventListener);
+  }
+
+  /** The insights shown in the stream, in file order and then by line. */
+  private orderedInsights(): AgentInsightView[] {
+    const files = this.review?.files ?? [];
+    return files.flatMap((file) =>
+      this.insights
+        .filter((insight) => insight.path === file.path)
+        .toSorted((a, b) => a.lineStart - b.lineStart || a.lineEnd - b.lineEnd),
+    );
+  }
+
+  private stepInsight(step: number): void {
+    const ordered = this.orderedInsights();
+    if (ordered.length === 0) {
+      return;
+    }
+    const current = ordered.findIndex((insight) => insight.id === this.focusedInsightId);
+    const next =
+      current === -1
+        ? this.firstInsightFromActiveFile(ordered, step)
+        : Math.min(ordered.length - 1, Math.max(0, current + step));
+    const target = ordered[next];
+    if (target !== undefined) {
+      this.focusInsight(target.id);
+    }
+  }
+
+  private firstInsightFromActiveFile(ordered: readonly AgentInsightView[], step: number): number {
+    const files = this.review?.files ?? [];
+    const order = new Map(files.map((file, index) => [file.path, index]));
+    const index =
+      step > 0
+        ? ordered.findIndex((insight) => (order.get(insight.path) ?? 0) >= this.activeIndex)
+        : ordered.findLastIndex((insight) => (order.get(insight.path) ?? 0) <= this.activeIndex);
+    return index === -1 ? (step > 0 ? ordered.length - 1 : 0) : index;
+  }
+
+  private focusInsight(insightId: string): void {
+    const insight = this.insights.find((candidate) => candidate.id === insightId);
+    const fileIndex = this.review?.files.findIndex((file) => file.path === insight?.path) ?? -1;
+    if (insight === undefined || fileIndex === -1) {
+      return;
+    }
+    this.focusedInsightId = insight.id;
+    this.activeIndex = fileIndex;
+    void this.revealInsight(fileIndex, insight.id);
+  }
+
+  private async revealInsight(fileIndex: number, insightId: string): Promise<void> {
+    await this.updateComplete;
+    await this.renderRoot.querySelectorAll('beuve-file-card')[fileIndex]?.revealInsight(insightId);
+  }
+
+  private toggleFocusedInsight(status: Exclude<InsightStatusView, 'pending'>): void {
+    const insight = this.insights.find((candidate) => candidate.id === this.focusedInsightId);
+    if (insight === undefined) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-insight-status', {
+        detail: { insightId: insight.id, status: insight.status === status ? 'pending' : status },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private togglePeek(isClosing: boolean): void {
@@ -229,6 +328,8 @@ export class BeuveDiffStream extends LitElement {
                       .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
                       .findings=${this.impact?.findings ?? []}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
+                      .insights=${this.insights.filter((insight) => insight.path === file.path)}
+                      .focusedInsightId=${this.focusedInsightId}
                       ?active=${index === this.activeIndex}
                       @click=${(): void => {
                         this.activeIndex = index;
@@ -266,10 +367,20 @@ export class BeuveDiffStream extends LitElement {
     if (changed.has('review')) {
       this.activeIndex = 0;
     }
+    if (!changed.has('review') && !changed.has('insights')) {
+      return;
+    }
+    const isShown = this.insights.some((insight) => insight.id === this.focusedInsightId);
+    this.focusedInsightId = isShown ? this.focusedInsightId : undefined;
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('activeIndex') && !changed.has('review')) {
+    const jump = this.insightJump;
+    if (jump !== undefined && changed.has('insightJump')) {
+      this.focusInsight(jump.insightId);
+      return;
+    }
+    if (changed.has('activeIndex') && !changed.has('review') && !changed.has('focusedInsightId')) {
       this.renderRoot
         .querySelectorAll('beuve-file-card')
         [this.activeIndex]?.scrollIntoView({ block: 'start' });

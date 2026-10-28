@@ -1,0 +1,96 @@
+import type { ReviewEffort } from '#contract/ipc-contract.ts';
+import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
+
+/** What the reviewer typed into the chat drawer, parsed (ADR 0022). */
+export type ChatCommand =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'help' }
+  | {
+      readonly kind: 'review';
+      readonly pathPrefixes: readonly string[];
+      readonly fresh: boolean;
+      readonly effort?: ReviewEffort;
+    }
+  /** Plain text: a question for the Q&A chat, which doesn't exist yet. */
+  | { readonly kind: 'question'; readonly text: string }
+  /** An unknown command or a malformed one; `message` says how to fix it. */
+  | { readonly kind: 'invalid'; readonly message: string };
+
+const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
+const whitespace = /\s+/u;
+
+/**
+ * Parses one chat input line. Grammar: `/help` (or `/?`), and
+ * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
+ * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
+ * dropped); command names are case-insensitive. Pure: the drawer shows the result.
+ */
+export function parseChatCommand(input: string): ChatCommand {
+  const text = input.trim();
+  if (text === '') {
+    return { kind: 'empty' };
+  }
+  if (!text.startsWith('/')) {
+    return { kind: 'question', text };
+  }
+  const [name = '', ...args] = text.split(whitespace);
+  switch (name.toLowerCase()) {
+    case '/help':
+    case '/?': {
+      return { kind: 'help' };
+    }
+    case '/review': {
+      return parseReview(args);
+    }
+    default: {
+      return { kind: 'invalid', message: `Unknown command ${name}. Type /help for the commands.` };
+    }
+  }
+}
+
+function parseReview(args: readonly string[]): ChatCommand {
+  const prefixes: string[] = [];
+  let isFresh = false;
+  let effort: ReviewEffort | undefined;
+  let hasOptionsEnded = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (!hasOptionsEnded && arg.startsWith('-')) {
+      if (arg === '--') {
+        hasOptionsEnded = true;
+      } else if (arg === '--fresh') {
+        isFresh = true;
+      } else if (arg === '--effort' || arg.startsWith('--effort=')) {
+        const value = arg === '--effort' ? args[(index += 1)] : arg.slice('--effort='.length);
+        if (value === undefined || !isEffort(value)) {
+          return invalid('--effort takes low, medium or high, e.g. /review --effort=high.');
+        }
+        effort = value;
+      } else {
+        return invalid(`/review has no option ${arg}. Type /help for its options.`);
+      }
+      continue;
+    }
+    const prefix = normalizePathPrefix(arg);
+    if (prefix === undefined) {
+      return invalid(`${arg} is not a path inside the repository.`);
+    }
+    if (!prefixes.includes(prefix)) {
+      prefixes.push(prefix);
+    }
+  }
+  return {
+    kind: 'review',
+    pathPrefixes: prefixes,
+    fresh: isFresh,
+    ...(effort !== undefined && { effort }),
+  };
+}
+
+function isEffort(value: string): value is ReviewEffort {
+  return efforts.has(value);
+}
+
+function invalid(message: string): ChatCommand {
+  return { kind: 'invalid', message };
+}
