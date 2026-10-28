@@ -10,6 +10,7 @@
     "node": ">=22.18.0"
   },
   "imports": {
+    "#contract/*": "./src/contract/*",
     "#internal/*": "./src/internal/*",
     "#pkg/*": "./src/pkg/*"
   },

@@ -30,6 +30,13 @@
   --beuve-warn: #a86a00;
   --beuve-danger: #c8333a;
   --beuve-scrim: #0000004d;
+
+  --beuve-diff-added-bg: #1f8a4c1a;
+  --beuve-diff-added-text: #116335;
+  --beuve-diff-removed-bg: #c8333a1a;
+  --beuve-diff-removed-text: #a3252b;
+  --beuve-diff-hunk-bg: #2f6fde12;
+  --beuve-diff-hunk-text: #2f6fde;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,6 +54,13 @@
     --beuve-warn: #e0a83a;
     --beuve-danger: #ff6b70;
     --beuve-scrim: #00000080;
+
+    --beuve-diff-added-bg: #4cc27f1f;
+    --beuve-diff-added-text: #7ad9a1;
+    --beuve-diff-removed-bg: #ff6b701f;
+    --beuve-diff-removed-text: #ff9a9d;
+    --beuve-diff-hunk-bg: #6b9cff14;
+    --beuve-diff-hunk-text: #8fb3ff;
   }
 }
 

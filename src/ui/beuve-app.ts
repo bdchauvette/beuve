@@ -2,7 +2,14 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
-import type { AppInfo, McpStatus } from '../contract/ipc-contract.ts';
+import type {
+  AppInfo,
+  CreateLocalSessionRequest,
+  IpcResult,
+  McpStatus,
+  ReviewView,
+  SessionSummary,
+} from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
 import './beuve-diff-stream.ts';
@@ -17,7 +24,8 @@ import type { ZoneId } from './zones.ts';
 
 /**
  * Root of the renderer: the four-zone shell (spec section 4), the zone focus model and the
- * keys the shell already handles. Owns all bridge calls; zones are presentational.
+ * keys the shell already handles. Owns all bridge calls and session state; zones are
+ * presentational and report user intent with events.
  */
 @customElement('beuve-app')
 export class BeuveApp extends LitElement {
@@ -97,12 +105,32 @@ export class BeuveApp extends LitElement {
     }
   };
 
+  private readonly onOpenRepository = (event: CustomEvent<CreateLocalSessionRequest>): void => {
+    void this.openRepository(event.detail);
+  };
+
+  private readonly onSelectSession = (event: CustomEvent<{ sessionId: string }>): void => {
+    void this.selectSession(event.detail.sessionId);
+  };
+
+  private readonly onMarkReviewed = (): void => {
+    void this.markReviewed();
+  };
+
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor chatOpen = false;
   @state() accessor overlayOpen = false;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
   @state() accessor sessionNote = 'Loading sessions…';
+  @state() accessor sessions: readonly SessionSummary[] = [];
+  @state() accessor selectedId = '';
+  @state() accessor review: ReviewView | undefined;
+  @state() accessor reviewLoading = false;
+  @state() accessor reviewError = '';
+  @state() accessor marking = false;
+  @state() accessor opening = false;
+  @state() accessor openError = '';
 
   constructor() {
     super();
@@ -150,9 +178,90 @@ export class BeuveApp extends LitElement {
       this.appInfo = info.value;
       this.dataset['platform'] = info.value.platform;
     }
-    this.sessionNote = sessions.ok
-      ? `${String(sessions.value.length)} sessions`
-      : `Sessions unavailable: ${sessions.error.message}`;
+    this.applySessions(sessions);
+  }
+
+  private applySessions(sessions: IpcResult<readonly SessionSummary[]>): void {
+    if (sessions.ok) {
+      this.sessions = sessions.value;
+      this.sessionNote = `${String(sessions.value.length)} sessions`;
+    } else {
+      this.sessionNote = `Sessions unavailable: ${sessions.error.message}`;
+    }
+  }
+
+  private async listSessions(): Promise<IpcResult<readonly SessionSummary[]>> {
+    const bridge = beuveBridge();
+    return bridge === undefined
+      ? { ok: false, error: { code: 'not-wired', message: 'no Electron bridge' } }
+      : bridge.invoke('session:list');
+  }
+
+  private async refreshSessions(): Promise<void> {
+    this.applySessions(await this.listSessions());
+  }
+
+  private async openRepository(request: CreateLocalSessionRequest): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined || this.opening) {
+      return;
+    }
+    this.opening = true;
+    this.openError = '';
+    const created = await bridge.invoke('session:create-local', request);
+    this.opening = false;
+    if (!created.ok) {
+      this.openError = created.error.message;
+      return;
+    }
+    await this.refreshSessions();
+    await this.selectSession(created.value.id);
+  }
+
+  private async selectSession(sessionId: string): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    if (sessionId !== this.selectedId) {
+      this.review = undefined;
+    }
+    this.selectedId = sessionId;
+    this.reviewLoading = true;
+    this.reviewError = '';
+    const review = await bridge.invoke('session:get-review', { sessionId });
+    if (sessionId !== this.selectedId) {
+      return;
+    }
+    this.reviewLoading = false;
+    if (review.ok) {
+      this.review = review.value;
+      this.focusedZone = 'diff';
+    } else {
+      this.review = undefined;
+      this.reviewError = review.error.message;
+    }
+  }
+
+  private async markReviewed(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined || this.marking) {
+      return;
+    }
+    this.marking = true;
+    this.reviewError = '';
+    const marked = await bridge.invoke('session:mark-reviewed', {
+      sessionId: review.session.id,
+      expectedHeadSha: review.headSha,
+    });
+    this.marking = false;
+    if (!marked.ok) {
+      this.reviewError = marked.error.message;
+      return;
+    }
+    await this.refreshSessions();
+    await this.selectSession(review.session.id);
   }
 
   private handleKey(event: KeyboardEvent): void {
@@ -197,22 +306,44 @@ export class BeuveApp extends LitElement {
     this.focusedZone = this.chatOpen ? 'chat' : 'diff';
   }
 
+  private sessionLabel(): string {
+    const session = this.sessions.find(({ id }) => id === this.selectedId);
+    if (session === undefined) {
+      return 'No session';
+    }
+    const { source } = session;
+    const head = source.kind === 'local' ? source.headRef : `#${String(source.number)}`;
+    return `${source.repoPath} · ${source.baseRef} ← ${head}`;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="titlebar">
         <span class="brand">beuve</span>
-        <span class="session">No session</span>
+        <span class="session">${this.sessionLabel()}</span>
       </div>
       <beuve-intent-sidebar
         data-zone="intent"
         tabindex="-1"
         ?focused=${this.focusedZone === 'intent'}
+        .sessions=${this.sessions}
+        .selectedId=${this.selectedId}
+        .sessionNote=${this.sessionNote}
+        ?opening=${this.opening}
+        .openError=${this.openError}
+        @beuve-open-repository=${this.onOpenRepository}
+        @beuve-select-session=${this.onSelectSession}
       ></beuve-intent-sidebar>
       <beuve-diff-stream
         data-zone="diff"
         tabindex="-1"
         ?focused=${this.focusedZone === 'diff'}
         .sessionNote=${this.sessionNote}
+        .review=${this.review}
+        ?loading=${this.reviewLoading}
+        ?marking=${this.marking}
+        .error=${this.reviewError}
+        @beuve-mark-reviewed=${this.onMarkReviewed}
       ></beuve-diff-stream>
       <beuve-ura-dock
         data-zone="ura"

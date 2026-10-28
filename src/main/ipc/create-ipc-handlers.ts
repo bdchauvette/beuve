@@ -10,8 +10,9 @@ import type {
   InvokeResponse,
   IpcError,
   IpcResult,
+  ReviewView,
   SessionSummary,
-} from '../../contract/ipc-contract.ts';
+} from '#contract/ipc-contract.ts';
 import type { MainServices } from '../main-services.ts';
 
 /** One handler per invoke channel. Each takes the raw, untrusted renderer argument. */
@@ -22,7 +23,21 @@ export type IpcHandlers = {
 };
 
 const noRequest = z.undefined();
-const openSessionRequest = z.strictObject({ sessionId: z.string().min(1).max(200) });
+const sessionId = z.string().min(1).max(200);
+const sessionRequest = z.strictObject({ sessionId });
+const revision = z.string().trim().min(1).max(1024);
+const localSessionRequest = z.strictObject({
+  repoPath: z.string().min(1).max(4096),
+  baseRef: revision,
+  headRef: revision,
+});
+const markReviewedRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha: z
+    .string()
+    .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
+    .optional(),
+});
 
 /**
  * Builds the invoke handlers. The renderer is untrusted, so each handler validates its argument
@@ -34,13 +49,31 @@ export function createIpcHandlers(services: MainServices, appInfo: AppInfo): Ipc
       const parsed = noRequest.safeParse(request);
       return parsed.success ? ok(appInfo) : invalid(parsed.error);
     },
-    'session:list': async (request): Promise<IpcResult<readonly SessionSummary[]>> => {
+    'session:list': (request): IpcResult<readonly SessionSummary[]> => {
       const parsed = noRequest.safeParse(request);
       return parsed.success ? services.sessions.list() : invalid(parsed.error);
     },
-    'session:open': async (request): Promise<IpcResult<SessionSummary>> => {
-      const parsed = openSessionRequest.safeParse(request);
+    'session:open': (request): IpcResult<SessionSummary> => {
+      const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.sessions.open(parsed.data) : invalid(parsed.error);
+    },
+    'session:create-local': async (request): Promise<IpcResult<SessionSummary>> => {
+      const parsed = localSessionRequest.safeParse(request);
+      return parsed.success ? services.sessions.createLocal(parsed.data) : invalid(parsed.error);
+    },
+    'session:get-review': async (request): Promise<IpcResult<ReviewView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.sessions.getReview(parsed.data) : invalid(parsed.error);
+    },
+    'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
+      const parsed = markReviewedRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, expectedHeadSha } = parsed.data;
+      return services.sessions.markReviewed(
+        expectedHeadSha === undefined ? { sessionId: id } : { sessionId: id, expectedHeadSha },
+      );
     },
   };
 }

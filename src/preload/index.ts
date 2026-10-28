@@ -7,9 +7,9 @@ import type {
   EventPayload,
   InvokeChannel,
   InvokeResponse,
-} from '../contract/ipc-contract.ts';
-import { isEventChannel } from '../contract/is-event-channel.ts';
-import { isInvokeChannel } from '../contract/is-invoke-channel.ts';
+} from '#contract/ipc-contract.ts';
+import { isEventChannel } from '#contract/is-event-channel.ts';
+import { isInvokeChannel } from '#contract/is-invoke-channel.ts';
 
 /**
  * The renderer's only door to main: contract channels, allow-listed at runtime because the

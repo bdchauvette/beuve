@@ -6,7 +6,7 @@ import type { App } from 'electron';
 
 import type { Logger } from '#pkg/logger/create-logger.ts';
 
-import type { AppInfo, McpStatus } from '../contract/ipc-contract.ts';
+import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
 
 import { createIpcHandlers } from './ipc/create-ipc-handlers.ts';
 import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';

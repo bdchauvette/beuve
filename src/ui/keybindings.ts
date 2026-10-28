@@ -9,7 +9,7 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['Tab', 'Shift+Tab'], action: 'Cycle zones', available: true },
   { keys: ['?'], action: 'Show this overlay', available: true },
   { keys: ['c'], action: 'Toggle the chat drawer', available: true },
-  { keys: ['j', 'k'], action: 'Next / previous hunk or file', available: false },
+  { keys: ['j', 'k'], action: 'Next / previous file', available: true },
   { keys: ['Space'], action: 'Expand / collapse', available: false },
   { keys: ['f'], action: 'Toggle diff-only tree', available: false },
   { keys: ['p'], action: 'Call-stack peek', available: false },

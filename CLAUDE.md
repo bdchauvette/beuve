@@ -23,7 +23,8 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - File names are kebab-case.
 - Exactly one runtime export per file, named after the file: `create-logger.ts` exports `createLogger`, `lru-cache.ts` exports class `LruCache`. Types may be exported alongside it, and a file may export only types.
 - No default exports, no re-exports, no barrels.
-- Import by exact path including the `.ts` extension (ADR 0008): `#pkg/logger/create-logger.ts`, `#internal/git/read-diff.ts`. Use relative imports only within the same directory tree of one domain.
+- Aliases (package.json `imports`): `#contract/*` → `src/contract/*`, `#internal/*` → `src/internal/*`, `#pkg/*` → `src/pkg/*`.
+- Import by exact path including the `.ts` extension (ADR 0008): `#pkg/logger/create-logger.ts`, `#internal/git/read-diff.ts`, `#contract/ipc-contract.ts`. Use relative imports only within the same directory tree of one domain or layer.
 
 ## Code style
 
@@ -40,6 +41,8 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 
 - Vitest, colocated: `foo-bar.ts` is tested by `foo-bar.test.ts` in the same directory.
 - `node:sqlite` works in tests directly; use `openDatabase(':memory:')`.
+- Helpers shared between test files live in a `testing/` directory (ADR 0013), e.g. `#internal/git/testing/create-test-repository.ts`; only tests may import them.
+- Main-process integration tests run in plain Node against `openAppDatabase(':memory:')` and a temp repository (`src/main/create-main-services.test.ts`).
 - Local lint rules live in `eslint-local-rules/` with RuleTester tests beside them.
 
 ## Gotchas

@@ -4,16 +4,18 @@ Lightweight ADRs capturing decisions as the project evolves. One file per decisi
 
 Template: [0000-template.md](0000-template.md)
 
-| ADR                                            | Title                                                     | Status   |
-| ---------------------------------------------- | --------------------------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)  | Record architecture decisions                             | Accepted |
-| [0002](0002-modular-monolith-import-rules.md)  | Modular monolith layout and import rules                  | Accepted |
-| [0003](0003-lit-for-ui-layer.md)               | Lit for the UI layer                                      | Accepted |
-| [0004](0004-node-sqlite.md)                    | Built-in node:sqlite instead of better-sqlite3            | Accepted |
-| [0005](0005-electron-security-baseline.md)     | Electron security baseline without eslint-plugin-electron | Accepted |
-| [0006](0006-domain-owned-persistence.md)       | Domains own their tables; main composes                   | Accepted |
-| [0007](0007-build-test-and-tooling-layout.md)  | Build, test and tooling layout                            | Accepted |
-| [0008](0008-ts-extension-import-specifiers.md) | Import specifiers use the `.ts` extension                 | Accepted |
-| [0009](0009-session-domain-model.md)           | Session domain model                                      | Accepted |
-| [0010](0010-git-cli-and-interdiff.md)          | Git CLI and interdiff algorithm                           | Accepted |
-| [0011](0011-ipc-contract-and-mcp-transport.md) | IPC contract layer and MCP transport                      | Accepted |
+| ADR                                                    | Title                                                               | Status   |
+| ------------------------------------------------------ | ------------------------------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)          | Record architecture decisions                                       | Accepted |
+| [0002](0002-modular-monolith-import-rules.md)          | Modular monolith layout and import rules                            | Accepted |
+| [0003](0003-lit-for-ui-layer.md)                       | Lit for the UI layer                                                | Accepted |
+| [0004](0004-node-sqlite.md)                            | Built-in node:sqlite instead of better-sqlite3                      | Accepted |
+| [0005](0005-electron-security-baseline.md)             | Electron security baseline without eslint-plugin-electron           | Accepted |
+| [0006](0006-domain-owned-persistence.md)               | Domains own their tables; main composes                             | Accepted |
+| [0007](0007-build-test-and-tooling-layout.md)          | Build, test and tooling layout                                      | Accepted |
+| [0008](0008-ts-extension-import-specifiers.md)         | Import specifiers use the `.ts` extension                           | Accepted |
+| [0009](0009-session-domain-model.md)                   | Session domain model                                                | Accepted |
+| [0010](0010-git-cli-and-interdiff.md)                  | Git CLI and interdiff algorithm                                     | Accepted |
+| [0011](0011-ipc-contract-and-mcp-transport.md)         | IPC contract layer and MCP transport                                | Accepted |
+| [0012](0012-checkpoint-base-and-review-composition.md) | Checkpoints record the reviewed base; main composes session and git | Accepted |
+| [0013](0013-test-helpers-in-testing-directories.md)    | Shared test helpers live in `testing/` directories                  | Accepted |

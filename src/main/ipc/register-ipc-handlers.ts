@@ -3,8 +3,8 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import type { Logger } from '#pkg/logger/create-logger.ts';
 import { err } from '#pkg/result/err.ts';
 
-import { invokeChannels } from '../../contract/invoke-channels.ts';
-import type { IpcResult } from '../../contract/ipc-contract.ts';
+import { invokeChannels } from '#contract/invoke-channels.ts';
+import type { IpcResult } from '#contract/ipc-contract.ts';
 
 import type { IpcHandlers } from './create-ipc-handlers.ts';
 

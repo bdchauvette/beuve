@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { AppInfo, McpStatus } from '../contract/ipc-contract.ts';
+import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
 
 /** Bottom bar: focused zone, MCP server state and app version. */
 @customElement('beuve-status-bar')

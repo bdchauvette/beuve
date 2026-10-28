@@ -5,4 +5,7 @@ export const invokeChannels = Object.freeze([
   'app:get-info',
   'session:list',
   'session:open',
+  'session:create-local',
+  'session:get-review',
+  'session:mark-reviewed',
 ] as const satisfies readonly InvokeChannel[]);

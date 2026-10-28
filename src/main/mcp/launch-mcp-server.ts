@@ -2,7 +2,7 @@ import process from 'node:process';
 
 import type { Logger } from '#pkg/logger/create-logger.ts';
 
-import type { McpStatus } from '../../contract/ipc-contract.ts';
+import type { McpStatus } from '#contract/ipc-contract.ts';
 
 import { loadMcpToken } from './load-mcp-token.ts';
 import type { McpToolServices } from './mcp-tool-services.ts';

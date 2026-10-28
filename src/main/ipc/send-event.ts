@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron';
 
-import type { EventChannel, EventPayload } from '../../contract/ipc-contract.ts';
+import type { EventChannel, EventPayload } from '#contract/ipc-contract.ts';
 
 /** Pushes a typed contract event to one renderer, ignoring destroyed ones. */
 export function sendEvent<E extends EventChannel>(

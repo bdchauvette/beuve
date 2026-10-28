@@ -18,4 +18,4 @@ main, preload and ui run in three processes but must agree on channel names and 
 
 ## Consequences
 
-Adding a channel means one map entry, one allow-list entry (a type test catches omissions), one zod schema and one handler. Imports into `src/contract` are relative until package.json gains `"#contract/*": "./src/contract/*"`. The main bundle carries the MCP SDK and its HTTP stack (about 1.4 MB). Agents must read the discovery file or be configured with the token. The default port is stable across restarts, but the port in the discovery file is the authoritative one.
+Adding a channel means one map entry, one allow-list entry (a type test catches omissions), one zod schema and one handler. Imports of `src/contract` use the `#contract/*` alias (package.json `imports`), as `#pkg/*` and `#internal/*` do. The main bundle carries the MCP SDK and its HTTP stack (about 1.4 MB). Agents must read the discovery file or be configured with the token. The default port is stable across restarts, but the port in the discovery file is the authoritative one.

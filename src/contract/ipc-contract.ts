@@ -34,7 +34,8 @@ export type SessionSourceView =
 
 /**
  * A review session as the UI sees it: the session domain's model flattened to plain strings.
- * `lastReviewedSha` is absent until the first checkpoint. Timestamps are ISO-8601 UTC.
+ * `lastReviewedSha` (the last checkpoint's head) is absent until the first checkpoint.
+ * Timestamps are ISO-8601 UTC.
  */
 export interface SessionSummary {
   readonly id: string;
@@ -49,8 +50,106 @@ export interface OpenSessionRequest {
   readonly sessionId: string;
 }
 
-/** Expected failures of an invoke channel. `not-wired` means the backing service isn't composed yet. */
-export type IpcErrorCode = 'invalid-request' | 'not-wired' | 'not-found' | 'internal';
+/** Start (or resume) reviewing `headRef` against `baseRef` in the repository containing `repoPath`. */
+export interface CreateLocalSessionRequest {
+  /** Absolute path inside a git worktree; the session records the repository's top level. */
+  readonly repoPath: string;
+  readonly baseRef: string;
+  readonly headRef: string;
+}
+
+export interface GetReviewRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * Sign off on the session's current head. `expectedHeadSha`, when given, must equal the head the
+ * reviewer was shown; if the head moved since, nothing is recorded and the call fails with
+ * `stale-review`.
+ */
+export interface MarkReviewedRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha?: string;
+}
+
+/** Why an interdiff could not be trusted, so the full change is shown instead. */
+export type InterdiffFallbackView =
+  | { readonly kind: 'conflicts'; readonly paths: readonly string[] }
+  | { readonly kind: 'git-too-old'; readonly version: string; readonly required: string }
+  /** The previously reviewed commits are no longer in the repository (e.g. garbage-collected). */
+  | { readonly kind: 'reviewed-commits-missing' };
+
+/**
+ * What the diff in a {@link ReviewView} covers.
+ *
+ * - `full`: never reviewed; the whole change since it forked from the base branch.
+ * - `up-to-date`: the last checkpoint is the head; no files.
+ * - `interdiff`: only what changed since the last checkpoint. `exact` when the fork point didn't
+ *   move, `rebased` when the branch was rebased (upstream changes cancel out), `fallback` when no
+ *   trustworthy interdiff exists and the full change is shown, with the reason.
+ */
+export type ReviewScope =
+  | { readonly kind: 'full' }
+  | { readonly kind: 'up-to-date' }
+  | {
+      readonly kind: 'interdiff';
+      readonly fromBaseSha: string;
+      readonly fromHeadSha: string;
+      readonly outcome:
+        | { readonly kind: 'exact' }
+        | { readonly kind: 'rebased' }
+        | { readonly kind: 'fallback'; readonly reason: InterdiffFallbackView };
+    };
+
+/** A hunk's position; its lines are in the file's `patch`. */
+export interface DiffHunkView {
+  readonly oldStart: number;
+  readonly oldCount: number;
+  readonly newStart: number;
+  readonly newCount: number;
+  /** The full `@@ -a,b +c,d @@ …` line. */
+  readonly header: string;
+}
+
+/** One file of a review diff. `oldPath` is set for renames and copies. */
+export interface DiffFileView {
+  readonly status: 'added' | 'deleted' | 'modified' | 'renamed' | 'copied';
+  readonly path: string;
+  readonly oldPath?: string;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly binary: boolean;
+  readonly hunks: readonly DiffHunkView[];
+  /** The file's unified diff text, from `diff --git` on, newline-terminated. */
+  readonly patch: string;
+}
+
+/**
+ * What the reviewer should look at now. `baseSha` is where `headSha` forked from the base
+ * branch; marking the session reviewed records that pair.
+ */
+export interface ReviewView {
+  readonly session: SessionSummary;
+  readonly scope: ReviewScope;
+  readonly baseSha: string;
+  readonly headSha: string;
+  readonly files: readonly DiffFileView[];
+}
+
+/**
+ * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
+ * yet; `stale-review` that the head moved after the reviewer last saw it.
+ */
+export type IpcErrorCode =
+  | 'invalid-request'
+  | 'not-wired'
+  | 'not-found'
+  | 'not-a-repository'
+  | 'unknown-revision'
+  | 'git-unavailable'
+  | 'git-failed'
+  | 'stale-review'
+  | 'internal';
 
 export interface IpcError {
   readonly code: IpcErrorCode;
@@ -69,6 +168,18 @@ export interface InvokeChannelMap {
   };
   'session:open': {
     readonly request: OpenSessionRequest;
+    readonly response: IpcResult<SessionSummary>;
+  };
+  'session:create-local': {
+    readonly request: CreateLocalSessionRequest;
+    readonly response: IpcResult<SessionSummary>;
+  };
+  'session:get-review': {
+    readonly request: GetReviewRequest;
+    readonly response: IpcResult<ReviewView>;
+  };
+  'session:mark-reviewed': {
+    readonly request: MarkReviewedRequest;
     readonly response: IpcResult<SessionSummary>;
   };
 }

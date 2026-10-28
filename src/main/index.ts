@@ -5,7 +5,8 @@ import { app, BrowserWindow } from 'electron';
 
 import { createLogger } from '#pkg/logger/create-logger.ts';
 
-import { createUnwiredServices } from './create-unwired-services.ts';
+import { createMainServices } from './create-main-services.ts';
+import { openAppDatabase } from './database/open-app-database.ts';
 import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
@@ -28,8 +29,12 @@ if (app.requestSingleInstanceLock()) {
 
 async function launch(): Promise<void> {
   try {
+    const db = openAppDatabase(path.join(app.getPath('userData'), 'beuve.db'));
+    app.once('quit', () => {
+      db.close();
+    });
     await startApp(app, {
-      services: createUnwiredServices(),
+      services: createMainServices({ db, logger }),
       preloadPath: path.join(import.meta.dirname, '../preload/index.cjs'),
       indexHtmlPath: path.join(import.meta.dirname, '../ui/index.html'),
       mcpPort: parsePort(process.env['BEUVE_MCP_PORT']) ?? defaultMcpPort,

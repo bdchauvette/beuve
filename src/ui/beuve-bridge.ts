@@ -1,4 +1,4 @@
-import type { BeuveApi } from '../contract/ipc-contract.ts';
+import type { BeuveApi } from '#contract/ipc-contract.ts';
 
 declare global {
   /** `window.beuve`, exposed by the preload (`src/preload/index.ts`); absent outside Electron. */
