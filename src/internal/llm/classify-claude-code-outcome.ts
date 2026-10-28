@@ -3,7 +3,7 @@ import { ok } from '#pkg/result/ok.ts';
 import type { Result } from '#pkg/result/result.ts';
 
 import type { ClaudeCodeResult } from './parse-claude-code-event.ts';
-import type { ModelError } from './review-model.ts';
+import type { ModelError } from './language-model.ts';
 
 /** What a finished `claude` process left behind, after the stream was read. */
 export interface ClaudeCodeOutcome {
@@ -19,20 +19,22 @@ export interface ClaudeCodeOutcome {
   readonly invalidLine: string | undefined;
 }
 
-/** A successful run's output, not yet checked against the request's schema. */
+/** A successful run's output: for `json`, not yet checked against the request's schema. */
 export interface ClassifiedOutput {
   readonly value: unknown;
   readonly result: ClaudeCodeResult;
 }
 
 /**
- * Turns a finished run into its structured output, still unvalidated, or a {@link ModelError}.
+ * Turns a finished run into its answer or a {@link ModelError}. `json` expects structured output
+ * (or the result text as JSON), still unvalidated; `text` expects a non-blank result text.
  * Authentication and rate-limit failures are recognized from HTTP statuses, the stream's rate-limit
  * events and Claude Code's `/login` hints. These texts are not a documented interface, so anything
  * unrecognized falls through to `model-failed` or `process-failed` with the message intact.
  */
 export function classifyClaudeCodeOutcome(
   outcome: ClaudeCodeOutcome,
+  expects: 'json' | 'text' = 'json',
 ): Result<ClassifiedOutput, ModelError> {
   const { result } = outcome;
   if (result === undefined) {
@@ -40,6 +42,11 @@ export function classifyClaudeCodeOutcome(
   }
   if (result.isError) {
     return err(failedResult(result, outcome));
+  }
+  if (expects === 'text') {
+    return result.text === undefined || result.text.trim() === ''
+      ? err({ kind: 'invalid-output', reason: 'the result has no text' })
+      : ok({ value: result.text, result });
   }
   if (result.hasStructuredOutput) {
     return ok({ value: result.structuredOutput, result });

@@ -50,6 +50,22 @@ describe('classifyClaudeCodeOutcome', () => {
     });
   });
 
+  it('returns the result text as is when text is expected, and rejects a blank one', () => {
+    const prose = { ...success, hasStructuredOutput: false, text: 'See [[a.ts:1-2]].' };
+    expect(classifyClaudeCodeOutcome(outcome({ result: prose }), 'text')).toEqual({
+      ok: true,
+      value: { value: 'See [[a.ts:1-2]].', result: prose },
+    });
+    expect(
+      classifyClaudeCodeOutcome(outcome({ result: { ...prose, text: ' \n' } }), 'text'),
+    ).toEqual({ ok: false, error: { kind: 'invalid-output', reason: 'the result has no text' } });
+    const unauthorized = outcome({ result: failed({ apiErrorStatus: 401 }) });
+    expect(classifyClaudeCodeOutcome(unauthorized, 'text')).toMatchObject({
+      ok: false,
+      error: { kind: 'not-authenticated' },
+    });
+  });
+
   it('maps authentication failures from HTTP status or the /login hint', () => {
     for (const result of [
       failed({ apiErrorStatus: 401, text: 'API Error' }),

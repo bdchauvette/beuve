@@ -10,6 +10,11 @@ import path from 'node:path';
  * - `review`: the second argument names a JSON file `{ insights, delayMs? }`; after `delayMs` it
  *   succeeds with `{ insights }` as structured output, and appends `{ args, cwd }` as one line to
  *   `<file>.calls` so tests can count runs and check the working directory and flags.
+ * - `chat`: the second argument names a JSON file `{ preamble?, chunks, delayMs? }`. It writes
+ *   `preamble` (text before a Grep call), then the answer as `chunks`, each a text delta when the
+ *   argv has `--include-partial-messages` (as the real CLI does), waiting `delayMs` before each
+ *   chunk; it succeeds with the joined chunks as `result`, and appends `{ args, cwd, stdin }` as
+ *   one line to `<file>.calls`.
  * - `text-result`: succeeds with the JSON only in `result`, no `structured_output`.
  * - `garbage`: prints lines that aren't JSON and exits 0.
  * - `mismatch`: succeeds with structured output that matches no schema.
@@ -63,6 +68,37 @@ process.stdin.on('end', () => {
         const value = { insights: script.insights };
         result({ result: JSON.stringify(value), structured_output: value });
       }, script.delayMs ?? 0);
+      break;
+    }
+    case 'chat': {
+      const script = JSON.parse(readFileSync(pidFile, 'utf8'));
+      appendFileSync(pidFile + '.calls', JSON.stringify({ args, cwd: process.cwd(), stdin }) + '\n');
+      const isStreaming = args.includes('--include-partial-messages');
+      const start = () => isStreaming && emit({ type: 'stream_event', parent_tool_use_id: null,
+        event: { type: 'message_start', message: { content: [] } } });
+      const delta = (text) => isStreaming && emit({ type: 'stream_event', parent_tool_use_id: null,
+        event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } } });
+      init();
+      if (script.preamble !== undefined) {
+        start();
+        delta(script.preamble);
+        emit({ type: 'assistant', message: { content: [{ type: 'text', text: script.preamble },
+          { type: 'tool_use', name: 'Grep', input: {} }] } });
+      }
+      start();
+      const chunks = [...script.chunks];
+      const next = () => {
+        const chunk = chunks.shift();
+        if (chunk !== undefined) {
+          delta(chunk);
+          setTimeout(next, script.delayMs ?? 0);
+          return;
+        }
+        const text = script.chunks.join('');
+        emit({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
+        result({ result: text });
+      };
+      setTimeout(next, script.delayMs ?? 0);
       break;
     }
     case 'text-result': {

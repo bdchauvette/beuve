@@ -17,16 +17,17 @@ import type {
   ReviewRunSummaryView,
   SetInsightStatusRequest,
 } from '#contract/ipc-contract.ts';
+import { createClaudeCodeModel } from '#internal/llm/create-claude-code-model.ts';
+import type { ClaudeCodeModelOptions } from '#internal/llm/create-claude-code-model.ts';
+import type { LanguageModel } from '#internal/llm/language-model.ts';
 import type { AgentInsightId, CommitSha, SessionId } from '#internal/review/agent-insight.ts';
-import { createClaudeCodeModel } from '#internal/review/create-claude-code-model.ts';
 import { findReviewRun } from '#internal/review/find-review-run.ts';
 import { insertReviewRun } from '#internal/review/insert-review-run.ts';
 import { listAgentInsights } from '#internal/review/list-agent-insights.ts';
 import { listReviewRuns } from '#internal/review/list-review-runs.ts';
 import { normalizePathScope } from '#internal/review/normalize-path-scope.ts';
 import { replaceReviewRun } from '#internal/review/replace-review-run.ts';
-import type { ModelProgress, ReviewModel } from '#internal/review/review-model.ts';
-import type { ClaudeCodeModelOptions } from '#internal/review/create-claude-code-model.ts';
+import type { ModelProgress } from '#internal/review/review-model.ts';
 import { runPreliminaryReview } from '#internal/review/run-preliminary-review.ts';
 import { setAgentInsightStatus } from '#internal/review/set-agent-insight-status.ts';
 import { err } from '#pkg/result/err.ts';
@@ -142,7 +143,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
 
   const resolveModel = async (
     request: ReviewRunRequest,
-  ): Promise<Result<ReviewModel, ReviewRunErrorView>> => {
+  ): Promise<Result<LanguageModel, ReviewRunErrorView>> => {
     let { command } = claude;
     if (command === undefined) {
       const resolved = await resolveClaudeCommand({

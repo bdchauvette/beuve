@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 /**
  * The parts of one `--output-format=stream-json` line the adapter uses. Claude Code emits many
- * more event types (`stream_event`, `system/status`, `user` tool results, …); they are `other`.
+ * more event types (`system/status`, `user` tool results, other `stream_event`s, …); they are
+ * `other`. `message-start` and `text-delta` come from the top-level agent's `stream_event` lines,
+ * which carry Messages API stream events (text deltas only with `--include-partial-messages`).
  */
 export type ClaudeCodeEvent =
   | {
@@ -18,6 +20,8 @@ export type ClaudeCodeEvent =
       /** Epoch seconds, as Claude Code reports it. */
       readonly resetsAt: number | undefined;
     }
+  | { readonly kind: 'message-start' }
+  | { readonly kind: 'text-delta'; readonly text: string }
   | { readonly kind: 'result'; readonly result: ClaudeCodeResult }
   | { readonly kind: 'other' }
   | { readonly kind: 'invalid'; readonly reason: string };
@@ -50,6 +54,15 @@ const contentBlock = z.looseObject({ type: z.string(), name: z.string().optional
 
 const assistant = z.looseObject({
   message: z.looseObject({ content: z.array(contentBlock).optional() }),
+});
+
+const streamDelta = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
+
+const apiStreamEvent = z.looseObject({ type: z.string(), delta: streamDelta.optional() });
+
+const streamEvent = z.looseObject({
+  parent_tool_use_id: z.string().nullish(),
+  event: apiStreamEvent,
 });
 
 const rateLimit = z.looseObject({
@@ -87,6 +100,9 @@ export function parseClaudeCodeEvent(text: string): ClaudeCodeEvent {
     case 'assistant': {
       return toToolUse(json);
     }
+    case 'stream_event': {
+      return toStreamEvent(json);
+    }
     case 'rate_limit_event': {
       return toRateLimit(json);
     }
@@ -121,6 +137,21 @@ function toToolUse(json: unknown): ClaudeCodeEvent {
     .filter((block) => block.type === 'tool_use')
     .map((block) => block.name ?? 'unknown');
   return tools.length === 0 ? { kind: 'other' } : { kind: 'tool-use', tools };
+}
+
+function toStreamEvent(json: unknown): ClaudeCodeEvent {
+  const parsed = streamEvent.safeParse(json);
+  if (!parsed.success || (parsed.data.parent_tool_use_id ?? undefined) !== undefined) {
+    return { kind: 'other' };
+  }
+  const { event } = parsed.data;
+  if (event.type === 'message_start') {
+    return { kind: 'message-start' };
+  }
+  const text = event.delta?.type === 'text_delta' ? event.delta.text : undefined;
+  return text !== undefined && text !== '' && event.type === 'content_block_delta'
+    ? { kind: 'text-delta', text }
+    : { kind: 'other' };
 }
 
 function toRateLimit(json: unknown): ClaudeCodeEvent {

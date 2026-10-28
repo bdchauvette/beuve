@@ -1,5 +1,5 @@
 import type { ReviewRunErrorView } from '#contract/ipc-contract.ts';
-import type { ModelError } from '#internal/review/review-model.ts';
+import type { ModelError } from '#internal/llm/language-model.ts';
 
 /** Why a run was aborted; the `AbortSignal` reason main passes. */
 export type AbortReason = Extract<ReviewRunErrorView, { code: 'cancelled' }>['reason'];

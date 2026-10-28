@@ -1,0 +1,130 @@
+import { describe, expect, it } from 'vitest';
+
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+
+import { askQuestion } from './ask-question.ts';
+import type { ChatDelta, ChatModel, ChatModelOutput, ChatModelRequest } from './chat-model.ts';
+import { createChatQuestion } from './testing/create-chat-question.ts';
+
+interface FakeError {
+  readonly kind: 'timeout' | 'cancelled';
+}
+
+function fakeModel(
+  answer: Result<string, FakeError>,
+  seen: ChatModelRequest[] = [],
+  deltas: readonly ChatDelta[] = [],
+): ChatModel<FakeError> {
+  return {
+    runText: async (request: ChatModelRequest): Promise<Result<ChatModelOutput, FakeError>> => {
+      seen.push(request);
+      for (const delta of deltas) {
+        request.onText?.(delta);
+        await Promise.resolve();
+      }
+      if (request.signal?.aborted === true) {
+        return err({ kind: 'cancelled' });
+      }
+      if (!answer.ok) {
+        return answer;
+      }
+      return ok({
+        value: answer.value,
+        model: 'fake-model',
+        turns: 2,
+        costUsd: 0.01,
+        durationMs: 900,
+        deniedToolUses: 0,
+      });
+    },
+  };
+}
+
+describe('askQuestion', () => {
+  it('asks in the head worktree and returns the answer with validated citations', async () => {
+    const seen: ChatModelRequest[] = [];
+    const answer =
+      'It trims because of [[src/a.ts:12-13]]; see also [[src/c.ts:1]] and [[docs/x.md:2-4]].\n';
+    const result = await askQuestion(
+      createChatQuestion({ worktreePaths: new Set(['docs/x.md']) }),
+      { model: fakeModel(ok(answer), seen) },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ cwd: '/work/repo', timeoutMs: 300_000 });
+    expect(seen[0]?.prompt).toContain('Why does parse trim the first part?');
+    expect(seen[0]?.system).toContain('[[path:start-end]]');
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        answer:
+          'It trims because of [[src/a.ts:12-13]]; see also `src/c.ts:1-1` and [[docs/x.md:2-4]].',
+        citations: [
+          { path: 'src/a.ts', startLine: 12, endLine: 13, side: 'head' },
+          { path: 'docs/x.md', startLine: 2, endLine: 4, side: 'head' },
+        ],
+        dropped: [{ path: 'src/c.ts', startLine: 1, endLine: 1, reason: 'unknown-path' }],
+        malformedCitations: 0,
+        usage: { model: 'fake-model', turns: 2, durationMs: 900 },
+      },
+    });
+  });
+
+  it('never accepts a citation of a deleted file', async () => {
+    const question = createChatQuestion({
+      files: [{ path: 'old.ts', status: 'deleted', binary: false, patch: '' }],
+    });
+    const result = await askQuestion(question, { model: fakeModel(ok('Gone: [[old.ts:1]].')) });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { citations: [], answer: 'Gone: `old.ts:1-1`.' },
+    });
+  });
+
+  it('passes streamed deltas through', async () => {
+    const deltas: ChatDelta[] = [
+      { kind: 'append', text: 'Let me look.' },
+      { kind: 'reset' },
+      { kind: 'append', text: 'Done.' },
+    ];
+    const received: ChatDelta[] = [];
+    await askQuestion(createChatQuestion(), {
+      model: fakeModel(ok('Done.'), [], deltas),
+      onDelta: (delta) => {
+        received.push(delta);
+      },
+    });
+    expect(received).toEqual(deltas);
+  });
+
+  it('wraps model failures and cancellation', async () => {
+    const timedOut = fakeModel(err({ kind: 'timeout' }));
+    expect(await askQuestion(createChatQuestion(), { model: timedOut })).toEqual({
+      ok: false,
+      error: { kind: 'model', error: { kind: 'timeout' } },
+    });
+    const controller = new AbortController();
+    controller.abort();
+    const never = fakeModel(ok('never'));
+    expect(
+      await askQuestion(createChatQuestion(), { model: never, signal: controller.signal }),
+    ).toEqual({ ok: false, error: { kind: 'model', error: { kind: 'cancelled' } } });
+  });
+
+  it('refuses empty and oversized questions without calling the model', async () => {
+    const seen: ChatModelRequest[] = [];
+    const model = fakeModel(ok('x'), seen);
+    const blank = createChatQuestion({ question: ' \n' });
+    expect(await askQuestion(blank, { model })).toEqual({
+      ok: false,
+      error: { kind: 'empty-question' },
+    });
+    const long = createChatQuestion({ question: 'x'.repeat(8001) });
+    expect(await askQuestion(long, { model })).toEqual({
+      ok: false,
+      error: { kind: 'question-too-long', maxChars: 8000 },
+    });
+    expect(seen).toHaveLength(0);
+  });
+});

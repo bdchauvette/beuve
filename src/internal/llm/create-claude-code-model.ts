@@ -18,7 +18,15 @@ import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import { createClaudeCodeEnvironment } from './create-claude-code-environment.ts';
 import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
 import type { ClaudeCodeResult } from './parse-claude-code-event.ts';
-import type { ModelError, ModelOutput, ModelRequest, ReviewModel } from './review-model.ts';
+import type {
+  BaseModelRequest,
+  LanguageModel,
+  ModelError,
+  ModelOutput,
+  ModelRequest,
+  TextModelRequest,
+  TextStreamEvent,
+} from './language-model.ts';
 
 export interface ClaudeCodeModelOptions {
   /** The `claude` executable: a bare name looked up on `PATH`, or an absolute path. */
@@ -45,20 +53,23 @@ const stderrTailChars = 4096;
 const maxArgumentChars = 100_000;
 
 /**
- * A {@link ReviewModel} that drives the user's installed Claude Code CLI headless (ADR 0019), so
- * the user's own Claude Code login authenticates and beuve never handles credentials. Each run is
- * one `claude --print` process: no shell, an allow-listed environment, `cwd` = the worktree, the
- * prompt on stdin, read-only tools only, its own process group (POSIX) so a timeout or abort
- * reaps every descendant, and a cap on stdout.
+ * A {@link LanguageModel} that drives the user's installed Claude Code CLI headless (ADR 0019,
+ * 0030), so the user's own Claude Code login authenticates and beuve never handles credentials.
+ * Each run is one `claude --print` process: no shell, an allow-listed environment, `cwd` = the
+ * worktree, the prompt on stdin, read-only tools only, its own process group (POSIX) so a timeout
+ * or abort reaps every descendant, and a cap on stdout. `run` constrains the answer with
+ * `--json-schema`; `runText` takes the final text and, with `onText`, streams its deltas.
  */
-export function createClaudeCodeModel(options: ClaudeCodeModelOptions = {}): ReviewModel {
+export function createClaudeCodeModel(options: ClaudeCodeModelOptions = {}): LanguageModel {
   return {
     run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
-      runClaudeCode(request, options),
+      runStructured(request, options),
+    runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
+      runText(request, options),
   };
 }
 
-async function runClaudeCode<T>(
+async function runStructured<T>(
   request: ModelRequest<T>,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<ModelOutput<T>, ModelError>> {
@@ -66,7 +77,51 @@ async function runClaudeCode<T>(
   if (jsonSchema === undefined) {
     return err({ kind: 'invalid-request', reason: 'the output schema has no JSON Schema form' });
   }
-  const invalid = validateRequest(request, jsonSchema);
+  const answer = await runClaudeCode(request, options, { jsonSchema });
+  if (!answer.ok) {
+    return answer;
+  }
+  const parsed = request.outputSchema.safeParse(answer.value.value);
+  if (!parsed.success) {
+    options.logger?.info('claude-code: output does not match the schema', {
+      durationMs: answer.value.durationMs,
+    });
+    return err({ kind: 'invalid-output', reason: z.prettifyError(parsed.error) });
+  }
+  logFinished(answer.value, options);
+  return ok({ ...answer.value, value: parsed.data });
+}
+
+async function runText(
+  request: TextModelRequest,
+  options: ClaudeCodeModelOptions,
+): Promise<Result<ModelOutput<string>, ModelError>> {
+  const answer = await runClaudeCode(request, options, {
+    ...(request.onText !== undefined && { onText: request.onText }),
+  });
+  if (!answer.ok) {
+    return answer;
+  }
+  const { value } = answer.value;
+  if (typeof value !== 'string') {
+    return err({ kind: 'invalid-output', reason: 'the result has no text' });
+  }
+  logFinished(answer.value, options);
+  return ok({ ...answer.value, value });
+}
+
+interface OutputMode {
+  /** Structured output; free-form text when omitted. */
+  readonly jsonSchema?: string;
+  readonly onText?: (event: TextStreamEvent) => void;
+}
+
+async function runClaudeCode(
+  request: BaseModelRequest,
+  options: ClaudeCodeModelOptions,
+  mode: OutputMode,
+): Promise<Result<ModelOutput<unknown>, ModelError>> {
+  const invalid = validateRequest(request, mode.jsonSchema ?? '');
   if (invalid !== undefined) {
     return err(invalid);
   }
@@ -75,7 +130,8 @@ async function runClaudeCode<T>(
   }
   const args = buildClaudeCodeArgs({
     system: request.system,
-    jsonSchema,
+    ...(mode.jsonSchema !== undefined && { jsonSchema: mode.jsonSchema }),
+    ...(mode.onText !== undefined && { streamText: true }),
     ...(options.model !== undefined && { model: options.model }),
     ...(options.effort !== undefined && { effort: options.effort }),
     ...(options.maxBudgetUsd !== undefined && { maxBudgetUsd: options.maxBudgetUsd }),
@@ -89,42 +145,49 @@ async function runClaudeCode<T>(
     systemChars: request.system.length,
   });
 
-  const run = await execute(command, [...(options.leadingArgs ?? []), ...args], request, options);
+  const run = await execute(
+    command,
+    [...(options.leadingArgs ?? []), ...args],
+    request,
+    mode.onText,
+    options,
+  );
   const durationMs = Math.round(performance.now() - started);
   if (!run.ok) {
     options.logger?.info('claude-code: run failed', { durationMs, error: run.error.kind });
     return run;
   }
   const { outcome, model } = run.value;
-  const structured = classifyClaudeCodeOutcome(outcome);
-  if (!structured.ok) {
+  const classified = classifyClaudeCodeOutcome(
+    outcome,
+    mode.jsonSchema === undefined ? 'text' : 'json',
+  );
+  if (!classified.ok) {
     options.logger?.info('claude-code: run failed', {
       durationMs,
-      error: structured.error.kind,
+      error: classified.error.kind,
       exitCode: outcome.exitCode,
     });
-    return structured;
+    return classified;
   }
-  const parsed = request.outputSchema.safeParse(structured.value.value);
-  if (!parsed.success) {
-    options.logger?.info('claude-code: output does not match the schema', { durationMs });
-    return err({ kind: 'invalid-output', reason: z.prettifyError(parsed.error) });
-  }
-  const { result } = structured.value;
-  options.logger?.info('claude-code: run finished', {
-    durationMs,
+  const { result } = classified.value;
+  return ok({
+    value: classified.value.value,
     model,
     turns: result.turns,
     costUsd: result.costUsd,
+    durationMs,
     deniedToolUses: result.deniedToolUses,
   });
-  return ok({
-    value: parsed.data,
-    model,
-    turns: result.turns,
-    costUsd: result.costUsd,
-    durationMs,
-    deniedToolUses: result.deniedToolUses,
+}
+
+function logFinished(output: ModelOutput<unknown>, options: ClaudeCodeModelOptions): void {
+  options.logger?.info('claude-code: run finished', {
+    durationMs: output.durationMs,
+    model: output.model,
+    turns: output.turns,
+    costUsd: output.costUsd,
+    deniedToolUses: output.deniedToolUses,
   });
 }
 
@@ -138,7 +201,7 @@ function toJsonSchema(schema: z.ZodType): string | undefined {
   }
 }
 
-function validateRequest<T>(request: ModelRequest<T>, jsonSchema: string): ModelError | undefined {
+function validateRequest(request: BaseModelRequest, jsonSchema: string): ModelError | undefined {
   if (!path.isAbsolute(request.cwd)) {
     return { kind: 'invalid-request', reason: 'cwd must be absolute' };
   }
@@ -159,10 +222,11 @@ interface Execution {
   readonly model: string | undefined;
 }
 
-async function execute<T>(
+async function execute(
   command: string,
   args: readonly string[],
-  request: ModelRequest<T>,
+  request: BaseModelRequest,
+  onText: ((event: TextStreamEvent) => void) | undefined,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<Execution, ModelError>> {
   const isOwnGroup = process.platform !== 'win32';
@@ -210,6 +274,7 @@ async function execute<T>(
   let result: ClaudeCodeResult | undefined;
   let rateLimit: ClaudeCodeOutcome['rateLimit'];
   let invalidLine: string | undefined;
+  let hasStreamedText = false;
   const onLine = (text: string): void => {
     if (text.trim() === '') {
       return;
@@ -225,6 +290,18 @@ async function execute<T>(
         for (const tool of event.tools) {
           request.onProgress?.({ kind: 'tool-use', tool });
         }
+        break;
+      }
+      case 'message-start': {
+        if (hasStreamedText) {
+          hasStreamedText = false;
+          onText?.({ kind: 'reset' });
+        }
+        break;
+      }
+      case 'text-delta': {
+        hasStreamedText = true;
+        onText?.({ kind: 'append', text: event.text });
         break;
       }
       case 'rate-limit': {

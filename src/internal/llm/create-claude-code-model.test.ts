@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -8,7 +15,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { createClaudeCodeModel } from './create-claude-code-model.ts';
-import type { ModelProgress, ModelRequest } from './review-model.ts';
+import type {
+  ModelProgress,
+  ModelRequest,
+  TextModelRequest,
+  TextStreamEvent,
+} from './language-model.ts';
 import { writeFakeClaude } from './testing/write-fake-claude.ts';
 
 const temporary = mkdtempSync(path.join(tmpdir(), 'beuve-fake-claude-'));
@@ -191,6 +203,83 @@ describe('createClaudeCodeModel', () => {
     });
   });
 });
+
+describe('createClaudeCodeModel runText', () => {
+  it('returns the final text, streaming its deltas and resetting after a tool call', async () => {
+    const events: TextStreamEvent[] = [];
+    const outcome = await chat('stream', {
+      preamble: 'Let me look.',
+      chunks: ['It splits ', 'on commas [[src/a.ts:10-12]].'],
+    }).runText(
+      textRequest({
+        onText: (event) => {
+          events.push(event);
+        },
+      }),
+    );
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: { value: 'It splits on commas [[src/a.ts:10-12]].', model: 'fake-model-1', turns: 2 },
+    });
+    expect(events).toEqual<TextStreamEvent[]>([
+      { kind: 'append', text: 'Let me look.' },
+      { kind: 'reset' },
+      { kind: 'append', text: 'It splits ' },
+      { kind: 'append', text: 'on commas [[src/a.ts:10-12]].' },
+    ]);
+    const [call] = calls('stream');
+    expect(call?.args).toContain('--include-partial-messages');
+    expect(call?.args.some((arg) => arg.startsWith('--json-schema'))).toBe(false);
+    expect(call?.args).toContain('--tools=Read,Grep,Glob');
+  });
+
+  it('does not ask for partial messages without onText', async () => {
+    const outcome = await chat('quiet', { chunks: ['Plain.'] }).runText(textRequest());
+    expect(outcome).toMatchObject({ ok: true, value: { value: 'Plain.' } });
+    expect(calls('quiet')[0]?.args).not.toContain('--include-partial-messages');
+  });
+
+  it('maps failures and cancellation like structured runs', async () => {
+    expect(await model('not-logged-in').runText(textRequest())).toMatchObject({
+      ok: false,
+      error: { kind: 'not-authenticated' },
+    });
+    expect(await model('fail').runText(textRequest())).toMatchObject({
+      ok: false,
+      error: { kind: 'process-failed', exitCode: 2 },
+    });
+    const pidFile = path.join(directory, 'text-cancel.json');
+    const controller = new AbortController();
+    const running = model('hang', pidFile).runText(textRequest({ signal: controller.signal }));
+    await waitFor(() => existsSync(pidFile));
+    controller.abort();
+    expect(await running).toEqual({ ok: false, error: { kind: 'cancelled' } });
+    await expectReaped(pidFile);
+  });
+});
+
+function textRequest(overrides: Partial<TextModelRequest> = {}): TextModelRequest {
+  return {
+    system: 'Answer questions.',
+    prompt: 'What does parse do?',
+    cwd: directory,
+    timeoutMs: 10_000,
+    ...overrides,
+  };
+}
+
+function chat(name: string, chatScript: object): ReturnType<typeof createClaudeCodeModel> {
+  const file = path.join(directory, `${name}.json`);
+  writeFileSync(file, JSON.stringify(chatScript));
+  return model('chat', file);
+}
+
+function calls(name: string): { args: string[] }[] {
+  return readFileSync(path.join(directory, `${name}.json.calls`), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { args: string[] });
+}
 
 async function waitFor(isDone: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !isDone(); attempt += 1) {

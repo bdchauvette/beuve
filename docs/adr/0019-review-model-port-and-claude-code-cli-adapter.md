@@ -1,6 +1,6 @@
 # 0019. Review model port, and Claude Code CLI as the first adapter
 
-- Status: Accepted
+- Status: Accepted (adapter moved to the llm domain by [0030](0030-llm-domain-and-structural-model-ports.md))
 - Date: 2026-10-28
 
 ## Context

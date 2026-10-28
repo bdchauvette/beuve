@@ -34,3 +34,5 @@ Template: [0000-template.md](0000-template.md)
 | [0026](0026-radar-tree-and-file-channels.md)                   | The package-aware radar tree and the file channels behind it              | Accepted |
 | [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md) | The URA dock: wiring, keyboard grammar, clipboard path and outdated items | Accepted |
 | [0028](0028-control-flow-graphs-and-layout.md)                 | Control-flow graphs and layout                                            | Accepted |
+| [0030](0030-llm-domain-and-structural-model-ports.md)          | The llm domain and structural model ports                                 | Accepted |
+| [0031](0031-read-only-qa-chat.md)                              | Read-only Q&A chat                                                        | Accepted |

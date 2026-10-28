@@ -10,12 +10,13 @@ import { normalizePathScope } from './normalize-path-scope.ts';
 import { insightOutputSchema } from './insight-output-schema.ts';
 import type { ModelInsight } from './insight-output-schema.ts';
 import type { ReviewInput } from './review-input.ts';
-import type { ModelError, ModelProgress, ReviewModel } from './review-model.ts';
+import type { ModelProgress, ReviewModel } from './review-model.ts';
 import { validateInsights } from './validate-insights.ts';
 import type { InsightDrops } from './validate-insights.ts';
 
-export interface PreliminaryReviewDeps {
-  readonly model: ReviewModel;
+/** `E` is the model adapter's error type, passed through as the review's failure. */
+export interface PreliminaryReviewDeps<E> {
+  readonly model: ReviewModel<E>;
   readonly clock: () => Date;
   readonly ids: () => string;
   readonly budget?: PromptBudget;
@@ -51,10 +52,10 @@ const noModel = 'none';
  * model port and the injected clock and ids. Scheduling, cancellation when the head moves, and
  * one run per (session, head, path scope) are main's job ({@link reviewRunKey}, `findReviewRun`).
  */
-export async function runPreliminaryReview(
+export async function runPreliminaryReview<E>(
   input: ReviewInput,
-  deps: PreliminaryReviewDeps,
-): Promise<Result<PreliminaryReview, ModelError>> {
+  deps: PreliminaryReviewDeps<E>,
+): Promise<Result<PreliminaryReview, E>> {
   const budget = deps.budget ?? defaultPromptBudget;
   const built = buildReviewPrompt(input, budget);
   const hasText = input.files.some((file) => !file.binary && file.status !== 'deleted');
@@ -89,9 +90,9 @@ const emptyValidation = {
   clamped: 0,
 };
 
-function assemble(
+function assemble<E>(
   input: ReviewInput,
-  deps: PreliminaryReviewDeps,
+  deps: PreliminaryReviewDeps<E>,
   prompt: PromptReport,
   model: string,
   kept: readonly ModelInsight[],

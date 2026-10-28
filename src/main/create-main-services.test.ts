@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { IpcResult, ReviewProgressView, ReviewView } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
-import { writeFakeClaude } from '#internal/review/testing/write-fake-claude.ts';
+import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { createLogger } from '#pkg/logger/create-logger.ts';
 

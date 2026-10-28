@@ -37,6 +37,15 @@ describe('buildClaudeCodeArgs', () => {
     expect(args.slice(-3)).toEqual(['--model=opus', '--effort=high', '--max-budget-usd=0.5']);
   });
 
+  it('builds a free-form text run, streaming text deltas only when asked', () => {
+    const plain = buildClaudeCodeArgs({ system: 's' });
+    expect(plain.some((arg) => arg.startsWith('--json-schema'))).toBe(false);
+    expect(plain).not.toContain('--include-partial-messages');
+    expect(plain.at(-1)).toBe('--append-system-prompt=s');
+    const streamed = buildClaudeCodeArgs({ system: 's', streamText: true, model: 'opus' });
+    expect(streamed.slice(-2)).toEqual(['--include-partial-messages', '--model=opus']);
+  });
+
   it('never grants a tool that writes, runs commands or reaches the network', () => {
     const args = buildClaudeCodeArgs({ system: 's', jsonSchema: '{}' });
     const granted = args

@@ -8,7 +8,7 @@ import type { Result } from '#pkg/result/result.ts';
 import type { CommitSha } from './agent-insight.ts';
 import type { ModelInsight } from './insight-output-schema.ts';
 import { reviewRunKey } from './review-run-key.ts';
-import type { ModelError, ModelOutput, ModelRequest, ReviewModel } from './review-model.ts';
+import type { ModelOutput, ModelRequest, ReviewModel } from './review-model.ts';
 import { runPreliminaryReview } from './run-preliminary-review.ts';
 import { createReviewInput } from './testing/create-review-input.ts';
 
@@ -24,10 +24,15 @@ function counter(): () => string {
   };
 }
 
+interface ModelError {
+  readonly kind: 'timeout';
+  readonly timeoutMs: number;
+}
+
 function fakeModel(
   answer: Result<{ insights: ModelInsight[] }, ModelError>,
   seen: ModelRequest<unknown>[] = [],
-): ReviewModel {
+): ReviewModel<ModelError> {
   return {
     run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> => {
       seen.push(request);
