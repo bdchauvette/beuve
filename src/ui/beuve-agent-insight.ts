@@ -8,7 +8,8 @@ import { parseInsightMarkdown } from './parse-insight-markdown.ts';
 import type { InlineSpan, MarkdownBlock } from './parse-insight-markdown.ts';
 
 const promoteTitle =
-  'Promote (y): mark this insight as worth raising. Staging it into the review dock (URA) arrives with the dock; for now it is only marked promoted.';
+  'Promote (y): stage this insight in the review dock on its lines, as an issue (a nit for info). Edit or withdraw it there.';
+const promotedTitle = 'Staged in the review dock. y again (or Unpromote) withdraws it.';
 
 /**
  * One agent insight (spec 5B) as a subtle purple annotation under the diff line it refers to:
@@ -208,10 +209,10 @@ export class BeuveAgentInsight extends LitElement {
           >${Math.round(insight.confidence * 100)}% confident</span
         >
         <span class="spacer"></span>
-        ${isPromoted ? html`<span class="promoted" title=${promoteTitle}>Promoted</span>` : nothing}
+        ${isPromoted ? html`<span class="promoted" title=${promotedTitle}>Staged</span>` : nothing}
         <button
           type="button"
-          title=${isPromoted ? 'Undo the promotion (y)' : promoteTitle}
+          title=${isPromoted ? 'Withdraw it from the review dock (y)' : promoteTitle}
           @click=${this.request(isPromoted ? 'pending' : 'promoted')}
         >
           ${isPromoted ? 'Unpromote' : 'Promote'}

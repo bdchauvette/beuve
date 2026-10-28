@@ -18,6 +18,9 @@ export class BeuveKeybindingOverlay extends LitElement {
 
     .panel {
       width: min(460px, calc(100vw - 48px));
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      box-sizing: border-box;
       padding: var(--beuve-space-4) var(--beuve-space-6);
       border: 1px solid var(--beuve-border);
       border-radius: 10px;

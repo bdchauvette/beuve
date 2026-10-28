@@ -16,6 +16,10 @@ import type {
   ReviewProgressView,
   ReviewView,
   SessionSummary,
+  UraExportTarget,
+  UraItemView,
+  UraSeverityView,
+  UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
@@ -26,8 +30,9 @@ import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
-import type { FileJump, InsightJump } from './beuve-diff-stream.ts';
+import type { FileJump, InsightJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader } from './beuve-file-card.ts';
+import type { DockNotice } from './beuve-ura-dock.ts';
 import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
 import { cycleZone } from './cycle-zone.ts';
@@ -195,6 +200,67 @@ export class BeuveApp extends LitElement {
     return pair.ok ? pair.value : undefined;
   };
 
+  private readonly onUraCreate = (event: CustomEvent<UraCreateRequest>): void => {
+    void this.createUraItem(event.detail);
+  };
+
+  private readonly onUraUpdate = (
+    event: CustomEvent<{ itemId: string; title: string; body: string; severity: UraSeverityView }>,
+  ): void => {
+    void this.uraCall(async (bridge) => bridge.invoke('ura:update', event.detail));
+  };
+
+  private readonly onUraTransition = (
+    event: CustomEvent<{ itemId: string; to: 'staged' | 'withdrawn' | 'addressed' }>,
+  ): void => {
+    void this.transitionUraItem(event.detail.itemId, event.detail.to);
+  };
+
+  private readonly onUraReorder = (event: CustomEvent<{ itemIds: readonly string[] }>): void => {
+    const { review } = this;
+    if (review === undefined) {
+      return;
+    }
+    const byId = new Map(this.uraItems.map((item) => [item.id, item]));
+    this.uraItems = event.detail.itemIds.flatMap((id) => byId.get(id) ?? []);
+    void this.uraCall(async (bridge) =>
+      bridge.invoke('ura:reorder', { sessionId: review.session.id, itemIds: event.detail.itemIds }),
+    );
+  };
+
+  private readonly onUraExport = (
+    event: CustomEvent<{ target: UraExportTarget; verdict?: UraVerdictView }>,
+  ): void => {
+    void this.exportUra(event.detail.target, event.detail.verdict);
+  };
+
+  private readonly onUraJump = (event: CustomEvent<{ item: UraItemView }>): void => {
+    const { placement, anchor } = event.detail.item;
+    const target = placement.kind === 'current' ? placement.anchor : anchor;
+    if (target.kind === 'change') {
+      return;
+    }
+    this.jumpNonce += 1;
+    this.fileJump = {
+      path: target.path,
+      ...(target.kind === 'lines' && placement.kind === 'current' && { line: target.startLine }),
+      nonce: this.jumpNonce,
+    };
+    this.focusedZone = 'diff';
+  };
+
+  private readonly onStageFinding = (
+    event: CustomEvent<{ path: string; functionName: string }>,
+  ): void => {
+    const { review } = this;
+    if (review === undefined) {
+      return;
+    }
+    void this.uraCall(async (bridge) =>
+      bridge.invoke('ura:stage-impact-finding', { sessionId: review.session.id, ...event.detail }),
+    );
+  };
+
   private readonly onInsightStatus = (
     event: CustomEvent<{ insightId: string; status: InsightStatusView }>,
   ): void => {
@@ -225,6 +291,11 @@ export class BeuveApp extends LitElement {
   /** The open session head's tracked paths, for the radar tree. */
   @state() accessor tree: RepositoryTreeView | undefined;
   @state() accessor treeMode: RadarTreeMode = 'neighborhood';
+  /** The open session's URA items, every status, placed on its current head. */
+  @state() accessor uraItems: readonly UraItemView[] = [];
+  @state() accessor uraVerdict: UraVerdictView = 'approve';
+  @state() accessor dockNotice: DockNotice | undefined;
+  @state() accessor exporting = false;
 
   constructor() {
     super();
@@ -252,6 +323,11 @@ export class BeuveApp extends LitElement {
       }),
       bridge.on('review:progress', (event) => {
         this.applyReviewProgress(event);
+      }),
+      bridge.on('ura:changed', ({ sessionId }) => {
+        if (sessionId === this.review?.session.id) {
+          void this.refreshUra(sessionId);
+        }
       }),
     ];
     void this.loadInitialState();
@@ -328,6 +404,8 @@ export class BeuveApp extends LitElement {
       this.review = undefined;
       this.insights = [];
       this.tree = undefined;
+      this.uraItems = [];
+      this.dockNotice = undefined;
     }
     this.selectedId = sessionId;
     this.reviewLoading = true;
@@ -347,6 +425,7 @@ export class BeuveApp extends LitElement {
       void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
       void this.refreshInsights(review.value.session.id);
+      void this.refreshUra(review.value.session.id);
     } else {
       this.review = undefined;
       this.reviewError = review.error.message;
@@ -621,19 +700,147 @@ export class BeuveApp extends LitElement {
     this.transcript = withCitations(this.transcript, listed.value.insights);
   }
 
+  /**
+   * `y`/`d` and the insight's buttons. Promoting stages the insight in the dock (main marks it
+   * promoted in the same transaction); undoing a promotion, or dismissing a promoted insight,
+   * withdraws its item first, which sets the insight back to pending.
+   */
   private async setInsightStatus(insightId: string, status: InsightStatusView): Promise<void> {
     const bridge = beuveBridge();
-    if (bridge === undefined) {
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
       return;
     }
     const restatus = (insights: readonly AgentInsightView[]): AgentInsightView[] =>
       insights.map((insight) => (insight.id === insightId ? { ...insight, status } : insight));
     this.insights = restatus(this.insights);
     this.transcript = withCitations(this.transcript, this.insights);
-    const changed = await bridge.invoke('review:set-insight-status', { insightId, status });
-    if (!changed.ok && this.review !== undefined) {
+    let isDone = true;
+    if (status === 'promoted') {
+      const promoted = await bridge.invoke('ura:promote-insight', { insightId });
+      isDone = promoted.ok;
+      this.noteFailure(promoted);
+    } else {
+      const staged = this.uraItems.find(
+        (item) =>
+          item.origin.kind === 'agent-insight' &&
+          item.origin.insightId === insightId &&
+          item.status.kind === 'staged',
+      );
+      if (staged !== undefined) {
+        const withdrawn = await bridge.invoke('ura:transition', {
+          itemId: staged.id,
+          to: 'withdrawn',
+        });
+        this.noteFailure(withdrawn);
+      }
+      if (staged === undefined || status === 'dismissed') {
+        const changed = await bridge.invoke('review:set-insight-status', { insightId, status });
+        isDone = changed.ok;
+      }
+    }
+    if (!isDone || status !== 'dismissed') {
+      await this.refreshInsights(review.session.id);
+    }
+  }
+
+  private async refreshUra(sessionId: string): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const listed = await bridge.invoke('ura:list', { sessionId });
+    if (!listed.ok || this.review?.session.id !== sessionId) {
+      return;
+    }
+    this.uraItems = listed.value.items;
+    this.uraVerdict = listed.value.derivedVerdict;
+  }
+
+  private async createUraItem(request: UraCreateRequest): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      request.settle('No review session is open.');
+      return;
+    }
+    const created = await bridge.invoke('ura:create', {
+      sessionId: review.session.id,
+      headSha: request.headSha,
+      anchor: request.anchor,
+      severity: request.draft.severity,
+      title: request.draft.title,
+      body: request.draft.body,
+    });
+    request.settle(created.ok ? undefined : created.error.message);
+    if (created.ok) {
+      this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
+    }
+  }
+
+  private async transitionUraItem(
+    itemId: string,
+    to: 'staged' | 'withdrawn' | 'addressed',
+  ): Promise<void> {
+    await this.uraCall(async (bridge) => bridge.invoke('ura:transition', { itemId, to }));
+    const item = this.uraItems.find((entry) => entry.id === itemId);
+    if (item?.origin.kind === 'agent-insight' && this.review !== undefined) {
       await this.refreshInsights(this.review.session.id);
     }
+  }
+
+  /** Runs a dock call; `ura:changed` refreshes the list, and failures show in the dock. */
+  private async uraCall(
+    call: (bridge: NonNullable<ReturnType<typeof beuveBridge>>) => Promise<IpcResult<unknown>>,
+  ): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const result = await call(bridge);
+    this.noteFailure(result);
+    if (!result.ok && this.review !== undefined) {
+      await this.refreshUra(this.review.session.id);
+    }
+  }
+
+  private noteFailure(result: IpcResult<unknown>): void {
+    if (!result.ok) {
+      this.dockNotice = { tone: 'error', text: result.error.message };
+    }
+  }
+
+  /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */
+  private async exportUra(
+    target: UraExportTarget,
+    verdict: UraVerdictView | undefined,
+  ): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined || this.exporting) {
+      return;
+    }
+    this.exporting = true;
+    const compiled = await bridge.invoke('ura:export', {
+      sessionId: review.session.id,
+      target,
+      ...(verdict !== undefined && { verdict }),
+    });
+    if (!compiled.ok) {
+      this.exporting = false;
+      this.dockNotice = { tone: 'error', text: compiled.error.message };
+      return;
+    }
+    const copied = await bridge.invoke('clipboard:write-text', { text: compiled.value.text });
+    this.exporting = false;
+    const { itemCount, outdatedCount } = compiled.value;
+    const outdated = outdatedCount === 0 ? '' : `, ${String(outdatedCount)} outdated`;
+    this.dockNotice = copied.ok
+      ? {
+          tone: 'info',
+          text: `Copied ${exportLabels[target]}: ${String(itemCount)} ${itemCount === 1 ? 'item' : 'items'}${outdated}, ${formatBytes(compiled.value.text.length)}.`,
+        }
+      : { tone: 'error', text: `Could not copy: ${copied.error.message}` };
   }
 
   private handleKey(event: KeyboardEvent): void {
@@ -733,17 +940,30 @@ export class BeuveApp extends LitElement {
         .insightJump=${this.insightJump}
         .fileJump=${this.fileJump}
         .loadFilePair=${this.loadFilePair}
+        .uraItems=${this.uraItems}
         @beuve-mark-reviewed=${this.onMarkReviewed}
         @beuve-insight-status=${this.onInsightStatus}
         @beuve-peek-request=${this.onPeekRequest}
         @beuve-peek-expand=${this.onPeekExpand}
         @beuve-peek-close=${this.onPeekClose}
         @beuve-diff-rendered=${this.onDiffRendered}
+        @beuve-ura-create=${this.onUraCreate}
+        @beuve-ura-stage-finding=${this.onStageFinding}
       ></beuve-diff-stream>
       <beuve-ura-dock
         data-zone="ura"
         tabindex="-1"
         ?focused=${this.focusedZone === 'ura'}
+        ?hasSession=${this.review !== undefined}
+        .items=${this.uraItems}
+        .derivedVerdict=${this.uraVerdict}
+        .notice=${this.dockNotice}
+        ?exporting=${this.exporting}
+        @beuve-ura-jump=${this.onUraJump}
+        @beuve-ura-update=${this.onUraUpdate}
+        @beuve-ura-transition=${this.onUraTransition}
+        @beuve-ura-reorder=${this.onUraReorder}
+        @beuve-ura-export=${this.onUraExport}
       ></beuve-ura-dock>
       ${
         this.chatOpen
@@ -822,11 +1042,25 @@ function withCitations(
   });
 }
 
+const exportLabels: Readonly<Record<UraExportTarget, string>> = {
+  'agent-xml': 'the review for Claude Code as XML',
+  'agent-json': 'the review for agents as JSON',
+  github: 'the GitHub review JSON',
+  markdown: 'the review as Markdown',
+};
+
+function formatBytes(characters: number): string {
+  return characters < 1024
+    ? `${String(characters)} characters`
+    : `${(characters / 1024).toFixed(1)} K characters`;
+}
+
 function isEditable(event: KeyboardEvent): boolean {
   const [target] = event.composedPath();
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   );
 }

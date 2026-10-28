@@ -11,24 +11,55 @@ import type {
   FileImpactView,
   FilePairView,
   ImpactFindingView,
+  UraAnchorView,
+  UraItemView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-agent-insight.ts';
 import type { BeuveAgentInsight } from './beuve-agent-insight.ts';
 import './beuve-peek-portal.ts';
+import './beuve-ura-composer.ts';
+import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import { describeFileImpact } from './describe-file-impact.ts';
+import { describeUraItem } from './describe-ura-item.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { PeekState } from './peek-state.ts';
 import { placeInsights } from './place-insights.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
+import type { HunkStep } from './plan-hunk-steps.ts';
+import { planStageAnchor } from './plan-stage-anchor.ts';
+import type { SelectedLines } from './plan-stage-anchor.ts';
 import { splitPatch } from './split-patch.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
 import { toInsightAnnotations } from './to-insight-annotations.ts';
 import { toTextmateTheme } from './to-textmate-theme.ts';
 import type { TextmateTheme } from './to-textmate-theme.ts';
+import { toUraMarkers } from './to-ura-markers.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
+
+/** The note composer `m` opened on this card, and how saving it went. */
+export interface ComposerState {
+  readonly path: string;
+  readonly anchor: UraAnchorView;
+  readonly where: string;
+  readonly saving: boolean;
+  readonly error: string;
+}
+
+/** What a card annotates under a head line (or above the diff, at line 0). */
+type CardNote =
+  | { readonly kind: 'insight'; readonly insight: AgentInsightView }
+  | { readonly kind: 'ura'; readonly item: UraItemView }
+  | { readonly kind: 'composer' };
+
+/** A note with the head lines it is about; one interface, so the library's metadata type stays whole. */
+interface CardSlot {
+  readonly lineStart: number;
+  readonly lineEnd: number;
+  readonly note: CardNote;
+}
 
 const themeNames = { light: 'beuve-light', dark: 'beuve-dark' } as const;
 const estimatedLineHeight = 20;
@@ -40,8 +71,10 @@ const estimatedSeparatorHeight = 32;
  * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting and agent
  * insights as line annotations. The diff mounts while the stream sets `mounted` (the card is near
  * the viewport); otherwise a placeholder of the diff's last or estimated height stands in. If the
- * library fails to render, the card falls back to a plain `<pre>` of the patch. Emits
- * `beuve-diff-rendered` each time its diff mounts.
+ * library fails to render, the card falls back to a plain `<pre>` of the patch. Staged URA items
+ * show as subtle markers under their lines, the `m` composer opens under the lines it stages,
+ * and the ImpactGate banner offers to stage its findings. Emits `beuve-diff-rendered` each time
+ * its diff mounts and `beuve-ura-stage-finding` from the banner.
  */
 @customElement('beuve-file-card')
 export class BeuveFileCard extends LitElement {
@@ -162,6 +195,66 @@ export class BeuveFileCard extends LitElement {
       margin: var(--beuve-space-1) var(--beuve-space-3) var(--beuve-space-2);
     }
 
+    .impact {
+      display: flex;
+      align-items: center;
+      gap: var(--beuve-space-2);
+    }
+
+    .impact .text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .impact button {
+      flex: none;
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid currentcolor;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font: var(--beuve-font-small);
+      cursor: pointer;
+    }
+
+    .impact button:disabled {
+      border-color: transparent;
+      cursor: default;
+    }
+
+    .ura-marker {
+      display: flex;
+      align-items: baseline;
+      gap: var(--beuve-space-2);
+      margin: 2px var(--beuve-space-3);
+      padding: 0 var(--beuve-space-2);
+      border-left: 2px solid var(--beuve-accent);
+      font: var(--beuve-font-small);
+      white-space: nowrap;
+      color: var(--beuve-text-muted);
+    }
+
+    .ura-marker .ura-kind {
+      flex: none;
+      font-weight: 600;
+      color: var(--beuve-accent);
+    }
+
+    .ura-marker.blocker {
+      border-left-color: var(--beuve-danger);
+    }
+
+    .ura-marker.blocker .ura-kind {
+      color: var(--beuve-danger);
+    }
+
+    .ura-marker .ura-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--beuve-text);
+    }
+
     pre {
       margin: 0;
       padding: var(--beuve-space-1) 0;
@@ -190,11 +283,29 @@ export class BeuveFileCard extends LitElement {
     }
   `;
 
-  private diff: FileDiff<AgentInsightView> | undefined;
+  private diff: FileDiff<CardSlot> | undefined;
   private metadata: FileDiffMetadata | undefined;
   /** The diff's rendered height when it last unmounted, for an exact placeholder. */
   private measuredHeight: number | undefined;
   private readonly insightElements = new Map<string, BeuveAgentInsight>();
+  private composerElement: BeuveUraComposer | undefined;
+  /** The step `j`/`k` last selected, to tell it apart from the reviewer's own selection. */
+  private programmaticStep: HunkStep | undefined;
+  /** Lines the reviewer selected in the gutter, until `j`/`k` moves on. */
+  private lineSelection: SelectedLines | undefined;
+
+  private readonly onLineSelected = (range: SelectedLines | null): void => {
+    if (range === null) {
+      this.lineSelection = undefined;
+      return;
+    }
+    const step = this.programmaticStep;
+    const isStep =
+      range.start === step?.start &&
+      range.end === step.end &&
+      (range.side ?? 'additions') === step.side;
+    this.lineSelection = isStep ? undefined : range;
+  };
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
   @property({ type: Boolean, reflect: true }) accessor active = false;
@@ -211,6 +322,10 @@ export class BeuveFileCard extends LitElement {
   @property({ type: Number }) accessor activeHunk = -1;
   /** Enables hunk expansion; absent outside Electron. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
+  /** The session's URA items; staged ones placed on this file get markers. */
+  @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
+  /** The `m` composer, when it is open on this file. */
+  @property({ attribute: false }) accessor composer: ComposerState | undefined;
 
   @state() accessor isFallback = false;
   /** `@pierre/diffs`, loaded with the first card that mounts (ADR 0025). */
@@ -226,9 +341,11 @@ export class BeuveFileCard extends LitElement {
     });
   }
 
-  private findRow(side: 'additions' | 'deletions', line: number): Element | undefined {
+  private findRow(side: 'additions' | 'deletions' | 'context', line: number): Element | undefined {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
-    const type = side === 'additions' ? 'change-addition' : 'change-deletion';
+    const type = { additions: 'change-addition', deletions: 'change-deletion', context: 'context' }[
+      side
+    ];
     return (
       root?.querySelector(
         `[data-line='${CSS.escape(String(line))}'][data-line-type='${CSS.escape(type)}']`,
@@ -252,9 +369,9 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = toInsightAnnotations(this.file?.hunks ?? [], this.insights);
-    const isNewInput = ['file', 'mounted', 'library', 'insights'].some((key) =>
-      changed.has(key as keyof BeuveFileCard),
+    const annotations = toInsightAnnotations(this.file?.hunks ?? [], this.notes());
+    const isNewInput = ['file', 'mounted', 'library', 'insights', 'uraItems', 'composer'].some(
+      (key) => changed.has(key as keyof BeuveFileCard),
     );
     if (isNew || isNewInput) {
       this.diff.render({
@@ -272,14 +389,43 @@ export class BeuveFileCard extends LitElement {
       return;
     }
     const step = this.active ? planHunkSteps(metadata.hunks)[this.activeHunk] : undefined;
+    this.programmaticStep = step;
+    this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff.setSelectedLines(step ?? null);
   }
 
-  private createDiff(library: typeof Diffs): FileDiff<AgentInsightView> {
+  /** Staged URA markers first, then insights, then the composer, each under its last line. */
+  private notes(): CardSlot[] {
+    const path = this.file?.path ?? '';
+    const composer = this.composer?.path === path ? this.composer : undefined;
+    const composerLines =
+      composer?.anchor.kind === 'lines'
+        ? { lineStart: composer.anchor.startLine, lineEnd: composer.anchor.endLine }
+        : { lineStart: 0, lineEnd: 0 };
+    return [
+      ...toUraMarkers(path, this.uraItems)
+        .filter(({ item }) => !this.showsInsight(item))
+        .map(({ lineStart, lineEnd, item }): CardSlot => ({
+          lineStart,
+          lineEnd,
+          note: { kind: 'ura', item },
+        })),
+      ...this.insights.map((insight): CardSlot => ({
+        lineStart: insight.lineStart,
+        lineEnd: insight.lineEnd,
+        note: { kind: 'insight', insight },
+      })),
+      ...(composer === undefined
+        ? []
+        : [{ ...composerLines, note: { kind: 'composer' } } as const]),
+    ];
+  }
+
+  private createDiff(library: typeof Diffs): FileDiff<CardSlot> {
     registerThemes(library);
     const loader = this.loadFilePair;
-    return new library.FileDiff<AgentInsightView>({
+    return new library.FileDiff<CardSlot>({
       theme: themeNames,
       themeType: 'system',
       preferredHighlighter: 'shiki-js',
@@ -288,11 +434,13 @@ export class BeuveFileCard extends LitElement {
       hunkSeparators: 'line-info',
       lineDiffType: 'word-alt',
       overflow: 'scroll',
+      enableLineSelection: true,
+      onLineSelected: this.onLineSelected,
       ...(loader !== undefined && {
         loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> =>
           loadFiles(loader, fileDiff),
       }),
-      renderAnnotation: (annotation): HTMLElement => this.insightElement(annotation.metadata),
+      renderAnnotation: (annotation): HTMLElement => this.noteElement(annotation.metadata.note),
       onPostRender: (_node, _instance, phase): void => {
         if (phase === 'mount') {
           this.dispatchEvent(
@@ -301,6 +449,42 @@ export class BeuveFileCard extends LitElement {
         }
       },
     });
+  }
+
+  private noteElement(note: CardNote): HTMLElement {
+    switch (note.kind) {
+      case 'insight': {
+        return this.insightElement(note.insight);
+      }
+      case 'ura': {
+        return uraMarkerElement(note.item);
+      }
+      case 'composer': {
+        return this.composerNode();
+      }
+    }
+  }
+
+  /** One composer element per card, kept while it is open so typing survives re-renders. */
+  private composerNode(): BeuveUraComposer {
+    const element = this.composerElement ?? document.createElement('beuve-ura-composer');
+    this.composerElement = element;
+    this.syncComposer();
+    return element;
+  }
+
+  private syncComposer(): void {
+    const { composer, composerElement } = this;
+    if (composerElement === undefined) {
+      return;
+    }
+    if (composer === undefined || composer.path !== this.file?.path) {
+      this.composerElement = undefined;
+      return;
+    }
+    composerElement.where = composer.where;
+    composerElement.saving = composer.saving;
+    composerElement.error = composer.error;
   }
 
   private insightElement(insight: AgentInsightView): HTMLElement {
@@ -315,11 +499,63 @@ export class BeuveFileCard extends LitElement {
 
   private renderImpact(): TemplateResult | typeof nothing {
     const banner = describeFileImpact(this.impact, this.findings);
-    return banner === undefined
-      ? nothing
-      : html`<div class="impact ${banner.tone}" title=${banner.title} role="status">
-          <span class="label">ImpactGate</span> ${banner.text}
-        </div>`;
+    if (banner === undefined) {
+      return nothing;
+    }
+    const path = this.file?.path;
+    const own = this.findings.filter((finding) => finding.path === path);
+    const unstaged = own.filter((finding) => !this.isStaged(finding));
+    const stage = (event: Event): void => {
+      event.stopPropagation();
+      for (const finding of unstaged) {
+        this.dispatchEvent(
+          new CustomEvent('beuve-ura-stage-finding', {
+            detail: { path: finding.path, functionName: finding.functionName },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
+    };
+    return html`<div class="impact ${banner.tone}" title=${banner.title} role="status">
+      <span class="text"><span class="label">ImpactGate</span> ${banner.text}</span>
+      ${
+        own.length === 0
+          ? nothing
+          : html`<button
+              type="button"
+              ?disabled=${unstaged.length === 0}
+              title=${
+                unstaged.length === 0
+                  ? 'Staged in the review dock'
+                  : `Stage ${unstaged.length === 1 ? 'this finding' : `these ${String(unstaged.length)} findings`} in the review dock`
+              }
+              @click=${stage}
+            >
+              ${unstaged.length === 0 ? 'Staged' : 'Stage'}
+            </button>`
+      }
+    </div>`;
+  }
+
+  /** A promoted insight's own block already says it is staged, so it gets no second marker. */
+  private showsInsight(item: UraItemView): boolean {
+    const { origin } = item;
+    return (
+      origin.kind === 'agent-insight' &&
+      this.insights.some((insight) => insight.id === origin.insightId)
+    );
+  }
+
+  private isStaged(finding: ImpactFindingView): boolean {
+    return this.uraItems.some(
+      ({ origin, status, anchor }) =>
+        origin.kind === 'impact-finding' &&
+        status.kind !== 'withdrawn' &&
+        origin.functionName === finding.functionName &&
+        anchor.kind === 'lines' &&
+        anchor.path === finding.path,
+    );
   }
 
   private renderCode(file: DiffFileView): TemplateResult {
@@ -345,7 +581,10 @@ export class BeuveFileCard extends LitElement {
         .insight=${shown}
         ?focused=${shown.id === this.focusedInsightId}
       ></beuve-agent-insight>`;
-    return html`${placement.unplaced.map((shown) => insight(shown))}
+    const path = file.path;
+    return html`${toUraMarkers(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
+      ${this.composer?.path === path ? this.composerNode() : nothing}
+      ${placement.unplaced.map((shown) => insight(shown))}
       <pre>
 ${splitPatch(file.patch).map(
           (line, index) =>
@@ -367,6 +606,25 @@ ${splitPatch(file.patch).map(
     element?.scrollIntoView({ block: 'center' });
   }
 
+  /** Where `m` stages a note on this card: the selected lines, else the active hunk, else the file. */
+  stageAnchor(): UraAnchorView | undefined {
+    const { file } = this;
+    return file === undefined
+      ? undefined
+      : planStageAnchor(file.path, file.hunks[this.activeHunk], this.lineSelection);
+  }
+
+  /** Scrolls head line `line` into view (or the card's header without one), mounting the diff. */
+  async revealLine(line: number | undefined): Promise<void> {
+    this.mounted = true;
+    await this.updateComplete;
+    const row =
+      line === undefined
+        ? undefined
+        : await waitFor(() => this.findRow('additions', line) ?? this.findRow('context', line));
+    (row ?? this).scrollIntoView({ block: row === undefined ? 'start' : 'center' });
+  }
+
   /** Selects hunk `index` and scrolls its first change into view, mounting the diff if needed. */
   async revealHunk(index: number): Promise<void> {
     this.mounted = true;
@@ -380,6 +638,9 @@ ${splitPatch(file.patch).map(
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has('composer')) {
+      this.syncComposer();
+    }
     if (changed.has('mounted') && this.mounted && this.library === undefined) {
       void this.loadLibrary();
     }
@@ -444,6 +705,23 @@ ${splitPatch(file.patch).map(
       ${this.renderCode(file)}
     `;
   }
+}
+
+/** A staged item's marker: its severity and title on one quiet line, built as text nodes. */
+function uraMarkerElement(item: UraItemView): HTMLElement {
+  const labels = describeUraItem(item);
+  const marker = document.createElement('div');
+  marker.className = `ura-marker ${item.severity}`;
+  marker.dataset['uraItemId'] = item.id;
+  marker.title = `Staged in the review dock: ${labels.anchor}, from ${labels.origin}`;
+  const kind = document.createElement('span');
+  kind.className = 'ura-kind';
+  kind.textContent = `Staged · ${labels.severity}`;
+  const title = document.createElement('span');
+  title.className = 'ura-title';
+  title.textContent = item.title;
+  marker.append(kind, title);
+  return marker;
 }
 
 /** Shared by every card: the library is a lazy chunk, loaded once, themes registered once. */

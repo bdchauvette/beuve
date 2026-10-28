@@ -8,11 +8,15 @@ import type {
   ImpactView,
   InsightStatusView,
   ReviewView,
+  UraAnchorView,
+  UraItemView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
-import type { BeuveFileCard, FilePairLoader } from './beuve-file-card.ts';
+import type { BeuveFileCard, ComposerState, FilePairLoader } from './beuve-file-card.ts';
+import type { UraDraft } from './beuve-ura-composer.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
+import { describeUraItem } from './describe-ura-item.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
@@ -24,10 +28,25 @@ export interface InsightJump {
   readonly nonce: number;
 }
 
-/** A request to show a file's card from outside (the radar tree); `nonce` repeats a jump. */
+/**
+ * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
+ * head line; `nonce` repeats a jump.
+ */
 export interface FileJump {
   readonly path: string;
+  readonly line?: number;
   readonly nonce: number;
+}
+
+/**
+ * A note the composer asks to stage, with the head it was written against. `settle` closes the
+ * composer, or keeps it open with the error the owner reports.
+ */
+export interface UraCreateRequest {
+  readonly anchor: UraAnchorView;
+  readonly headSha: string;
+  readonly draft: UraDraft;
+  readonly settle: (error: string | undefined) => void;
 }
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
@@ -40,9 +59,10 @@ const unmountMargin = '6000px 0px';
  * header naming the review kind, ImpactGate banners and agent insights once they arrive. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, `j`/`k` step
  * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
- * it), `]`/`[` move between agent insights, and `y`/`d` promote or dismiss the focused one (again
- * to undo). Emits `beuve-mark-reviewed`, `beuve-peek-request`, `beuve-peek-close` and
- * `beuve-insight-status`; `beuve-app` does the IPC.
+ * it), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
+ * to undo), and `m` opens a composer that stages the selected lines, the active hunk or the file
+ * into the review dock (ADR 0027). Emits `beuve-mark-reviewed`, `beuve-peek-request`,
+ * `beuve-peek-close`, `beuve-insight-status` and `beuve-ura-create`; `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
@@ -172,6 +192,11 @@ export class BeuveDiffStream extends LitElement {
       this.toggleFocusedInsight(event.key === 'y' ? 'promoted' : 'dismissed');
       return;
     }
+    if (event.key === 'm') {
+      event.preventDefault();
+      this.openComposer();
+      return;
+    }
     const step = ({ j: 1, k: -1 } as const)[event.key];
     const files = this.review?.files ?? [];
     if (step === undefined || files.length === 0) {
@@ -194,6 +219,36 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onInsightFocus = (event: CustomEvent<{ insightId: string }>): void => {
     this.focusInsight(event.detail.insightId);
+  };
+
+  private readonly onComposeSubmit = (event: CustomEvent<UraDraft>): void => {
+    const { composer, review } = this;
+    if (composer === undefined || review === undefined || composer.saving) {
+      return;
+    }
+    this.composer = { ...composer, saving: true, error: '' };
+    const request: UraCreateRequest = {
+      anchor: composer.anchor,
+      headSha: review.headSha,
+      draft: event.detail,
+      settle: (error): void => {
+        if (this.composer?.path !== composer.path) {
+          return;
+        }
+        if (error === undefined) {
+          this.closeComposer();
+        } else {
+          this.composer = { ...composer, saving: false, error };
+        }
+      },
+    };
+    this.dispatchEvent(
+      new CustomEvent('beuve-ura-create', { detail: request, bubbles: true, composed: true }),
+    );
+  };
+
+  private readonly onComposeCancel = (): void => {
+    this.closeComposer();
   };
 
   private readonly onNearViewport = (entries: IntersectionObserverEntry[]): void => {
@@ -238,16 +293,21 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor fileJump: FileJump | undefined;
   /** Backs hunk expansion in the cards. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
+  /** The session's URA items, which the cards mark under their lines. */
+  @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
 
   @state() accessor activeIndex = 0;
   /** The active card's hunk `j`/`k` stopped at; `-1` for its header. */
   @state() accessor activeHunk = -1;
   @state() accessor focusedInsightId: string | undefined;
+  @state() accessor composer: ComposerState | undefined;
 
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-insight-focus', this.onInsightFocus as EventListener);
+    this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
+    this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
     this.addController({
       hostDisconnected: (): void => {
         this.disconnectObservers();
@@ -282,14 +342,63 @@ export class BeuveDiffStream extends LitElement {
     this.activeHunk = -1;
   }
 
-  private focusFile(path: string): void {
+  private focusFile(path: string, line: number | undefined): void {
     const index = this.review?.files.findIndex((file) => file.path === path) ?? -1;
     if (index === -1) {
       return;
     }
     this.activeIndex = index;
     this.activeHunk = -1;
-    void this.revealPosition();
+    if (line === undefined) {
+      void this.revealPosition();
+      return;
+    }
+    void this.revealLine(index, line);
+  }
+
+  private async revealLine(index: number, line: number): Promise<void> {
+    await this.updateComplete;
+    await this.cards()[index]?.revealLine(line);
+  }
+
+  /** `m`: a composer on the active card, staging what {@link BeuveFileCard.stageAnchor} names. */
+  private openComposer(): void {
+    const { review } = this;
+    const file = review?.files[this.activeIndex];
+    const card = this.cards()[this.activeIndex];
+    const anchor = card?.stageAnchor();
+    if (review === undefined || file === undefined || anchor === undefined) {
+      return;
+    }
+    const where = describeUraItem({
+      id: '',
+      sessionId: review.session.id,
+      headSha: review.headSha,
+      anchor,
+      placement: { kind: 'current', anchor },
+      severity: 'issue',
+      origin: { kind: 'human' },
+      title: '',
+      body: '',
+      status: { kind: 'staged' },
+      createdAt: '',
+      updatedAt: '',
+    }).anchor;
+    this.composer = { path: file.path, anchor, where, saving: false, error: '' };
+    void this.revealComposer(anchor);
+  }
+
+  private async revealComposer(anchor: UraAnchorView): Promise<void> {
+    await this.updateComplete;
+    const card = this.cards()[this.activeIndex];
+    await card?.revealLine(anchor.kind === 'lines' ? anchor.endLine : undefined);
+    const element = await waitForComposer(card);
+    element?.focus();
+  }
+
+  private closeComposer(): void {
+    this.composer = undefined;
+    this.focus();
   }
 
   /**
@@ -458,6 +567,8 @@ export class BeuveDiffStream extends LitElement {
                       .findings=${this.impact?.findings ?? []}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
                       .insights=${this.insights.filter((insight) => insight.path === file.path)}
+                      .uraItems=${this.uraItems}
+                      .composer=${this.composer?.path === file.path ? this.composer : undefined}
                       .focusedInsightId=${this.focusedInsightId}
                       ?active=${index === this.activeIndex}
                       @click=${(): void => {
@@ -496,6 +607,9 @@ export class BeuveDiffStream extends LitElement {
     if (changed.has('review')) {
       this.activeIndex = 0;
       this.activeHunk = -1;
+      const path = this.composer?.path;
+      const isShown = this.review?.files.some((file) => file.path === path) === true;
+      this.composer = isShown ? this.composer : undefined;
     }
     if (!changed.has('review') && !changed.has('insights')) {
       return;
@@ -515,9 +629,25 @@ export class BeuveDiffStream extends LitElement {
     }
     const fileJump = this.fileJump;
     if (fileJump !== undefined && changed.has('fileJump')) {
-      this.focusFile(fileJump.path);
+      this.focusFile(fileJump.path, fileJump.line);
     }
   }
+}
+
+/** Polls a few frames for the composer the card renders through the library's annotations. */
+async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLElement | undefined> {
+  for (let frame = 0; card !== undefined && frame < 30; frame += 1) {
+    const element =
+      card.querySelector('beuve-ura-composer') ??
+      card.renderRoot.querySelector('beuve-ura-composer');
+    if (element !== null) {
+      return element;
+    }
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+    });
+  }
+  return undefined;
 }
 
 /** Short shas of what the diff spans: fork point to head, or last reviewed head to head. */
