@@ -22,4 +22,12 @@ describe('findFirstChangedLine', () => {
   it('never mistakes the file header for a change', () => {
     expect(findFirstChangedLine(`${header}@@ -1 +1 @@\n-x\n+y\n`)).toBe(1);
   });
+
+  it('can look at one hunk only', () => {
+    const patch = `${header}@@ -1,2 +1,2 @@\n a\n+b\n@@ -20,3 +20,4 @@\n x\n y\n+z\n w\n`;
+    expect(findFirstChangedLine(patch)).toBe(2);
+    expect(findFirstChangedLine(patch, 0)).toBe(2);
+    expect(findFirstChangedLine(patch, 1)).toBe(22);
+    expect(findFirstChangedLine(patch, 2)).toBeUndefined();
+  });
 });

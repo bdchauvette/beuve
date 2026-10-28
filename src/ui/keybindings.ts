@@ -15,7 +15,7 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['Space'], action: 'Expand / collapse', available: false },
   { keys: ['f'], action: 'Toggle diff-only tree', available: true },
   { keys: ['p'], action: 'Call-stack peek (callers)', available: true },
-  { keys: ['Esc'], action: 'Close the peek portal', available: true },
+  { keys: ['Esc'], action: 'Close the peek or flow portal', available: true },
   { keys: [']', '['], action: 'Next / previous agent insight', available: true },
   {
     keys: ['y'],
@@ -34,7 +34,11 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['x'], action: 'Dock: withdraw / restore the item', available: true },
   { keys: ['a'], action: 'Dock: mark addressed / restage', available: true },
   { keys: ['Shift+j', 'Shift+k'], action: 'Dock: move the item down / up', available: true },
-  { keys: ['Shift+p'], action: 'Control-flow graph', available: false },
+  {
+    keys: ['Shift+p'],
+    action: 'Control-flow graph of the function (Enter shows the code)',
+    available: true,
+  },
   { keys: ['r'], action: 'Run trace probe', available: false },
   { keys: ['e'], action: 'Inline edit', available: false },
   { keys: ['o'], action: 'Open in IDE', available: false },

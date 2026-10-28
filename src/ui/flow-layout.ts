@@ -43,8 +43,10 @@ export interface PositionedFlowEdge {
   readonly back: boolean;
   /** An orthogonal polyline from the source to the target (the last segment ends in the arrow). */
   readonly points: readonly FlowPoint[];
-  /** Where to write the edge's label: just past its start. */
+  /** Where to write the edge's label: beside its first bend, clear of the line itself. */
   readonly labelAt: FlowPoint;
+  /** Which side of `labelAt` the text grows towards, so it never sits on the line. */
+  readonly labelAnchor: 'start' | 'end';
 }
 
 export interface FlowLayout {
@@ -389,7 +391,7 @@ function buildResult(
   const lanes = laneOrder(edges, back, layerOf);
   const routed: (PositionedFlowEdge | undefined)[] = edges.map((edge, position) => {
     if (back.has(position)) {
-      return routeBack(edge, lanes.get(position) ?? 0, boxes, maxRight);
+      return routeBack(edge, lanes.get(position) ?? 0, boxes, maxRight, graph.count);
     }
     const slot = forward.findIndex((item) => item.position === position);
     return routeForward(edge, graph.chains[slot] ?? [], ports.get(slot), boxes, slot);
@@ -486,41 +488,89 @@ function routeForward(
     points.push(from, { x: from.x, y: middle }, { x: to.x, y: middle });
   }
   points.push(hops.at(-1) ?? { x: 0, y: 0 });
-  const start = points[0] ?? { x: 0, y: 0 };
+  const simple = simplify(points);
   return {
     from: edge.source.from,
     to: edge.source.to,
     kind: edge.kind,
     back: false,
-    points: simplify(points),
-    labelAt: { x: start.x + 4, y: start.y + 12 },
+    points: simple,
+    ...placeForwardLabel(simple),
   };
 }
 
+/**
+ * The label goes on the first horizontal run, above it and on the side the run heads to, so the
+ * two labels of a decision (`yes` left, `no` right) diverge instead of colliding. An edge that
+ * starts by running straight down gets its label beside that run.
+ */
+function placeForwardLabel(points: readonly FlowPoint[]): {
+  labelAt: FlowPoint;
+  labelAnchor: 'start' | 'end';
+} {
+  const [start = { x: 0, y: 0 }, bend = start, turn = bend] = points;
+  const direction = Math.sign(turn.x - bend.x);
+  if (direction === 0 || bend.x !== start.x) {
+    return { labelAt: { x: start.x + 4, y: start.y + 12 }, labelAnchor: 'start' };
+  }
+  return {
+    labelAt: { x: bend.x + direction * 4, y: bend.y - 4 },
+    labelAnchor: direction < 0 ? 'end' : 'start',
+  };
+}
+
+/**
+ * Back edges climb a lane right of the drawing. They leave and enter through a node's right side
+ * when nothing else sits on that side of its row; otherwise they leave through the bottom and
+ * enter through the top, along the gaps between rows, so they never run through another node.
+ */
 function routeBack(
   edge: IndexedEdge,
   lane: number,
   boxes: readonly Box[],
   maxRight: number,
+  realCount: number,
 ): PositionedFlowEdge {
   const source = boxes[edge.from] ?? { x: 0, y: 0, width: 0 };
   const target = boxes[edge.to] ?? { x: 0, y: 0, width: 0 };
+  const rows = boxes.slice(0, realCount);
   const laneX = maxRight + laneGap * (lane + 1);
-  const fromY = source.y + nodeHeight / 2;
-  const toY = target.y + nodeHeight / 2;
+  const below = layerGap - 10 - (lane % 3) * 3;
+  const above = layerGap - below;
+  const leave: FlowPoint[] = isClearRight(source, rows)
+    ? [
+        { x: source.x + source.width, y: source.y + nodeHeight / 2 },
+        { x: laneX, y: source.y + nodeHeight / 2 },
+      ]
+    : [
+        { x: source.x + source.width / 2, y: source.y + nodeHeight },
+        { x: source.x + source.width / 2, y: source.y + nodeHeight + below },
+        { x: laneX, y: source.y + nodeHeight + below },
+      ];
+  const enter: FlowPoint[] = isClearRight(target, rows)
+    ? [
+        { x: laneX, y: target.y + nodeHeight / 2 },
+        { x: target.x + target.width, y: target.y + nodeHeight / 2 },
+      ]
+    : [
+        { x: laneX, y: target.y - above },
+        { x: target.x + target.width / 2, y: target.y - above },
+        { x: target.x + target.width / 2, y: target.y },
+      ];
   return {
     from: edge.source.from,
     to: edge.source.to,
     kind: edge.kind,
     back: true,
-    points: simplify([
-      { x: source.x + source.width, y: fromY },
-      { x: laneX, y: fromY },
-      { x: laneX, y: toY },
-      { x: target.x + target.width, y: toY },
-    ]),
-    labelAt: { x: laneX + 4, y: fromY - 4 },
+    points: simplify([...leave, ...enter]),
+    labelAt: { x: laneX + 4, y: (leave.at(-1)?.y ?? source.y) - 4 },
+    labelAnchor: 'start',
   };
+}
+
+/** Nothing else sits to the right of `box` in its row. */
+function isClearRight(box: Box, rows: readonly Box[]): boolean {
+  return rows.every((other) => other === box || other.y !== box.y || other.x <= box.x);
 }
 
 /** Lane numbers for back edges: short climbs sit inside long ones so they never cross. */

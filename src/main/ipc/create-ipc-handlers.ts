@@ -10,6 +10,7 @@ import type {
   CallHierarchyRequest,
   CallHierarchyView,
   FilePairView,
+  FlowGraphResponse,
   ImpactView,
   InsightListView,
   InsightStatusChangeView,
@@ -70,6 +71,12 @@ const callHierarchyRequest = z.strictObject({
   character: z.number().int().min(0).max(10_000_000).optional(),
   direction: z.enum(['incoming', 'outgoing']),
   nodeId: z.string().min(1).max(200).optional(),
+});
+
+const flowGraphRequest = z.strictObject({
+  sessionId,
+  path: z.string().min(1).max(4096),
+  line: z.number().int().min(1).max(10_000_000),
 });
 
 const pathPrefix = z
@@ -223,6 +230,10 @@ export function createIpcHandlers(
       return parsed.success
         ? services.lsp.callHierarchy(withoutUndefined(parsed.data))
         : invalid(parsed.error);
+    },
+    'flow:get-graph': async (request): Promise<IpcResult<FlowGraphResponse>> => {
+      const parsed = flowGraphRequest.safeParse(request);
+      return parsed.success ? services.flow.getGraph(parsed.data) : invalid(parsed.error);
     },
     'review:run': async (request): Promise<IpcResult<ReviewRunHandleView>> => {
       const parsed = reviewRunRequest.safeParse(request);

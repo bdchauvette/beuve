@@ -181,6 +181,34 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
     await handlers['lsp:call-hierarchy']({ ...good, character: 4, nodeId: 'n1' });
     expect(calls).toEqual([good, { ...good, character: 4, nodeId: 'n1' }]);
   });
+
+  it('validates flow:get-graph before delegating', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        flow: {
+          getGraph: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
+    for (const bad of [
+      { ...good, line: 0 },
+      { ...good, line: 2.5 },
+      { ...good, path: '' },
+      { sessionId: 's1', path: 'a.ts' },
+      { ...good, extra: true },
+    ]) {
+      await expectInvalid(handlers['flow:get-graph'](bad));
+    }
+    await handlers['flow:get-graph'](good);
+    expect(calls).toEqual([good]);
+  });
 });
 
 describe('createIpcHandlers for the preliminary review', () => {
@@ -373,6 +401,7 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
     impact: { getImpact: async () => notWired },
     files: { getTree: async () => notWired, getFilePair: async () => notWired },
     lsp: { callHierarchy: async () => notWired },
+    flow: { getGraph: async () => notWired },
     review: {
       run: async () => notWired,
       listInsights: async () => notWired,

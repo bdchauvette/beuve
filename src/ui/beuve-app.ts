@@ -8,6 +8,8 @@ import type {
   CallHierarchyView,
   CreateLocalSessionRequest,
   FilePairView,
+  FlowFailureKind,
+  FlowGraphResponse,
   ImpactView,
   InsightStatusView,
   IpcResult,
@@ -38,6 +40,7 @@ import { chatHelp } from './chat-help.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 import type { ChatCommand } from './parse-chat-command.ts';
+import type { FlowState } from './flow-state.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
@@ -156,6 +159,16 @@ export class BeuveApp extends LitElement {
 
   private readonly onPeekClose = (): void => {
     this.peek = undefined;
+  };
+
+  private readonly onFlowRequest = (
+    event: CustomEvent<{ path: string; line: number | undefined }>,
+  ): void => {
+    void this.openFlow(event.detail.path, event.detail.line);
+  };
+
+  private readonly onFlowClose = (): void => {
+    this.flow = undefined;
   };
 
   private readonly onChatSubmit = (event: CustomEvent<{ text: string }>): void => {
@@ -292,6 +305,8 @@ export class BeuveApp extends LitElement {
   @state() accessor review: ReviewView | undefined;
   @state() accessor impact: ImpactView | undefined;
   @state() accessor peek: PeekState | undefined;
+  /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
+  @state() accessor flow: FlowState | undefined;
   @state() accessor reviewLoading = false;
   @state() accessor reviewError = '';
   @state() accessor marking = false;
@@ -434,6 +449,7 @@ export class BeuveApp extends LitElement {
     }
     this.reviewLoading = false;
     this.peek = undefined;
+    this.flow = undefined;
     if (review.ok) {
       if (this.review?.headSha !== review.value.headSha) {
         this.insights = [];
@@ -508,6 +524,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined) {
       return;
     }
+    this.flow = undefined;
     if (line === undefined) {
       this.peek = {
         path,
@@ -529,6 +546,35 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.peek = toPeekState(path, line, answer);
+  }
+
+  private async openFlow(path: string, line: number | undefined): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    this.peek = undefined;
+    if (line === undefined) {
+      this.flow = {
+        path,
+        line,
+        status: 'error',
+        message: 'This file has no head-side change to draw a flow for.',
+      };
+      return;
+    }
+    const pending: FlowState = { path, line, status: 'loading' };
+    this.flow = pending;
+    const answer = await bridge.invoke('flow:get-graph', {
+      sessionId: review.session.id,
+      path,
+      line,
+    });
+    if (this.flow !== pending || this.review !== review) {
+      return;
+    }
+    this.flow = toFlowState(path, line, answer);
   }
 
   private async expandPeek(nodeId: string): Promise<void> {
@@ -952,6 +998,7 @@ export class BeuveApp extends LitElement {
         .error=${this.reviewError}
         .impact=${this.impact}
         .peek=${this.peek}
+        .flow=${this.flow}
         .insights=${this.insights}
         .insightJump=${this.insightJump}
         .fileJump=${this.fileJump}
@@ -962,6 +1009,8 @@ export class BeuveApp extends LitElement {
         @beuve-peek-request=${this.onPeekRequest}
         @beuve-peek-expand=${this.onPeekExpand}
         @beuve-peek-close=${this.onPeekClose}
+        @beuve-flow-request=${this.onFlowRequest}
+        @beuve-flow-close=${this.onFlowClose}
         @beuve-diff-rendered=${this.onDiffRendered}
         @beuve-ura-create=${this.onUraCreate}
         @beuve-ura-stage-finding=${this.onStageFinding}
@@ -1034,6 +1083,23 @@ function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchy
         children: new Map([[root.id, { status: 'ready', calls }]]),
       };
 }
+
+function toFlowState(path: string, line: number, answer: IpcResult<FlowGraphResponse>): FlowState {
+  if (!answer.ok) {
+    return { path, line, status: 'error', message: answer.error.message };
+  }
+  return answer.value.kind === 'graph'
+    ? { path, line, status: 'ready', graph: answer.value.graph }
+    : { path, line, status: 'error', message: flowFailureText[answer.value.failure] };
+}
+
+const flowFailureText: Readonly<Record<FlowFailureKind, string>> = {
+  'unsupported-language':
+    'No control-flow chart for this kind of file yet (TypeScript and JavaScript only).',
+  'no-function-at-line': 'The change is not inside a function, so there is no flow to draw.',
+  'too-large': 'This function is too large to draw as a chart.',
+  'file-unavailable': 'The head version of this file is not readable source.',
+};
 
 /** Gives every finished review entry pills for its run's insights, with their current status. */
 function withCitations(

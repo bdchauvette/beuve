@@ -17,12 +17,15 @@ import type {
 
 import './beuve-agent-insight.ts';
 import type { BeuveAgentInsight } from './beuve-agent-insight.ts';
+import './beuve-flow-portal.ts';
+import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import { describeFileImpact } from './describe-file-impact.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
+import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { placeInsights } from './place-insights.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
@@ -294,6 +297,11 @@ export class BeuveFileCard extends LitElement {
   /** Lines the reviewer selected in the gutter, until `j`/`k` moves on. */
   private lineSelection: SelectedLines | undefined;
 
+  private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
+    event.stopPropagation();
+    void this.revealLine(event.detail.startLine);
+  };
+
   private readonly onLineSelected = (range: SelectedLines | null): void => {
     if (range === null) {
       this.lineSelection = undefined;
@@ -315,6 +323,8 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor impact: FileImpactView | undefined;
   @property({ attribute: false }) accessor findings: readonly ImpactFindingView[] = [];
   @property({ attribute: false }) accessor peek: PeekState | undefined;
+  /** The control-flow graph portal, which shares the peek's place (one portal at a time). */
+  @property({ attribute: false }) accessor flow: FlowState | undefined;
   /** This file's agent insights for the reviewed head. */
   @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
   @property() accessor focusedInsightId: string | undefined;
@@ -702,6 +712,14 @@ ${splitPatch(file.patch).map(
         ${this.renderImpact()}
       </div>
       ${this.peek === undefined ? nothing : html`<beuve-peek-portal .peek=${this.peek}></beuve-peek-portal>`}
+      ${
+        this.flow === undefined
+          ? nothing
+          : html`<beuve-flow-portal
+              .flow=${this.flow}
+              @flow-node-activate=${this.onFlowNodeActivate}
+            ></beuve-flow-portal>`
+      }
       ${this.renderCode(file)}
     `;
   }

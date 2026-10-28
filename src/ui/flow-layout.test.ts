@@ -42,6 +42,34 @@ const loop: FlowLayoutInput = {
   ],
 };
 
+/** A loop whose `continue` sits left of a sibling condition: its jump must not cross it. */
+const nested: FlowLayoutInput = {
+  nodes: [
+    { id: 0, kind: 'entry', label: 'walk' },
+    { id: 1, kind: 'exit', label: 'end' },
+    { id: 2, kind: 'loop', label: 'for (const item of items)' },
+    { id: 3, kind: 'condition', label: 'item < 0' },
+    { id: 4, kind: 'block', label: 'continue' },
+    { id: 5, kind: 'condition', label: 'item > 100' },
+    { id: 6, kind: 'block', label: 'break' },
+    { id: 7, kind: 'block', label: 'total += item' },
+    { id: 8, kind: 'return', label: 'return total' },
+  ],
+  edges: [
+    { from: 0, to: 2, kind: 'next' },
+    { from: 2, to: 3, kind: 'true' },
+    { from: 2, to: 8, kind: 'false' },
+    { from: 3, to: 4, kind: 'true' },
+    { from: 3, to: 5, kind: 'false' },
+    { from: 4, to: 2, kind: 'continue' },
+    { from: 5, to: 6, kind: 'true' },
+    { from: 5, to: 7, kind: 'false' },
+    { from: 6, to: 8, kind: 'break' },
+    { from: 7, to: 2, kind: 'loop-back' },
+    { from: 8, to: 1, kind: 'next' },
+  ],
+};
+
 describe('flowLayout', () => {
   it('returns an empty layout for an empty graph', () => {
     expect(flowLayout({ nodes: [], edges: [] })).toMatchObject({ nodes: [], edges: [] });
@@ -101,6 +129,33 @@ describe('flowLayout', () => {
       expect(end).toEqual({ x: header.x + header.width, y: header.y + header.height / 2 });
     }
     expect(nodeOf(layout, 6).layer).toBeLessThan(nodeOf(layout, 1).layer);
+  });
+
+  it('never runs an edge through a box other than its own ends', () => {
+    for (const input of [ifElse, loop, nested]) {
+      const layout = flowLayout(input);
+      for (const edge of layout.edges) {
+        const ends = new Set([edge.from, edge.to]);
+        const others = layout.nodes.filter((candidate) => !ends.has(candidate.id));
+        for (const node of others) {
+          for (const [at, from] of edge.points.entries()) {
+            const to = edge.points[at + 1];
+            if (to !== undefined) {
+              expect(isInsideBox(from, to, node)).toBe(false);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('puts the label of a branch beside its first horizontal run, on the side it heads to', () => {
+    const layout = flowLayout(ifElse);
+    const yes = layout.edges.find((edge) => edge.kind === 'true');
+    const no = layout.edges.find((edge) => edge.kind === 'false');
+    expect(yes?.labelAnchor).toBe('end');
+    expect(no?.labelAnchor).toBe('start');
+    expect(yes?.labelAt.x).toBeLessThan(no?.labelAt.x ?? 0);
   });
 
   it('draws forward edges as orthogonal polylines from source bottom to target top', () => {
@@ -169,6 +224,19 @@ describe('flowLayout', () => {
     expect(nodeOf(layout, 1).width).toBeGreaterThan(nodeOf(layout, 0).width);
   });
 });
+
+/** Whether an axis-aligned segment passes through the inside of a box. */
+function isInsideBox(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  box: { x: number; y: number; width: number; height: number },
+): boolean {
+  const left = Math.min(from.x, to.x);
+  const right = Math.max(from.x, to.x);
+  const top = Math.min(from.y, to.y);
+  const bottom = Math.max(from.y, to.y);
+  return right > box.x && left < box.x + box.width && bottom > box.y && top < box.y + box.height;
+}
 
 function nodeOf(layout: FlowLayout, id: number): FlowLayout['nodes'][number] {
   const found = layout.nodes.find((node) => node.id === id);

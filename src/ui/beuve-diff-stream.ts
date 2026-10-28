@@ -5,6 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import type {
   AgentInsightView,
+  DiffFileView,
   ImpactView,
   InsightStatusView,
   ReviewView,
@@ -18,6 +19,7 @@ import type { UraDraft } from './beuve-ura-composer.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
+import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -176,7 +178,15 @@ export class BeuveDiffStream extends LitElement {
     if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) {
       return;
     }
-    if (event.key === 'p' || (event.key === 'Escape' && this.peek !== undefined)) {
+    if (event.key === 'P') {
+      event.preventDefault();
+      this.toggleFlow();
+      return;
+    }
+    if (
+      event.key === 'p' ||
+      (event.key === 'Escape' && (this.peek !== undefined || this.flow !== undefined))
+    ) {
       event.preventDefault();
       this.togglePeek(event.key === 'Escape');
       return;
@@ -286,6 +296,7 @@ export class BeuveDiffStream extends LitElement {
   /** ImpactGate for `review`, once `session:get-impact` has answered. */
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property({ attribute: false }) accessor peek: PeekState | undefined;
+  @property({ attribute: false }) accessor flow: FlowState | undefined;
 
   /** Agent insights for `review`'s head, every status. */
   @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
@@ -499,19 +510,56 @@ export class BeuveDiffStream extends LitElement {
     );
   }
 
+  /** `p` toggles the call-stack peek of the active card; Escape closes whichever portal is open. */
   private togglePeek(isClosing: boolean): void {
     const file = this.review?.files[this.activeIndex];
     if (isClosing || file === undefined || this.peek?.path === file.path) {
-      this.dispatchEvent(new CustomEvent('beuve-peek-close', { bubbles: true, composed: true }));
+      this.closePortals();
       return;
     }
     this.dispatchEvent(
       new CustomEvent('beuve-peek-request', {
-        detail: { path: file.path, line: findFirstChangedLine(file.patch) },
+        detail: { path: file.path, line: this.targetLine(file) },
         bubbles: true,
         composed: true,
       }),
     );
+    this.focus();
+  }
+
+  /** `Shift+p` toggles the control-flow graph of the function around the same line `p` targets. */
+  private toggleFlow(): void {
+    const file = this.review?.files[this.activeIndex];
+    if (file === undefined || this.flow?.path === file.path) {
+      this.closePortals();
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-flow-request', {
+        detail: { path: file.path, line: this.targetLine(file) },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    this.focus();
+  }
+
+  /** The first changed head line of the focused hunk, else of the file. */
+  private targetLine(file: DiffFileView): number | undefined {
+    return (
+      (this.activeHunk === -1 ? undefined : findFirstChangedLine(file.patch, this.activeHunk)) ??
+      findFirstChangedLine(file.patch)
+    );
+  }
+
+  private closePortals(): void {
+    if (this.peek !== undefined) {
+      this.dispatchEvent(new CustomEvent('beuve-peek-close', { bubbles: true, composed: true }));
+    }
+    if (this.flow !== undefined) {
+      this.dispatchEvent(new CustomEvent('beuve-flow-close', { bubbles: true, composed: true }));
+    }
+    this.focus();
   }
 
   private renderWelcome(): TemplateResult {
@@ -566,6 +614,7 @@ export class BeuveDiffStream extends LitElement {
                       .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
                       .findings=${this.impact?.findings ?? []}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
+                      .flow=${this.flow?.path === file.path ? this.flow : undefined}
                       .insights=${this.insights.filter((insight) => insight.path === file.path)}
                       .uraItems=${this.uraItems}
                       .composer=${this.composer?.path === file.path ? this.composer : undefined}

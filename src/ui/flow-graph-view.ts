@@ -59,6 +59,7 @@ export class FlowGraphView extends LitElement {
     :host {
       display: block;
       overflow: auto;
+      background: var(--beuve-bg);
       color: var(--beuve-text);
       font: var(--beuve-font-small);
     }
@@ -94,6 +95,10 @@ export class FlowGraphView extends LitElement {
     .edge-label {
       fill: var(--beuve-text-muted);
       font-size: 10px;
+      paint-order: stroke;
+      stroke: var(--beuve-bg);
+      stroke-width: 3px;
+      stroke-linejoin: round;
     }
 
     .node {
@@ -233,7 +238,7 @@ export class FlowGraphView extends LitElement {
     const label = edgeLabels[edge.kind];
     return svg`
       <path class=${`edge ${edge.kind}${edge.back ? ' back' : ''}`} d=${path} marker-end="url(#arrow)"></path>
-      ${label === undefined ? nothing : svg`<text class="edge-label" x=${edge.labelAt.x} y=${edge.labelAt.y}>${label}</text>`}
+      ${label === undefined ? nothing : svg`<text class="edge-label" text-anchor=${edge.labelAnchor} x=${edge.labelAt.x} y=${edge.labelAt.y}>${label}</text>`}
     `;
   }
 
@@ -362,6 +367,14 @@ export class FlowGraphView extends LitElement {
     this.dispatchEvent(
       new CustomEvent('flow-node-activate', { detail, bubbles: true, composed: true }),
     );
+  }
+
+  /** Puts keyboard focus on the first node (the entry), once the chart has rendered. */
+  focusEntry(): void {
+    const first = this.graph?.nodes[0]?.id;
+    if (first !== undefined) {
+      this.focusNode(first);
+    }
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {

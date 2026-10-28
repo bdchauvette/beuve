@@ -12,6 +12,7 @@ export const invokeChannels = Object.freeze([
   'session:get-file-pair',
   'session:get-tree',
   'lsp:call-hierarchy',
+  'flow:get-graph',
   'review:run',
   'review:list-insights',
   'review:set-insight-status',

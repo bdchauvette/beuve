@@ -354,6 +354,81 @@ export interface CallHierarchyView {
   readonly calls: readonly CallHierarchyCallView[];
 }
 
+/**
+ * The control-flow graph of the function enclosing head line `line` (1-based) of `path`, a file
+ * of the review `session:get-review` shows for the session now (ADR 0028, 0029).
+ */
+export interface GetFlowGraphRequest {
+  readonly sessionId: string;
+  /** Repository-relative head-side path with `/` separators. */
+  readonly path: string;
+  readonly line: number;
+}
+
+export type FlowNodeKindView =
+  | 'entry'
+  | 'exit'
+  | 'block'
+  | 'condition'
+  | 'loop'
+  | 'switch'
+  | 'case'
+  | 'try'
+  | 'catch'
+  | 'finally'
+  | 'return'
+  | 'throw';
+
+export type FlowEdgeKindView =
+  | 'next'
+  | 'true'
+  | 'false'
+  | 'case'
+  | 'default'
+  | 'loop-back'
+  | 'break'
+  | 'continue'
+  | 'exception'
+  | 'finally';
+
+/** One step of the function. Lines are 1-based and inclusive; `changed` marks review changes. */
+export interface FlowGraphNodeView {
+  readonly id: number;
+  readonly kind: FlowNodeKindView;
+  readonly label: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly changed: boolean;
+}
+
+export interface FlowGraphEdgeView {
+  readonly from: number;
+  readonly to: number;
+  readonly kind: FlowEdgeKindView;
+}
+
+export interface FlowGraphView {
+  /** The function's own or assigned name; empty when it has none. */
+  readonly name: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly nodes: readonly FlowGraphNodeView[];
+  readonly edges: readonly FlowGraphEdgeView[];
+}
+
+/**
+ * Why a file has no graph: the language has no flow rules, no function encloses the line, the
+ * function has more nodes than a reviewer can read, or the head side is not readable source
+ * (deleted, binary, too big to parse).
+ */
+export type FlowFailureKind =
+  'unsupported-language' | 'no-function-at-line' | 'too-large' | 'file-unavailable';
+
+/** The graph, or the reason there is none; unexpected faults are `IpcError`s instead. */
+export type FlowGraphResponse =
+  | { readonly kind: 'graph'; readonly graph: FlowGraphView }
+  | { readonly kind: 'failed'; readonly failure: FlowFailureKind; readonly message: string };
+
 /** How hard Claude Code thinks during a preliminary review (`--effort`, ADR 0019). */
 export type ReviewEffort = 'low' | 'medium' | 'high';
 
@@ -793,6 +868,10 @@ export interface InvokeChannelMap {
   'lsp:call-hierarchy': {
     readonly request: CallHierarchyRequest;
     readonly response: IpcResult<CallHierarchyView>;
+  };
+  'flow:get-graph': {
+    readonly request: GetFlowGraphRequest;
+    readonly response: IpcResult<FlowGraphResponse>;
   };
   'review:run': {
     readonly request: ReviewRunRequest;
