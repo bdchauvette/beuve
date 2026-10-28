@@ -21,6 +21,7 @@ import type {
   DiagnosticsFreshness,
   DiagnosticSeverity,
   DiagnosticView,
+  DocumentSymbolView,
   Position,
 } from '#internal/lsp/lsp-model.ts';
 import { err } from '#pkg/result/err.ts';
@@ -118,6 +119,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     workspace: Workspace,
     request: CallHierarchyRequest,
     file: string,
+    spans: ChangedLines,
   ): Promise<Result<Position, IpcError>> => {
     const line = request.line - 1;
     if (request.character !== undefined) {
@@ -127,7 +129,14 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     if (!symbols.ok) {
       return fail(symbols.error);
     }
-    const symbol = findEnclosingSymbol(symbols.value, line);
+    const span = spans
+      .get(file)
+      ?.find(
+        (candidate) => candidate.startLine <= request.line && candidate.endLine >= request.line,
+      );
+    const symbol =
+      findEnclosingSymbol(symbols.value, line) ??
+      (span === undefined ? undefined : findFirstCallable(symbols.value, line, span.endLine - 1));
     return symbol === undefined
       ? err({
           code: 'not-found',
@@ -160,7 +169,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         return workspace;
       }
       const file = toRelative(repository, request.path);
-      const position = await locate(workspace.value, request, file);
+      const position = await locate(workspace.value, request, file, spans);
       if (!position.ok) {
         return position;
       }
@@ -228,6 +237,36 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       });
     },
   };
+}
+
+const callableKinds = new Set(['function', 'method', 'constructor']);
+
+/**
+ * The first callable declared within 0-based lines `from`–`to`, for a change that starts outside
+ * any function (an added file's imports): the peek then roots at the first function it adds.
+ */
+function findFirstCallable(
+  symbols: readonly DocumentSymbolView[],
+  from: number,
+  to: number,
+): DocumentSymbolView | undefined {
+  let first: DocumentSymbolView | undefined;
+  const visit = (candidates: readonly DocumentSymbolView[]): void => {
+    for (const symbol of candidates) {
+      const start = symbol.range.start.line;
+      if (
+        callableKinds.has(symbol.kind) &&
+        start >= from &&
+        start <= to &&
+        (first === undefined || start < first.range.start.line)
+      ) {
+        first = symbol;
+      }
+      visit(symbol.children);
+    }
+  };
+  visit(symbols);
+  return first;
 }
 
 /** Agents often pass paths in the user's checkout; those map to the same relative path. */

@@ -270,6 +270,15 @@ describe(
           direction: 'incoming',
         }),
       ).toMatchObject({ ok: false, error: { code: 'not-found' } });
+      const added = value(
+        await services.lsp.callHierarchy({
+          sessionId,
+          path: 'src/complex.ts',
+          line: 1,
+          direction: 'incoming',
+        }),
+      );
+      expect(added).toMatchObject({ root: { name: 'handleAuth', badge: 'modified' }, calls: [] });
     });
 
     it('moves the session checkout when the head moves, and prunes it on startup', async () => {
