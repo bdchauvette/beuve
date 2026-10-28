@@ -337,6 +337,94 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
       ok: false,
     });
   });
+  it('persists the reviewer-chosen verdict for exports and beuve_read_human_review', async () => {
+    await note(2, 2, 'Prefer const');
+    const read = async (): Promise<{ verdict: unknown; text: string }> => {
+      const review = await services.mcpTools.readHumanReview({});
+      if (!review.ok) {
+        throw new Error(review.error);
+      }
+      return { verdict: review.value.structured['verdict'], text: review.value.text };
+    };
+    const initial = await read();
+    expect(initial.verdict).toBe('comment');
+
+    expect(value(services.ura.setVerdict({ sessionId, verdict: 'approve' }))).toEqual({
+      sessionId,
+      derivedVerdict: 'comment',
+      chosenVerdict: 'approve',
+    });
+    expect(changes.at(-1)).toBe(sessionId);
+    expect(value(await services.ura.list({ sessionId }))).toMatchObject({
+      derivedVerdict: 'comment',
+      chosenVerdict: 'approve',
+    });
+    const approved = await read();
+    expect(approved.verdict).toBe('approve');
+    expect(approved.text).toContain('verdict="approve"');
+    expect(value(await services.ura.export({ sessionId, target: 'github' }))).toMatchObject({
+      verdict: 'approve',
+      verdictSource: 'chosen',
+      derivedVerdict: 'comment',
+    });
+    expect(
+      value(await services.ura.export({ sessionId, target: 'github', verdict: 'request-changes' })),
+    ).toMatchObject({ verdict: 'request-changes' });
+    expect(value(await services.ura.list({ sessionId })).chosenVerdict).toBe('approve');
+
+    const stored = db.prepare('SELECT verdict FROM ura_verdict_choices;').all();
+    expect(stored).toEqual([{ verdict: 'approve' }]);
+
+    expect(value(services.ura.setVerdict({ sessionId, verdict: 'comment' }))).toEqual({
+      sessionId,
+      derivedVerdict: 'comment',
+    });
+    expect(db.prepare('SELECT count(*) AS n FROM ura_verdict_choices;').get()).toEqual({ n: 0 });
+    const restored = await read();
+    expect(restored.verdict).toBe('comment');
+    expect(
+      services.ura.setVerdict({
+        sessionId: '99999999-9999-4999-8999-999999999999',
+        verdict: 'comment',
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+  });
+
+  it('clears an approval when a blocker is staged, says so, and refuses a new one', async () => {
+    await note(2, 2, 'Prefer const');
+    value(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    const blocker = value(
+      await services.ura.create({
+        sessionId,
+        anchor: { kind: 'file', path: 'src/app.ts' },
+        severity: 'blocker',
+        title: 'Not wired',
+        body: '',
+      }),
+    );
+
+    const listed = value(await services.ura.list({ sessionId }));
+    expect(listed.chosenVerdict).toBeUndefined();
+    expect(listed.derivedVerdict).toBe('request-changes');
+    expect(listed.verdictNotice).toContain('Approve verdict was cleared');
+    const read = await services.mcpTools.readHumanReview({});
+    expect(read.ok && read.value.structured['verdict']).toBe('request-changes');
+    expect(services.ura.setVerdict({ sessionId, verdict: 'approve' })).toMatchObject({
+      ok: false,
+      error: { code: 'refused' },
+    });
+
+    value(await services.ura.transition({ itemId: blocker.id, to: 'withdrawn' }));
+    expect(value(await services.ura.list({ sessionId })).verdictNotice).toContain('cleared');
+    value(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    expect(value(await services.ura.list({ sessionId }))).toMatchObject({
+      chosenVerdict: 'approve',
+    });
+    expect(value(await services.ura.list({ sessionId })).verdictNotice).toBeUndefined();
+  });
 });
 
 const appLines = [

@@ -277,6 +277,10 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           promoteInsight: record,
           stageImpactFinding: record,
           export: record,
+          setVerdict: (request) => {
+            calls.push(request);
+            return notWiredError;
+          },
           reorder: (request) => {
             calls.push(request);
             return notWiredError;
@@ -308,6 +312,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(handlers['ura:promote-insight']({ insightId: id, severity: 'meh' }));
     await expectInvalid(handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }));
     await expectInvalid(handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
+    await expectInvalid(handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
     await expectInvalid(handlers['ura:list']({}));
 
     await handlers['ura:create'](note);
@@ -317,6 +322,8 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:promote-insight']({ insightId: id });
     await handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a', functionName: 'f' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
+    await handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'comment' });
+    await handlers['ura:set-verdict']({ sessionId: 's1' });
     expect(calls).toEqual([
       note,
       { itemId: id, title: 'New' },
@@ -325,6 +332,8 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { insightId: id },
       { sessionId: 's1', path: 'a', functionName: 'f' },
       { sessionId: 's1', target: 'agent-xml' },
+      { sessionId: 's1', verdict: 'comment' },
+      { sessionId: 's1' },
     ]);
   });
 
@@ -378,6 +387,7 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       reorder: () => notWiredError,
       promoteInsight: async () => notWired,
       stageImpactFinding: async () => notWired,
+      setVerdict: () => notWiredError,
       export: async () => notWired,
       onChanged: () => doNothingSync,
     },

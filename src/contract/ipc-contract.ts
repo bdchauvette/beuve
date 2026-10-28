@@ -593,6 +593,28 @@ export interface UraListView {
   readonly items: readonly UraItemView[];
   /** The verdict the staged items imply (ADR 0023). */
   readonly derivedVerdict: UraVerdictView;
+  /** The verdict the reviewer chose over the derived one; absent when they follow it (ADR 0029). */
+  readonly chosenVerdict?: UraVerdictView;
+  /** Why a chosen verdict was dropped, until the reviewer chooses again. */
+  readonly verdictNotice?: string;
+}
+
+/**
+ * Stores the verdict the reviewer picks for the session (ADR 0029); exports and
+ * `beuve_read_human_review` use it. Omitting `verdict` (or passing the derived one) goes back to
+ * following the derived verdict. Approving while a blocker is staged is `refused`.
+ */
+export interface SetUraVerdictRequest {
+  readonly sessionId: string;
+  readonly verdict?: UraVerdictView;
+}
+
+/** The verdict state after a change: what exports will carry, and why. */
+export interface UraVerdictStateView {
+  readonly sessionId: string;
+  readonly derivedVerdict: UraVerdictView;
+  readonly chosenVerdict?: UraVerdictView;
+  readonly verdictNotice?: string;
 }
 
 /**
@@ -671,7 +693,10 @@ export interface UraStagedView {
  */
 export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github' | 'markdown';
 
-/** Compiles the staged items on the current head; `verdict` overrides the derived one. */
+/**
+ * Compiles the staged items on the current head with the session's chosen verdict (else the
+ * derived one); `verdict` overrides both for this export only.
+ */
 export interface ExportUraRequest {
   readonly sessionId: string;
   readonly target: UraExportTarget;
@@ -805,6 +830,10 @@ export interface InvokeChannelMap {
   'ura:stage-impact-finding': {
     readonly request: StageImpactFindingRequest;
     readonly response: IpcResult<UraStagedView>;
+  };
+  'ura:set-verdict': {
+    readonly request: SetUraVerdictRequest;
+    readonly response: IpcResult<UraVerdictStateView>;
   };
   'ura:export': {
     readonly request: ExportUraRequest;

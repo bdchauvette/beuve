@@ -5,6 +5,7 @@ import type {
   ListUraItemsRequest,
   PromoteInsightRequest,
   ReorderUraItemsRequest,
+  SetUraVerdictRequest,
   StageImpactFindingRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
@@ -14,6 +15,8 @@ import type {
   UraOrderView,
   UraPlacementView,
   UraStagedView,
+  UraVerdictStateView,
+  UraVerdictView,
 } from '#contract/ipc-contract.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
@@ -34,9 +37,11 @@ import { promoteAgentInsight } from '#internal/ura/promote-agent-insight.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
 import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
+import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
 import { stageImpactFinding } from '#internal/ura/stage-impact-finding.ts';
 import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
+import { writeVerdictChoice } from '#internal/ura/write-verdict-choice.ts';
 import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
 import type {
   AgentInsightId,
@@ -49,6 +54,7 @@ import type {
   UraStatus,
   UraStoreError,
 } from '#internal/ura/ura-item.ts';
+import type { UraVerdictChoice } from '#internal/ura/ura-verdict-choice.ts';
 import { LruCache } from '#pkg/datastructures/lru-cache.ts';
 import { err } from '#pkg/result/err.ts';
 import { ok } from '#pkg/result/ok.ts';
@@ -65,6 +71,7 @@ import { buildLineMapping } from './build-line-mapping.ts';
 import { renderUraExport } from './render-ura-export.ts';
 import { toUraItemView } from './to-ura-item-view.ts';
 import { toUraSummary } from './to-ura-summary.ts';
+import { toVerdictNotice } from './to-verdict-notice.ts';
 import { uraFailure } from './ura-failure.ts';
 
 /** The URA staging dock (Zone 3) as the renderer and the MCP server reach it (ADR 0023, 0027). */
@@ -78,6 +85,7 @@ export interface UraServices {
   readonly stageImpactFinding: (
     request: StageImpactFindingRequest,
   ) => Promise<IpcResult<UraStagedView>>;
+  readonly setVerdict: (request: SetUraVerdictRequest) => IpcResult<UraVerdictStateView>;
   readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
   /** The `beuve.ura/1` payload and its XML form, with the derived verdict, for MCP. */
   readonly readAgentReview: (
@@ -116,7 +124,20 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const listeners = new Set<(sessionId: string) => void>();
   const mappings = new LruCache<string, Promise<LineMapping | undefined>>(options.cacheSize ?? 64);
 
+  /** The session's verdict choice, dropped first if staged blockers have made it impossible. */
+  const settledChoice = (sessionId: string, items: readonly UraItem[]): UraVerdictChoice =>
+    settleVerdictChoice(
+      db,
+      sessionId as SessionId,
+      items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
+      deps.now(),
+    );
+
   const changed = (sessionId: string): void => {
+    const items = listUraItems(db, sessionId as SessionId);
+    if (items.ok) {
+      settledChoice(sessionId, items.value);
+    }
     for (const listener of listeners) {
       try {
         listener(sessionId);
@@ -251,13 +272,26 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       repository: refreshed.repository,
     };
     const live = items.value.filter((item) => item.status.kind === 'staged');
+    const chosen = verdict ?? settledChoice(summary.sessionId, items.value).chosen;
     const artifact = compileUraArtifact({
       summary,
       items: items.value,
       lineMappings: await mappingsFor(head, live),
-      ...(verdict !== undefined && { verdict }),
+      ...(chosen !== undefined && { verdict: chosen }),
     });
     return artifact.ok ? artifact : uraFailure(logger, artifact.error);
+  };
+
+  const verdictState = (
+    sessionId: string,
+    items: readonly UraItem[],
+  ): Omit<UraVerdictStateView, 'sessionId'> => {
+    const choice = settledChoice(sessionId, items);
+    return {
+      derivedVerdict: deriveStagedVerdict(items),
+      ...(choice.chosen !== undefined && { chosenVerdict: choice.chosen }),
+      ...(choice.cleared !== undefined && { verdictNotice: toVerdictNotice(choice.cleared) }),
+    };
   };
 
   return {
@@ -276,9 +310,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         sessionId: head.value.sessionId,
         headSha: head.value.headSha,
         items: views,
-        derivedVerdict: deriveUraVerdict(
-          items.value.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
-        ),
+        ...verdictState(head.value.sessionId, items.value),
       });
     },
 
@@ -437,6 +469,35 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
     },
 
+    setVerdict: ({ sessionId, verdict }): IpcResult<UraVerdictStateView> => {
+      const loaded = loadSession(context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const items = listUraItems(db, loaded.value.id);
+      if (!items.ok) {
+        return uraFailure(logger, items.error);
+      }
+      const blockers = items.value
+        .filter((item) => item.status.kind === 'staged' && item.severity === 'blocker')
+        .map((item) => item.id);
+      if (verdict === 'approve' && blockers.length > 0) {
+        return uraFailure(logger, { kind: 'approve-with-blockers', itemIds: blockers });
+      }
+      const derived = deriveStagedVerdict(items.value);
+      const written = writeVerdictChoice(
+        db,
+        loaded.value.id,
+        verdict === undefined || verdict === derived ? {} : { chosen: verdict },
+        deps.now(),
+      );
+      if (!written.ok) {
+        return uraFailure(logger, written.error);
+      }
+      changed(sessionId);
+      return ok({ sessionId, ...verdictState(sessionId, items.value) });
+    },
+
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
       const artifact = await compile(sessionId, verdict);
       return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
@@ -463,4 +524,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       };
     },
   };
+}
+
+function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {
+  return deriveUraVerdict(
+    items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
+  );
 }

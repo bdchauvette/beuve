@@ -27,6 +27,7 @@ import type {
   UraListView,
   UraOrderView,
   UraStagedView,
+  UraVerdictStateView,
 } from '#contract/ipc-contract.ts';
 import type { MainServices } from '../main-services.ts';
 
@@ -161,6 +162,8 @@ const uraExportRequest = z.strictObject({
   verdict: uraVerdict.optional(),
 });
 
+const verdictChoiceRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
+
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
 /**
@@ -287,6 +290,14 @@ export function createIpcHandlers(
     'ura:stage-impact-finding': async (request): Promise<IpcResult<UraStagedView>> => {
       const parsed = stageFindingRequest.safeParse(request);
       return parsed.success ? services.ura.stageImpactFinding(parsed.data) : invalid(parsed.error);
+    },
+    'ura:set-verdict': (request): IpcResult<UraVerdictStateView> => {
+      const parsed = verdictChoiceRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, verdict } = parsed.data;
+      return services.ura.setVerdict({ sessionId: id, ...(verdict !== undefined && { verdict }) });
     },
     'ura:export': async (request): Promise<IpcResult<UraExportView>> => {
       const parsed = uraExportRequest.safeParse(request);

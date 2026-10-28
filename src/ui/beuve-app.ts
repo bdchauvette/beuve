@@ -228,10 +228,24 @@ export class BeuveApp extends LitElement {
     );
   };
 
-  private readonly onUraExport = (
-    event: CustomEvent<{ target: UraExportTarget; verdict?: UraVerdictView }>,
+  private readonly onUraExport = (event: CustomEvent<{ target: UraExportTarget }>): void => {
+    void this.exportUra(event.detail.target);
+  };
+
+  private readonly onUraSetVerdict = (
+    event: CustomEvent<{ verdict: UraVerdictView | undefined }>,
   ): void => {
-    void this.exportUra(event.detail.target, event.detail.verdict);
+    const { review } = this;
+    if (review === undefined) {
+      return;
+    }
+    const { verdict } = event.detail;
+    void this.uraCall(async (bridge) =>
+      bridge.invoke('ura:set-verdict', {
+        sessionId: review.session.id,
+        ...(verdict !== undefined && { verdict }),
+      }),
+    );
   };
 
   private readonly onUraJump = (event: CustomEvent<{ item: UraItemView }>): void => {
@@ -294,6 +308,8 @@ export class BeuveApp extends LitElement {
   /** The open session's URA items, every status, placed on its current head. */
   @state() accessor uraItems: readonly UraItemView[] = [];
   @state() accessor uraVerdict: UraVerdictView = 'approve';
+  @state() accessor chosenVerdict: UraVerdictView | undefined;
+  @state() accessor verdictNotice = '';
   @state() accessor dockNotice: DockNotice | undefined;
   @state() accessor exporting = false;
 
@@ -405,6 +421,8 @@ export class BeuveApp extends LitElement {
       this.insights = [];
       this.tree = undefined;
       this.uraItems = [];
+      this.chosenVerdict = undefined;
+      this.verdictNotice = '';
       this.dockNotice = undefined;
     }
     this.selectedId = sessionId;
@@ -755,6 +773,8 @@ export class BeuveApp extends LitElement {
     }
     this.uraItems = listed.value.items;
     this.uraVerdict = listed.value.derivedVerdict;
+    this.chosenVerdict = listed.value.chosenVerdict;
+    this.verdictNotice = listed.value.verdictNotice ?? '';
   }
 
   private async createUraItem(request: UraCreateRequest): Promise<void> {
@@ -811,10 +831,7 @@ export class BeuveApp extends LitElement {
   }
 
   /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */
-  private async exportUra(
-    target: UraExportTarget,
-    verdict: UraVerdictView | undefined,
-  ): Promise<void> {
+  private async exportUra(target: UraExportTarget): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
     if (bridge === undefined || review === undefined || this.exporting) {
@@ -824,7 +841,6 @@ export class BeuveApp extends LitElement {
     const compiled = await bridge.invoke('ura:export', {
       sessionId: review.session.id,
       target,
-      ...(verdict !== undefined && { verdict }),
     });
     if (!compiled.ok) {
       this.exporting = false;
@@ -957,6 +973,8 @@ export class BeuveApp extends LitElement {
         ?hasSession=${this.review !== undefined}
         .items=${this.uraItems}
         .derivedVerdict=${this.uraVerdict}
+        .chosenVerdict=${this.chosenVerdict}
+        .verdictNotice=${this.verdictNotice}
         .notice=${this.dockNotice}
         ?exporting=${this.exporting}
         @beuve-ura-jump=${this.onUraJump}
@@ -964,6 +982,7 @@ export class BeuveApp extends LitElement {
         @beuve-ura-transition=${this.onUraTransition}
         @beuve-ura-reorder=${this.onUraReorder}
         @beuve-ura-export=${this.onUraExport}
+        @beuve-ura-set-verdict=${this.onUraSetVerdict}
       ></beuve-ura-dock>
       ${
         this.chatOpen

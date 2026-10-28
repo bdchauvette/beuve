@@ -1,0 +1,48 @@
+import type { DatabaseSync } from 'node:sqlite';
+
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+
+import { sqliteErrorCode } from './sqlite-error-code.ts';
+import type { SessionId, UraStoreError } from './ura-item.ts';
+import type { UraVerdictChoice } from './ura-verdict-choice.ts';
+
+const foreignKeyViolation = 787;
+
+/**
+ * Replaces the session's verdict choice. An empty choice (no `chosen`, no `cleared`) deletes the
+ * row. A session that doesn't exist is `session-not-found`.
+ */
+export function writeVerdictChoice(
+  db: DatabaseSync,
+  sessionId: SessionId,
+  choice: UraVerdictChoice,
+  now: Date,
+): Result<void, Extract<UraStoreError, { kind: 'session-not-found' }>> {
+  const stored = choice.chosen ?? choice.cleared;
+  if (stored === undefined) {
+    db.prepare('DELETE FROM ura_verdict_choices WHERE session_id = ?;').run(sessionId);
+    return ok(undefined);
+  }
+  try {
+    db.prepare(
+      `INSERT INTO ura_verdict_choices (session_id, verdict, cleared_reason, updated_at)
+       VALUES (:session_id, iif(:is_choice, :stored, NULL), iif(:is_choice, NULL, :stored), :updated_at)
+       ON CONFLICT (session_id) DO UPDATE
+         SET verdict = excluded.verdict, cleared_reason = excluded.cleared_reason,
+             updated_at = excluded.updated_at;`,
+    ).run({
+      session_id: sessionId,
+      is_choice: choice.chosen === undefined ? 0 : 1,
+      stored,
+      updated_at: now.toISOString(),
+    });
+  } catch (error: unknown) {
+    if (sqliteErrorCode(error) === foreignKeyViolation) {
+      return err({ kind: 'session-not-found', sessionId });
+    }
+    throw error;
+  }
+  return ok(undefined);
+}

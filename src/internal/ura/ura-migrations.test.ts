@@ -10,6 +10,7 @@ const at = '2026-10-28T12:00:00.000Z';
 const checkFailed = /CHECK/u;
 const foreignKeyFailed = /FOREIGN KEY/u;
 const uniqueFailed = /UNIQUE/u;
+const uniqueOrPrimaryFailed = /UNIQUE|PRIMARY KEY/u;
 
 /** Column values as SQL literals: a staged human note on lines 1–2. */
 const valid: Readonly<Record<string, string>> = {
@@ -154,5 +155,17 @@ describe('uraMigrations', () => {
     }).toThrow(uniqueFailed);
     db.exec(insertSql(withId({ ...valid, ...finding, head_sha: `'${later}'` }, 5)));
     db.exec(insertSql(withId({ ...valid, ...finding, impact_function: "'g'" }, 6)));
+  });
+
+  it('records at most one verdict choice per session', () => {
+    const db = createUraTestDatabase([session]);
+    db.exec(
+      `INSERT INTO ura_verdict_choices (session_id, verdict, updated_at) VALUES ('${session}', 'comment', '${at}');`,
+    );
+    expect(() => {
+      db.exec(
+        `INSERT INTO ura_verdict_choices (session_id, verdict, updated_at) VALUES ('${session}', 'approve', '${at}');`,
+      );
+    }).toThrow(uniqueOrPrimaryFailed);
   });
 });

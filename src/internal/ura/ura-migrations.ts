@@ -87,6 +87,18 @@ export const uraMigrations: readonly Migration[] = [
         WHERE origin_kind = 'impact-finding';
     `,
   },
+  {
+    id: 'ura-0002-verdict-choices',
+    up: `
+      CREATE TABLE ura_verdict_choices (
+        session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
+        verdict TEXT CHECK (verdict IS NULL OR verdict IN ('approve', 'request-changes', 'comment')),
+        cleared_reason TEXT CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged')),
+        updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
+        CHECK (verdict IS NULL OR cleared_reason IS NULL)
+      ) STRICT;
+    `,
+  },
 ];
 
 function allNull(columns: readonly string[]): string {

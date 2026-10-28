@@ -360,13 +360,16 @@ export class BeuveUraDock extends LitElement {
   /** The open session's items in dock order, every status (`ura:list`). */
   @property({ attribute: false }) accessor items: readonly UraItemView[] = [];
   @property() accessor derivedVerdict: UraVerdictView = 'approve';
+  /** The verdict stored for the session (`ura:list`); absent when the derived one applies. */
+  @property() accessor chosenVerdict: UraVerdictView | undefined;
+  /** Why a stored verdict was dropped, shown until the reviewer chooses again. */
+  @property() accessor verdictNotice = '';
   @property({ attribute: false }) accessor notice: DockNotice | undefined;
   /** Set by the owner while an export is being compiled and copied. */
   @property({ type: Boolean }) accessor exporting = false;
 
   @state() accessor cursor = 0;
   @state() accessor editingId: string | undefined;
-  @state() accessor chosenVerdict: UraVerdictView | undefined;
   @state() accessor verdictRefusal = '';
 
   constructor() {
@@ -458,8 +461,10 @@ export class BeuveUraDock extends LitElement {
   private chooseVerdict(value: string): void {
     const chosen = value === '' ? undefined : (value as UraVerdictView);
     const resolved = resolveDockVerdict(chosen, this.derivedVerdict, this.blockers());
-    this.chosenVerdict = resolved.refusal === undefined ? chosen : undefined;
     this.verdictRefusal = resolved.refusal ?? '';
+    if (resolved.refusal === undefined) {
+      this.emit('beuve-ura-set-verdict', { verdict: chosen });
+    }
   }
 
   private blockers(): number {
@@ -468,11 +473,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   private exportTo(target: UraExportTarget): void {
-    const verdict = resolveDockVerdict(this.chosenVerdict, this.derivedVerdict, this.blockers());
-    this.emit('beuve-ura-export', {
-      target,
-      ...(verdict.source === 'chosen' && { verdict: verdict.value }),
-    });
+    this.emit('beuve-ura-export', { target });
   }
 
   private renderItem(item: UraItemView, index: number): TemplateResult {
@@ -582,7 +583,9 @@ export class BeuveUraDock extends LitElement {
       </label>
       ${
         this.verdictRefusal === ''
-          ? nothing
+          ? this.verdictNotice === ''
+            ? nothing
+            : html`<p class="note" role="status">${this.verdictNotice}</p>`
           : html`<p class="note error" role="alert">${this.verdictRefusal}</p>`
       }
       <div class="exports">
@@ -658,12 +661,8 @@ export class BeuveUraDock extends LitElement {
         this.editingId = undefined;
       }
     }
-    if (
-      (changed.has('items') || changed.has('derivedVerdict')) &&
-      this.chosenVerdict === 'approve' &&
-      this.blockers() > 0
-    ) {
-      this.chooseVerdict('approve');
+    if (changed.has('chosenVerdict') || changed.has('verdictNotice')) {
+      this.verdictRefusal = '';
     }
   }
 }
