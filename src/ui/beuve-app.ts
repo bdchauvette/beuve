@@ -7,10 +7,12 @@ import type {
   AppInfo,
   CallHierarchyView,
   CreateLocalSessionRequest,
+  FilePairView,
   ImpactView,
   InsightStatusView,
   IpcResult,
   McpStatus,
+  RepositoryTreeView,
   ReviewProgressView,
   ReviewView,
   SessionSummary,
@@ -24,15 +26,19 @@ import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
-import type { InsightJump } from './beuve-diff-stream.ts';
+import type { FileJump, InsightJump } from './beuve-diff-stream.ts';
+import type { FilePairLoader } from './beuve-file-card.ts';
 import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 import type { ChatCommand } from './parse-chat-command.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
+import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import type { ZoneId } from './zones.ts';
+
+const impactGraceMs = 1500;
 
 /**
  * Root of the renderer: the four-zone shell (spec section 4), the zone focus model and the
@@ -161,6 +167,34 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
+  /** Resolves the wait in {@link loadImpactAfterFirstDiff}; set while it waits. */
+  private releaseImpact: (() => void) | undefined;
+
+  private readonly onDiffRendered = (): void => {
+    this.releaseImpact?.();
+  };
+
+  private readonly onTreeSelect = (event: CustomEvent<{ path: string }>): void => {
+    this.jumpNonce += 1;
+    this.fileJump = { path: event.detail.path, nonce: this.jumpNonce };
+  };
+
+  /** Hunk expansion reads whole files through `session:get-file-pair`. */
+  private readonly loadFilePair: FilePairLoader = async (
+    path: string,
+  ): Promise<FilePairView | undefined> => {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return undefined;
+    }
+    const pair = await bridge.invoke('session:get-file-pair', {
+      sessionId: review.session.id,
+      path,
+    });
+    return pair.ok ? pair.value : undefined;
+  };
+
   private readonly onInsightStatus = (
     event: CustomEvent<{ insightId: string; status: InsightStatusView }>,
   ): void => {
@@ -187,6 +221,10 @@ export class BeuveApp extends LitElement {
   /** Agent insights for the open review's head. */
   @state() accessor insights: readonly AgentInsightView[] = [];
   @state() accessor insightJump: InsightJump | undefined;
+  @state() accessor fileJump: FileJump | undefined;
+  /** The open session head's tracked paths, for the radar tree. */
+  @state() accessor tree: RepositoryTreeView | undefined;
+  @state() accessor treeMode: RadarTreeMode = 'neighborhood';
 
   constructor() {
     super();
@@ -289,6 +327,7 @@ export class BeuveApp extends LitElement {
     if (sessionId !== this.selectedId) {
       this.review = undefined;
       this.insights = [];
+      this.tree = undefined;
     }
     this.selectedId = sessionId;
     this.reviewLoading = true;
@@ -305,11 +344,32 @@ export class BeuveApp extends LitElement {
       }
       this.review = review.value;
       this.focusedZone = 'diff';
-      void this.loadImpact(review.value);
+      void this.loadImpactAfterFirstDiff(review.value);
+      void this.loadTree(review.value);
       void this.refreshInsights(review.value.session.id);
     } else {
       this.review = undefined;
       this.reviewError = review.error.message;
+    }
+  }
+
+  /**
+   * ImpactGate parses in main's thread, which also serves the renderer's `file://` chunk loads.
+   * Asking only once the first diff has rendered (or after a grace period, for reviews with no
+   * text diff) keeps it from stalling the highlighter's first load (ADR 0025).
+   */
+  private async loadImpactAfterFirstDiff(review: ReviewView): Promise<void> {
+    this.releaseImpact?.();
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, impactGraceMs);
+      this.releaseImpact = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+    this.releaseImpact = undefined;
+    if (this.review === review) {
+      await this.loadImpact(review);
     }
   }
 
@@ -328,6 +388,21 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.impact = impact.ok && impact.value.headSha === review.headSha ? impact.value : undefined;
+  }
+
+  /** The radar tree's paths, once per head. */
+  private async loadTree(review: ReviewView): Promise<void> {
+    const bridge = beuveBridge();
+    if (
+      bridge === undefined ||
+      (this.tree?.sessionId === review.session.id && this.tree.headSha === review.headSha)
+    ) {
+      return;
+    }
+    const tree = await bridge.invoke('session:get-tree', { sessionId: review.session.id });
+    if (this.review === review && tree.ok) {
+      this.tree = tree.value;
+    }
   }
 
   private async openPeek(path: string, line: number | undefined): Promise<void> {
@@ -588,6 +663,11 @@ export class BeuveApp extends LitElement {
         this.toggleChat();
         return;
       }
+      case 'f': {
+        event.preventDefault();
+        this.treeMode = this.treeMode === 'diff-only' ? 'neighborhood' : 'diff-only';
+        return;
+      }
       default: {
         return;
       }
@@ -630,8 +710,13 @@ export class BeuveApp extends LitElement {
         .sessionNote=${this.sessionNote}
         ?opening=${this.opening}
         .openError=${this.openError}
+        .files=${this.review?.files}
+        .tree=${this.tree}
+        .impact=${this.impact}
+        .treeMode=${this.treeMode}
         @beuve-open-repository=${this.onOpenRepository}
         @beuve-select-session=${this.onSelectSession}
+        @beuve-tree-select=${this.onTreeSelect}
       ></beuve-intent-sidebar>
       <beuve-diff-stream
         data-zone="diff"
@@ -646,11 +731,14 @@ export class BeuveApp extends LitElement {
         .peek=${this.peek}
         .insights=${this.insights}
         .insightJump=${this.insightJump}
+        .fileJump=${this.fileJump}
+        .loadFilePair=${this.loadFilePair}
         @beuve-mark-reviewed=${this.onMarkReviewed}
         @beuve-insight-status=${this.onInsightStatus}
         @beuve-peek-request=${this.onPeekRequest}
         @beuve-peek-expand=${this.onPeekExpand}
         @beuve-peek-close=${this.onPeekClose}
+        @beuve-diff-rendered=${this.onDiffRendered}
       ></beuve-diff-stream>
       <beuve-ura-dock
         data-zone="ura"

@@ -1,15 +1,23 @@
-import { css, html, LitElement } from 'lit';
+import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { SessionSummary } from '#contract/ipc-contract.ts';
+import type {
+  DiffFileView,
+  ImpactView,
+  RepositoryTreeView,
+  SessionSummary,
+} from '#contract/ipc-contract.ts';
 
 import './beuve-open-repository-form.ts';
+import './beuve-radar-tree.ts';
+import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
- * Zone 1: review sessions and the form that opens a local repository. Requirements mapping and
- * the radar tree arrive in Phase 2. Emits `beuve-select-session` with `{ sessionId }`.
+ * Zone 1: review sessions, the form that opens a local repository, and the radar tree of the open
+ * review's files (`f` toggles diff-only); focusing the zone focuses the tree. Requirements mapping arrives later. Emits
+ * `beuve-select-session` with `{ sessionId }`; the tree emits `beuve-tree-select`.
  */
 @customElement('beuve-intent-sidebar')
 export class BeuveIntentSidebar extends LitElement {
@@ -18,6 +26,34 @@ export class BeuveIntentSidebar extends LitElement {
     css`
       :host {
         border-right: 1px solid var(--beuve-border);
+      }
+
+      .body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .files {
+        display: flex;
+        flex: 1 0 320px;
+        flex-direction: column;
+        min-height: 320px;
+      }
+
+      .files h2 {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+      }
+
+      .files .mode {
+        margin-left: auto;
+        font-weight: 400;
+      }
+
+      beuve-radar-tree {
+        flex: 1;
+        margin: 0 calc(-1 * var(--beuve-space-3));
       }
 
       ul {
@@ -67,6 +103,11 @@ export class BeuveIntentSidebar extends LitElement {
     `,
   ];
 
+  /** Tab into Zone 1 lands in the radar tree, so arrow keys work at once. */
+  private readonly onFocus = (): void => {
+    this.renderRoot.querySelector('beuve-radar-tree')?.focusTree();
+  };
+
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   @property({ attribute: false }) accessor sessions: readonly SessionSummary[] = [];
   @property() accessor selectedId = '';
@@ -74,6 +115,16 @@ export class BeuveIntentSidebar extends LitElement {
   @property() accessor sessionNote = '';
   @property({ type: Boolean }) accessor opening = false;
   @property() accessor openError = '';
+  /** The open review's files and the head's tree, for the radar tree. */
+  @property({ attribute: false }) accessor files: readonly DiffFileView[] | undefined;
+  @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
+  @property({ attribute: false }) accessor impact: ImpactView | undefined;
+  @property() accessor treeMode: RadarTreeMode = 'neighborhood';
+
+  constructor() {
+    super();
+    this.addEventListener('focus', this.onFocus);
+  }
 
   private renderSession(session: SessionSummary): TemplateResult {
     const { source } = session;
@@ -94,6 +145,23 @@ export class BeuveIntentSidebar extends LitElement {
         </button>
       </li>
     `;
+  }
+
+  private renderFiles(files: readonly DiffFileView[]): TemplateResult {
+    return html`<section class="files">
+      <h2>
+        Files
+        <span class="mode" title="f toggles"
+          >${this.treeMode === 'diff-only' ? 'diff only' : 'neighborhood'} · <kbd>f</kbd></span
+        >
+      </h2>
+      <beuve-radar-tree
+        .tree=${this.tree}
+        .files=${files}
+        .impact=${this.impact}
+        .mode=${this.treeMode}
+      ></beuve-radar-tree>
+    </section>`;
   }
 
   private select(sessionId: string): void {
@@ -126,6 +194,7 @@ export class BeuveIntentSidebar extends LitElement {
             .error=${this.openError}
           ></beuve-open-repository-form>
         </section>
+        ${this.files === undefined ? nothing : this.renderFiles(this.files)}
       </div>
     `;
   }

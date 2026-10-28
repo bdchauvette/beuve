@@ -1,0 +1,183 @@
+import type * as Trees from '@pierre/trees';
+import type { FileTree, FileTreeRowDecoration, FileTreeRowDecorationContext } from '@pierre/trees';
+import { css, html, LitElement } from 'lit';
+import type { PropertyValues, TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+
+import type { DiffFileView, ImpactView, RepositoryTreeView } from '#contract/ipc-contract.ts';
+
+import { planRadarTree } from './plan-radar-tree.ts';
+import type { RadarTreeMode, RadarTreePlan } from './plan-radar-tree.ts';
+import { planTreeDecorations } from './plan-tree-decorations.ts';
+import type { TreeDecoration } from './plan-tree-decorations.ts';
+
+const trailingSlash = /\/$/u;
+
+/**
+ * The radar tree in Zone 1 (spec section 4, ADR 0026): a `@pierre/trees` view of the repository at
+ * the session head that opens the packages a change touches down to its files, marks changed
+ * files with their git status, and puts ImpactGate percentiles and finding counts on changed
+ * files and their packages. `mode` is neighborhood or diff-only (`f`). Arrow keys move through
+ * the rows; selecting a file (click, Enter or Space) emits `beuve-tree-select` with `{ path }`
+ * when that file is part of the review.
+ */
+@customElement('beuve-radar-tree')
+export class BeuveRadarTree extends LitElement {
+  static override styles = css`
+    :host {
+      display: block;
+      min-height: 0;
+    }
+
+    .mount {
+      height: 100%;
+      --trees-bg-override: var(--beuve-surface);
+      --trees-fg-override: var(--beuve-text);
+      --trees-fg-muted-override: var(--beuve-text-muted);
+      --trees-bg-muted-override: var(--beuve-surface-sunken);
+      --trees-border-color-override: var(--beuve-border);
+      --trees-accent-override: var(--beuve-accent);
+      --trees-selected-bg-override: var(--beuve-accent-soft);
+      --trees-selected-fg-override: var(--beuve-text);
+      --trees-selected-focused-border-color-override: var(--beuve-accent);
+      --trees-focus-ring-color-override: var(--beuve-accent);
+      --trees-font-family-override: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --trees-font-size-override: 12px;
+      --trees-padding-inline-override: 0;
+      --trees-git-added-color-override: var(--beuve-ok);
+      --trees-git-modified-color-override: var(--beuve-warn);
+      --trees-git-deleted-color-override: var(--beuve-danger);
+      --trees-git-renamed-color-override: var(--beuve-accent);
+      --trees-status-added-override: var(--beuve-ok);
+      --trees-status-modified-override: var(--beuve-warn);
+      --trees-status-deleted-override: var(--beuve-danger);
+      --trees-status-renamed-override: var(--beuve-accent);
+    }
+  `;
+
+  private fileTree: FileTree | undefined;
+  private plan: RadarTreePlan | undefined;
+  private decorations: ReadonlyMap<string, TreeDecoration> = new Map();
+  private readonly reviewed = new Set<string>();
+
+  /** `session:get-tree` for the open session; `undefined` until it answers. */
+  @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
+  @property({ attribute: false }) accessor files: readonly DiffFileView[] = [];
+  @property({ attribute: false }) accessor impact: ImpactView | undefined;
+  @property() accessor mode: RadarTreeMode = 'neighborhood';
+
+  /** `@pierre/trees`, a lazy chunk loaded when the first tree connects. */
+  @state() accessor library: typeof Trees | undefined;
+
+  constructor() {
+    super();
+    this.addController({
+      hostConnected: (): void => {
+        void this.loadLibrary();
+      },
+      hostDisconnected: (): void => {
+        this.fileTree?.cleanUp();
+        this.fileTree = undefined;
+        this.plan = undefined;
+      },
+    });
+  }
+
+  private async loadLibrary(): Promise<void> {
+    this.library ??= await import('@pierre/trees');
+  }
+
+  private mountTree(library: typeof Trees, plan: RadarTreePlan): void {
+    const mount = this.renderRoot.querySelector<HTMLElement>('.mount');
+    if (mount === null) {
+      return;
+    }
+    this.fileTree = new library.FileTree({
+      paths: plan.paths,
+      initialExpandedPaths: plan.expandedPaths,
+      initialExpansion: 'closed',
+      flattenEmptyDirectories: true,
+      stickyFolders: true,
+      gitStatus: plan.gitStatus,
+      renderRowDecoration: (context): FileTreeRowDecoration | null => this.decorate(context),
+      onSelectionChange: (selected): void => {
+        this.select(selected);
+      },
+    });
+    this.fileTree.render({ containerWrapper: mount });
+  }
+
+  private decorate({ item }: FileTreeRowDecorationContext): FileTreeRowDecoration | null {
+    const decoration = this.decorations.get(item.path.replace(trailingSlash, ''));
+    // eslint-disable-next-line unicorn/no-null -- the library's "no decoration" is null.
+    return decoration === undefined ? null : { text: decoration.text, title: decoration.title };
+  }
+
+  private select(selected: readonly string[]): void {
+    const [path] = selected;
+    if (path === undefined || !this.reviewed.has(path)) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-tree-select', { detail: { path }, bubbles: true, composed: true }),
+    );
+  }
+
+  /** Moves keyboard focus into the tree, on the first changed file when there is one. */
+  focusTree(): void {
+    const [first] = this.files;
+    if (first === undefined) {
+      this.fileTree?.focusFirstItem();
+      return;
+    }
+    this.fileTree?.focusPath(first.path);
+  }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    const { library } = this;
+    const isRelevant = ['tree', 'files', 'mode', 'impact', 'library'].some((key) =>
+      changed.has(key as keyof BeuveRadarTree),
+    );
+    if (library === undefined || !isRelevant) {
+      return;
+    }
+    const plan = planRadarTree(
+      {
+        paths: this.tree?.paths ?? [],
+        packageRoots: this.tree?.packageRoots ?? [],
+        files: this.files,
+      },
+      this.mode,
+    );
+    this.decorations = planTreeDecorations(this.impact, plan.packageOf);
+    this.reviewed.clear();
+    for (const file of this.files) {
+      this.reviewed.add(file.path);
+    }
+    const isNewListing =
+      this.plan === undefined || changed.has('tree') || changed.has('files') || changed.has('mode');
+    this.plan = plan;
+    if (this.fileTree === undefined) {
+      this.mountTree(library, plan);
+      return;
+    }
+    if (isNewListing) {
+      this.fileTree.resetPaths(plan.paths, { initialExpandedPaths: plan.expandedPaths });
+      this.fileTree.setGitStatus(plan.gitStatus);
+    }
+    if (changed.has('impact')) {
+      // Re-renders the rows, so they ask `renderRowDecoration` again.
+      this.fileTree.setComposition(this.fileTree.getComposition());
+    }
+  }
+
+  override render(): TemplateResult {
+    return html`<div class="mount"></div>`;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'beuve-radar-tree': BeuveRadarTree;
+  }
+}
