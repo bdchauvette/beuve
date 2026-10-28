@@ -8,24 +8,26 @@ import { narrowImpactView } from '../impact/narrow-impact-view.ts';
 import type { LspServices } from '../lsp/create-lsp-services.ts';
 import { resolveSessionId } from '../sessions/resolve-session-id.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
+import type { UraServices } from '../ura/create-ura-services.ts';
 
-import type { McpToolOutcome, McpToolServices } from './mcp-tool-services.ts';
+import type { McpDocumentOutcome, McpToolOutcome, McpToolServices } from './mcp-tool-services.ts';
 import { unimplementedMcpTools } from './unimplemented-mcp-tools.ts';
 
 export interface McpToolsOptions {
   readonly context: SessionContext;
   readonly impact: ImpactServices;
   readonly lsp: LspServices;
+  readonly ura: Pick<UraServices, 'readAgentReview'>;
   /** The session the reviewer has open in beuve, if any. */
   readonly openSessionId: () => string | undefined;
 }
 
 /**
- * The MCP tools backed by real domains: ImpactGate and LSP diagnostics. Trace probes and the human
- * review dock are not built yet and still answer "not implemented".
+ * The MCP tools backed by real domains: ImpactGate, LSP diagnostics and the reviewer's staged
+ * review (URA). Trace probes are not built yet and still answer "not implemented".
  */
 export function createMcpTools(options: McpToolsOptions): McpToolServices {
-  const { context, impact, lsp, openSessionId } = options;
+  const { context, impact, lsp, ura, openSessionId } = options;
   const sessionFor = (requested: string | undefined): Result<string, string> =>
     resolveSessionId(context, requested, openSessionId());
   return {
@@ -49,7 +51,16 @@ export function createMcpTools(options: McpToolsOptions): McpToolServices {
       return report.ok ? report : failure(report.error);
     },
     runTraceProbe: unimplementedMcpTools.runTraceProbe,
-    readHumanReview: unimplementedMcpTools.readHumanReview,
+    readHumanReview: async ({ sessionId }): Promise<McpDocumentOutcome> => {
+      const id = sessionFor(sessionId);
+      if (!id.ok) {
+        return id;
+      }
+      const read = await ura.readAgentReview(id.value);
+      return read.ok
+        ? ok({ structured: { ...read.value.review }, text: read.value.xml })
+        : err(`${read.error.code}: ${read.error.message}`);
+    },
   };
 }
 

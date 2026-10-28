@@ -30,10 +30,19 @@ export interface HumanReviewInput {
  */
 export type McpToolOutcome = Result<unknown, string>;
 
+/**
+ * A tool outcome whose text content is a document of its own rather than the JSON of its
+ * structured content, such as the human review as XML beside its JSON form.
+ */
+export type McpDocumentOutcome = Result<
+  { readonly structured: Readonly<Record<string, unknown>>; readonly text: string },
+  string
+>;
+
 /** What the MCP tools delegate to. `src/main` composes the domains behind it. */
 export interface McpToolServices {
   readonly getLspDiagnostics: (input: LspDiagnosticsInput) => Promise<McpToolOutcome>;
   readonly runImpactCheck: (input: ImpactCheckInput) => Promise<McpToolOutcome>;
   readonly runTraceProbe: (input: TraceProbeInput) => Promise<McpToolOutcome>;
-  readonly readHumanReview: (input: HumanReviewInput) => Promise<McpToolOutcome>;
+  readonly readHumanReview: (input: HumanReviewInput) => Promise<McpDocumentOutcome>;
 }

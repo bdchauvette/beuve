@@ -21,6 +21,8 @@ import { createReviewServices } from './review/create-review-services.ts';
 import type { ClaudeCodeSettings, ReviewServices } from './review/create-review-services.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
+import { createUraServices } from './ura/create-ura-services.ts';
+import type { UraServices } from './ura/create-ura-services.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
 
 export interface MainServicesOptions {
@@ -45,9 +47,13 @@ export interface MainServicesOptions {
  */
 export function createMainServices(options: MainServicesOptions): MainServices {
   const { logger } = options;
-  const heads: { review: ReviewServices | undefined } = { review: undefined };
+  const heads: { review: ReviewServices | undefined; ura: UraServices | undefined } = {
+    review: undefined,
+    ura: undefined,
+  };
   const onHeadMoved = (sessionId: string, headSha: string): void => {
     heads.review?.observeHead(sessionId, headSha);
+    heads.ura?.observeHead(sessionId);
   };
   const context: SessionContext = {
     db: options.db,
@@ -79,13 +85,16 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ...(options.claude !== undefined && { claude: options.claude }),
   });
   heads.review = review;
+  const ura = createUraServices({ context, impact });
+  heads.ura = ura;
   return {
     sessions,
     impact,
     files: createFileServices({ context }),
     lsp,
     review,
-    mcpTools: createMcpTools({ context, impact, lsp, openSessionId: () => open.sessionId }),
+    ura,
+    mcpTools: createMcpTools({ context, impact, lsp, ura, openSessionId: () => open.sessionId }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
       await worktrees.prune(

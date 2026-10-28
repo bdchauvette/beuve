@@ -13,6 +13,7 @@ import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
 import type { ReviewServices } from './review/create-review-services.ts';
+import type { UraServices } from './ura/create-ura-services.ts';
 
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
 export interface SessionServices {
@@ -33,6 +34,7 @@ export interface MainServices {
   readonly files: FileServices;
   readonly lsp: Pick<LspServices, 'callHierarchy'>;
   readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
+  readonly ura: Omit<UraServices, 'observeHead' | 'readAgentReview'>;
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;

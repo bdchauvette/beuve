@@ -1,0 +1,466 @@
+import type {
+  CreateUraItemRequest,
+  ExportUraRequest,
+  IpcResult,
+  ListUraItemsRequest,
+  PromoteInsightRequest,
+  ReorderUraItemsRequest,
+  StageImpactFindingRequest,
+  TransitionUraItemRequest,
+  UpdateUraItemRequest,
+  UraExportView,
+  UraItemView,
+  UraListView,
+  UraOrderView,
+  UraPlacementView,
+  UraStagedView,
+} from '#contract/ipc-contract.ts';
+import type { GitRepository } from '#internal/git/open-repository.ts';
+import { resolveRevision } from '#internal/git/resolve-revision.ts';
+import { findAgentInsight } from '#internal/review/find-agent-insight.ts';
+import { setAgentInsightStatus } from '#internal/review/set-agent-insight-status.ts';
+import { buildAgentReview } from '#internal/ura/build-agent-review.ts';
+import type { AgentReview } from '#internal/ura/build-agent-review.ts';
+import { compileUraArtifact } from '#internal/ura/compile-ura-artifact.ts';
+import { createUraItem } from '#internal/ura/create-ura-item.ts';
+import { deriveUraVerdict } from '#internal/ura/derive-ura-verdict.ts';
+import { editUraItem } from '#internal/ura/edit-ura-item.ts';
+import { findUraItem } from '#internal/ura/find-ura-item.ts';
+import { findUraItemByOrigin } from '#internal/ura/find-ura-item-by-origin.ts';
+import { insertUraItem } from '#internal/ura/insert-ura-item.ts';
+import type { LineMapping } from '#internal/ura/line-mapping.ts';
+import { listUraItems } from '#internal/ura/list-ura-items.ts';
+import { promoteAgentInsight } from '#internal/ura/promote-agent-insight.ts';
+import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
+import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
+import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
+import { stageImpactFinding } from '#internal/ura/stage-impact-finding.ts';
+import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
+import { updateUraItem } from '#internal/ura/update-ura-item.ts';
+import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
+import type {
+  AgentInsightId,
+  CommitSha,
+  SessionId,
+  UraDeps,
+  UraItem,
+  UraItemError,
+  UraItemId,
+  UraStatus,
+  UraStoreError,
+} from '#internal/ura/ura-item.ts';
+import { LruCache } from '#pkg/datastructures/lru-cache.ts';
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+import { withTransaction } from '#pkg/sqlite/with-transaction.ts';
+
+import type { ImpactServices } from '../impact/create-impact-services.ts';
+import { loadReviewDiff } from '../sessions/load-review-diff.ts';
+import { loadSession } from '../sessions/load-session.ts';
+import { refreshSession } from '../sessions/refresh-session.ts';
+import type { SessionContext } from '../sessions/session-context.ts';
+
+import { buildLineMapping } from './build-line-mapping.ts';
+import { renderUraExport } from './render-ura-export.ts';
+import { toUraItemView } from './to-ura-item-view.ts';
+import { toUraSummary } from './to-ura-summary.ts';
+import { uraFailure } from './ura-failure.ts';
+
+/** The URA staging dock (Zone 3) as the renderer and the MCP server reach it (ADR 0023, 0027). */
+export interface UraServices {
+  readonly list: (request: ListUraItemsRequest) => Promise<IpcResult<UraListView>>;
+  readonly create: (request: CreateUraItemRequest) => Promise<IpcResult<UraItemView>>;
+  readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
+  readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
+  readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
+  readonly promoteInsight: (request: PromoteInsightRequest) => Promise<IpcResult<UraStagedView>>;
+  readonly stageImpactFinding: (
+    request: StageImpactFindingRequest,
+  ) => Promise<IpcResult<UraStagedView>>;
+  readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
+  /** The `beuve.ura/1` payload and its XML form, with the derived verdict, for MCP. */
+  readonly readAgentReview: (
+    sessionId: string,
+  ) => Promise<IpcResult<{ readonly review: AgentReview; readonly xml: string }>>;
+  /** Tells listeners a session's items moved, because its head did. */
+  readonly observeHead: (sessionId: string) => void;
+  /** Subscribes to `ura:changed`; returns the unsubscribe function. */
+  readonly onChanged: (listener: (sessionId: string) => void) => () => void;
+}
+
+export interface UraServicesOptions {
+  readonly context: SessionContext;
+  readonly impact: ImpactServices;
+  /** Line mappings kept, one per (repository, older head, current head). Defaults to 64. */
+  readonly cacheSize?: number;
+}
+
+interface Head {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly repository: GitRepository;
+}
+
+/**
+ * Composes the URA domain with sessions, git, the review domain's insights and ImpactGate. Items
+ * written against an older head are re-anchored on every read from the git diff between the two
+ * heads (cached, since commits never change); nothing about placement is stored. Every change is
+ * announced through `onChanged`, whoever made it.
+ */
+export function createUraServices(options: UraServicesOptions): UraServices {
+  type StoreResult<T> = Result<T, UraItemError | UraStoreError>;
+  const { context, impact } = options;
+  const { db, logger } = context;
+  const deps: UraDeps = context.deps;
+  const listeners = new Set<(sessionId: string) => void>();
+  const mappings = new LruCache<string, Promise<LineMapping | undefined>>(options.cacheSize ?? 64);
+
+  const changed = (sessionId: string): void => {
+    for (const listener of listeners) {
+      try {
+        listener(sessionId);
+      } catch (error: unknown) {
+        logger.warn('ura change listener failed', { error });
+      }
+    }
+  };
+
+  const mappingFor = async (head: Head, fromHeadSha: string): Promise<LineMapping | undefined> => {
+    const key = [head.repository.root, fromHeadSha, head.headSha].join('\0');
+    const cached = mappings.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const building = buildLineMapping(head.repository, fromHeadSha, head.headSha);
+    mappings.set(key, building);
+    const mapping = await building;
+    if (mapping === undefined) {
+      mappings.delete(key);
+    }
+    return mapping;
+  };
+
+  const mappingsFor = async (head: Head, items: readonly UraItem[]): Promise<LineMapping[]> => {
+    const older = [...new Set(items.map((item) => item.headSha as string))].filter(
+      (sha) => sha !== head.headSha,
+    );
+    const built = await Promise.all(older.map(async (sha) => mappingFor(head, sha)));
+    return built.filter((mapping) => mapping !== undefined);
+  };
+
+  const placer = async (
+    head: Head,
+    items: readonly UraItem[],
+  ): Promise<(item: UraItem) => UraPlacementView> => {
+    const built = await mappingsFor(head, items);
+    const byHead = new Map(built.map((mapping) => [mapping.fromHeadSha, mapping] as const));
+    return (item: UraItem): UraPlacementView => {
+      if (item.headSha === head.headSha) {
+        return { kind: 'current', anchor: item.anchor };
+      }
+      const mapping = byHead.get(item.headSha);
+      return mapping === undefined
+        ? { kind: 'outdated', reason: 'no-line-mapping' }
+        : reanchorUraAnchor(item.anchor, mapping.files);
+    };
+  };
+
+  const headOf = async (sessionId: string): Promise<IpcResult<Head>> => {
+    const loaded = loadSession(context, sessionId);
+    if (!loaded.ok) {
+      return loaded;
+    }
+    const refreshed = await refreshSession(context, loaded.value);
+    return refreshed.ok
+      ? ok({
+          sessionId: refreshed.value.session.id,
+          headSha: refreshed.value.session.headSha,
+          repository: refreshed.value.repository,
+        })
+      : refreshed;
+  };
+
+  const viewOne = async (item: UraItem): Promise<IpcResult<UraItemView>> => {
+    const head = await headOf(item.sessionId);
+    if (!head.ok) {
+      return head;
+    }
+    const place = await placer(head.value, [item]);
+    return ok(toUraItemView(item, place(item)));
+  };
+
+  const stored = <T>(result: StoreResult<T>): IpcResult<T> =>
+    result.ok ? result : uraFailure(logger, result.error);
+
+  /** Inserts a promoted or staged item; a repeat returns the existing one, restaged if withdrawn. */
+  const stageOnce = (item: UraItem): StoreResult<{ item: UraItem; created: boolean }> => {
+    const inserted = insertUraItem(db, item);
+    if (inserted.ok) {
+      return ok({ item, created: true });
+    }
+    if (inserted.error.kind !== 'duplicate-item' || inserted.error.reason === 'id-taken') {
+      return inserted;
+    }
+    const existing = findUraItemByOrigin(db, item);
+    if (!existing.ok) {
+      return existing;
+    }
+    if (existing.value === undefined) {
+      return inserted;
+    }
+    if (existing.value.status.kind !== 'withdrawn') {
+      return ok({ item: existing.value, created: false });
+    }
+    const restaged = transitionUraItem(existing.value, { kind: 'staged' }, deps.now());
+    if (!restaged.ok) {
+      return restaged;
+    }
+    const saved = updateUraItem(db, restaged.value);
+    return saved.ok ? ok({ item: restaged.value, created: false }) : saved;
+  };
+
+  const staged = async (
+    result: IpcResult<{ item: UraItem; created: boolean }>,
+  ): Promise<IpcResult<UraStagedView>> => {
+    if (!result.ok) {
+      return result;
+    }
+    changed(result.value.item.sessionId);
+    const view = await viewOne(result.value.item);
+    return view.ok ? ok({ item: view.value, created: result.value.created }) : view;
+  };
+
+  const compile = async (
+    sessionId: string,
+    verdict: ExportUraRequest['verdict'],
+  ): Promise<IpcResult<UraArtifact>> => {
+    const diff = await loadReviewDiff(context, sessionId);
+    if (!diff.ok) {
+      return diff;
+    }
+    const { refreshed } = diff.value;
+    const summary = toUraSummary(diff.value);
+    const items = listUraItems(db, summary.sessionId);
+    if (!items.ok) {
+      return uraFailure(logger, items.error);
+    }
+    const head: Head = {
+      sessionId: summary.sessionId,
+      headSha: summary.headSha,
+      repository: refreshed.repository,
+    };
+    const live = items.value.filter((item) => item.status.kind === 'staged');
+    const artifact = compileUraArtifact({
+      summary,
+      items: items.value,
+      lineMappings: await mappingsFor(head, live),
+      ...(verdict !== undefined && { verdict }),
+    });
+    return artifact.ok ? artifact : uraFailure(logger, artifact.error);
+  };
+
+  return {
+    list: async ({ sessionId }): Promise<IpcResult<UraListView>> => {
+      const head = await headOf(sessionId);
+      if (!head.ok) {
+        return head;
+      }
+      const items = listUraItems(db, head.value.sessionId as SessionId);
+      if (!items.ok) {
+        return uraFailure(logger, items.error);
+      }
+      const place = await placer(head.value, items.value);
+      const views = items.value.map((item) => toUraItemView(item, place(item)));
+      return ok({
+        sessionId: head.value.sessionId,
+        headSha: head.value.headSha,
+        items: views,
+        derivedVerdict: deriveUraVerdict(
+          items.value.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
+        ),
+      });
+    },
+
+    create: async (request): Promise<IpcResult<UraItemView>> => {
+      const head = await headOf(request.sessionId);
+      if (!head.ok) {
+        return head;
+      }
+      let headSha = head.value.headSha;
+      if (request.headSha !== undefined && request.headSha !== headSha) {
+        const written = await resolveRevision(head.value.repository, request.headSha);
+        if (!written.ok || written.value !== request.headSha) {
+          return err({ code: 'not-found', message: `no such commit: ${request.headSha}` });
+        }
+        headSha = written.value;
+      }
+      const patch = request.suggestedPatch ?? '';
+      const item = createUraItem(
+        {
+          sessionId: head.value.sessionId as SessionId,
+          headSha: headSha as CommitSha,
+          anchor: request.anchor,
+          severity: request.severity,
+          origin: { kind: 'human' },
+          title: request.title,
+          body: request.body,
+          ...(patch.trim() !== '' && { suggestion: patch }),
+        },
+        deps,
+      );
+      if (!item.ok) {
+        return uraFailure(logger, item.error);
+      }
+      const inserted = insertUraItem(db, item.value);
+      if (!inserted.ok) {
+        return uraFailure(logger, inserted.error);
+      }
+      changed(item.value.sessionId);
+      const place = await placer(head.value, [item.value]);
+      return ok(toUraItemView(item.value, place(item.value)));
+    },
+
+    update: async ({ itemId, suggestedPatch, ...text }): Promise<IpcResult<UraItemView>> => {
+      const found = findUraItem(db, itemId as UraItemId);
+      if (!found.ok) {
+        return uraFailure(logger, found.error);
+      }
+      const edit = {
+        ...text,
+        ...(suggestedPatch !== undefined && {
+          suggestion: suggestedPatch.trim() === '' ? '' : suggestedPatch,
+        }),
+      };
+      const edited = editUraItem(found.value, edit, deps.now());
+      if (!edited.ok) {
+        return uraFailure(logger, edited.error);
+      }
+      const saved = updateUraItem(db, edited.value);
+      if (!saved.ok) {
+        return uraFailure(logger, saved.error);
+      }
+      changed(edited.value.sessionId);
+      return viewOne(edited.value);
+    },
+
+    transition: async ({ itemId, to }): Promise<IpcResult<UraItemView>> => {
+      const found = findUraItem(db, itemId as UraItemId);
+      if (!found.ok) {
+        return uraFailure(logger, found.error);
+      }
+      let status: UraStatus = { kind: to === 'staged' ? 'staged' : 'withdrawn' };
+      if (to === 'addressed') {
+        const head = await headOf(found.value.sessionId);
+        if (!head.ok) {
+          return head;
+        }
+        status = { kind: 'addressed', atSha: head.value.headSha as CommitSha, by: 'reviewer' };
+      }
+      const moved = transitionUraItem(found.value, status, deps.now());
+      if (!moved.ok) {
+        return uraFailure(logger, moved.error);
+      }
+      const { origin } = moved.value;
+      const saved = withTransaction(db, (): StoreResult<void> => {
+        const updated = updateUraItem(db, moved.value);
+        if (to !== 'addressed' && updated.ok && origin.kind === 'agent-insight') {
+          // A fresh review run may have replaced the insight; the item outlives it (ADR 0023).
+          setAgentInsightStatus(db, origin.insightId, to === 'staged' ? 'promoted' : 'pending');
+        }
+        return updated;
+      });
+      if (!saved.ok) {
+        return uraFailure(logger, saved.error);
+      }
+      changed(moved.value.sessionId);
+      return viewOne(moved.value);
+    },
+
+    reorder: ({ sessionId, itemIds }): IpcResult<UraOrderView> => {
+      const reordered = reorderUraItems(db, sessionId as SessionId, itemIds as UraItemId[]);
+      if (!reordered.ok) {
+        return uraFailure(logger, reordered.error);
+      }
+      changed(sessionId);
+      return ok({ sessionId, itemIds });
+    },
+
+    promoteInsight: async ({ insightId, severity }): Promise<IpcResult<UraStagedView>> => {
+      const promoted = withTransaction(db, (): IpcResult<{ item: UraItem; created: boolean }> => {
+        const insight = findAgentInsight(db, insightId as AgentInsightId);
+        if (!insight.ok) {
+          return insight.error.kind === 'insight-not-found'
+            ? err({ code: 'not-found', message: 'no such insight' })
+            : err({ code: 'internal', message: 'stored review data is corrupt' });
+        }
+        const item = promoteAgentInsight(insight.value, deps, severity);
+        if (!item.ok) {
+          return uraFailure(logger, item.error);
+        }
+        // Staging writes nothing when it fails, so the insight's status changes only with it.
+        const result = stored(stageOnce(item.value));
+        if (result.ok) {
+          setAgentInsightStatus(db, insight.value.id, 'promoted');
+        }
+        return result;
+      });
+      return staged(promoted);
+    },
+
+    stageImpactFinding: async ({
+      sessionId,
+      path,
+      functionName,
+    }): Promise<IpcResult<UraStagedView>> => {
+      const report = await impact.getImpact({ sessionId });
+      if (!report.ok) {
+        return report;
+      }
+      const finding = report.value.findings.find(
+        (candidate) => candidate.path === path && candidate.functionName === functionName,
+      );
+      if (finding === undefined) {
+        return err({
+          code: 'not-found',
+          message: `ImpactGate has no finding for ${functionName} in ${path} at the current head`,
+        });
+      }
+      const item = stageImpactFinding(
+        { ...finding, baseValue: finding.baseValue },
+        {
+          sessionId: report.value.sessionId as SessionId,
+          headSha: report.value.headSha as CommitSha,
+        },
+        deps,
+      );
+      return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
+    },
+
+    export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
+      const artifact = await compile(sessionId, verdict);
+      return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
+    },
+
+    readAgentReview: async (
+      sessionId,
+    ): Promise<IpcResult<{ review: AgentReview; xml: string }>> => {
+      const artifact = await compile(sessionId, undefined);
+      return artifact.ok
+        ? ok({
+            review: buildAgentReview(artifact.value),
+            xml: renderAgentReviewXml(artifact.value),
+          })
+        : artifact;
+    },
+
+    observeHead: changed,
+
+    onChanged: (listener): (() => void) => {
+      listeners.add(listener);
+      return (): void => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}

@@ -512,11 +512,201 @@ export interface InsightStatusChangeView {
   readonly status: InsightStatusView;
 }
 
+/** How much a URA item matters, most urgent first (ADR 0023). */
+export type UraSeverityView = 'blocker' | 'issue' | 'question' | 'nit' | 'praise';
+
+/** Where a URA item points on a head: lines are 1-based and inclusive. */
+export type UraAnchorView =
+  | {
+      readonly kind: 'lines';
+      readonly path: string;
+      readonly startLine: number;
+      readonly endLine: number;
+    }
+  | { readonly kind: 'file'; readonly path: string }
+  | { readonly kind: 'change' };
+
+/** Who or what raised a URA item. */
+export type UraOriginView =
+  | { readonly kind: 'human' }
+  | { readonly kind: 'agent-insight'; readonly insightId: string }
+  | {
+      readonly kind: 'impact-finding';
+      readonly metric: 'cognitive-complexity';
+      readonly functionName: string;
+      readonly value: number;
+      readonly threshold: number;
+      readonly percentile: number;
+    }
+  | { readonly kind: 'chat-answer'; readonly messageId: string };
+
+/** `staged` items are exported; `addressed` records the head at which the issue was fixed. */
+export type UraStatusView =
+  | { readonly kind: 'staged' }
+  | { readonly kind: 'withdrawn' }
+  | {
+      readonly kind: 'addressed';
+      readonly atSha: string;
+      readonly by: 'reviewer' | 'agent';
+    };
+
+/** Why an item no longer maps onto the session's current head. */
+export type UraOutdatedReasonView = 'lines-changed' | 'file-deleted' | 'no-line-mapping';
+
+/** Where an item sits on the session's current head (re-anchored when written against an older one). */
+export type UraPlacementView =
+  | { readonly kind: 'current'; readonly anchor: UraAnchorView }
+  | { readonly kind: 'outdated'; readonly reason: UraOutdatedReasonView };
+
+/**
+ * One item of the URA staging dock (Zone 3). `anchor` is on `headSha`, the head it was written
+ * against; `placement` is where it sits on the session's current head. `body` is Markdown.
+ */
+export interface UraItemView {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly anchor: UraAnchorView;
+  readonly placement: UraPlacementView;
+  readonly severity: UraSeverityView;
+  readonly origin: UraOriginView;
+  readonly title: string;
+  readonly body: string;
+  /** A unified diff for the anchored path, against `headSha`. */
+  readonly suggestedPatch?: string;
+  readonly status: UraStatusView;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** What the review asks of the author, as a GitHub review event would say it. */
+export type UraVerdictView = 'approve' | 'request-changes' | 'comment';
+
+export interface ListUraItemsRequest {
+  readonly sessionId: string;
+}
+
+/** A session's items in dock order, every status, placed on its current head. */
+export interface UraListView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly items: readonly UraItemView[];
+  /** The verdict the staged items imply (ADR 0023). */
+  readonly derivedVerdict: UraVerdictView;
+}
+
+/**
+ * A reviewer's note. `headSha` is the head the reviewer was shown, which `anchor` refers to; it
+ * defaults to the session's current head. An empty `suggestedPatch` means none.
+ */
+export interface CreateUraItemRequest {
+  readonly sessionId: string;
+  readonly headSha?: string;
+  readonly anchor: UraAnchorView;
+  readonly severity: UraSeverityView;
+  readonly title: string;
+  readonly body: string;
+  readonly suggestedPatch?: string;
+}
+
+/** Edits an item's text, severity or patch; an empty `suggestedPatch` removes the patch. */
+export interface UpdateUraItemRequest {
+  readonly itemId: string;
+  readonly severity?: UraSeverityView;
+  readonly title?: string;
+  readonly body?: string;
+  readonly suggestedPatch?: string;
+}
+
+/**
+ * Withdraws an item, marks it addressed (by the reviewer, at the session's current head), or
+ * restages it. Withdrawing or restaging a promoted insight's item also sets the insight back to
+ * `pending` or `promoted`.
+ */
+export interface TransitionUraItemRequest {
+  readonly itemId: string;
+  readonly to: 'staged' | 'withdrawn' | 'addressed';
+}
+
+/** Every item of the session (any status), exactly once, in the new dock order. */
+export interface ReorderUraItemsRequest {
+  readonly sessionId: string;
+  readonly itemIds: readonly string[];
+}
+
+export interface UraOrderView {
+  readonly sessionId: string;
+  readonly itemIds: readonly string[];
+}
+
+/**
+ * Stages an agent insight (`y`) and marks it `promoted`, in one transaction. Promoting it again
+ * returns the item it already has, restaged if it was withdrawn.
+ */
+export interface PromoteInsightRequest {
+  readonly insightId: string;
+  readonly severity?: UraSeverityView;
+}
+
+/**
+ * Stages an ImpactGate finding of the session's current head, named by its file and function;
+ * main looks the finding up in its own report. Staging it again returns the existing item.
+ */
+export interface StageImpactFindingRequest {
+  readonly sessionId: string;
+  readonly path: string;
+  readonly functionName: string;
+}
+
+/** The item a promotion or staging produced; `created` is false when it already existed. */
+export interface UraStagedView {
+  readonly item: UraItemView;
+  readonly created: boolean;
+}
+
+/**
+ * Where an export goes: `agent-json` (the `beuve.ura/1` payload `beuve_read_human_review`
+ * returns), `agent-xml` (the same as XML, for pasting into Claude Code), `github` (the body of a
+ * pull request review, not posted) or `markdown`.
+ */
+export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github' | 'markdown';
+
+/** Compiles the staged items on the current head; `verdict` overrides the derived one. */
+export interface ExportUraRequest {
+  readonly sessionId: string;
+  readonly target: UraExportTarget;
+  readonly verdict?: UraVerdictView;
+}
+
+export interface UraExportView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly target: UraExportTarget;
+  readonly mediaType: 'application/json' | 'application/xml' | 'text/markdown';
+  readonly text: string;
+  readonly verdict: UraVerdictView;
+  readonly verdictSource: 'derived' | 'chosen';
+  readonly derivedVerdict: UraVerdictView;
+  readonly itemCount: number;
+  readonly outdatedCount: number;
+}
+
+/** Text for the system clipboard, written by main (the renderer's clipboard is denied). */
+export interface WriteClipboardRequest {
+  readonly text: string;
+}
+
+/** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
+export interface UraChangedView {
+  readonly sessionId: string;
+}
+
 /**
  * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
  * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
  * language server handles the file, or that a side of a file pair is binary or too large;
- * `lsp-failed` that the language server could not answer.
+ * `lsp-failed` that the language server could not answer; `refused` that a valid request
+ * contradicts the current state (approving over a blocker, an impossible status change).
  */
 export type IpcErrorCode =
   | 'invalid-request'
@@ -529,6 +719,7 @@ export type IpcErrorCode =
   | 'stale-review'
   | 'unsupported'
   | 'lsp-failed'
+  | 'refused'
   | 'internal';
 
 export interface IpcError {
@@ -590,6 +781,39 @@ export interface InvokeChannelMap {
     readonly request: SetInsightStatusRequest;
     readonly response: IpcResult<InsightStatusChangeView>;
   };
+  'ura:list': { readonly request: ListUraItemsRequest; readonly response: IpcResult<UraListView> };
+  'ura:create': {
+    readonly request: CreateUraItemRequest;
+    readonly response: IpcResult<UraItemView>;
+  };
+  'ura:update': {
+    readonly request: UpdateUraItemRequest;
+    readonly response: IpcResult<UraItemView>;
+  };
+  'ura:transition': {
+    readonly request: TransitionUraItemRequest;
+    readonly response: IpcResult<UraItemView>;
+  };
+  'ura:reorder': {
+    readonly request: ReorderUraItemsRequest;
+    readonly response: IpcResult<UraOrderView>;
+  };
+  'ura:promote-insight': {
+    readonly request: PromoteInsightRequest;
+    readonly response: IpcResult<UraStagedView>;
+  };
+  'ura:stage-impact-finding': {
+    readonly request: StageImpactFindingRequest;
+    readonly response: IpcResult<UraStagedView>;
+  };
+  'ura:export': {
+    readonly request: ExportUraRequest;
+    readonly response: IpcResult<UraExportView>;
+  };
+  'clipboard:write-text': {
+    readonly request: WriteClipboardRequest;
+    readonly response: IpcResult<{ readonly length: number }>;
+  };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -607,6 +831,7 @@ export type McpStatus =
 export interface EventChannelMap {
   'mcp:status': McpStatus;
   'review:progress': ReviewProgressView;
+  'ura:changed': UraChangedView;
 }
 
 export type EventChannel = keyof EventChannelMap;

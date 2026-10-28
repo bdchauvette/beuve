@@ -22,8 +22,19 @@ import type {
   RepositoryTreeView,
   ReviewView,
   SessionSummary,
+  UraExportView,
+  UraItemView,
+  UraListView,
+  UraOrderView,
+  UraStagedView,
 } from '#contract/ipc-contract.ts';
 import type { MainServices } from '../main-services.ts';
+
+/** What the handlers need from Electron itself; tests pass a stub. */
+export interface IpcPlatform {
+  /** Absent outside Electron, where `clipboard:write-text` answers `not-wired`. */
+  readonly writeClipboard?: (text: string) => Promise<void>;
+}
 
 /** One handler per invoke channel. Each takes the raw, untrusted renderer argument. */
 export type IpcHandlers = {
@@ -79,16 +90,88 @@ const reviewRunRequest = z.strictObject({
   effort: z.enum(['low', 'medium', 'high']).optional(),
 });
 
+const uuid = z.string().regex(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u);
+const commitSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
+
 const insightStatusRequest = z.strictObject({
-  insightId: z.string().regex(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u),
+  insightId: uuid,
   status: z.enum(['pending', 'promoted', 'dismissed']),
 });
+
+const repositoryPath = z.string().min(1).max(4096);
+const line = z.number().int().min(1).max(10_000_000);
+const uraSeverity = z.enum(['blocker', 'issue', 'question', 'nit', 'praise']);
+const uraVerdict = z.enum(['approve', 'request-changes', 'comment']);
+const uraTitle = z.string().max(1000);
+const uraBody = z.string().max(100_000);
+const uraPatch = z.string().max(1_000_000);
+
+const uraAnchor = z.discriminatedUnion('kind', [
+  z
+    .strictObject({
+      kind: z.literal('lines'),
+      path: repositoryPath,
+      startLine: line,
+      endLine: line,
+    })
+    .refine((anchor) => anchor.endLine >= anchor.startLine, 'endLine comes before startLine'),
+  z.strictObject({ kind: z.literal('file'), path: repositoryPath }),
+  z.strictObject({ kind: z.literal('change') }),
+]);
+
+const uraCreateRequest = z.strictObject({
+  sessionId,
+  headSha: commitSha.optional(),
+  anchor: uraAnchor,
+  severity: uraSeverity,
+  title: uraTitle,
+  body: uraBody,
+  suggestedPatch: uraPatch.optional(),
+});
+
+const uraUpdateRequest = z.strictObject({
+  itemId: uuid,
+  severity: uraSeverity.optional(),
+  title: uraTitle.optional(),
+  body: uraBody.optional(),
+  suggestedPatch: uraPatch.optional(),
+});
+
+const uraTransitionRequest = z.strictObject({
+  itemId: uuid,
+  to: z.enum(['staged', 'withdrawn', 'addressed']),
+});
+
+const uraReorderRequest = z.strictObject({
+  sessionId,
+  itemIds: z.array(uuid).max(10_000),
+});
+
+const promoteInsightRequest = z.strictObject({ insightId: uuid, severity: uraSeverity.optional() });
+
+const stageFindingRequest = z.strictObject({
+  sessionId,
+  path: repositoryPath,
+  functionName: z.string().min(1).max(1000),
+});
+
+const uraExportRequest = z.strictObject({
+  sessionId,
+  target: z.enum(['agent-json', 'agent-xml', 'github', 'markdown']),
+  verdict: uraVerdict.optional(),
+});
+
+const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
 /**
  * Builds the invoke handlers. The renderer is untrusted, so each handler validates its argument
  * before anything reaches `services`, and answers bad input with an `invalid-request` error.
  */
-export function createIpcHandlers(services: MainServices, appInfo: AppInfo): IpcHandlers {
+export function createIpcHandlers(
+  services: MainServices,
+  appInfo: AppInfo,
+  platform: IpcPlatform = {},
+): IpcHandlers {
   return {
     'app:get-info': (request): IpcResult<AppInfo> => {
       const parsed = noRequest.safeParse(request);
@@ -151,6 +234,78 @@ export function createIpcHandlers(services: MainServices, appInfo: AppInfo): Ipc
     'review:set-insight-status': (request): IpcResult<InsightStatusChangeView> => {
       const parsed = insightStatusRequest.safeParse(request);
       return parsed.success ? services.review.setInsightStatus(parsed.data) : invalid(parsed.error);
+    },
+    'ura:list': async (request): Promise<IpcResult<UraListView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.ura.list(parsed.data) : invalid(parsed.error);
+    },
+    'ura:create': async (request): Promise<IpcResult<UraItemView>> => {
+      const parsed = uraCreateRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { headSha, suggestedPatch, ...required } = parsed.data;
+      return services.ura.create({
+        ...required,
+        ...(headSha !== undefined && { headSha }),
+        ...(suggestedPatch !== undefined && { suggestedPatch }),
+      });
+    },
+    'ura:update': async (request): Promise<IpcResult<UraItemView>> => {
+      const parsed = uraUpdateRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { itemId, severity, title, body, suggestedPatch } = parsed.data;
+      return services.ura.update({
+        itemId,
+        ...(severity !== undefined && { severity }),
+        ...(title !== undefined && { title }),
+        ...(body !== undefined && { body }),
+        ...(suggestedPatch !== undefined && { suggestedPatch }),
+      });
+    },
+    'ura:transition': async (request): Promise<IpcResult<UraItemView>> => {
+      const parsed = uraTransitionRequest.safeParse(request);
+      return parsed.success ? services.ura.transition(parsed.data) : invalid(parsed.error);
+    },
+    'ura:reorder': (request): IpcResult<UraOrderView> => {
+      const parsed = uraReorderRequest.safeParse(request);
+      return parsed.success ? services.ura.reorder(parsed.data) : invalid(parsed.error);
+    },
+    'ura:promote-insight': async (request): Promise<IpcResult<UraStagedView>> => {
+      const parsed = promoteInsightRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { insightId, severity } = parsed.data;
+      return services.ura.promoteInsight({
+        insightId,
+        ...(severity !== undefined && { severity }),
+      });
+    },
+    'ura:stage-impact-finding': async (request): Promise<IpcResult<UraStagedView>> => {
+      const parsed = stageFindingRequest.safeParse(request);
+      return parsed.success ? services.ura.stageImpactFinding(parsed.data) : invalid(parsed.error);
+    },
+    'ura:export': async (request): Promise<IpcResult<UraExportView>> => {
+      const parsed = uraExportRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { verdict, ...required } = parsed.data;
+      return services.ura.export({ ...required, ...(verdict !== undefined && { verdict }) });
+    },
+    'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
+      const parsed = clipboardRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (platform.writeClipboard === undefined) {
+        return err({ code: 'not-wired', message: 'no clipboard outside Electron' });
+      }
+      await platform.writeClipboard(parsed.data.text);
+      return ok({ length: parsed.data.text.length });
     },
   };
 }

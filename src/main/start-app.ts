@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, ipcMain, session } from 'electron';
+import { BrowserWindow, clipboard, ipcMain, session } from 'electron';
 import type { App } from 'electron';
 
 import type { Logger } from '#pkg/logger/create-logger.ts';
@@ -26,8 +26,8 @@ export interface StartAppOptions {
 }
 
 /**
- * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC and
- * review progress events, the main window and the MCP server; preliminary reviews are aborted and
+ * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC,
+ * review progress and URA change events, the clipboard, the main window and the MCP server; preliminary reviews are aborted and
  * language servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
  * level (see CLAUDE.md).
  */
@@ -52,12 +52,21 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       sendEvent(window.webContents, 'review:progress', event);
     }
   });
+  services.ura.onChanged((sessionId) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'ura:changed', { sessionId });
+    }
+  });
   void services.pruneWorktrees();
   hardenSession(session.defaultSession);
   app.on('web-contents-created', (_event, contents) => {
     hardenWebContents(contents, logger);
   });
-  registerIpcHandlers(ipcMain, createIpcHandlers(services, readAppInfo(app)), {
+  // The renderer's own clipboard needs a permission the hardened session denies (ADR 0027).
+  const platform = {
+    writeClipboard: async (text: string): Promise<void> => clipboard.writeText(text),
+  };
+  registerIpcHandlers(ipcMain, createIpcHandlers(services, readAppInfo(app), platform), {
     trustedUrl: pathToFileURL(options.indexHtmlPath).href,
     logger,
   });

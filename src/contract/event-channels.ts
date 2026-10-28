@@ -4,4 +4,5 @@ import type { EventChannel } from './ipc-contract.ts';
 export const eventChannels = Object.freeze([
   'mcp:status',
   'review:progress',
+  'ura:changed',
 ] as const satisfies readonly EventChannel[]);

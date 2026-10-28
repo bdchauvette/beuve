@@ -256,6 +256,97 @@ describe('createIpcHandlers for the preliminary review', () => {
   });
 });
 
+describe('createIpcHandlers for the review dock and clipboard', () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+
+  it('validates ura channels before delegating, dropping absent options', async () => {
+    const calls: unknown[] = [];
+    const record = async (request: unknown): Promise<Err<IpcError>> => {
+      calls.push(request);
+      return notWired;
+    };
+    const base = stubServices({});
+    const handlers = createIpcHandlers(
+      {
+        ...base,
+        ura: {
+          ...base.ura,
+          create: record,
+          update: record,
+          transition: record,
+          promoteInsight: record,
+          stageImpactFinding: record,
+          export: record,
+          reorder: (request) => {
+            calls.push(request);
+            return notWiredError;
+          },
+        },
+      },
+      appInfo,
+    );
+    const note = {
+      sessionId: 's1',
+      anchor: { kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 4 },
+      severity: 'issue',
+      title: 'Check this',
+      body: '',
+    };
+    for (const bad of [
+      { ...note, severity: 'major' },
+      { ...note, anchor: { kind: 'lines', path: 'a', startLine: 4, endLine: 3 } },
+      { ...note, anchor: { kind: 'lines', path: 'a', startLine: 0, endLine: 3 } },
+      { ...note, anchor: { kind: 'change', path: 'a' } },
+      { ...note, headSha: 'abc' },
+      { ...note, extra: 1 },
+    ]) {
+      await expectInvalid(handlers['ura:create'](bad));
+    }
+    await expectInvalid(handlers['ura:update']({ itemId: 'x' }));
+    await expectInvalid(handlers['ura:transition']({ itemId: id, to: 'deleted' }));
+    await expectInvalid(handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
+    await expectInvalid(handlers['ura:promote-insight']({ insightId: id, severity: 'meh' }));
+    await expectInvalid(handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }));
+    await expectInvalid(handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
+    await expectInvalid(handlers['ura:list']({}));
+
+    await handlers['ura:create'](note);
+    await handlers['ura:update']({ itemId: id, title: 'New' });
+    await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
+    await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
+    await handlers['ura:promote-insight']({ insightId: id });
+    await handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a', functionName: 'f' });
+    await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
+    expect(calls).toEqual([
+      note,
+      { itemId: id, title: 'New' },
+      { itemId: id, to: 'withdrawn' },
+      { sessionId: 's1', itemIds: [id] },
+      { insightId: id },
+      { sessionId: 's1', path: 'a', functionName: 'f' },
+      { sessionId: 's1', target: 'agent-xml' },
+    ]);
+  });
+
+  it('writes the clipboard through the platform, and only text', async () => {
+    const written: string[] = [];
+    const handlers = createIpcHandlers(stubServices({}), appInfo, {
+      writeClipboard: async (text) => {
+        written.push(text);
+        await Promise.resolve();
+      },
+    });
+    await expectInvalid(handlers['clipboard:write-text']({ text: 7 }));
+    expect(await handlers['clipboard:write-text']({ text: '<beuve-review/>' })).toEqual(
+      ok({ length: 15 }),
+    );
+    expect(written).toEqual(['<beuve-review/>']);
+    expect(
+      await createIpcHandlers(stubServices({}), appInfo)['clipboard:write-text']({ text: 'x' }),
+    ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+});
+
 async function expectInvalid(response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
@@ -278,6 +369,17 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       listInsights: async () => notWired,
       setInsightStatus: () => notWiredError,
       onProgress: () => doNothingSync,
+    },
+    ura: {
+      list: async () => notWired,
+      create: async () => notWired,
+      update: async () => notWired,
+      transition: async () => notWired,
+      reorder: () => notWiredError,
+      promoteInsight: async () => notWired,
+      stageImpactFinding: async () => notWired,
+      export: async () => notWired,
+      onChanged: () => doNothingSync,
     },
     mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,
