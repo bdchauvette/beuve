@@ -1,6 +1,6 @@
 # 0018. Integrating `@pierre/diffs` and `@pierre/trees` into the renderer
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-28
 
 ## Context
@@ -22,7 +22,7 @@ Spec section 4 puts `@pierre/diffs` cards in Zone 2 and a `@pierre/trees` radar 
   - These two files are the only importers of `@pierre/*`, which dependency-cruiser enforces.
   - Pure, Vitest-tested mappers sit beside them: `to-file-diff-metadata.ts` (`processFile(patch, { cacheKey })`), `to-line-annotations.ts` (insight badges, staged-URA markers, citation targets), `plan-hunk-steps.ts` (`j`/`k` and citation jumps through `setSelectedLines` and `revealLine`) and `to-tree-input.ts` (diff-only paths, package directories to expand, decorations).
   - `split-patch.ts` stays as the fallback renderer.
-- **Build**: the ui bundle sets `splitting: true`. An esbuild alias replaces `shiki/langs` with a curated language list and stubs `shiki/wasm`. Highlighting uses `shiki-js`, and `themeType: 'system'` follows the OS. `--diffs-*-override`/`--trees-*-override` variables are mapped from the `--beuve-*` tokens.
+- **Build**: the ui bundle sets `splitting: true`. An esbuild alias replaces `shiki/langs` with a curated language list and stubs `shiki/wasm`. Highlighting uses `shiki-js`, and `themeType: 'system'` follows the OS. The default themes are minimal, in the spirit of Nikita Prokopov's Alabaster: only strings, constants (numbers, booleans, literals), comments and top-level definitions get color, and everything else stays plain text. We ship beuve's own Alabaster-style light and dark TextMate themes rather than any of Shiki's bundled themes, which also drops the 1.3 MB of themes from the bundle. Light is the designed default, and the UI follows `prefers-color-scheme`. `--diffs-*-override`/`--trees-*-override` variables are mapped from the `--beuve-*` tokens.
 - **Contract additions** (`src/contract`):
   1. Add full `oldBlobSha`/`newBlobSha` to `DiffFileView`, for cache keys and content loading.
   2. Add `session:get-file-pair` `{ sessionId, path, oldPath?, fromSha, toSha }` → `{ oldContents | null, newContents | null }`, which backs `loadDiffFiles` (hunk expansion) and inline edit.
