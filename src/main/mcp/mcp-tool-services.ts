@@ -12,11 +12,13 @@ export interface ImpactCheckInput {
   readonly paths?: readonly string[] | undefined;
 }
 
-/** Runs the test covering a line with trace logging (spec 5E). */
+/** Runs the tests covering a line with execution tracing (spec 5E, ADR 0041). */
 export interface TraceProbeInput {
+  readonly sessionId?: string | undefined;
   readonly path: string;
+  /** 1-based head line. */
   readonly line: number;
-  readonly testName?: string | undefined;
+  readonly testNamePattern?: string | undefined;
 }
 
 /** The human's staged review (URA items) for a session. */

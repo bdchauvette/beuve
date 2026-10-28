@@ -14,6 +14,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { createGhCliCredentialProvider } from '#internal/auth/create-gh-cli-credential-provider.ts';
 import { writeFakeGh } from '#internal/auth/testing/write-fake-gh.ts';
+import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import type { FakeGhScenario } from '#internal/auth/testing/write-fake-gh.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
@@ -34,6 +35,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
   let clone: TestRepository;
   let bare: string;
   let scenarioFile: string;
+  let chatFile: string;
   let callsFile: string;
   let api: FakeGithubApi;
   let db: DatabaseSync;
@@ -79,6 +81,8 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     scenarioFile = path.join(scratch, 'gh-scenario.json');
     writeScenario({ hosts: { 'github.com': { token, login: 'reviewer' } }, callsFile });
     const gh = writeFakeGh(scratch);
+    chatFile = path.join(scratch, 'chat.json');
+    writeFileSync(chatFile, JSON.stringify({ chunks: ['Because of REQ-1.'] }));
 
     db = openAppDatabase(':memory:');
     services = createMainServices({
@@ -86,6 +90,11 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       logger: createLogger('test', { sink: (): void => undefined }),
       deps: steppingDeps(),
       worktreeRoot: path.join(scratch, 'worktrees'),
+      claude: {
+        command: process.execPath,
+        leadingArgs: [writeFakeClaude(scratch), 'chat', chatFile],
+        killGraceMs: 200,
+      },
       github: {
         credentials: createGhCliCredentialProvider({
           command: process.execPath,
@@ -432,6 +441,40 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       kind: 'failed',
       failure: 'not-signed-in',
       remedy: 'gh auth login --hostname github.com',
+    });
+  });
+
+  it('gives the pull request to the chat as intent and to agents as metadata', async () => {
+    const sessionId = await opened();
+    const answered = new Promise<void>((resolve) => {
+      services.chat.onMessageUpdated(() => {
+        resolve();
+      });
+    });
+    value(await services.chat.ask({ sessionId, question: 'Why 42?' }));
+    await answered;
+    const [call] = readFileSync(`${chatFile}.calls`, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { stdin: string });
+    expect(call?.stdin).toContain("## The author's stated intent");
+    expect(call?.stdin).toContain('Make the answer right\n\nREQ-1: the answer is 42.');
+
+    const review = await services.mcpTools.readHumanReview({ sessionId });
+    expect(review).toMatchObject({
+      ok: true,
+      value: {
+        structured: {
+          schema: 'beuve.ura/1',
+          pullRequest: {
+            number: 7,
+            title: 'Make the answer right',
+            url: expect.stringContaining('/pull/7') as string,
+            state: 'open',
+            author: 'octocat',
+          },
+        },
+      },
     });
   });
 

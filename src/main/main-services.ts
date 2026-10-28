@@ -16,6 +16,7 @@ import type { GithubServices } from './github/create-github-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
+import type { TraceServices } from './trace/create-trace-services.ts';
 import type { ReviewServices } from './review/create-review-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
@@ -45,7 +46,8 @@ export interface MainServices {
     UraServices,
     'observeHead' | 'readAgentReview' | 'compileArtifact' | 'listPostings' | 'recordPostings'
   >;
-  readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'watch'>;
+  readonly trace: Omit<TraceServices, 'observeHead' | 'probe'>;
+  readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;

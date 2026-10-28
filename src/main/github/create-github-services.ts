@@ -40,6 +40,15 @@ import { prepareGithubReview } from './prepare-github-review.ts';
 import { toPullRequestView } from './to-pull-request-view.ts';
 import { toStackView } from './to-stack-view.ts';
 
+/** The identifying metadata of a pull request, as `beuve_read_human_review` reports it. */
+export interface PullRequestSummary {
+  readonly number: number;
+  readonly title: string;
+  readonly url: string;
+  readonly state: 'open' | 'closed' | 'merged';
+  readonly author: string;
+}
+
 /** GitHub pull request sessions as the renderer reaches them (ADR 0037–0040). */
 export interface GithubServices {
   readonly authStatus: (
@@ -60,6 +69,8 @@ export interface GithubServices {
   ) => Promise<IpcResult<{ readonly opened: true }>>;
   /** The stored title, state and base branch of a pull request session, for the session list. */
   readonly badgeFor: (source: SessionSourceView) => PullRequestBadgeView | undefined;
+  /** Stored number, title, URL, state and author of a pull request session, for agents (ADR 0041). */
+  readonly summaryFor: (sessionId: string) => PullRequestSummary | undefined;
   /** The PR body as review intent (ADR 0022's `intent`), for pull request sessions. */
   readonly intentFor: (sessionId: string) => string | undefined;
   /** Polls this session while it is the one the reviewer has open; `undefined` stops polling. */
@@ -225,6 +236,20 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
             state: stored.state,
             isDraft: stored.isDraft,
             baseBranch: stored.baseBranch,
+          };
+    },
+
+    summaryFor: (sessionId): PullRequestSummary | undefined => {
+      const loaded = loadSession(options.context, sessionId);
+      const stored = loaded.ok ? storedFor(loaded.value.source) : undefined;
+      return stored === undefined
+        ? undefined
+        : {
+            number: stored.ref.number,
+            title: stored.title,
+            url: stored.htmlUrl,
+            state: stored.state,
+            author: stored.author,
           };
     },
 

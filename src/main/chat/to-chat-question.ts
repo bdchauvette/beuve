@@ -13,6 +13,8 @@ export interface ChatQuestionParts {
   readonly focus: ChatFocusRequest | undefined;
   /** The cached ImpactGate findings for the same diff, if they were computed. */
   readonly impactFindings: readonly ImpactFindingView[] | undefined;
+  /** The change's stated intent (a pull request's title and body), if it has one. */
+  readonly intent?: string | undefined;
   /** Paths tracked at the head, so answers may cite files outside the diff. */
   readonly worktreePaths: ReadonlySet<string> | undefined;
 }
@@ -39,6 +41,7 @@ export function toChatQuestion(parts: ChatQuestionParts): ChatQuestion {
     files: input.files,
     history: parts.history,
     ...(input.impactFindings !== undefined && { impactFindings: input.impactFindings }),
+    ...(parts.intent !== undefined && parts.intent.trim() !== '' && { intent: parts.intent }),
     ...(parts.focus !== undefined && { focus: toFocus(parts.focus) }),
     ...(parts.worktreePaths !== undefined && { worktreePaths: parts.worktreePaths }),
   };

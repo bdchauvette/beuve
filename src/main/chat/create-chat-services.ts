@@ -71,6 +71,8 @@ export interface ChatServicesOptions {
   readonly impact: ImpactServices;
   readonly worktrees: SessionWorktrees;
   readonly claude?: ClaudeCodeSettings;
+  /** The session's stated intent (a pull request's title and body), put in the prompt. */
+  readonly intentFor?: (sessionId: string) => string | undefined;
   /** Least time between stores of the streaming preview. Defaults to 1 second. */
   readonly previewIntervalMs?: number;
 }
@@ -187,6 +189,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         history,
         focus,
         impactFindings: findings,
+        intent: options.intentFor?.(job.sessionId),
         worktreePaths: tree.ok ? new Set(tree.value) : undefined,
       }),
     );

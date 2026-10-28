@@ -35,6 +35,9 @@ import type {
   RepositoryTreeView,
   ReviewView,
   SessionSummary,
+  TraceCancelledView,
+  TraceRunStartedView,
+  TraceTrustView,
   UraExportView,
   UraItemView,
   UraListView,
@@ -90,6 +93,15 @@ const flowGraphRequest = z.strictObject({
   path: z.string().min(1).max(4096),
   line: z.number().int().min(1).max(10_000_000),
 });
+
+const traceRunRequest = z.strictObject({
+  sessionId,
+  path: z.string().min(1).max(4096),
+  line: z.number().int().min(1).max(10_000_000),
+  testNamePattern: z.string().min(1).max(1000).optional(),
+});
+
+const traceTrustRequest = z.strictObject({ sessionId, trusted: z.boolean() });
 
 const pathPrefix = z
   .string()
@@ -271,6 +283,29 @@ export function createIpcHandlers(
     'flow:get-graph': async (request): Promise<IpcResult<FlowGraphResponse>> => {
       const parsed = flowGraphRequest.safeParse(request);
       return parsed.success ? services.flow.getGraph(parsed.data) : invalid(parsed.error);
+    },
+    'trace:run': async (request): Promise<IpcResult<TraceRunStartedView>> => {
+      const parsed = traceRunRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { testNamePattern, ...required } = parsed.data;
+      return services.trace.run({
+        ...required,
+        ...(testNamePattern !== undefined && { testNamePattern }),
+      });
+    },
+    'trace:cancel': (request): IpcResult<TraceCancelledView> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.trace.cancel(parsed.data) : invalid(parsed.error);
+    },
+    'trace:get-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.trace.getTrust(parsed.data) : invalid(parsed.error);
+    },
+    'trace:set-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
+      const parsed = traceTrustRequest.safeParse(request);
+      return parsed.success ? services.trace.setTrust(parsed.data) : invalid(parsed.error);
     },
     'review:run': async (request): Promise<IpcResult<ReviewRunHandleView>> => {
       const parsed = reviewRunRequest.safeParse(request);

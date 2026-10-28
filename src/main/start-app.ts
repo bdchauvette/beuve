@@ -70,6 +70,11 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       sendEvent(window.webContents, 'chat:message-updated', event);
     }
   });
+  services.trace.onStatus((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'trace:status', event);
+    }
+  });
   services.ura.onChanged((sessionId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'ura:changed', { sessionId });

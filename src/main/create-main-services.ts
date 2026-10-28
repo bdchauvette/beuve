@@ -37,6 +37,10 @@ import type { ClaudeCodeSettings } from './review/claude-code-settings.ts';
 import type { ReviewServices } from './review/create-review-services.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
+import { createTraceServices } from './trace/create-trace-services.ts';
+import type { TraceServices } from './trace/create-trace-services.ts';
+import { createTraceTrust } from './trace/create-trace-trust.ts';
+import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
@@ -62,6 +66,17 @@ export interface MainServicesOptions {
   readonly editor?: {
     readonly settingsPath?: string;
     readonly platform?: EditorPlatform;
+  };
+  /**
+   * Trace probes (ADR 0036, 0041): `settingsPath` holds the per-repository approvals (in memory
+   * without it), `temporaryDirectory` where runs work, `timeoutMs` the longest a probe may run.
+   * Tests may pass a `runner`.
+   */
+  readonly trace?: {
+    readonly settingsPath?: string;
+    readonly temporaryDirectory?: string;
+    readonly timeoutMs?: number;
+    readonly runner?: TraceRunner;
   };
   /**
    * GitHub (ADR 0034, 0037–0040). `credentials` defaults to the gh CLI and is always wrapped in the
@@ -90,11 +105,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     review: ReviewServices | undefined;
     ura: UraServices | undefined;
     chat: ChatServices | undefined;
-  } = { review: undefined, ura: undefined, chat: undefined };
+    trace: TraceServices | undefined;
+  } = { review: undefined, ura: undefined, chat: undefined, trace: undefined };
   const onHeadMoved = (sessionId: string, headSha: string): void => {
     heads.review?.observeHead(sessionId, headSha);
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
+    heads.trace?.observeHead(sessionId, headSha);
   };
   const context: SessionContext = {
     db: options.db,
@@ -141,10 +158,23 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     impact,
     worktrees,
     ...(options.claude !== undefined && { claude: options.claude }),
+    intentFor: (sessionId) => gh.services?.intentFor(sessionId),
   });
   heads.chat = chat;
   const ura = createUraServices({ context, impact });
   heads.ura = ura;
+  const trace = createTraceServices({
+    context,
+    worktrees,
+    parse: parser.parse,
+    trust: createTraceTrust({ settingsPath: options.trace?.settingsPath, now: context.deps.now }),
+    ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
+    ...(options.trace?.temporaryDirectory !== undefined && {
+      temporaryDirectory: options.trace.temporaryDirectory,
+    }),
+    ...(options.trace?.timeoutMs !== undefined && { timeoutMs: options.trace.timeoutMs }),
+  });
+  heads.trace = trace;
   const credentials = createCachedCredentialProvider(
     options.github?.credentials ?? createGhCliCredentialProvider({ logger }),
   );
@@ -180,8 +210,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     review,
     chat,
     ura,
+    trace,
     github,
-    mcpTools: createMcpTools({ context, impact, lsp, ura, openSessionId: () => open.sessionId }),
+    mcpTools: createMcpTools({
+      context,
+      impact,
+      lsp,
+      ura,
+      trace,
+      github,
+      openSessionId: () => open.sessionId,
+    }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
       await worktrees.prune(
@@ -195,7 +234,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
     dispose: async (): Promise<void> => {
       github.dispose();
-      await Promise.all([review.dispose(), chat.dispose()]);
+      await Promise.all([review.dispose(), chat.dispose(), trace.dispose()]);
       await multiplexer.dispose();
     },
   };

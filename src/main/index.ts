@@ -60,6 +60,7 @@ async function launch(): Promise<void> {
               }),
           }),
         },
+        trace: { settingsPath, temporaryDirectory: path.join(userData, 'trace') },
         github: {
           settingsPath,
           openExternal: async (url) => shell.openExternal(url),

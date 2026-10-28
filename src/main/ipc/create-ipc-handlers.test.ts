@@ -211,6 +211,49 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
   });
 });
 
+describe('createIpcHandlers for trace probes', () => {
+  it('validates trace:run and trace:set-trust before delegating', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        trace: {
+          ...stubServices({}).trace,
+          run: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+          setTrust: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
+    for (const bad of [
+      { ...good, line: 0 },
+      { ...good, path: '' },
+      { ...good, testNamePattern: '' },
+      { ...good, extra: true },
+      { sessionId: 's1', line: 3 },
+    ]) {
+      await expectInvalid(handlers['trace:run'](bad));
+    }
+    await handlers['trace:run'](good);
+    await handlers['trace:run']({ ...good, testNamePattern: 'clamp' });
+    await expectInvalid(handlers['trace:set-trust']({ sessionId: 's1' }));
+    await expectInvalid(handlers['trace:set-trust']({ sessionId: 's1', trusted: 'yes' }));
+    await handlers['trace:set-trust']({ sessionId: 's1', trusted: true });
+    expect(calls).toEqual([
+      good,
+      { ...good, testNamePattern: 'clamp' },
+      { sessionId: 's1', trusted: true },
+    ]);
+  });
+});
+
 describe('createIpcHandlers for the preliminary review', () => {
   it('validates review:run and normalizes path prefixes', async () => {
     const calls: unknown[] = [];
@@ -594,6 +637,14 @@ function stubServices(
       setVerdict: () => notWiredError,
       export: async () => notWired,
       onChanged: () => doNothingSync,
+    },
+    trace: {
+      run: async () => notWired,
+      cancel: () => notWiredError,
+      getTrust: async () => notWired,
+      setTrust: async () => notWired,
+      onStatus: () => doNothingSync,
+      dispose: doNothing,
     },
     github: {
       authStatus: async () => notWired,

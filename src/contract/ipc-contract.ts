@@ -442,6 +442,162 @@ export type FlowGraphResponse =
   | { readonly kind: 'graph'; readonly graph: FlowGraphView }
   | { readonly kind: 'failed'; readonly failure: FlowFailureKind; readonly message: string };
 
+/**
+ * Runs the tests covering the hunk around head line `line` (1-based) of `path` with execution
+ * tracing (ADR 0036, 0041). The answer only acknowledges the start; progress and outcome arrive as
+ * `trace:status` events. One probe is in flight per session: a second request is `refused`.
+ */
+export interface TraceRunRequest {
+  readonly sessionId: string;
+  /** Repository-relative head-side path with `/` separators. */
+  readonly path: string;
+  readonly line: number;
+  /** Vitest's `--testNamePattern`. */
+  readonly testNamePattern?: string;
+}
+
+export interface TraceRunStartedView {
+  readonly runId: string;
+}
+
+export interface TraceCancelRequest {
+  readonly sessionId: string;
+}
+
+export interface TraceCancelledView {
+  /** A probe was in flight and has been told to stop. */
+  readonly cancelled: boolean;
+}
+
+export interface TraceGetTrustRequest {
+  readonly sessionId: string;
+}
+
+export interface TraceSetTrustRequest {
+  readonly sessionId: string;
+  readonly trusted: boolean;
+}
+
+/**
+ * Whether the session's repository may run its own tests (ADR 0041). `repositoryPath` is the
+ * real path the approval is keyed by; `remoteUrl` the remote it was given for, when there is one.
+ */
+export interface TraceTrustView {
+  readonly trusted: boolean;
+  readonly repositoryPath: string;
+  readonly remoteUrl?: string;
+}
+
+/** A bounded one-line rendering of a runtime value. */
+export interface TraceValueView {
+  readonly type: string;
+  readonly preview: string;
+}
+
+export interface TracedFunctionView {
+  readonly index: number;
+  readonly name: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+interface TraceEntryBaseView {
+  readonly seq: number;
+  /** Index into the result's `functions`. */
+  readonly fn: number;
+  /** One-based head line. */
+  readonly line: number;
+  /** Call depth among traced functions, 0 for the outermost. */
+  readonly depth: number;
+  /** The construct's own lines are part of the hunk. */
+  readonly inHunk: boolean;
+  /** The source snippet: condition, case, loop header or statement. */
+  readonly label: string;
+}
+
+/** One step of an execution trace, in the order it happened. */
+export type TraceEntryView = TraceEntryBaseView &
+  (
+    | {
+        readonly kind: 'enter';
+        readonly args: readonly { readonly name: string; readonly value: TraceValueView }[];
+      }
+    | { readonly kind: 'branch'; readonly construct: 'if' | 'ternary'; readonly taken: boolean }
+    | {
+        readonly kind: 'branch';
+        readonly construct: 'switch' | 'catch';
+        readonly value: TraceValueView;
+      }
+    | { readonly kind: 'branch'; readonly construct: 'case' | 'default' }
+    | { readonly kind: 'loop'; readonly iterations: number }
+    | { readonly kind: 'return'; readonly value: TraceValueView; readonly implicit: boolean }
+    | {
+        readonly kind: 'throw';
+        readonly value: TraceValueView;
+        readonly propagated: boolean;
+      }
+  );
+
+export interface TraceTimelineView {
+  /** Repository-relative test file; empty for events outside any test. */
+  readonly file: string;
+  readonly titles: readonly string[];
+  readonly status: 'passed' | 'failed' | 'skipped' | 'unknown';
+  readonly failure?: string;
+  readonly durationMs?: number;
+  readonly entries: readonly TraceEntryView[];
+  /** Events the recorder dropped at its limits. */
+  readonly dropped: number;
+}
+
+/** What a probe traced: all lines are 1-based head lines of `path`. */
+export interface TraceResultView {
+  readonly path: string;
+  readonly headSha: string;
+  readonly testFiles: readonly string[];
+  readonly functions: readonly TracedFunctionView[];
+  readonly timelines: readonly TraceTimelineView[];
+  readonly durationMs: number;
+}
+
+export type TraceFailureKind =
+  /** The repository has not been approved to run its tests (nothing ran). */
+  | 'untrusted'
+  | 'no-tests-found'
+  /** Vitest is not installed in the repository's `node_modules`. */
+  | 'not-vitest'
+  | 'unsupported-language'
+  | 'no-function-at-line'
+  | 'file-unavailable'
+  | 'too-large'
+  | 'timeout'
+  | 'cancelled'
+  /** Tests ran and some failed; the trace is attached. */
+  | 'test-failed-with-trace'
+  | 'runner-failed';
+
+/**
+ * Pushed on `trace:status` for probes the renderer started: `running` once the tests are chosen,
+ * then `completed` or `failed`. A failed probe may still carry its trace (`test-failed-with-trace`).
+ */
+export type TraceStatusView = {
+  readonly sessionId: string;
+  readonly runId: string;
+  readonly path: string;
+  readonly line: number;
+} & (
+  | { readonly state: 'running'; readonly testFiles: readonly string[] }
+  | { readonly state: 'completed'; readonly result: TraceResultView }
+  | {
+      readonly state: 'failed';
+      readonly failure: TraceFailureKind;
+      readonly message: string;
+      readonly result?: TraceResultView;
+      /** For `untrusted`: the repository the approval would cover. */
+      readonly repositoryPath?: string;
+    }
+);
+
 /** How hard Claude Code thinks during a preliminary review (`--effort`, ADR 0019). */
 export type ReviewEffort = 'low' | 'medium' | 'high';
 
@@ -1237,6 +1393,22 @@ export interface InvokeChannelMap {
     readonly request: GetFlowGraphRequest;
     readonly response: IpcResult<FlowGraphResponse>;
   };
+  'trace:run': {
+    readonly request: TraceRunRequest;
+    readonly response: IpcResult<TraceRunStartedView>;
+  };
+  'trace:cancel': {
+    readonly request: TraceCancelRequest;
+    readonly response: IpcResult<TraceCancelledView>;
+  };
+  'trace:get-trust': {
+    readonly request: TraceGetTrustRequest;
+    readonly response: IpcResult<TraceTrustView>;
+  };
+  'trace:set-trust': {
+    readonly request: TraceSetTrustRequest;
+    readonly response: IpcResult<TraceTrustView>;
+  };
   'review:run': {
     readonly request: ReviewRunRequest;
     readonly response: IpcResult<ReviewRunHandleView>;
@@ -1354,6 +1526,7 @@ export interface EventChannelMap {
   'ura:changed': UraChangedView;
   'github:pr-updated': PullRequestUpdatedView;
   'github:ci-status': CiStatusChangedView;
+  'trace:status': TraceStatusView;
 }
 
 export type EventChannel = keyof EventChannelMap;
