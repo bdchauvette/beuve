@@ -1,0 +1,188 @@
+import { execFile } from 'node:child_process';
+import type { ExecFileException } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+
+import type { Logger } from '#pkg/logger/create-logger.ts';
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+
+import type { GitError } from './git-error.ts';
+
+/** One git invocation. `args` start at the subcommand; hardening options are prepended. */
+export interface GitRequest {
+  /** Absolute directory git runs in. */
+  readonly cwd: string;
+  readonly args: readonly string[];
+  /** Executable to run. Defaults to `git` on `PATH`. */
+  readonly gitBinary?: string;
+  /** Kill git after this long. Defaults to 30 s. */
+  readonly timeoutMs?: number;
+  /** Fail with `output-too-large` past this many bytes of stdout or stderr. Defaults to 64 MiB. */
+  readonly maxBufferBytes?: number;
+  readonly logger?: Logger;
+}
+
+const defaultTimeoutMs = 30_000;
+const defaultMaxBufferBytes = 64 * 1024 * 1024;
+
+/**
+ * Global options that make git's output predictable and keep repository-controlled config from
+ * running programs: no pager, literal pathspecs, unquoted UTF-8 paths, no colour, no fsmonitor
+ * or hooks, and standard `a/` `b/` diff prefixes.
+ */
+const hardeningArgs = [
+  '--no-pager',
+  '--literal-pathspecs',
+  '-c',
+  'core.quotepath=off',
+  '-c',
+  'core.fsmonitor=false',
+  '-c',
+  'core.hooksPath=/dev/null',
+  '-c',
+  'color.ui=false',
+  '-c',
+  'diff.noprefix=false',
+  '-c',
+  'diff.mnemonicPrefix=false',
+  '-c',
+  'diff.relative=false',
+];
+
+/**
+ * Runs git directly (never through a shell) and returns its stdout. Inherited `GIT_*` variables
+ * are dropped so the caller's environment can't redirect git to another repository, prompts and
+ * pagers are disabled, and messages are forced to the C locale so failures can be classified.
+ * Never rejects.
+ */
+export async function runGit(request: GitRequest): Promise<Result<string, GitError>> {
+  const invalid = validateRequest(request);
+  if (invalid !== undefined) {
+    return err(invalid);
+  }
+  const gitBinary = request.gitBinary ?? 'git';
+  const timeoutMs = request.timeoutMs ?? defaultTimeoutMs;
+  const maxBufferBytes = request.maxBufferBytes ?? defaultMaxBufferBytes;
+  const started = performance.now();
+  const outcome = await execute(gitBinary, [...hardeningArgs, ...request.args], {
+    cwd: request.cwd,
+    timeoutMs,
+    maxBufferBytes,
+  });
+  request.logger?.debug('git', {
+    args: request.args,
+    cwd: request.cwd,
+    durationMs: Math.round(performance.now() - started),
+    exitCode: outcome.error === null ? 0 : outcome.error.code,
+  });
+  return outcome.error === null
+    ? ok(outcome.stdout)
+    : err(await classifyFailure(outcome, { ...request, gitBinary, timeoutMs, maxBufferBytes }));
+}
+
+function validateRequest(request: GitRequest): GitError | undefined {
+  if (!path.isAbsolute(request.cwd)) {
+    return { kind: 'invalid-argument', argument: request.cwd, reason: 'cwd must be absolute' };
+  }
+  const withNul = [request.cwd, ...request.args].find((arg) => arg.includes('\0'));
+  return withNul === undefined
+    ? undefined
+    : { kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' };
+}
+
+interface ExecOutcome {
+  readonly error: ExecFileException | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+async function execute(
+  file: string,
+  args: readonly string[],
+  options: { readonly cwd: string; readonly timeoutMs: number; readonly maxBufferBytes: number },
+): Promise<ExecOutcome> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      file,
+      args,
+      {
+        cwd: options.cwd,
+        env: hardenedEnvironment(),
+        timeout: options.timeoutMs,
+        maxBuffer: options.maxBufferBytes,
+        encoding: 'utf8',
+        windowsHide: true,
+        shell: false,
+      },
+      (error, stdout, stderr): void => {
+        resolve({ error, stdout, stderr });
+      },
+    );
+    child.stdin?.end();
+  });
+}
+
+function hardenedEnvironment(): NodeJS.ProcessEnv {
+  const inherited = Object.entries(process.env).filter(
+    ([key]) => !key.toUpperCase().startsWith('GIT_'),
+  );
+  return {
+    ...Object.fromEntries(inherited),
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_PAGER: 'cat',
+    PAGER: 'cat',
+    GIT_OPTIONAL_LOCKS: '0',
+    GIT_NO_REPLACE_OBJECTS: '1',
+    LC_ALL: 'C',
+    LANGUAGE: 'C',
+  };
+}
+
+const notARepositoryPattern = /not a git repository/iu;
+const dubiousOwnershipPattern = /dubious ownership/iu;
+
+async function classifyFailure(
+  outcome: ExecOutcome,
+  request: Required<Omit<GitRequest, 'logger'>>,
+): Promise<GitError> {
+  const { error, stdout, stderr } = outcome;
+  const { args } = request;
+  const code = error?.code;
+  if (code === 'ENOENT') {
+    return (await isDirectory(request.cwd))
+      ? { kind: 'git-not-found', gitBinary: request.gitBinary }
+      : { kind: 'not-a-repository', path: request.cwd, stderr: 'directory does not exist' };
+  }
+  if (code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+    return { kind: 'output-too-large', args, maxBufferBytes: request.maxBufferBytes };
+  }
+  if (error?.killed === true) {
+    return { kind: 'timeout', args, timeoutMs: request.timeoutMs };
+  }
+  if (notARepositoryPattern.test(stderr)) {
+    return { kind: 'not-a-repository', path: request.cwd, stderr: stderr.trim() };
+  }
+  if (dubiousOwnershipPattern.test(stderr)) {
+    return { kind: 'unsafe-repository', path: request.cwd, stderr: stderr.trim() };
+  }
+  return {
+    kind: 'command-failed',
+    args,
+    exitCode: typeof code === 'number' ? code : undefined,
+    signal: error?.signal ?? undefined,
+    stdout,
+    stderr: stderr.trim(),
+  };
+}
+
+async function isDirectory(directory: string): Promise<boolean> {
+  try {
+    const stats = await stat(directory);
+    return stats.isDirectory();
+  } catch {
+    return false;
+  }
+}
