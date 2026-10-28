@@ -19,4 +19,6 @@ Template: [0000-template.md](0000-template.md)
 | [0011](0011-ipc-contract-and-mcp-transport.md)         | IPC contract layer and MCP transport                                | Accepted |
 | [0012](0012-checkpoint-base-and-review-composition.md) | Checkpoints record the reviewed base; main composes session and git | Accepted |
 | [0013](0013-test-helpers-in-testing-directories.md)    | Shared test helpers live in `testing/` directories                  | Accepted |
+| [0014](0014-tree-sitter-via-web-tree-sitter.md)        | Tree-sitter via web-tree-sitter                                     | Accepted |
+| [0015](0015-impactgate-metrics-and-syntax-seam.md)     | ImpactGate metrics and the syntax seam                              | Accepted |
 | [0018](0018-pierre-diffs-and-trees-integration.md)     | @pierre/diffs and @pierre/trees integration                         | Accepted |

@@ -1,0 +1,84 @@
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+import type { Result } from '#pkg/result/result.ts';
+
+import { assessImpact } from './assess-impact.ts';
+import { defaultImpactConfig } from './default-impact-config.ts';
+import type { ImpactConfig } from './default-impact-config.ts';
+import type { SourceMeasurement } from './function-measurement.ts';
+import type { ImpactSourceFile, MeasuredFile, ParseSource } from './impact-input.ts';
+import type { ImpactReport, SkipReason } from './impact-report.ts';
+import { measureFunctions } from './measure-functions.ts';
+import { rulesByLanguage } from './rules-by-language.ts';
+
+interface MeasuredSide {
+  readonly language: string;
+  readonly measurement: SourceMeasurement;
+}
+
+/**
+ * ImpactGate for a set of changed files (ADR 0015): parses both sides of each with `parse`,
+ * measures every function while its tree is alive, and assesses the change. Files in languages
+ * without rules, or that fail to parse, are reported as skipped rather than failing the check.
+ */
+export async function runImpactCheck(
+  files: readonly ImpactSourceFile[],
+  parse: ParseSource,
+  config: ImpactConfig = defaultImpactConfig,
+): Promise<ImpactReport> {
+  const measured = await Promise.all(files.map(async (file) => measureFile(file, parse)));
+  return assessImpact(measured, config);
+}
+
+async function measureFile(file: ImpactSourceFile, parse: ParseSource): Promise<MeasuredFile> {
+  const location =
+    file.previousPath === undefined
+      ? { path: file.path }
+      : { path: file.path, previousPath: file.previousPath };
+  const [base, head] = await Promise.all([
+    measureSide(file.previousPath ?? file.path, file.baseText, parse),
+    measureSide(file.path, file.headText, parse),
+  ]);
+  if (!base.ok) {
+    return { status: 'skipped', ...location, reason: base.error };
+  }
+  if (!head.ok) {
+    return { status: 'skipped', ...location, reason: head.error };
+  }
+  const language = head.value?.language ?? base.value?.language;
+  if (language === undefined) {
+    return { status: 'skipped', ...location, reason: 'no-source' };
+  }
+  return {
+    status: 'measured',
+    ...location,
+    language,
+    base: base.value?.measurement,
+    head: head.value?.measurement,
+    changedLines: file.changedLines,
+  };
+}
+
+async function measureSide(
+  path: string,
+  text: string | undefined,
+  parse: ParseSource,
+): Promise<Result<MeasuredSide | undefined, SkipReason>> {
+  if (text === undefined) {
+    return ok(undefined);
+  }
+  const parsed = await parse(path, text, (root, language): MeasuredSide | undefined => {
+    const rules = rulesByLanguage[language];
+    return rules === undefined
+      ? undefined
+      : { language, measurement: measureFunctions(root, rules) };
+  });
+  if (!parsed.ok) {
+    return err(toSkipReason(parsed.error.kind));
+  }
+  return parsed.value === undefined ? err('unsupported-language') : ok(parsed.value);
+}
+
+function toSkipReason(kind: string): SkipReason {
+  return kind === 'unsupported-language' || kind === 'too-large' ? kind : 'parse-failed';
+}
