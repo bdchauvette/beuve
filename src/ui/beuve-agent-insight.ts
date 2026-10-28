@@ -15,7 +15,7 @@ const promoteTitle =
  * severity, category, lines, confidence, title and a safe Markdown subset of its body. Dismissed
  * insights collapse to a one-line stub. Asks for status changes with `beuve-insight-status`
  * (`y`/`d` do the same from the diff stream) and reports clicks with `beuve-insight-focus`.
- * Light enough to render inside a `@pierre/diffs` annotation slot later (ADR 0018).
+ * The file card renders it in `@pierre/diffs` line annotation slots (ADR 0025).
  */
 @customElement('beuve-agent-insight')
 export class BeuveAgentInsight extends LitElement {

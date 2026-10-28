@@ -81,6 +81,17 @@ export default {
       to: { path: '/testing/' },
     },
     {
+      name: 'pierre-only-in-wrappers',
+      severity: 'error',
+      comment:
+        'Only beuve-file-card and beuve-radar-tree import @pierre/* (ADR 0018), so a library swap stays local; tests may.',
+      from: {
+        path: '^src/',
+        pathNot: ['^src/ui/beuve-(file-card|radar-tree)\\.ts$', '\\.test\\.ts$'],
+      },
+      to: { path: '^node_modules/@pierre/' },
+    },
+    {
       name: 'no-dev-deps-in-src',
       severity: 'error',
       comment: 'Application code may not use devDependencies (electron is provided at runtime).',

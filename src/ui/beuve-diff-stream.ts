@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 import type {
   AgentInsightView,
@@ -10,9 +11,11 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
+import type { BeuveFileCard, FilePairLoader } from './beuve-file-card.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
 import type { PeekState } from './peek-state.ts';
+import { stepReviewPosition } from './step-review-position.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /** A request to focus an insight from outside (a chat citation); `nonce` repeats a jump. */
@@ -21,13 +24,25 @@ export interface InsightJump {
   readonly nonce: number;
 }
 
+/** A request to show a file's card from outside (the radar tree); `nonce` repeats a jump. */
+export interface FileJump {
+  readonly path: string;
+  readonly nonce: number;
+}
+
+/** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
+const mountMargin = '1200px 0px';
+/** Cards farther away than this unmount theirs, which bounds the DOM of a long stream (ADR 0025). */
+const unmountMargin = '6000px 0px';
+
 /**
- * Zone 2: the diff stream. Shows the open session's review as file cards with a header naming the
- * review kind, ImpactGate banners and agent insights once they arrive. While the zone has focus,
- * `j`/`k` move between cards, `p` toggles the focused card's call-stack peek (Escape closes it),
- * `]`/`[` move between agent insights, and `y`/`d` promote or dismiss the focused one (again to
- * undo). Diff cards move to `@pierre/diffs` in Phase 2. Emits `beuve-mark-reviewed`,
- * `beuve-peek-request`, `beuve-peek-close` and `beuve-insight-status`; `beuve-app` does the IPC.
+ * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
+ * header naming the review kind, ImpactGate banners and agent insights once they arrive. Cards
+ * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, `j`/`k` step
+ * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
+ * it), `]`/`[` move between agent insights, and `y`/`d` promote or dismiss the focused one (again
+ * to undo). Emits `beuve-mark-reviewed`, `beuve-peek-request`, `beuve-peek-close` and
+ * `beuve-insight-status`; `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
@@ -157,13 +172,20 @@ export class BeuveDiffStream extends LitElement {
       this.toggleFocusedInsight(event.key === 'y' ? 'promoted' : 'dismissed');
       return;
     }
-    const step = { j: 1, k: -1 }[event.key];
-    const count = this.review?.files.length ?? 0;
-    if (step === undefined || count === 0) {
+    const step = ({ j: 1, k: -1 } as const)[event.key];
+    const files = this.review?.files ?? [];
+    if (step === undefined || files.length === 0) {
       return;
     }
     event.preventDefault();
-    this.activeIndex = Math.min(count - 1, Math.max(0, this.activeIndex + step));
+    const next = stepReviewPosition(
+      files.map((file) => file.hunks.length),
+      { file: this.activeIndex, hunk: this.activeHunk },
+      step,
+    );
+    this.activeIndex = next.file;
+    this.activeHunk = next.hunk;
+    void this.revealPosition();
   };
 
   private readonly onMarkClick = (): void => {
@@ -173,6 +195,30 @@ export class BeuveDiffStream extends LitElement {
   private readonly onInsightFocus = (event: CustomEvent<{ insightId: string }>): void => {
     this.focusInsight(event.detail.insightId);
   };
+
+  private readonly onNearViewport = (entries: IntersectionObserverEntry[]): void => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        (entry.target as BeuveFileCard).mounted = true;
+      }
+    }
+  };
+
+  private readonly onFarFromViewport = (entries: IntersectionObserverEntry[]): void => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) {
+        (entry.target as BeuveFileCard).mounted = false;
+      }
+    }
+  };
+
+  private observers:
+    | {
+        readonly root: Element;
+        readonly near: IntersectionObserver;
+        readonly far: IntersectionObserver;
+      }
+    | undefined;
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
 
@@ -189,14 +235,92 @@ export class BeuveDiffStream extends LitElement {
   /** Agent insights for `review`'s head, every status. */
   @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
   @property({ attribute: false }) accessor insightJump: InsightJump | undefined;
+  @property({ attribute: false }) accessor fileJump: FileJump | undefined;
+  /** Backs hunk expansion in the cards. */
+  @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
 
   @state() accessor activeIndex = 0;
+  /** The active card's hunk `j`/`k` stopped at; `-1` for its header. */
+  @state() accessor activeHunk = -1;
   @state() accessor focusedInsightId: string | undefined;
 
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-insight-focus', this.onInsightFocus as EventListener);
+    this.addController({
+      hostDisconnected: (): void => {
+        this.disconnectObservers();
+      },
+    });
+  }
+
+  private cards(): NodeListOf<BeuveFileCard> {
+    return this.renderRoot.querySelectorAll('beuve-file-card');
+  }
+
+  /** Scrolls to the active hunk, or the active card's header. */
+  private async revealPosition(): Promise<void> {
+    await this.updateComplete;
+    const card = this.cards()[this.activeIndex];
+    if (card === undefined) {
+      return;
+    }
+    if (this.activeHunk === -1) {
+      card.scrollIntoView({ block: 'start' });
+      return;
+    }
+    await card.revealHunk(this.activeHunk);
+  }
+
+  /** A click on a card makes it active, at its header unless it already was. */
+  private activate(index: number): void {
+    if (index === this.activeIndex) {
+      return;
+    }
+    this.activeIndex = index;
+    this.activeHunk = -1;
+  }
+
+  private focusFile(path: string): void {
+    const index = this.review?.files.findIndex((file) => file.path === path) ?? -1;
+    if (index === -1) {
+      return;
+    }
+    this.activeIndex = index;
+    this.activeHunk = -1;
+    void this.revealPosition();
+  }
+
+  /**
+   * Mounts cards near the viewport and unmounts those far from it. Cards are observed once they
+   * have rendered their placeholders, so the first pass sees real heights.
+   */
+  private async observeCards(): Promise<void> {
+    const root = this.renderRoot.querySelector('.body');
+    if (root === null) {
+      return;
+    }
+    if (this.observers?.root !== root) {
+      this.disconnectObservers();
+      this.observers = {
+        root,
+        near: new IntersectionObserver(this.onNearViewport, { root, rootMargin: mountMargin }),
+        far: new IntersectionObserver(this.onFarFromViewport, { root, rootMargin: unmountMargin }),
+      };
+    }
+    const cards = [...this.cards()];
+    await Promise.all(cards.map(async (card) => card.updateComplete));
+    for (const card of cards) {
+      this.observers.near.observe(card);
+      this.observers.far.observe(card);
+    }
+  }
+
+  private disconnectObservers(): void {
+    this.observers?.near.disconnect();
+    this.observers?.far.disconnect();
+    this.observers = undefined;
   }
 
   /** The insights shown in the stream, in file order and then by line. */
@@ -243,12 +367,13 @@ export class BeuveDiffStream extends LitElement {
     }
     this.focusedInsightId = insight.id;
     this.activeIndex = fileIndex;
+    this.activeHunk = -1;
     void this.revealInsight(fileIndex, insight.id);
   }
 
   private async revealInsight(fileIndex: number, insightId: string): Promise<void> {
     await this.updateComplete;
-    await this.renderRoot.querySelectorAll('beuve-file-card')[fileIndex]?.revealInsight(insightId);
+    await this.cards()[fileIndex]?.revealInsight(insightId);
   }
 
   private toggleFocusedInsight(status: Exclude<InsightStatusView, 'pending'>): void {
@@ -321,10 +446,14 @@ export class BeuveDiffStream extends LitElement {
           isUpToDate
             ? html`<p class="empty">Everything up to the head has been reviewed.</p>`
             : html`<div class="cards">
-                ${review.files.map(
+                ${repeat(
+                  review.files,
+                  (file) => file.path,
                   (file, index) =>
                     html`<beuve-file-card
                       .file=${file}
+                      .loadFilePair=${this.loadFilePair}
+                      .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
                       .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
                       .findings=${this.impact?.findings ?? []}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
@@ -332,7 +461,7 @@ export class BeuveDiffStream extends LitElement {
                       .focusedInsightId=${this.focusedInsightId}
                       ?active=${index === this.activeIndex}
                       @click=${(): void => {
-                        this.activeIndex = index;
+                        this.activate(index);
                       }}
                     ></beuve-file-card>`,
                 )}
@@ -366,6 +495,7 @@ export class BeuveDiffStream extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('review')) {
       this.activeIndex = 0;
+      this.activeHunk = -1;
     }
     if (!changed.has('review') && !changed.has('insights')) {
       return;
@@ -375,15 +505,17 @@ export class BeuveDiffStream extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has('review')) {
+      void this.observeCards();
+    }
     const jump = this.insightJump;
     if (jump !== undefined && changed.has('insightJump')) {
       this.focusInsight(jump.insightId);
       return;
     }
-    if (changed.has('activeIndex') && !changed.has('review') && !changed.has('focusedInsightId')) {
-      this.renderRoot
-        .querySelectorAll('beuve-file-card')
-        [this.activeIndex]?.scrollIntoView({ block: 'start' });
+    const fileJump = this.fileJump;
+    if (fileJump !== undefined && changed.has('fileJump')) {
+      this.focusFile(fileJump.path);
     }
   }
 }
