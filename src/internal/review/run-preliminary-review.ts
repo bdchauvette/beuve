@@ -6,6 +6,7 @@ import type { AgentInsight, AgentInsightId, ReviewRun, ReviewRunId } from './age
 import { buildReviewPrompt } from './build-review-prompt.ts';
 import type { PromptBudget, PromptReport } from './build-review-prompt.ts';
 import { defaultPromptBudget } from './default-prompt-budget.ts';
+import { normalizePathScope } from './normalize-path-scope.ts';
 import { insightOutputSchema } from './insight-output-schema.ts';
 import type { ModelInsight } from './insight-output-schema.ts';
 import type { ReviewInput } from './review-input.ts';
@@ -48,7 +49,7 @@ const noModel = 'none';
  * One preliminary agentic review (spec 5B): builds the prompt, asks the model, validates its
  * insights against the diff and stamps them as pending insights of a new run. Pure apart from the
  * model port and the injected clock and ids. Scheduling, cancellation when the head moves, and
- * one run per (session, head) are main's job ({@link reviewRunKey}, `findReviewRun`).
+ * one run per (session, head, path scope) are main's job ({@link reviewRunKey}, `findReviewRun`).
  */
 export async function runPreliminaryReview(
   input: ReviewInput,
@@ -104,6 +105,7 @@ function assemble(
     id: deps.ids() as ReviewRunId,
     sessionId: input.sessionId,
     scope: scope.kind,
+    pathScope: normalizePathScope(input.pathScope ?? []),
     baseSha: scope.baseSha,
     headSha: scope.headSha,
     fromHeadSha: scope.kind === 'interdiff' ? scope.fromHeadSha : undefined,

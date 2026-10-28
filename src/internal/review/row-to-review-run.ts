@@ -8,6 +8,7 @@ import type { ReviewRun, ReviewRunId, ReviewStoreError, SessionId } from './agen
 import { isCommitSha } from './is-commit-sha.ts';
 import { isIsoTimestamp } from './is-iso-timestamp.ts';
 import { isUuid } from './is-uuid.ts';
+import { parsePathScope } from './parse-path-scope.ts';
 
 type CorruptRow = Extract<ReviewStoreError, { kind: 'corrupt-row' }>;
 
@@ -15,7 +16,7 @@ type CorruptRow = Extract<ReviewStoreError, { kind: 'corrupt-row' }>;
 export function rowToReviewRun(row: Record<string, SQLOutputValue>): Result<ReviewRun, CorruptRow> {
   const corrupt = (reason: string): Result<ReviewRun, CorruptRow> =>
     err({ kind: 'corrupt-row', table: 'review_runs', id: String(row['id']), reason });
-  const { id, session_id, scope, base_sha, head_sha, from_head_sha, model } = row;
+  const { id, session_id, scope, path_scope, base_sha, head_sha, from_head_sha, model } = row;
   const { insight_count, dropped_count, created_at } = row;
 
   if (!isUuid(id) || !isUuid(session_id)) {
@@ -23,6 +24,10 @@ export function rowToReviewRun(row: Record<string, SQLOutputValue>): Result<Revi
   }
   if (scope !== 'full' && scope !== 'interdiff') {
     return corrupt('scope is not full or interdiff');
+  }
+  const pathScope = parsePathScope(path_scope);
+  if (pathScope === undefined) {
+    return corrupt('path_scope is not a JSON array of strings');
   }
   if (!isCommitSha(base_sha) || !isCommitSha(head_sha)) {
     return corrupt('base_sha or head_sha is not a commit id');
@@ -44,6 +49,7 @@ export function rowToReviewRun(row: Record<string, SQLOutputValue>): Result<Revi
     id: id as ReviewRunId,
     sessionId: session_id as SessionId,
     scope,
+    pathScope,
     baseSha: base_sha,
     headSha: head_sha,
     fromHeadSha,

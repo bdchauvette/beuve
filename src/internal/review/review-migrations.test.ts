@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SessionId } from './agent-insight.ts';
+import { openDatabase } from '#pkg/sqlite/open-database.ts';
+import { runMigrations } from '#pkg/sqlite/run-migrations.ts';
+
 import { listAgentInsights } from './list-agent-insights.ts';
+import { reviewMigrations } from './review-migrations.ts';
 import { createReviewTestDatabase } from './testing/create-review-test-database.ts';
 
 const session = '11111111-1111-4111-8111-111111111111';
@@ -10,6 +14,7 @@ const sha = 'a'.repeat(40);
 const at = '2026-10-28T12:00:00.000Z';
 
 const checkFailed = /CHECK/u;
+const uniqueFailed = /UNIQUE/u;
 const foreignKeyFailed = /FOREIGN KEY/u;
 
 /** Column values as SQL literals. */
@@ -121,5 +126,47 @@ describe('reviewMigrations', () => {
         reason: 'severity or category is unknown',
       },
     });
+  });
+
+  it('migrates stored runs and insights to whole-change runs, keeping the foreign keys', () => {
+    const db = openDatabase(':memory:');
+    const stub = { id: 'test-0000', up: 'CREATE TABLE sessions (id TEXT PRIMARY KEY) STRICT;' };
+    const [first, second] = reviewMigrations;
+    runMigrations(db, [stub, first as never]);
+    db.exec(`INSERT INTO sessions (id) VALUES ('${session}');`);
+    db.exec(insertSql('review_runs', { ...validRun }));
+    db.exec(insertSql('agent_insights', { ...validInsight, status: "'dismissed'" }));
+
+    expect(runMigrations(db, [stub, first as never, second as never])).toEqual([
+      'review-0002-run-path-scope',
+    ]);
+
+    expect(db.prepare('SELECT id, path_scope FROM review_runs;').all()).toEqual([
+      { id: run, path_scope: '[]' },
+    ]);
+    expect(db.prepare('SELECT run_id, status FROM agent_insights;').all()).toEqual([
+      { run_id: run, status: 'dismissed' },
+    ]);
+    db.exec(
+      insertSql('review_runs', {
+        ...validRun,
+        id: "'99999999-9999-4999-8999-999999999999'",
+        path_scope: `'["src"]'`,
+      }),
+    );
+    expect(() => {
+      db.exec(
+        insertSql('review_runs', {
+          ...validRun,
+          id: "'88888888-8888-4888-8888-888888888888'",
+        }),
+      );
+    }).toThrow(uniqueFailed);
+    expect(() => {
+      db.exec(insertSql('review_runs', { ...validRun, path_scope: "'{}'" }));
+    }).toThrow(checkFailed);
+    db.prepare('DELETE FROM review_runs WHERE id = ?;').run(run);
+    expect(db.prepare('SELECT count(*) AS n FROM agent_insights;').get()).toEqual({ n: 0 });
+    expect(db.prepare('PRAGMA foreign_key_check;').all()).toEqual([]);
   });
 });

@@ -11,6 +11,7 @@ import type {
 import { findReviewRun } from './find-review-run.ts';
 import { insertReviewRun } from './insert-review-run.ts';
 import { listAgentInsights } from './list-agent-insights.ts';
+import { listReviewRuns } from './list-review-runs.ts';
 import { setAgentInsightStatus } from './set-agent-insight-status.ts';
 import { createReviewTestDatabase } from './testing/create-review-test-database.ts';
 
@@ -22,6 +23,7 @@ const run: ReviewRun = {
   id: '22222222-2222-4222-8222-222222222222' as ReviewRunId,
   sessionId,
   scope: 'interdiff',
+  pathScope: [],
   baseSha: 'b'.repeat(40) as CommitSha,
   headSha: head,
   fromHeadSha: 'd'.repeat(40) as CommitSha,
@@ -74,15 +76,64 @@ describe('insertReviewRun', () => {
     expect(findReviewRun(db, sessionId, head)).toEqual({ ok: true, value: full });
   });
 
-  it('allows one run per session and head, atomically', () => {
+  it('allows one run per session, head and path scope, atomically', () => {
     const db = createReviewTestDatabase([sessionId]);
     insertReviewRun(db, run, [first]);
     const again = { ...run, id: '55555555-5555-4555-8555-555555555555' as ReviewRunId };
     expect(insertReviewRun(db, again, [])).toEqual({
       ok: false,
-      error: { kind: 'duplicate-run', sessionId, headSha: head },
+      error: { kind: 'duplicate-run', sessionId, headSha: head, pathScope: [] },
     });
     expect(listAgentInsights(db, sessionId, head)).toEqual({ ok: true, value: [first] });
+  });
+
+  it('stores runs with different path scopes side by side, finding each by its scope', () => {
+    const db = createReviewTestDatabase([sessionId]);
+    const scoped: ReviewRun = {
+      ...run,
+      id: '55555555-5555-4555-8555-555555555555' as ReviewRunId,
+      pathScope: ['src/a.ts', 'src/z'],
+    };
+    insertReviewRun(db, run, []);
+    expect(insertReviewRun(db, scoped, [])).toEqual({ ok: true, value: undefined });
+    expect(findReviewRun(db, sessionId, head, ['src/z/', 'src/a.ts', './src/a.ts'])).toEqual({
+      ok: true,
+      value: scoped,
+    });
+    expect(findReviewRun(db, sessionId, head, [])).toEqual({ ok: true, value: run });
+    expect(findReviewRun(db, sessionId, head, ['src/a.ts'])).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(listReviewRuns(db, sessionId, head)).toEqual({ ok: true, value: [scoped, run] });
+  });
+
+  it('lists the insights of every run at a head once, the newest run winning', () => {
+    const db = createReviewTestDatabase([sessionId]);
+    const scoped: ReviewRun = {
+      ...run,
+      id: '55555555-5555-4555-8555-555555555555' as ReviewRunId,
+      pathScope: ['src/a.ts'],
+      createdAt: '2026-10-28T13:00:00.000Z',
+    };
+    const repeat: AgentInsight = {
+      ...first,
+      id: '66666666-6666-4666-8666-666666666666' as AgentInsightId,
+      runId: scoped.id,
+      title: 'path  traversal!',
+      createdAt: scoped.createdAt,
+    };
+    const other: AgentInsight = {
+      ...repeat,
+      id: '77777777-7777-4777-8777-777777777777' as AgentInsightId,
+      title: 'Something else',
+      lineStart: 1,
+      lineEnd: 1,
+    };
+    insertReviewRun(db, run, [second, first]);
+    insertReviewRun(db, scoped, [repeat, other]);
+    const listed = listAgentInsights(db, sessionId, head);
+    expect(listed).toEqual({ ok: true, value: [other, repeat, second] });
   });
 
   it('rejects unknown sessions and rolls back the run when an insight is invalid', () => {

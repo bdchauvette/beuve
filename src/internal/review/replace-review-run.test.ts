@@ -22,6 +22,7 @@ function run(id: string): ReviewRun {
   return {
     id: id as ReviewRunId,
     sessionId,
+    pathScope: [],
     scope: 'full',
     baseSha: 'b'.repeat(40) as CommitSha,
     headSha: head,
@@ -60,13 +61,50 @@ const oldInsight = insight('44444444-4444-4444-8444-444444444444', old);
 const nextInsight = insight('55555555-5555-4555-8555-555555555555', next);
 
 describe('replaceReviewRun', () => {
-  it('replaces the stored run for the head and drops its insights and statuses', () => {
+  it('replaces the stored run for the head and its insights', () => {
     const db = createReviewTestDatabase([sessionId]);
     insertReviewRun(db, old, [oldInsight]);
     setAgentInsightStatus(db, oldInsight.id, 'dismissed');
     expect(replaceReviewRun(db, next, [nextInsight])).toEqual({ ok: true, value: true });
     expect(findReviewRun(db, sessionId, head)).toEqual({ ok: true, value: next });
-    expect(listAgentInsights(db, sessionId, head)).toEqual({ ok: true, value: [nextInsight] });
+    expect(listAgentInsights(db, sessionId, head)).toEqual({
+      ok: true,
+      value: [{ ...nextInsight, status: 'dismissed' }],
+    });
+  });
+
+  it('replaces only the run with the same path scope', () => {
+    const db = createReviewTestDatabase([sessionId]);
+    const scoped: ReviewRun = {
+      ...run('66666666-6666-4666-8666-666666666666'),
+      pathScope: ['src'],
+    };
+    insertReviewRun(db, old, []);
+    insertReviewRun(db, scoped, []);
+    expect(replaceReviewRun(db, next, [])).toEqual({ ok: true, value: true });
+    expect(findReviewRun(db, sessionId, head, ['src'])).toEqual({ ok: true, value: scoped });
+    expect(findReviewRun(db, sessionId, head)).toEqual({ ok: true, value: next });
+  });
+
+  it('carries promoted and dismissed statuses over to matching new insights', () => {
+    const db = createReviewTestDatabase([sessionId]);
+    insertReviewRun(db, old, [oldInsight]);
+    setAgentInsightStatus(db, oldInsight.id, 'dismissed');
+    const reworded = { ...nextInsight, title: 'Empty input!' };
+    replaceReviewRun(db, next, [reworded]);
+    expect(listAgentInsights(db, sessionId, head)).toEqual({
+      ok: true,
+      value: [{ ...reworded, status: 'dismissed' }],
+    });
+  });
+
+  it('does not carry a status over to an insight that is not the same observation', () => {
+    const db = createReviewTestDatabase([sessionId]);
+    insertReviewRun(db, old, [oldInsight]);
+    setAgentInsightStatus(db, oldInsight.id, 'promoted');
+    const elsewhere = { ...nextInsight, lineStart: 30, lineEnd: 31 };
+    replaceReviewRun(db, next, [elsewhere]);
+    expect(listAgentInsights(db, sessionId, head)).toEqual({ ok: true, value: [elsewhere] });
   });
 
   it('inserts when there is nothing to replace', () => {

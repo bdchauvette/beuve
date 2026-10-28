@@ -22,6 +22,8 @@ import { createClaudeCodeModel } from '#internal/review/create-claude-code-model
 import { findReviewRun } from '#internal/review/find-review-run.ts';
 import { insertReviewRun } from '#internal/review/insert-review-run.ts';
 import { listAgentInsights } from '#internal/review/list-agent-insights.ts';
+import { listReviewRuns } from '#internal/review/list-review-runs.ts';
+import { normalizePathScope } from '#internal/review/normalize-path-scope.ts';
 import { replaceReviewRun } from '#internal/review/replace-review-run.ts';
 import type { ModelProgress, ReviewModel } from '#internal/review/review-model.ts';
 import type { ClaudeCodeModelOptions } from '#internal/review/create-claude-code-model.ts';
@@ -87,15 +89,18 @@ interface Job {
   readonly runId: string;
   readonly sessionId: string;
   readonly headSha: string;
+  /** The normalized path prefixes the run is limited to; `[]` is the whole change. */
+  readonly pathScope: readonly string[];
   readonly controller: AbortController;
   done: Promise<void>;
 }
 
 /**
  * Runs the preliminary review in the background (ADR 0019 recipe, ADR 0022 lifecycle): the head is
- * refreshed up front so a run is keyed by (session, head); a stored run is reused unless `fresh`,
- * an in-flight one is joined, and a run whose head moves, that a fresh run supersedes, or that is
- * running when beuve quits is aborted. Each run builds the same diff `session:get-review` shows,
+ * refreshed up front so a run is keyed by (session, head, path scope); a stored run for that key is
+ * reused unless `fresh`, an in-flight run with the same key is joined, and a run whose head moves,
+ * that a fresh or differently scoped request supersedes (one run in flight per session), or that
+ * is running when beuve quits is aborted. Each run builds the same diff `session:get-review` shows,
  * adds the cached ImpactGate findings, checks the head out (ADR 0020), asks Claude Code there and
  * stores the validated insights.
  */
@@ -195,7 +200,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
         message: 'Everything up to the head is marked reviewed: there is nothing to review.',
       });
     }
-    const pathPrefixes = request.pathPrefixes ?? [];
+    const pathPrefixes = job.pathScope;
     const impactView = await impact.getImpact({ sessionId: job.sessionId });
     const findings =
       impactView.ok && impactView.value.headSha === job.headSha
@@ -286,11 +291,17 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
     );
   };
 
-  const start = (sessionId: string, headSha: string, request: ReviewRunRequest): Job => {
+  const start = (
+    sessionId: string,
+    headSha: string,
+    pathScope: readonly string[],
+    request: ReviewRunRequest,
+  ): Job => {
     const job: Job = {
       runId: context.deps.newId(),
       sessionId,
       headSha,
+      pathScope,
       controller: new AbortController(),
       done: Promise.resolve(),
     };
@@ -327,12 +338,17 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
       }
       const { sessionId, headSha } = head.value;
       observeHead(sessionId, headSha);
+      const pathScope = normalizePathScope(request.pathPrefixes ?? []);
       const active = jobs.get(sessionId);
-      if (active !== undefined && request.fresh !== true) {
+      if (
+        active !== undefined &&
+        request.fresh !== true &&
+        hasSameScope(active.pathScope, pathScope)
+      ) {
         return ok({ status: 'attached', ...identify(active) });
       }
       if (request.fresh !== true) {
-        const stored = findReviewRun(db, sessionId as SessionId, headSha as CommitSha);
+        const stored = findReviewRun(db, sessionId as SessionId, headSha as CommitSha, pathScope);
         if (!stored.ok) {
           return corrupt(context, stored.error);
         }
@@ -349,7 +365,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
       if (active !== undefined) {
         abort(active, 'superseded');
       }
-      const job = start(sessionId, headSha, request);
+      const job = start(sessionId, headSha, pathScope, request);
       return ok({ status: 'started', ...identify(job) });
     },
 
@@ -364,15 +380,16 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
       if (!insights.ok) {
         return corrupt(context, insights.error);
       }
-      const stored = findReviewRun(db, sessionId as SessionId, headSha as CommitSha);
-      if (!stored.ok) {
-        return corrupt(context, stored.error);
+      const runs = listReviewRuns(db, sessionId as SessionId, headSha as CommitSha);
+      if (!runs.ok) {
+        return corrupt(context, runs.error);
       }
+      const [newest] = runs.value;
       const active = jobs.get(sessionId);
       return ok({
         sessionId,
         headSha,
-        ...(stored.value !== undefined && { run: toReviewRunSummary(stored.value) }),
+        ...(newest !== undefined && { run: toReviewRunSummary(newest) }),
         ...(active?.headSha === headSha && { activeRunId: active.runId }),
         insights: insights.value.map((insight) => toAgentInsightView(insight)),
       });
@@ -418,6 +435,10 @@ async function isExecutable(file: string): Promise<boolean> {
 function withDirectory(directory: string, searchPath = ''): string {
   const entries = searchPath.split(path.delimiter).filter((entry) => entry !== '');
   return [directory, ...entries.filter((entry) => entry !== directory)].join(path.delimiter);
+}
+
+function hasSameScope(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((prefix, index) => prefix === right[index]);
 }
 
 function identify(job: Job): { runId: string; sessionId: string; headSha: string } {

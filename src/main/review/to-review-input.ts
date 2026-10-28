@@ -9,7 +9,7 @@ export interface ReviewInputParts {
   /** The diff `session:get-review` shows; must not be `up-to-date`. */
   readonly diff: ReviewDiff;
   readonly worktreePath: string;
-  /** Normalized prefixes; empty means the whole diff. */
+  /** Normalized with `normalizePathScope`; empty means the whole diff. */
   readonly pathPrefixes: readonly string[];
   /** The cached ImpactGate findings for the same diff, if they were computed. */
   readonly impactFindings: readonly ImpactFindingView[] | undefined;
@@ -43,6 +43,7 @@ export function toReviewInput(parts: ReviewInputParts): ReviewInput {
     scope: toScope(diff, headSha),
     worktreePath: parts.worktreePath,
     files,
+    pathScope: pathPrefixes,
     ...(parts.impactFindings !== undefined && { impactFindings: findings }),
   };
 }

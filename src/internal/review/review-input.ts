@@ -11,6 +11,8 @@ export interface ReviewInput {
   readonly worktreePath: string;
   /** In diff order. */
   readonly files: readonly ReviewFile[];
+  /** The path prefixes the review is limited to, as `normalizePathScope` returns them; default `[]`. */
+  readonly pathScope?: readonly string[];
   /** ImpactGate findings for the head, if computed. */
   readonly impactFindings?: readonly ReviewImpactFinding[];
   /** The change's stated purpose: a PR description or the coding agent's prompt. Untrusted text. */

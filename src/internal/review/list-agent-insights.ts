@@ -4,29 +4,32 @@ import { ok } from '#pkg/result/ok.ts';
 import type { Result } from '#pkg/result/result.ts';
 
 import type { AgentInsight, CommitSha, ReviewStoreError, SessionId } from './agent-insight.ts';
-import { rowToAgentInsight } from './row-to-agent-insight.ts';
+import { dedupeInsights } from './dedupe-insights.ts';
+import { selectHeadInsights } from './select-head-insights.ts';
 
-/** A session's insights for one head, every status, ordered by path and line. */
+/**
+ * A session's insights for one head, every status, from all of the head's runs (ADR 0024). The
+ * same observation found by overlapping runs appears once, as the newest run found it; the result
+ * is ordered by path and line.
+ */
 export function listAgentInsights(
   db: DatabaseSync,
   sessionId: SessionId,
   headSha: CommitSha,
 ): Result<AgentInsight[], Extract<ReviewStoreError, { kind: 'corrupt-row' }>> {
-  const rows = db
-    .prepare(
-      `SELECT i.*, r.model AS model
-         FROM agent_insights i JOIN review_runs r ON r.id = i.run_id
-        WHERE i.session_id = ? AND i.head_sha = ?
-        ORDER BY i.path, i.line_start, i.line_end, i.rowid;`,
-    )
-    .all(sessionId, headSha);
-  const insights: AgentInsight[] = [];
-  for (const row of rows) {
-    const insight = rowToAgentInsight(row);
-    if (!insight.ok) {
-      return insight;
-    }
-    insights.push(insight.value);
+  const all = selectHeadInsights(db, sessionId, headSha);
+  if (!all.ok) {
+    return all;
   }
-  return ok(insights);
+  const sorted = dedupeInsights(all.value).toSorted(
+    (a, b) => compareText(a.path, b.path) || a.lineStart - b.lineStart || a.lineEnd - b.lineEnd,
+  );
+  return ok(sorted);
+}
+
+function compareText(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
 }

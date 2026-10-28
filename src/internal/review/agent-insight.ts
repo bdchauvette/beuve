@@ -46,13 +46,19 @@ export interface AgentInsight {
 }
 
 /**
- * One completed preliminary review of a session at a head. At most one per (session, head):
- * main checks {@link findReviewRun} before scheduling and {@link insertReviewRun} enforces it.
+ * One completed preliminary review of a session at a head, limited to a path scope. At most one
+ * per (session, head, path scope): main checks {@link findReviewRun} before scheduling and
+ * {@link insertReviewRun} enforces it (ADR 0024).
  */
 export interface ReviewRun {
   readonly id: ReviewRunId;
   readonly sessionId: SessionId;
   readonly scope: 'full' | 'interdiff';
+  /**
+   * The normalized, sorted path prefixes the run was limited to (`normalizePathScope`); `[]` is
+   * the whole change. Part of the run's identity.
+   */
+  readonly pathScope: readonly string[];
   /** The fork point (merge-base) the reviewed diff was taken against. */
   readonly baseSha: CommitSha;
   readonly headSha: CommitSha;
@@ -68,7 +74,12 @@ export interface ReviewRun {
 /** Expected failures of the review domain's persistence. */
 export type ReviewStoreError =
   | { readonly kind: 'session-not-found'; readonly sessionId: SessionId }
-  | { readonly kind: 'duplicate-run'; readonly sessionId: SessionId; readonly headSha: CommitSha }
+  | {
+      readonly kind: 'duplicate-run';
+      readonly sessionId: SessionId;
+      readonly headSha: CommitSha;
+      readonly pathScope: readonly string[];
+    }
   | { readonly kind: 'insight-not-found'; readonly id: AgentInsightId }
   | {
       readonly kind: 'corrupt-row';

@@ -363,9 +363,9 @@ describe('createMainServices (integration: preliminary review with a fake claude
     return { sessionId: id };
   };
 
-  const scripted = (insights: readonly unknown[], delayMs = 0): ClaudeCodeSettings => {
+  const scripted = (delayMs = 0): ClaudeCodeSettings => {
     const file = path.join(repo.scratch(), 'review.json');
-    writeFileSync(file, JSON.stringify({ insights, delayMs }));
+    writeFileSync(file, JSON.stringify({ insights: reviewInsights, delayMs }));
     return { command: process.execPath, leadingArgs: [script, 'review', file] };
   };
 
@@ -383,7 +383,7 @@ describe('createMainServices (integration: preliminary review with a fake claude
   };
 
   it('runs, stores and lists insights; reuses, joins and freshly reruns the run for a head', async () => {
-    const claude = scripted(reviewInsights, 150);
+    const claude = scripted(150);
     const { sessionId } = await start(claude);
     const review = must(services).review;
     const head = repo.git('rev-parse', 'feature');
@@ -435,12 +435,33 @@ describe('createMainServices (integration: preliminary review with a fake claude
       }),
     ).toMatchObject({ ok: false, error: { code: 'not-found' } });
 
-    const reused = value(await review.run({ sessionId, pathPrefixes: ['feature.rs'] }));
-    expect(reused).toMatchObject({
+    const plain = value(await review.run({ sessionId }));
+    expect(plain).toMatchObject({
       status: 'reused',
       summary: { reviewRunId: done.kind === 'completed' ? done.summary.reviewRunId : '' },
     });
     expect(calls(claude)).toHaveLength(1);
+
+    const scoped = value(await review.run({ sessionId, pathPrefixes: ['./feature.rs/'] }));
+    expect(scoped.status).toBe('started');
+    expect(scoped.runId).not.toBe(first.runId);
+    const scopedDone = await finished(scoped.runId);
+    expect(scopedDone).toMatchObject({
+      kind: 'completed',
+      summary: { insightCount: 1, fileCount: 1, pathPrefixes: ['feature.rs'] },
+    });
+    expect(calls(claude)).toHaveLength(2);
+    expect(value(await review.run({ sessionId, pathPrefixes: ['feature.rs'] })).status).toBe(
+      'reused',
+    );
+    expect(value(await review.run({ sessionId })).status).toBe('reused');
+    expect(calls(claude)).toHaveLength(2);
+    const both = value(await review.listInsights({ sessionId }));
+    expect(both.insights.map((item) => [item.path, item.status])).toEqual([
+      ['app.rs', 'dismissed'],
+      ['feature.rs', 'pending'],
+    ]);
+    expect(both.run?.reviewRunId).toBe(storedId(scopedDone));
 
     const fresh = value(
       await review.run({ sessionId, fresh: true, pathPrefixes: ['feature.rs'], effort: 'low' }),
@@ -450,9 +471,10 @@ describe('createMainServices (integration: preliminary review with a fake claude
       kind: 'completed',
       summary: { insightCount: 1, fileCount: 1, pathPrefixes: ['feature.rs'] },
     });
-    expect(calls(claude)[1]?.args).toContain('--effort=low');
+    expect(calls(claude)[2]?.args).toContain('--effort=low');
     const rerun = value(await review.listInsights({ sessionId }));
     expect(rerun.insights.map((insight) => [insight.path, insight.status])).toEqual([
+      ['app.rs', 'dismissed'],
       ['feature.rs', 'pending'],
     ]);
 
@@ -461,6 +483,72 @@ describe('createMainServices (integration: preliminary review with a fake claude
       kind: 'failed',
       error: { code: 'nothing-to-review' },
     });
+  });
+
+  it('keeps a plain and a scoped review of one head apart, and joins only the same scope', async () => {
+    const claude = scripted(150);
+    const { sessionId } = await start(claude);
+    const review = must(services).review;
+
+    const scoped = value(await review.run({ sessionId, pathPrefixes: ['feature.rs'] }));
+    expect(scoped.status).toBe('started');
+    expect(value(await review.run({ sessionId, pathPrefixes: ['./feature.rs'] }))).toEqual({
+      ...scoped,
+      status: 'attached',
+    });
+    const plain = value(await review.run({ sessionId }));
+    expect(plain.status).toBe('started');
+    expect(plain.runId).not.toBe(scoped.runId);
+    expect(await finished(scoped.runId)).toMatchObject({
+      kind: 'failed',
+      error: { code: 'cancelled', reason: 'superseded' },
+    });
+    expect(await finished(plain.runId)).toMatchObject({
+      kind: 'completed',
+      summary: { insightCount: 2, fileCount: 2 },
+    });
+    expect(value(await review.run({ sessionId })).status).toBe('reused');
+    expect(value(await review.run({ sessionId, pathPrefixes: ['feature.rs'] })).status).toBe(
+      'started',
+    );
+    await finished(events.findLast((event) => event.kind === 'started')?.runId ?? 'none');
+  });
+
+  it('reuses a plain review for the next plain review without calling Claude Code again', async () => {
+    const claude = scripted();
+    const { sessionId } = await start(claude);
+    const review = must(services).review;
+    const first = value(await review.run({ sessionId }));
+    const done = await finished(first.runId);
+    expect(value(await review.run({ sessionId }))).toMatchObject({
+      status: 'reused',
+      summary: { reviewRunId: storedId(done) },
+    });
+    expect(calls(claude)).toHaveLength(1);
+  });
+
+  it('carries a dismissed insight over when --fresh replaces its run', async () => {
+    const claude = scripted();
+    const { sessionId } = await start(claude);
+    const review = must(services).review;
+    const first = value(await review.run({ sessionId }));
+    await finished(first.runId);
+    const [appInsight, featureInsight] = value(await review.listInsights({ sessionId })).insights;
+    review.setInsightStatus({ insightId: appInsight?.id ?? '', status: 'dismissed' });
+    review.setInsightStatus({ insightId: featureInsight?.id ?? '', status: 'promoted' });
+
+    const fresh = value(await review.run({ sessionId, fresh: true }));
+    expect(fresh.status).toBe('started');
+    const freshDone = await finished(fresh.runId);
+    expect(calls(claude)).toHaveLength(2);
+    const listed = value(await review.listInsights({ sessionId }));
+    expect(listed.run?.reviewRunId).toBe(storedId(freshDone));
+    expect(
+      listed.insights.map((item) => [item.path, item.status, item.id !== appInsight?.id]),
+    ).toEqual([
+      ['app.rs', 'dismissed', true],
+      ['feature.rs', 'promoted', true],
+    ]);
   });
 
   it('aborts the in-flight run when the head moves, killing Claude Code', async () => {
@@ -533,6 +621,10 @@ function insight(path: string, line: number, severity: string, title: string): u
     body: `**${title}**: check \`${path}\` line ${String(line)}.`,
     confidence: 0.8,
   };
+}
+
+function storedId(event: ReviewProgressView): string {
+  return event.kind === 'completed' ? event.summary.reviewRunId : '';
 }
 
 /** The fake's `review` mode logs one `{ args, cwd }` line per run. */

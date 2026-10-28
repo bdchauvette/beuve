@@ -79,6 +79,7 @@ describe('runPreliminaryReview', () => {
     expect(result.value.run).toEqual({
       id: runId,
       sessionId: input.sessionId,
+      pathScope: [],
       scope: 'full',
       baseSha: input.scope.baseSha,
       headSha: input.scope.headSha,
@@ -130,7 +131,18 @@ describe('runPreliminaryReview', () => {
     expect(result).toMatchObject({ ok: true, value: { insights: [], run: { model: 'none' } } });
   });
 
-  it('records the reviewed head for interdiffs and keys runs by session and head', async () => {
+  it('records the normalized path scope the input was limited to', async () => {
+    const result = await runPreliminaryReview(
+      createReviewInput({ pathScope: ['src/b.ts/', 'src/a.ts'] }),
+      { model: fakeModel(ok({ insights: [] })), clock, ids: counter() },
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { run: { pathScope: ['src/a.ts', 'src/b.ts'] } },
+    });
+  });
+
+  it('records the reviewed head for interdiffs and keys runs by session, head and path scope', async () => {
     const base = createReviewInput();
     const fromHeadSha = 'd'.repeat(40) as CommitSha;
     const input = {
@@ -144,6 +156,7 @@ describe('runPreliminaryReview', () => {
     });
     expect(result).toMatchObject({ ok: true, value: { run: { scope: 'interdiff', fromHeadSha } } });
     expect(reviewRunKey(input)).toBe(reviewRunKey(base));
-    expect(reviewRunKey(base)).toBe(`review:${base.sessionId}@${base.scope.headSha}`);
+    expect(reviewRunKey(base)).toBe(`review:${base.sessionId}@${base.scope.headSha}#[]`);
+    expect(reviewRunKey({ ...base, pathScope: ['src/a.ts'] })).not.toBe(reviewRunKey(base));
   });
 });
