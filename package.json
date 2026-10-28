@@ -1,0 +1,59 @@
+{
+  "name": "beuve",
+  "version": "0.1.0",
+  "description": "Code review and verification workbench",
+  "private": true,
+  "type": "module",
+  "license": "0BSD",
+  "main": "dist/main/index.js",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "imports": {
+    "#internal/*": "./src/internal/*",
+    "#pkg/*": "./src/pkg/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json",
+    "lint": "eslint --max-warnings 0 .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "deps": "depcruise src --config .dependency-cruiser.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "node scripts/build.ts",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run deps && npm run test",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@pierre/diffs": "1.6.2",
+    "@pierre/trees": "1.0.0-beta.6",
+    "lit": "3.3.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@e18e/eslint-plugin": "0.8.1",
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "@typescript-eslint/rule-tester": "8.72.1",
+    "@typescript-eslint/utils": "8.72.1",
+    "dependency-cruiser": "18.7.0",
+    "electron": "45.1.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-lit": "2.3.1",
+    "eslint-plugin-n": "18.5.0",
+    "eslint-plugin-promise": "7.3.0",
+    "eslint-plugin-security": "4.2.0",
+    "eslint-plugin-unicorn": "79.0.0",
+    "eslint-plugin-wc": "3.1.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,1 @@
+import './beuve-app.ts';

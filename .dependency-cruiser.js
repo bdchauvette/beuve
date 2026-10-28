@@ -1,0 +1,110 @@
+/** Import rules from ADR 0002. Run with `npm run deps`. */
+/** @type {import('dependency-cruiser').IConfiguration} */
+export default {
+  forbidden: [
+    {
+      name: 'no-circular',
+      severity: 'error',
+      comment: 'Circular dependencies make modules impossible to reason about in isolation.',
+      from: {},
+      to: { circular: true },
+    },
+    {
+      name: 'domain-isolation',
+      severity: 'error',
+      comment: 'A domain may import only itself and #pkg/*; coordinate through src/main.',
+      from: { path: '^src/internal/([^/]+)/' },
+      to: { path: '^src/internal/', pathNot: '^src/internal/$1/' },
+    },
+    {
+      name: 'pkg-is-leaf',
+      severity: 'error',
+      comment: 'src/pkg may import only Node built-ins and other src/pkg modules.',
+      from: { path: '^src/pkg/', pathNot: '\\.test\\.ts$' },
+      to: { pathNot: '^src/pkg/', dependencyTypesNot: ['core'] },
+    },
+    {
+      name: 'pkg-no-npm',
+      severity: 'error',
+      comment: 'src/pkg has zero external dependencies.',
+      from: { path: '^src/pkg/', pathNot: '\\.test\\.ts$' },
+      to: { dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'npm-bundled'] },
+    },
+    {
+      name: 'renderer-not-to-main',
+      severity: 'error',
+      comment: 'ui and preload talk to main only through the IPC contract.',
+      from: { path: '^src/(ui|preload)/' },
+      to: { path: '^src/(main|internal)/' },
+    },
+    {
+      name: 'internal-not-to-processes',
+      severity: 'error',
+      comment: 'Domains never depend on a process layer; main composes them.',
+      from: { path: '^src/internal/' },
+      to: { path: '^src/(main|ui|preload)/' },
+    },
+    {
+      name: 'main-not-to-renderer',
+      severity: 'error',
+      comment: 'main, preload and ui are separate bundles for separate processes.',
+      from: { path: '^src/main/' },
+      to: { path: '^src/(ui|preload)/' },
+    },
+    {
+      name: 'no-entrypoint-imports',
+      severity: 'error',
+      comment: 'Process entrypoints (src/*/index.ts) are never imported.',
+      from: {},
+      to: { path: '^src/[^/]+/index\\.ts$' },
+    },
+    {
+      name: 'no-dev-deps-in-src',
+      severity: 'error',
+      comment: 'Application code may not use devDependencies (electron is provided at runtime).',
+      from: { path: '^src/', pathNot: '\\.test\\.ts$' },
+      to: {
+        dependencyTypes: ['npm-dev'],
+        dependencyTypesNot: ['type-only'],
+        pathNot: '^node_modules/electron/',
+      },
+    },
+    {
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      comment: 'Every import must resolve, including #internal/* and #pkg/* aliases.',
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
+      name: 'no-non-package-json',
+      severity: 'error',
+      comment: 'npm modules must be declared in package.json.',
+      from: {},
+      to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },
+    },
+    {
+      name: 'no-orphans',
+      severity: 'warn',
+      comment: 'A module nothing imports is dead code or a missing entrypoint.',
+      from: {
+        orphan: true,
+        pathNot: ['\\.d\\.ts$', '\\.test\\.ts$', '^src/[^/]+/index\\.ts$', '(^|/)tsconfig\\.json$'],
+      },
+      to: {},
+    },
+  ],
+  options: {
+    doNotFollow: { path: 'node_modules' },
+    tsPreCompilationDeps: true,
+    tsConfig: { fileName: 'tsconfig.json' },
+    enhancedResolveOptions: {
+      exportsFields: ['exports'],
+      conditionNames: ['import', 'require', 'node', 'default', 'types'],
+      extensions: ['.ts', '.js', '.json'],
+    },
+    reporterOptions: {
+      text: { highlightFocused: true },
+    },
+  },
+};
