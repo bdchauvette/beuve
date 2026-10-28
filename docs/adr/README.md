@@ -32,3 +32,4 @@ Template: [0000-template.md](0000-template.md)
 | [0024](0024-review-runs-keyed-by-path-scope.md)               | Review runs keyed by path scope; statuses survive reruns               | Accepted |
 | [0025](0025-diff-cards-themes-and-lazy-mounting.md)           | Diff cards: Alabaster-style themes, curated grammars and lazy mounting | Accepted |
 | [0026](0026-radar-tree-and-file-channels.md)                  | The package-aware radar tree and the file channels behind it           | Accepted |
+| [0028](0028-control-flow-graphs-and-layout.md)                | Control-flow graphs and layout                                         | Accepted |

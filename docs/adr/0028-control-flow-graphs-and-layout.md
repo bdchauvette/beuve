@@ -1,0 +1,22 @@
+# 0028. Control-flow graphs from syntax trees, and a dependency-free layout
+
+- Status: Accepted
+- Date: 2026-10-28
+
+## Context
+
+`Shift+p` (spec 5D) shows a mini flowchart of the function under the cursor, with the lines the review changed highlighted. It needs a control-flow graph (CFG) per function and a way to draw it. Both must respect the import rules (ADR 0002) and stay small, since a reviewer reads the chart in a glance.
+
+## Decision
+
+- **Domain and seam.** `src/internal/flow/` builds graphs. Like `impact` (ADR 0015) it declares the node shape it reads, `FlowSyntaxNode`, which Tree-sitter nodes satisfy structurally, and a per-language `FlowRules` table (`ecmascriptFlowRules` for TypeScript, TSX and JavaScript; `flowRulesByLanguage` maps syntax language ids). A new language is a table, not code; a test checks the table's node types and fields against the grammars. Tests parse real source through helpers in `flow/testing/` (ADR 0013).
+- **API.** `findFunctionAt(root, line, rules)` returns the innermost function enclosing a one-based line. `buildControlFlowGraph(fn, rules, { changedLines, maxNodes })` returns `Result<ControlFlowGraph, FlowFailure>`. Failures are `too-large` (more than 200 nodes by default) or `unsupported`; neither throws. The graph is plain data: nodes `{ id, kind, label, startLine, endLine, changed }` and edges `{ from, to, kind }`.
+- **Model.** Kinds: `entry`, `exit`, `block`, `condition`, `loop`, `switch`, `case`, `try`, `catch`, `finally`, `return`, `throw`. Edge kinds: `next`, `true`, `false`, `case`, `default`, `loop-back`, `break`, `continue`, `exception`, `finally`. Straight-line statements merge into one `block` (label: first statement, plus `(+n)`). `if`/`else if` chains, `for`, `for…in/of`, `while`, `do…while`, `switch` (with fallthrough and an implicit default edge), `try`/`catch`/`finally`, `return`, `throw`, `break` and `continue` (labelled or not) are nodes and edges. A `condition` or `loop` node owns only its header lines, so `changed` marks the branch that moved, not everything inside it. Code after a jump is unreachable and dropped.
+- **Exceptions and finally.** A `try` node has an `exception` edge to its catch (or finally). A `throw` inside a `try` body goes to the catch; elsewhere to the exit. Returns, throws, breaks and continues that cross a `finally` go into it (`finally` edge) and leave it towards their original target. There is one `finally` node, so it also appears to allow paths that cannot happen (a normal completion followed by the return exit).
+- **Excluded.** Nested functions are not entered; they remain text in their block's label (and have their own graph via `findFunctionAt`). Optional chaining, ternaries, `&&`, `||` and `??` are not branches. Implicit exceptions from ordinary calls are not drawn, and `await`, generators and `with` are plain statements.
+- **Layout.** `src/ui/flow-layout.ts` is a pure, deterministic layered layout: `loop-back` edges and any further cycle edges found by a depth-first search are set aside; layers are the longest path from the entry (the exit is forced last); edges spanning layers get dummy nodes; four barycenter sweeps order each layer; x positions come from alternating neighbour-centring sweeps with left and right overlap removal averaged; edges are orthogonal polylines with spread ports; back edges run down lanes right of the drawing. Box widths are estimated from label length in monospace. `src/ui/flow-graph-view.ts` (`beuve-flow-graph`) draws the result as inline SVG with Lit text bindings; arrow keys walk the flow, Enter fires `flow-node-activate`.
+- **No layout dependency.** Graphs are capped at a few hundred nodes and are mostly trees with a few back edges, where dagre or ELK would add hundreds of kilobytes, a worker or sync/async layout API, and a new dependency (which needs an ADR) for output we would still restyle. About 300 lines of layout is easy to test and to keep stable between renders.
+
+## Consequences
+
+The chart is cheap, serialisable (it crosses IPC as data) and testable without a DOM. Main parses the head blob, calls `findFunctionAt` and `buildControlFlowGraph` with the changed head lines, and the renderer lays out and draws. Limits we accept: crossings are reduced but not minimised; very wide switches make wide charts; labels are truncated to about 40 characters; two functions at equal depth on one line resolve to the first; only the head side is drawn, so removed lines are not shown.
