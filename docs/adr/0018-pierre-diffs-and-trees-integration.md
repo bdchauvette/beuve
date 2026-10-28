@@ -1,0 +1,34 @@
+# 0018. Integrating `@pierre/diffs` and `@pierre/trees` into the renderer
+
+- Status: Proposed
+- Date: 2026-10-28
+
+## Context
+
+Spec section 4 puts `@pierre/diffs` cards in Zone 2 and a `@pierre/trees` radar tree in Zone 1. Right now `beuve-file-card` renders `DiffFileView.patch` as a plain `<pre>`. Both packages are installed: diffs 1.6.2 (Apache-2.0) and trees 1.0.0-beta.6 (Apache-2.0, beta). A spike tested them in headless Chromium under our CSP, with Lit components wrapping both libraries, a real three-file git patch and a 13-row tree.
+
+- **Shape.** Both are framework-agnostic vanilla classes (`FileDiff`, `FileTree`). The React entry points are optional and React is only a peer dependency, so we don't need it. Each library renders into its own custom element (`diffs-container`, `file-tree-container`) with an open shadow root, and both work when nested inside a Lit shadow root. Annotation and header-slot content is light DOM slotted into `diffs-container`, so the owning Lit component's styles apply to it.
+- **Diffs.** Highlighting uses Shiki 4 with the JavaScript regex engine by default, on the main thread. Workers are opt-in through a `workerFactory`, and WASM loads only with `preferredHighlighter: 'shiki-wasm'`. The library takes either unified patch text (`parsePatchFiles` or `processFile`) or before/after contents. It provides: line annotations (`{side, lineNumber, metadata}` rendered by `renderAnnotation`), header prefix/metadata slots, gutter utilities, controlled line selection (`setSelectedLines`, `onLineSelected`), `revealLine`, hunk expansion (this needs full contents through `loadDiffFiles`), and a `Virtualizer`/`CodeView` for long streams. There is no "next hunk" API, so `j`/`k` must be computed from `FileDiffMetadata.hunks`. Inline editing (`@pierre/diffs/edit`) is a real editor with undo, carets and keymaps. It attaches only to a diff that has both full files, and it reports results through `onEditComplete`. Writing files stays our job. Interdiffs need nothing special because they are just the patch main already computes (ADR 0010).
+- **Trees.** The tree is built from paths and rendered with Preact 11 (beta) inside its shadow root. It is virtualized and has sticky folders. It provides: roving keyboard focus (arrow keys verified), search with `hide-non-matches`, `gitStatus` lanes, one `renderRowDecoration` text/icon lane (we can put percentiles there), and `initialExpandedPaths`, `resetPaths` and `scrollToPath`. It has no notion of packages and no filter predicate. That means package-aware expansion and diff-only mode must be computed by us and fed in as paths and expanded paths.
+- **CSP.** Under `style-src 'self'` the diffs view breaks: hunk rows collapse and no code renders. The browser reports 277 `style-src-attr` violations, from per-token `style="color:…"` attributes and `grid-row` attributes set through `innerHTML`. Both libraries also insert `<style>` elements (diffs theme CSS, trees scrollbar-gutter CSS, `unsafeCSS`), which violate `style-src-elem`. The `useCSSClasses` option is accepted but does nothing in 1.6.2. Scripts, eval, workers, `blob:` and WASM caused no violations.
+- **Weight.** esbuild with minification pulls in about 11.5 MB if nothing is split, mostly Shiki grammars (7.9 MB), themes (1.3 MB), `@pierre/highlights` (0.6 MB) and the inlined oniguruma WASM (0.6 MB). With `splitting: true` the eager entry is 503 KB (143 KB gzip, Lit included), and grammars load lazily through `import()`.
+
+## Decision
+
+- **CSP delta**, the only change to `src/ui/index.html`: add `style-src-elem 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline'` and leave `style-src 'self'` as the fallback. With that change the spike rendered with zero violations in both light and dark mode. Scripts stay `script-src 'self'`, with no `'wasm-unsafe-eval'` and no `worker-src`. This is acceptable because inline style cannot execute script. The CSS exfiltration channels (`url()`) stay closed by `img-src`/`font-src 'self'`, `default-src 'none'` and the session's http(s) block (ADR 0011). Patch text reaches the DOM as escaped hast text nodes.
+- **Placement** (ADR 0002 unchanged, all of it in `src/ui`):
+  - `beuve-file-card.ts` owns one `FileDiff` and puts ImpactGate banners in the header prefix slot.
+  - `beuve-radar-tree.ts` lives inside `beuve-intent-sidebar` and owns one `FileTree`.
+  - These two files are the only importers of `@pierre/*`, which dependency-cruiser enforces.
+  - Pure, Vitest-tested mappers sit beside them: `to-file-diff-metadata.ts` (`processFile(patch, { cacheKey })`), `to-line-annotations.ts` (insight badges, staged-URA markers, citation targets), `plan-hunk-steps.ts` (`j`/`k` and citation jumps through `setSelectedLines` and `revealLine`) and `to-tree-input.ts` (diff-only paths, package directories to expand, decorations).
+  - `split-patch.ts` stays as the fallback renderer.
+- **Build**: the ui bundle sets `splitting: true`. An esbuild alias replaces `shiki/langs` with a curated language list and stubs `shiki/wasm`. Highlighting uses `shiki-js`, and `themeType: 'system'` follows the OS. `--diffs-*-override`/`--trees-*-override` variables are mapped from the `--beuve-*` tokens.
+- **Contract additions** (`src/contract`):
+  1. Add full `oldBlobSha`/`newBlobSha` to `DiffFileView`, for cache keys and content loading.
+  2. Add `session:get-file-pair` `{ sessionId, path, oldPath?, fromSha, toSha }` → `{ oldContents | null, newContents | null }`, which backs `loadDiffFiles` (hunk expansion) and inline edit.
+  3. Add `session:get-tree` → `{ paths, packageRoots }` at the head, for the radar tree.
+  4. Later, add a `review:annotations` event carrying a `ReviewAnnotationView` union (`insight`, `impact-gate`, `ura-staged`, `citation`; path, side, line). Insights arrive asynchronously (spec 5B), so they are not part of `ReviewView`.
+
+## Consequences
+
+Phase 2 gets highlighted, annotatable, selectable diffs and a virtualized tree without React or Monaco. The cost is about 0.5 MB of eager renderer code plus lazy grammar chunks, and a style-only CSP relaxation that we revisit if upstream makes `useCSSClasses` work or exposes CSSOM styling. Trees is beta and its API has changed across 1.0.0-beta.1 to beta.6. Diffs 1.6.2 is two days old. Both stay pinned exactly, and the wrapper files keep a library swap local. Fallback: if either library regresses, `beuve-file-card` drops back to `split-patch.ts` and the tree to a plain Lit list fed by the same mappers.
