@@ -10,7 +10,9 @@ import type {
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
+import { describeReviewPreview } from './describe-review-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
+import type { GithubDockState } from './github-post-state.ts';
 import { moveUraItem } from './move-ura-item.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -254,6 +256,43 @@ export class BeuveUraDock extends LitElement {
         margin-top: var(--beuve-space-2);
       }
 
+      .github {
+        display: grid;
+        gap: var(--beuve-space-1);
+        margin-top: var(--beuve-space-2);
+      }
+
+      .github .note {
+        margin: 0;
+      }
+
+      .github.confirm {
+        padding: var(--beuve-space-2);
+        border: 1px solid var(--beuve-accent);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-accent-soft);
+      }
+
+      .github .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--beuve-space-1);
+      }
+
+      button.link {
+        display: inline;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--beuve-accent);
+        text-decoration: underline;
+      }
+
+      .posted {
+        font: var(--beuve-font-small);
+        color: var(--beuve-ok);
+      }
+
       .verdict {
         display: flex;
         align-items: center;
@@ -374,6 +413,8 @@ export class BeuveUraDock extends LitElement {
   @property({ attribute: false }) accessor notice: DockNotice | undefined;
   /** Set by the owner while an export is being compiled and copied. */
   @property({ type: Boolean }) accessor exporting = false;
+  /** Set for pull request sessions: posting to GitHub replaces copying the review JSON. */
+  @property({ attribute: false }) accessor github: GithubDockState | undefined;
 
   @state() accessor cursor = 0;
   @state() accessor editingId: string | undefined;
@@ -525,6 +566,15 @@ export class BeuveUraDock extends LitElement {
                 >${labels.outdated}</span
               >`
         }
+        ${
+          item.posted === undefined
+            ? nothing
+            : html`<span
+                class="posted"
+                title="Posted to GitHub ${item.posted.placement === 'inline' ? 'inline' : 'in the review body'}, ${item.posted.postedAt}"
+                >posted</span
+              >`
+        }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
       <div class="title">${item.title}</div>
@@ -606,20 +656,23 @@ export class BeuveUraDock extends LitElement {
             : html`<p class="note" role="status">${this.verdictNotice}</p>`
           : html`<p class="note error" role="alert">${this.verdictRefusal}</p>`
       }
+      ${this.github === undefined ? nothing : this.renderGithub(this.github)}
       <div class="exports">
-        ${exports.map(
-          (entry) =>
-            html`<button
-              type="button"
-              title=${entry.title}
-              ?disabled=${!this.hasSession || this.exporting}
-              @click=${(): void => {
-                this.exportTo(entry.target);
-              }}
-            >
-              ${entry.label}
-            </button>`,
-        )}
+        ${exports
+          .filter((entry) => entry.target !== 'github' || this.github === undefined)
+          .map(
+            (entry) =>
+              html`<button
+                type="button"
+                title=${entry.title}
+                ?disabled=${!this.hasSession || this.exporting}
+                @click=${(): void => {
+                  this.exportTo(entry.target);
+                }}
+              >
+                ${entry.label}
+              </button>`,
+          )}
       </div>
       ${
         this.notice === undefined
@@ -627,11 +680,113 @@ export class BeuveUraDock extends LitElement {
           : html`<p class="note ${this.notice.tone}" role="status">${this.notice.text}</p>`
       }
       <p class="note">
-        ${stagedCount === 0 ? 'Nothing staged: an export carries only the verdict. ' : ''}Posting to
-        GitHub needs sign-in, which beuve doesn't have yet: copy the JSON instead. Agents read the
-        same review over MCP (<code>beuve_read_human_review</code>).
+        ${stagedCount === 0 ? 'Nothing staged: an export carries only the verdict. ' : ''}Agents
+        read the same review over MCP (<code>beuve_read_human_review</code>).
       </p>
     </section>`;
+  }
+
+  /** Post to GitHub: a button, then a confirmation with what goes inline and into the body. */
+  private renderGithub(github: GithubDockState): TemplateResult {
+    if (!github.isSignedIn) {
+      return html`<p class="note">Post to ${github.target}: ${github.signInHint}</p>`;
+    }
+    const { post } = github;
+    switch (post.kind) {
+      case 'idle':
+      case 'failed': {
+        return html`<div class="github">
+          <button
+            type="button"
+            class="primary"
+            ?disabled=${!this.hasSession}
+            title="Post the staged items as one review on ${github.target}"
+            @click=${(): void => {
+              this.emit('beuve-github-preview', {});
+            }}
+          >
+            Post review to GitHub…
+          </button>
+          ${post.kind === 'failed' ? html`<p class="note error" role="alert">${post.text}</p>` : nothing}
+        </div>`;
+      }
+      case 'busy': {
+        return html`<div class="github"><p class="note" role="status">${post.text}</p></div>`;
+      }
+      case 'confirm': {
+        return html`<div class="github confirm" role="group" aria-label="Confirm posting">
+          <p class="note">Post to ${github.target}: ${describeReviewPreview(post.preview)}</p>
+          <div class="actions">
+            <button
+              type="button"
+              @click=${(): void => {
+                this.emit('beuve-github-cancel', {});
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="primary"
+              @click=${(): void => {
+                this.emit('beuve-github-post', {});
+              }}
+            >
+              Post
+            </button>
+          </div>
+        </div>`;
+      }
+      case 'own-pull-request': {
+        return html`<div class="github confirm" role="group" aria-label="Post as comment">
+          <p class="note">${post.message} Post as comment instead?</p>
+          <div class="actions">
+            <button
+              type="button"
+              @click=${(): void => {
+                this.emit('beuve-github-cancel', {});
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="primary"
+              @click=${(): void => {
+                this.emit('beuve-github-post', { verdict: 'comment' });
+              }}
+            >
+              Post as comment
+            </button>
+          </div>
+        </div>`;
+      }
+      case 'posted': {
+        return html`<div class="github">
+          <p class="note" role="status">
+            ${post.text}
+            <button
+              type="button"
+              class="link"
+              title=${post.url}
+              @click=${(): void => {
+                this.emit('beuve-open-link', { url: post.url });
+              }}
+            >
+              View on GitHub
+            </button>
+          </p>
+          <button
+            type="button"
+            @click=${(): void => {
+              this.emit('beuve-github-preview', {});
+            }}
+          >
+            Post again…
+          </button>
+        </div>`;
+      }
+    }
   }
 
   override render(): TemplateResult {

@@ -5,19 +5,25 @@ import { customElement, property } from 'lit/decorators.js';
 import type {
   DiffFileView,
   ImpactView,
+  PullRequestSessionView,
   RepositoryTreeView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 
+import './beuve-open-pull-request-form.ts';
 import './beuve-open-repository-form.ts';
+import './beuve-pull-request-intent.ts';
 import './beuve-radar-tree.ts';
+import { describePullRequestState } from './describe-pull-request-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
- * Zone 1: review sessions, the form that opens a local repository, and the radar tree of the open
- * review's files (`f` toggles diff-only); focusing the zone focuses the tree. Requirements mapping arrives later. Emits
- * `beuve-select-session` with `{ sessionId }`; the tree emits `beuve-tree-select`.
+ * Zone 1: a pull request session's intent (title, body, stack), review sessions, the forms that
+ * open a pull request or a local repository, and the radar tree of the open review's files (`f`
+ * toggles diff-only); focusing the zone focuses the tree. Requirements mapping arrives later.
+ * Emits `beuve-select-session` with `{ sessionId }`; the tree emits `beuve-tree-select`, the
+ * intent `beuve-open-link` and `beuve-open-stack`, the forms their open requests.
  */
 @customElement('beuve-intent-sidebar')
 export class BeuveIntentSidebar extends LitElement {
@@ -100,6 +106,59 @@ export class BeuveIntentSidebar extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+
+      .title-line {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-1);
+        min-width: 0;
+      }
+
+      .title-line .name {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .number {
+        flex: none;
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        color: var(--beuve-text-muted);
+      }
+
+      .state {
+        flex: none;
+        font: var(--beuve-font-small);
+        font-weight: 600;
+        color: var(--beuve-text-muted);
+      }
+
+      .state.ok {
+        color: var(--beuve-ok);
+      }
+
+      .state.merged {
+        color: var(--beuve-insight);
+      }
+
+      .state.danger {
+        color: var(--beuve-danger);
+      }
+
+      details > summary {
+        font: var(--beuve-font-small);
+        font-weight: 600;
+        color: var(--beuve-text-muted);
+        cursor: pointer;
+      }
+
+      details[open] > summary {
+        margin-bottom: var(--beuve-space-2);
+      }
+
+      details + details {
+        margin-top: var(--beuve-space-3);
+      }
     `,
   ];
 
@@ -115,6 +174,12 @@ export class BeuveIntentSidebar extends LitElement {
   @property() accessor sessionNote = '';
   @property({ type: Boolean }) accessor opening = false;
   @property() accessor openError = '';
+  /** The open pull request session's intent; absent for local sessions. */
+  @property({ attribute: false }) accessor pullRequest: PullRequestSessionView | undefined;
+  @property({ type: Boolean }) accessor openingPull = false;
+  @property() accessor pullError = '';
+  @property() accessor pullRemedy = '';
+  @property() accessor clonePath = '';
   /** The open review's files and the head's tree, for the radar tree. */
   @property({ attribute: false }) accessor files: readonly DiffFileView[] | undefined;
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
@@ -129,19 +194,33 @@ export class BeuveIntentSidebar extends LitElement {
   private renderSession(session: SessionSummary): TemplateResult {
     const { source } = session;
     const name = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
-    const head = source.kind === 'local' ? source.headRef : `#${String(source.number)}`;
+    const current = session.id === this.selectedId ? 'true' : 'false';
+    const select = (): void => {
+      this.select(session.id);
+    };
+    if (source.kind === 'github-pull-request') {
+      const { pullRequest } = session;
+      const badge = pullRequest === undefined ? undefined : describePullRequestState(pullRequest);
+      return html`
+        <li>
+          <button type="button" title=${source.repoPath} aria-current=${current} @click=${select}>
+            <span class="title-line">
+              <span class="number">#${source.number}</span>
+              <span class="name">${pullRequest?.title ?? `${source.owner}/${source.repo}`}</span>
+              ${badge === undefined ? nothing : html`<span class="state ${badge.tone}">${badge.label}</span>`}
+            </span>
+            <span class="refs"
+              >${source.owner}/${source.repo} · ${pullRequest?.baseBranch ?? 'base'} · ${name}</span
+            >
+          </button>
+        </li>
+      `;
+    }
     return html`
       <li>
-        <button
-          type="button"
-          title=${source.repoPath}
-          aria-current=${session.id === this.selectedId ? 'true' : 'false'}
-          @click=${(): void => {
-            this.select(session.id);
-          }}
-        >
+        <button type="button" title=${source.repoPath} aria-current=${current} @click=${select}>
           <span class="name">${name}</span>
-          <span class="refs">${source.baseRef} ← ${head}</span>
+          <span class="refs">${source.baseRef} ← ${source.headRef}</span>
         </button>
       </li>
     `;
@@ -177,6 +256,13 @@ export class BeuveIntentSidebar extends LitElement {
     return html`
       <header>Intent</header>
       <div class="body">
+        ${
+          this.pullRequest === undefined
+            ? nothing
+            : html`<section>
+                <beuve-pull-request-intent .view=${this.pullRequest}></beuve-pull-request-intent>
+              </section>`
+        }
         <section>
           <h2>Sessions</h2>
           ${
@@ -188,11 +274,22 @@ export class BeuveIntentSidebar extends LitElement {
           }
         </section>
         <section>
-          <h2>Open local repository</h2>
-          <beuve-open-repository-form
-            ?busy=${this.opening}
-            .error=${this.openError}
-          ></beuve-open-repository-form>
+          <details ?open=${this.sessions.length === 0 || this.pullError !== ''}>
+            <summary>Open pull request</summary>
+            <beuve-open-pull-request-form
+              ?busy=${this.openingPull}
+              .error=${this.pullError}
+              .remedy=${this.pullRemedy}
+              .clonePath=${this.clonePath}
+            ></beuve-open-pull-request-form>
+          </details>
+          <details ?open=${this.sessions.length === 0 || this.openError !== ''}>
+            <summary>Open local repository</summary>
+            <beuve-open-repository-form
+              ?busy=${this.opening}
+              .error=${this.openError}
+            ></beuve-open-repository-form>
+          </details>
         </section>
         ${this.files === undefined ? nothing : this.renderFiles(this.files)}
       </div>

@@ -2,11 +2,21 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
+import type {
+  AppInfo,
+  CiStatusView,
+  GithubAuthStatusView,
+  McpStatus,
+} from '#contract/ipc-contract.ts';
 
+import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
+import { describeGithubAuth } from './describe-github-auth.ts';
 
-/** Bottom bar: focused zone, a transient notice, MCP server state and app version. */
+/**
+ * Bottom bar: focused zone, a transient notice, the open pull request's CI rollup, GitHub
+ * sign-in, MCP server state and app version.
+ */
 @customElement('beuve-status-bar')
 export class BeuveStatusBar extends LitElement {
   static override styles = css`
@@ -47,8 +57,17 @@ export class BeuveStatusBar extends LitElement {
       background: var(--beuve-warn);
     }
 
-    .dot.failed {
+    .dot.failed,
+    .dot.danger {
       background: var(--beuve-danger);
+    }
+
+    .dot.ok {
+      background: var(--beuve-ok);
+    }
+
+    .dot.warn {
+      background: var(--beuve-warn);
     }
 
     .notice {
@@ -71,6 +90,23 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
+  /** CI for the open pull request session's head; absent for local sessions. */
+  @property({ attribute: false }) accessor ci: CiStatusView | undefined;
+  @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
+
+  private renderCi(ci: CiStatusView): TemplateResult {
+    const line = describeCiStatus(ci);
+    return html`<span title=${line.title}
+      ><span class="dot ${line.tone}"></span>${line.text}</span
+    >`;
+  }
+
+  private renderGithub(auth: GithubAuthStatusView): TemplateResult {
+    const line = describeGithubAuth(auth);
+    return html`<span title=${line.title}
+      ><span class="dot ${line.tone}"></span>${line.text}</span
+    >`;
+  }
 
   private renderMcp(): TemplateResult {
     const status = this.mcpStatus;
@@ -106,6 +142,8 @@ export class BeuveStatusBar extends LitElement {
           : html`<span class="notice ${this.notice.tone}" role="status">${this.notice.text}</span>`
       }
       <span class="spacer"></span>
+      ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
+      ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.renderMcp()}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
       <span><kbd>?</kbd> keys</span>
