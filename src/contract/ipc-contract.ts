@@ -122,6 +122,9 @@ export interface DiffFileView {
   readonly hunks: readonly DiffHunkView[];
   /** The file's unified diff text, from `diff --git` on, newline-terminated. */
   readonly patch: string;
+  /** Full blob names of the base and head sides (ADR 0018); absent for a side that doesn't exist. */
+  readonly oldBlobSha?: string;
+  readonly newBlobSha?: string;
 }
 
 /**
@@ -262,6 +265,39 @@ export interface ImpactView {
   };
   /** Wall time of the computation that produced this report (blob reads and parsing). */
   readonly computeMs: number;
+}
+
+/**
+ * Both sides of one file of the review `session:get-review` shows for the session now, for hunk
+ * expansion. `path` is the head-side path (the diff's `path`).
+ */
+export interface GetFilePairRequest {
+  readonly sessionId: string;
+  readonly path: string;
+}
+
+/** A file's full base and head text; a side that doesn't exist (added or deleted) is absent. */
+export interface FilePairView {
+  readonly path: string;
+  readonly oldPath?: string;
+  readonly oldContents?: string;
+  readonly newContents?: string;
+}
+
+export interface GetTreeRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * Every path tracked at the session head, for the radar tree, and the package roots among their
+ * directories: those holding a `package.json`, `go.mod`, `Cargo.toml` or `pyproject.toml`. The
+ * repository root is `''`. Paths are repository-relative with `/` separators, in git's order.
+ */
+export interface RepositoryTreeView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly paths: readonly string[];
+  readonly packageRoots: readonly string[];
 }
 
 /**
@@ -479,7 +515,8 @@ export interface InsightStatusChangeView {
 /**
  * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
  * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
- * language server handles the file; `lsp-failed` that the language server could not answer.
+ * language server handles the file, or that a side of a file pair is binary or too large;
+ * `lsp-failed` that the language server could not answer.
  */
 export type IpcErrorCode =
   | 'invalid-request'
@@ -528,6 +565,14 @@ export interface InvokeChannelMap {
   'session:get-impact': {
     readonly request: GetImpactRequest;
     readonly response: IpcResult<ImpactView>;
+  };
+  'session:get-file-pair': {
+    readonly request: GetFilePairRequest;
+    readonly response: IpcResult<FilePairView>;
+  };
+  'session:get-tree': {
+    readonly request: GetTreeRequest;
+    readonly response: IpcResult<RepositoryTreeView>;
   };
   'lsp:call-hierarchy': {
     readonly request: CallHierarchyRequest;

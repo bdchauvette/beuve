@@ -11,6 +11,7 @@ import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
 import type { Logger } from '#pkg/logger/create-logger.ts';
 
+import { createFileServices } from './files/create-file-services.ts';
 import { createImpactServices } from './impact/create-impact-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
@@ -81,6 +82,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   return {
     sessions,
     impact,
+    files: createFileServices({ context }),
     lsp,
     review,
     mcpTools: createMcpTools({ context, impact, lsp, openSessionId: () => open.sessionId }),

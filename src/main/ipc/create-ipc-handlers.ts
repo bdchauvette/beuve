@@ -9,6 +9,7 @@ import type {
   AppInfo,
   CallHierarchyRequest,
   CallHierarchyView,
+  FilePairView,
   ImpactView,
   InsightListView,
   InsightStatusChangeView,
@@ -18,6 +19,7 @@ import type {
   IpcResult,
   ReviewRunHandleView,
   ReviewRunRequest,
+  RepositoryTreeView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -46,6 +48,8 @@ const markReviewedRequest = z.strictObject({
     .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
     .optional(),
 });
+
+const filePairRequest = z.strictObject({ sessionId, path: z.string().min(1).max(4096) });
 
 const callHierarchyRequest = z.strictObject({
   sessionId,
@@ -119,6 +123,14 @@ export function createIpcHandlers(services: MainServices, appInfo: AppInfo): Ipc
     'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.impact.getImpact(parsed.data) : invalid(parsed.error);
+    },
+    'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
+      const parsed = filePairRequest.safeParse(request);
+      return parsed.success ? services.files.getFilePair(parsed.data) : invalid(parsed.error);
+    },
+    'session:get-tree': async (request): Promise<IpcResult<RepositoryTreeView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.files.getTree(parsed.data) : invalid(parsed.error);
     },
     'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
       const parsed = callHierarchyRequest.safeParse(request);

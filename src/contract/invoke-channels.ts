@@ -9,6 +9,8 @@ export const invokeChannels = Object.freeze([
   'session:get-review',
   'session:mark-reviewed',
   'session:get-impact',
+  'session:get-file-pair',
+  'session:get-tree',
   'lsp:call-hierarchy',
   'review:run',
   'review:list-insights',

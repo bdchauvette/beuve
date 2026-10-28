@@ -1,0 +1,123 @@
+import type {
+  FilePairView,
+  GetFilePairRequest,
+  GetTreeRequest,
+  IpcResult,
+  RepositoryTreeView,
+} from '#contract/ipc-contract.ts';
+import type { DiffFile } from '#internal/git/diff-model.ts';
+import { listTreePaths } from '#internal/git/list-tree-paths.ts';
+import { readBlobs } from '#internal/git/read-blobs.ts';
+import type { BlobContent } from '#internal/git/read-blobs.ts';
+import { LruCache } from '#pkg/datastructures/lru-cache.ts';
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+
+import { gitFailure } from '../sessions/git-failure.ts';
+import { loadReviewDiff } from '../sessions/load-review-diff.ts';
+import { loadSession } from '../sessions/load-session.ts';
+import { refreshSession } from '../sessions/refresh-session.ts';
+import type { SessionContext } from '../sessions/session-context.ts';
+
+import { findPackageRoots } from './find-package-roots.ts';
+
+/** Whole files and the repository tree, for the radar tree and hunk expansion (ADR 0018). */
+export interface FileServices {
+  readonly getTree: (request: GetTreeRequest) => Promise<IpcResult<RepositoryTreeView>>;
+  readonly getFilePair: (request: GetFilePairRequest) => Promise<IpcResult<FilePairView>>;
+}
+
+export interface FileServicesOptions {
+  readonly context: SessionContext;
+  /** Trees kept, one per (repository, head). Defaults to 8. */
+  readonly cacheSize?: number;
+}
+
+const zeroIdPattern = /^0+$/u;
+
+/**
+ * `session:get-tree` lists the session head's tree (refreshing the head first) and its package
+ * roots, cached per (repository, head). `session:get-file-pair` reads both sides of one file of
+ * the review the session shows now, by the blob ids in its diff, so only reviewed files are read.
+ */
+export function createFileServices(options: FileServicesOptions): FileServices {
+  const { context } = options;
+  const trees = new LruCache<string, Pick<RepositoryTreeView, 'paths' | 'packageRoots'>>(
+    options.cacheSize ?? 8,
+  );
+  return {
+    getTree: async ({ sessionId }): Promise<IpcResult<RepositoryTreeView>> => {
+      const loaded = loadSession(context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const refreshed = await refreshSession(context, loaded.value);
+      if (!refreshed.ok) {
+        return refreshed;
+      }
+      const { repository, session } = refreshed.value;
+      const key = `${repository.root}\0${session.headSha}`;
+      const cached = trees.get(key);
+      if (cached !== undefined) {
+        return ok({ sessionId, headSha: session.headSha, ...cached });
+      }
+      const paths = await listTreePaths(repository, session.headSha);
+      if (!paths.ok) {
+        return gitFailure(context.logger, paths.error);
+      }
+      const listing = { paths: paths.value, packageRoots: findPackageRoots(paths.value) };
+      trees.set(key, listing);
+      return ok({ sessionId, headSha: session.headSha, ...listing });
+    },
+    getFilePair: async ({ sessionId, path }): Promise<IpcResult<FilePairView>> => {
+      const diff = await loadReviewDiff(context, sessionId);
+      if (!diff.ok) {
+        return diff;
+      }
+      const file = diff.value.files.find((candidate) => headPath(candidate) === path);
+      if (file === undefined) {
+        return err({ code: 'not-found', message: 'that file is not in the review' });
+      }
+      const sides = [blobId(file, 'old'), blobId(file, 'new')];
+      const blobs = await readBlobs(
+        diff.value.refreshed.repository,
+        sides.filter((objectId) => objectId !== undefined).map((objectId) => ({ objectId })),
+      );
+      if (!blobs.ok) {
+        return gitFailure(context.logger, blobs.error);
+      }
+      const [oldContents, newContents] = sides.map((objectId) => textOf(objectId, blobs.value));
+      if (oldContents === undefined || newContents === undefined) {
+        return err({ code: 'unsupported', message: 'a side of this file is not readable text' });
+      }
+      return ok({
+        path,
+        ...('oldPath' in file && { oldPath: file.oldPath }),
+        ...(oldContents.value !== undefined && { oldContents: oldContents.value }),
+        ...(newContents.value !== undefined && { newContents: newContents.value }),
+      });
+    },
+  };
+}
+
+function headPath(file: DiffFile): string {
+  return 'newPath' in file ? file.newPath : file.path;
+}
+
+function blobId(file: DiffFile, side: 'old' | 'new'): string | undefined {
+  const isAbsent = side === 'old' ? file.status === 'added' : file.status === 'deleted';
+  const objectId = side === 'old' ? file.oldObject : file.newObject;
+  return isAbsent || objectId === undefined || zeroIdPattern.test(objectId) ? undefined : objectId;
+}
+
+/** `{ value: undefined }` for an absent side, `undefined` when the side is not readable text. */
+function textOf(
+  objectId: string | undefined,
+  blobs: ReadonlyMap<string, BlobContent>,
+): { readonly value: string | undefined } | undefined {
+  if (objectId === undefined) {
+    return { value: undefined };
+  }
+  const content = blobs.get(objectId);
+  return content?.kind === 'text' ? { value: content.text } : undefined;
+}

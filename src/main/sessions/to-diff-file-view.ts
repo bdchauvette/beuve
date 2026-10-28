@@ -1,7 +1,9 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
 
-/** Maps a parsed git diff file to the contract's view: paths, counts, hunk positions, patch. */
+const zeroIdPattern = /^0+$/u;
+
+/** Maps a parsed git diff file to the contract's view: paths, counts, hunk positions, patch, blobs. */
 export function toDiffFileView(file: DiffFile): DiffFileView {
   let additions = 0;
   let deletions = 0;
@@ -26,6 +28,8 @@ export function toDiffFileView(file: DiffFile): DiffFileView {
       header,
     })),
     patch: file.patch,
+    ...blobSha('oldBlobSha', file.oldObject),
+    ...blobSha('newBlobSha', file.newObject),
   };
   switch (file.status) {
     case 'added':
@@ -38,4 +42,13 @@ export function toDiffFileView(file: DiffFile): DiffFileView {
       return { status: file.status, path: file.newPath, oldPath: file.oldPath, ...common };
     }
   }
+}
+
+function blobSha<K extends 'oldBlobSha' | 'newBlobSha'>(
+  key: K,
+  objectId: string | undefined,
+): Partial<Record<K, string>> {
+  return objectId === undefined || zeroIdPattern.test(objectId)
+    ? {}
+    : ({ [key]: objectId } as Partial<Record<K, string>>);
 }

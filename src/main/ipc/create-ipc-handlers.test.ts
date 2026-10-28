@@ -123,6 +123,35 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
     expect(calls).toEqual([{ sessionId: 's1' }]);
   });
 
+  it('validates session:get-tree and session:get-file-pair before delegating', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        files: {
+          getTree: async (request) => {
+            calls.push(['tree', request]);
+            return notWired;
+          },
+          getFilePair: async (request) => {
+            calls.push(['pair', request]);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    await expectInvalid(handlers['session:get-tree']({ sessionId: 's1', path: 'a' }));
+    await expectInvalid(handlers['session:get-file-pair']({ sessionId: 's1' }));
+    await expectInvalid(handlers['session:get-file-pair']({ sessionId: 's1', path: '' }));
+    await handlers['session:get-tree']({ sessionId: 's1' });
+    await handlers['session:get-file-pair']({ sessionId: 's1', path: 'src/a.ts' });
+    expect(calls).toEqual([
+      ['tree', { sessionId: 's1' }],
+      ['pair', { sessionId: 's1', path: 'src/a.ts' }],
+    ]);
+  });
+
   it('validates lsp:call-hierarchy and drops absent optional fields', async () => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
@@ -242,6 +271,7 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       ...overrides,
     },
     impact: { getImpact: async () => notWired },
+    files: { getTree: async () => notWired, getFilePair: async () => notWired },
     lsp: { callHierarchy: async () => notWired },
     review: {
       run: async () => notWired,

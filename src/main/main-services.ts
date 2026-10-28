@@ -8,6 +8,7 @@ import type {
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 
+import type { FileServices } from './files/create-file-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
@@ -29,6 +30,7 @@ export interface SessionServices {
 export interface MainServices {
   readonly sessions: SessionServices;
   readonly impact: ImpactServices;
+  readonly files: FileServices;
   readonly lsp: Pick<LspServices, 'callHierarchy'>;
   readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
   readonly mcpTools: McpToolServices;
