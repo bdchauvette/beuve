@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { chatHelp } from './chat-help.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('parseChatCommand', () => {
@@ -10,6 +11,18 @@ describe('parseChatCommand', () => {
     expect(parseChatCommand('/editor cursor')).toEqual({ kind: 'editor', editorId: 'cursor' });
     expect(parseChatCommand('/editor emacs')).toMatchObject({ kind: 'invalid' });
     expect(parseChatCommand('/editor zed cursor')).toMatchObject({ kind: 'invalid' });
+  });
+
+  it('parses /trust and /untrust, which take no arguments', () => {
+    expect(parseChatCommand('/trust')).toEqual({ kind: 'trust' });
+    expect(parseChatCommand(' /UNTRUST ')).toEqual({ kind: 'untrust' });
+    expect(parseChatCommand('/trust now')).toMatchObject({ kind: 'invalid' });
+    expect(parseChatCommand('/untrust all')).toMatchObject({ kind: 'invalid' });
+  });
+
+  it('lists /trust and /untrust in the help', () => {
+    expect(chatHelp.some((line) => line.startsWith('/trust'))).toBe(true);
+    expect(chatHelp.some((line) => line.startsWith('/untrust'))).toBe(true);
   });
 
   it('parses /review for the whole session', () => {

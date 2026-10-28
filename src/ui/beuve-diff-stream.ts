@@ -21,6 +21,7 @@ import { describeUraItem } from './describe-ura-item.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
+import type { TraceState } from './trace-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
 import { zoneStyles } from './zone-styles.ts';
 
@@ -61,7 +62,7 @@ const unmountMargin = '6000px 0px';
  * header naming the review kind, ImpactGate banners and agent insights once they arrive. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, `j`/`k` step
  * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
- * it), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
+ * it), `r` runs the tests covering the focused hunk with tracing (ADR 0041), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
  * to undo), and `m` opens a composer that stages the selected lines, the active hunk or the file
  * into the review dock (ADR 0027). Emits `beuve-mark-reviewed`, `beuve-peek-request`,
  * `beuve-peek-close`, `beuve-insight-status`, `beuve-ura-create` and `beuve-active-file` (the
@@ -184,9 +185,15 @@ export class BeuveDiffStream extends LitElement {
       this.toggleFlow();
       return;
     }
+    if (event.key === 'r') {
+      event.preventDefault();
+      this.requestTrace();
+      return;
+    }
     if (
       event.key === 'p' ||
-      (event.key === 'Escape' && (this.peek !== undefined || this.flow !== undefined))
+      (event.key === 'Escape' &&
+        (this.peek !== undefined || this.flow !== undefined || this.trace !== undefined))
     ) {
       event.preventDefault();
       this.togglePeek(event.key === 'Escape');
@@ -303,6 +310,7 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   @property({ attribute: false }) accessor flow: FlowState | undefined;
+  @property({ attribute: false }) accessor trace: TraceState | undefined;
 
   /** Agent insights for `review`'s head, every status. */
   @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
@@ -566,6 +574,33 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   }
 
+  /**
+   * `r` runs the tests covering the focused hunk (else the file's first change) with tracing and
+   * opens the timeline portal; pressing it while the same probe runs does nothing.
+   */
+  private requestTrace(): void {
+    const file = this.review?.files[this.activeIndex];
+    if (file === undefined) {
+      return;
+    }
+    const line = this.targetLine(file);
+    if (
+      this.trace?.status === 'loading' &&
+      this.trace.path === file.path &&
+      this.trace.line === line
+    ) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-trace-request', {
+        detail: { path: file.path, line },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    this.focus();
+  }
+
   /** The first changed head line of the focused hunk, else of the file. */
   private targetLine(file: DiffFileView): number | undefined {
     return (
@@ -580,6 +615,9 @@ export class BeuveDiffStream extends LitElement {
     }
     if (this.flow !== undefined) {
       this.dispatchEvent(new CustomEvent('beuve-flow-close', { bubbles: true, composed: true }));
+    }
+    if (this.trace !== undefined) {
+      this.dispatchEvent(new CustomEvent('beuve-trace-close', { bubbles: true, composed: true }));
     }
     this.focus();
   }
@@ -637,6 +675,7 @@ export class BeuveDiffStream extends LitElement {
                       .findings=${this.impact?.findings ?? []}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
                       .flow=${this.flow?.path === file.path ? this.flow : undefined}
+                      .trace=${this.trace?.path === file.path ? this.trace : undefined}
                       .insights=${this.insights.filter((insight) => insight.path === file.path)}
                       .uraItems=${this.uraItems}
                       .composer=${this.composer?.path === file.path ? this.composer : undefined}

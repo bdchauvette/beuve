@@ -11,7 +11,7 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['c'], action: 'Open / focus the chat input (again to close)', available: true },
   {
     keys: ['Enter'],
-    action: 'Chat: ask a question, or run a command (/review, /clear, /help)',
+    action: 'Chat: ask a question, or run a command (/review, /trust, /clear, /help)',
     available: true,
   },
   { keys: ['Esc'], action: 'Chat: back to the diff stream', available: true },
@@ -24,7 +24,11 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
   { keys: ['Space'], action: 'Expand / collapse', available: false },
   { keys: ['f'], action: 'Toggle diff-only tree', available: true },
   { keys: ['p'], action: 'Call-stack peek (callers)', available: true },
-  { keys: ['Esc'], action: 'Close the peek or flow portal', available: true },
+  {
+    keys: ['Esc'],
+    action: 'Close the peek, flow or trace portal (stops a running probe)',
+    available: true,
+  },
   { keys: [']', '['], action: 'Next / previous agent insight', available: true },
   {
     keys: ['y'],
@@ -48,7 +52,12 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
     action: 'Control-flow graph of the function (Enter shows the code)',
     available: true,
   },
-  { keys: ['r'], action: 'Run trace probe', available: false },
+  {
+    keys: ['r'],
+    action:
+      'Trace probe: run the tests covering the hunk and show what executed (asks once per repository; Enter shows the line)',
+    available: true,
+  },
   { keys: ['e'], action: 'Inline edit', available: false },
   {
     keys: ['o'],

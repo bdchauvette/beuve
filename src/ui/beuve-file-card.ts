@@ -20,6 +20,8 @@ import type { BeuveAgentInsight } from './beuve-agent-insight.ts';
 import './beuve-flow-portal.ts';
 import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
+import './beuve-trace-portal.ts';
+import type { TraceLineActivateDetail } from './beuve-trace-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import { describeFileImpact } from './describe-file-impact.ts';
@@ -27,6 +29,7 @@ import { describeUraItem } from './describe-ura-item.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
+import type { TraceState } from './trace-state.ts';
 import { placeInsights } from './place-insights.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
@@ -303,6 +306,11 @@ export class BeuveFileCard extends LitElement {
     void this.revealLine(event.detail.startLine);
   };
 
+  private readonly onTraceLineActivate = (event: CustomEvent<TraceLineActivateDetail>): void => {
+    event.stopPropagation();
+    void this.revealLine(event.detail.line);
+  };
+
   private readonly onLineSelected = (range: SelectedLines | null): void => {
     if (range === null) {
       this.lineSelection = undefined;
@@ -326,6 +334,8 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   /** The control-flow graph portal, which shares the peek's place (one portal at a time). */
   @property({ attribute: false }) accessor flow: FlowState | undefined;
+  /** The trace timeline portal; it shares the place of the peek and flow portals too. */
+  @property({ attribute: false }) accessor trace: TraceState | undefined;
   /** This file's agent insights for the reviewed head. */
   @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
   @property() accessor focusedInsightId: string | undefined;
@@ -728,6 +738,14 @@ ${splitPatch(file.patch).map(
               .flow=${this.flow}
               @flow-node-activate=${this.onFlowNodeActivate}
             ></beuve-flow-portal>`
+      }
+      ${
+        this.trace === undefined
+          ? nothing
+          : html`<beuve-trace-portal
+              .trace=${this.trace}
+              @trace-line-activate=${this.onTraceLineActivate}
+            ></beuve-trace-portal>`
       }
       ${this.renderCode(file)}
     `;

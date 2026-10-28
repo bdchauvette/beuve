@@ -9,6 +9,10 @@ export type ChatCommand =
   | { readonly kind: 'clear' }
   /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
   | { readonly kind: 'editor'; readonly editorId?: EditorId }
+  /** Approves running the open repository's tests for trace probes (ADR 0041). */
+  | { readonly kind: 'trust' }
+  /** Withdraws that approval. */
+  | { readonly kind: 'untrust' }
   | {
       readonly kind: 'review';
       readonly pathPrefixes: readonly string[];
@@ -24,8 +28,8 @@ const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 const whitespace = /\s+/u;
 
 /**
- * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`, and
- * `/editor [zed|vscode|cursor]`, and
+ * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
+ * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -48,6 +52,13 @@ export function parseChatCommand(input: string): ChatCommand {
       return args.length === 0
         ? { kind: 'clear' }
         : invalid('/clear takes no arguments. Type /help for the commands.');
+    }
+    case '/trust':
+    case '/untrust': {
+      const kind = name.toLowerCase() === '/trust' ? 'trust' : 'untrust';
+      return args.length === 0
+        ? { kind }
+        : invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
     }
     case '/editor': {
       return parseEditor(args);

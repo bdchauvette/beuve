@@ -16,6 +16,7 @@ import type {
   FlowFailureKind,
   FlowGraphResponse,
   GithubAuthStatusView,
+  TraceStatusView,
   ImpactView,
   InsightStatusView,
   IpcResult,
@@ -67,6 +68,9 @@ import type { FlowState } from './flow-state.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
+import { applyTraceStatus } from './apply-trace-status.ts';
+import { formatDuration } from './format-duration.ts';
+import type { TraceState } from './trace-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import type { ZoneId } from './zones.ts';
@@ -228,6 +232,20 @@ export class BeuveApp extends LitElement {
 
   private readonly onFlowClose = (): void => {
     this.flow = undefined;
+  };
+
+  private readonly onTraceRequest = (
+    event: CustomEvent<{ path: string; line: number | undefined }>,
+  ): void => {
+    void this.openTrace(event.detail.path, event.detail.line);
+  };
+
+  private readonly onTraceClose = (): void => {
+    this.closeTrace();
+  };
+
+  private readonly onTraceTrust = (): void => {
+    void this.trustAndRunTrace();
   };
 
   private readonly onChatSubmit = (event: CustomEvent<{ text: string }>): void => {
@@ -393,6 +411,8 @@ export class BeuveApp extends LitElement {
   @state() accessor peek: PeekState | undefined;
   /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
   @state() accessor flow: FlowState | undefined;
+  /** The trace timeline portal; at most one of `peek`, `flow` and `trace` is open at a time. */
+  @state() accessor trace: TraceState | undefined;
   @state() accessor reviewLoading = false;
   @state() accessor reviewError = '';
   @state() accessor marking = false;
@@ -461,6 +481,9 @@ export class BeuveApp extends LitElement {
         if (sessionId === this.review?.session.id) {
           void this.refreshUra(sessionId);
         }
+      }),
+      bridge.on('trace:status', (event) => {
+        this.applyTraceEvent(event);
       }),
       bridge.on('github:pr-updated', (event) => {
         this.applyPullRequestUpdate(event);
@@ -748,6 +771,7 @@ export class BeuveApp extends LitElement {
     this.reviewLoading = false;
     this.peek = undefined;
     this.flow = undefined;
+    this.closeTrace();
     if (review.ok) {
       if (this.review?.headSha !== review.value.headSha) {
         this.insights = [];
@@ -827,6 +851,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.flow = undefined;
+    this.closeTrace();
     if (line === undefined) {
       this.peek = {
         path,
@@ -857,6 +882,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.peek = undefined;
+    this.closeTrace();
     if (line === undefined) {
       this.flow = {
         path,
@@ -877,6 +903,144 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.flow = toFlowState(path, line, answer);
+  }
+
+  /** `r`: runs the tests covering the hunk with tracing; the portal follows `trace:status`. */
+  private async openTrace(path: string, line: number | undefined): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    this.peek = undefined;
+    this.flow = undefined;
+    this.closeTrace();
+    if (line === undefined) {
+      this.trace = {
+        path,
+        line,
+        status: 'error',
+        failure: 'local',
+        message: 'This file has no head-side change to trace.',
+      };
+      return;
+    }
+    const pending: TraceState = { path, line, status: 'loading', testFiles: undefined };
+    this.trace = pending;
+    const started = await bridge.invoke('trace:run', {
+      sessionId: review.session.id,
+      path,
+      line,
+    });
+    // Status events may already have replaced `pending`; only a refusal is left to report.
+    if (!started.ok && this.trace === pending && this.review === review) {
+      this.trace = {
+        path,
+        line,
+        status: 'error',
+        failure: 'local',
+        message: started.error.message,
+      };
+    }
+  }
+
+  /** Closes the trace portal, stopping the probe if it is still running. */
+  private closeTrace(): void {
+    const { review, trace } = this;
+    if (review !== undefined && trace?.status === 'loading') {
+      void beuveBridge()?.invoke('trace:cancel', { sessionId: review.session.id });
+    }
+    this.trace = undefined;
+  }
+
+  private async trustAndRunTrace(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review, trace } = this;
+    if (bridge === undefined || review === undefined || trace?.status !== 'needs-trust') {
+      return;
+    }
+    const trusted = await bridge.invoke('trace:set-trust', {
+      sessionId: review.session.id,
+      trusted: true,
+    });
+    if (this.trace !== trace || this.review !== review) {
+      return;
+    }
+    if (!trusted.ok) {
+      this.trace = {
+        path: trace.path,
+        line: trace.line,
+        status: 'error',
+        failure: 'local',
+        message: trusted.error.message,
+      };
+      return;
+    }
+    await this.openTrace(trace.path, trace.line);
+  }
+
+  private applyTraceEvent(event: TraceStatusView): void {
+    const next = applyTraceStatus(this.trace, this.review?.session.id, event);
+    if (next === this.trace) {
+      return;
+    }
+    this.trace = next;
+    if (next?.status === 'ready') {
+      const tests = next.result.timelines.length;
+      const took = formatDuration(next.result.durationMs);
+      this.showNotice({
+        tone: next.note === undefined ? 'info' : 'error',
+        text:
+          next.note === undefined
+            ? `Trace ready: ${String(tests)} ${tests === 1 ? 'test' : 'tests'} in ${took}.`
+            : `Trace ready, but some tests failed (${took}).`,
+      });
+    } else if (next?.status === 'error') {
+      this.showNotice({ tone: 'error', text: `Trace probe: ${next.message}` });
+    }
+  }
+
+  /** `/trust` and `/untrust`: approve or withdraw running the open repository's tests (ADR 0041). */
+  private async runTrustCommand(isTrusting: boolean): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      this.note('error', 'Open a review session first, then type /trust or /untrust.');
+      return;
+    }
+    const sessionId = review.session.id;
+    const before = await bridge.invoke('trace:get-trust', { sessionId });
+    if (!before.ok) {
+      this.note('error', before.error.message);
+      return;
+    }
+    const { repositoryPath } = before.value;
+    if (before.value.trusted === isTrusting) {
+      this.note(
+        'info',
+        isTrusting
+          ? `${repositoryPath} is already trusted. /untrust withdraws it.`
+          : `${repositoryPath} is not trusted.`,
+      );
+      return;
+    }
+    const changed = await bridge.invoke('trace:set-trust', { sessionId, trusted: isTrusting });
+    if (!changed.ok) {
+      this.note('error', changed.error.message);
+      return;
+    }
+    this.note(
+      'info',
+      ...(isTrusting
+        ? [
+            `Trusted ${repositoryPath}.`,
+            'Pressing r on a hunk now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
+          ]
+        : [`No longer trusting ${repositoryPath}. Pressing r will ask again.`]),
+    );
+    if (!isTrusting) {
+      this.closeTrace();
+    }
   }
 
   private async expandPeek(nodeId: string): Promise<void> {
@@ -962,6 +1126,12 @@ export class BeuveApp extends LitElement {
       case 'editor': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runEditorCommand(command.editorId);
+        return;
+      }
+      case 'trust':
+      case 'untrust': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.runTrustCommand(command.kind === 'trust');
         return;
       }
       case 'review': {
@@ -1470,6 +1640,7 @@ export class BeuveApp extends LitElement {
         .impact=${this.impact}
         .peek=${this.peek}
         .flow=${this.flow}
+        .trace=${this.trace}
         .insights=${this.insights}
         .insightJump=${this.insightJump}
         .fileJump=${this.fileJump}
@@ -1482,6 +1653,9 @@ export class BeuveApp extends LitElement {
         @beuve-peek-close=${this.onPeekClose}
         @beuve-flow-request=${this.onFlowRequest}
         @beuve-flow-close=${this.onFlowClose}
+        @beuve-trace-request=${this.onTraceRequest}
+        @beuve-trace-close=${this.onTraceClose}
+        @beuve-trace-trust=${this.onTraceTrust}
         @beuve-diff-rendered=${this.onDiffRendered}
         @beuve-ura-create=${this.onUraCreate}
         @beuve-active-file=${this.onActiveFile}
