@@ -26,6 +26,11 @@ export interface GithubClientOptions<E> {
   readonly getToken: TokenSource<E>;
   /** Defaults to the global `fetch`. */
   readonly fetch?: FetchLike;
+  /**
+   * Replaces the API root `resolveGithubApiBase` gives, for a local fake GitHub in development
+   * and tests (ADR 0040). Main passes it only in an unpackaged app, and only a loopback URL.
+   */
+  readonly apiBase?: URL;
   /** Per request, including reading the body. Defaults to 20 s. */
   readonly timeoutMs?: number;
   /** Sent as `X-GitHub-Api-Version`. Defaults to `2022-11-28`. */
@@ -49,7 +54,7 @@ export function createGithubClient<E>(
   if (host === undefined) {
     return err(`not a GitHub hostname: ${options.host}`);
   }
-  const base = resolveGithubApiBase(host);
+  const base = options.apiBase ?? resolveGithubApiBase(host);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? 20_000;
   const now = options.now ?? ((): Date => new Date());
