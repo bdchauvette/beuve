@@ -7,4 +7,6 @@ export const eventChannels = Object.freeze([
   'chat:delta',
   'chat:message-updated',
   'ura:changed',
+  'github:pr-updated',
+  'github:ci-status',
 ] as const satisfies readonly EventChannel[]);

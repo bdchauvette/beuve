@@ -12,6 +12,7 @@ import type { ChatServices } from './chat/create-chat-services.ts';
 import type { EditorServices } from './editor/create-editor-services.ts';
 import type { FileServices } from './files/create-file-services.ts';
 import type { FlowServices } from './flow/create-flow-services.ts';
+import type { GithubServices } from './github/create-github-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
@@ -40,10 +41,17 @@ export interface MainServices {
   readonly editor: EditorServices;
   readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
   readonly chat: Omit<ChatServices, 'observeHead'>;
-  readonly ura: Omit<UraServices, 'observeHead' | 'readAgentReview'>;
+  readonly ura: Omit<
+    UraServices,
+    'observeHead' | 'readAgentReview' | 'compileArtifact' | 'listPostings' | 'recordPostings'
+  >;
+  readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'watch'>;
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;
-  /** Aborts preliminary reviews and chat answers and stops the language servers. Call once, on quit. */
+  /**
+   * Aborts preliminary reviews and chat answers, stops polling GitHub and the language servers.
+   * Call once, on quit.
+   */
   readonly dispose: () => Promise<void>;
 }

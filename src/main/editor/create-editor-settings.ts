@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-
 import type { EditorId } from '#contract/ipc-contract.ts';
+
+import { readSettingsFile } from '../settings/read-settings-file.ts';
+import { updateSettingsFile } from '../settings/update-settings-file.ts';
 
 import { editorDefinitions } from './editor-definitions.ts';
 
@@ -19,7 +19,7 @@ export function createEditorSettings(filePath?: string): EditorSettings {
   let remembered: EditorId | undefined;
   return {
     read: async (): Promise<EditorId | undefined> => {
-      const stored = filePath === undefined ? undefined : await readObject(filePath);
+      const stored = filePath === undefined ? undefined : await readSettingsFile(filePath);
       return filePath === undefined ? remembered : toEditorId(stored?.['preferredEditor']);
     },
     write: async (editorId): Promise<void> => {
@@ -27,24 +27,9 @@ export function createEditorSettings(filePath?: string): EditorSettings {
       if (filePath === undefined) {
         return;
       }
-      const next = { ...(await readObject(filePath)), preferredEditor: editorId };
-      await mkdir(path.dirname(filePath), { recursive: true });
-      const temporary = `${filePath}.tmp`;
-      await writeFile(temporary, `${JSON.stringify(next, undefined, 2)}\n`);
-      await rename(temporary, filePath);
+      await updateSettingsFile(filePath, (current) => ({ ...current, preferredEditor: editorId }));
     },
   };
-}
-
-async function readObject(filePath: string): Promise<Record<string, unknown>> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'));
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 function toEditorId(value: unknown): EditorId | undefined {

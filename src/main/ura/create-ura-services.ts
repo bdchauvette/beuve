@@ -33,8 +33,10 @@ import { findUraItemByOrigin } from '#internal/ura/find-ura-item-by-origin.ts';
 import { insertUraItem } from '#internal/ura/insert-ura-item.ts';
 import type { LineMapping } from '#internal/ura/line-mapping.ts';
 import { listUraItems } from '#internal/ura/list-ura-items.ts';
+import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
 import { promoteAgentInsight } from '#internal/ura/promote-agent-insight.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
+import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
@@ -54,6 +56,7 @@ import type {
   UraStatus,
   UraStoreError,
 } from '#internal/ura/ura-item.ts';
+import type { UraPosting } from '#internal/ura/ura-posting.ts';
 import type { UraVerdictChoice } from '#internal/ura/ura-verdict-choice.ts';
 import { LruCache } from '#pkg/datastructures/lru-cache.ts';
 import { err } from '#pkg/result/err.ts';
@@ -87,6 +90,18 @@ export interface UraServices {
   ) => Promise<IpcResult<UraStagedView>>;
   readonly setVerdict: (request: SetUraVerdictRequest) => IpcResult<UraVerdictStateView>;
   readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
+  /**
+   * The artifact on the current head with the chosen verdict (or `verdict`), for exporters main
+   * runs itself, such as posting to GitHub (ADR 0039).
+   */
+  readonly compileArtifact: (
+    sessionId: string,
+    verdict?: UraVerdictView,
+  ) => Promise<IpcResult<UraArtifact>>;
+  /** The session's postings, so a review isn't posted twice. */
+  readonly listPostings: (sessionId: string) => readonly UraPosting[];
+  /** Records that a posted review carried these items, and announces the change. */
+  readonly recordPostings: (sessionId: string, postings: readonly UraPosting[]) => void;
   /** The `beuve.ura/1` payload and its XML form, with the derived verdict, for MCP. */
   readonly readAgentReview: (
     sessionId: string,
@@ -187,6 +202,11 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     };
   };
 
+  const postingsFor = (sessionId: string): ReadonlyMap<string, UraPosting> =>
+    new Map(
+      listUraPostings(db, sessionId as SessionId).map((posting) => [posting.itemId, posting]),
+    );
+
   const headOf = async (sessionId: string): Promise<IpcResult<Head>> => {
     const loaded = loadSession(context, sessionId);
     if (!loaded.ok) {
@@ -208,7 +228,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return head;
     }
     const place = await placer(head.value, [item]);
-    return ok(toUraItemView(item, place(item)));
+    return ok(toUraItemView(item, place(item), postingsFor(item.sessionId).get(item.id)));
   };
 
   const stored = <T>(result: StoreResult<T>): IpcResult<T> =>
@@ -305,7 +325,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         return uraFailure(logger, items.error);
       }
       const place = await placer(head.value, items.value);
-      const views = items.value.map((item) => toUraItemView(item, place(item)));
+      const postings = postingsFor(head.value.sessionId);
+      const views = items.value.map((item) =>
+        toUraItemView(item, place(item), postings.get(item.id)),
+      );
       return ok({
         sessionId: head.value.sessionId,
         headSha: head.value.headSha,
@@ -501,6 +524,16 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
       const artifact = await compile(sessionId, verdict);
       return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
+    },
+
+    compileArtifact: async (sessionId, verdict): Promise<IpcResult<UraArtifact>> =>
+      compile(sessionId, verdict),
+
+    listPostings: (sessionId): readonly UraPosting[] => listUraPostings(db, sessionId as SessionId),
+
+    recordPostings: (sessionId, postings): void => {
+      recordUraPostings(db, postings);
+      changed(sessionId);
     },
 
     readAgentReview: async (

@@ -17,6 +17,9 @@ import type {
   EditorSettingsView,
   FilePairView,
   FlowGraphResponse,
+  GithubAuthStatusView,
+  GithubFailureView,
+  GithubReviewPreviewView,
   ImpactView,
   InsightListView,
   InsightStatusChangeView,
@@ -24,6 +27,9 @@ import type {
   InvokeResponse,
   IpcError,
   IpcResult,
+  OpenPullRequestResponse,
+  PostGithubReviewResponse,
+  PullRequestSessionView,
   ReviewRunHandleView,
   ReviewRunRequest,
   RepositoryTreeView,
@@ -195,6 +201,14 @@ const editorOpenRequest = z.strictObject({
 const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
+
+const githubAuthRequest = z.strictObject({ host: z.string().min(1).max(253).optional() });
+const openPullRequestRequest = z.strictObject({
+  ref: z.string().trim().min(1).max(2048),
+  repoPath: z.string().trim().min(1).max(4096).optional(),
+});
+const githubReviewRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
+const githubLinkRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 
 /**
  * Builds the invoke handlers. The renderer is untrusted, so each handler validates its argument
@@ -382,6 +396,59 @@ export function createIpcHandlers(
     'editor:set-preferred': async (request): Promise<IpcResult<EditorSettingsView>> => {
       const parsed = preferredEditorRequest.safeParse(request);
       return parsed.success ? services.editor.setPreferred(parsed.data) : invalid(parsed.error);
+    },
+    'github:auth-status': async (request): Promise<IpcResult<GithubAuthStatusView>> => {
+      const parsed = githubAuthRequest.safeParse(request ?? {});
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { host } = parsed.data;
+      return services.github.authStatus(host === undefined ? {} : { host });
+    },
+    'github:open-pr': async (request): Promise<IpcResult<OpenPullRequestResponse>> => {
+      const parsed = openPullRequestRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { ref, repoPath } = parsed.data;
+      return services.github.openPullRequest({
+        ref,
+        ...(repoPath !== undefined && { repoPath }),
+      });
+    },
+    'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success
+        ? services.github.getPullRequest(parsed.data.sessionId)
+        : invalid(parsed.error);
+    },
+    'github:preview-review': async (
+      request,
+    ): Promise<IpcResult<GithubReviewPreviewView | GithubFailureView>> => {
+      const parsed = githubReviewRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, verdict } = parsed.data;
+      return services.github.previewReview({
+        sessionId: id,
+        ...(verdict !== undefined && { verdict }),
+      });
+    },
+    'github:post-review': async (request): Promise<IpcResult<PostGithubReviewResponse>> => {
+      const parsed = githubReviewRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, verdict } = parsed.data;
+      return services.github.postReview({
+        sessionId: id,
+        ...(verdict !== undefined && { verdict }),
+      });
+    },
+    'github:open-link': async (request): Promise<IpcResult<{ opened: true }>> => {
+      const parsed = githubLinkRequest.safeParse(request);
+      return parsed.success ? services.github.openLink(parsed.data) : invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

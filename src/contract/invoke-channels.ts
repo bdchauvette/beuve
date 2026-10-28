@@ -33,4 +33,10 @@ export const invokeChannels = Object.freeze([
   'editor:open',
   'editor:get-settings',
   'editor:set-preferred',
+  'github:auth-status',
+  'github:open-pr',
+  'github:get-pr',
+  'github:preview-review',
+  'github:post-review',
+  'github:open-link',
 ] as const satisfies readonly InvokeChannel[]);

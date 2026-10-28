@@ -8,6 +8,7 @@ import { createLogger } from '#pkg/logger/create-logger.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
+import { parseDevApiBase } from './github/parse-dev-api-base.ts';
 import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
@@ -33,6 +34,14 @@ async function launch(): Promise<void> {
     const userData = app.getPath('userData');
     const worktreeRoot = path.join(userData, 'worktrees');
     const db = openAppDatabase(path.join(userData, 'beuve.db'));
+    const settingsPath = path.join(userData, 'settings.json');
+    // A local fake GitHub for development (ADR 0040); a packaged app never reads it.
+    const githubApiBase = app.isPackaged
+      ? undefined
+      : parseDevApiBase(process.env['BEUVE_GITHUB_API_URL']);
+    if (githubApiBase !== undefined) {
+      logger.warn('using a development GitHub API', { url: githubApiBase.href });
+    }
     app.once('quit', () => {
       db.close();
     });
@@ -42,7 +51,7 @@ async function launch(): Promise<void> {
         logger,
         worktreeRoot,
         editor: {
-          settingsPath: path.join(userData, 'settings.json'),
+          settingsPath,
           platform: createSystemEditorPlatform({
             openExternal: async (url) => shell.openExternal(url),
             ...(!app.isPackaged &&
@@ -50,6 +59,11 @@ async function launch(): Promise<void> {
                 launchLog: process.env['BEUVE_EDITOR_LAUNCH_LOG'],
               }),
           }),
+        },
+        github: {
+          settingsPath,
+          openExternal: async (url) => shell.openExternal(url),
+          ...(githubApiBase !== undefined && { apiBase: githubApiBase }),
         },
         syntax: { wasmDirectory: path.join(import.meta.dirname, 'wasm') },
       }),

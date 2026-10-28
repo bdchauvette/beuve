@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest';
+
+import { err } from '#pkg/result/err.ts';
+import { ok } from '#pkg/result/ok.ts';
+
+import { describeAuthStatus } from './describe-auth-status.ts';
+
+describe('describeAuthStatus', () => {
+  it('names the login, provider and scopes, and a failed check', () => {
+    expect(
+      describeAuthStatus(
+        'github.com',
+        ok({
+          provider: 'gh-cli',
+          host: 'github.com',
+          account: { login: 'octocat', scopes: ['repo'], check: { kind: 'valid' } },
+        }),
+      ),
+    ).toEqual({
+      kind: 'signed-in',
+      host: 'github.com',
+      provider: 'gh-cli',
+      login: 'octocat',
+      scopes: ['repo'],
+    });
+    expect(
+      describeAuthStatus(
+        'github.com',
+        ok({
+          provider: 'gh-cli',
+          host: 'github.com',
+          account: {
+            login: 'octocat',
+            scopes: undefined,
+            check: { kind: 'failed', message: 'expired' },
+          },
+        }),
+      ),
+    ).toMatchObject({ kind: 'signed-in', login: 'octocat', problem: 'expired' });
+    expect(
+      describeAuthStatus(
+        'github.com',
+        ok({ provider: 'gh-cli', host: 'github.com', account: undefined }),
+      ),
+    ).toEqual({ kind: 'signed-in', host: 'github.com', provider: 'gh-cli' });
+  });
+
+  it('gives the reason and remedy of a missing credential', () => {
+    const remedy = 'gh auth login --hostname github.com';
+    expect(
+      describeAuthStatus('github.com', err({ kind: 'not-logged-in', host: 'github.com', remedy })),
+    ).toEqual({
+      kind: 'signed-out',
+      host: 'github.com',
+      reason: 'not-logged-in',
+      message: `Not signed in to github.com. Run \`${remedy}\`.`,
+      remedy,
+    });
+    expect(
+      describeAuthStatus(
+        'github.com',
+        err({ kind: 'cli-not-installed', searched: ['/usr/bin/gh'] }),
+      ),
+    ).toMatchObject({ kind: 'signed-out', reason: 'cli-not-installed' });
+    expect(
+      describeAuthStatus('ghe.example.com', err({ kind: 'timeout', timeoutMs: 10_000 })),
+    ).toMatchObject({ reason: 'timeout', message: 'gh did not answer within 10 s.' });
+  });
+});

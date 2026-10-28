@@ -27,8 +27,9 @@ export interface StartAppOptions {
 
 /**
  * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC,
- * review progress, chat and URA change events, the clipboard, the main window and the MCP server; preliminary reviews are aborted and
- * language servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
+ * review progress, chat, URA and GitHub events, the clipboard, the main window (whose focus sets
+ * the GitHub polling pace) and the MCP server; preliminary reviews are aborted and language
+ * servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
  * level (see CLAUDE.md).
  */
 export async function startApp(app: App, options: StartAppOptions): Promise<void> {
@@ -44,6 +45,13 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     const window = createMainWindow(options);
     window.webContents.on('did-finish-load', () => {
       sendEvent(window.webContents, 'mcp:status', mcpStatus);
+    });
+    // Poll GitHub on the interval while beuve has focus, less often otherwise (ADR 0038).
+    window.on('focus', () => {
+      services.github.setForeground(true);
+    });
+    window.on('blur', () => {
+      services.github.setForeground(false);
     });
   };
 
@@ -65,6 +73,16 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   services.ura.onChanged((sessionId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'ura:changed', { sessionId });
+    }
+  });
+  services.github.onPullRequestUpdated((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'github:pr-updated', event);
+    }
+  });
+  services.github.onCiStatus((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'github:ci-status', event);
     }
   });
   void services.pruneWorktrees();

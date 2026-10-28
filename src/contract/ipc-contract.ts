@@ -26,11 +26,22 @@ export type SessionSourceView =
   | {
       readonly kind: 'github-pull-request';
       readonly repoPath: string;
+      /** The local ref the base branch is fetched into, `refs/beuve/pr/<n>/base`. */
       readonly baseRef: string;
+      readonly host: string;
       readonly owner: string;
       readonly repo: string;
       readonly number: number;
     };
+
+/** What the session list shows of a pull request, from the metadata main last stored. */
+export interface PullRequestBadgeView {
+  readonly title: string;
+  readonly state: 'open' | 'closed' | 'merged';
+  readonly isDraft: boolean;
+  /** The pull request's base branch on GitHub, e.g. `main`. */
+  readonly baseBranch: string;
+}
 
 /**
  * A review session as the UI sees it: the session domain's model flattened to plain strings.
@@ -44,6 +55,8 @@ export interface SessionSummary {
   readonly lastReviewedSha?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Pull request sessions whose metadata main has stored (ADR 0037); `session:list` only. */
+  readonly pullRequest?: PullRequestBadgeView;
 }
 
 export interface OpenSessionRequest {
@@ -760,6 +773,14 @@ export interface UraItemView {
   readonly status: UraStatusView;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Set once a posted GitHub review carried the item (ADR 0039); it is not posted again. */
+  readonly posted?: UraPostingView;
+}
+
+export interface UraPostingView {
+  readonly url: string;
+  readonly placement: 'inline' | 'body';
+  readonly postedAt: string;
 }
 
 /** What the review asks of the author, as a GitHub review event would say it. */
@@ -960,6 +981,190 @@ export interface UraChangedView {
   readonly sessionId: string;
 }
 
+/** `github:auth-status`: whose GitHub credential beuve would use for `host` (default github.com). */
+export interface GithubAuthStatusRequest {
+  readonly host?: string;
+}
+
+/**
+ * Who beuve is signed in to GitHub as, through which mechanism (ADR 0034). Never a token. A
+ * `signed-out` status names the reason and, when there is one, a command that fixes it.
+ */
+export type GithubAuthStatusView =
+  | {
+      readonly kind: 'signed-in';
+      readonly host: string;
+      readonly provider: 'gh-cli';
+      /** Absent when the provider can't say (an old gh). */
+      readonly login?: string;
+      readonly scopes?: readonly string[];
+      /** The provider's last check of the credential failed, with its message. */
+      readonly problem?: string;
+    }
+  | {
+      readonly kind: 'signed-out';
+      readonly host: string;
+      readonly reason:
+        | 'invalid-host'
+        | 'cli-not-installed'
+        | 'not-logged-in'
+        | 'host-not-configured'
+        | 'timeout'
+        | 'command-failed';
+      readonly message: string;
+      readonly remedy?: string;
+    };
+
+/** A pull request as the UI shows it. `body` is Markdown, rendered with a safe subset. */
+export interface PullRequestView {
+  readonly host: string;
+  readonly owner: string;
+  readonly repo: string;
+  readonly number: number;
+  readonly title: string;
+  readonly body: string;
+  readonly state: 'open' | 'closed' | 'merged';
+  readonly isDraft: boolean;
+  readonly author: string;
+  readonly htmlUrl: string;
+  readonly baseBranch: string;
+  readonly headBranch: string;
+  readonly headSha: string;
+  readonly isCrossRepository: boolean;
+  readonly updatedAt: string;
+}
+
+/** A neighbour in a stack of pull requests, opened with `github:open-pr` and the same clone. */
+export interface PullRequestStackEntryView {
+  readonly ref: string;
+  readonly number: number;
+  readonly title: string;
+  readonly isDraft: boolean;
+  readonly htmlUrl: string;
+}
+
+export interface PullRequestStackView {
+  readonly parents: readonly PullRequestStackEntryView[];
+  readonly children: readonly PullRequestStackEntryView[];
+}
+
+export type CiBucketView = 'pending' | 'success' | 'failure' | 'neutral';
+
+export interface CiCheckView {
+  readonly name: string;
+  readonly bucket: CiBucketView;
+  readonly url?: string;
+}
+
+/** CI for the pull request's head: one rollup over its check runs and commit statuses. */
+export interface CiStatusView {
+  readonly sha: string;
+  readonly overall: CiBucketView | 'none';
+  readonly counts: Readonly<Record<CiBucketView, number>>;
+  readonly checks: readonly CiCheckView[];
+  readonly isTruncated: boolean;
+}
+
+/**
+ * Open (or resume) a pull request session. `ref` is a pull request URL, `owner/repo#n` or
+ * `host/owner/repo#n`; `repoPath` a local clone whose remotes include the pull request's base
+ * repository. Without it, main uses the clone last used for that repository (ADR 0037).
+ */
+export interface OpenPullRequestRequest {
+  readonly ref: string;
+  readonly repoPath?: string;
+}
+
+/** Why a GitHub operation didn't happen; `remedy` is a command to run, when one helps. */
+export type GithubFailureKind =
+  | 'invalid-ref'
+  | 'not-signed-in'
+  | 'not-found'
+  | 'forbidden'
+  | 'rate-limited'
+  | 'needs-local-clone'
+  | 'fetch-failed'
+  | 'head-mismatch'
+  | 'not-a-pull-request'
+  | 'own-pull-request'
+  | 'stale-commit'
+  | 'github-failed';
+
+export interface GithubFailureView {
+  readonly kind: 'failed';
+  readonly failure: GithubFailureKind;
+  readonly message: string;
+  readonly remedy?: string;
+}
+
+export type OpenPullRequestResponse =
+  | GithubFailureView
+  | {
+      readonly kind: 'opened';
+      readonly session: SessionSummary;
+      readonly pullRequest: PullRequestView;
+      /** The clone's top level, remembered for this repository. */
+      readonly repoPath: string;
+    };
+
+/**
+ * What the UI shows of a pull request session: stored metadata, its stack neighbours and the last
+ * CI status. Asking also makes it the session main polls (ADR 0038).
+ */
+export interface PullRequestSessionView {
+  readonly sessionId: string;
+  readonly pullRequest: PullRequestView;
+  readonly stack: PullRequestStackView;
+  readonly ci?: CiStatusView;
+}
+
+/** Post (or preview) the session's staged URA items as one GitHub review on the current head. */
+export interface PostGithubReviewRequest {
+  readonly sessionId: string;
+  readonly verdict?: UraVerdictView;
+}
+
+/**
+ * What posting would send: inline comments, items that go into the review body (file-level,
+ * whole-change, outdated or off the pull request's diff), and items an earlier review already
+ * carried, which are not sent again.
+ */
+export interface GithubReviewPreviewView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly verdict: UraVerdictView;
+  readonly inlineCount: number;
+  readonly bodyCount: number;
+  readonly alreadyPostedCount: number;
+}
+
+export type PostGithubReviewResponse =
+  | (GithubReviewPreviewView & {
+      readonly kind: 'posted';
+      readonly url: string;
+      /** Inline comments GitHub refused and the fallback moved into the body. */
+      readonly movedToBody: number;
+    })
+  | GithubFailureView;
+
+/** A link from a pull request body; main opens it in the browser only if it is on GitHub. */
+export interface OpenGithubLinkRequest {
+  readonly url: string;
+}
+
+/** Pushed when polling finds a pull request changed; `headMoved` when its head did. */
+export interface PullRequestUpdatedView {
+  readonly sessionId: string;
+  readonly pullRequest: PullRequestView;
+  readonly stack: PullRequestStackView;
+  readonly headMoved: boolean;
+}
+
+export interface CiStatusChangedView {
+  readonly sessionId: string;
+  readonly ci: CiStatusView;
+}
+
 /**
  * Expected failures of an invoke channel. `not-wired` means the backing service isn't composed
  * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
@@ -1103,6 +1308,30 @@ export interface InvokeChannelMap {
     readonly request: SetPreferredEditorRequest;
     readonly response: IpcResult<EditorSettingsView>;
   };
+  'github:auth-status': {
+    readonly request: GithubAuthStatusRequest;
+    readonly response: IpcResult<GithubAuthStatusView>;
+  };
+  'github:open-pr': {
+    readonly request: OpenPullRequestRequest;
+    readonly response: IpcResult<OpenPullRequestResponse>;
+  };
+  'github:get-pr': {
+    readonly request: GetReviewRequest;
+    readonly response: IpcResult<PullRequestSessionView>;
+  };
+  'github:preview-review': {
+    readonly request: PostGithubReviewRequest;
+    readonly response: IpcResult<GithubReviewPreviewView | GithubFailureView>;
+  };
+  'github:post-review': {
+    readonly request: PostGithubReviewRequest;
+    readonly response: IpcResult<PostGithubReviewResponse>;
+  };
+  'github:open-link': {
+    readonly request: OpenGithubLinkRequest;
+    readonly response: IpcResult<{ readonly opened: true }>;
+  };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -1123,6 +1352,8 @@ export interface EventChannelMap {
   'chat:delta': ChatDeltaView;
   'chat:message-updated': ChatMessageUpdatedView;
   'ura:changed': UraChangedView;
+  'github:pr-updated': PullRequestUpdatedView;
+  'github:ci-status': CiStatusChangedView;
 }
 
 export type EventChannel = keyof EventChannelMap;

@@ -501,11 +501,55 @@ describe('createIpcHandlers for the editor', () => {
   });
 });
 
+describe('github channels', () => {
+  it('validates refs, paths, verdicts and links before reaching the services', async () => {
+    const calls: unknown[] = [];
+    const record = async (request: unknown): Promise<typeof notWiredError> => {
+      calls.push(request);
+      await Promise.resolve();
+      return notWiredError;
+    };
+    const handlers = createIpcHandlers(
+      stubServices(
+        {},
+        {
+          authStatus: record,
+          openPullRequest: record,
+          postReview: record,
+          openLink: record,
+          getPullRequest: record,
+        },
+      ),
+      appInfo,
+    );
+    await expectInvalid(handlers['github:open-pr']({ ref: '' }));
+    await expectInvalid(handlers['github:open-pr']({ ref: 'o/r#1', token: 'x' }));
+    await expectInvalid(handlers['github:post-review']({ sessionId: 's1', verdict: 'lgtm' }));
+    await expectInvalid(handlers['github:open-link']({ url: '' }));
+    await expectInvalid(handlers['github:auth-status']({ host: '' }));
+    await handlers['github:auth-status'](undefined);
+    await handlers['github:open-pr']({ ref: ' o/r#1 ', repoPath: '/clone' });
+    await handlers['github:open-pr']({ ref: 'o/r#2' });
+    await handlers['github:post-review']({ sessionId: 's1', verdict: 'comment' });
+    await handlers['github:get-pr']({ sessionId: 's1' });
+    expect(calls).toEqual([
+      {},
+      { ref: 'o/r#1', repoPath: '/clone' },
+      { ref: 'o/r#2' },
+      { sessionId: 's1', verdict: 'comment' },
+      's1',
+    ]);
+  });
+});
+
 async function expectInvalid(response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
 
-function stubServices(overrides: Partial<SessionServices>): MainServices {
+function stubServices(
+  overrides: Partial<SessionServices>,
+  github: Partial<MainServices['github']> = {},
+): MainServices {
   return {
     sessions: {
       list: () => notWiredError,
@@ -550,6 +594,20 @@ function stubServices(overrides: Partial<SessionServices>): MainServices {
       setVerdict: () => notWiredError,
       export: async () => notWired,
       onChanged: () => doNothingSync,
+    },
+    github: {
+      authStatus: async () => notWired,
+      openPullRequest: async () => notWired,
+      getPullRequest: async () => notWired,
+      previewReview: async () => notWired,
+      postReview: async () => notWired,
+      openLink: async () => notWired,
+      pollNow: doNothing,
+      setForeground: doNothingSync,
+      onPullRequestUpdated: () => doNothingSync,
+      onCiStatus: () => doNothingSync,
+      dispose: doNothingSync,
+      ...github,
     },
     mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,

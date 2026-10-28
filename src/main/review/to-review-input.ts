@@ -13,6 +13,8 @@ export interface ReviewInputParts {
   readonly pathPrefixes: readonly string[];
   /** The cached ImpactGate findings for the same diff, if they were computed. */
   readonly impactFindings: readonly ImpactFindingView[] | undefined;
+  /** What the change is for: a pull request's title and body (ADR 0037). */
+  readonly intent?: string | undefined;
 }
 
 /**
@@ -45,6 +47,7 @@ export function toReviewInput(parts: ReviewInputParts): ReviewInput {
     files,
     pathScope: pathPrefixes,
     ...(parts.impactFindings !== undefined && { impactFindings: findings }),
+    ...(parts.intent !== undefined && parts.intent !== '' && { intent: parts.intent }),
   };
 }
 

@@ -62,6 +62,8 @@ export interface ReviewServicesOptions {
   readonly impact: ImpactServices;
   readonly worktrees: SessionWorktrees;
   readonly claude?: ClaudeCodeSettings;
+  /** The session's stated intent (a pull request's title and body), passed to the reviewer. */
+  readonly intentFor?: (sessionId: string) => string | undefined;
 }
 
 interface Job {
@@ -179,6 +181,7 @@ export function createReviewServices(options: ReviewServicesOptions): ReviewServ
       worktreePath: worktree.value,
       pathPrefixes,
       impactFindings: findings,
+      intent: options.intentFor?.(job.sessionId),
     });
     if (input.files.length === 0) {
       return err({
