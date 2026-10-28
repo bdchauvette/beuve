@@ -1,11 +1,61 @@
 :root {
   color-scheme: light dark;
+
+  --beuve-space-1: 4px;
+  --beuve-space-2: 8px;
+  --beuve-space-3: 12px;
   --beuve-space-4: 16px;
-  --beuve-font-body: 14px/1.5 system-ui, sans-serif;
+  --beuve-space-6: 24px;
+  --beuve-radius: 6px;
+  --beuve-font-body: 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --beuve-font-small: 11px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --beuve-font-mono: 12px/1.5 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --beuve-titlebar-height: 38px;
+  --beuve-statusbar-height: 26px;
+  --beuve-intent-width: 260px;
+  --beuve-ura-width: 320px;
+  --beuve-chat-height: 280px;
+
+  --beuve-bg: #f7f7f8;
+  --beuve-surface: #ffffff;
+  --beuve-surface-sunken: #efeff1;
+  --beuve-border: #dcdce0;
+  --beuve-text: #1b1c20;
+  --beuve-text-muted: #6a6c75;
+  --beuve-accent: #2f6fde;
+  --beuve-accent-soft: #2f6fde1f;
+  --beuve-insight: #7a4fd6;
+  --beuve-ok: #1f8a4c;
+  --beuve-warn: #a86a00;
+  --beuve-danger: #c8333a;
+  --beuve-scrim: #0000004d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --beuve-bg: #16181d;
+    --beuve-surface: #1d2027;
+    --beuve-surface-sunken: #13151a;
+    --beuve-border: #2e323b;
+    --beuve-text: #e3e5ea;
+    --beuve-text-muted: #8d929e;
+    --beuve-accent: #6b9cff;
+    --beuve-accent-soft: #6b9cff26;
+    --beuve-insight: #a985ff;
+    --beuve-ok: #4cc27f;
+    --beuve-warn: #e0a83a;
+    --beuve-danger: #ff6b70;
+    --beuve-scrim: #00000080;
+  }
 }
 
 html,
 body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
+  background: var(--beuve-bg);
+  color: var(--beuve-text);
+  font: var(--beuve-font-body);
 }

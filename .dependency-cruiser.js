@@ -31,6 +31,20 @@ export default {
       to: { dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'npm-bundled'] },
     },
     {
+      name: 'contract-is-leaf',
+      severity: 'error',
+      comment: 'src/contract (ADR 0011) may import only itself and src/pkg: no npm, no built-ins.',
+      from: { path: '^src/contract/', pathNot: '\\.test\\.ts$' },
+      to: { pathNot: '^src/(contract|pkg)/' },
+    },
+    {
+      name: 'contract-is-node-free',
+      severity: 'error',
+      comment: 'The contract is bundled into the sandboxed preload and the renderer.',
+      from: { path: '^src/contract/', pathNot: '\\.test\\.ts$' },
+      to: { path: '^(?!src/|node_modules/)', reachable: true },
+    },
+    {
       name: 'renderer-not-to-main',
       severity: 'error',
       comment: 'ui and preload talk to main only through the IPC contract.',
@@ -40,9 +54,9 @@ export default {
     {
       name: 'internal-not-to-processes',
       severity: 'error',
-      comment: 'Domains never depend on a process layer; main composes them.',
+      comment: 'Domains never depend on a process layer or the IPC contract; main composes them.',
       from: { path: '^src/internal/' },
-      to: { path: '^src/(main|ui|preload)/' },
+      to: { path: '^src/(main|ui|preload|contract)/' },
     },
     {
       name: 'main-not-to-renderer',

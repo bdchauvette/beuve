@@ -15,3 +15,4 @@ Template: [0000-template.md](0000-template.md)
 | [0007](0007-build-test-and-tooling-layout.md)  | Build, test and tooling layout                            | Accepted |
 | [0008](0008-ts-extension-import-specifiers.md) | Import specifiers use the `.ts` extension                 | Accepted |
 | [0009](0009-session-domain-model.md)           | Session domain model                                      | Accepted |
+| [0011](0011-ipc-contract-and-mcp-transport.md) | IPC contract layer and MCP transport                      | Accepted |
