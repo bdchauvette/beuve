@@ -12,6 +12,7 @@ export class BeuveKeybindingOverlay extends LitElement {
     :host {
       position: fixed;
       inset: 0;
+      z-index: 20;
       display: grid;
       place-items: center;
       background: var(--beuve-scrim);

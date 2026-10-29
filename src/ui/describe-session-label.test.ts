@@ -1,0 +1,56 @@
+import { describe, expect, it } from 'vitest';
+
+import type { SessionSummary } from '#contract/ipc-contract.ts';
+
+import { describeSessionLabel } from './describe-session-label.ts';
+
+const local: SessionSummary = {
+  id: 's1',
+  source: { kind: 'local', repoPath: '/work/notes/', baseRef: 'main', headRef: 'feature' },
+  headSha: 'a',
+  createdAt: '2026-10-29T00:00:00Z',
+  updatedAt: '2026-10-29T00:00:00Z',
+};
+
+const pull: SessionSummary = {
+  id: 's2',
+  source: {
+    kind: 'github-pull-request',
+    repoPath: '/work/checkout',
+    baseRef: 'refs/beuve/pr/42/base',
+    host: 'github.com',
+    owner: 'acme',
+    repo: 'checkout',
+    number: 42,
+  },
+  headSha: 'b',
+  createdAt: '2026-10-29T00:00:00Z',
+  updatedAt: '2026-10-29T00:00:00Z',
+};
+
+describe('describeSessionLabel', () => {
+  it('asks to open a review when none is selected', () => {
+    expect(describeSessionLabel([local], '', undefined)).toBe('Open a review…');
+  });
+
+  it('names a local session by folder, head and base', () => {
+    expect(describeSessionLabel([local], 's1', undefined)).toBe('notes · feature against main');
+  });
+
+  it('prefers the listed summary, which carries the pull request title', () => {
+    const listed = {
+      ...pull,
+      pullRequest: { title: 'Charge tax', state: 'open', isDraft: false, baseBranch: 'main' },
+    } as const;
+    expect(describeSessionLabel([listed], 's2', pull)).toBe('acme/checkout#42 Charge tax');
+  });
+
+  it('names a session opened before the session list caught up', () => {
+    expect(describeSessionLabel([], 's2', pull)).toBe('acme/checkout#42');
+    expect(describeSessionLabel([local], 's2', pull)).toBe('acme/checkout#42');
+  });
+
+  it('ignores a review left over from another session', () => {
+    expect(describeSessionLabel([], 's1', pull)).toBe('Open a review…');
+  });
+});

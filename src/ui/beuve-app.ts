@@ -79,6 +79,7 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { displayKey } from './display-key.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
+import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
@@ -1048,6 +1049,9 @@ export class BeuveApp extends LitElement {
       }
       this.review = review.value;
       this.focusedZone = 'diff';
+      if (this.sessions.every(({ id }) => id !== sessionId)) {
+        void this.refreshSessions();
+      }
       void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
       void this.refreshInsights(review.value.session.id);
@@ -1922,6 +1926,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.sidebarHidden = false;
+    this.sidebarTab = zone;
     this.focusedZone = zone;
   }
 
@@ -1934,6 +1939,7 @@ export class BeuveApp extends LitElement {
   }
 
   private showOpenDialog(): void {
+    void this.refreshSessions();
     this.overlayOpen = false;
     this.openDialog = true;
     void this.updateComplete.then(() => {
@@ -2101,20 +2107,6 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  private sessionLabel(): string {
-    const session = this.sessions.find(({ id }) => id === this.selectedId);
-    if (session === undefined) {
-      return 'Open a review…';
-    }
-    const { source } = session;
-    const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
-    if (source.kind === 'github-pull-request') {
-      const title = session.pullRequest === undefined ? '' : ` ${session.pullRequest.title}`;
-      return `${source.owner}/${source.repo}#${String(source.number)}${title}`;
-    }
-    return `${folder} · ${source.headRef} against ${source.baseRef}`;
-  }
-
   /** The dock's GitHub posting state, for pull request sessions only. */
   private githubDock(): GithubDockState | undefined {
     const source = this.review?.session.source;
@@ -2156,7 +2148,7 @@ export class BeuveApp extends LitElement {
           this.showOpenDialog();
         }}
       >
-        ${this.sessionLabel()}
+        ${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
       </button>
       <span class="spacer"></span>
       <button
