@@ -6,6 +6,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 
 - Run `npm run check` (typecheck, lint, format:check, deps, test). It must pass with zero warnings.
 - `npm run build` bundles to `dist/`; `npm start` builds and launches Electron.
+- `npm run dist:mac` packages an arm64 dmg+zip into `out/` (ad-hoc signed unless `CSC_*`/`APPLE_*` are set); `npm run dist:linux-dir` builds `out/linux-unpacked/` for smoke tests (ADR 0048, `docs/packaging.md`). A new file main loads by path at run time must be added to `electron-builder.yml`.
 - Don't add dependencies without an ADR. Never add lodash-style grab-bags; write a helper in `src/pkg/`.
 - Write a short ADR (`docs/adr/0000-template.md`, add it to the README table) for any decision that constrains later work.
 

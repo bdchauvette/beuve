@@ -53,3 +53,4 @@ Template: [0000-template.md](0000-template.md)
 | [0045](0045-verdict-choice-belongs-to-a-head.md)                      | A chosen verdict belongs to the head it was chosen at                            | Accepted |
 | [0046](0046-chat-context-mentions.md)                                 | Chat context mentions: grammar, resolution at the commit, budget and persistence | Accepted |
 | [0047](0047-chat-compaction.md)                                       | `/compact`: a summary message as the chat's compaction boundary                  | Accepted |
+| [0048](0048-packaging-signing-and-release.md)                         | Packaging, signing and release with electron-builder                             | Accepted |

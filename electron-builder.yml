@@ -1,0 +1,73 @@
+# Packaging (ADR 0048). Run through `npm run dist:mac` or `npm run dist:linux-dir`, which build first.
+appId: dev.amoskeag.beuve
+productName: beuve
+copyright: Copyright © 2026 beuve contributors
+directories:
+  output: out
+  buildResources: build
+# Main, preload and ui are esbuild bundles (ADR 0007). The only node_modules main needs at run
+# time are the two it launches by path (ADR 0021); every other dependency is inside the bundles.
+files:
+  - dist/**
+  - '!dist/**/*.map'
+  - package.json
+  - '!node_modules/**'
+  # File sets rather than node_modules patterns: electron-builder drops every `*.d.ts` it collects
+  # from node_modules, and tsserver needs `lib.*.d.ts`.
+  - from: node_modules/typescript
+    to: node_modules/typescript
+    filter:
+      - package.json
+      - LICENSE.txt
+      - lib/*.js
+      - '!lib/{_tsc,tsc}.js'
+      - lib/lib.*.d.ts
+      - lib/typesMap.json
+  - from: node_modules/typescript-language-server
+    to: node_modules/typescript-language-server
+    filter:
+      - package.json
+      - LICENSE
+      - lib/cli.mjs
+asar: true
+# Launched by path with ELECTRON_RUN_AS_NODE (ADR 0021). Inside the archive tsserver resolves its
+# lib files only partly and reports wrong diagnostics, so both run from app.asar.unpacked.
+asarUnpack:
+  - node_modules/typescript/**
+  - node_modules/typescript-language-server/**
+# Nothing is native, so there is nothing to rebuild for Electron's ABI (ADR 0004).
+npmRebuild: false
+publish: null
+electronFuses:
+  # Must stay on: language servers and trace probes run as `process.execPath` with
+  # ELECTRON_RUN_AS_NODE=1 (ADR 0017, 0021, 0036).
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+mac:
+  # Apple silicon only (ADR 0048).
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  category: public.app-category.developer-tools
+  # Electron 44 and later require macOS 13 (Ventura).
+  minimumSystemVersion: '13.0'
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  icon: build/icon.icns
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+linux:
+  target:
+    - AppImage
+  category: Development
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
