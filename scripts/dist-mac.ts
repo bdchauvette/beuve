@@ -26,7 +26,8 @@ await distMac();
  * signed with the hardened runtime, and notarized when a complete set of Apple credentials is in
  * the environment. Without one it is ad-hoc signed, without the hardened runtime, and says so: such
  * a build runs only where Gatekeeper is told to allow it (docs/packaging.md). Run after
- * `npm run build`; `npm run dist:mac` does both.
+ * `npm run build`; `npm run dist:mac` does both. `BEUVE_BUILD_VERSION` overrides the version in the
+ * app and in the artifact names without touching `package.json` (untagged CI builds, ADR 0049).
  */
 async function distMac(): Promise<void> {
   if (process.platform !== 'darwin') {
@@ -36,7 +37,11 @@ async function distMac(): Promise<void> {
   }
   const signing = chooseSigning(process.env);
   describeSigning(signing);
-  const artifacts = await build({ mac: [], config: configFor(signing), publish: 'never' });
+  const artifacts = await build({
+    mac: [],
+    config: configFor(signing, process.env['BEUVE_BUILD_VERSION']),
+    publish: 'never',
+  });
   for (const artifact of artifacts) {
     const { size } = await stat(artifact);
     console.log(`dist:mac: ${path.relative(process.cwd(), artifact)} ${mib(size)}`);
@@ -72,10 +77,12 @@ function describeSigning(signing: Signing): void {
  * validation would reject ad-hoc signed frameworks, and the alternative entitlement
  * (`disable-library-validation`) would weaken a signed build too.
  */
-function configFor(signing: Signing): Configuration {
-  return signing.kind === 'ad-hoc'
-    ? { mac: { identity: '-', hardenedRuntime: false, notarize: false } }
-    : { forceCodeSigning: true, mac: { notarize: signing.notarization !== undefined } };
+function configFor(signing: Signing, version: string | undefined): Configuration {
+  const base: Configuration =
+    signing.kind === 'ad-hoc'
+      ? { mac: { identity: '-', hardenedRuntime: false, notarize: false } }
+      : { forceCodeSigning: true, mac: { notarize: signing.notarization !== undefined } };
+  return version === undefined || version === '' ? base : { ...base, extraMetadata: { version } };
 }
 
 function mib(bytes: number): string {
