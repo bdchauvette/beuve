@@ -2,11 +2,13 @@ import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { minimizePatchPreview } from './minimize-patch-preview.ts';
 import { splitPatch } from './split-patch.ts';
 
 /**
  * A quiet, read-only preview of a suggested patch (ADR 0043): its hunk lines with the removed and
- * added ones tinted like the diff, file headers and hunk headers left out. Used by the `m`
+ * added ones tinted like the diff, file headers and hunk headers left out. Lines the edit kept are
+ * shown as context, not as a removal and an identical addition (`minimizePatchPreview`). Used by the `m`
  * composer and the review dock.
  */
 @customElement('beuve-patch-preview')
@@ -53,8 +55,8 @@ export class BeuvePatchPreview extends LitElement {
   @property() accessor patch = '';
 
   override render(): TemplateResult {
-    const lines = splitPatch(this.patch).filter(
-      (line) => line.kind !== 'meta' && line.kind !== 'hunk',
+    const lines = minimizePatchPreview(
+      splitPatch(this.patch).filter((line) => line.kind !== 'meta' && line.kind !== 'hunk'),
     );
     return html`<pre aria-label="Suggested change">
 ${lines.map(
