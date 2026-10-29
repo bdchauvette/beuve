@@ -40,5 +40,7 @@ jobs:
           brew --version
           # Audit needs the cask inside a tap: tap this checkout.
           brew tap bdchauvette/beuve "$PWD"
+          # Homebrew 7.0.11 refuses to load casks from an untrusted tap.
+          brew trust bdchauvette/beuve
           brew style --cask bdchauvette/beuve/beuve
           brew audit --cask --strict bdchauvette/beuve/beuve
