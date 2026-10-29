@@ -1,0 +1,21 @@
+# 0042. Two-column shell, one open flow, and a command palette over one command registry
+
+- Status: Proposed (layout exploration on `explore/layout`; one of layouts A, B, C is to be chosen)
+- Date: 2026-10-29
+
+## Context
+
+Spec section 4 lays out four zones side by side, each under a 32 px uppercase title bar. Reviewers found the stacked "Open pull request" and "Open local repository" forms in Zone 1 confusing, the title bars a waste of height, and asked for a two-column layout with the sidebar on either side. The common paths are resuming a recent review and opening a pull request someone just linked. Shortcuts were listed in three places (`keybindings.ts`, `/help`, the key handlers) that could drift, and there was no way to search commands, files or staged notes.
+
+## Decision
+
+- **Shell.** Two columns: the diff stream (Zone 2, flexible) and one sidebar (`--beuve-sidebar-width`, `clamp(300px, 26vw, 380px)`) on the right by default, or the left (`/sidebar left|right`, `BEUVE_SIDEBAR`). `\` hides it. No zone title bars: a focused zone draws a 2 px accent line along its top edge, and the status bar names the focused region with its main keys instead of "Focus: …". Zones keep their ids and Tab order (spec 5A). Three prototypes sit behind `BEUVE_LAYOUT=a|b|c` and `/layout`: A tabs Zone 1, Zone 3 and Zone 4 in the sidebar (`1`, `2`, `3`); B stacks Zone 1 over Zone 3 in collapsible sections with the chat as a drawer under the diff; C keeps only the intent and Zone 3 in the sidebar and finds files through the palette.
+- **Opening sessions** happens in one place, `beuve-open-panel`: the ⌘O dialog, and the main area when no session is open. One input takes a pull request link (Enter opens it in the clone the reviewer last used for that repository, Tab edits the clone first), a folder path, or words that filter recent sessions; two steps cover the rest. "Pull request…" has a link and a local clone with a folder picker; "Local branch…" has a folder (picker), then head and base suggested from git. The session list leaves Zone 1.
+- **Channels.** `repository:inspect { path }` (absolute) returns the repository root, the current branch, a default base (`origin/HEAD`, else `main` or `master`) and branches newest first (`inspectBranches` in the git domain, read-only). `dialog:choose-folder { title?, defaultPath? }` shows Electron's folder picker through an injected platform function, like the clipboard (ADR 0027), answering `chosen` or `cancelled`. The renderer never names a command or path to run.
+- **Command registry.** `command-registry.ts` lists every command once: title, scope, shortcut names, chat usage, `/help` text, availability, and what running it does (a shell action, a key pressed in a zone, or a chat command, run at once or typed for the reviewer to finish). The shortcuts overlay (`keybindings.ts`), `/help` (`chat-help.ts`) and the palette read it; a test keeps them in step.
+- **Palette** (⌘K, ⌘⇧P; ⌘P starts in files; Ctrl elsewhere): fuzzy search (`fuzzy-match.ts`) over commands with their shortcuts, recent sessions and open actions, the review's files (changed first, then the head's tracked paths) and staged notes and insights (`plan-palette.ts`, pure). `>` commands, `@` files, `#` open, `!` review narrow it; the footer lists the prefixes. A changed file scrolls the diff to it; another file is revealed in the tree.
+- **Development-only.** `BEUVE_LAYOUT` and `BEUVE_SIDEBAR` reach the renderer in `AppInfo.layoutOverride` only when the app is unpackaged. The layout choice is remembered in the window's `localStorage`; the merged layout moves the sidebar side to `settings.json`.
+
+## Consequences
+
+Each zone gains about 32 px of height and the diff gains the width of one column. Opening a known pull request is one paste and Enter; resuming is ⌘O, Enter. A pull request whose repository has no earlier session needs the clone chosen once. Running commands from the palette dispatches a synthetic key in the zone, so zone shortcuts keep a single implementation, at the cost of the palette depending on the zones' key grammar. New chat commands (for example `/diff`, `/whitespace`) must add a registry entry to appear in `/help` and the palette. Layout C gives up the persistent tree: neighbourhood context is a palette query away, and unchanged files open in the editor.

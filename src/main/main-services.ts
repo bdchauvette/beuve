@@ -1,9 +1,11 @@
 import type {
   CreateLocalSessionRequest,
   GetReviewRequest,
+  InspectRepositoryRequest,
   IpcResult,
   MarkReviewedRequest,
   OpenSessionRequest,
+  RepositoryInspectionView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -27,6 +29,10 @@ export interface SessionServices {
   readonly createLocal: (request: CreateLocalSessionRequest) => Promise<IpcResult<SessionSummary>>;
   readonly getReview: (request: GetReviewRequest) => Promise<IpcResult<ReviewView>>;
   readonly markReviewed: (request: MarkReviewedRequest) => Promise<IpcResult<SessionSummary>>;
+  /** The repository containing a folder and its branches, before a session exists. */
+  readonly inspectRepository: (
+    request: InspectRepositoryRequest,
+  ) => Promise<IpcResult<RepositoryInspectionView>>;
 }
 
 /**

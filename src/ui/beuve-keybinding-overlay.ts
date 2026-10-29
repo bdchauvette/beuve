@@ -2,6 +2,7 @@ import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { displayKey } from './display-key.ts';
 import { keybindings } from './keybindings.ts';
 
 /** Modal list of the spec 5A keys, opened with `?`. Closing is handled by `beuve-app`. */
@@ -81,6 +82,8 @@ export class BeuveKeybindingOverlay extends LitElement {
 
   /** The name of the editor `o` opens, e.g. “Zed”; absent while unknown. */
   @property() accessor editorName = '';
+  /** `process.platform`, for writing shortcuts the platform's way. */
+  @property() accessor platform = '';
 
   override render(): TemplateResult {
     return html`
@@ -90,8 +93,11 @@ export class BeuveKeybindingOverlay extends LitElement {
           ${keybindings.map(
             (binding) => html`
               <tr class=${binding.available ? '' : 'soon'}>
-                <td>${binding.keys.map((key) => html`<kbd>${key}</kbd>`)}</td>
+                <td>
+                  ${binding.keys.map((key) => html`<kbd>${displayKey(key, this.platform)}</kbd>`)}
+                </td>
                 <td>${binding.action}</td>
+                <td class="badge">${binding.scope === 'Anywhere' ? '' : binding.scope}</td>
                 <td class="badge">${binding.available ? '' : 'coming soon'}</td>
               </tr>
             `,

@@ -14,7 +14,7 @@ import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 
 /**
- * Bottom bar: focused zone, a transient notice, the open pull request's CI rollup, GitHub
+ * Bottom bar: the focused region and its main keys, a transient notice, the open pull request's CI rollup, GitHub
  * sign-in, MCP server state and app version.
  */
 @customElement('beuve-status-bar')
@@ -87,6 +87,8 @@ export class BeuveStatusBar extends LitElement {
   `;
 
   @property() accessor zoneLabel = '';
+  /** Keys for the focused region, e.g. `j k hunks · m stage`. */
+  @property() accessor zoneHints = '';
   @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
@@ -135,7 +137,10 @@ export class BeuveStatusBar extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <span>Focus: <span class="zone">${this.zoneLabel}</span></span>
+      <span
+        ><span class="zone">${this.zoneLabel}</span
+        >${this.zoneHints === '' ? nothing : html`<span class="hints"> · ${this.zoneHints}</span>`}</span
+      >
       ${
         this.notice === undefined
           ? nothing

@@ -6,6 +6,8 @@ export const invokeChannels = Object.freeze([
   'session:list',
   'session:open',
   'session:create-local',
+  'repository:inspect',
+  'dialog:choose-folder',
   'session:get-review',
   'session:mark-reviewed',
   'session:get-impact',

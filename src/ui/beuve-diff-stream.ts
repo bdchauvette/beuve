@@ -708,7 +708,6 @@ export class BeuveDiffStream extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <header>Diff stream</header>
       ${this.review === undefined ? this.renderWelcome() : this.renderReview(this.review)}
     `;
   }

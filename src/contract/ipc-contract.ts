@@ -13,6 +13,17 @@ export interface AppInfo {
   readonly electronVersion: string;
   readonly chromeVersion: string;
   readonly nodeVersion: string;
+  /** Development-only layout overrides (`BEUVE_LAYOUT`, `BEUVE_SIDEBAR`); never set when packaged. */
+  readonly layoutOverride?: LayoutOverrideView;
+}
+
+/** The shell's layout prototypes: a, b or c, and which side the sidebar sits on. */
+export type LayoutIdView = 'a' | 'b' | 'c';
+export type SidebarSideView = 'left' | 'right';
+
+export interface LayoutOverrideView {
+  readonly layout?: LayoutIdView;
+  readonly sidebarSide?: SidebarSideView;
 }
 
 /** What a session reviews: a local branch or a GitHub pull request. */
@@ -70,6 +81,40 @@ export interface CreateLocalSessionRequest {
   readonly baseRef: string;
   readonly headRef: string;
 }
+
+/** A folder the reviewer picked, before any session exists for it. */
+export interface InspectRepositoryRequest {
+  /** Absolute path inside a git worktree. */
+  readonly path: string;
+}
+
+/** A local or remote-tracking branch by its short name (`main`, `origin/main`). */
+export interface BranchView {
+  readonly name: string;
+  readonly isRemote: boolean;
+  readonly committedAt: string;
+}
+
+/** The repository containing a folder, with branch suggestions for base and head. */
+export interface RepositoryInspectionView {
+  readonly root: string;
+  /** The checked-out branch; absent on a detached head. */
+  readonly currentBranch?: string;
+  /** `origin/HEAD`'s target, else `main` or `master`. */
+  readonly defaultBase?: string;
+  /** Most recently committed first. */
+  readonly branches: readonly BranchView[];
+}
+
+/** Shows the system folder picker. */
+export interface ChooseFolderRequest {
+  readonly title?: string;
+  /** Absolute path the picker starts in. */
+  readonly defaultPath?: string;
+}
+
+export type ChooseFolderResponse =
+  { readonly kind: 'chosen'; readonly path: string } | { readonly kind: 'cancelled' };
 
 export interface GetReviewRequest {
   readonly sessionId: string;
@@ -1364,6 +1409,14 @@ export interface InvokeChannelMap {
   'session:create-local': {
     readonly request: CreateLocalSessionRequest;
     readonly response: IpcResult<SessionSummary>;
+  };
+  'repository:inspect': {
+    readonly request: InspectRepositoryRequest;
+    readonly response: IpcResult<RepositoryInspectionView>;
+  };
+  'dialog:choose-folder': {
+    readonly request: ChooseFolderRequest;
+    readonly response: IpcResult<ChooseFolderResponse>;
   };
   'session:get-review': {
     readonly request: GetReviewRequest;

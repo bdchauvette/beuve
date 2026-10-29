@@ -490,6 +490,46 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
   });
 });
 
+describe('createIpcHandlers for the open flow', () => {
+  it('inspects only absolute paths', async () => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      stubServices({
+        inspectRepository: async (request) => {
+          calls.push(request);
+          await Promise.resolve();
+          return notWired;
+        },
+      }),
+      appInfo,
+    );
+    await expectInvalid(handlers['repository:inspect']({ path: 'relative/dir' }));
+    await expectInvalid(handlers['repository:inspect']({ path: '/x', extra: 1 }));
+    await handlers['repository:inspect']({ path: '/code/beuve' });
+    expect(calls).toEqual([{ path: '/code/beuve' }]);
+  });
+
+  it('shows the folder picker through the platform', async () => {
+    const asked: unknown[] = [];
+    const handlers = createIpcHandlers(stubServices({}), appInfo, {
+      chooseFolder: async (options) => {
+        asked.push(options);
+        await Promise.resolve();
+        return asked.length === 1 ? '/code/beuve' : undefined;
+      },
+    });
+    await expectInvalid(handlers['dialog:choose-folder']({ title: 7 }));
+    expect(await handlers['dialog:choose-folder']({ defaultPath: '/code' })).toEqual(
+      ok({ kind: 'chosen', path: '/code/beuve' }),
+    );
+    expect(await handlers['dialog:choose-folder']({})).toEqual(ok({ kind: 'cancelled' }));
+    expect(asked).toEqual([{ defaultPath: '/code' }, {}]);
+    expect(
+      await createIpcHandlers(stubServices({}), appInfo)['dialog:choose-folder']({}),
+    ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+});
+
 describe('createIpcHandlers for the editor', () => {
   const opened = ok({
     kind: 'opened' as const,
@@ -600,6 +640,7 @@ function stubServices(
       createLocal: async () => notWired,
       getReview: async () => notWired,
       markReviewed: async () => notWired,
+      inspectRepository: async () => notWired,
       ...overrides,
     },
     impact: { getImpact: async () => notWired },
@@ -666,7 +707,7 @@ function stubServices(
   };
 }
 
-function recording(name: Exclude<keyof SessionServices, 'list'>): {
+function recording(name: Exclude<keyof SessionServices, 'list' | 'inspectRepository'>): {
   calls: unknown[];
   services: MainServices;
 } {

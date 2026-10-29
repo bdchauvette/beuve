@@ -96,4 +96,11 @@ describe('parseChatCommand', () => {
       message: 'Unknown command /explain. Type /help for the commands.',
     });
   });
+
+  it('parses /layout and /sidebar', () => {
+    expect(parseChatCommand('/layout b')).toEqual({ kind: 'layout', layout: 'b' });
+    expect(parseChatCommand('/sidebar left')).toEqual({ kind: 'sidebar', side: 'left' });
+    expect(parseChatCommand('/layout d').kind).toBe('invalid');
+    expect(parseChatCommand('/sidebar').kind).toBe('invalid');
+  });
 });

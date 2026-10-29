@@ -47,3 +47,4 @@ Template: [0000-template.md](0000-template.md)
 | [0039](0039-posting-reviews-and-posted-items.md)                 | Posting the URA as a GitHub review, and posted items                      | Accepted |
 | [0040](0040-github-in-the-renderer-and-development-overrides.md) | GitHub in the renderer, safe links and development overrides              | Accepted |
 | [0041](0041-trace-probe-trust-channels-and-cancellation.md)      | Trace probes in the app: trust, channels, cancellation and the MCP tool   | Accepted |
+| [0042](0042-two-column-shell-open-flow-and-command-palette.md)   | Two-column shell, one open flow, and a command palette over one registry  | Proposed |
