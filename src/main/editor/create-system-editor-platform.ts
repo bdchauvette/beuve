@@ -12,7 +12,7 @@ export interface SystemEditorPlatformOptions {
   readonly openExternal?: (url: string) => Promise<void>;
   /**
    * Test hook: append each launch as a JSON line to this file instead of starting anything. Main
-   * passes it only from an unpackaged app's `BEUVE_EDITOR_LAUNCH_LOG`.
+   * passes it only from an unpackaged app's `BEUVE_EDITOR_LAUNCH_LOG` (`readDevelopmentOverrides`).
    */
   readonly launchLog?: string;
 }

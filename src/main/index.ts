@@ -8,7 +8,7 @@ import { createLogger } from '#pkg/logger/create-logger.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
-import { parseDevApiBase } from './github/parse-dev-api-base.ts';
+import { readDevelopmentOverrides } from './read-development-overrides.ts';
 import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
@@ -35,10 +35,14 @@ async function launch(): Promise<void> {
     const worktreeRoot = path.join(userData, 'worktrees');
     const db = openAppDatabase(path.join(userData, 'beuve.db'));
     const settingsPath = path.join(userData, 'settings.json');
-    // A local fake GitHub for development (ADR 0040); a packaged app never reads it.
-    const githubApiBase = app.isPackaged
-      ? undefined
-      : parseDevApiBase(process.env['BEUVE_GITHUB_API_URL']);
+    // Fakes for development (ADR 0040); a packaged app applies none of them (ADR 0048).
+    const { githubApiBase, editorLaunchLog, ignored } = readDevelopmentOverrides(
+      app.isPackaged,
+      process.env,
+    );
+    if (ignored.length > 0) {
+      logger.warn('ignoring development overrides in a packaged app', { variables: ignored });
+    }
     if (githubApiBase !== undefined) {
       logger.warn('using a development GitHub API', { url: githubApiBase.href });
     }
@@ -54,10 +58,7 @@ async function launch(): Promise<void> {
           settingsPath,
           platform: createSystemEditorPlatform({
             openExternal: async (url) => shell.openExternal(url),
-            ...(!app.isPackaged &&
-              process.env['BEUVE_EDITOR_LAUNCH_LOG'] !== undefined && {
-                launchLog: process.env['BEUVE_EDITOR_LAUNCH_LOG'],
-              }),
+            ...(editorLaunchLog !== undefined && { launchLog: editorLaunchLog }),
           }),
         },
         display: { settingsPath },
