@@ -73,6 +73,11 @@ export interface CreateLocalSessionRequest {
 
 export interface GetReviewRequest {
   readonly sessionId: string;
+  /**
+   * Diff with `git diff --ignore-all-space` (ADR 0042): a separately cached display variant.
+   * Head line numbers, and so every anchor, are the same as without it.
+   */
+  readonly ignoreWhitespace?: boolean;
 }
 
 /**
@@ -150,6 +155,8 @@ export interface ReviewView {
   readonly baseSha: string;
   readonly headSha: string;
   readonly files: readonly DiffFileView[];
+  /** `ignored` when the diff was computed ignoring whitespace (ADR 0042). */
+  readonly whitespace: 'shown' | 'ignored';
 }
 
 export interface GetImpactRequest {
@@ -1132,6 +1139,21 @@ export interface SetPreferredEditorRequest {
   readonly editorId: EditorId;
 }
 
+/** How a diff card lays out a modification: side by side, or one inline column (ADR 0042). */
+export type DiffLayoutView = 'split' | 'unified';
+
+/** The reviewer's diff display preferences, kept in `settings.json` (ADR 0042). */
+export interface DiffDisplayView {
+  readonly layout: DiffLayoutView;
+  readonly ignoreWhitespace: boolean;
+}
+
+/** Changes one or both preferences; what is left out stays as it was. */
+export interface SetDiffDisplayRequest {
+  readonly layout?: DiffLayoutView;
+  readonly ignoreWhitespace?: boolean;
+}
+
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
 export interface UraChangedView {
   readonly sessionId: string;
@@ -1479,6 +1501,14 @@ export interface InvokeChannelMap {
   'editor:set-preferred': {
     readonly request: SetPreferredEditorRequest;
     readonly response: IpcResult<EditorSettingsView>;
+  };
+  'display:get': {
+    readonly request: undefined;
+    readonly response: IpcResult<DiffDisplayView>;
+  };
+  'display:set': {
+    readonly request: SetDiffDisplayRequest;
+    readonly response: IpcResult<DiffDisplayView>;
   };
   'github:auth-status': {
     readonly request: GithubAuthStatusRequest;

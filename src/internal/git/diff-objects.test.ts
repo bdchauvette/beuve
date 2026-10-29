@@ -44,6 +44,30 @@ describe('diffObjects', () => {
     }
   });
 
+  it('ignores all whitespace on request, keeping head line numbers', async () => {
+    repo.write('code.py', 'a\nif x:\n  y=1\nz\n');
+    repo.write('spaces.txt', 'one\n');
+    const from = repo.commit('from');
+    repo.write('code.py', 'a\nif x:\n    y = 1\nz\nnew\n');
+    repo.write('spaces.txt', 'one   \n');
+    const to = repo.commit('to');
+    const shown = await diffObjects(git, from, to);
+    expect(shown).toMatchObject({ ok: true, value: [{ path: 'code.py' }, { path: 'spaces.txt' }] });
+    const ignored = await diffObjects(git, from, to, { ignoreWhitespace: true });
+    expect(ignored).toMatchObject({
+      ok: true,
+      value: [{ path: 'code.py', hunks: [{ newStart: 2, newCount: 4 }] }],
+    });
+    if (!ignored.ok) {
+      return;
+    }
+
+    expect(ignored.value).toHaveLength(1);
+    expect(ignored.value[0]?.hunks[0]?.lines.filter((line) => line.kind !== 'context')).toEqual([
+      { kind: 'added', content: 'new', newLine: 5, noNewline: false },
+    ]);
+  });
+
   it('limits to literal paths and controls context', async () => {
     repo.write('a.txt', '1\n2\n3\n4\n5\n');
     repo.write('*.txt', 'star\n');

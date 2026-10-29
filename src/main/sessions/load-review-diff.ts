@@ -8,6 +8,7 @@ import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { computeReviewRange } from '#internal/session/compute-review-range.ts';
 import type { ReviewRange } from '#internal/session/session.ts';
+import type { LruCache } from '#pkg/datastructures/lru-cache.ts';
 import { ok } from '#pkg/result/ok.ts';
 import type { Result } from '#pkg/result/result.ts';
 
@@ -17,10 +18,19 @@ import { refreshSession } from './refresh-session.ts';
 import type { RefreshedSession } from './refresh-session.ts';
 import type { SessionContext } from './session-context.ts';
 
-interface RangeDiff {
+/** A computed review diff without the session behind it, as {@link ReviewDiffOptions} caches it. */
+export interface RangeDiff {
   readonly scope: ReviewScope;
   readonly baseSha: CommitSha;
   readonly files: readonly DiffFile[];
+}
+
+/** Display variants of the diff (ADR 0042); the default is the plain diff every service uses. */
+export interface ReviewDiffOptions {
+  /** `git diff --ignore-all-space`: hides whitespace-only lines; head line numbers are unchanged. */
+  readonly ignoreWhitespace?: boolean;
+  /** Diffs keyed by repository, commits and variant, which never change once computed. */
+  readonly cache?: LruCache<string, RangeDiff>;
 }
 
 /** The diff a review shows, still in git-domain types, with the refreshed session behind it. */
@@ -36,6 +46,7 @@ export interface ReviewDiff extends RangeDiff {
 export async function loadReviewDiff(
   context: SessionContext,
   sessionId: string,
+  options: ReviewDiffOptions = {},
 ): Promise<Result<ReviewDiff, IpcError>> {
   const loaded = loadSession(context, sessionId);
   if (!loaded.ok) {
@@ -46,19 +57,46 @@ export async function loadReviewDiff(
     return refreshed;
   }
   const range = computeReviewRange(refreshed.value.session);
-  const diff = await diffReviewRange(context, refreshed.value, range);
+  const diff = await cachedRangeDiff(context, refreshed.value, range, options);
   return diff.ok ? ok({ ...diff.value, refreshed: refreshed.value }) : diff;
+}
+
+async function cachedRangeDiff(
+  context: SessionContext,
+  refreshed: RefreshedSession,
+  range: ReviewRange,
+  options: ReviewDiffOptions,
+): Promise<Result<RangeDiff, IpcError>> {
+  const isIgnoringWhitespace = options.ignoreWhitespace === true;
+  const key = [
+    refreshed.repository.root,
+    refreshed.baseTip,
+    range.kind,
+    range.kind === 'interdiff' ? `${range.fromBaseSha}:${range.fromHeadSha}` : '',
+    range.kind === 'interdiff' ? range.toHeadSha : range.headSha,
+    isIgnoringWhitespace ? 'w' : '',
+  ].join('\0');
+  const cached = options.cache?.get(key);
+  if (cached !== undefined) {
+    return ok(cached);
+  }
+  const diff = await diffReviewRange(context, refreshed, range, isIgnoringWhitespace);
+  if (diff.ok) {
+    options.cache?.set(key, diff.value);
+  }
+  return diff;
 }
 
 async function diffReviewRange(
   context: SessionContext,
   refreshed: RefreshedSession,
   range: ReviewRange,
+  isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
   const { repository, baseTip } = refreshed;
   switch (range.kind) {
     case 'full': {
-      return diffFull(context, refreshed, range.headSha, { kind: 'full' });
+      return diffFull(context, refreshed, range.headSha, { kind: 'full' }, isIgnoringWhitespace);
     }
     case 'up-to-date': {
       const mergeBase = await findMergeBase(repository, baseTip, range.headSha);
@@ -67,7 +105,7 @@ async function diffReviewRange(
         : gitFailure(context.logger, mergeBase.error);
     }
     case 'interdiff': {
-      return diffInterdiff(context, refreshed, range);
+      return diffInterdiff(context, refreshed, range, isIgnoringWhitespace);
     }
   }
 }
@@ -77,8 +115,13 @@ async function diffFull(
   refreshed: RefreshedSession,
   headSha: CommitSha,
   scope: ReviewScope,
+  isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
-  const diff = await diffRange(refreshed.repository, { base: refreshed.baseTip, head: headSha });
+  const diff = await diffRange(
+    refreshed.repository,
+    { base: refreshed.baseTip, head: headSha },
+    { ignoreWhitespace: isIgnoringWhitespace },
+  );
   return diff.ok
     ? ok({ scope, baseSha: diff.value.mergeBase, files: diff.value.files })
     : gitFailure(context.logger, diff.error);
@@ -88,6 +131,7 @@ async function diffInterdiff(
   context: SessionContext,
   refreshed: RefreshedSession,
   range: Extract<ReviewRange, { kind: 'interdiff' }>,
+  isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
   const { repository, baseTip } = refreshed;
   const from = { fromBaseSha: range.fromBaseSha, fromHeadSha: range.fromHeadSha };
@@ -100,16 +144,23 @@ async function diffInterdiff(
     if (missing.error.kind !== 'unknown-revision') {
       return gitFailure(context.logger, missing.error);
     }
-    return diffFull(context, refreshed, range.toHeadSha, {
-      kind: 'interdiff',
-      ...from,
-      outcome: { kind: 'fallback', reason: { kind: 'reviewed-commits-missing' } },
-    });
+    return diffFull(
+      context,
+      refreshed,
+      range.toHeadSha,
+      {
+        kind: 'interdiff',
+        ...from,
+        outcome: { kind: 'fallback', reason: { kind: 'reviewed-commits-missing' } },
+      },
+      isIgnoringWhitespace,
+    );
   }
   const interdiff = await computeInterdiff(
     repository,
     { base: range.fromBaseSha, head: range.fromHeadSha },
     { base: baseTip, head: range.toHeadSha },
+    { ignoreWhitespace: isIgnoringWhitespace },
   );
   if (!interdiff.ok) {
     return gitFailure(context.logger, interdiff.error);

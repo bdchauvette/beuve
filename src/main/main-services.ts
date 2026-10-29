@@ -9,6 +9,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import type { ChatServices } from './chat/create-chat-services.ts';
+import type { DisplayServices } from './display/create-display-services.ts';
 import type { EditorServices } from './editor/create-editor-services.ts';
 import type { FileServices } from './files/create-file-services.ts';
 import type { FlowServices } from './flow/create-flow-services.ts';
@@ -40,6 +41,7 @@ export interface MainServices {
   readonly lsp: Pick<LspServices, 'callHierarchy'>;
   readonly flow: FlowServices;
   readonly editor: EditorServices;
+  readonly display: DisplayServices;
   readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
   readonly chat: Omit<ChatServices, 'observeHead'>;
   readonly ura: Omit<

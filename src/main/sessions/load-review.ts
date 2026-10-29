@@ -3,6 +3,7 @@ import { ok } from '#pkg/result/ok.ts';
 import type { Result } from '#pkg/result/result.ts';
 
 import { loadReviewDiff } from './load-review-diff.ts';
+import type { ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { toDiffFileView } from './to-diff-file-view.ts';
 import { toSessionSummary } from './to-session-summary.ts';
@@ -11,8 +12,9 @@ import { toSessionSummary } from './to-session-summary.ts';
 export async function loadReview(
   context: SessionContext,
   sessionId: string,
+  options: ReviewDiffOptions = {},
 ): Promise<Result<ReviewView, IpcError>> {
-  const diff = await loadReviewDiff(context, sessionId);
+  const diff = await loadReviewDiff(context, sessionId, options);
   if (!diff.ok) {
     return diff;
   }
@@ -23,5 +25,6 @@ export async function loadReview(
     baseSha,
     headSha: refreshed.session.headSha,
     files: files.map((file) => toDiffFileView(file)),
+    whitespace: options.ignoreWhitespace === true ? 'ignored' : 'shown',
   });
 }

@@ -17,6 +17,7 @@ import type { Logger } from '#pkg/logger/create-logger.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
+import { createDisplayServices } from './display/create-display-services.ts';
 import { createEditorServices } from './editor/create-editor-services.ts';
 import { createEditorSettings } from './editor/create-editor-settings.ts';
 import type { EditorPlatform } from './editor/editor-platform.ts';
@@ -67,6 +68,8 @@ export interface MainServicesOptions {
     readonly settingsPath?: string;
     readonly platform?: EditorPlatform;
   };
+  /** Diff display preferences (ADR 0042), in memory without `settingsPath`. */
+  readonly display?: { readonly settingsPath?: string };
   /**
    * Trace probes (ADR 0036, 0041): `settingsPath` holds the per-repository approvals (in memory
    * without it), `temporaryDirectory` where runs work, `timeoutMs` the longest a probe may run.
@@ -207,6 +210,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       settings: createEditorSettings(options.editor?.settingsPath),
       platform: options.editor?.platform ?? createSystemEditorPlatform(),
     }),
+    display: createDisplayServices(options.display?.settingsPath),
     review,
     chat,
     ura,

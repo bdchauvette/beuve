@@ -81,8 +81,10 @@ describe('createIpcHandlers', () => {
     const { calls, services } = recording('getReview');
     const handlers = createIpcHandlers(services, appInfo);
     await expectInvalid(handlers['session:get-review']({ sessionId: 3 }));
+    await expectInvalid(handlers['session:get-review']({ sessionId: 's1', ignoreWhitespace: 1 }));
     await handlers['session:get-review']({ sessionId: 's1' });
-    expect(calls).toEqual([{ sessionId: 's1' }]);
+    await handlers['session:get-review']({ sessionId: 's1', ignoreWhitespace: true });
+    expect(calls).toEqual([{ sessionId: 's1' }, { sessionId: 's1', ignoreWhitespace: true }]);
   });
 
   it('validates session:mark-reviewed, including the optional expected head', async () => {
@@ -542,6 +544,30 @@ describe('createIpcHandlers for the editor', () => {
     await expectInvalid(handlers['editor:set-preferred']({}));
     await expectInvalid(handlers['editor:get-settings']({ x: 1 }));
   });
+
+  it('validates the diff display preferences', async () => {
+    const calls: unknown[] = [];
+    const services = stubServices({});
+    const handlers = createIpcHandlers(
+      {
+        ...services,
+        display: {
+          get: async () => notWired,
+          set: async (request) => {
+            calls.push(request);
+            return notWired;
+          },
+        },
+      },
+      appInfo,
+    );
+    await expectInvalid(handlers['display:set']({ layout: 'diagonal' }));
+    await expectInvalid(handlers['display:set']({ ignoreWhitespace: 'yes' }));
+    await expectInvalid(handlers['display:get']({ x: 1 }));
+    await handlers['display:set']({ layout: 'unified' });
+    await handlers['display:set']({ ignoreWhitespace: false });
+    expect(calls).toEqual([{ layout: 'unified' }, { ignoreWhitespace: false }]);
+  });
 });
 
 describe('github channels', () => {
@@ -611,6 +637,7 @@ function stubServices(
       getSettings: async () => notWired,
       setPreferred: async () => notWired,
     },
+    display: { get: async () => notWired, set: async () => notWired },
     review: {
       run: async () => notWired,
       listInsights: async () => notWired,

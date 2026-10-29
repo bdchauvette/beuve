@@ -108,6 +108,20 @@ describe('buildGithubReview', () => {
     expect(review.comments[0]).not.toHaveProperty('start_line');
   });
 
+  it('posts an inline edit (every anchored line replaced, context around) as a ranged suggestion', () => {
+    const review = buildGithubReview(
+      withItem({
+        anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 12 },
+        suggestion:
+          '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -9,5 +9,4 @@\n z\n-a\n-b\n-c\n+a\n+B\n y\n',
+      }),
+    );
+    expect(review.comments).toEqual([
+      expect.objectContaining({ line: 12, start_line: 10, side: 'RIGHT', start_side: 'RIGHT' }),
+    ]);
+    expect(review.comments[0]?.body).toContain('```suggestion\na\nB\n```');
+  });
+
   it('suggests a deletion as an empty block, and insertions at the edges', () => {
     const deletion = buildGithubReview(withItem({ suggestion: '@@ -10,3 +9,0 @@\n-a\n-b\n-c\n' }));
     expect(deletion.comments[0]?.body).toContain('```suggestion\n```');

@@ -124,6 +124,64 @@ describe('createMainServices (integration: SQLite + git, no Electron)', () => {
     expect(fileSummary(review)).toEqual([['notes.md', 'added', 1, 0]]);
   });
 
+  it('diffs a separately cached whitespace-ignoring variant with the same head lines', async () => {
+    repo.write('app.py', lines(['def run():', '  x=1', '  return x', '']));
+    repo.write('spaces.txt', lines(['one']));
+    repo.commit('base');
+    repo.git('switch', '--quiet', '--create', 'feature');
+    repo.write('app.py', lines(['def run():', '    x = 1', '    return x', '', 'run()']));
+    repo.write('spaces.txt', lines(['one   ']));
+    repo.commit('reindent, then call');
+    repo.git('switch', '--quiet', 'main');
+    const { id } = value(
+      await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
+    );
+    const shown = value(await sessions.getReview({ sessionId: id }));
+    expect(shown.whitespace).toBe('shown');
+    expect(fileSummary(shown)).toEqual([
+      ['app.py', 'modified', 3, 2],
+      ['spaces.txt', 'modified', 1, 1],
+    ]);
+    const ignored = value(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }));
+    expect(ignored.whitespace).toBe('ignored');
+    expect(ignored.headSha).toBe(shown.headSha);
+    expect(fileSummary(ignored)).toEqual([['app.py', 'modified', 1, 0]]);
+    expect(ignored.files[0]?.hunks).toEqual([
+      expect.objectContaining({ newStart: 2, newCount: 4 }),
+    ]);
+    expect(ignored.files[0]?.patch).toContain('\n+run()\n');
+    expect(ignored.files[0]?.patch).toContain('\n     x = 1\n');
+
+    const item = value(
+      await services.ura.create({
+        sessionId: id,
+        headSha: shown.headSha,
+        anchor: { kind: 'lines', path: 'app.py', startLine: 5, endLine: 5 },
+        severity: 'nit',
+        title: 'Guard the call',
+        body: '',
+      }),
+    );
+    expect(item.placement).toEqual({ kind: 'current', anchor: item.anchor });
+    value(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }));
+    expect(value(await services.ura.list({ sessionId: id })).items[0]?.placement).toEqual({
+      kind: 'current',
+      anchor: { kind: 'lines', path: 'app.py', startLine: 5, endLine: 5 },
+    });
+
+    value(await sessions.markReviewed({ sessionId: id, expectedHeadSha: shown.headSha }));
+    repo.git('switch', '--quiet', 'feature');
+    repo.write('app.py', lines(['def run():', '\tx = 1', '\treturn x', '', 'run()', 'run()']));
+    repo.commit('tabs, and call twice');
+    repo.git('switch', '--quiet', 'main');
+    const interdiff = value(await sessions.getReview({ sessionId: id }));
+    expect(fileSummary(interdiff)).toEqual([['app.py', 'modified', 3, 2]]);
+    const quiet = value(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }));
+    expect(quiet.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
+    expect(fileSummary(quiet)).toEqual([['app.py', 'modified', 1, 0]]);
+    expect(quiet.files[0]?.hunks).toEqual([expect.objectContaining({ newStart: 3, newCount: 4 })]);
+  });
+
   it('refuses directories outside a repository and unknown refs with typed errors', async () => {
     featureBranch(repo);
     const outside = repo.scratch();

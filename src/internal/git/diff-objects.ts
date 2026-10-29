@@ -13,6 +13,11 @@ export interface DiffObjectsOptions {
   readonly contextLines?: number;
   /** Limit the diff to these repository-relative paths (matched literally). */
   readonly paths?: readonly string[];
+  /**
+   * Compare lines ignoring all whitespace (`--ignore-all-space`, GitHub's "hide whitespace").
+   * Files whose only changes are whitespace drop out of the diff; line numbers stay exact.
+   */
+  readonly ignoreWhitespace?: boolean;
 }
 
 /**
@@ -44,6 +49,7 @@ export async function diffObjects(
     '--src-prefix=a/',
     '--dst-prefix=b/',
     `--unified=${String(contextLines)}`,
+    ...(options.ignoreWhitespace === true ? ['--ignore-all-space'] : []),
     '--end-of-options',
     from,
     to,
@@ -56,10 +62,24 @@ export async function diffObjects(
   }
   const parsed = parseUnifiedDiff(output.value);
   return parsed.ok
-    ? ok(parsed.value)
+    ? ok(
+        options.ignoreWhitespace === true
+          ? parsed.value.filter((file) => hasVisibleChange(file))
+          : parsed.value,
+      )
     : err({
         kind: 'unexpected-output',
         args,
         message: `line ${String(parsed.error.line)}: ${parsed.error.message}`,
       });
+}
+
+/** Older gits print a bare header for a file whose changes `-w` hid; such a file shows nothing. */
+function hasVisibleChange(file: DiffFile): boolean {
+  return (
+    file.status !== 'modified' ||
+    file.binary ||
+    file.hunks.length > 0 ||
+    file.oldMode !== file.newMode
+  );
 }

@@ -37,6 +37,8 @@ export const invokeChannels = Object.freeze([
   'editor:open',
   'editor:get-settings',
   'editor:set-preferred',
+  'display:get',
+  'display:set',
   'github:auth-status',
   'github:open-pr',
   'github:get-pr',

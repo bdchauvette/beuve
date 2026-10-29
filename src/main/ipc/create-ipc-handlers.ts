@@ -14,6 +14,7 @@ import type {
   ChatClearedView,
   ChatListView,
   EditorOpenResponse,
+  DiffDisplayView,
   EditorSettingsView,
   FilePairView,
   FlowGraphResponse,
@@ -63,6 +64,7 @@ export type IpcHandlers = {
 const noRequest = z.undefined();
 const sessionId = z.string().min(1).max(200);
 const sessionRequest = z.strictObject({ sessionId });
+const reviewRequest = z.strictObject({ sessionId, ignoreWhitespace: z.boolean().optional() });
 const revision = z.string().trim().min(1).max(1024);
 const localSessionRequest = z.strictObject({
   repoPath: z.string().min(1).max(4096),
@@ -211,6 +213,10 @@ const editorOpenRequest = z.strictObject({
   column: z.number().int().min(1).max(100_000).optional(),
 });
 const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
+const displayRequest = z.strictObject({
+  layout: z.enum(['split', 'unified']).optional(),
+  ignoreWhitespace: z.boolean().optional(),
+});
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
@@ -249,8 +255,15 @@ export function createIpcHandlers(
       return parsed.success ? services.sessions.createLocal(parsed.data) : invalid(parsed.error);
     },
     'session:get-review': async (request): Promise<IpcResult<ReviewView>> => {
-      const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.sessions.getReview(parsed.data) : invalid(parsed.error);
+      const parsed = reviewRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, ignoreWhitespace } = parsed.data;
+      return services.sessions.getReview({
+        sessionId: id,
+        ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
+      });
     },
     'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = markReviewedRequest.safeParse(request);
@@ -449,6 +462,21 @@ export function createIpcHandlers(
       return services.github.openPullRequest({
         ref,
         ...(repoPath !== undefined && { repoPath }),
+      });
+    },
+    'display:get': async (request): Promise<IpcResult<DiffDisplayView>> => {
+      const parsed = noRequest.safeParse(request);
+      return parsed.success ? services.display.get() : invalid(parsed.error);
+    },
+    'display:set': async (request): Promise<IpcResult<DiffDisplayView>> => {
+      const parsed = displayRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { layout, ignoreWhitespace } = parsed.data;
+      return services.display.set({
+        ...(layout !== undefined && { layout }),
+        ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
