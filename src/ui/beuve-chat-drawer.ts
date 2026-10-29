@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { ChatCitationView, ChatMessageView } from '#contract/ipc-contract.ts';
 
 import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
+import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeReviewSummary } from './describe-review-summary.ts';
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
@@ -628,7 +629,7 @@ export class BeuveChatDrawer extends LitElement {
         <input
           type="text"
           aria-label="Ask a question or run a command"
-          placeholder=${this.isAnswering() ? 'Answering… ask again when it is done' : 'Ask about this change, or /review, /clear, /help'}
+          placeholder=${describeChatPlaceholder(this.isAnswering())}
           autocomplete="off"
           spellcheck="false"
           @keydown=${this.onInputKeyDown}
