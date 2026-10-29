@@ -10,6 +10,7 @@ import type {
   ChatDeltaView,
   CiStatusView,
   CreateLocalSessionRequest,
+  DiffDisplayView,
   EditorId,
   EditorSettingsView,
   FilePairView,
@@ -28,6 +29,7 @@ import type {
   ReviewProgressView,
   ReviewView,
   SessionSummary,
+  SetDiffDisplayRequest,
   UraExportTarget,
   UraItemView,
   UraSeverityView,
@@ -42,7 +44,12 @@ import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
-import type { FileJump, InsightJump, UraCreateRequest } from './beuve-diff-stream.ts';
+import type {
+  FileJump,
+  InsightJump,
+  SuggestionJump,
+  UraCreateRequest,
+} from './beuve-diff-stream.ts';
 import type { FilePairLoader } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import type {
@@ -54,6 +61,7 @@ import type {
 } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
 import { currentEditorName } from './current-editor-name.ts';
+import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
@@ -320,9 +328,31 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onUraUpdate = (
-    event: CustomEvent<{ itemId: string; title: string; body: string; severity: UraSeverityView }>,
+    event: CustomEvent<{
+      itemId: string;
+      title?: string;
+      body?: string;
+      severity?: UraSeverityView;
+      suggestedPatch?: string;
+    }>,
   ): void => {
     void this.uraCall(async (bridge) => bridge.invoke('ura:update', event.detail));
+  };
+
+  /** The dock's "Edit suggestion": the stream opens `e` on the item's lines (ADR 0043). */
+  private readonly onUraEditSuggestion = (event: CustomEvent<{ itemId: string }>): void => {
+    this.jumpNonce += 1;
+    this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
+    this.focusedZone = 'diff';
+  };
+
+  private readonly onStatusNotice = (event: CustomEvent<StatusNotice>): void => {
+    this.showNotice(event.detail);
+  };
+
+  /** `s`/`w` in the stream: store the preference, and refetch the diff if whitespace changed. */
+  private readonly onDisplayChange = (event: CustomEvent<SetDiffDisplayRequest>): void => {
+    void this.setDisplay(event.detail);
   };
 
   private readonly onUraTransition = (
@@ -401,6 +431,9 @@ export class BeuveApp extends LitElement {
   @state() accessor overlayOpen = false;
   @state() accessor statusNotice: StatusNotice | undefined;
   @state() accessor editorSettings: EditorSettingsView | undefined;
+  /** Split or inline, and whether whitespace is ignored (ADR 0042); main stores it. */
+  @state() accessor display: DiffDisplayView = { layout: 'split', ignoreWhitespace: false };
+  @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
   @state() accessor sessionNote = 'Loading sessions…';
@@ -523,6 +556,10 @@ export class BeuveApp extends LitElement {
     this.applySessions(sessions);
     const editors = await bridge.invoke('editor:get-settings');
     this.editorSettings = editors.ok ? editors.value : undefined;
+    const display = await bridge.invoke('display:get');
+    if (display.ok) {
+      this.applyDisplay(display.value);
+    }
     await this.loadGithubAuth(undefined);
   }
 
@@ -688,6 +725,45 @@ export class BeuveApp extends LitElement {
     );
   }
 
+  private applyDisplay(display: DiffDisplayView): void {
+    const isWhitespaceChanged = display.ignoreWhitespace !== this.display.ignoreWhitespace;
+    this.display = display;
+    if (isWhitespaceChanged && this.selectedId !== '') {
+      void this.selectSession(this.selectedId);
+    }
+  }
+
+  /** Stores a display change; `/diff` and `/whitespace` without arguments only show it. */
+  private async setDisplay(change: SetDiffDisplayRequest): Promise<DiffDisplayView | undefined> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return undefined;
+    }
+    const isQuery = change.layout === undefined && change.ignoreWhitespace === undefined;
+    const result = isQuery
+      ? await bridge.invoke('display:get')
+      : await bridge.invoke('display:set', change);
+    if (!result.ok) {
+      this.showNotice({ tone: 'error', text: result.error.message });
+      return undefined;
+    }
+    this.applyDisplay(result.value);
+    if (!isQuery) {
+      this.showNotice({
+        tone: 'info',
+        text: `Diffs: ${describeDiffDisplay(result.value, false).text}`,
+      });
+    }
+    return result.value;
+  }
+
+  private async runDisplayCommand(change: SetDiffDisplayRequest): Promise<void> {
+    const display = await this.setDisplay(change);
+    if (display !== undefined) {
+      this.note('info', `Diffs: ${describeDiffDisplay(display, false).text}.`);
+    }
+  }
+
   /** `/editor [id]`: shows or sets the editor `o` opens. */
   private async runEditorCommand(editorId: EditorId | undefined): Promise<void> {
     const bridge = beuveBridge();
@@ -764,7 +840,10 @@ export class BeuveApp extends LitElement {
     this.selectedId = sessionId;
     this.reviewLoading = true;
     this.reviewError = '';
-    const review = await bridge.invoke('session:get-review', { sessionId });
+    const review = await bridge.invoke('session:get-review', {
+      sessionId,
+      ignoreWhitespace: this.display.ignoreWhitespace,
+    });
     if (sessionId !== this.selectedId) {
       return;
     }
@@ -1128,6 +1207,20 @@ export class BeuveApp extends LitElement {
         void this.runEditorCommand(command.editorId);
         return;
       }
+      case 'diff': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.runDisplayCommand(command.layout === undefined ? {} : { layout: command.layout });
+        return;
+      }
+      case 'whitespace': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.runDisplayCommand(
+          command.ignoreWhitespace === undefined
+            ? {}
+            : { ignoreWhitespace: command.ignoreWhitespace },
+        );
+        return;
+      }
       case 'trust':
       case 'untrust': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
@@ -1443,6 +1536,7 @@ export class BeuveApp extends LitElement {
       severity: request.draft.severity,
       title: request.draft.title,
       body: request.draft.body,
+      ...(request.suggestedPatch !== undefined && { suggestedPatch: request.suggestedPatch }),
     });
     request.settle(created.ok ? undefined : created.error.message);
     if (created.ok) {
@@ -1646,6 +1740,11 @@ export class BeuveApp extends LitElement {
         .fileJump=${this.fileJump}
         .loadFilePair=${this.loadFilePair}
         .uraItems=${this.uraItems}
+        .display=${this.display}
+        .suggestionJump=${this.suggestionJump}
+        @beuve-display-change=${this.onDisplayChange}
+        @beuve-status-notice=${this.onStatusNotice}
+        @beuve-ura-update=${this.onUraUpdate}
         @beuve-mark-reviewed=${this.onMarkReviewed}
         @beuve-insight-status=${this.onInsightStatus}
         @beuve-peek-request=${this.onPeekRequest}
@@ -1681,6 +1780,7 @@ export class BeuveApp extends LitElement {
         @beuve-ura-jump=${this.onUraJump}
         @beuve-open-editor=${this.onOpenEditor}
         @beuve-ura-update=${this.onUraUpdate}
+        @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
         @beuve-ura-transition=${this.onUraTransition}
         @beuve-ura-reorder=${this.onUraReorder}
         @beuve-ura-export=${this.onUraExport}
@@ -1719,6 +1819,7 @@ export class BeuveApp extends LitElement {
         this.overlayOpen
           ? html`<beuve-keybinding-overlay
               .editorName=${currentEditorName(this.editorSettings)}
+              .displayName=${describeDiffDisplay(this.display, false).text}
             ></beuve-keybinding-overlay>`
           : nothing
       }

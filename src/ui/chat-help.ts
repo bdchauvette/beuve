@@ -6,6 +6,8 @@ export const chatHelp: readonly string[] = Object.freeze([
   '/review --fresh — rerun even if this head was reviewed (replaces its insights)',
   '/review --effort=low|medium|high — how hard Claude Code thinks',
   '/editor zed|vscode|cursor — choose the editor the o key opens (just /editor shows the current one)',
+  '/diff split|inline — side-by-side or inline diffs (s in the diff stream; just /diff shows the current one)',
+  '/whitespace ignore|show — hide or show whitespace-only changes, computed by git diff -w (w in the diff stream)',
   '/trust — allow this repository’s tests to run on this machine for trace probes (r). They execute the repository’s test code and Vitest config.',
   '/untrust — withdraw that approval; r then asks again.',
   '/clear — delete this session’s chat (stops an answer in progress)',

@@ -1,4 +1,4 @@
-import type { EditorId, ReviewEffort } from '#contract/ipc-contract.ts';
+import type { DiffLayoutView, EditorId, ReviewEffort } from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 
 /** What the reviewer typed into the chat drawer, parsed (ADR 0022). */
@@ -9,6 +9,10 @@ export type ChatCommand =
   | { readonly kind: 'clear' }
   /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
   | { readonly kind: 'editor'; readonly editorId?: EditorId }
+  /** `/diff` shows the diff layout; `/diff split` or `/diff inline` sets it (ADR 0042). */
+  | { readonly kind: 'diff'; readonly layout?: DiffLayoutView }
+  /** `/whitespace` shows whether whitespace is ignored; `ignore` or `show` sets it. */
+  | { readonly kind: 'whitespace'; readonly ignoreWhitespace?: boolean }
   /** Approves running the open repository's tests for trace probes (ADR 0041). */
   | { readonly kind: 'trust' }
   /** Withdraws that approval. */
@@ -29,7 +33,8 @@ const whitespace = /\s+/u;
 
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
- * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, and
+ * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, `/diff [split|inline]`,
+ * `/whitespace [ignore|show]`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -63,6 +68,12 @@ export function parseChatCommand(input: string): ChatCommand {
     case '/editor': {
       return parseEditor(args);
     }
+    case '/diff': {
+      return parseDiff(args);
+    }
+    case '/whitespace': {
+      return parseWhitespace(args);
+    }
     case '/review': {
       return parseReview(args);
     }
@@ -87,6 +98,39 @@ function parseEditor(args: readonly string[]): ChatCommand {
   return editorId === undefined
     ? invalid('/editor takes zed, vscode or cursor, e.g. /editor zed.')
     : { kind: 'editor', editorId };
+}
+
+const layoutAliases: Readonly<Record<string, DiffLayoutView>> = {
+  split: 'split',
+  'side-by-side': 'split',
+  inline: 'unified',
+  unified: 'unified',
+};
+
+function parseDiff(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'diff' };
+  }
+  const layout = args.length === 1 ? layoutAliases[(args[0] ?? '').toLowerCase()] : undefined;
+  return layout === undefined
+    ? invalid('/diff takes split or inline, e.g. /diff inline.')
+    : { kind: 'diff', layout };
+}
+
+const whitespaceAliases: Readonly<Record<string, boolean>> = {
+  ignore: true,
+  hide: true,
+  show: false,
+};
+
+function parseWhitespace(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'whitespace' };
+  }
+  const ignore = args.length === 1 ? whitespaceAliases[(args[0] ?? '').toLowerCase()] : undefined;
+  return ignore === undefined
+    ? invalid('/whitespace takes ignore or show, e.g. /whitespace ignore.')
+    : { kind: 'whitespace', ignoreWhitespace: ignore };
 }
 
 function parseReview(args: readonly string[]): ChatCommand {

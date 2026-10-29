@@ -58,7 +58,15 @@ export const keybindings: readonly Keybinding[] = Object.freeze([
       'Trace probe: run the tests covering the hunk and show what executed (asks once per repository; Enter shows the line)',
     available: true,
   },
-  { keys: ['e'], action: 'Inline edit', available: false },
+  {
+    keys: ['e'],
+    action:
+      'Suggest an edit to the hunk or selected lines (⌘Enter saves as a suggestion, Esc cancels; files are never written)',
+    available: true,
+  },
+  { keys: ['s'], action: 'Diffs side by side / inline', available: true },
+  { keys: ['w'], action: 'Hide / show whitespace-only changes', available: true },
+  { keys: ['i'], action: 'ImpactGate details of the file (Esc closes)', available: true },
   {
     keys: ['o'],
     action: 'Open in your editor at this line (diff stream, dock item or chat citation)',

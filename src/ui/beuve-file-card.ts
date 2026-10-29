@@ -1,13 +1,17 @@
 import type * as Diffs from '@pierre/diffs';
 import type { FileDiff, FileDiffLoadedFiles, FileDiffMetadata } from '@pierre/diffs';
-import { css, html, LitElement, nothing } from 'lit';
-import type { PropertyValues, TemplateResult } from 'lit';
+import type * as DiffsEdit from '@pierre/diffs/edit';
+import type { Editor } from '@pierre/diffs/edit';
+import { css, html, LitElement, nothing, svg } from 'lit';
+import type { PropertyValues, SVGTemplateResult, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
   AgentInsightView,
   DiffFileView,
+  DiffLayoutView,
   FileImpactView,
   FilePairView,
   ImpactFindingView,
@@ -24,13 +28,19 @@ import './beuve-trace-portal.ts';
 import type { TraceLineActivateDetail } from './beuve-trace-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
-import { describeFileImpact } from './describe-file-impact.ts';
+import { applySuggestedPatch } from './apply-suggested-patch.ts';
+import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
+import { headRowSelector } from './head-row-selector.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { placeInsights } from './place-insights.ts';
+import { planEditTarget } from './plan-edit-target.ts';
+import type { EditTarget } from './plan-edit-target.ts';
+import { planImpactChip } from './plan-impact-chip.ts';
+import type { ImpactChip } from './plan-impact-chip.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
 import { planStageAnchor } from './plan-stage-anchor.ts';
@@ -53,6 +63,24 @@ export interface ComposerState {
   readonly where: string;
   readonly saving: boolean;
   readonly error: string;
+  /** The suggestion an `e` edit produced, staged with the note (ADR 0043). */
+  readonly suggestedPatch?: string;
+}
+
+/**
+ * An `e` edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
+ * to start; `error` is shown in the edit bar (e.g. an edit outside the range).
+ */
+export interface EditSession {
+  readonly target: EditTarget;
+  readonly phase: 'loading' | 'editing' | 'failed';
+  readonly error: string;
+}
+
+/** Sent when an `e` edit is saved: the edited range and its suggested patch. */
+export interface SuggestionSaveDetail {
+  readonly target: EditTarget;
+  readonly patch: string;
 }
 
 /** What a card annotates under a head line (or above the diff, at line 0). */
@@ -146,21 +174,150 @@ export class BeuveFileCard extends LitElement {
       color: var(--beuve-diff-removed-text);
     }
 
-    .impact {
+    .impact-chip {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      gap: 4px;
+      padding: 0 var(--beuve-space-1);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--beuve-text-muted);
+      font: var(--beuve-font-small);
+      cursor: default;
+    }
+
+    .impact-chip svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .impact-chip.quiet {
+      opacity: 0.55;
+    }
+
+    .impact-chip.warning {
+      border-color: color-mix(in srgb, var(--beuve-warn) 45%, transparent);
+      background: color-mix(in srgb, var(--beuve-warn) 10%, var(--beuve-surface-sunken));
+      color: var(--beuve-warn);
+    }
+
+    .impact-chip:hover,
+    .impact-chip:focus-visible {
+      opacity: 1;
+      border-color: var(--beuve-accent);
+      outline: none;
+    }
+
+    .impact-popover {
+      position: fixed;
+      inset: auto;
+      box-sizing: border-box;
+      width: min(380px, calc(100vw - 32px));
+      margin: 0;
+      padding: var(--beuve-space-2) var(--beuve-space-3);
+      border: 1px solid var(--beuve-border);
+      border-radius: var(--beuve-radius);
+      background: var(--beuve-surface);
+      box-shadow: 0 6px 24px #0000001f;
+      color: var(--beuve-text);
+      font: var(--beuve-font-small);
+    }
+
+    .impact-popover h3 {
+      margin: 0 0 var(--beuve-space-1);
+      font: inherit;
+      font-weight: 600;
+    }
+
+    .impact-popover p {
+      margin: 0 0 var(--beuve-space-1);
+      color: var(--beuve-text-muted);
+    }
+
+    .impact-popover table {
+      width: 100%;
+      margin-bottom: var(--beuve-space-1);
+      border-collapse: collapse;
+    }
+
+    .impact-popover th {
+      padding: 2px 0;
+      font-weight: 400;
+      text-align: left;
+      color: var(--beuve-text-muted);
+    }
+
+    .impact-popover td {
+      padding: 2px 0;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .impact-popover th:not(:first-child),
+    .impact-popover td:not(:first-child) {
+      padding-left: var(--beuve-space-2);
+      text-align: right;
+    }
+
+    .impact-popover .fn {
+      max-width: 160px;
+      overflow: hidden;
+      font: var(--beuve-font-mono);
+      font-size: 11px;
+      text-overflow: ellipsis;
+    }
+
+    .impact-popover .breach {
+      color: var(--beuve-warn);
+    }
+
+    .impact-popover .actions {
+      display: flex;
+      align-items: center;
+      gap: var(--beuve-space-2);
+    }
+
+    .impact-popover .keys {
+      flex: 1;
+      color: var(--beuve-text-muted);
+    }
+
+    .impact-popover button {
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      border-radius: 4px;
+      background: var(--beuve-surface);
+      color: var(--beuve-text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .impact-popover button:disabled {
+      color: var(--beuve-text-muted);
+      cursor: default;
+    }
+
+    .edit-bar {
+      display: flex;
+      align-items: baseline;
+      gap: var(--beuve-space-2);
       padding: var(--beuve-space-1) var(--beuve-space-3);
       border-bottom: 1px solid var(--beuve-border);
+      border-left: 3px solid var(--beuve-accent);
       background: var(--beuve-surface);
       font: var(--beuve-font-small);
       color: var(--beuve-text-muted);
     }
 
-    .impact.warning {
-      background: color-mix(in srgb, var(--beuve-warn) 12%, var(--beuve-surface));
-      color: var(--beuve-warn);
+    .edit-bar .what {
+      font-weight: 600;
+      color: var(--beuve-text);
     }
 
-    .impact .label {
-      font-weight: 600;
+    .edit-bar .error {
+      color: var(--beuve-danger);
     }
 
     .placeholder {
@@ -200,33 +357,6 @@ export class BeuveFileCard extends LitElement {
 
     beuve-agent-insight {
       margin: var(--beuve-space-1) var(--beuve-space-3) var(--beuve-space-2);
-    }
-
-    .impact {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-    }
-
-    .impact .text {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .impact button {
-      flex: none;
-      padding: 0 var(--beuve-space-2);
-      border: 1px solid currentcolor;
-      border-radius: 4px;
-      background: transparent;
-      color: inherit;
-      font: var(--beuve-font-small);
-      cursor: pointer;
-    }
-
-    .impact button:disabled {
-      border-color: transparent;
-      cursor: default;
     }
 
     .ura-marker {
@@ -300,6 +430,39 @@ export class BeuveFileCard extends LitElement {
   private programmaticStep: HunkStep | undefined;
   /** Lines the reviewer selected in the gutter, until `j`/`k` moves on. */
   private lineSelection: SelectedLines | undefined;
+  /** The `e` editor attached to the diff, and the head text it started from. */
+  private editor: Editor<'file-diff', CardSlot> | undefined;
+  private editHead: string | undefined;
+  /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
+  private codeGeneration = 0;
+  private impactHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * While editing, ⌘/Ctrl+Enter saves and Escape cancels before the editor sees them; every
+   * other key stays with the editor and never reaches the stream's shortcuts.
+   */
+  private readonly onEditKeyCapture = (event: KeyboardEvent): void => {
+    if (this.edit === undefined) {
+      return;
+    }
+    const isSave = event.key === 'Enter' && (event.metaKey || event.ctrlKey);
+    if (!isSave && event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (isSave) {
+      this.saveEdit();
+    } else {
+      this.cancelEdit('');
+    }
+  };
+
+  private readonly onEditKeyBubble = (event: KeyboardEvent): void => {
+    if (this.edit !== undefined) {
+      event.stopPropagation();
+    }
+  };
 
   private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
     event.stopPropagation();
@@ -347,6 +510,13 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** The `m` composer, when it is open on this file. */
   @property({ attribute: false }) accessor composer: ComposerState | undefined;
+  /** How the diff is laid out ({@link planDiffLayout} in the stream, ADR 0042). */
+  @property() accessor diffStyle: DiffLayoutView = 'unified';
+  /** ImpactGate's cognitive limit, named in the indicator's popover. */
+  @property({ type: Number }) accessor cognitiveLimit: number | undefined;
+
+  /** The `e` edit in progress on this card (ADR 0043). */
+  @state() accessor edit: EditSession | undefined;
 
   @state() accessor isFallback = false;
   /** `@pierre/diffs`, loaded with the first card that mounts (ADR 0025). */
@@ -354,24 +524,22 @@ export class BeuveFileCard extends LitElement {
 
   constructor() {
     super();
+    this.addEventListener('keydown', this.onEditKeyCapture, { capture: true });
+    this.addEventListener('keydown', this.onEditKeyBubble);
     this.addController({
       hostDisconnected: (): void => {
+        this.endEdit();
         this.diff?.cleanUp();
         this.diff = undefined;
+        clearTimeout(this.impactHideTimer);
       },
     });
   }
 
+  /** A rendered row by head line (base line for deletions), on the head side when split. */
   private findRow(side: 'additions' | 'deletions' | 'context', line: number): Element | undefined {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
-    const type = { additions: 'change-addition', deletions: 'change-deletion', context: 'context' }[
-      side
-    ];
-    return (
-      root?.querySelector(
-        `[data-line='${CSS.escape(String(line))}'][data-line-type='${CSS.escape(type)}']`,
-      ) ?? undefined
-    );
+    return root?.querySelector(headRowSelector(this.diffStyle, side, line)) ?? undefined;
   }
 
   private async loadLibrary(): Promise<void> {
@@ -409,7 +577,9 @@ export class BeuveFileCard extends LitElement {
     if (!isNew && !changed.has('activeHunk') && !changed.has('active')) {
       return;
     }
-    const step = this.active ? planHunkSteps(metadata.hunks)[this.activeHunk] : undefined;
+    const step = this.active
+      ? planHunkSteps(metadata.hunks, this.diffStyle)[this.activeHunk]
+      : undefined;
     this.programmaticStep = step;
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
@@ -450,7 +620,7 @@ export class BeuveFileCard extends LitElement {
       theme: themeNames,
       themeType: 'system',
       preferredHighlighter: 'shiki-js',
-      diffStyle: 'unified',
+      diffStyle: this.diffStyle,
       disableFileHeader: true,
       hunkSeparators: 'line-info',
       lineDiffType: 'word-alt',
@@ -504,6 +674,7 @@ export class BeuveFileCard extends LitElement {
       return;
     }
     composerElement.where = composer.where;
+    composerElement.patch = composer.suggestedPatch ?? '';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
   }
@@ -518,14 +689,71 @@ export class BeuveFileCard extends LitElement {
     return element;
   }
 
-  private renderImpact(): TemplateResult | typeof nothing {
-    const banner = describeFileImpact(this.impact, this.findings);
-    if (banner === undefined) {
+  /**
+   * The ImpactGate indicator in the title bar (ADR 0042) and its popover, which opens on hover,
+   * on keyboard focus and with `i`, closes with Escape, and never traps focus.
+   */
+  private renderImpactChip(): TemplateResult | typeof nothing {
+    const chip = planImpactChip(this.impact, this.findings, this.cognitiveLimit);
+    if (chip === undefined) {
       return nothing;
     }
-    const path = this.file?.path;
-    const own = this.findings.filter((finding) => finding.path === path);
-    const unstaged = own.filter((finding) => !this.isStaged(finding));
+    const show = (): void => {
+      this.showImpact();
+    };
+    const hide = (): void => {
+      this.scheduleImpactHide();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.hideImpact();
+      this.dispatchEvent(new CustomEvent('beuve-impact-close', { bubbles: true, composed: true }));
+    };
+    const label = chip.tone === 'warning' ? `ImpactGate: ${chip.label}` : 'ImpactGate details';
+    return html`<button
+        type="button"
+        class="impact-chip ${chip.tone}"
+        aria-label=${label}
+        aria-haspopup="dialog"
+        aria-controls="impact-popover"
+        @mouseenter=${show}
+        @mouseleave=${hide}
+        @focus=${show}
+        @blur=${hide}
+        @click=${(event: Event): void => {
+          event.stopPropagation();
+          this.showImpact();
+        }}
+        @keydown=${onKey}
+      >
+        ${chip.tone === 'warning' ? warningIcon : gaugeIcon}${chip.label}
+      </button>
+      <div
+        id="impact-popover"
+        class="impact-popover"
+        popover="manual"
+        role="dialog"
+        aria-label="ImpactGate"
+        @mouseenter=${show}
+        @mouseleave=${hide}
+        @focusin=${show}
+        @focusout=${hide}
+        @keydown=${onKey}
+        @click=${(event: Event): void => {
+          event.stopPropagation();
+        }}
+      >
+        ${this.renderImpactDetails(chip)}
+      </div>`;
+  }
+
+  private renderImpactDetails(chip: ImpactChip): TemplateResult {
+    const unstaged = chip.findings.filter((finding) => !this.isStaged(finding));
     const stage = (event: Event): void => {
       event.stopPropagation();
       for (const finding of unstaged) {
@@ -538,25 +766,106 @@ export class BeuveFileCard extends LitElement {
         );
       }
     };
-    return html`<div class="impact ${banner.tone}" title=${banner.title} role="status">
-      <span class="text"><span class="label">ImpactGate</span> ${banner.text}</span>
+    return html`<h3>ImpactGate</h3>
+      <p>${chip.summary}</p>
       ${
-        own.length === 0
+        chip.rows.length === 0
           ? nothing
-          : html`<button
-              type="button"
-              ?disabled=${unstaged.length === 0}
-              title=${
-                unstaged.length === 0
-                  ? 'Staged in the review dock'
-                  : `Stage ${unstaged.length === 1 ? 'this finding' : `these ${String(unstaged.length)} findings`} in the review dock`
-              }
-              @click=${stage}
-            >
-              ${unstaged.length === 0 ? 'Staged' : 'Stage'}
-            </button>`
+          : html`<table>
+              <thead>
+                <tr>
+                  <th>Function</th>
+                  <th>Lines</th>
+                  <th title="Cognitive complexity, base → head">Cognitive</th>
+                  <th title="Rank of the head value among the head's functions">Pctl</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${chip.rows.map(
+                  (row) =>
+                    html`<tr class=${row.trend === undefined ? '' : 'breach'}>
+                      <td class="fn" title=${row.name}>${row.name}</td>
+                      <td>${row.lines}</td>
+                      <td>
+                        ${row.before === undefined ? 'new' : String(row.before)} →
+                        ${row.after === undefined ? 'removed' : String(row.after)}${
+                          row.trend === undefined ? '' : ` · ${row.trend}`
+                        }
+                      </td>
+                      <td>${row.percentile === undefined ? '' : String(row.percentile)}</td>
+                    </tr>`,
+                )}
+              </tbody>
+            </table>`
       }
-    </div>`;
+      ${chip.note === '' ? nothing : html`<p>${chip.note}</p>`}
+      <div class="actions">
+        <span class="keys">Esc closes</span>
+        ${
+          chip.findings.length === 0
+            ? nothing
+            : html`<button
+                type="button"
+                ?disabled=${unstaged.length === 0}
+                title=${
+                  unstaged.length === 0
+                    ? 'Staged in the review dock'
+                    : `Stage ${unstaged.length === 1 ? 'this finding' : `these ${String(unstaged.length)} findings`} in the review dock`
+                }
+                @click=${stage}
+              >
+                ${unstaged.length === 0 ? 'Staged' : 'Stage'}
+              </button>`
+        }
+      </div>`;
+  }
+
+  private impactParts(): { chip: HTMLElement; popover: HTMLElement } | undefined {
+    const chip = this.renderRoot.querySelector<HTMLElement>('.impact-chip');
+    const popover = this.renderRoot.querySelector<HTMLElement>('.impact-popover');
+    return chip === null || popover === null ? undefined : { chip, popover };
+  }
+
+  /** Opens the popover in the top layer, under the chip and inside the window. */
+  private showImpact(): void {
+    clearTimeout(this.impactHideTimer);
+    const parts = this.impactParts();
+    if (parts === undefined) {
+      return;
+    }
+    const { chip, popover } = parts;
+    if (!popover.matches(':popover-open')) {
+      popover.showPopover();
+    }
+    const anchor = chip.getBoundingClientRect();
+    const width = popover.getBoundingClientRect().width;
+    const left = Math.max(8, Math.min(anchor.right - width, innerWidth - width - 8));
+    const below = anchor.bottom + 4;
+    const height = popover.getBoundingClientRect().height;
+    const top = below + height > innerHeight - 8 ? Math.max(8, anchor.top - height - 4) : below;
+    popover.style.left = `${String(Math.round(left))}px`;
+    popover.style.top = `${String(Math.round(top))}px`;
+  }
+
+  private scheduleImpactHide(): void {
+    clearTimeout(this.impactHideTimer);
+    this.impactHideTimer = setTimeout(() => {
+      const parts = this.impactParts();
+      const isInside =
+        parts !== undefined &&
+        (parts.chip.matches(':hover, :focus') || parts.popover.matches(':hover, :focus-within'));
+      if (!isInside) {
+        this.hideImpact();
+      }
+    }, 150);
+  }
+
+  private hideImpact(): void {
+    clearTimeout(this.impactHideTimer);
+    const popover = this.impactParts()?.popover;
+    if (popover?.matches(':popover-open') === true) {
+      popover.hidePopover();
+    }
   }
 
   /** A promoted insight's own block already says it is staged, so it gets no second marker. */
@@ -587,7 +896,7 @@ export class BeuveFileCard extends LitElement {
       return html`<p class="empty">${file.binary ? 'Binary file' : 'No textual changes'}</p>`;
     }
     return this.mounted
-      ? html`<div class="code"></div>`
+      ? html`${keyed(this.codeGeneration, html`<div class="code"></div>`)}`
       : html`<div
           class="code placeholder"
           style=${styleMap({ height: `${String(this.measuredHeight ?? estimateHeight(file))}px` })}
@@ -613,6 +922,103 @@ ${splitPatch(file.patch).map(
                 placement.afterLine.get(index) ?? []
               ).map((shown) => insight(shown))}`,
         )}</pre>`;
+  }
+
+  /** ⌘/Ctrl+Enter: the edit as a patch of the target lines, unless it strays outside them. */
+  private saveEdit(): void {
+    const { edit, editor, editHead, file } = this;
+    if (editor === undefined || editHead === undefined || edit?.phase !== 'editing') {
+      if (edit?.phase === 'failed') {
+        this.cancelEdit('');
+      }
+      return;
+    }
+    const plan = buildSuggestedPatch(file?.path ?? '', editHead, editor.getText(), edit.target);
+    switch (plan.kind) {
+      case 'outside': {
+        this.edit = { ...edit, error: plan.message };
+        return;
+      }
+      case 'unchanged': {
+        this.cancelEdit('Nothing changed, so there is no suggestion.');
+        return;
+      }
+      case 'patch': {
+        this.endEdit();
+        const detail: SuggestionSaveDetail = { target: edit.target, patch: plan.text };
+        this.dispatchEvent(
+          new CustomEvent('beuve-suggestion-save', { detail, bubbles: true, composed: true }),
+        );
+      }
+    }
+  }
+
+  private cancelEdit(message: string): void {
+    this.endEdit();
+    this.dispatchEvent(
+      new CustomEvent('beuve-suggestion-cancel', {
+        detail: { message },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** Detaches the editor, discarding its text, and remounts the diff as it was. */
+  private endEdit(): void {
+    const isAttached = this.editor !== undefined;
+    this.diff?.setCodeScrollLeft(0);
+    this.editor?.cleanUp('discard');
+    this.editor = undefined;
+    this.editHead = undefined;
+    this.edit = undefined;
+    if (!isAttached) {
+      return;
+    }
+
+    this.diff?.cleanUp();
+    this.diff = undefined;
+    this.codeGeneration += 1;
+  }
+
+  private renderEditBar(): TemplateResult | typeof nothing {
+    const { edit } = this;
+    if (edit === undefined) {
+      return nothing;
+    }
+    const { startLine, endLine } = edit.target;
+    const lines =
+      startLine === endLine
+        ? `line ${String(startLine)}`
+        : `lines ${String(startLine)}–${String(endLine)}`;
+    const what = `${edit.target.itemId === undefined ? 'Suggesting' : 'Editing the suggestion for'} ${lines}`;
+    const state =
+      edit.phase === 'loading'
+        ? 'Opening the editor…'
+        : edit.phase === 'failed'
+          ? ''
+          : '⌘Enter saves as a suggestion · Esc cancels · your files are never written';
+    return html`<div class="edit-bar" role="status">
+      <span class="what">${what}</span>
+      <span>${state}</span>
+      ${edit.error === '' ? nothing : html`<span class="error" role="alert">${edit.error}</span>`}
+    </div>`;
+  }
+
+  /** Scrolls a row (or the card) into view vertically, keeping the code's horizontal scroll. */
+  private scrollToRow(row: Element | undefined): void {
+    const left = this.diff?.getCodeScrollLeft();
+    (row ?? this).scrollIntoView({ block: row === undefined ? 'start' : 'center' });
+    if (left !== undefined) {
+      this.diff?.setCodeScrollLeft(left);
+    }
+  }
+
+  /** `i`: focuses the ImpactGate indicator, which opens its popover; `false` without one. */
+  focusImpact(): boolean {
+    const chip = this.impactParts()?.chip;
+    chip?.focus();
+    return chip !== undefined;
   }
 
   /** Scrolls an insight of this card into view, mounting the diff first if needed. */
@@ -643,6 +1049,65 @@ ${splitPatch(file.patch).map(
       : planEditorLine(file, this.activeHunk, this.lineSelection);
   }
 
+  /** What `e` would edit here: the selected lines or the hunk, or the staged note under them. */
+  editTarget(items: readonly UraItemView[], headSha: string): EditTarget | undefined {
+    const { file } = this;
+    return file === undefined
+      ? undefined
+      : planEditTarget(file, this.activeHunk, this.lineSelection, items, headSha);
+  }
+
+  /**
+   * Opens `@pierre/diffs/edit` on the head side of this diff (ADR 0043), once both full files are
+   * loaded through `session:get-file-pair`, with the caret on the target's first line. Nothing
+   * is ever written: saving builds a suggested patch for the target lines and emits
+   * `beuve-suggestion-save`; cancelling emits `beuve-suggestion-cancel`.
+   */
+  async startEdit(target: EditTarget): Promise<void> {
+    const { file, loadFilePair: loader } = this;
+    if (file === undefined || loader === undefined || this.edit !== undefined) {
+      return;
+    }
+    this.edit = { target, phase: 'loading', error: '' };
+    this.mounted = true;
+    try {
+      const [pair, module] = await Promise.all([loader(file.path), loadEditor()]);
+      const diff = await waitForValue(() => this.diff);
+      if (diff === undefined || pair?.newContents === undefined) {
+        throw new Error('beuve could not load this file to edit it.');
+      }
+      await diff.prepareForEditing();
+      if (this.edit.target !== target || this.diff !== diff) {
+        return;
+      }
+      const editor = new module.Editor<'file-diff', CardSlot>('file-diff');
+      editor.edit(diff);
+      const suggested =
+        target.patch === undefined
+          ? undefined
+          : applySuggestedPatch(pair.newContents, target.patch);
+      if (suggested !== undefined && suggested !== pair.newContents) {
+        // Re-editing starts from the suggestion; undo goes back to the head.
+        const end = { line: pair.newContents.split('\n').length, character: 0 };
+        editor.applyEdits([
+          { range: { start: { line: 0, character: 0 }, end }, newText: suggested },
+        ]);
+      }
+      this.editor = editor;
+      this.editHead = pair.newContents;
+      this.edit = { target, phase: 'editing', error: '' };
+      editor.focus({ lineNumber: target.startLine, preventScroll: false });
+      await this.revealLine(target.startLine);
+    } catch (error: unknown) {
+      this.endEdit();
+      this.edit = {
+        target,
+        phase: 'failed',
+        error: error instanceof Error ? error.message : 'The editor could not start.',
+      };
+    }
+  }
+
   /** Scrolls head line `line` into view (or the card's header without one), mounting the diff. */
   async revealLine(line: number | undefined): Promise<void> {
     this.mounted = true;
@@ -651,7 +1116,7 @@ ${splitPatch(file.patch).map(
       line === undefined
         ? undefined
         : await waitFor(() => this.findRow('additions', line) ?? this.findRow('context', line));
-    (row ?? this).scrollIntoView({ block: row === undefined ? 'start' : 'center' });
+    this.scrollToRow(row);
   }
 
   /** Selects hunk `index` and scrolls its first change into view, mounting the diff if needed. */
@@ -660,10 +1125,12 @@ ${splitPatch(file.patch).map(
     this.activeHunk = index;
     await this.updateComplete;
     const step =
-      this.metadata === undefined ? undefined : planHunkSteps(this.metadata.hunks)[index];
+      this.metadata === undefined
+        ? undefined
+        : planHunkSteps(this.metadata.hunks, this.diffStyle)[index];
     const row =
       step === undefined ? undefined : await waitFor(() => this.findRow(step.side, step.start));
-    (row ?? this).scrollIntoView({ block: row === undefined ? 'start' : 'center' });
+    this.scrollToRow(row);
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -672,6 +1139,16 @@ ${splitPatch(file.patch).map(
     }
     if (changed.has('mounted') && this.mounted && this.library === undefined) {
       void this.loadLibrary();
+    }
+    if (changed.has('mounted') && !this.mounted && this.edit !== undefined) {
+      // An open edit keeps its diff mounted however far the stream scrolls.
+      this.mounted = true;
+    }
+    if (changed.has('diffStyle') && this.diff !== undefined && this.edit === undefined) {
+      this.diff.cleanUp();
+      this.diff = undefined;
+      this.codeGeneration += 1;
+      this.measuredHeight = undefined;
     }
     if (changed.has('mounted') && !this.mounted && this.diff !== undefined) {
       const height = this.renderRoot.querySelector('.code')?.getBoundingClientRect().height;
@@ -693,7 +1170,13 @@ ${splitPatch(file.patch).map(
 
   protected override updated(changed: PropertyValues<this>): void {
     const { library, metadata } = this;
-    if (library === undefined || metadata === undefined || !this.mounted || this.isFallback) {
+    if (
+      library === undefined ||
+      metadata === undefined ||
+      !this.mounted ||
+      this.isFallback ||
+      this.editor !== undefined
+    ) {
       return;
     }
     const container = this.renderRoot.querySelector<HTMLElement>('.code');
@@ -727,8 +1210,9 @@ ${splitPatch(file.patch).map(
           </span>
           <span class="additions">+${file.additions}</span>
           <span class="deletions">−${file.deletions}</span>
+          ${this.renderImpactChip()}
         </div>
-        ${this.renderImpact()}
+        ${this.renderEditBar()}
       </div>
       ${this.peek === undefined ? nothing : html`<beuve-peek-portal .peek=${this.peek}></beuve-peek-portal>`}
       ${
@@ -761,7 +1245,7 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   marker.title = `Staged in the review dock: ${labels.anchor}, from ${labels.origin}`;
   const kind = document.createElement('span');
   kind.className = 'ura-kind';
-  kind.textContent = `Staged · ${labels.severity}`;
+  kind.textContent = `Staged · ${labels.severity}${item.suggestedPatch === undefined ? '' : ' · suggestion'}`;
   const title = document.createElement('span');
   title.className = 'ura-title';
   title.textContent = item.title;
@@ -780,6 +1264,18 @@ async function loadDiffs(): Promise<typeof Diffs> {
   return shared.library;
 }
 
+const sharedEditor: { module: Promise<typeof DiffsEdit> | undefined } = { module: undefined };
+
+/** `@pierre/diffs/edit`, a lazy chunk loaded by the first `e` (ADR 0043). */
+async function loadEditor(): Promise<typeof DiffsEdit> {
+  sharedEditor.module ??= import('@pierre/diffs/edit');
+  return sharedEditor.module;
+}
+
+const warningIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10.5H1Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 5v2.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>`;
+
+const gaugeIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5a4 4 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8.5 7.8 5.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+
 /** Registers beuve's Alabaster-style themes with the library once (ADR 0025). */
 function registerThemes(library: typeof Diffs): void {
   if (shared.areThemesRegistered) {
@@ -795,9 +1291,11 @@ function registerThemes(library: typeof Diffs): void {
   }
 }
 
-/** Parses the patch, keyed by its blobs, and turns highlighting off for languages beuve doesn't ship. */
+/** Parses the patch, keyed by its blobs and hunks, and turns highlighting off for languages beuve doesn't ship. */
 function toMetadata(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {
-  const cacheKey = [file.path, file.oldBlobSha ?? '', file.newBlobSha ?? ''].join('\0');
+  // The hunks tell apart diffs of the same blobs: a whitespace-ignoring variant, or an interdiff.
+  const hunks = file.hunks.map((hunk) => hunk.header).join('\n');
+  const cacheKey = [file.path, file.oldBlobSha ?? '', file.newBlobSha ?? '', hunks].join('\0');
   const metadata = library.processFile(file.patch, { cacheKey, isGitDiff: true });
   if (metadata === undefined) {
     return undefined;
@@ -832,6 +1330,20 @@ function estimateHeight(file: DiffFileView): number {
     (line) => line.kind !== 'meta' && line.kind !== 'hunk',
   ).length;
   return lines * estimatedLineHeight + file.hunks.length * estimatedSeparatorHeight;
+}
+
+/** Polls a few animation frames for a value that a later render sets. */
+async function waitForValue<T>(find: () => T | undefined): Promise<T | undefined> {
+  for (let frame = 0; frame < 60; frame += 1) {
+    const found = find();
+    if (found !== undefined) {
+      return found;
+    }
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+    });
+  }
+  return undefined;
 }
 
 /** Polls a few animation frames for an element the library renders asynchronously. */

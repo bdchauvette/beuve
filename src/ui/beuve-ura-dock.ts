@@ -10,6 +10,7 @@ import type {
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
+import './beuve-patch-preview.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import type { GithubDockState } from './github-post-state.ts';
@@ -53,7 +54,10 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * move, Enter jumps the diff stream to the item, `o` opens it in the editor (`beuve-open-editor`), Space opens its editor (title, body, severity),
  * `x` withdraws or restores it, `a` marks it addressed (or restages it), and `Shift+J`/`Shift+K`
  * move it down or up the export order. A verdict selector shows the derived default and refuses
- * approving over a staged blocker; export buttons copy the compiled review. Presentational: emits
+ * approving over a staged blocker; export buttons copy the compiled review. Items carrying a
+ * suggested patch say `suggestion` and preview it under the cursor; the editor can re-edit the
+ * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
+ * `beuve-ura-edit-suggestion`,
  * `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-transition`, `beuve-ura-reorder` and
  * `beuve-ura-export`; `beuve-app` does the IPC.
  */
@@ -179,6 +183,21 @@ export class BeuveUraDock extends LitElement {
       .title {
         margin-top: 1px;
         overflow-wrap: anywhere;
+      }
+
+      .suggestion {
+        flex: none;
+        color: var(--beuve-accent);
+      }
+
+      beuve-patch-preview {
+        margin-top: var(--beuve-space-1);
+      }
+
+      .editor .suggestion-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-1);
       }
 
       .editor {
@@ -575,9 +594,19 @@ export class BeuveUraDock extends LitElement {
                 >posted</span
               >`
         }
+        ${
+          item.suggestedPatch === undefined
+            ? nothing
+            : html`<span class="suggestion" title="Carries a suggested change">suggestion</span>`
+        }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
       <div class="title">${item.title}</div>
+      ${
+        item.suggestedPatch !== undefined && (index === this.cursor || this.editingId === item.id)
+          ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
+          : nothing
+      }
       ${this.editingId === item.id ? this.renderEditor(item) : nothing}
     </li>`;
   }
@@ -607,6 +636,7 @@ export class BeuveUraDock extends LitElement {
         <input name="title" aria-label="Title" maxlength="200" .value=${item.title} />
       </div>
       <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
+      ${this.renderSuggestionActions(item)}
       <div class="row">
         <span class="note">⌘Enter saves · Esc closes</span>
         <span class="spacer"></span>
@@ -621,6 +651,47 @@ export class BeuveUraDock extends LitElement {
         <button type="submit" class="primary">Save</button>
       </div>
     </form>`;
+  }
+
+  /**
+   * Re-edit or remove a suggestion. Editing happens in the diff stream (`e` there), so it is
+   * offered only for line notes current on the head they were written against.
+   */
+  private renderSuggestionActions(item: UraItemView): TemplateResult | typeof nothing {
+    const isEditable =
+      item.status.kind === 'staged' &&
+      item.anchor.kind === 'lines' &&
+      item.placement.kind === 'current';
+    if (!isEditable && item.suggestedPatch === undefined) {
+      return nothing;
+    }
+    return html`<div class="suggestion-actions">
+      ${
+        isEditable
+          ? html`<button
+              type="button"
+              @click=${(): void => {
+                this.closeEditor();
+                this.emit('beuve-ura-edit-suggestion', { itemId: item.id });
+              }}
+            >
+              ${item.suggestedPatch === undefined ? 'Suggest a change…' : 'Edit suggestion…'}
+            </button>`
+          : nothing
+      }
+      ${
+        item.suggestedPatch === undefined
+          ? nothing
+          : html`<button
+              type="button"
+              @click=${(): void => {
+                this.emit('beuve-ura-update', { itemId: item.id, suggestedPatch: '' });
+              }}
+            >
+              Remove suggestion
+            </button>`
+      }
+    </div>`;
   }
 
   private renderExport(stagedCount: number): TemplateResult {

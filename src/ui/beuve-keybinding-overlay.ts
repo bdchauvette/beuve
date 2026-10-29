@@ -1,4 +1,4 @@
-import { css, html, LitElement } from 'lit';
+import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -81,6 +81,8 @@ export class BeuveKeybindingOverlay extends LitElement {
 
   /** The name of the editor `o` opens, e.g. “Zed”; absent while unknown. */
   @property() accessor editorName = '';
+  /** How diffs are shown now, e.g. “Split · whitespace hidden”. */
+  @property() accessor displayName = '';
 
   override render(): TemplateResult {
     return html`
@@ -101,6 +103,14 @@ export class BeuveKeybindingOverlay extends LitElement {
           Editor for <kbd>o</kbd>: ${this.editorName === '' ? 'first one found' : this.editorName} ·
           change with <code>/editor zed|vscode|cursor</code> in the chat
         </footer>
+        ${
+          this.displayName === ''
+            ? nothing
+            : html`<footer>
+                Diffs: ${this.displayName} · <code>/diff split|inline</code>,
+                <code>/whitespace ignore|show</code>
+              </footer>`
+        }
         <footer><kbd>Esc</kbd> or <kbd>?</kbd> closes</footer>
       </div>
     `;

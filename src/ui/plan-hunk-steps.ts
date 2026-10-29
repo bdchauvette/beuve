@@ -19,11 +19,15 @@ export interface HunkStep {
 }
 
 /**
- * One step per hunk (ADR 0025): the first changed run, on its deletion side when it removes
- * lines, else on its addition side. A hunk without changes (never produced by git) steps to its
- * first head line.
+ * One step per hunk (ADR 0025): the first changed run. Inline, a run that removes lines is
+ * selected on its deletion side, where it starts; split (ADR 0042), the head side is on the
+ * right, so a run that adds lines is selected there and only a pure deletion stays on the left.
+ * A hunk without changes (never produced by git) steps to its first head line.
  */
-export function planHunkSteps(hunks: readonly HunkShape[]): HunkStep[] {
+export function planHunkSteps(
+  hunks: readonly HunkShape[],
+  style: 'split' | 'unified' = 'unified',
+): HunkStep[] {
   return hunks.map((hunk) => {
     let addition = hunk.additionStart;
     let deletion = hunk.deletionStart;
@@ -33,7 +37,7 @@ export function planHunkSteps(hunks: readonly HunkShape[]): HunkStep[] {
         deletion += content.lines;
         continue;
       }
-      if (content.deletions > 0) {
+      if (content.deletions > 0 && (style === 'unified' || content.additions === 0)) {
         return { side: 'deletions', start: deletion, end: deletion + content.deletions - 1 };
       }
       if (content.additions > 0) {

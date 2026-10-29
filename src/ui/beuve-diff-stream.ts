@@ -5,6 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import type {
   AgentInsightView,
+  DiffDisplayView,
   DiffFileView,
   ImpactView,
   InsightStatusView,
@@ -14,12 +15,21 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
-import type { BeuveFileCard, ComposerState, FilePairLoader } from './beuve-file-card.ts';
+import type {
+  BeuveFileCard,
+  ComposerState,
+  FilePairLoader,
+  SuggestionSaveDetail,
+} from './beuve-file-card.ts';
 import type { UraDraft } from './beuve-ura-composer.ts';
+import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
 import type { FlowState } from './flow-state.ts';
+import { minimumSplitWidth } from './minimum-split-width.ts';
+import { planDiffLayout } from './plan-diff-layout.ts';
+import type { EditTarget } from './plan-edit-target.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
@@ -49,8 +59,18 @@ export interface UraCreateRequest {
   readonly anchor: UraAnchorView;
   readonly headSha: string;
   readonly draft: UraDraft;
+  /** The suggestion an `e` edit produced (ADR 0043), staged with the note. */
+  readonly suggestedPatch?: string;
   readonly settle: (error: string | undefined) => void;
 }
+
+/** A request from the dock to (re-)edit an item's suggestion; `nonce` repeats it. */
+export interface SuggestionJump {
+  readonly itemId: string;
+  readonly nonce: number;
+}
+
+const defaultDisplay: DiffDisplayView = { layout: 'split', ignoreWhitespace: false };
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
 const mountMargin = '1200px 0px';
@@ -64,7 +84,10 @@ const unmountMargin = '6000px 0px';
  * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
  * it), `r` runs the tests covering the focused hunk with tracing (ADR 0041), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
  * to undo), and `m` opens a composer that stages the selected lines, the active hunk or the file
- * into the review dock (ADR 0027). Emits `beuve-mark-reviewed`, `beuve-peek-request`,
+ * into the review dock (ADR 0027). `s` and `w` toggle side-by-side/inline diffs and hiding
+ * whitespace (ADR 0042), `i` opens the focused card's ImpactGate details, and `e` edits the
+ * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
+ * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
  * `beuve-peek-close`, `beuve-insight-status`, `beuve-ura-create` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
@@ -168,6 +191,12 @@ export class BeuveDiffStream extends LitElement {
         font-weight: 600;
       }
 
+      .display {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
+
       .cards {
         display: flex;
         flex-direction: column;
@@ -220,6 +249,29 @@ export class BeuveDiffStream extends LitElement {
       this.openComposer();
       return;
     }
+    if (event.key === 'e') {
+      event.preventDefault();
+      this.editActive();
+      return;
+    }
+    if (event.key === 'i') {
+      event.preventDefault();
+      if (this.cards()[this.activeIndex]?.focusImpact() !== true) {
+        this.notify('info', 'ImpactGate has nothing to say about this file.');
+      }
+      return;
+    }
+    if (event.key === 's' || event.key === 'w') {
+      event.preventDefault();
+      const detail: Partial<DiffDisplayView> =
+        event.key === 's'
+          ? { layout: this.display.layout === 'split' ? 'unified' : 'split' }
+          : { ignoreWhitespace: !this.display.ignoreWhitespace };
+      this.dispatchEvent(
+        new CustomEvent('beuve-display-change', { detail, bubbles: true, composed: true }),
+      );
+      return;
+    }
     const step = ({ j: 1, k: -1 } as const)[event.key];
     const files = this.review?.files ?? [];
     if (step === undefined || files.length === 0) {
@@ -254,6 +306,7 @@ export class BeuveDiffStream extends LitElement {
       anchor: composer.anchor,
       headSha: review.headSha,
       draft: event.detail,
+      ...(composer.suggestedPatch !== undefined && { suggestedPatch: composer.suggestedPatch }),
       settle: (error): void => {
         if (this.composer?.path !== composer.path) {
           return;
@@ -273,6 +326,45 @@ export class BeuveDiffStream extends LitElement {
   private readonly onComposeCancel = (): void => {
     this.closeComposer();
   };
+
+  /** An `e` edit saved: onto the note it was made for, else into a new note's composer. */
+  private readonly onSuggestionSave = (event: CustomEvent<SuggestionSaveDetail>): void => {
+    const { target, patch } = event.detail;
+    if (target.itemId === undefined) {
+      this.openComposer(
+        { kind: 'lines', path: target.path, startLine: target.startLine, endLine: target.endLine },
+        patch,
+      );
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-ura-update', {
+        detail: { itemId: target.itemId, suggestedPatch: patch },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    this.notify('info', 'Suggestion attached to the note.');
+    this.focus();
+  };
+
+  private readonly onSuggestionCancel = (event: CustomEvent<{ message: string }>): void => {
+    if (event.detail.message !== '') {
+      this.notify('info', event.detail.message);
+    }
+    this.focus();
+  };
+
+  private readonly onImpactClose = (): void => {
+    this.focus();
+  };
+
+  private readonly resizeObserver = new ResizeObserver((entries) => {
+    const width = entries.at(-1)?.contentRect.width;
+    if (width !== undefined && width > 0) {
+      this.streamWidth = width;
+    }
+  });
 
   private readonly onNearViewport = (entries: IntersectionObserverEntry[]): void => {
     for (const entry of entries) {
@@ -320,6 +412,11 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
   /** The session's URA items, which the cards mark under their lines. */
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
+  /** The reviewer's diff layout and whitespace preference (ADR 0042). */
+  @property({ attribute: false }) accessor display: DiffDisplayView = defaultDisplay;
+  @property({ attribute: false }) accessor suggestionJump: SuggestionJump | undefined;
+  /** The stream's width, which decides whether a split fits. */
+  @state() accessor streamWidth: number | undefined;
 
   @state() accessor activeIndex = 0;
   /** The active card's hunk `j`/`k` stopped at; `-1` for its header. */
@@ -333,8 +430,15 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-insight-focus', this.onInsightFocus as EventListener);
     this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
+    this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
+    this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
+    this.addEventListener('beuve-impact-close', this.onImpactClose);
     this.addController({
+      hostConnected: (): void => {
+        this.resizeObserver.observe(this);
+      },
       hostDisconnected: (): void => {
+        this.resizeObserver.disconnect();
         this.disconnectObservers();
       },
     });
@@ -402,12 +506,67 @@ export class BeuveDiffStream extends LitElement {
     );
   }
 
-  /** `m`: a composer on the active card, staging what {@link BeuveFileCard.stageAnchor} names. */
-  private openComposer(): void {
+  private notify(tone: 'info' | 'error', text: string): void {
+    this.dispatchEvent(
+      new CustomEvent('beuve-status-notice', {
+        detail: { tone, text },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** `e`: edits what {@link BeuveFileCard.editTarget} names on the active card. */
+  private editActive(): void {
+    const { review } = this;
+    const card = this.cards()[this.activeIndex];
+    const target =
+      review === undefined ? undefined : card?.editTarget(this.uraItems, review.headSha);
+    if (card === undefined || target === undefined) {
+      this.notify('info', 'Pick a hunk with j/k, or select head lines, to suggest an edit.');
+      return;
+    }
+    void card.startEdit(target);
+  }
+
+  /** The dock asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
+  private async editItem(itemId: string): Promise<void> {
+    const item = this.uraItems.find((entry) => entry.id === itemId);
+    const anchor = item?.placement.kind === 'current' ? item.placement.anchor : undefined;
+    const index =
+      anchor?.kind === 'lines'
+        ? (this.review?.files.findIndex((file) => file.path === anchor.path) ?? -1)
+        : -1;
+    if (index === -1 || item === undefined || anchor?.kind !== 'lines') {
+      this.notify('error', 'That note is not on a line of this diff, so it cannot be edited here.');
+      return;
+    }
+    if (item.headSha !== this.review?.headSha) {
+      this.notify('error', 'That note was written on an older head; stage a new one to suggest.');
+      return;
+    }
+    this.activeIndex = index;
+    this.activeHunk = -1;
+    await this.updateComplete;
+    const target: EditTarget = {
+      path: anchor.path,
+      startLine: anchor.startLine,
+      endLine: anchor.endLine,
+      itemId,
+      ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
+    };
+    await this.cards()[index]?.startEdit(target);
+  }
+
+  /**
+   * `m`: a composer on the active card, staging what {@link BeuveFileCard.stageAnchor} names, or
+   * `anchor` with the suggestion an `e` edit produced.
+   */
+  private openComposer(given?: UraAnchorView, suggestedPatch?: string): void {
     const { review } = this;
     const file = review?.files[this.activeIndex];
     const card = this.cards()[this.activeIndex];
-    const anchor = card?.stageAnchor();
+    const anchor = given ?? card?.stageAnchor();
     if (review === undefined || file === undefined || anchor === undefined) {
       return;
     }
@@ -425,7 +584,14 @@ export class BeuveDiffStream extends LitElement {
       createdAt: '',
       updatedAt: '',
     }).anchor;
-    this.composer = { path: file.path, anchor, where, saving: false, error: '' };
+    this.composer = {
+      path: file.path,
+      anchor,
+      where,
+      saving: false,
+      error: '',
+      ...(suggestedPatch !== undefined && { suggestedPatch }),
+    };
     void this.revealComposer(anchor);
   }
 
@@ -649,6 +815,7 @@ export class BeuveDiffStream extends LitElement {
         >
         ${this.renderImpactTotals()}
         <span class="spacer"></span>
+        ${this.renderDisplay()}
         ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
         <button
           type="button"
@@ -669,6 +836,8 @@ export class BeuveDiffStream extends LitElement {
                   (file, index) =>
                     html`<beuve-file-card
                       .file=${file}
+                      .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
+                      .cognitiveLimit=${this.impact?.cognitiveMax}
                       .loadFilePair=${this.loadFilePair}
                       .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
                       .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
@@ -690,6 +859,12 @@ export class BeuveDiffStream extends LitElement {
         }
       </div>
     `;
+  }
+
+  private renderDisplay(): TemplateResult {
+    const isNarrow = this.streamWidth !== undefined && this.streamWidth < minimumSplitWidth;
+    const label = describeDiffDisplay(this.display, isNarrow);
+    return html`<span class="display" title=${label.title}>${label.text}</span>`;
   }
 
   private renderImpactTotals(): TemplateResult | typeof nothing {
@@ -715,7 +890,14 @@ export class BeuveDiffStream extends LitElement {
 
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('review')) {
-      this.activeIndex = 0;
+      // The same head again (e.g. whitespace toggled) keeps the cursor on its file.
+      const previous = changed.get('review');
+      const activePath = previous?.files[this.activeIndex]?.path;
+      const kept =
+        previous?.headSha === this.review?.headSha
+          ? (this.review?.files.findIndex((file) => file.path === activePath) ?? -1)
+          : -1;
+      this.activeIndex = Math.max(0, kept);
       this.activeHunk = -1;
       const path = this.composer?.path;
       const isShown = this.review?.files.some((file) => file.path === path) === true;
@@ -749,6 +931,10 @@ export class BeuveDiffStream extends LitElement {
     const fileJump = this.fileJump;
     if (fileJump !== undefined && changed.has('fileJump')) {
       this.focusFile(fileJump.path, fileJump.line);
+    }
+    const suggestionJump = this.suggestionJump;
+    if (suggestionJump !== undefined && changed.has('suggestionJump')) {
+      void this.editItem(suggestionJump.itemId);
     }
   }
 }

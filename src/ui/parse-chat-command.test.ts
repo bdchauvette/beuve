@@ -4,6 +4,23 @@ import { chatHelp } from './chat-help.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('parseChatCommand', () => {
+  it('parses /diff and /whitespace with and without a choice', () => {
+    expect(parseChatCommand('/diff')).toEqual({ kind: 'diff' });
+    expect(parseChatCommand('/diff Inline')).toEqual({ kind: 'diff', layout: 'unified' });
+    expect(parseChatCommand('/diff split')).toEqual({ kind: 'diff', layout: 'split' });
+    expect(parseChatCommand('/diff wide')).toMatchObject({ kind: 'invalid' });
+    expect(parseChatCommand('/whitespace')).toEqual({ kind: 'whitespace' });
+    expect(parseChatCommand('/whitespace ignore')).toEqual({
+      kind: 'whitespace',
+      ignoreWhitespace: true,
+    });
+    expect(parseChatCommand('/whitespace show')).toEqual({
+      kind: 'whitespace',
+      ignoreWhitespace: false,
+    });
+    expect(parseChatCommand('/whitespace ignore show')).toMatchObject({ kind: 'invalid' });
+  });
+
   it('parses /editor with and without a choice', () => {
     expect(parseChatCommand('/editor')).toEqual({ kind: 'editor' });
     expect(parseChatCommand('/editor Zed')).toEqual({ kind: 'editor', editorId: 'zed' });

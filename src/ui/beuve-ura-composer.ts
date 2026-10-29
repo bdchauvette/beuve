@@ -1,8 +1,10 @@
-import { css, html, LitElement } from 'lit';
+import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import type { UraSeverityView } from '#contract/ipc-contract.ts';
+
+import './beuve-patch-preview.ts';
 
 /** What the composer submits: a new note's severity, one-line title and Markdown body. */
 export interface UraDraft {
@@ -16,7 +18,8 @@ const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 
 /**
  * The compact note composer `m` opens under the staged lines (ADR 0027): severity (`issue` by
  * default), title and body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
- * Keys typed here never reach the diff stream's or the shell's shortcuts. Emits
+ * With a suggestion from an `e` edit (ADR 0043) it previews the patch that is staged with the
+ * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Emits
  * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.
  */
 @customElement('beuve-ura-composer')
@@ -32,6 +35,7 @@ export class BeuveUraComposer extends LitElement {
 
     form {
       display: grid;
+      grid-template-columns: minmax(0, 1fr);
       gap: var(--beuve-space-1);
       padding: var(--beuve-space-2);
       border: 1px solid var(--beuve-border);
@@ -103,6 +107,16 @@ export class BeuveUraComposer extends LitElement {
       color: #fff;
     }
 
+    .suggestion {
+      display: grid;
+      gap: 2px;
+    }
+
+    .suggestion .label {
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
     .hint,
     .error {
       font: var(--beuve-font-small);
@@ -151,6 +165,8 @@ export class BeuveUraComposer extends LitElement {
   /** Set by the owner while the note is being saved, or when saving failed. */
   @property({ type: Boolean }) accessor saving = false;
   @property() accessor error = '';
+  /** The suggested patch staged with the note; empty for none. */
+  @property() accessor patch = '';
 
   @state() accessor severity: UraSeverityView = 'issue';
 
@@ -185,7 +201,7 @@ export class BeuveUraComposer extends LitElement {
 
   /** Focuses the title, for when the composer opens. */
   override focus(): void {
-    this.titleInput()?.focus();
+    this.titleInput()?.focus({ preventScroll: true });
   }
 
   override render(): TemplateResult {
@@ -208,6 +224,14 @@ export class BeuveUraComposer extends LitElement {
         <input aria-label="Title" placeholder="Title" maxlength="200" autocomplete="off" />
       </div>
       <textarea aria-label="Body" placeholder="Details (Markdown, optional)"></textarea>
+      ${
+        this.patch === ''
+          ? nothing
+          : html`<div class="suggestion">
+              <span class="label">Suggestion</span>
+              <beuve-patch-preview .patch=${this.patch}></beuve-patch-preview>
+            </div>`
+      }
       <div class="row">
         <span class="where">${this.where}</span>
         ${
@@ -225,7 +249,7 @@ export class BeuveUraComposer extends LitElement {
   }
 
   protected override firstUpdated(): void {
-    this.titleInput()?.focus();
+    this.titleInput()?.focus({ preventScroll: true });
   }
 }
 

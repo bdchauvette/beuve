@@ -37,6 +37,29 @@ describe('planHunkSteps', () => {
     ]);
   });
 
+  it('selects the head side of a replacement when split, keeping pure deletions left', () => {
+    const hunks = [
+      {
+        additionStart: 40,
+        deletionStart: 41,
+        hunkContent: [
+          { type: 'context', lines: 1 },
+          { type: 'change', additions: 1, deletions: 2 },
+        ],
+      },
+      {
+        additionStart: 60,
+        deletionStart: 61,
+        hunkContent: [{ type: 'change', additions: 0, deletions: 3 }],
+      },
+    ] as const;
+    expect(planHunkSteps(hunks, 'split')).toEqual([
+      { side: 'additions', start: 41, end: 41 },
+      { side: 'deletions', start: 61, end: 63 },
+    ]);
+    expect(planHunkSteps(hunks, 'unified')[0]).toEqual({ side: 'deletions', start: 42, end: 43 });
+  });
+
   it('falls back to the first head line of a hunk without changes', () => {
     expect(
       planHunkSteps([
