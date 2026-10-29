@@ -18,3 +18,7 @@ ADR 0027 left the dock copying the GitHub review JSON because nothing could post
 ## Consequences
 
 A review is all or nothing and never posted twice by accident. Editing a posted item doesn't repost it; the reviewer stages a new note to say more. If the review was created but the response was lost (network error), nothing is recorded and a retry posts again; GitHub shows both. The placement recorded for a partial body fallback can be wrong, which only affects the dock's tooltip.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `ura_item_postings` is created with the other URA tables; `ura-0003-item-postings` is retired.

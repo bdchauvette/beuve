@@ -21,3 +21,7 @@ Zone 4 (spec 4) is a read-only Q&A drawer. Answers carry citation pills that jum
 - History is resent with every question, since each question is a fresh `claude --print` process. That is simple and stateless, but long conversations cost more context.
 - Spec 4 indexes the chat on embeddings and LSP symbols. This version reads files through tools instead, so there is no index to build or keep fresh, and large repositories answer more slowly.
 - Streamed text shows raw, unvalidated markers until the final answer replaces it.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `chat-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The id `chat-0001-messages` is retired.

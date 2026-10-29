@@ -16,11 +16,7 @@ const time = '2026-10-28T12:00:00.000Z';
 describe('sessionMigrations', () => {
   it('uses session-prefixed ids and applies idempotently', () => {
     const db = openDatabase(':memory:');
-    expect(runMigrations(db, sessionMigrations)).toEqual([
-      'session-0001-sessions-and-checkpoints',
-      'session-0002-checkpoint-base',
-      'session-0003-pull-request-host',
-    ]);
+    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0001-initial']);
     expect(runMigrations(db, sessionMigrations)).toEqual([]);
   });
 
@@ -93,19 +89,7 @@ describe('sessionMigrations', () => {
   });
 });
 
-describe('session-0002-checkpoint-base', () => {
-  it('drops legacy checkpoints without a base, leaving their sessions unreviewed', () => {
-    const db = openDatabase(':memory:');
-    runMigrations(db, sessionMigrations.slice(0, 1));
-    insertLocal(db, {});
-    db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?);').run(checkpointId, id, sha, time);
-    expect(runMigrations(db, sessionMigrations.slice(0, 2))).toEqual([
-      'session-0002-checkpoint-base',
-    ]);
-    expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toEqual({ n: 0 });
-    expect(db.prepare('SELECT count(*) AS n FROM sessions;').get()).toEqual({ n: 1 });
-  });
-
+describe('checkpoints', () => {
   it('requires a full base sha', () => {
     const db = setup();
     insertLocal(db, {});
@@ -121,24 +105,15 @@ describe('session-0002-checkpoint-base', () => {
   });
 });
 
-describe('session-0003-pull-request-host', () => {
-  it('backfills github.com for existing pull requests and keys them by host', () => {
-    const db = openDatabase(':memory:');
-    runMigrations(db, sessionMigrations.slice(0, 2));
-    insertLocal(db, {});
-    insertPull(db, { id: otherId, host: undefined });
-    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0003-pull-request-host']);
-    expect(
-      db.prepare("SELECT kind, coalesce(host, '-') AS host FROM sessions ORDER BY kind;").all(),
-    ).toEqual([
-      { kind: 'github-pull-request', host: 'github.com' },
-      { kind: 'local', host: '-' },
-    ]);
+describe('pull request hosts', () => {
+  it('keys pull requests by host', () => {
+    const db = setup();
+    insertPull(db, {});
     expect(() => {
       insertPull(db, { id: checkpointId, host: 'ghe.example.com' });
     }).not.toThrow();
     expect(() => {
-      insertPull(db, { id: '00000000-0000-4000-8000-00000000000d' });
+      insertPull(db, { id: otherId });
     }).toThrow('UNIQUE constraint failed');
   });
 });

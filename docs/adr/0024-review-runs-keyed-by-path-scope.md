@@ -20,3 +20,7 @@ ADR 0022 stored one run per (session, head). So `/review src/auth.ts` reused an 
 - Several runs per head cost several model calls; each is explicit, and reuse needs an identical scope.
 - Changing only effort never reruns by itself, and a rerun does not honor the old run's effort.
 - Carry-over cannot follow an insight whose title the model rewords, or across heads.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `review-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `review_runs` is created with `path_scope` from the start; the table rebuild and the whole-change treatment of earlier runs are gone.

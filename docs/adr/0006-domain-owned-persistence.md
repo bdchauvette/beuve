@@ -19,3 +19,7 @@ The spec defines a single schema in `src/main/database-initializer.ts` with tabl
 ## Consequences
 
 Domains can be tested against an in-memory database in isolation. Migration ordering is a composition concern in `src/main`, and later domains must only reference tables from domains that migrate earlier.
+
+## Amendment 2026-10-29: migrations squashed
+
+Migrations are squashed until the first tagged release; after that, append-only. Until then each domain has one initial migration holding its final schema (`session-0001-initial`, `review-0001-initial`, `ura-0001-initial`, `chat-0001-initial`, `github-0001-initial`), and a schema change edits it. No release or database exists yet, so nothing upgrades. Once a version is tagged, a migration that shipped is never edited and every schema change is a new migration.

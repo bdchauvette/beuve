@@ -8,7 +8,7 @@ import type { Migration } from '#pkg/sqlite/run-migrations.ts';
  */
 export const githubMigrations: readonly Migration[] = [
   {
-    id: 'github-0001-pull-requests',
+    id: 'github-0001-initial',
     up: `
       CREATE TABLE github_pull_requests (
         host TEXT NOT NULL CHECK (host <> '' AND host NOT GLOB '*[^a-z0-9.-]*'),

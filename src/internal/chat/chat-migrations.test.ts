@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { openDatabase } from '#pkg/sqlite/open-database.ts';
-import { runMigrations } from '#pkg/sqlite/run-migrations.ts';
-
-import { chatMigrations } from './chat-migrations.ts';
 import { createChatTestDatabase } from './testing/create-chat-test-database.ts';
 
 const sessionId = '11111111-1111-4111-8111-111111111111';
@@ -43,29 +39,6 @@ describe('chatMigrations', () => {
     expect(
       insert({ role: 'user', mentions: '[{"path":"a.ts","side":"head","sha":"x"}]' }),
     ).not.toThrow();
-  });
-
-  it('keeps chat-0001 rows, in order, when chat-0002 rebuilds the table', () => {
-    const db = openDatabase(':memory:');
-    const [first, second] = chatMigrations;
-    runMigrations(db, [
-      { id: 'test-0000-sessions-stub', up: 'CREATE TABLE sessions (id TEXT PRIMARY KEY) STRICT;' },
-      ...(first === undefined ? [] : [first]),
-    ]);
-    db.prepare('INSERT INTO sessions (id) VALUES (?);').run(sessionId);
-    const insertOld = db.prepare(
-      `INSERT INTO chat_messages (id, session_id, head_sha, role, content, created_at)
-       VALUES (?, ?, ?, 'user', ?, ?);`,
-    );
-    insertOld.run('00000000-0000-4000-8000-000000000002', sessionId, head, 'first', at);
-    insertOld.run('00000000-0000-4000-8000-000000000001', sessionId, head, 'second', at);
-    runMigrations(db, second === undefined ? [] : [second]);
-    expect(
-      db.prepare('SELECT content, mentions FROM chat_messages ORDER BY created_at, rowid;').all(),
-    ).toEqual([
-      { content: 'first', mentions: '[]' },
-      { content: 'second', mentions: '[]' },
-    ]);
   });
 
   it.each([

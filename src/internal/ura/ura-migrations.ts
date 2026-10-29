@@ -13,14 +13,14 @@ const originColumns = [
 ] as const;
 
 /**
- * The URA domain's schema (ADR 0006, 0023). `ura_items` references `sessions`, so main runs the
+ * The URA domain's schema (ADR 0006, 0023, 0039, 0045; squashed until the first release). `ura_items` references `sessions`, so main runs the
  * session domain's migrations first. Table CHECKs mirror the anchor, origin and status unions.
  * `insight_id` deliberately has no foreign key: a fresh review run replaces its insights, and a
  * promoted item must outlive the insight it came from.
  */
 export const uraMigrations: readonly Migration[] = [
   {
-    id: 'ura-0001-items',
+    id: 'ura-0001-initial',
     up: `
       CREATE TABLE ura_items (
         id TEXT PRIMARY KEY CHECK (length(id) = 36),
@@ -85,25 +85,20 @@ export const uraMigrations: readonly Migration[] = [
       CREATE UNIQUE INDEX ura_items_by_finding
         ON ura_items (session_id, head_sha, path, impact_metric, impact_function)
         WHERE origin_kind = 'impact-finding';
-    `,
-  },
-  {
-    id: 'ura-0002-verdict-choices',
-    up: `
+
       CREATE TABLE ura_verdict_choices (
         session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
         verdict TEXT CHECK (verdict IS NULL OR verdict IN ('approve', 'request-changes', 'comment')),
-        cleared_reason TEXT CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged')),
+        cleared_reason TEXT
+          CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged', 'head-moved')),
+        head_sha TEXT CHECK (head_sha IS NULL OR (${sha('head_sha')})),
         updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
-        CHECK (verdict IS NULL OR cleared_reason IS NULL)
+        CHECK (verdict IS NULL OR cleared_reason IS NULL),
+        CHECK ((verdict IS NULL) = (head_sha IS NULL))
       ) STRICT;
-    `,
-  },
-  {
-    // ADR 0039: which staged items a posted GitHub review carried, so posting again sends only
-    // what is new. The item stays staged; the posting is a fact about it, not a status.
-    id: 'ura-0003-item-postings',
-    up: `
+
+      -- ADR 0039: which staged items a posted GitHub review carried, so posting again sends only
+      -- what is new. The item stays staged; the posting is a fact about it, not a status.
       CREATE TABLE ura_item_postings (
         item_id TEXT NOT NULL REFERENCES ura_items (id) ON DELETE CASCADE,
         target TEXT NOT NULL CHECK (target IN ('github')),
@@ -116,31 +111,6 @@ export const uraMigrations: readonly Migration[] = [
       ) STRICT;
 
       CREATE INDEX ura_item_postings_by_session ON ura_item_postings (session_id, posted_at);
-    `,
-  },
-  {
-    // ADR 0045: a chosen verdict belongs to the head it was chosen at. SQLite can't change a
-    // CHECK, so the table is rebuilt. A choice made before heads were recorded can't be tied to
-    // one, so it becomes a remembered clear and the reviewer is told once.
-    id: 'ura-0004-verdict-choice-head',
-    up: `
-      CREATE TABLE ura_verdict_choices_next (
-        session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
-        verdict TEXT CHECK (verdict IS NULL OR verdict IN ('approve', 'request-changes', 'comment')),
-        cleared_reason TEXT
-          CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged', 'head-moved')),
-        head_sha TEXT CHECK (head_sha IS NULL OR (${sha('head_sha')})),
-        updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
-        CHECK (verdict IS NULL OR cleared_reason IS NULL),
-        CHECK ((verdict IS NULL) = (head_sha IS NULL))
-      ) STRICT;
-
-      INSERT INTO ura_verdict_choices_next (session_id, verdict, cleared_reason, head_sha, updated_at)
-        SELECT session_id, NULL, coalesce(cleared_reason, 'head-moved'), NULL, updated_at
-        FROM ura_verdict_choices;
-
-      DROP TABLE ura_verdict_choices;
-      ALTER TABLE ura_verdict_choices_next RENAME TO ura_verdict_choices;
     `,
   },
 ];

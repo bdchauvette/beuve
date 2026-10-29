@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { openDatabase } from '#pkg/sqlite/open-database.ts';
-import { runMigrations } from '#pkg/sqlite/run-migrations.ts';
-
-import { readVerdictChoice } from './read-verdict-choice.ts';
 import { createUraTestDatabase } from './testing/create-ura-test-database.ts';
-import type { SessionId } from './ura-item.ts';
-import { uraMigrations } from './ura-migrations.ts';
 
 const session = '11111111-1111-4111-8111-111111111111';
 const sha = 'a'.repeat(40);
@@ -173,21 +167,5 @@ describe('uraMigrations', () => {
         `INSERT INTO ura_verdict_choices (session_id, verdict, head_sha, updated_at) VALUES ('${session}', 'approve', '${later}', '${at}');`,
       );
     }).toThrow(uniqueOrPrimaryFailed);
-  });
-
-  it('turns a verdict chosen before heads were recorded into a remembered clear', () => {
-    const db = openDatabase(':memory:');
-    const upToVerdicts = uraMigrations.slice(0, 3);
-    const stub = {
-      id: 'test-0000-sessions-stub',
-      up: 'CREATE TABLE sessions (id TEXT PRIMARY KEY) STRICT;',
-    };
-    runMigrations(db, [stub, ...upToVerdicts]);
-    db.exec(`INSERT INTO sessions (id) VALUES ('${session}');`);
-    db.exec(
-      `INSERT INTO ura_verdict_choices (session_id, verdict, updated_at) VALUES ('${session}', 'approve', '${at}');`,
-    );
-    runMigrations(db, [stub, ...uraMigrations]);
-    expect(readVerdictChoice(db, session as SessionId)).toEqual({ cleared: 'head-moved' });
   });
 });

@@ -17,3 +17,7 @@ ADR 0029 stored the reviewer's chosen verdict per session and noted that it is n
 ## Consequences
 
 An agent never reads a verdict the reviewer gave about an older head, and `ura:export` agrees. The notice says "new commits" for the one-off legacy case too, which is close enough. An explicit `verdict` on `ura:export` still overrides for that export. Rebasing to an identical tree moves the head and clears the choice; that is the safe side. This supersedes the "not tied to a head" consequence of ADR 0029.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The rebuild that turned a verdict chosen before heads were recorded into a remembered `head-moved` clear is gone: no such rows can exist. `head-moved` remains the reason when a head moves.

@@ -1,12 +1,12 @@
 import type { Migration } from '#pkg/sqlite/run-migrations.ts';
 
 /**
- * The session domain's schema (ADR 0006, 0009). The review state is derived from
+ * The session domain's schema (ADR 0006, 0009, 0012, 0037); squashed until the first release. The review state is derived from
  * `checkpoints`, so `sessions` has no denormalized last-checkpoint column.
  */
 export const sessionMigrations: readonly Migration[] = [
   {
-    id: 'session-0001-sessions-and-checkpoints',
+    id: 'session-0001-initial',
     up: `
       CREATE TABLE sessions (
         id TEXT PRIMARY KEY CHECK (length(id) = 36),
@@ -20,6 +20,14 @@ export const sessionMigrations: readonly Migration[] = [
         head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
         created_at TEXT NOT NULL CHECK (${timestamp('created_at')}),
         updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
+        host TEXT CHECK (
+          host IS NULL OR (
+            kind = 'github-pull-request'
+            AND length(host) BETWEEN 1 AND 253
+            AND host NOT GLOB '*[^a-z0-9.-]*'
+            AND host NOT GLOB '[.-]*'
+          )
+        ),
         CHECK (
           (kind = 'local'
             AND head_ref IS NOT NULL AND trim(head_ref) <> ''
@@ -36,26 +44,8 @@ export const sessionMigrations: readonly Migration[] = [
       CREATE UNIQUE INDEX sessions_local_change
         ON sessions (repo_path, base_ref, head_ref) WHERE kind = 'local';
       CREATE UNIQUE INDEX sessions_pull_request
-        ON sessions (repo_path, owner, repo, pr_number) WHERE kind = 'github-pull-request';
+        ON sessions (repo_path, host, owner, repo, pr_number) WHERE kind = 'github-pull-request';
       CREATE INDEX sessions_by_recency ON sessions (updated_at DESC);
-
-      CREATE TABLE checkpoints (
-        id TEXT PRIMARY KEY CHECK (length(id) = 36),
-        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
-        commit_sha TEXT NOT NULL CHECK (${sha('commit_sha')}),
-        created_at TEXT NOT NULL CHECK (${timestamp('created_at')})
-      ) STRICT;
-
-      CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
-    `,
-  },
-  {
-    // ADR 0012: a checkpoint records the reviewed fork point as well as the head. No build ever
-    // wrote checkpoints (sessions weren't wired), so the table is rebuilt rather than migrated;
-    // any row that did exist is dropped and its session falls back to a full review.
-    id: 'session-0002-checkpoint-base',
-    up: `
-      DROP TABLE checkpoints;
 
       CREATE TABLE checkpoints (
         id TEXT PRIMARY KEY CHECK (length(id) = 36),
@@ -66,28 +56,6 @@ export const sessionMigrations: readonly Migration[] = [
       ) STRICT;
 
       CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
-    `,
-  },
-  {
-    // A pull request's host (ADR 0037), so GitHub Enterprise pull requests can be resumed. Rows
-    // written before hosts existed were github.com. The table isn't rebuilt: `checkpoints` and
-    // later domains' tables cascade from it.
-    id: 'session-0003-pull-request-host',
-    up: `
-      ALTER TABLE sessions ADD COLUMN host TEXT CHECK (
-        host IS NULL OR (
-          kind = 'github-pull-request'
-          AND length(host) BETWEEN 1 AND 253
-          AND host NOT GLOB '*[^a-z0-9.-]*'
-          AND host NOT GLOB '[.-]*'
-        )
-      );
-
-      UPDATE sessions SET host = 'github.com' WHERE kind = 'github-pull-request';
-
-      DROP INDEX sessions_pull_request;
-      CREATE UNIQUE INDEX sessions_pull_request
-        ON sessions (repo_path, host, owner, repo, pr_number) WHERE kind = 'github-pull-request';
     `,
   },
 ];

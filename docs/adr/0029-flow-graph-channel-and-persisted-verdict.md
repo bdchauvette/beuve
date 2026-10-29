@@ -19,3 +19,7 @@ ADR 0028 built control-flow graphs and a layout but nothing reached them. Separa
 ## Consequences
 
 The graph costs one blob read and one parse the first time a function is asked for, and a map lookup afterwards. Pure renames (no blob ids in the diff) have no graph. The `p` peek now follows the focused hunk instead of always the file's first change. An agent reads the reviewer's decision over MCP, but a verdict is advisory until the reviewer exports: it was not tied to a head, so a new commit kept it (ADR 0045 now clears a choice when the head moves; a blocker added later still clears an approval). `ura:set-verdict` is a new write path every caller must go through; the dock no longer keeps its own copy.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `ura_verdict_choices` is created in its final form (ADR 0045); `ura-0002-verdict-choices` is retired.

@@ -26,3 +26,7 @@ The URA (spec 1, Zone 3) is beuve's single output: the reviewer's decisions, com
 ## Consequences
 
 Exports never lose track of which head an item was about, and stale items are flagged instead of being posted on the wrong lines. Limits we accept: re-anchoring is line-based, so a reformatted range is outdated even if its meaning didn't change, and an item whose head can't be diffed (garbage-collected after a force-push) is outdated with `no-line-mapping`. GitHub accepts inline comments only on lines its diff shows, and rejects the whole review otherwise, so main must pass `commentableRanges` from the pull request's full diff; APPROVE and REQUEST_CHANGES fail on one's own pull request; suggestions for outdated items are dropped to a diff block in the body. XML parsers normalize CR, so a patch for a CRLF file is exact only in the JSON form. Titles render as inline Markdown with `<` escaped.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The id `ura-0001-items` is retired.

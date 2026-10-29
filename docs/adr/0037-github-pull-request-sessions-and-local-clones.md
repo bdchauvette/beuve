@@ -20,3 +20,7 @@ ADR 0034 and 0035 built the credential provider and the REST client but nothing 
 ## Consequences
 
 Opening a pull request costs one API call, one fetch and a ref check; a reviewer without a clone is told what to do instead of beuve cloning gigabytes on their behalf. A clone whose only remote is a fork can't open the upstream pull request until it gains a remote for the base repository. Metadata rows outlive their sessions (sessions are never deleted yet). The insteadOf-aware remote matching means a `url.<local mirror>.insteadOf` setup still works, which the tests rely on.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `session-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `sessions.host` is created with the table (still nullable, and still the last column) instead of by `ALTER TABLE` with a `github.com` backfill. `github_pull_requests` is in `github-0001-initial`.

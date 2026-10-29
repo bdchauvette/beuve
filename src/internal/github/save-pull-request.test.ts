@@ -16,7 +16,7 @@ const ref = { host: 'github.com', owner: 'octo-org', repo: 'hello-world', number
 describe('savePullRequest', () => {
   it('stores, replaces and reads back pull request metadata', () => {
     const db = openDatabase(':memory:');
-    expect(runMigrations(db, githubMigrations)).toEqual(['github-0001-pull-requests']);
+    expect(runMigrations(db, githubMigrations)).toEqual(['github-0001-initial']);
     expect(findStoredPullRequest(db, ref)).toEqual({ ok: true, value: undefined });
 
     const decoded = decodeWith(pullRequestSchema, fixtures.pullRequest);

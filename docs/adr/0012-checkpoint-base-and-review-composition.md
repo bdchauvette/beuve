@@ -19,3 +19,7 @@ ADR 0010's interdiff needs the previously reviewed `{base, head}` to tell author
 ## Consequences
 
 Interdiffs survive rebases, and the session domain stays free of git. Every review request costs a few git spawns (version, top level, two `rev-parse`s, merge-bases, one diff), which is fine for local repositories. A checkpoint's base is a snapshot: if upstream history is rewritten under it, the next interdiff falls back rather than guessing. GitHub pull-request sessions keep their stored head until the GitHub integration refreshes it.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `session-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The `session-0002-checkpoint-base` rebuild is gone, along with its dropping of stray rows.

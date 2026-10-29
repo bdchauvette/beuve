@@ -19,3 +19,7 @@ Reviewers want to point the chat at exact lines, as Zed's "add selection to thre
 ## Consequences
 
 The reviewer can say "this" and mean exact lines, both sides of a change included, and the model gets the bytes the reviewer saw at the commit they saw. Selections cost prompt budget ahead of the diff, so a whole-file mention can push diff hunks out; the prompt says what it dropped. A chip made before the head moved is refused rather than silently re-read at another commit, so the reviewer adds it again. Mentions are only re-sent as references, never re-read for later turns. The input is now an editable box rather than an `<input>`: single-line-ish (Enter sends), plain text only, with the chips owned by beuve.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `chat-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `mentions` is a column of the original `chat_messages`; the rebuild that kept rowids is gone.

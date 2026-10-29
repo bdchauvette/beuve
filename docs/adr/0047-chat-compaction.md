@@ -18,3 +18,7 @@ Each question resends the conversation (ADR 0031), bounded to 20 turns and 40 00
 ## Consequences
 
 Long conversations stay cheap and keep their conclusions, and the reviewer can still read every original turn. A summary can be wrong or lose nuance; the prompt calls it the model's own, untrusted, and the turns after it are still sent verbatim. Compacting twice folds the first summary into the second, so information degrades with each pass. The summary costs one more model call and the same quota and privacy terms as a question.
+
+## Amendment 2026-10-29: migrations squashed
+
+Squashed into `chat-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The `summary` role is part of the original `chat_messages` CHECK.
