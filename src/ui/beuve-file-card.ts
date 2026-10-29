@@ -42,6 +42,7 @@ import type { EditTarget } from './plan-edit-target.ts';
 import { planImpactChip } from './plan-impact-chip.ts';
 import type { ImpactChip } from './plan-impact-chip.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
+import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
 import { planStageAnchor } from './plan-stage-anchor.ts';
 import { planEditorLine } from './plan-editor-line.ts';
@@ -583,7 +584,7 @@ export class BeuveFileCard extends LitElement {
     this.programmaticStep = step;
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
-    this.diff.setSelectedLines(step ?? null);
+    this.diff.setSelectedLines(step ?? null, planStepHighlight(this.diffStyle, step));
   }
 
   /** Staged URA markers first, then insights, then the composer, each under its last line. */
