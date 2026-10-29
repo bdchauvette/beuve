@@ -437,6 +437,22 @@ export class BeuveFileCard extends LitElement {
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
   private codeGeneration = 0;
   private impactHideTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The chip's top edge when the popover was placed. */
+  private impactAnchorTop = 0;
+  /**
+   * The popover is placed once from the chip's rectangle and closes, calmly, when a scroll moves
+   * the chip away from it; scrolling inside the popover or sideways in the code leaves it be.
+   */
+  private readonly onScrollWhileImpactOpen = (event: Event): void => {
+    const parts = this.impactParts();
+    if (parts === undefined) {
+      return;
+    }
+    const isInside = event.target instanceof Node && parts.popover.contains(event.target);
+    if (!isInside && Math.abs(parts.chip.getBoundingClientRect().top - this.impactAnchorTop) > 1) {
+      this.hideImpact();
+    }
+  };
 
   /**
    * While editing, ⌘/Ctrl+Enter saves and Escape cancels before the editor sees them; every
@@ -846,6 +862,8 @@ export class BeuveFileCard extends LitElement {
     const top = below + height > innerHeight - 8 ? Math.max(8, anchor.top - height - 4) : below;
     popover.style.left = `${String(Math.round(left))}px`;
     popover.style.top = `${String(Math.round(top))}px`;
+    this.impactAnchorTop = anchor.top;
+    addEventListener('scroll', this.onScrollWhileImpactOpen, { capture: true, passive: true });
   }
 
   private scheduleImpactHide(): void {
@@ -863,6 +881,7 @@ export class BeuveFileCard extends LitElement {
 
   private hideImpact(): void {
     clearTimeout(this.impactHideTimer);
+    removeEventListener('scroll', this.onScrollWhileImpactOpen, { capture: true });
     const popover = this.impactParts()?.popover;
     if (popover?.matches(':popover-open') === true) {
       popover.hidePopover();
@@ -1013,6 +1032,12 @@ ${splitPatch(file.patch).map(
     if (left !== undefined) {
       this.diff?.setCodeScrollLeft(left);
     }
+  }
+
+  override disconnectedCallback(): void {
+    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
+    super.disconnectedCallback();
+    this.hideImpact();
   }
 
   /** `i`: focuses the ImpactGate indicator, which opens its popover; `false` without one. */
