@@ -1,6 +1,6 @@
 # 0025. Diff cards: Alabaster-style themes, curated grammars and lazy mounting
 
-- Status: Accepted
+- Status: Accepted; layout, the ImpactGate banner and `e` amended by [0042](0042-diff-display-modes-whitespace-variant-and-impact-chip.md) and [0043](0043-inline-edits-become-suggestions.md)
 - Date: 2026-10-28
 
 ## Context
