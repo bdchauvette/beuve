@@ -2726,7 +2726,6 @@ const exportLabels: Readonly<Record<UraExportTarget, string>> = {
   'agent-xml': 'the review for Claude Code as XML',
   'agent-json': 'the review for agents as JSON',
   github: 'the GitHub review JSON',
-  markdown: 'the review as Markdown',
 };
 
 function formatBytes(characters: number): string {

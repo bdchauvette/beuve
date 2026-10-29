@@ -206,9 +206,9 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
     expect(changes).toContain(sessionId);
 
     value(await services.ura.transition({ itemId: replaced.id, to: 'addressed' }));
-    const markdown = value(await services.ura.export({ sessionId, target: 'markdown' }));
-    expect(markdown).toMatchObject({ headSha: newHead, itemCount: 2, outdatedCount: 0 });
-    expect(markdown.text).toContain('`src/app.ts:7-8`');
+    const exported = value(await services.ura.export({ sessionId, target: 'agent-json' }));
+    expect(exported).toMatchObject({ headSha: newHead, itemCount: 2, outdatedCount: 0 });
+    expect(exported.text).toContain('"startLine": 7');
 
     repo.git('switch', '--quiet', 'feature');
     repo.git('rm', '--quiet', 'src/app.ts');
@@ -329,8 +329,6 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
       event: 'COMMENT',
       comments: [{ path: 'src/app.ts', line: 2, side: 'RIGHT' }],
     });
-    const markdown = value(await services.ura.export({ sessionId, target: 'markdown' }));
-    expect(markdown.text).toContain('# Review of `feature` into `main`');
     expect(
       await services.ura.export({ sessionId, target: 'github', verdict: 'approve' }),
     ).toMatchObject({ ok: false, error: { code: 'refused' } });

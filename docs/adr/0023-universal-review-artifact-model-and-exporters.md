@@ -20,7 +20,6 @@ The URA (spec 1, Zone 3) is beuve's single output: the reviewer's decisions, com
 - **Exporters**, all pure and deterministic:
   - `buildAgentReview`: JSON (`schema: "beuve.ura/1"`), what `beuve_read_human_review` returns as structured content. `renderAgentReviewXml`: the same data as XML, titles escaped, bodies and patches in CDATA with `]]>` split, characters XML 1.0 can't carry replaced by U+FFFD. Data only, no instructions.
   - `buildGithubReview`: the body of `POST /repos/{o}/{r}/pulls/{n}/reviews` with `commit_id`, `event`, `body` and `comments[]` (`line`, `side: RIGHT`, `start_line`/`start_side` for ranges). A one-hunk patch that shows every anchored line becomes a `suggestion` block for exactly those lines; any other patch a `diff` block. Whole-file, whole-change and outdated items, and lines outside the optional per-path `commentableRanges`, go into the body.
-  - `renderUraMarkdown`: a numbered summary for copy and paste.
 - **Persistence** (ADR 0006): `uraMigrations` (`ura-0001-items`) creates `ura_items`, STRICT, with CHECKs mirroring the anchor, origin and status unions, `session_id` cascading from `sessions`, and an integer `position` for dock order. Partial unique indexes stage an insight once and an ImpactGate finding once per (session, head, path, function). Main runs it after the session migrations.
 
 ## Consequences
@@ -30,3 +29,7 @@ Exports never lose track of which head an item was about, and stale items are fl
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The id `ura-0001-items` is retired.
+
+## Amendment 2026-10-29: the Markdown exporter is dropped
+
+`renderUraMarkdown`, the `markdown` export target, the `text/markdown` media type and the dock's "Copy Markdown" button are removed. Agent JSON, agent XML and GitHub remain.

@@ -44,7 +44,6 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
     label: 'Copy GitHub review (JSON)',
     title: 'The body of POST /repos/{owner}/{repo}/pulls/{number}/reviews.',
   },
-  { target: 'markdown', label: 'Copy Markdown', title: 'A numbered summary for anywhere.' },
 ];
 
 /**

@@ -215,7 +215,7 @@ const stageFindingRequest = z.strictObject({
 
 const uraExportRequest = z.strictObject({
   sessionId,
-  target: z.enum(['agent-json', 'agent-xml', 'github', 'markdown']),
+  target: z.enum(['agent-json', 'agent-xml', 'github']),
   verdict: uraVerdict.optional(),
 });
 

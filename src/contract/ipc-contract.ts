@@ -1133,9 +1133,9 @@ export interface UraStagedView {
 /**
  * Where an export goes: `agent-json` (the `beuve.ura/1` payload `beuve_read_human_review`
  * returns), `agent-xml` (the same as XML, for pasting into Claude Code), `github` (the body of a
- * pull request review, not posted) or `markdown`.
+ * pull request review, not posted).
  */
-export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github' | 'markdown';
+export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github';
 
 /**
  * Compiles the staged items on the current head with the session's chosen verdict (else the
@@ -1151,7 +1151,7 @@ export interface UraExportView {
   readonly sessionId: string;
   readonly headSha: string;
   readonly target: UraExportTarget;
-  readonly mediaType: 'application/json' | 'application/xml' | 'text/markdown';
+  readonly mediaType: 'application/json' | 'application/xml';
   readonly text: string;
   readonly verdict: UraVerdictView;
   readonly verdictSource: 'derived' | 'chosen';

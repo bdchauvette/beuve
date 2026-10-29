@@ -2,7 +2,6 @@ import type { UraExportTarget, UraExportView } from '#contract/ipc-contract.ts';
 import { buildAgentReview } from '#internal/ura/build-agent-review.ts';
 import { buildGithubReview } from '#internal/ura/build-github-review.ts';
 import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
-import { renderUraMarkdown } from '#internal/ura/render-ura-markdown.ts';
 import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
 
 /**
@@ -40,9 +39,6 @@ function render(
     }
     case 'github': {
       return { mediaType: 'application/json', text: json(buildGithubReview(artifact)) };
-    }
-    case 'markdown': {
-      return { mediaType: 'text/markdown', text: renderUraMarkdown(artifact) };
     }
   }
 }
