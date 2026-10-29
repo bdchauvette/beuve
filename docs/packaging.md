@@ -1,6 +1,6 @@
 # Packaging beuve
 
-How to build the app, and what each build is good for. The decisions behind this are in [ADR 0048](adr/0048-packaging-signing-and-release.md).
+How to build the app, and what each build is good for. The decisions behind this are in [ADR 0048](adr/0048-packaging-signing-and-release.md) and, for CI, versions, releases and Homebrew, [ADR 0049](adr/0049-ci-matrix-releases-and-homebrew-cask.md).
 
 ## Commands
 
@@ -27,7 +27,7 @@ Each `dist:*` command runs `npm run build` first. The configuration is `electron
 
 `CSC_LINK` is the "Developer ID Application" certificate with its private key, exported from Keychain Access as a `.p12`, given as a path or as base64 text. `CSC_NAME` names one that is already in your login keychain, for example `Developer ID Application: Your Name (TEAMID)`.
 
-beuve is for personal use for now, so the default is the first row: there is no Developer ID, and the release workflow (`.github/workflows/release.yml`) builds and uploads an ad-hoc artifact without any secrets. The signed rows stay available. To use them, export the variables before `npm run dist:mac`, or add them as repository secrets and pass them in the workflow's `dist:mac` step.
+beuve is for personal use for now, so the default is the first row: there is no Developer ID, and the release workflow (`.github/workflows/release.yml`) builds an ad-hoc artifact without any secrets. The signed rows stay available. To use them, export the variables before `npm run dist:mac`, or add them as repository secrets and pass them in the workflow's `dist:mac` step.
 
 ## Ad-hoc builds for personal use
 
@@ -52,6 +52,49 @@ codesign --verify --deep --strict --verbose=2 /Applications/beuve.app
 ```
 
 `--deep` is fine for this local, ad-hoc case. Developer ID builds are signed inside-out by electron-builder instead, and must not be re-signed with `--deep`. Removing the quarantine attribute tells macOS you trust that copy. Don't do it for builds you didn't make.
+
+## Releasing
+
+`package.json` is the source of truth for the version. From a clean, up-to-date `main`:
+
+```sh
+npm version patch        # or minor, major, or prerelease --preid beta (e.g. 0.2.0-beta.1)
+git push --follow-tags   # pushes main and the v<version> tag that npm version created
+```
+
+`npm version` bumps `package.json` and `package-lock.json`, commits, and tags `v<version>`. Pushing the tag starts `release.yml`, which:
+
+1. Fails if the tag (without the `v`) differs from `package.json`'s version.
+2. Runs `npm run check` and `npm run dist:mac` on an Apple silicon runner (ad-hoc signed, no secrets).
+3. Writes `SHA256SUMS` for the dmg and zip.
+4. Generates release notes from the conventional commits since the previous `v*` tag (`scripts/release-notes.ts`: Features, Fixes, Performance, Refactoring, Documentation, Other changes) and publishes a GitHub Release, not a draft, with the dmg, zip and `SHA256SUMS` attached. A version with a suffix (`0.2.0-beta.1`) is marked as a prerelease and leaves the Homebrew cask alone.
+5. For a full release, downloads the published zip, hashes it, and pushes `chore(cask): beuve <version>` to `main` with the new `version` and `sha256` in `Casks/beuve.rb`. (A push made with `GITHUB_TOKEN` starts no workflows, and only tags start a release, so this cannot loop.)
+6. Installs the cask from the tap on a macOS runner as a smoke test.
+
+Where things appear: the release at `https://github.com/bdchauvette/beuve/releases`, and a `beuve-<version>-mac-arm64` artifact on the workflow run (kept 90 days). Pull the cask commit (`git pull`) before your next release.
+
+A manual run of the workflow (Actions › Release › Run workflow) on a branch builds `<package version>-dev.<short sha>` and uploads the artifact only: no release, no cask change.
+
+If the guard step fails, delete the tag (`git push --delete origin v<x>` and `git tag -d v<x>`), fix the version, and tag again.
+
+## Installing with Homebrew
+
+An app is a Homebrew _cask_, and a _tap_ is a git repository that holds casks. The tap is this repository: the cask is `Casks/beuve.rb`. Because the repository isn't named `homebrew-<something>`, tapping needs the URL:
+
+```sh
+brew tap bdchauvette/beuve https://github.com/bdchauvette/beuve
+brew install --cask beuve
+```
+
+Homebrew 6 and later require you to trust a non-official tap. Installing by full name trusts just this cask, and works without tapping first: `brew install --cask bdchauvette/beuve/beuve`. Upgrade with `brew upgrade --cask beuve`, remove with `brew uninstall --cask beuve`, and `brew uninstall --zap --cask beuve` also removes `~/Library/Application Support/beuve` (the database, settings and worktrees), preferences, caches and saved state.
+
+The cask installs the zip rather than the dmg: Homebrew unpacks it directly, with no volume to mount. It requires Apple silicon and macOS 13 or later.
+
+Trade-offs of using this repository as the tap: `brew tap` clones the whole application repository, and a cask change is a commit to `main`. A dedicated `bdchauvette/homebrew-tap` repository would hold only casks and allow `brew tap bdchauvette/tap`. Moving there later means moving `Casks/beuve.rb` and pointing the release workflow's cask step at it, with a token that can push to that repository.
+
+### Gatekeeper and Homebrew
+
+Homebrew removed `--no-quarantine` (deprecated in 4.7, gone in the 6.x/7.x line), and it will not install casks that fail Gatekeeper into the official `homebrew/cask`. beuve is ad-hoc signed and not notarized, so a quarantined copy is rejected. The cask therefore has a `postflight` step that runs `/usr/bin/xattr -dr com.apple.quarantine` on `/Applications/beuve.app`, only that app, and its caveats say so. This works in a custom tap, which runs its own cask code once you trust the tap; it would be rejected upstream. If you'd rather decide yourself, delete the `postflight` block from `Casks/beuve.rb` in your own tap clone (or fork) and use Control-click › Open as above. A Developer ID signed and notarized build makes the step unnecessary.
 
 ## What's in the app
 

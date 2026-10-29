@@ -8,31 +8,127 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  mac:
-    # Apple silicon runner; beuve ships arm64 only (ADR 0048).
+  build:
+    # Apple silicon runner; beuve ships arm64 only (ADR 0048, 0049).
     runs-on: macos-latest
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      - name: Resolve the version
+        id: version
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [ "$tag_version" != "$pkg" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match package.json version $pkg; bump with 'npm version' and tag again"
+              exit 1
+            fi
+            version="$pkg"
+          else
+            version="$pkg-dev.${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building beuve $version"
       - run: npm ci
       - run: npm run check
       # No secrets: an ad-hoc signed, unnotarized build for personal use (docs/packaging.md). To
       # sign and notarize, add the CSC_* and APPLE_* secrets and pass them here as `env`.
-      - run: npm run dist:mac
+      - name: Build the dmg and zip
+        env:
+          BEUVE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+        run: npm run dist:mac
+      - name: Checksums
+        working-directory: out
+        run: |
+          shasum -a 256 ./*.dmg ./*.zip | sed 's|  \./|  |' > SHA256SUMS
+          cat SHA256SUMS
+          [ "$(wc -l < SHA256SUMS)" -eq 2 ]
       - uses: actions/upload-artifact@v4
         with:
-          name: beuve-mac-arm64
+          name: beuve-${{ steps.version.outputs.version }}-mac-arm64
           path: |
             out/*.dmg
             out/*.zip
+            out/SHA256SUMS
           if-no-files-found: error
-      - name: Draft a GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+
+  release:
+    # Tags only; an untagged run stops at the uploaded artifact.
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: beuve-${{ needs.build.outputs.version }}-mac-arm64
+          path: ${{ runner.temp }}/assets
+      - name: Publish the GitHub Release
+        run: |
+          node scripts/release-notes.ts > "$RUNNER_TEMP/notes.md"
+          flags=()
+          # 0.2.0-beta.1 and the like are prereleases.
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/assets/* \
+            --verify-tag --title "beuve $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+      - name: Update the Homebrew cask on main
+        run: |
+          case "$VERSION" in *-*) echo "Prerelease: leaving the cask alone"; exit 0 ;; esac
+          # Hash what users download, not what we built.
+          gh release download "$GITHUB_REF_NAME" --pattern '*.zip' --dir "$RUNNER_TEMP/published"
+          sha=$(sha256sum "$RUNNER_TEMP"/published/*.zip | cut -d' ' -f1)
+          grep -q "^$sha  .*\.zip$" "$RUNNER_TEMP/assets/SHA256SUMS"
+          git fetch origin main
+          git checkout -B main origin/main
+          node scripts/update-cask.ts "$VERSION" "$sha"
+          if git diff --quiet; then echo "Cask already current"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "chore(cask): beuve $VERSION"
+          # A GITHUB_TOKEN push starts no workflow runs, and releases come from tags only, so
+          # this commit can't loop.
+          for attempt in 1 2 3; do
+            git push origin main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
+
+  verify-cask:
+    needs: [build, release]
+    if: ${{ !contains(needs.build.outputs.version, '-') }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install from the tap
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" out/*.dmg out/*.zip --draft --generate-notes --title "beuve $GITHUB_REF_NAME"
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+        run: |
+          brew --version
+          brew tap bdchauvette/beuve https://github.com/bdchauvette/beuve
+          brew install --cask bdchauvette/beuve/beuve
+          test -d /Applications/beuve.app
+          ! xattr -p com.apple.quarantine /Applications/beuve.app 2>/dev/null
+          codesign --verify --deep --strict /Applications/beuve.app
+          brew uninstall --cask bdchauvette/beuve/beuve
