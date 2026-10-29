@@ -4,7 +4,6 @@ import type {
   InspectRepositoryRequest,
   IpcResult,
   MarkReviewedRequest,
-  OpenSessionRequest,
   RepositoryInspectionView,
   ReviewView,
   SessionSummary,
@@ -26,7 +25,6 @@ import type { UraServices } from './ura/create-ura-services.ts';
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
 export interface SessionServices {
   readonly list: () => IpcResult<readonly SessionSummary[]>;
-  readonly open: (request: OpenSessionRequest) => IpcResult<SessionSummary>;
   readonly createLocal: (request: CreateLocalSessionRequest) => Promise<IpcResult<SessionSummary>>;
   readonly getReview: (request: GetReviewRequest) => Promise<IpcResult<ReviewView>>;
   readonly markReviewed: (request: MarkReviewedRequest) => Promise<IpcResult<SessionSummary>>;

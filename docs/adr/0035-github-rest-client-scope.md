@@ -20,3 +20,7 @@ beuve reviews GitHub pull requests the same way as local agent runs (spec 1): it
 ## Consequences
 
 The client is a few hundred lines we own, with no Octokit, retries, throttling or GraphQL. Callers poll at their own pace and must respect `resetAt`. Redirects for renamed repositories are followed; fetch drops `Authorization` on a cross-origin redirect. Stack navigation sees only open pull requests in the same repository, one level at a time. GitHub's 422 texts for reviews aren't a documented interface, so classification is by pattern and falls back to `validation-failed`. The session domain's `github-pull-request` source has no host yet, so Enterprise pull requests need a host column before main can resume them.
+
+## Amendment 2026-10-29: unused operations removed
+
+`listPullRequestCommits` and `listPullRequestFiles` had no production caller and are deleted. Re-add them with their first user.

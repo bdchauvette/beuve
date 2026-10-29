@@ -49,16 +49,6 @@ describe('createIpcHandlers', () => {
     });
   });
 
-  it('validates session:open before delegating', async () => {
-    const { calls, services } = recording('open');
-    const handlers = createIpcHandlers(services, appInfo);
-    for (const bad of [undefined, 'id', { sessionId: '' }, { sessionId: 's1', extra: 1 }]) {
-      await expectInvalid(handlers['session:open'](bad));
-    }
-    expect(await handlers['session:open']({ sessionId: 's1' })).toEqual(ok(session));
-    expect(calls).toEqual([{ sessionId: 's1' }]);
-  });
-
   it('validates session:create-local before delegating', async () => {
     const { calls, services } = recording('createLocal');
     const handlers = createIpcHandlers(services, appInfo);
@@ -702,7 +692,6 @@ function stubServices(
   return {
     sessions: {
       list: () => notWiredError,
-      open: () => notWiredError,
       createLocal: async () => notWired,
       getReview: async () => notWired,
       markReviewed: async () => notWired,
@@ -781,12 +770,6 @@ function recording(name: Exclude<keyof SessionServices, 'list' | 'inspectReposit
 } {
   const calls: unknown[] = [];
   const overrides: Record<typeof name, Partial<SessionServices>> = {
-    open: {
-      open: (request) => {
-        calls.push(request);
-        return ok(session);
-      },
-    },
     createLocal: {
       createLocal: async (request) => {
         calls.push(request);

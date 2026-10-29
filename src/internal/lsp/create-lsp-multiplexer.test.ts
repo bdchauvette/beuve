@@ -149,33 +149,9 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     ]);
   });
 
-  it('answers symbols, hover and definition', async () => {
+  it('answers document symbols', async () => {
     const symbols = unwrap(await lsp.documentSymbols({ root: project.root, path: 'src/b.ts' }));
     expect(symbols).toContainEqual(expect.objectContaining({ name: 'b', kind: 'function' }));
-    const hover = unwrap(
-      await lsp.hover({
-        root: project.root,
-        path: 'src/b.ts',
-        position: { line: 3, character: 9 },
-      }),
-    );
-    expect(hover).toMatchObject({
-      kind: 'markdown',
-      value: expect.stringContaining('c(n: number): number') as unknown,
-    });
-    const definition = unwrap(
-      await lsp.definition({
-        root: project.root,
-        path: 'src/b.ts',
-        position: { line: 3, character: 9 },
-      }),
-    );
-    expect(definition).toEqual([
-      {
-        file: { kind: 'workspace', path: 'src/c.ts' },
-        range: { start: { line: 0, character: 16 }, end: { line: 0, character: 17 } },
-      },
-    ]);
   });
 
   it('refuses paths outside the root, odd files and unknown nodes', async () => {

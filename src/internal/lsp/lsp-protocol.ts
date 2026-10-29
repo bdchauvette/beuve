@@ -41,12 +41,6 @@ export interface LspDiagnostic {
   }[];
 }
 
-export interface LspPublishDiagnosticsParams {
-  readonly uri: string;
-  readonly version?: number;
-  readonly diagnostics: readonly LspDiagnostic[];
-}
-
 export interface LspCallHierarchyItem {
   readonly name: string;
   readonly kind: number;

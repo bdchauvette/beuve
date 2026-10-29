@@ -296,10 +296,6 @@ export function createIpcHandlers(
       const parsed = noRequest.safeParse(request);
       return parsed.success ? services.sessions.list() : invalid(parsed.error);
     },
-    'session:open': (request): IpcResult<SessionSummary> => {
-      const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.sessions.open(parsed.data) : invalid(parsed.error);
-    },
     'session:create-local': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = localSessionRequest.safeParse(request);
       return parsed.success ? services.sessions.createLocal(parsed.data) : invalid(parsed.error);

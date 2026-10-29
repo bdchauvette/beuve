@@ -20,7 +20,6 @@ import { createLocalSession } from './create-local-session.ts';
 import { inspectRepository } from './inspect-repository.ts';
 import { loadReview } from './load-review.ts';
 import type { RangeDiff } from './load-review-diff.ts';
-import { loadSession } from './load-session.ts';
 import { markReviewed } from './mark-reviewed.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
@@ -55,7 +54,6 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
   const cache = new LruCache<string, RangeDiff>(reviewDiffCacheSize);
   return {
     list: (): IpcResult<readonly SessionSummary[]> => listSummaries(context),
-    open: ({ sessionId }): IpcResult<SessionSummary> => openSummary(context, sessionId),
     createLocal: async (request): Promise<IpcResult<SessionSummary>> =>
       createLocalSession(context, request),
     getReview: async ({ sessionId, ignoreWhitespace }): Promise<IpcResult<ReviewView>> =>
@@ -72,9 +70,4 @@ function listSummaries(context: SessionContext): IpcResult<readonly SessionSumma
   return sessions.ok
     ? ok(sessions.value.map((session) => toSessionSummary(session)))
     : sessionFailure(context.logger, sessions.error);
-}
-
-function openSummary(context: SessionContext, sessionId: string): IpcResult<SessionSummary> {
-  const session = loadSession(context, sessionId);
-  return session.ok ? ok(toSessionSummary(session.value)) : session;
 }

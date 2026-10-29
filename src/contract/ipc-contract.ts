@@ -62,10 +62,6 @@ export interface SessionSummary {
   readonly pullRequest?: PullRequestBadgeView;
 }
 
-export interface OpenSessionRequest {
-  readonly sessionId: string;
-}
-
 /** Start (or resume) reviewing `headRef` against `baseRef` in the repository containing `repoPath`. */
 export interface CreateLocalSessionRequest {
   /** Absolute path inside a git worktree; the session records the repository's top level. */
@@ -1459,10 +1455,6 @@ export interface InvokeChannelMap {
   'session:list': {
     readonly request: undefined;
     readonly response: IpcResult<readonly SessionSummary[]>;
-  };
-  'session:open': {
-    readonly request: OpenSessionRequest;
-    readonly response: IpcResult<SessionSummary>;
   };
   'session:create-local': {
     readonly request: CreateLocalSessionRequest;

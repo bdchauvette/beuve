@@ -50,7 +50,7 @@ const noModel = 'none';
  * One preliminary agentic review (spec 5B): builds the prompt, asks the model, validates its
  * insights against the diff and stamps them as pending insights of a new run. Pure apart from the
  * model port and the injected clock and ids. Scheduling, cancellation when the head moves, and
- * one run per (session, head, path scope) are main's job ({@link reviewRunKey}, `findReviewRun`).
+ * one run per (session, head, path scope) are main's job (`findReviewRun`).
  */
 export async function runPreliminaryReview<E>(
   input: ReviewInput,

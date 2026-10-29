@@ -68,8 +68,6 @@ export type AssistantState =
   | { readonly status: 'streaming' | 'complete' | 'cancelled' }
   | { readonly status: 'failed'; readonly errorCode: string };
 
-export type AssistantStatus = AssistantState['status'];
-
 /** Expected failures of the chat repository. */
 export type ChatStoreError =
   | { readonly kind: 'session-not-found'; readonly sessionId: SessionId }

@@ -7,7 +7,6 @@ import type { Result } from '#pkg/result/result.ts';
 
 import type { CommitSha } from './agent-insight.ts';
 import type { ModelInsight } from './insight-output-schema.ts';
-import { reviewRunKey } from './review-run-key.ts';
 import type { ModelOutput, ModelRequest, ReviewModel } from './review-model.ts';
 import { runPreliminaryReview } from './run-preliminary-review.ts';
 import { createReviewInput } from './testing/create-review-input.ts';
@@ -147,7 +146,7 @@ describe('runPreliminaryReview', () => {
     });
   });
 
-  it('records the reviewed head for interdiffs and keys runs by session, head and path scope', async () => {
+  it('records the reviewed head for interdiffs', async () => {
     const base = createReviewInput();
     const fromHeadSha = 'd'.repeat(40) as CommitSha;
     const input = {
@@ -160,8 +159,5 @@ describe('runPreliminaryReview', () => {
       ids: counter(),
     });
     expect(result).toMatchObject({ ok: true, value: { run: { scope: 'interdiff', fromHeadSha } } });
-    expect(reviewRunKey(input)).toBe(reviewRunKey(base));
-    expect(reviewRunKey(base)).toBe(`review:${base.sessionId}@${base.scope.headSha}#[]`);
-    expect(reviewRunKey({ ...base, pathScope: ['src/a.ts'] })).not.toBe(reviewRunKey(base));
   });
 });

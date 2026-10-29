@@ -441,7 +441,7 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     expect(await chat.ask({ sessionId: 'nope', question: 'Hi?' })).toMatchObject({ ok: false });
     expect(chat.clear({ sessionId: 'nope' })).toMatchObject({ ok: false });
 
-    const head = value(must(services).sessions.open({ sessionId })).headSha;
+    const head = value(await must(services).sessions.getReview({ sessionId })).headSha;
     appendChatMessage(db, {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as ChatMessageId,
       sessionId: sessionId as SessionId,

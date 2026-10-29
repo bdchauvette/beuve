@@ -264,7 +264,6 @@ function trackOpenSession(
   };
   return {
     ...sessions,
-    open: (request): IpcResult<SessionSummary> => remember(sessions.open(request)),
     getReview: async (request): Promise<IpcResult<ReviewView>> =>
       remember(await sessions.getReview(request)),
   };

@@ -106,7 +106,9 @@ describe('createMainServices (integration: SQLite + git, no Electron)', () => {
       baseSha: newBase,
       files: [],
     });
-    expect(value(sessions.open({ sessionId: created.id })).lastReviewedSha).toBe(newHead);
+    expect(value(sessions.list()).find(({ id }) => id === created.id)?.lastReviewedSha).toBe(
+      newHead,
+    );
   });
 
   it('shows an exact interdiff when the author pushes on an unmoved base', async () => {

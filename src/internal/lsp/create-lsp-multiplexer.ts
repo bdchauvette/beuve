@@ -23,8 +23,6 @@ import type {
   CallHierarchyNode,
   DiagnosticsReport,
   DocumentSymbolView,
-  HoverView,
-  LocationView,
   Position,
   ServerStatus,
 } from './lsp-model.ts';
@@ -33,8 +31,6 @@ import { normalizeUri } from './normalize-uri.ts';
 import { parseCallHierarchyItems } from './parse-call-hierarchy-items.ts';
 import type { LspCallHierarchyEdge } from './parse-call-hierarchy-items.ts';
 import { parseDocumentSymbols } from './parse-document-symbols.ts';
-import { parseHover } from './parse-hover.ts';
-import { parseLocations } from './parse-locations.ts';
 import { resolveWorkspaceFile } from './resolve-workspace-file.ts';
 import type { WorkspaceFile } from './resolve-workspace-file.ts';
 import { resolveWorkspaceRoot } from './resolve-workspace-root.ts';
@@ -95,10 +91,6 @@ export interface DiagnosticsRequest extends FileRequest {
   readonly timeoutMs?: number;
 }
 
-export interface ReferencesRequest extends PositionRequest {
-  readonly includeDeclaration?: boolean;
-}
-
 /**
  * Read-only access to language servers, one process per (workspace root, server), started on
  * first use. Every method resolves to a `Result`; none rejects.
@@ -116,13 +108,6 @@ export interface LspMultiplexer {
   readonly outgoingCalls: (
     nodeId: string,
   ) => Promise<Result<readonly CallHierarchyCall[], LspError>>;
-  readonly definition: (
-    request: PositionRequest,
-  ) => Promise<Result<readonly LocationView[], LspError>>;
-  readonly references: (
-    request: ReferencesRequest,
-  ) => Promise<Result<readonly LocationView[], LspError>>;
-  readonly hover: (request: PositionRequest) => Promise<Result<HoverView | undefined, LspError>>;
   readonly documentSymbols: (
     request: FileRequest,
   ) => Promise<Result<readonly DocumentSymbolView[], LspError>>;
@@ -412,7 +397,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 
   const requireCapability = (
     opened: { readonly session: ServerSession; readonly entry: ServerEntry },
-    capability: 'callHierarchy' | 'definition' | 'references' | 'hover' | 'documentSymbol',
+    capability: 'callHierarchy' | 'documentSymbol',
   ): Result<undefined, LspError> =>
     opened.session.server.capabilities[capability]
       ? ok(undefined)
@@ -559,80 +544,6 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 
     outgoingCalls: async (nodeId): Promise<Result<readonly CallHierarchyCall[], LspError>> =>
       expand(nodeId, 'outgoing'),
-
-    definition: async (request): Promise<Result<readonly LocationView[], LspError>> => {
-      const opened = await openFile(request);
-      if (!opened.ok) {
-        return opened;
-      }
-      const capable = requireCapability(opened.value, 'definition');
-      if (!capable.ok) {
-        return capable;
-      }
-      const { session, entry } = opened.value;
-      const result = await session.request(
-        'textDocument/definition',
-        positionParams(opened.value, request.position),
-      );
-      if (!result.ok) {
-        return result;
-      }
-      const locations = parseLocations(result.value);
-      const mapper = await mapperFor(
-        session,
-        entry.root,
-        locations.map((location) => location.uri),
-      );
-      return ok(locations.map((location) => mapper.location(location)));
-    },
-
-    references: async (request): Promise<Result<readonly LocationView[], LspError>> => {
-      const opened = await openFile(request);
-      if (!opened.ok) {
-        return opened;
-      }
-      const capable = requireCapability(opened.value, 'references');
-      if (!capable.ok) {
-        return capable;
-      }
-      const { session, entry } = opened.value;
-      const result = await session.request('textDocument/references', {
-        ...positionParams(opened.value, request.position),
-        context: { includeDeclaration: request.includeDeclaration ?? false },
-      });
-      if (!result.ok) {
-        return result;
-      }
-      const locations = parseLocations(result.value);
-      const mapper = await mapperFor(
-        session,
-        entry.root,
-        locations.map((location) => location.uri),
-      );
-      return ok(locations.map((location) => mapper.location(location)));
-    },
-
-    hover: async (request): Promise<Result<HoverView | undefined, LspError>> => {
-      const opened = await openFile(request);
-      if (!opened.ok) {
-        return opened;
-      }
-      const capable = requireCapability(opened.value, 'hover');
-      if (!capable.ok) {
-        return capable;
-      }
-      const { session, entry, document } = opened.value;
-      const result = await session.request(
-        'textDocument/hover',
-        positionParams(opened.value, request.position),
-      );
-      if (!result.ok) {
-        return result;
-      }
-      const hover = parseHover(result.value);
-      const mapper = await mapperFor(session, entry.root, [document.uri]);
-      return ok(hover === undefined ? undefined : mapper.hover(document.uri, hover));
-    },
 
     documentSymbols: async (request): Promise<Result<readonly DocumentSymbolView[], LspError>> => {
       const opened = await openFile(request);

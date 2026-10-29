@@ -5,7 +5,6 @@ import type {
   DiagnosticSeverity,
   DiagnosticView,
   DocumentSymbolView,
-  HoverView,
   LocationView,
   Range,
 } from './lsp-model.ts';
@@ -18,7 +17,6 @@ import type {
   PositionEncoding,
 } from './lsp-protocol.ts';
 import { normalizeUri } from './normalize-uri.ts';
-import type { LspHover } from './parse-hover.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import { symbolKindName } from './symbol-kind-name.ts';
 import { toFileReference } from './to-file-reference.ts';
@@ -39,7 +37,6 @@ export interface ViewMapper {
   readonly diagnostic: (uri: string, diagnostic: LspDiagnostic) => DiagnosticView;
   readonly node: (id: string, item: LspCallHierarchyItem) => CallHierarchyNode;
   readonly symbol: (uri: string, symbol: LspDocumentSymbol) => DocumentSymbolView;
-  readonly hover: (uri: string, hover: LspHover) => HoverView;
 }
 
 const severities: Readonly<Record<number, DiagnosticSeverity>> = {
@@ -103,10 +100,5 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
       selectionRange: range(item.uri, item.selectionRange),
     }),
     symbol,
-    hover: (uri, value): HoverView => ({
-      kind: value.kind,
-      value: value.value,
-      range: value.range === undefined ? undefined : range(uri, value.range),
-    }),
   };
 }

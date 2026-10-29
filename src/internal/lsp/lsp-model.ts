@@ -85,12 +85,6 @@ export interface CallHierarchyCall {
   readonly callSites: readonly Range[];
 }
 
-export interface HoverView {
-  readonly kind: 'markdown' | 'plaintext';
-  readonly value: string;
-  readonly range: Range | undefined;
-}
-
 export interface DocumentSymbolView {
   readonly name: string;
   readonly kind: string;

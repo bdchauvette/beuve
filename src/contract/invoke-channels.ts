@@ -4,7 +4,6 @@ import type { InvokeChannel } from './ipc-contract.ts';
 export const invokeChannels = Object.freeze([
   'app:get-info',
   'session:list',
-  'session:open',
   'session:create-local',
   'repository:inspect',
   'dialog:choose-folder',
