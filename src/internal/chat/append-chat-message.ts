@@ -20,9 +20,9 @@ export function appendChatMessage(
     message.role === 'assistant' && message.status === 'failed' ? message.errorCode : '';
   try {
     db.prepare(
-      `INSERT INTO chat_messages (id, session_id, head_sha, role, content, citations, status,
-                                  error_code, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?);`,
+      `INSERT INTO chat_messages (id, session_id, head_sha, role, content, citations, mentions,
+                                  status, error_code, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?);`,
     ).run(
       message.id,
       message.sessionId,
@@ -30,6 +30,7 @@ export function appendChatMessage(
       message.role,
       message.content,
       JSON.stringify(message.citations),
+      JSON.stringify(message.mentions),
       status,
       errorCode,
       message.createdAt,

@@ -24,9 +24,27 @@ export interface Citation {
   readonly side: 'head';
 }
 
-/** One entry of a session's Q&A transcript (Zone 4), asked and answered at `headSha`. */
+/**
+ * Lines the reviewer attached to a question (ADR 0046): a range of one side of a file at a
+ * commit, or the whole file when both lines are absent. 1-based and inclusive; `base` lines are
+ * the base side's own numbers. The question's text refers to the n-th mention as `[[@n]]`.
+ */
+export interface ChatMention {
+  /** Repository-relative, `/`-separated; the base side's own path for `base`. */
+  readonly path: string;
+  readonly side: 'head' | 'base';
+  readonly startLine?: number;
+  readonly endLine?: number;
+  /** The commit whose text was selected: the session head, or the review's base. */
+  readonly sha: CommitSha;
+}
+
+/**
+ * One entry of a session's Q&A transcript (Zone 4), asked and answered at `headSha`. A `summary`
+ * is a `/compact` note (ADR 0047): later prompts send it instead of every turn before it.
+ */
 export type ChatMessage =
-  | (ChatMessageBase & { readonly role: 'user' | 'system-notice' })
+  | (ChatMessageBase & { readonly role: 'user' | 'system-notice' | 'summary' })
   | (ChatMessageBase & { readonly role: 'assistant' } & AssistantState);
 
 export interface ChatMessageBase {
@@ -40,6 +58,8 @@ export interface ChatMessageBase {
   readonly content: string;
   /** In order of first appearance; empty for user messages and notices. */
   readonly citations: readonly Citation[];
+  /** What the question was about, in `[[@n]]` order; empty for everything but user messages. */
+  readonly mentions: readonly ChatMention[];
   readonly createdAt: string;
 }
 

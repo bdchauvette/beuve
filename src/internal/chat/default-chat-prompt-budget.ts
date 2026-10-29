@@ -13,4 +13,7 @@ export const defaultChatPromptBudget: ChatPromptBudget = {
   maxHistoryChars: 40_000,
   maxHistoryTurns: 20,
   maxImpactFindings: 20,
+  maxSelectionChars: 60_000,
+  maxSelectionFileChars: 30_000,
+  maxSummaryChars: 16_000,
 };

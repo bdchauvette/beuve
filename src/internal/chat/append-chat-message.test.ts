@@ -16,7 +16,7 @@ describe('appendChatMessage', () => {
   it('round-trips every role and status, in transcript order', () => {
     const db = createChatTestDatabase([sessionId]);
     const at = '2026-10-28T12:00:00.000Z';
-    const base = { sessionId, headSha, citations: [], createdAt: at };
+    const base = { sessionId, headSha, citations: [], mentions: [], createdAt: at };
     const messages: ChatMessage[] = [
       { ...base, id: id(1), role: 'user', content: 'Why?' },
       {
@@ -38,6 +38,23 @@ describe('appendChatMessage', () => {
       },
       { ...base, id: id(5), role: 'system-notice', content: 'Head moved to cccc.' },
       { ...base, id: id(6), role: 'assistant', status: 'cancelled', content: 'Partial' },
+      {
+        ...base,
+        id: id(7),
+        role: 'user',
+        content: 'Why [[@1]] and [[@2]]?',
+        mentions: [
+          { path: 'src/a.ts', side: 'head', startLine: 27, endLine: 33, sha: headSha },
+          { path: 'src/old.ts', side: 'base', sha: 'b'.repeat(40) as CommitSha },
+        ],
+      },
+      {
+        ...base,
+        id: id(8),
+        role: 'summary',
+        content: '**Asked**\n- why [[src/a.ts:27-33]]',
+        citations: [{ path: 'src/a.ts', startLine: 27, endLine: 33, side: 'head' }],
+      },
     ];
     for (const message of messages) {
       expect(appendChatMessage(db, message)).toEqual({ ok: true, value: undefined });
@@ -54,6 +71,7 @@ describe('appendChatMessage', () => {
       role: 'user',
       content: 'Why?',
       citations: [],
+      mentions: [],
       createdAt: '2026-10-28T12:00:00.000Z',
     };
     const other = '22222222-2222-4222-8222-222222222222' as SessionId;

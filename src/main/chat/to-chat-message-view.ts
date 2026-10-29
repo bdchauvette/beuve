@@ -26,6 +26,12 @@ export function toChatMessageView(message: ChatMessage): ChatMessageView {
       startLine,
       endLine,
     })),
+    mentions: message.mentions.map(({ path, side, startLine, endLine, sha }) => ({
+      path,
+      side,
+      ...(startLine !== undefined && endLine !== undefined && { startLine, endLine }),
+      sha,
+    })),
     createdAt: message.createdAt,
   };
   if (message.role !== 'assistant') {

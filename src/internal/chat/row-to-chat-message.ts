@@ -7,6 +7,7 @@ import type { Result } from '#pkg/result/result.ts';
 import type {
   ChatMessage,
   ChatMessageBase,
+  ChatMention,
   ChatMessageId,
   ChatStoreError,
   Citation,
@@ -22,8 +23,18 @@ export function rowToChatMessage(
 ): Result<ChatMessage, CorruptRow> {
   const corrupt = (reason: string): Result<ChatMessage, CorruptRow> =>
     err({ kind: 'corrupt-row', table: 'chat_messages', id: String(row['id']), reason });
-  const { id, session_id, head_sha, role, content, citations, status, error_code, created_at } =
-    row;
+  const {
+    id,
+    session_id,
+    head_sha,
+    role,
+    content,
+    citations,
+    mentions,
+    status,
+    error_code,
+    created_at,
+  } = row;
 
   if (!isUuid(id) || !isUuid(session_id)) {
     return corrupt('id or session_id is not a UUID');
@@ -34,9 +45,13 @@ export function rowToChatMessage(
   if (typeof content !== 'string') {
     return corrupt('content is not text');
   }
-  const parsedCitations = parseCitationList(citations);
+  const parsedCitations = parseJsonList(citations, toCitation);
   if (parsedCitations === undefined) {
     return corrupt('citations is not a JSON array of citations');
+  }
+  const parsedMentions = parseJsonList(mentions, toMention);
+  if (parsedMentions === undefined) {
+    return corrupt('mentions is not a JSON array of mentions');
   }
   if (typeof created_at !== 'string' || !isoUtc.test(created_at)) {
     return corrupt('created_at is not an ISO-8601 UTC timestamp');
@@ -47,13 +62,14 @@ export function rowToChatMessage(
     headSha: head_sha as CommitSha,
     content,
     citations: parsedCitations,
+    mentions: parsedMentions,
     createdAt: created_at,
   };
-  if (role === 'user' || role === 'system-notice') {
+  if (role === 'user' || role === 'system-notice' || role === 'summary') {
     return status === 'complete' ? ok({ ...base, role }) : corrupt(`a ${role} is not complete`);
   }
   if (role !== 'assistant') {
-    return corrupt('role is not user, assistant or system-notice');
+    return corrupt('role is not user, assistant, system-notice or summary');
   }
   if (status === 'failed') {
     return typeof error_code === 'string' && error_code.trim() !== ''
@@ -76,7 +92,10 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && uuid.test(value);
 }
 
-function parseCitationList(value: unknown): Citation[] | undefined {
+function parseJsonList<T>(
+  value: unknown,
+  toItem: (item: unknown) => T | undefined,
+): T[] | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
@@ -89,15 +108,15 @@ function parseCitationList(value: unknown): Citation[] | undefined {
   if (!Array.isArray(json)) {
     return undefined;
   }
-  const citations: Citation[] = [];
-  for (const item of json as unknown[]) {
-    const citation = toCitation(item);
-    if (citation === undefined) {
+  const items: T[] = [];
+  for (const entry of json as unknown[]) {
+    const item = toItem(entry);
+    if (item === undefined) {
       return undefined;
     }
-    citations.push(citation);
+    items.push(item);
   }
-  return citations;
+  return items;
 }
 
 function toCitation(item: unknown): Citation | undefined {
@@ -113,6 +132,28 @@ function toCitation(item: unknown): Citation | undefined {
     isLine(endLine) &&
     endLine >= startLine;
   return isCitation ? { path, startLine, endLine, side } : undefined;
+}
+
+function toMention(item: unknown): ChatMention | undefined {
+  if (typeof item !== 'object' || item === null) {
+    return undefined;
+  }
+  const { path, side, startLine, endLine, sha } = item as Record<string, unknown>;
+  if (
+    typeof path !== 'string' ||
+    path === '' ||
+    typeof sha !== 'string' ||
+    !commitSha.test(sha) ||
+    (side !== 'head' && side !== 'base')
+  ) {
+    return undefined;
+  }
+  if (startLine === undefined && endLine === undefined) {
+    return { path, side, sha: sha as CommitSha };
+  }
+  return isLine(startLine) && isLine(endLine) && endLine >= startLine
+    ? { path, side, startLine, endLine, sha: sha as CommitSha }
+    : undefined;
 }
 
 function isLine(line: unknown): line is number {

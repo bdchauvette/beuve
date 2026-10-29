@@ -5,6 +5,8 @@ import type {
   ChatCancelRequest,
   ChatClearedView,
   ChatClearRequest,
+  ChatCompactedView,
+  ChatCompactRequest,
   ChatDeltaView,
   ChatErrorCode,
   ChatListRequest,
@@ -16,18 +18,22 @@ import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import { askQuestion } from '#internal/chat/ask-question.ts';
 import { clearChatMessages } from '#internal/chat/clear-chat-messages.ts';
 import type {
+  ChatMention,
   ChatMessage,
   ChatMessageId,
   CommitSha,
   SessionId,
 } from '#internal/chat/chat-message.ts';
 import type { ChatDelta } from '#internal/chat/chat-model.ts';
-import type { ChatQuestion, ChatTurn } from '#internal/chat/chat-question.ts';
+import type { ChatSelection, ChatTurn } from '#internal/chat/chat-question.ts';
+import { compactConversation } from '#internal/chat/compact-conversation.ts';
 import { listChatMessages } from '#internal/chat/list-chat-messages.ts';
+import { splitAtCompaction } from '#internal/chat/split-at-compaction.ts';
 import { toChatHistory } from '#internal/chat/to-chat-history.ts';
 import { updateChatAnswer } from '#internal/chat/update-chat-answer.ts';
 import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
+import type { ImpactFindingView } from '#contract/ipc-contract.ts';
 import type { ModelError } from '#internal/llm/language-model.ts';
 import { err } from '#pkg/result/err.ts';
 import { ok } from '#pkg/result/ok.ts';
@@ -38,13 +44,16 @@ import type { ClaudeCodeSettings } from '../review/claude-code-settings.ts';
 import { resolveLanguageModel } from '../review/resolve-language-model.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
+import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSessionHead } from '../sessions/refresh-session-head.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 
+import { describeChatError } from './describe-chat-error.ts';
 import { modelErrorToChatFailure } from './model-error-to-chat-failure.ts';
 import type { ChatFailure } from './model-error-to-chat-failure.ts';
+import { resolveChatMentions } from './resolve-chat-mentions.ts';
 import { toChatMessageView } from './to-chat-message-view.ts';
 import { toChatQuestion } from './to-chat-question.ts';
 
@@ -54,6 +63,11 @@ export interface ChatServices {
   readonly ask: (request: ChatAskRequest) => Promise<IpcResult<ChatAskedView>>;
   readonly list: (request: ChatListRequest) => IpcResult<ChatListView>;
   readonly cancel: (request: ChatCancelRequest) => IpcResult<ChatCancelledView>;
+  /**
+   * `/compact` (ADR 0047): condenses the turns since the last summary into a new summary message,
+   * answering once it is stored. It occupies the session like an answer does.
+   */
+  readonly compact: (request: ChatCompactRequest) => Promise<IpcResult<ChatCompactedView>>;
   /** Deletes the session's transcript; an answer in flight is stopped and not stored. */
   readonly clear: (request: ChatClearRequest) => IpcResult<ChatClearedView>;
   /** Aborts the session's answer in flight if it was asked at a head other than `headSha`. */
@@ -80,6 +94,7 @@ export interface ChatServicesOptions {
 interface Job {
   readonly sessionId: string;
   readonly headSha: string;
+  /** The streaming answer's id, or the id the summary of a `/compact` will get. */
   readonly messageId: string;
   readonly controller: AbortController;
   /** The raw answer streamed so far. */
@@ -103,9 +118,22 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   type AbortReason = 'cancelled' | 'head-changed' | 'cleared' | 'app-quit';
 
   type Outcome =
-    | { readonly status: 'complete'; readonly answer: ChatAnswerUpdate }
+    | {
+        readonly status: 'complete';
+        readonly answer: ChatAnswerUpdate;
+        /** Earlier turns the prompt dropped for size. */
+        readonly droppedTurns: number;
+      }
     | { readonly status: 'cancelled' }
     | { readonly status: 'failed'; readonly code: ChatErrorCode };
+
+  /** What a question or a compaction runs against: the diff, its checkout and its files. */
+  interface Prepared {
+    readonly diff: ReviewDiff;
+    readonly worktreePath: string;
+    readonly worktreePaths: ReadonlySet<string> | undefined;
+    readonly findings: readonly ImpactFindingView[] | undefined;
+  }
 
   const { context, impact, worktrees } = options;
   const { db, logger } = context;
@@ -144,10 +172,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const prepare = async (
     job: Job,
-    question: string,
-    history: readonly ChatTurn[],
-    focus: ChatAskRequest['focus'],
-  ): Promise<Result<ChatQuestion, Outcome>> => {
+    options: { readonly withImpact: boolean },
+  ): Promise<Result<Prepared, Outcome>> => {
     const isAborted = (): boolean => job.controller.signal.aborted;
     const unavailable = (): Result<never, Outcome> =>
       err({ status: 'failed', code: 'chat-unavailable' });
@@ -163,11 +189,14 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       abort(job, 'head-changed');
       return err({ status: 'cancelled' });
     }
-    const impactView = await impact.getImpact({ sessionId: job.sessionId });
-    const findings =
-      impactView.ok && impactView.value.headSha === job.headSha
-        ? impactView.value.findings
-        : undefined;
+    let findings: readonly ImpactFindingView[] | undefined;
+    if (options.withImpact) {
+      const impactView = await impact.getImpact({ sessionId: job.sessionId });
+      findings =
+        impactView.ok && impactView.value.headSha === job.headSha
+          ? impactView.value.findings
+          : undefined;
+    }
     const worktree = await worktrees.ensure(
       refreshed.repository,
       job.sessionId,
@@ -181,31 +210,37 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return unavailable();
     }
     const tree = await listTreePaths(refreshed.repository, refreshed.session.headSha);
-    return ok(
-      toChatQuestion({
-        diff: diff.value,
-        worktreePath: worktree.value,
-        question,
-        history,
-        focus,
-        impactFindings: findings,
-        intent: options.intentFor?.(job.sessionId),
-        worktreePaths: tree.ok ? new Set(tree.value) : undefined,
-      }),
-    );
+    return ok({
+      diff: diff.value,
+      worktreePath: worktree.value,
+      worktreePaths: tree.ok ? new Set(tree.value) : undefined,
+      findings,
+    });
   };
 
   const answer = async (
     job: Job,
     assistant: ChatMessage,
     request: ChatAskRequest,
-    history: readonly ChatTurn[],
+    conversation: Conversation,
   ): Promise<Outcome> => {
     const { signal } = job.controller;
-    const input = await prepare(job, request.question, history, request.focus);
-    if (!input.ok) {
-      return input.error;
+    const prepared = await prepare(job, { withImpact: true });
+    if (!prepared.ok) {
+      return prepared.error;
     }
+    const input = toChatQuestion({
+      diff: prepared.value.diff,
+      worktreePath: prepared.value.worktreePath,
+      question: request.question,
+      history: conversation.history,
+      summary: conversation.summary,
+      selections: conversation.selections,
+      focus: request.focus,
+      impactFindings: prepared.value.findings,
+      intent: options.intentFor?.(job.sessionId),
+      worktreePaths: prepared.value.worktreePaths,
+    });
     const model = await resolveLanguageModel(claude, logger);
     if (!model.ok) {
       return { status: 'failed', code: 'not-installed' };
@@ -230,7 +265,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       lastStoredAt = now;
       updateChatAnswer(db, assistant.id, { status: 'streaming', content: job.streamed });
     };
-    const asked = await askQuestion<ModelError>(input.value, {
+    const asked = await askQuestion<ModelError>(input, {
       model: model.value,
       signal,
       onDelta,
@@ -244,6 +279,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           content: asked.value.answer,
           citations: asked.value.citations,
         },
+        droppedTurns: asked.value.prompt.omittedTurns,
       };
     }
     if (asked.error.kind !== 'model') {
@@ -275,7 +311,73 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return;
     }
     const final: ChatMessage = { ...assistant, ...update, citations: update.citations ?? [] };
-    notify(updateListeners, { message: toChatMessageView(final) });
+    const droppedTurns = outcome.status === 'complete' ? outcome.droppedTurns : 0;
+    notify(updateListeners, {
+      message: toChatMessageView(final),
+      ...(droppedTurns > 0 && { droppedTurns }),
+    });
+  };
+
+  /** Runs `/compact` for a job: the turns since the last summary become one summary message. */
+  const condense = async (
+    job: Job,
+    summary: string | undefined,
+    turns: readonly ChatTurn[],
+  ): Promise<Result<ChatMessage, Outcome>> => {
+    const prepared = await prepare(job, { withImpact: false });
+    if (!prepared.ok) {
+      return prepared;
+    }
+    const model = await resolveLanguageModel(claude, logger);
+    if (!model.ok) {
+      return err({ status: 'failed', code: 'not-installed' });
+    }
+    const question = toChatQuestion({
+      diff: prepared.value.diff,
+      worktreePath: prepared.value.worktreePath,
+      question: '',
+      history: [],
+      focus: undefined,
+      impactFindings: undefined,
+      worktreePaths: prepared.value.worktreePaths,
+    });
+    const compacted = await compactConversation<ModelError>(
+      {
+        baseSha: question.baseSha,
+        headSha: question.headSha,
+        worktreePath: question.worktreePath,
+        files: question.files,
+        ...(question.worktreePaths !== undefined && { worktreePaths: question.worktreePaths }),
+        ...(summary !== undefined && { summary }),
+        turns,
+      },
+      {
+        model: model.value,
+        signal: job.controller.signal,
+        ...(claude.timeoutMs !== undefined && { timeoutMs: claude.timeoutMs }),
+      },
+    );
+    if (!compacted.ok) {
+      if (compacted.error.kind === 'nothing-to-compact') {
+        return err({ status: 'failed', code: 'internal' });
+      }
+      const failure = modelErrorToChatFailure(compacted.error.error);
+      return err(
+        failure.kind === 'cancelled'
+          ? { status: 'cancelled' }
+          : { status: 'failed', code: failure.code },
+      );
+    }
+    return ok({
+      id: job.messageId as ChatMessageId,
+      sessionId: job.sessionId as SessionId,
+      headSha: job.headSha as CommitSha,
+      role: 'summary',
+      content: compacted.value.content,
+      citations: compacted.value.citations,
+      mentions: [],
+      createdAt: context.deps.now().toISOString(),
+    });
   };
 
   const jobOfMessage = (messageId: string): Job | undefined => {
@@ -320,6 +422,22 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       if (jobs.has(sessionId)) {
         return refusedWhileStreaming();
       }
+      let mentions: readonly ChatMention[] = [];
+      let selections: readonly ChatSelection[] = [];
+      if (request.mentions !== undefined && request.mentions.length > 0) {
+        const diff = await loadReviewDiff(context, sessionId);
+        if (!diff.ok) {
+          return diff;
+        }
+        const resolved = await resolveChatMentions(context, diff.value, request.mentions);
+        if (!resolved.ok) {
+          return resolved;
+        }
+        if (jobs.has(sessionId)) {
+          return refusedWhileStreaming();
+        }
+        ({ mentions, selections } = resolved.value);
+      }
       const stored = listChatMessages(db, sessionId as SessionId);
       if (!stored.ok) {
         logger.error('chat history is corrupt', { error: stored.error });
@@ -333,6 +451,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         role: 'user',
         content: request.question.trim(),
         citations: [],
+        mentions,
         createdAt,
       };
       const assistant: ChatMessage = {
@@ -342,6 +461,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         status: 'streaming',
         content: '',
         citations: [],
+        mentions: [],
         createdAt,
       };
       for (const message of [question, assistant]) {
@@ -359,11 +479,15 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         done: Promise.resolve(),
       };
       jobs.set(sessionId, job);
-      const history = toChatHistory(stored.value);
+      const conversation: Conversation = {
+        history: toChatHistory(stored.value),
+        summary: splitAtCompaction(stored.value).summary?.content,
+        selections,
+      };
       job.done = (async (): Promise<void> => {
         let outcome: Outcome;
         try {
-          outcome = await answer(job, assistant, request, history);
+          outcome = await answer(job, assistant, request, conversation);
         } catch (error: unknown) {
           logger.error('chat answer failed unexpectedly', { error });
           outcome = { status: 'failed', code: 'internal' };
@@ -390,13 +514,91 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       });
     },
 
-    cancel: ({ messageId }): IpcResult<ChatCancelledView> => {
-      const job = jobOfMessage(messageId);
+    cancel: (request): IpcResult<ChatCancelledView> => {
+      const job =
+        'messageId' in request ? jobOfMessage(request.messageId) : jobs.get(request.sessionId);
       if (job === undefined) {
         return ok({ cancelled: false });
       }
       abort(job, 'cancelled');
       return ok({ cancelled: true });
+    },
+
+    compact: async ({ sessionId: requested }): Promise<IpcResult<ChatCompactedView>> => {
+      if (isDisposed) {
+        return err({ code: 'not-wired', message: 'beuve is quitting' });
+      }
+      if (jobs.has(requested)) {
+        return refusedWhileStreaming();
+      }
+      const head = await refreshSessionHead(context, requested);
+      if (!head.ok) {
+        return head;
+      }
+      const { sessionId, headSha } = head.value;
+      if (jobs.has(sessionId)) {
+        return refusedWhileStreaming();
+      }
+      const stored = listChatMessages(db, sessionId as SessionId);
+      if (!stored.ok) {
+        logger.error('chat history is corrupt', { error: stored.error });
+        return err({ code: 'internal', message: 'stored chat history is corrupt' });
+      }
+      const turns = toChatHistory(stored.value);
+      if (turns.length === 0) {
+        return err({
+          code: 'refused',
+          message: 'Nothing to compact yet: there is no question since the last summary.',
+        });
+      }
+      const job: Job = {
+        sessionId,
+        headSha,
+        messageId: context.deps.newId(),
+        controller: new AbortController(),
+        streamed: '',
+        done: Promise.resolve(),
+      };
+      jobs.set(sessionId, job);
+      let outcome: Result<ChatMessage, Outcome>;
+      const running = (async (): Promise<Result<ChatMessage, Outcome>> => {
+        try {
+          return await condense(job, splitAtCompaction(stored.value).summary?.content, turns);
+        } catch (error: unknown) {
+          logger.error('chat compaction failed unexpectedly', { error });
+          return err({ status: 'failed', code: 'internal' });
+        }
+      })();
+      const settle = async (): Promise<void> => {
+        await running;
+      };
+      job.done = settle();
+      try {
+        outcome = await running;
+      } finally {
+        if (jobs.get(sessionId) === job) {
+          jobs.delete(sessionId);
+        }
+      }
+      if (job.controller.signal.aborted) {
+        return ok({ outcome: 'cancelled' });
+      }
+      if (!outcome.ok) {
+        const failed = outcome.error;
+        return ok(
+          failed.status === 'failed'
+            ? {
+                outcome: 'failed',
+                errorCode: failed.code,
+                errorMessage: describeChatError(failed.code),
+              }
+            : { outcome: 'cancelled' },
+        );
+      }
+      const appended = appendChatMessage(db, outcome.value);
+      return appended.ok
+        ? ok({ outcome: 'compacted', summary: toChatMessageView(outcome.value) })
+        : err({ code: 'not-found', message: 'no such session' });
     },
 
     clear: ({ sessionId }): IpcResult<ChatClearedView> => {
@@ -439,9 +641,17 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 }
 
+/** What a question is asked with besides the diff: the conversation and the reviewer's selections. */
+interface Conversation {
+  readonly history: readonly ChatTurn[];
+  readonly summary: string | undefined;
+  readonly selections: readonly ChatSelection[];
+}
+
 function refusedWhileStreaming(): Result<never, { code: 'refused'; message: string }> {
   return err({
     code: 'refused',
-    message: 'An answer is still streaming. Cancel it or wait for it before asking again.',
+    message:
+      'An answer or /compact is still running. Cancel it or wait for it before asking again.',
   });
 }

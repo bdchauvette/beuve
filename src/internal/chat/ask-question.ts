@@ -9,6 +9,7 @@ import type { ChatDelta, ChatModel, ChatModelProgress } from './chat-model.ts';
 import type { ChatQuestion } from './chat-question.ts';
 import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
 import { parseCitations } from './parse-citations.ts';
+import { toCitablePaths } from './to-citable-paths.ts';
 import { validateCitations } from './validate-citations.ts';
 import type { DroppedCitation } from './validate-citations.ts';
 
@@ -77,12 +78,7 @@ export async function askQuestion<E>(
   if (!output.ok) {
     return err({ kind: 'model', error: output.error });
   }
-  const knownPaths = new Set(input.worktreePaths);
-  for (const file of input.files) {
-    if (file.status !== 'deleted') {
-      knownPaths.add(file.path);
-    }
-  }
+  const knownPaths = toCitablePaths(input.files, input.worktreePaths);
   const answer = output.value.value.trim();
   const validated = validateCitations(answer, parseCitations(answer), {
     knownPaths,

@@ -65,7 +65,15 @@ function entry(message: ChatMessageView): ChatEntry {
 }
 
 function ask(content: string): ChatEntry {
-  return entry({ ...base, id: 'q', role: 'user', content, citations: [], status: 'complete' });
+  return entry({
+    ...base,
+    id: 'q',
+    role: 'user',
+    content,
+    citations: [],
+    mentions: [],
+    status: 'complete',
+  });
 }
 
 function reply(overrides: Partial<ChatMessageView>): ChatEntry {
@@ -75,6 +83,7 @@ function reply(overrides: Partial<ChatMessageView>): ChatEntry {
     role: 'assistant',
     content: 'Because.',
     citations: [],
+    mentions: [],
     status: 'complete',
     ...overrides,
   });

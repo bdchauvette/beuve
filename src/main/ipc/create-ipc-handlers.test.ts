@@ -330,6 +330,14 @@ describe('createIpcHandlers for the preliminary review', () => {
 });
 
 describe('createIpcHandlers for the chat', () => {
+  const mention = {
+    path: 'src/discounts.ts',
+    side: 'head',
+    startLine: 27,
+    endLine: 33,
+    sha: 'c'.repeat(40),
+  } as const;
+
   it('validates chat:ask and drops absent options', async () => {
     const calls: unknown[] = [];
     const base = stubServices({});
@@ -353,6 +361,18 @@ describe('createIpcHandlers for the chat', () => {
       { sessionId: 's1', question: 'why?', focus: { path: '' } },
       { sessionId: 's1', question: 'why?', focus: { path: 'a.ts', line: 0 } },
       { sessionId: 's1', question: 'why?', extra: true },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, path: '/etc/passwd' }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, path: '../x.ts' }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, side: 'left' }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, sha: 'abc' }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, startLine: 9, endLine: 3 }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, endLine: 5100 }] },
+      { sessionId: 's1', question: 'why?', mentions: [{ ...mention, endLine: undefined }] },
+      {
+        sessionId: 's1',
+        question: 'why?',
+        mentions: Array.from({ length: 9 }, (_, index) => ({ ...mention, startLine: index + 1 })),
+      },
     ]) {
       await expectInvalid(handlers['chat:ask'](bad));
     }
@@ -367,10 +387,22 @@ describe('createIpcHandlers for the chat', () => {
       question: 'why?',
       focus: { path: 'a', line: 3 },
     });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: 'why [[@1]] and [[@2]]?',
+      mentions: [mention, { path: './docs/a.md', side: 'base', sha: mention.sha }],
+    });
+    await handlers['chat:ask']({ sessionId: 's1', question: 'why?', mentions: [] });
     expect(calls).toEqual([
       { sessionId: 's1', question: 'why?' },
       { sessionId: 's1', question: 'why?', focus: { path: 'src/a.ts' } },
       { sessionId: 's1', question: 'why?', focus: { path: 'a', line: 3 } },
+      {
+        sessionId: 's1',
+        question: 'why [[@1]] and [[@2]]?',
+        mentions: [mention, { path: 'docs/a.md', side: 'base', sha: mention.sha }],
+      },
+      { sessionId: 's1', question: 'why?' },
     ]);
   });
 
@@ -379,6 +411,14 @@ describe('createIpcHandlers for the chat', () => {
     await expectInvalid(handlers['chat:list']({}));
     await expectInvalid(handlers['chat:clear']({ sessionId: '' }));
     await expectInvalid(handlers['chat:cancel']({ messageId: 'not-a-uuid' }));
+    await expectInvalid(handlers['chat:cancel']({ sessionId: '' }));
+    await expectInvalid(handlers['chat:compact']({ sessionId: 's1', extra: 1 }));
+    expect(await handlers['chat:compact']({ sessionId: 's1' })).toMatchObject({
+      error: { code: 'not-wired' },
+    });
+    expect(handlers['chat:cancel']({ sessionId: 's1' })).toMatchObject({
+      error: { code: 'not-wired' },
+    });
     expect(handlers['chat:list']({ sessionId: 's1' })).toMatchObject({
       error: { code: 'not-wired' },
     });
@@ -689,6 +729,7 @@ function stubServices(
       ask: async () => notWired,
       list: () => notWiredError,
       cancel: () => notWiredError,
+      compact: async () => notWired,
       clear: () => notWiredError,
       onDelta: () => doNothingSync,
       onMessageUpdated: () => doNothingSync,

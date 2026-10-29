@@ -1,4 +1,4 @@
-import type { CommitSha, SessionId } from './chat-message.ts';
+import type { ChatMention, CommitSha, SessionId } from './chat-message.ts';
 
 /**
  * One question about a reviewed change, in the chat domain's own terms. Main maps the session,
@@ -24,6 +24,13 @@ export interface ChatQuestion {
   readonly impactFindings?: readonly ChatImpactFinding[];
   /** What the reviewer is looking at in the diff stream, if anything. */
   readonly focus?: ChatFocus;
+  /**
+   * The lines the reviewer attached to this question (ADR 0046), resolved at their commits, in
+   * `[[@n]]` order. The prompt puts them first and gives them the budget before the diff.
+   */
+  readonly selections?: readonly ChatSelection[];
+  /** The latest `/compact` summary (ADR 0047); `history` then holds only the turns after it. */
+  readonly summary?: string;
   /** Earlier turns of this session's transcript, oldest first (see `toChatHistory`). */
   readonly history?: readonly ChatTurn[];
   /**
@@ -63,8 +70,25 @@ export interface ChatFocus {
   readonly excerpt?: string;
 }
 
-/** An earlier question or answer, as plain Markdown. */
+/** A mention resolved to the text it names at its commit (ADR 0046). */
+export type ChatSelection = Omit<ChatMention, 'startLine' | 'endLine'> &
+  (
+    | {
+        readonly kind: 'lines';
+        readonly startLine: number;
+        /** Clamped to the file's last line. */
+        readonly endLine: number;
+        readonly totalLines: number;
+        readonly isWholeFile: boolean;
+        /** The selected lines, without their line terminators. Untrusted. */
+        readonly lines: readonly string[];
+      }
+    | { readonly kind: 'unreadable'; readonly reason: 'binary' | 'too-large' | 'submodule' }
+  );
+
+/** An earlier question or answer, as plain Markdown. A question's `[[@n]]` name its `mentions`. */
 export interface ChatTurn {
   readonly role: 'user' | 'assistant';
   readonly content: string;
+  readonly mentions?: readonly ChatMention[];
 }

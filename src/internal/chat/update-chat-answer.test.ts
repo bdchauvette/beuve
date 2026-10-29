@@ -11,6 +11,7 @@ const base = {
   sessionId,
   headSha: 'c'.repeat(40) as CommitSha,
   citations: [],
+  mentions: [],
   createdAt: '2026-10-28T12:00:00.000Z',
 };
 const questionId = '00000000-0000-4000-8000-000000000001' as ChatMessageId;

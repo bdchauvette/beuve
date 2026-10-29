@@ -13,6 +13,7 @@ import type {
   ChatAskedView,
   ChatCancelledView,
   ChatClearedView,
+  ChatCompactedView,
   ChatListView,
   EditorOpenResponse,
   DiffDisplayView,
@@ -220,13 +221,39 @@ const uraExportRequest = z.strictObject({
 
 const verdictChoiceRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
 
+const maxMentionSpan = 5000;
+const chatMention = z
+  .strictObject({
+    path: pathPrefix,
+    side: z.enum(['head', 'base']),
+    startLine: line.optional(),
+    endLine: line.optional(),
+    sha: commitSha,
+  })
+  .refine(
+    (mention) => (mention.startLine === undefined) === (mention.endLine === undefined),
+    'give both lines or neither',
+  )
+  .refine(
+    (mention) =>
+      mention.startLine === undefined ||
+      mention.endLine === undefined ||
+      (mention.endLine >= mention.startLine &&
+        mention.endLine - mention.startLine < maxMentionSpan),
+    `expected startLine <= endLine, at most ${String(maxMentionSpan)} lines`,
+  );
+
 const chatAskRequest = z.strictObject({
   sessionId,
   question: z.string().trim().min(1).max(8000),
   focus: z.strictObject({ path: repositoryPath, line: line.optional() }).optional(),
+  mentions: z.array(chatMention).max(8).optional(),
 });
 
-const chatCancelRequest = z.strictObject({ messageId: uuid });
+const chatCancelRequest = z.union([
+  z.strictObject({ messageId: uuid }),
+  z.strictObject({ sessionId }),
+]);
 
 const editorOpenRequest = z.strictObject({
   sessionId,
@@ -453,12 +480,21 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { focus, ...required } = parsed.data;
+      const { focus, mentions, ...required } = parsed.data;
       return services.chat.ask({
         ...required,
         ...(focus !== undefined && {
           focus: { path: focus.path, ...(focus.line !== undefined && { line: focus.line }) },
         }),
+        ...(mentions !== undefined &&
+          mentions.length > 0 && {
+            mentions: mentions.map(({ path, side, startLine, endLine, sha }) => ({
+              path,
+              side,
+              ...(startLine !== undefined && endLine !== undefined && { startLine, endLine }),
+              sha,
+            })),
+          }),
       });
     },
     'chat:list': (request): IpcResult<ChatListView> => {
@@ -468,6 +504,10 @@ export function createIpcHandlers(
     'chat:cancel': (request): IpcResult<ChatCancelledView> => {
       const parsed = chatCancelRequest.safeParse(request);
       return parsed.success ? services.chat.cancel(parsed.data) : invalid(parsed.error);
+    },
+    'chat:compact': async (request): Promise<IpcResult<ChatCompactedView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.chat.compact(parsed.data) : invalid(parsed.error);
     },
     'chat:clear': (request): IpcResult<ChatClearedView> => {
       const parsed = sessionRequest.safeParse(request);

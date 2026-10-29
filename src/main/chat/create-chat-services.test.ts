@@ -169,7 +169,7 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     const first = value(await chat.ask({ sessionId, question: 'Slow one?' }));
     expect(await chat.ask({ sessionId, question: 'Another?' })).toMatchObject({
       ok: false,
-      error: { code: 'refused', message: expect.stringContaining('still streaming') as string },
+      error: { code: 'refused', message: expect.stringContaining('still running') as string },
     });
     while (deltas.every(({ kind, text }) => !(kind === 'append' && text === 'a'))) {
       await delay(20);
@@ -256,6 +256,184 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     });
   });
 
+  it('reads two mentions at their commits into the prompt, stores them and lists them', async () => {
+    repo.git('switch', '--quiet', 'feature');
+    repo.write('app.rs', 'fn main() {\n  run();\n  stop();\n}\n');
+    repo.commit('stop too');
+    repo.git('switch', '--quiet', 'main');
+    const claude = scripted(['It returns [[feature.rs:2]].']);
+    const { sessionId } = await start(claude);
+    const chat = must(services).chat;
+    const review = value(await must(services).sessions.getReview({ sessionId }));
+    const mentions = [
+      { path: 'feature.rs', side: 'head', startLine: 1, endLine: 2, sha: review.headSha },
+      { path: 'app.rs', side: 'base', startLine: 2, endLine: 3, sha: review.baseSha },
+    ] as const;
+    const asked = value(
+      await chat.ask({ sessionId, question: 'Why [[@1]] and not [[@2]]?', mentions }),
+    );
+    expect(asked.question).toMatchObject({ content: 'Why [[@1]] and not [[@2]]?', mentions });
+    await settled(asked.answer.id);
+
+    const [call] = calls(claude);
+    const stdin = call?.stdin ?? '';
+    const selected = stdin.indexOf('## Selected by the reviewer');
+    expect(selected).toBeGreaterThan(-1);
+    expect(selected).toBeLessThan(stdin.indexOf('## Diff'));
+    expect(stdin).toContain(
+      `### Selection 1: feature.rs:1-2 (head ${review.headSha.slice(0, 12)})`,
+    );
+    expect(stdin).toContain('1  pub fn feature() -> u8 {\n2    1\n```');
+    expect(stdin).toContain(
+      `### Selection 2: base:app.rs:2-3 (base ${review.baseSha.slice(0, 12)})`,
+    );
+    expect(stdin).toContain('2    run();\n3  }\n```');
+    expect(stdin).toContain(
+      'Why «selection 1: feature.rs:1-2» and not «selection 2: base:app.rs:2-3»?',
+    );
+
+    const listed = value(chat.list({ sessionId })).messages;
+    expect(listed[0]).toMatchObject({ role: 'user', mentions });
+    expect(listed[1]?.mentions).toEqual([]);
+
+    const followUp = value(await chat.ask({ sessionId, question: 'And then?' }));
+    await settled(followUp.answer.id);
+    const second = calls(claude)[1]?.stdin ?? '';
+    expect(second).not.toContain('## Selected by the reviewer');
+    expect(second).toContain('[beuve: selection 1 was feature.rs:1-2]');
+  });
+
+  it('refuses mentions at another commit, of unknown files or past the end', async () => {
+    const claude = scripted(['x']);
+    const { sessionId } = await start(claude);
+    const chat = must(services).chat;
+    const review = value(await must(services).sessions.getReview({ sessionId }));
+    const refused = async (mention: {
+      path: string;
+      side: 'head' | 'base';
+      startLine?: number;
+      endLine?: number;
+      sha: string;
+    }): Promise<string> => {
+      const result = await chat.ask({ sessionId, question: 'Why?', mentions: [mention] });
+      if (result.ok) {
+        throw new Error('expected a refusal');
+      }
+      expect(result.error.code).toBe('invalid-request');
+      return result.error.message;
+    };
+    expect(
+      await refused({
+        path: 'feature.rs',
+        side: 'head',
+        startLine: 1,
+        endLine: 1,
+        sha: review.baseSha,
+      }),
+    ).toContain('Add it again');
+    expect(await refused({ path: 'ghost.rs', side: 'head', sha: review.headSha })).toContain(
+      'neither in the review nor tracked',
+    );
+    expect(await refused({ path: 'feature.rs', side: 'base', sha: review.baseSha })).toContain(
+      'neither in the review nor tracked',
+    );
+    expect(
+      await refused({
+        path: 'feature.rs',
+        side: 'head',
+        startLine: 9,
+        endLine: 9,
+        sha: review.headSha,
+      }),
+    ).toContain('past the end');
+    expect(value(chat.list({ sessionId })).messages).toEqual([]);
+
+    const whole = value(
+      await chat.ask({
+        sessionId,
+        question: 'Explain [[@1]]',
+        mentions: [{ path: 'app.rs', side: 'head', sha: review.headSha }],
+      }),
+    );
+    await settled(whole.answer.id);
+    expect(calls(claude)[0]?.stdin).toContain(
+      `### Selection 1: app.rs (head ${review.headSha.slice(0, 12)}, whole file of 3 lines)`,
+    );
+  });
+
+  it('compacts the conversation into a summary that later prompts send instead of its turns', async () => {
+    const claude = scripted(['The first answer about feature.'], 0, 'compact');
+    const { sessionId } = await start(claude);
+    const chat = must(services).chat;
+    expect(await chat.compact({ sessionId })).toMatchObject({
+      ok: false,
+      error: { code: 'refused', message: expect.stringContaining('Nothing to compact') as string },
+    });
+    const first = value(await chat.ask({ sessionId, question: 'What is the first question?' }));
+    await settled(first.answer.id);
+
+    rescript(
+      claude,
+      ['**Asked**\n- what feature adds\n\n**Places**\n- [[feature.rs:1-3]] [[ghost.rs:1]]'],
+      0,
+    );
+    const compacted = value(await chat.compact({ sessionId }));
+    if (compacted.outcome !== 'compacted') {
+      throw new Error(`expected a summary, got ${compacted.outcome}`);
+    }
+    expect(compacted.summary).toMatchObject({
+      role: 'summary',
+      status: 'complete',
+      content: '**Asked**\n- what feature adds\n\n**Places**\n- [[feature.rs:1-3]] `ghost.rs:1-1`',
+      citations: [{ path: 'feature.rs', startLine: 1, endLine: 3 }],
+    });
+    const compactCall = calls(claude)[1];
+    expect(compactCall?.stdin).toContain('# Conversation to compact');
+    expect(compactCall?.stdin).toContain('What is the first question?');
+    expect(compactCall?.stdin).toContain('The first answer about feature.');
+    expect(value(chat.list({ sessionId })).messages.map(({ role }) => role)).toEqual([
+      'user',
+      'assistant',
+      'summary',
+    ]);
+    expect(await chat.compact({ sessionId })).toMatchObject({
+      ok: false,
+      error: { code: 'refused' },
+    });
+
+    rescript(claude, ['A later answer.'], 0);
+    const later = value(await chat.ask({ sessionId, question: 'A question after the summary?' }));
+    await settled(later.answer.id);
+    const laterCall = calls(claude)[2]?.stdin ?? '';
+    expect(laterCall).toContain('## Summary of the conversation so far');
+    expect(laterCall).toContain('- what feature adds');
+    expect(laterCall).not.toContain('What is the first question?');
+    expect(laterCall).not.toContain('The first answer about feature.');
+
+    expect(value(chat.clear({ sessionId }))).toEqual({ removed: 5 });
+    expect(value(chat.list({ sessionId })).messages).toEqual([]);
+  });
+
+  it('cancels a compaction by session and refuses questions while it runs', async () => {
+    const claude = scripted(['Answer.'], 0, 'slow-compact');
+    const { sessionId } = await start(claude);
+    const chat = must(services).chat;
+    const first = value(await chat.ask({ sessionId, question: 'Something?' }));
+    await settled(first.answer.id);
+    rescript(claude, ['a', 'b', 'c'], 1000);
+    const running = chat.compact({ sessionId });
+    while (calls(claude).length < 2) {
+      await delay(20);
+    }
+    expect(await chat.ask({ sessionId, question: 'Now?' })).toMatchObject({
+      ok: false,
+      error: { code: 'refused' },
+    });
+    expect(value(chat.cancel({ sessionId }))).toEqual({ cancelled: true });
+    expect(value(await running)).toEqual({ outcome: 'cancelled' });
+    expect(value(chat.list({ sessionId })).messages).toHaveLength(2);
+  });
+
   it('rejects unknown sessions and shows an orphaned streaming answer as cancelled', async () => {
     const { sessionId } = await start(scripted(['x']));
     const chat = must(services).chat;
@@ -272,6 +450,7 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
       status: 'streaming',
       content: 'half an ans',
       citations: [],
+      mentions: [],
       createdAt: '2026-10-28T11:00:00.000Z',
     });
     expect(value(chat.list({ sessionId })).messages).toMatchObject([
@@ -279,6 +458,11 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     ]);
   });
 });
+
+/** Changes what the fake answers next, keeping its call log. */
+function rescript(settings: ClaudeCodeSettings, chunks: string[], delayMs: number): void {
+  writeFileSync(settings.leadingArgs?.[2] ?? '', JSON.stringify({ chunks, delayMs }));
+}
 
 function calls(settings: ClaudeCodeSettings): { args: string[]; cwd: string; stdin: string }[] {
   const file = `${settings.leadingArgs?.[2] ?? ''}.calls`;

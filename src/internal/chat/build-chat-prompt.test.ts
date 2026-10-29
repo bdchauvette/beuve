@@ -7,6 +7,8 @@ import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
 
 const budget: ChatPromptBudget = defaultChatPromptBudget;
+const truncationNote =
+  /\[beuve: selection 1 truncated for size: lines 1-\d+ of 1-300 shown; Read src\/huge\.ts for the rest\]/u;
 const hunkNote = /\[beuve: hunks \d+-10 of 10 .* Read src\/huge\.ts for the rest\]/u;
 
 function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
@@ -164,3 +166,130 @@ describe('buildChatPrompt', () => {
     expect(built.report.focusTruncated).toBe(true);
   });
 });
+
+describe('buildChatPrompt with selections and a summary', () => {
+  const head = createChatQuestion().headSha;
+
+  it('puts the selections first, numbered as in the file, and names them in the question', () => {
+    const built = buildChatPrompt(
+      createChatQuestion({
+        question: 'Why does [[@1]] differ from [[@2]]?',
+        selections: [
+          {
+            kind: 'lines',
+            path: 'src/a.ts',
+            side: 'head',
+            sha: head,
+            startLine: 9,
+            endLine: 11,
+            totalLines: 40,
+            isWholeFile: false,
+            lines: lines(9, 3),
+          },
+          {
+            kind: 'lines',
+            path: 'src/a.ts',
+            side: 'base',
+            sha: createChatQuestion().baseSha,
+            startLine: 10,
+            endLine: 10,
+            totalLines: 30,
+            isWholeFile: false,
+            lines: ['  return parts[0];'],
+          },
+          { kind: 'unreadable', path: 'logo.png', side: 'head', sha: head, reason: 'binary' },
+        ],
+      }),
+      budget,
+    );
+    const { prompt } = built;
+    const selected = prompt.indexOf('## Selected by the reviewer');
+    expect(selected).toBeGreaterThan(-1);
+    expect(selected).toBeLessThan(prompt.indexOf('## Diff'));
+    expect(prompt).toContain(`### Selection 1: src/a.ts:9-11 (head ${head.slice(0, 12)})`);
+    expect(prompt).toContain(' 9  const v9 = 0;\n10  const v10 = 1;\n11  const v11 = 2;\n');
+    expect(prompt).toContain('### Selection 2: base:src/a.ts:10 (base ');
+    expect(prompt).toContain('10    return parts[0];');
+    expect(prompt).toContain('### Selection 3: logo.png (head ');
+    expect(prompt).toContain('[beuve: binary — not shown]');
+    expect(prompt).toContain(
+      'Why does «selection 1: src/a.ts:9-11» differ from «selection 2: base:src/a.ts:10»?',
+    );
+    expect(prompt).toContain('[beuve: the question is about selections 1-3');
+    expect(built.system).toContain('Selected by the reviewer');
+    expect(built.report.truncatedSelections).toBe(0);
+  });
+
+  it('gives selections the budget before the diff and truncates a large one, saying so', () => {
+    const tight: ChatPromptBudget = {
+      ...budget,
+      maxChars: 9000,
+      maxSelectionChars: 3000,
+      maxSelectionFileChars: 1500,
+    };
+    const built = buildChatPrompt(
+      createChatQuestion({
+        files: [bigFile('src/huge.ts', 10, 80)],
+        selections: [
+          {
+            kind: 'lines',
+            path: 'src/huge.ts',
+            side: 'head',
+            sha: head,
+            startLine: 1,
+            endLine: 300,
+            totalLines: 300,
+            isWholeFile: true,
+            lines: lines(1, 300),
+          },
+          {
+            kind: 'lines',
+            path: 'src/b.ts',
+            side: 'head',
+            sha: head,
+            startLine: 1,
+            endLine: 2,
+            totalLines: 3,
+            isWholeFile: false,
+            lines: lines(1, 2),
+          },
+        ],
+      }),
+      tight,
+    );
+    expect(built.report.truncatedSelections).toBe(1);
+    expect(built.prompt).toMatch(truncationNote);
+    expect(built.prompt).toContain('### Selection 2: src/b.ts:1-2');
+    expect(built.prompt).toContain('const v2 = 1;');
+    expect(built.report.chars).toBeLessThanOrEqual(tight.maxChars);
+    expect(built.report.truncatedFiles.length + built.report.omittedFiles.length).toBe(1);
+  });
+
+  it('sends the summary instead of the compacted turns, and the turns after it with their mentions', () => {
+    const history: ChatTurn[] = [
+      {
+        role: 'user',
+        content: 'And [[@1]]?',
+        mentions: [{ path: 'src/b.ts', side: 'head', startLine: 2, endLine: 2, sha: head }],
+      },
+      { role: 'assistant', content: 'It returns one.' },
+    ];
+    const { prompt } = buildChatPrompt(
+      createChatQuestion({ summary: '**Asked**\n- why parse trims', history }),
+      budget,
+    );
+    const summaryAt = prompt.indexOf('## Summary of the conversation so far');
+    expect(summaryAt).toBeGreaterThan(-1);
+    expect(summaryAt).toBeLessThan(prompt.indexOf('## Earlier in this conversation'));
+    expect(prompt).toContain('- why parse trims');
+    expect(prompt).toContain('And «selection 1: src/b.ts:2»?');
+    expect(prompt).toContain('[beuve: selection 1 was src/b.ts:2]');
+  });
+});
+
+function lines(from: number, count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_, index) => `const v${String(from + index)} = ${String(index)};`,
+  );
+}

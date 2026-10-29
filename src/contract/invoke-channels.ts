@@ -34,6 +34,7 @@ export const invokeChannels = Object.freeze([
   'chat:ask',
   'chat:list',
   'chat:cancel',
+  'chat:compact',
   'chat:clear',
   'clipboard:write-text',
   'editor:open',

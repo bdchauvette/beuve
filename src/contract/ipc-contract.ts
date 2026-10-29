@@ -774,13 +774,30 @@ export interface ChatMessageView {
   readonly id: string;
   readonly sessionId: string;
   readonly headSha: string;
-  readonly role: 'user' | 'assistant' | 'system-notice';
+  /** `summary` is a `/compact` note (ADR 0047): it stands for every message before it. */
+  readonly role: 'user' | 'assistant' | 'system-notice' | 'summary';
+  /** A question's `[[@n]]` tokens stand for the n-th of its `mentions` (ADR 0046). */
   readonly content: string;
   readonly citations: readonly ChatCitationView[];
+  /** What a question was about; empty for every other role. */
+  readonly mentions: readonly ChatMentionView[];
   readonly status: 'streaming' | 'complete' | 'failed' | 'cancelled';
   readonly errorCode?: ChatErrorCode;
   readonly errorMessage?: string;
   readonly createdAt: string;
+}
+
+/**
+ * Lines the reviewer attached to a question (ADR 0046): one side of a file at a commit, 1-based
+ * and inclusive, or the whole file without lines. `sha` is the session head for `head`, the
+ * review's base for `base`; `path` is that side's own path.
+ */
+export interface ChatMentionView {
+  readonly path: string;
+  readonly side: 'head' | 'base';
+  readonly startLine?: number;
+  readonly endLine?: number;
+  readonly sha: string;
 }
 
 /** What the reviewer is looking at in the diff stream when asking. */
@@ -797,8 +814,14 @@ export interface ChatFocusRequest {
  */
 export interface ChatAskRequest {
   readonly sessionId: string;
+  /** May name `mentions` as `[[@1]]`, `[[@2]]`…, in order. */
   readonly question: string;
   readonly focus?: ChatFocusRequest;
+  /**
+   * At most 8, about 20 000 lines together. Main reads each at its commit and puts the exact
+   * text first in the prompt; a mention it can't resolve refuses the question (`invalid-request`).
+   */
+  readonly mentions?: readonly ChatMentionView[];
 }
 
 export interface ChatAskedView {
@@ -816,11 +839,10 @@ export interface ChatListView {
   readonly messages: readonly ChatMessageView[];
 }
 
-export interface ChatCancelRequest {
-  readonly messageId: string;
-}
+/** Stops one streaming answer, or (`sessionId`) whatever the session runs: an answer or `/compact`. */
+export type ChatCancelRequest = { readonly messageId: string } | { readonly sessionId: string };
 
-/** `cancelled` is false when that answer was not streaming. */
+/** `cancelled` is false when nothing of that was running. */
 export interface ChatCancelledView {
   readonly cancelled: boolean;
 }
@@ -849,7 +871,27 @@ export interface ChatDeltaView {
 /** Pushed on `chat:message-updated` when an answer completes, fails or is cancelled. */
 export interface ChatMessageUpdatedView {
   readonly message: ChatMessageView;
+  /** Earlier turns the prompt had to drop for size, so the drawer can suggest `/compact`. */
+  readonly droppedTurns?: number;
 }
+
+/** Condenses the session's conversation into a summary message (ADR 0047). */
+export interface ChatCompactRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * How `/compact` ended. `compacted` carries the stored summary; `failed` says why, as answers do.
+ * Asking while it runs is refused; `chat:cancel { sessionId }` stops it.
+ */
+export type ChatCompactedView =
+  | { readonly outcome: 'compacted'; readonly summary: ChatMessageView }
+  | { readonly outcome: 'cancelled' }
+  | {
+      readonly outcome: 'failed';
+      readonly errorCode: ChatErrorCode;
+      readonly errorMessage: string;
+    };
 
 /** `pending` until the reviewer promotes (`y`) or dismisses (`d`) the insight. */
 export type InsightStatusView = 'pending' | 'promoted' | 'dismissed';
@@ -1528,6 +1570,10 @@ export interface InvokeChannelMap {
   'chat:cancel': {
     readonly request: ChatCancelRequest;
     readonly response: IpcResult<ChatCancelledView>;
+  };
+  'chat:compact': {
+    readonly request: ChatCompactRequest;
+    readonly response: IpcResult<ChatCompactedView>;
   };
   'chat:clear': {
     readonly request: ChatClearRequest;
