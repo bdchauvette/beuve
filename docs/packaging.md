@@ -94,7 +94,7 @@ Trade-offs of using this repository as the tap: `brew tap` clones the whole appl
 
 ### Gatekeeper and Homebrew
 
-Homebrew removed `--no-quarantine` (deprecated in 4.7, gone in the 6.x/7.x line), and it will not install casks that fail Gatekeeper into the official `homebrew/cask`. beuve is ad-hoc signed and not notarized, so a quarantined copy is rejected. The cask therefore has a `postflight` step that runs `/usr/bin/xattr -dr com.apple.quarantine` on `/Applications/beuve.app`, only that app, and its caveats say so. This works in a custom tap, which runs its own cask code once you trust the tap; it would be rejected upstream. If you'd rather decide yourself, delete the `postflight` block from `Casks/beuve.rb` in your own tap clone (or fork) and use Control-click › Open as above. A Developer ID signed and notarized build makes the step unnecessary.
+Homebrew removed `--no-quarantine` (deprecated in 4.7, gone in the 6.x/7.x line), and it will not install casks that fail Gatekeeper into the official `homebrew/cask`. beuve is ad-hoc signed and not notarized, so a quarantined copy is rejected. The cask therefore has a `postflight_steps` step that runs `/usr/bin/xattr -dr com.apple.quarantine` on `/Applications/beuve.app`, only that app, and its caveats say so. This works in a custom tap, which runs its own cask code once you trust the tap; it would be rejected upstream. If you'd rather decide yourself, delete the `postflight_steps` block from `Casks/beuve.rb` in your own tap clone (or fork) and use Control-click › Open as above. A Developer ID signed and notarized build makes the step unnecessary.
 
 ## What's in the app
 

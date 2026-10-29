@@ -19,9 +19,8 @@ cask "beuve" do
 
   # beuve is ad-hoc signed, not notarized (ADR 0048), so Gatekeeper rejects a quarantined copy.
   # Homebrew no longer has --no-quarantine; this removes the attribute from this one app only.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/beuve.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/beuve.app"]
   end
 
   zap trash: [
