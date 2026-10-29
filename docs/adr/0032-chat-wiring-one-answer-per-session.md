@@ -1,6 +1,6 @@
 # 0032. Chat wiring: one answer per session, refused not queued; staging and persistence rules
 
-- Status: Accepted; completes [0031](0031-read-only-qa-chat.md)
+- Status: Accepted; completes [0031](0031-read-only-qa-chat.md) (a compaction occupies the session too, [0047](0047-chat-compaction.md))
 - Date: 2026-10-28
 
 ## Context

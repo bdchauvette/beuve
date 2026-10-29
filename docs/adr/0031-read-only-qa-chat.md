@@ -1,6 +1,6 @@
 # 0031. Read-only Q&A chat: messages, citation grammar, context budget and privacy
 
-- Status: Accepted
+- Status: Accepted (mentions added by [0046](0046-chat-context-mentions.md), summaries by [0047](0047-chat-compaction.md))
 - Date: 2026-10-28
 
 ## Context
