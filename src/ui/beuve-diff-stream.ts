@@ -22,6 +22,7 @@ import type {
   SuggestionSaveDetail,
 } from './beuve-file-card.ts';
 import type { UraDraft } from './beuve-ura-composer.ts';
+import type { MentionTarget } from './chat-draft.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
@@ -48,6 +49,10 @@ export interface InsightJump {
 export interface FileJump {
   readonly path: string;
   readonly line?: number;
+  /** With `line`, selects the lines up to here as well (a chat chip, ADR 0046). */
+  readonly endLine?: number;
+  /** `base` reads `line` and `endLine` as base-side numbers; head by default. */
+  readonly side?: 'head' | 'base';
   readonly nonce: number;
 }
 
@@ -475,7 +480,8 @@ export class BeuveDiffStream extends LitElement {
     this.activeHunk = -1;
   }
 
-  private focusFile(path: string, line: number | undefined): void {
+  private focusFile(jump: FileJump): void {
+    const { path, line } = jump;
     const index = this.review?.files.findIndex((file) => file.path === path) ?? -1;
     if (index === -1) {
       return;
@@ -486,7 +492,21 @@ export class BeuveDiffStream extends LitElement {
       void this.revealPosition();
       return;
     }
+    if (jump.endLine !== undefined) {
+      void this.revealRange(index, line, jump.endLine, jump.side ?? 'head');
+      return;
+    }
     void this.revealLine(index, line);
+  }
+
+  private async revealRange(
+    index: number,
+    start: number,
+    end: number,
+    side: 'head' | 'base',
+  ): Promise<void> {
+    await this.updateComplete;
+    await this.cards()[index]?.revealRange(start, end, side);
   }
 
   private async revealLine(index: number, line: number): Promise<void> {
@@ -885,6 +905,11 @@ export class BeuveDiffStream extends LitElement {
     >`;
   }
 
+  /** What ⌘> adds to the chat (ADR 0046): the active card's selection, hunk or file. */
+  chatMention(): MentionTarget | undefined {
+    return this.cards()[this.activeIndex]?.chatMention();
+  }
+
   override render(): TemplateResult {
     return html`
       ${this.review === undefined ? this.renderWelcome() : this.renderReview(this.review)}
@@ -933,7 +958,7 @@ export class BeuveDiffStream extends LitElement {
     }
     const fileJump = this.fileJump;
     if (fileJump !== undefined && changed.has('fileJump')) {
-      this.focusFile(fileJump.path, fileJump.line);
+      this.focusFile(fileJump);
     }
     const suggestionJump = this.suggestionJump;
     if (suggestionJump !== undefined && changed.has('suggestionJump')) {

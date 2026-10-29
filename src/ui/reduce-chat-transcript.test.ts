@@ -32,6 +32,20 @@ const answer: ChatMessageView = {
 const note: ChatEntry = { id: 7, kind: 'note', tone: 'info', lines: ['hello'] };
 
 describe('reduceChatTranscript', () => {
+  it('puts a stored summary where the compaction entry was, once', () => {
+    const summary: ChatMessageView = { ...question, id: 's1', role: 'summary', content: 'Note.' };
+    const compacting: ChatEntry = { id: 9, kind: 'compaction', status: 'running' };
+    const start = { entries: [toMessage(question), compacting, note], pending: {} };
+    const state = reduceChatTranscript(start, { kind: 'compacted', summary });
+    expect(state.entries.map((entry) => entry.id)).toEqual(['q1', 's1', 7]);
+    expect(reduceChatTranscript(state, { kind: 'compacted', summary })).toBe(state);
+    const appended = reduceChatTranscript(
+      { entries: [note], pending: {} },
+      { kind: 'compacted', summary },
+    );
+    expect(appended.entries.map((entry) => entry.id)).toEqual([7, 's1']);
+  });
+
   it('appends the question and the streaming answer, then grows and resets the answer', () => {
     const state = run([
       { kind: 'asked', question, answer },
@@ -125,4 +139,8 @@ function delta(kind: 'append' | 'reset', text = ''): ChatTranscriptAction {
 
 function contents(state: ChatTranscript): string[] {
   return state.entries.flatMap((entry) => (entry.kind === 'message' ? entry.message.content : []));
+}
+
+function toMessage(message: ChatMessageView): ChatEntry {
+  return { id: message.id, kind: 'message', message };
 }

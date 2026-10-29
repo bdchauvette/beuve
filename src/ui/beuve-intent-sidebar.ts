@@ -94,6 +94,11 @@ export class BeuveIntentSidebar extends LitElement {
     </section>`;
   }
 
+  /** The file focused in the radar tree, which ⌘> adds to the chat whole. */
+  focusedPath(): string | undefined {
+    return this.renderRoot.querySelector('beuve-radar-tree')?.focusedPath();
+  }
+
   /** Shows an unchanged file in the tree (the palette's `@` files). */
   revealPath(path: string): void {
     this.renderRoot.querySelector('beuve-radar-tree')?.revealPath(path);

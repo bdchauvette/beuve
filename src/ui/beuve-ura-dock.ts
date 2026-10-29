@@ -860,6 +860,11 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
+  /** The item under the dock's cursor, which ⌘> adds to the chat by its anchor (ADR 0046). */
+  cursorItem(): UraItemView | undefined {
+    return this.ordered()[this.cursor];
+  }
+
   override render(): TemplateResult {
     const ordered = this.ordered();
     const stagedCount = this.items.filter((item) => item.status.kind === 'staged').length;

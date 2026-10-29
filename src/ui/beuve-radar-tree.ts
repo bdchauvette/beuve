@@ -133,6 +133,12 @@ export class BeuveRadarTree extends LitElement {
     this.fileTree?.focusPath(first.path);
   }
 
+  /** The file whose row has keyboard focus, for ⌘> (ADR 0046); `undefined` on a folder. */
+  focusedPath(): string | undefined {
+    const path = this.fileTree?.getFocusedPath() ?? undefined;
+    return path === undefined || path.endsWith('/') ? undefined : path;
+  }
+
   /** Focuses `path`'s row, for the palette's unchanged files. */
   revealPath(path: string): void {
     this.fileTree?.focusPath(path);

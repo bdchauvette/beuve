@@ -19,6 +19,13 @@ export type ChatEntry =
       readonly kind: 'note';
       readonly tone: 'info' | 'error';
       readonly lines: readonly string[];
+    }
+  /** A `/compact` in flight, or how it failed (ADR 0047); the stored summary replaces it. */
+  | {
+      readonly id: number;
+      readonly kind: 'compaction';
+      readonly status: 'running' | 'failed';
+      readonly message?: string;
     };
 
 /** The entries this window makes up itself: command echoes, notes and review runs. */

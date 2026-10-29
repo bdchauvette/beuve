@@ -44,6 +44,8 @@ import type { ImpactChip } from './plan-impact-chip.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
+import type { MentionTarget } from './chat-draft.ts';
+import { planChatMention } from './plan-chat-mention.ts';
 import { planStageAnchor } from './plan-stage-anchor.ts';
 import { planEditorLine } from './plan-editor-line.ts';
 import type { SelectedLines } from './plan-stage-anchor.ts';
@@ -434,6 +436,8 @@ export class BeuveFileCard extends LitElement {
   /** The `e` editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', CardSlot> | undefined;
   private editHead: string | undefined;
+  /** Whether this diff's gutter button already shows the chat icon. */
+  private isGutterLabelled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
   private codeGeneration = 0;
   private impactHideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -478,6 +482,13 @@ export class BeuveFileCard extends LitElement {
   private readonly onEditKeyBubble = (event: KeyboardEvent): void => {
     if (this.edit !== undefined) {
       event.stopPropagation();
+    }
+  };
+
+  /** The library attaches its gutter button on hover; it is relabelled once per diff. */
+  private readonly onPointerMove = (): void => {
+    if (!this.isGutterLabelled) {
+      this.labelGutterButton();
     }
   };
 
@@ -543,6 +554,7 @@ export class BeuveFileCard extends LitElement {
     super();
     this.addEventListener('keydown', this.onEditKeyCapture, { capture: true });
     this.addEventListener('keydown', this.onEditKeyBubble);
+    this.addEventListener('pointermove', this.onPointerMove);
     this.addController({
       hostDisconnected: (): void => {
         this.endEdit();
@@ -594,6 +606,12 @@ export class BeuveFileCard extends LitElement {
     if (!isNew && !changed.has('activeHunk') && !changed.has('active')) {
       return;
     }
+    // A click on a line number of another card activates it; the lines it selected stay selected.
+    const isActivatedBySelecting =
+      !isNew && this.active && this.activeHunk === -1 && this.lineSelection !== undefined;
+    if (isActivatedBySelecting) {
+      return;
+    }
     const step = this.active
       ? planHunkSteps(metadata.hunks, this.diffStyle)[this.activeHunk]
       : undefined;
@@ -632,6 +650,7 @@ export class BeuveFileCard extends LitElement {
 
   private createDiff(library: typeof Diffs): FileDiff<CardSlot> {
     registerThemes(library);
+    this.isGutterLabelled = false;
     const loader = this.loadFilePair;
     return new library.FileDiff<CardSlot>({
       theme: themeNames,
@@ -644,6 +663,10 @@ export class BeuveFileCard extends LitElement {
       overflow: 'scroll',
       enableLineSelection: true,
       onLineSelected: this.onLineSelected,
+      enableGutterUtility: true,
+      onGutterUtilityClick: (range): void => {
+        this.addToChat(range);
+      },
       ...(loader !== undefined && {
         loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> =>
           loadFiles(loader, fileDiff),
@@ -657,6 +680,47 @@ export class BeuveFileCard extends LitElement {
         }
       },
     });
+  }
+
+  /**
+   * `@pierre/diffs` shows its gutter button beside the hovered line number, or at the end of the
+   * selection; a click adds that line or the selection to the chat, a drag from it selects lines
+   * first (ADR 0046). Its plus becomes a speech bubble, so it doesn't read as "stage a note".
+   */
+  private labelGutterButton(): void {
+    const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
+    const button = root?.querySelector<HTMLElement>('[data-utility-button]');
+    if (button === undefined || button === null) {
+      return;
+    }
+    this.isGutterLabelled = true;
+    button.title = 'Add to the chat (⌘>); drag to take more lines';
+    button.setAttribute('aria-label', 'Add these lines to the chat');
+    const namespace = 'http://www.w3.org/2000/svg';
+    const icon = document.createElementNS(namespace, 'svg');
+    icon.setAttribute('viewBox', '0 0 16 16');
+    icon.setAttribute('width', '12');
+    icon.setAttribute('height', '12');
+    icon.setAttribute('aria-hidden', 'true');
+    const bubble = document.createElementNS(namespace, 'path');
+    bubble.setAttribute(
+      'd',
+      'M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5Z',
+    );
+    bubble.setAttribute('fill', 'currentColor');
+    icon.append(bubble);
+    button.replaceChildren(icon);
+  }
+
+  private addToChat(range: SelectedLines): void {
+    const { file } = this;
+    if (file === undefined) {
+      return;
+    }
+    const target = planChatMention(file, undefined, range);
+    this.dispatchEvent(
+      new CustomEvent('beuve-chat-add', { detail: { target }, bubbles: true, composed: true }),
+    );
   }
 
   private noteElement(note: CardNote): HTMLElement {
@@ -1065,6 +1129,37 @@ ${splitPatch(file.patch).map(
     return file === undefined
       ? undefined
       : planStageAnchor(file.path, file.hunks[this.activeHunk], this.lineSelection);
+  }
+
+  /**
+   * What ⌘> adds to the chat from this card (ADR 0046): the line selection (base side when it is
+   * on the left), else the focused hunk, else the whole file.
+   */
+  chatMention(): MentionTarget | undefined {
+    const { file } = this;
+    return file === undefined
+      ? undefined
+      : planChatMention(file, file.hunks[this.activeHunk], this.lineSelection);
+  }
+
+  /**
+   * Scrolls to lines `start`–`end` of one side and selects them, for a chat chip: head lines as
+   * `o` and citations find them, base lines by their own numbers on the deleted side.
+   */
+  async revealRange(start: number, end: number, side: 'head' | 'base'): Promise<void> {
+    this.mounted = true;
+    await this.updateComplete;
+    const row = await waitFor(() =>
+      side === 'base'
+        ? this.findRow('deletions', start)
+        : (this.findRow('additions', start) ?? this.findRow('context', start)),
+    );
+    const librarySide = side === 'base' ? 'deletions' : 'additions';
+    const range: SelectedLines = { start, end, side: librarySide, endSide: librarySide };
+    this.programmaticStep = undefined;
+    this.diff?.setSelectedLines(range);
+    this.lineSelection = range;
+    this.scrollToRow(row);
   }
 
   /** The head line `o` opens in the editor: the selected lines, else the active hunk or file. */

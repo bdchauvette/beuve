@@ -1,26 +1,42 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
-import type { ChatCitationView, ChatMessageView } from '#contract/ipc-contract.ts';
+import type { ChatCitationView, ChatMentionView, ChatMessageView } from '#contract/ipc-contract.ts';
 
+import type { DraftPart, DraftState } from './chat-draft.ts';
 import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 import { describeCitation } from './describe-citation.ts';
+import { describeMention } from './describe-mention.ts';
+import { insertDraftMention } from './insert-draft-mention.ts';
+import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
+import { removeDraftMention } from './remove-draft-mention.ts';
+import { serializeChatDraft } from './serialize-chat-draft.ts';
+import { toDraftParts } from './to-draft-parts.ts';
 import { describeReviewSummary } from './describe-review-summary.ts';
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
 import type { AnswerBlock, AnswerSpan } from './parse-answer-markdown.ts';
 import { zoneStyles } from './zone-styles.ts';
 
+/** Questions carry at most this many mentions (ADR 0046); main refuses more. */
+const maxMentions = 8;
+
 /**
  * Zone 4: the read-only chat drawer. Plain text is a question about the change (ADR 0031); the
- * commands `/review`, `/clear` and `/help` (ADR 0022) share the input. The transcript shows the
- * questions, the answers (streamed live, then rendered as a safe Markdown subset with a pill for
- * each citation) and the commands' results. Nothing typed here can change the worktree.
- * Presentational: emits `beuve-chat-submit`, `beuve-chat-escape`, `beuve-chat-cycle` (Tab),
- * `beuve-chat-cancel`, `beuve-chat-stage`, `beuve-chat-cite`, `beuve-citation` (an insight) and `beuve-open-editor` (`o` on a pill);
- * `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the arrow
- * keys move between the transcript's buttons (pills, Cancel, Stage) and the input.
+ * commands `/review`, `/compact`, `/clear` and `/help` (ADR 0022, 0047) share the input. The
+ * input is a one-line editable box that also holds context chips (ADR 0046): `addMention` puts
+ * one at the caret; it is atomic (Backspace removes it whole; ←/→ select it and Enter shows its
+ * lines). The box's DOM is a projection of a {@link DraftPart} model, read back with
+ * `textContent` only, never `innerHTML`. The transcript shows the questions with their chips, the
+ * answers (streamed live, then rendered as a safe Markdown subset with a pill for each citation),
+ * `/compact` summaries with everything before the latest folded under a divider, and the
+ * commands' results. Nothing typed here can change the worktree. Presentational: emits
+ * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`, `beuve-chat-cycle` (Tab),
+ * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-stage`, `beuve-chat-cite`,
+ * `beuve-chat-mention` (a chip), `beuve-citation` (an insight) and `beuve-open-editor` (`o` on a
+ * pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
+ * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
  */
 @customElement('beuve-chat-drawer')
 export class BeuveChatDrawer extends LitElement {
@@ -229,32 +245,173 @@ export class BeuveChatDrawer extends LitElement {
         border-top: 1px solid var(--beuve-border);
       }
 
-      input {
+      .editor {
         flex: 1;
         min-width: 0;
+        max-height: 8.5em;
+        overflow-y: auto;
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-bg);
         color: var(--beuve-text);
         font: var(--beuve-font-mono);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        cursor: text;
       }
 
-      input:focus {
+      .editor:focus {
         border-color: var(--beuve-accent);
         outline: none;
+      }
+
+      .editor[data-empty]::before {
+        content: attr(data-placeholder);
+        color: var(--beuve-text-muted);
+        pointer-events: none;
+      }
+
+      .chip {
+        display: inline-block;
+        max-width: calc(100% - 4px);
+        overflow: hidden;
+        margin: 0 1px;
+        padding: 0 5px;
+        border: 1px solid color-mix(in srgb, var(--beuve-accent) 30%, transparent);
+        border-radius: 4px;
+        background: var(--beuve-accent-soft);
+        color: var(--beuve-accent);
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        line-height: 16px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: text-bottom;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .chip[data-side='base'] {
+        border-style: dashed;
+        border-color: var(--beuve-border);
+        background: var(--beuve-surface-sunken);
+        color: var(--beuve-text-muted);
+      }
+
+      .chip[data-selected],
+      button.chip:focus-visible {
+        outline: 2px solid var(--beuve-accent);
+        outline-offset: 0;
+      }
+
+      button.chip {
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        line-height: 16px;
+      }
+
+      .summary {
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface-sunken);
+        overflow-wrap: anywhere;
+      }
+
+      .summary .label {
+        margin-bottom: var(--beuve-space-1);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .summary p,
+      .summary ul {
+        margin: var(--beuve-space-1) 0 0;
+      }
+
+      .summary .text > :first-child {
+        margin-top: 0;
+      }
+
+      .summary ul {
+        padding-left: var(--beuve-space-4);
+      }
+
+      .summary code {
+        font: var(--beuve-font-mono);
+      }
+
+      button.divider {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+        cursor: pointer;
+      }
+
+      button.divider::before,
+      button.divider::after {
+        content: '';
+        flex: 1;
+        border-top: 1px solid var(--beuve-border);
+      }
+
+      button.divider:hover,
+      button.divider:focus-visible {
+        color: var(--beuve-text);
+        outline: none;
+      }
+
+      .compacted {
+        display: flex;
+        flex-direction: column;
+        gap: var(--beuve-space-2);
+        opacity: 0.72;
       }
     `,
   ];
 
-  private readonly onInputKeyDown = (event: KeyboardEvent): void => {
-    if (event.ctrlKey || event.metaKey || event.altKey) {
+  private readonly onEditorKeyDown = (event: KeyboardEvent): void => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
       return;
     }
+    const chip = this.selectedChip;
+    if (chip !== undefined && !chipKeys.has(event.key)) {
+      this.selectChip(undefined);
+    }
     switch (event.key) {
+      case 'Enter': {
+        event.preventDefault();
+        if (chip === undefined) {
+          this.submit();
+        } else {
+          this.showChip(chip);
+        }
+        return;
+      }
+      case 'Backspace':
+      case 'Delete': {
+        this.removeChip(event, chip);
+        return;
+      }
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        this.stepOverChip(event, chip);
+        return;
+      }
       case 'Escape': {
         event.preventDefault();
         event.stopPropagation();
+        if (chip !== undefined) {
+          this.selectChip(undefined);
+          return;
+        }
         this.emit('beuve-chat-escape');
         return;
       }
@@ -306,7 +463,7 @@ export class BeuveChatDrawer extends LitElement {
     const buttons = this.navButtons();
     const next = buttons[buttons.indexOf(target) + step];
     if (next === undefined) {
-      this.inputElement()?.focus();
+      this.focus();
     } else {
       next.focus();
     }
@@ -314,16 +471,39 @@ export class BeuveChatDrawer extends LitElement {
 
   private readonly onSubmit = (event: SubmitEvent): void => {
     event.preventDefault();
-    const input = this.inputElement();
-    if (input === undefined) {
+    this.submit();
+  };
+
+  /** Typing changes the text runs only; the chips stay the nodes they were. */
+  private readonly onEditorInput = (): void => {
+    const editor = this.editorElement();
+    if (editor?.textContent === '' && editor.childNodes.length > 0) {
+      editor.replaceChildren();
+    }
+    this.rememberCaret();
+    this.syncEmpty();
+  };
+
+  private readonly onEditorClick = (event: MouseEvent): void => {
+    const chip = event.target instanceof Element ? event.target.closest('.chip') : undefined;
+    if (chip instanceof HTMLElement) {
+      event.preventDefault();
+      this.showChip(chip);
       return;
     }
-    const text = input.value;
-    input.value = '';
-    this.dispatchEvent(
-      new CustomEvent('beuve-chat-submit', { detail: { text }, bubbles: true, composed: true }),
-    );
+    this.selectChip(undefined);
+    this.rememberCaret();
   };
+
+  private readonly onEditorCaret = (): void => {
+    this.rememberCaret();
+  };
+
+  /** Each chip node's mention; chips are rebuilt from the model, never parsed from markup. */
+  private readonly chipMentions = new WeakMap<Node, ChatMentionView>();
+  /** The caret when the box last had it, so a chip added from elsewhere lands there. */
+  private savedCaret: number | undefined;
+  private selectedChip: HTMLElement | undefined;
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   @property({ attribute: false }) accessor transcript: readonly ChatEntry[] = [];
@@ -334,8 +514,235 @@ export class BeuveChatDrawer extends LitElement {
   /** Ids of answers already staged in the review dock. */
   @property({ attribute: false }) accessor stagedMessageIds: ReadonlySet<string> = new Set();
 
-  private inputElement(): HTMLInputElement | undefined {
-    return this.renderRoot.querySelector('input') ?? undefined;
+  @state() accessor isDraftEmpty = true;
+  /** Whether the messages a summary replaced are unfolded. */
+  @state() accessor showsCompacted = false;
+
+  private editorElement(): HTMLElement | undefined {
+    return this.renderRoot.querySelector<HTMLElement>('.editor') ?? undefined;
+  }
+
+  /** The editable box's selection; Chromium keeps one per shadow root. */
+  private selection(): Selection | null {
+    const root = this.renderRoot as ShadowRoot & { getSelection?: () => Selection | null };
+    return root.getSelection?.() ?? document.getSelection();
+  }
+
+  /** The box's content as the model, read from its nodes. */
+  private readParts(): DraftPart[] {
+    const parts: DraftPart[] = [];
+    const nodes = this.editorElement()?.childNodes ?? [];
+    for (const node of nodes) {
+      const mention = this.chipMentions.get(node);
+      const text = node.nodeName === 'BR' ? '' : (node.textContent ?? '');
+      if (mention !== undefined) {
+        parts.push({ kind: 'mention', mention });
+      } else if (text !== '') {
+        const last = parts.at(-1);
+        if (last?.kind === 'text') {
+          parts[parts.length - 1] = { kind: 'text', text: last.text + text };
+        } else {
+          parts.push({ kind: 'text', text });
+        }
+      }
+    }
+    return parts;
+  }
+
+  /** Renders the model into the box and puts the caret at its position. */
+  private renderDraft(draft: DraftState): void {
+    const editor = this.editorElement();
+    if (editor === undefined) {
+      return;
+    }
+    this.selectChip(undefined);
+    editor.replaceChildren(
+      ...draft.parts.map((part) =>
+        part.kind === 'text' ? document.createTextNode(part.text) : this.chipNode(part.mention),
+      ),
+    );
+    this.syncEmpty();
+    if (this.shadowRoot?.activeElement === editor) {
+      this.placeCaret(draft.caret);
+    }
+    this.savedCaret = draft.caret;
+  }
+
+  private chipNode(mention: ChatMentionView): HTMLElement {
+    const { label, title } = describeMention(mention);
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.contentEditable = 'false';
+    chip.dataset['side'] = mention.side;
+    chip.textContent = label;
+    chip.title = `${title}. Click to show it; Backspace removes it.`;
+    this.chipMentions.set(chip, mention);
+    return chip;
+  }
+
+  /** The caret as a model position, or `undefined` when the selection is outside the box. */
+  private caretOffset(): number | undefined {
+    const editor = this.editorElement();
+    const selection = this.selection();
+    if (editor === undefined || selection === null || selection.rangeCount === 0) {
+      return undefined;
+    }
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.startContainer)) {
+      return undefined;
+    }
+    let position = 0;
+    for (const [index, child] of [...editor.childNodes].entries()) {
+      if (range.startContainer === editor && index === range.startOffset) {
+        return position;
+      }
+      if (child === range.startContainer || child.contains(range.startContainer)) {
+        return (
+          position +
+          (child.nodeType === Node.TEXT_NODE ? range.startOffset : range.startOffset > 0 ? 1 : 0)
+        );
+      }
+      position += this.nodeLength(child);
+    }
+    return position;
+  }
+
+  private nodeLength(node: Node): number {
+    if (this.chipMentions.has(node)) {
+      return 1;
+    }
+    return node.nodeName === 'BR' ? 0 : (node.textContent ?? '').length;
+  }
+
+  private placeCaret(caret: number): void {
+    const editor = this.editorElement();
+    const selection = this.selection();
+    if (editor === undefined || selection === null) {
+      return;
+    }
+    const range = document.createRange();
+    let position = 0;
+    let isPlaced = false;
+    for (const [index, child] of [...editor.childNodes].entries()) {
+      const length = this.nodeLength(child);
+      if (child.nodeType === Node.TEXT_NODE && caret <= position + length) {
+        range.setStart(child, caret - position);
+        isPlaced = true;
+        break;
+      }
+      if (child.nodeType !== Node.TEXT_NODE && caret <= position) {
+        range.setStart(editor, index);
+        isPlaced = true;
+        break;
+      }
+      position += length;
+    }
+    if (!isPlaced) {
+      range.setStart(editor, editor.childNodes.length);
+    }
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  private rememberCaret(): void {
+    this.savedCaret = this.caretOffset() ?? this.savedCaret;
+  }
+
+  private syncEmpty(): void {
+    this.isDraftEmpty = this.readParts().every(
+      (part) => part.kind === 'text' && part.text.trim() === '',
+    );
+  }
+
+  /** The chip node just before (`-1`) or after (`1`) a collapsed caret, if there is one. */
+  private chipBeside(step: -1 | 1): HTMLElement | undefined {
+    const caret = this.caretOffset();
+    const selection = this.selection();
+    const editor = this.editorElement();
+    if (caret === undefined || editor === undefined || selection?.isCollapsed !== true) {
+      return undefined;
+    }
+    const target = step === -1 ? caret - 1 : caret;
+    let position = 0;
+    for (const child of editor.childNodes) {
+      const length = this.nodeLength(child);
+      if (target >= position && target < position + length) {
+        return this.chipMentions.has(child) && child instanceof HTMLElement ? child : undefined;
+      }
+      position += length;
+    }
+    return undefined;
+  }
+
+  private selectChip(chip: HTMLElement | undefined): void {
+    this.selectedChip?.removeAttribute('data-selected');
+    this.selectedChip = chip;
+    chip?.setAttribute('data-selected', '');
+  }
+
+  /** ←/→ beside a chip selects it; again moves past it. */
+  private stepOverChip(event: KeyboardEvent, chip: HTMLElement | undefined): void {
+    const step = event.key === 'ArrowLeft' ? -1 : 1;
+    const editor = this.editorElement();
+    if (chip !== undefined && editor !== undefined) {
+      event.preventDefault();
+      const index = [...editor.childNodes].indexOf(chip);
+      const before = [...editor.childNodes]
+        .slice(0, index)
+        .reduce((sum, node) => sum + this.nodeLength(node), 0);
+      this.selectChip(undefined);
+      this.placeCaret(step === -1 ? before : before + 1);
+      this.rememberCaret();
+      return;
+    }
+    const beside = this.chipBeside(step);
+    if (beside === undefined) {
+      return;
+    }
+    event.preventDefault();
+    this.selectChip(beside);
+  }
+
+  /** Backspace or Delete next to a chip, or on a selected one, removes it whole. */
+  private removeChip(event: KeyboardEvent, chip: HTMLElement | undefined): void {
+    const parts = this.readParts();
+    const caret = this.caretOffset() ?? 0;
+    const direction = event.key === 'Backspace' ? 'backward' : 'forward';
+    let next: DraftState | undefined;
+    if (chip === undefined) {
+      next =
+        this.selection()?.isCollapsed === true
+          ? removeDraftMention({ parts, caret }, direction)
+          : undefined;
+    } else {
+      const editor = this.editorElement();
+      const index = editor === undefined ? -1 : [...editor.childNodes].indexOf(chip);
+      const position = [...(editor?.childNodes ?? [])]
+        .slice(0, Math.max(0, index))
+        .reduce((sum, node) => sum + this.nodeLength(node), 0);
+      next = removeDraftMention({ parts, caret: position }, 'forward');
+    }
+    if (next === undefined) {
+      return;
+    }
+    event.preventDefault();
+    this.renderDraft(next);
+    this.placeCaret(next.caret);
+  }
+
+  private showChip(chip: Element): void {
+    const mention = this.chipMentions.get(chip);
+    if (mention !== undefined) {
+      this.emit('beuve-chat-mention', { mention });
+    }
+  }
+
+  private submit(): void {
+    const { text, mentions } = serializeChatDraft(this.readParts());
+    this.renderDraft({ parts: [], caret: 0 });
+    this.savedCaret = undefined;
+    this.emit('beuve-chat-submit', { text, mentions });
   }
 
   private navButtons(): HTMLButtonElement[] {
@@ -349,9 +756,10 @@ export class BeuveChatDrawer extends LitElement {
   private isAnswering(): boolean {
     return this.transcript.some(
       (entry) =>
-        entry.kind === 'message' &&
-        entry.message.role === 'assistant' &&
-        entry.message.status === 'streaming',
+        (entry.kind === 'message' &&
+          entry.message.role === 'assistant' &&
+          entry.message.status === 'streaming') ||
+        (entry.kind === 'compaction' && entry.status === 'running'),
     );
   }
 
@@ -383,12 +791,74 @@ export class BeuveChatDrawer extends LitElement {
       case 'message': {
         return this.renderMessage(entry.message);
       }
+      case 'compaction': {
+        return entry.status === 'running'
+          ? html`<div class="entry status" role="status">
+              <span>Compacting the conversation…</span>
+              <button
+                type="button"
+                class="action"
+                data-nav
+                title="Stop compacting; nothing is stored"
+                @click=${(): void => {
+                  this.emit('beuve-chat-cancel-compaction');
+                }}
+              >
+                Cancel
+              </button>
+            </div>`
+          : html`<div class="entry note error">
+              <p>${entry.message ?? 'Compaction failed.'}</p>
+            </div>`;
+      }
     }
   }
 
+  /** The transcript, with everything before the latest summary folded under a divider. */
+  private renderTranscript(): TemplateResult {
+    const { boundary, compactedMessages } = planTranscriptCompaction(this.transcript);
+    if (boundary === -1) {
+      return html`${this.transcript.map((entry) => this.renderEntry(entry))}`;
+    }
+    const earlier = this.transcript.slice(0, boundary);
+    const later = this.transcript.slice(boundary);
+    const count = `${String(compactedMessages)} ${compactedMessages === 1 ? 'message' : 'messages'}`;
+    return html`
+      <button
+        type="button"
+        class="divider"
+        data-nav
+        aria-expanded=${this.showsCompacted ? 'true' : 'false'}
+        title=${
+          this.showsCompacted
+            ? 'Fold the messages the summary replaced'
+            : 'Show the messages the summary replaced; questions no longer send them'
+        }
+        @click=${(): void => {
+          this.showsCompacted = !this.showsCompacted;
+        }}
+      >
+        Compacted · ${count} ${this.showsCompacted ? '▾' : '▸'}
+      </button>
+      ${
+        this.showsCompacted
+          ? html`<div class="compacted">${earlier.map((entry) => this.renderEntry(entry))}</div>`
+          : nothing
+      }
+      ${later.map((entry) => this.renderEntry(entry))}
+    `;
+  }
+
   private renderMessage(message: ChatMessageView): TemplateResult {
+    if (message.role === 'summary') {
+      return this.renderSummary(message);
+    }
     if (message.role !== 'assistant') {
-      return html`<p class="entry you">${message.content}</p>`;
+      // No whitespace around the parts: the question is shown pre-wrapped.
+      const parts = toDraftParts(message.content, message.mentions).map((part) =>
+        part.kind === 'text' ? part.text : this.renderChip(part.mention),
+      );
+      return html`<p class="entry you">${parts}</p>`;
     }
     const isStreaming = message.status === 'streaming';
     const blocks = parseAnswerMarkdown(
@@ -453,6 +923,35 @@ export class BeuveChatDrawer extends LitElement {
         </div>`;
       }
     }
+  }
+
+  private renderSummary(message: ChatMessageView): TemplateResult {
+    const blocks = parseAnswerMarkdown(message.content, message.citations, 'final');
+    return html`<div class="entry summary" role="group" aria-label="Conversation summary">
+      <div
+        class="label"
+        title="/compact wrote it; later questions send it instead of the turns above"
+      >
+        Conversation summary
+      </div>
+      <div class="text">${blocks.map((block) => this.renderBlock(block))}</div>
+    </div>`;
+  }
+
+  private renderChip(mention: ChatMentionView): TemplateResult {
+    const { label, title } = describeMention(mention);
+    return html`<button
+      type="button"
+      class="chip"
+      data-nav
+      data-side=${mention.side}
+      title="${title} (show it)"
+      @click=${(): void => {
+        this.emit('beuve-chat-mention', { mention });
+      }}
+    >
+      ${label}
+    </button>`;
   }
 
   private renderBlock(block: AnswerBlock): TemplateResult {
@@ -581,28 +1080,71 @@ export class BeuveChatDrawer extends LitElement {
 
   /** Types `text` into the input for the reviewer to finish (the palette's commands with arguments). */
   prefill(text: string): void {
-    void this.updateComplete.then(() => {
-      const input = this.inputElement();
-      if (input === undefined) {
-        return;
-      }
+    this.setDraft(text, []);
+  }
 
-      input.value = text;
-      input.focus();
-      input.setSelectionRange(text.length, text.length);
+  /** Replaces the input with a question and its chips, caret at the end (a refused question). */
+  setDraft(text: string, mentions: readonly ChatMentionView[]): void {
+    void this.updateComplete.then(() => {
+      const parts = toDraftParts(text, mentions);
+      const caret = parts.reduce(
+        (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
+        0,
+      );
+      this.renderDraft({ parts, caret });
+      this.focus();
     });
   }
 
-  /** Focuses the command input, after the first render if it hasn't happened yet. */
+  /**
+   * Puts a context chip at the caret, or at the end when the box never had one (ADR 0046), and
+   * focuses the box after it. `duplicate` when the same lines are already attached, `full` at
+   * the limit; neither changes the input.
+   */
+  async addMention(mention: ChatMentionView): Promise<'added' | 'duplicate' | 'full'> {
+    await this.updateComplete;
+    const parts = this.readParts();
+    const mentions = parts.flatMap((part) => (part.kind === 'mention' ? [part.mention] : []));
+    const key = (item: ChatMentionView): string =>
+      [item.path, item.side, item.startLine ?? '', item.endLine ?? '', item.sha].join('\0');
+    if (mentions.some((item) => key(item) === key(mention))) {
+      this.focus();
+      return 'duplicate';
+    }
+    if (mentions.length >= maxMentions) {
+      this.focus();
+      return 'full';
+    }
+    const length = parts.reduce(
+      (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
+      0,
+    );
+    const caret = Math.min(this.savedCaret ?? length, length);
+    const next = insertDraftMention({ parts, caret }, mention);
+    this.renderDraft(next);
+    this.focus();
+    return 'added';
+  }
+
+  /** Focuses the input, with the caret where it was, after the first render if needed. */
   override focus(options?: FocusOptions): void {
-    const input = this.inputElement();
-    if (input === undefined) {
+    const editor = this.editorElement();
+    if (editor === undefined) {
       void this.updateComplete.then(() => {
-        this.inputElement()?.focus(options);
+        this.focus(options);
       });
       return;
     }
-    input.focus(options);
+    if (this.shadowRoot?.activeElement !== editor) {
+      editor.focus(options);
+    }
+    const length = this.readParts().reduce(
+      (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
+      0,
+    );
+    if (this.caretOffset() === undefined || this.savedCaret !== undefined) {
+      this.placeCaret(Math.min(this.savedCaret ?? length, length));
+    }
   }
 
   override render(): TemplateResult {
@@ -620,22 +1162,36 @@ export class BeuveChatDrawer extends LitElement {
                 the files it reads leave this machine. It never edits anything. /help lists the
                 commands. <kbd>Esc</kbd> returns to the diff.
               </p>`
-            : html`<div class="transcript" aria-live="polite">
-                ${this.transcript.map((entry) => this.renderEntry(entry))}
-              </div>`
+            : html`<div class="transcript" aria-live="polite">${this.renderTranscript()}</div>`
         }
       </div>
       <form @submit=${this.onSubmit}>
-        <input
-          type="text"
+        <div
+          class="editor"
+          contenteditable="plaintext-only"
+          role="textbox"
           aria-label="Ask a question or run a command"
-          placeholder=${describeChatPlaceholder(this.isAnswering())}
-          autocomplete="off"
+          aria-multiline="false"
           spellcheck="false"
-          @keydown=${this.onInputKeyDown}
-        />
+          data-placeholder=${describeChatPlaceholder(this.isAnswering())}
+          ?data-empty=${this.isDraftEmpty}
+          @keydown=${this.onEditorKeyDown}
+          @input=${this.onEditorInput}
+          @click=${this.onEditorClick}
+          @keyup=${this.onEditorCaret}
+          @focusout=${this.onEditorCaret}
+        ></div>
       </form>
     `;
+  }
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    if (!changed.has('transcript')) {
+      return;
+    }
+    if (summaryOf(changed.get('transcript')) !== summaryOf(this.transcript)) {
+      this.showsCompacted = false;
+    }
   }
 
   protected override updated(changed: PropertyValues<this>): void {
@@ -644,6 +1200,23 @@ export class BeuveChatDrawer extends LitElement {
       body.scrollTop = body.scrollHeight;
     }
   }
+}
+
+/** Keys that act on a selected chip rather than deselecting it. */
+const chipKeys: ReadonlySet<string> = new Set([
+  'Enter',
+  'Backspace',
+  'Delete',
+  'ArrowLeft',
+  'ArrowRight',
+  'Escape',
+  'Shift',
+]);
+
+/** The id of the summary the transcript folds at, to unfold afresh when it changes. */
+function summaryOf(entries: readonly ChatEntry[] | undefined): string | undefined {
+  const { boundary } = planTranscriptCompaction(entries ?? []);
+  return entries?.[boundary]?.id.toString();
 }
 
 function shortPath(path: string): string {

@@ -16,6 +16,8 @@ export type ChatTranscriptAction =
   | { readonly kind: 'delta'; readonly delta: ChatDeltaView }
   /** `chat:message-updated`: the answer completed, failed or was cancelled. */
   | { readonly kind: 'updated'; readonly message: ChatMessageView }
+  /** `/compact` stored its summary: it joins the transcript where the compaction entry was. */
+  | { readonly kind: 'compacted'; readonly summary: ChatMessageView }
   /** `/clear`: every entry goes, local ones included. */
   | { readonly kind: 'cleared' };
 
@@ -74,6 +76,20 @@ export function reduceChatTranscript(
               },
             },
           };
+    }
+    case 'compacted': {
+      if (hasMessage(state.entries, action.summary.id)) {
+        return state;
+      }
+      const entry = toEntry(action.summary);
+      const at = state.entries.findIndex((item) => item.kind === 'compaction');
+      const entries =
+        at === -1
+          ? [...state.entries, entry]
+          : state.entries.flatMap((item, index) =>
+              index === at ? [entry] : item.kind === 'compaction' ? [] : [item],
+            );
+      return { ...state, entries };
     }
     case 'cleared': {
       return emptyChatTranscript;

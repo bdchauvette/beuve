@@ -12,6 +12,8 @@ export type ChatCommand =
   | { readonly kind: 'help' }
   /** Deletes the open session's transcript (ADR 0031). */
   | { readonly kind: 'clear' }
+  /** Condenses the conversation so far into a summary later prompts send instead (ADR 0047). */
+  | { readonly kind: 'compact' }
   /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
   | { readonly kind: 'editor'; readonly editorId?: EditorId }
   /** `/diff` shows the diff layout; `/diff split` or `/diff inline` sets it (ADR 0042). */
@@ -40,6 +42,7 @@ const whitespace = /\s+/u;
 
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
+ * `/compact`,
  * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, `/diff [split|inline]`,
  * `/whitespace [ignore|show]`, `/sidebar left|right`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
@@ -64,6 +67,11 @@ export function parseChatCommand(input: string): ChatCommand {
       return args.length === 0
         ? { kind: 'clear' }
         : invalid('/clear takes no arguments. Type /help for the commands.');
+    }
+    case '/compact': {
+      return args.length === 0
+        ? { kind: 'compact' }
+        : invalid('/compact takes no arguments. Type /help for the commands.');
     }
     case '/trust':
     case '/untrust': {

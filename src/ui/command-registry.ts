@@ -8,6 +8,7 @@ export type AppAction =
   | 'cycle-zone'
   | 'shortcuts'
   | 'chat'
+  | 'add-to-chat'
   | 'tree-mode'
   | 'toggle-sidebar'
   | 'flip-sidebar'
@@ -107,6 +108,14 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     keys: ['c'],
     available: true,
     run: app('chat'),
+  },
+  {
+    id: 'add-to-chat',
+    title: 'Add selection to chat: the selected lines, hunk, staged note or file',
+    scope: 'Anywhere',
+    keys: ['⌘>'],
+    available: true,
+    run: app('add-to-chat'),
   },
   {
     id: 'tree-mode',
@@ -368,6 +377,15 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     run: none,
   },
   {
+    id: 'chat-chips',
+    title:
+      'Chat input: select the context chip beside the caret (Enter shows it, Backspace removes it)',
+    scope: 'Chat',
+    keys: ['←', '→'],
+    available: true,
+    run: none,
+  },
+  {
     id: 'review',
     title: 'Run a preliminary agentic review',
     scope: 'Chat',
@@ -456,6 +474,16 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     help: 'withdraw that approval; r then asks again.',
     available: true,
     run: slash('/untrust'),
+  },
+  {
+    id: 'compact-chat',
+    title: 'Compact the chat into a summary',
+    scope: 'Chat',
+    keys: [],
+    slash: '/compact',
+    help: 'condense the conversation so far into a short note with its citations; later questions send the note instead of the older turns, which stay readable above it',
+    available: true,
+    run: slash('/compact'),
   },
   {
     id: 'clear-chat',

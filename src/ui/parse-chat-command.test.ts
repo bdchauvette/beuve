@@ -108,6 +108,11 @@ describe('parseChatCommand', () => {
       kind: 'invalid',
       message: '/clear takes no arguments. Type /help for the commands.',
     });
+    expect(parseChatCommand('/Compact')).toEqual({ kind: 'compact' });
+    expect(parseChatCommand('/compact all')).toEqual({
+      kind: 'invalid',
+      message: '/compact takes no arguments. Type /help for the commands.',
+    });
     expect(parseChatCommand('/explain foo')).toEqual({
       kind: 'invalid',
       message: 'Unknown command /explain. Type /help for the commands.',

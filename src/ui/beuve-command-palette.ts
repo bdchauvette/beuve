@@ -280,6 +280,11 @@ export class BeuveCommandPalette extends LitElement {
     </li>`;
   }
 
+  /** The highlighted entry's action, for ⌘> on a file or a staged note (ADR 0046). */
+  activeAction(): PaletteEntry['action'] | undefined {
+    return this.entries[this.cursor]?.action;
+  }
+
   override focus(): void {
     void this.updateComplete.then(() => {
       const input = this.renderRoot.querySelector('input');
@@ -332,7 +337,9 @@ export class BeuveCommandPalette extends LitElement {
               </button>`,
           )}
           <span class="spacer"></span>
-          <span>↑↓ choose · ⏎ run · Esc close</span>
+          <span
+            >↑↓ choose · ⏎ run · ${displayKey('⌘>', this.platform)} add to chat · Esc close</span
+          >
         </footer>
       </div>
     `;

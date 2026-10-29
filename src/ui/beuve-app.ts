@@ -8,6 +8,7 @@ import type {
   CallHierarchyView,
   ChatCitationView,
   ChatDeltaView,
+  ChatMentionView,
   CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
@@ -48,7 +49,11 @@ import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
+import type { BeuveCommandPalette } from './beuve-command-palette.ts';
+import type { BeuveDiffStream } from './beuve-diff-stream.ts';
 import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
+import type { BeuveUraDock } from './beuve-ura-dock.ts';
+import type { MentionTarget } from './chat-draft.ts';
 import type {
   BeuveOpenPanel,
   FolderChooser,
@@ -404,8 +409,27 @@ export class BeuveApp extends LitElement {
     void this.trustAndRunTrace();
   };
 
-  private readonly onChatSubmit = (event: CustomEvent<{ text: string }>): void => {
-    this.submitChat(event.detail.text);
+  private readonly onChatSubmit = (
+    event: CustomEvent<{ text: string; mentions?: readonly ChatMentionView[] }>,
+  ): void => {
+    this.submitChat(event.detail.text, event.detail.mentions ?? []);
+  };
+
+  /** A context chip, in the input or the transcript: show its lines in the diff. */
+  private readonly onChatMention = (event: CustomEvent<{ mention: ChatMentionView }>): void => {
+    this.openMention(event.detail.mention);
+  };
+
+  /** The gutter's chat button on a diff card. */
+  private readonly onChatAdd = (event: CustomEvent<{ target: MentionTarget }>): void => {
+    void this.addToChat(event.detail.target);
+  };
+
+  private readonly onChatCancelCompaction = (): void => {
+    const { review } = this;
+    if (review !== undefined) {
+      void beuveBridge()?.invoke('chat:cancel', { sessionId: review.session.id });
+    }
   };
 
   private readonly onChatEscape = (): void => {
@@ -442,6 +466,9 @@ export class BeuveApp extends LitElement {
     this.insightJump = { insightId: event.detail.insightId, nonce: this.jumpNonce };
     this.focusedZone = 'diff';
   };
+
+  /** Sessions whose chat already suggested /compact in this window. */
+  private readonly compactHinted = new Set<string>();
 
   /** Resolves the wait in {@link loadImpactAfterFirstDiff}; set while it waits. */
   private releaseImpact: (() => void) | undefined;
@@ -691,10 +718,16 @@ export class BeuveApp extends LitElement {
       bridge.on('chat:delta', (delta) => {
         this.applyChatDelta(delta);
       }),
-      bridge.on('chat:message-updated', ({ message }) => {
-        if (message.sessionId === this.review?.session.id) {
-          this.dispatchChat({ kind: 'updated', message });
+      bridge.on('chat:message-updated', ({ message, droppedTurns }) => {
+        if (message.sessionId !== this.review?.session.id) {
+          return;
         }
+        this.dispatchChat({ kind: 'updated', message });
+        if (droppedTurns === undefined || this.compactHinted.has(message.sessionId)) {
+          return;
+        }
+        this.compactHinted.add(message.sessionId);
+        this.note('info', 'Older turns are being dropped — /compact to keep a summary.');
       }),
       bridge.on('ura:changed', ({ sessionId }) => {
         if (sessionId === this.review?.session.id) {
@@ -1373,18 +1406,22 @@ export class BeuveApp extends LitElement {
     await this.selectSession(review.session.id);
   }
 
-  private submitChat(text: string): void {
+  private submitChat(text: string, mentions: readonly ChatMentionView[] = []): void {
     const command = parseChatCommand(text);
     if (command.kind === 'empty') {
       return;
     }
     switch (command.kind) {
       case 'question': {
-        void this.askQuestion(command.text);
+        void this.askQuestion(command.text, mentions);
         return;
       }
       case 'clear': {
         void this.clearChat();
+        return;
+      }
+      case 'compact': {
+        void this.compactChat();
         return;
       }
       case 'help': {
@@ -1482,7 +1519,7 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  private async askQuestion(question: string): Promise<void> {
+  private async askQuestion(question: string, mentions: readonly ChatMentionView[]): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
     if (bridge === undefined || review === undefined) {
@@ -1496,15 +1533,59 @@ export class BeuveApp extends LitElement {
       sessionId: review.session.id,
       question,
       ...(focusPath !== undefined && { focus: { path: focusPath } }),
+      ...(mentions.length > 0 && { mentions }),
     });
     if (!asked.ok) {
-      this.addEntry({ id: 0, kind: 'input', text: question });
       this.note('error', asked.error.message);
+      this.chatDrawer()?.setDraft(question, mentions);
       return;
     }
     if (this.review?.session.id === review.session.id) {
       this.dispatchChat({ kind: 'asked', ...asked.value });
     }
+  }
+
+  /** `/compact` (ADR 0047): shows progress, then the stored summary where it ran. */
+  private async compactChat(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      this.note('error', 'Open a review session first.');
+      return;
+    }
+    const sessionId = review.session.id;
+    const entryId = this.addEntry({ id: 0, kind: 'compaction', status: 'running' });
+    const compacted = await bridge.invoke('chat:compact', { sessionId });
+    if (this.review?.session.id !== sessionId) {
+      return;
+    }
+    if (compacted.ok && compacted.value.outcome === 'compacted') {
+      this.compactHinted.delete(sessionId);
+      this.dispatchChat({ kind: 'compacted', summary: compacted.value.summary });
+      return;
+    }
+    const failure = compacted.ok
+      ? compacted.value.outcome === 'failed'
+        ? compacted.value.errorMessage
+        : undefined
+      : compacted.error.message;
+    this.setEntries(
+      this.chat.entries.flatMap((entry): ChatEntry[] => {
+        if (entry.id !== entryId || entry.kind !== 'compaction') {
+          return [entry];
+        }
+        return failure === undefined
+          ? [
+              {
+                id: entryId,
+                kind: 'note',
+                tone: 'info',
+                lines: ['Compaction stopped; nothing was stored.'],
+              },
+            ]
+          : [{ ...entry, status: 'failed', message: failure }];
+      }),
+    );
   }
 
   private async clearChat(): Promise<void> {
@@ -1544,6 +1625,136 @@ export class BeuveApp extends LitElement {
       }
       return created;
     });
+  }
+
+  private chatDrawer(): BeuveChatDrawer | undefined {
+    return this.renderRoot.querySelector<BeuveChatDrawer>('beuve-chat-drawer') ?? undefined;
+  }
+
+  /**
+   * ⌘> (ADR 0046): what the focused region points at becomes a chip in the chat input. The diff
+   * gives its selection, hunk or file; the dock its item's anchor; the tree its focused file; the
+   * palette its highlighted file or note. The chat tab opens with the input focused.
+   */
+  private async addSelectionToChat(): Promise<void> {
+    if (this.review === undefined) {
+      return;
+    }
+    const target = this.selectionTarget();
+    if (typeof target === 'string') {
+      this.showNotice({ tone: 'info', text: target });
+      return;
+    }
+    await this.addToChat(target);
+  }
+
+  private selectionTarget(): MentionTarget | string {
+    if (this.paletteText !== undefined) {
+      const palette =
+        this.renderRoot.querySelector<BeuveCommandPalette>('beuve-command-palette') ?? undefined;
+      const action = palette?.activeAction();
+      this.closePalette();
+      if (action?.kind === 'file') {
+        return { path: action.path, side: 'head' };
+      }
+      const item =
+        action?.kind === 'ura-item'
+          ? this.uraItems.find(({ id }) => id === action.itemId)
+          : undefined;
+      return item === undefined
+        ? 'Pick a file or a staged note in the palette first.'
+        : this.itemTarget(item);
+    }
+    switch (this.focusedZone) {
+      case 'ura': {
+        const item = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
+        return item === undefined ? nothingSelected : this.itemTarget(item);
+      }
+      case 'intent': {
+        const path = this.renderRoot
+          .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
+          ?.focusedPath();
+        return path === undefined ? 'Focus a file in the tree to add it.' : { path, side: 'head' };
+      }
+      default: {
+        return (
+          this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream')?.chatMention() ??
+          nothingSelected
+        );
+      }
+    }
+  }
+
+  /** A staged note's lines at this head, or its file. */
+  private itemTarget(item: UraItemView): MentionTarget | string {
+    if (item.placement.kind !== 'current') {
+      return 'That note is outdated: its lines are not at this head.';
+    }
+    const { anchor } = item.placement;
+    switch (anchor.kind) {
+      case 'lines': {
+        return {
+          path: anchor.path,
+          side: 'head',
+          startLine: anchor.startLine,
+          endLine: anchor.endLine,
+        };
+      }
+      case 'file': {
+        return { path: anchor.path, side: 'head' };
+      }
+      case 'change': {
+        return 'That note is on the whole change; pick a line or file note.';
+      }
+    }
+  }
+
+  /** Adds a chip for `target` at the review's head (or base) and focuses the chat input. */
+  private async addToChat(target: MentionTarget): Promise<void> {
+    const { review } = this;
+    if (review === undefined) {
+      return;
+    }
+    const mention: ChatMentionView = {
+      ...target,
+      sha: target.side === 'base' ? review.baseSha : review.headSha,
+    };
+    this.focusSidebar('chat');
+    await this.updateComplete;
+    const added = await this.chatDrawer()?.addMention(mention);
+    if (added === 'full') {
+      this.showNotice({ tone: 'info', text: 'A question takes at most 8 selections.' });
+    } else if (added === 'duplicate') {
+      this.showNotice({ tone: 'info', text: 'Those lines are already in the question.' });
+    }
+  }
+
+  /** A chip: show its lines in the diff stream, or say the file is outside the change. */
+  private openMention(mention: ChatMentionView): void {
+    const file = this.review?.files.find((candidate) =>
+      mention.side === 'base'
+        ? (candidate.oldPath ?? candidate.path) === mention.path && candidate.status !== 'added'
+        : candidate.path === mention.path && candidate.status !== 'deleted',
+    );
+    if (file === undefined) {
+      this.note(
+        'info',
+        `${mention.path} is not in this diff: the file is unchanged by the review.`,
+      );
+      return;
+    }
+    this.jumpNonce += 1;
+    this.fileJump = {
+      path: file.path,
+      ...(mention.startLine !== undefined &&
+        mention.endLine !== undefined && {
+          line: mention.startLine,
+          endLine: mention.endLine,
+          side: mention.side,
+        }),
+      nonce: this.jumpNonce,
+    };
+    this.focusedZone = 'diff';
   }
 
   /** A citation pill: show the lines in the diff stream, or say the file is outside the change. */
@@ -1843,6 +2054,15 @@ export class BeuveApp extends LitElement {
     if (!(event.metaKey || event.ctrlKey) || event.altKey) {
       return false;
     }
+    if (isAddToChatKey(event)) {
+      if (isEditable(event) && this.paletteText === undefined) {
+        return false;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.runAppAction('add-to-chat');
+      return true;
+    }
     const key = event.key.toLowerCase();
     const isPaletteOpen = this.paletteText !== undefined;
     let action: AppAction | 'close' | undefined;
@@ -1890,6 +2110,10 @@ export class BeuveApp extends LitElement {
       }
       case 'chat': {
         this.toggleChat();
+        return;
+      }
+      case 'add-to-chat': {
+        void this.addSelectionToChat();
         return;
       }
       case 'tree-mode': {
@@ -2228,6 +2452,7 @@ export class BeuveApp extends LitElement {
       @beuve-active-file=${this.onActiveFile}
       @beuve-open-editor=${this.onOpenEditor}
       @beuve-ura-stage-finding=${this.onStageFinding}
+      @beuve-chat-add=${this.onChatAdd}
     ></beuve-diff-stream>`;
   }
 
@@ -2295,6 +2520,8 @@ export class BeuveApp extends LitElement {
       @beuve-chat-cancel=${this.onChatCancel}
       @beuve-chat-stage=${this.onChatStage}
       @beuve-chat-cite=${this.onChatCite}
+      @beuve-chat-mention=${this.onChatMention}
+      @beuve-chat-cancel-compaction=${this.onChatCancelCompaction}
       @beuve-open-editor=${this.onOpenEditor}
       @beuve-citation=${this.onCitation}
     ></beuve-chat-drawer>`;
@@ -2506,6 +2733,14 @@ function formatBytes(characters: number): string {
   return characters < 1024
     ? `${String(characters)} characters`
     : `${(characters / 1024).toFixed(1)} K characters`;
+}
+
+const nothingSelected =
+  'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
+
+/** ⌘> / Ctrl+> (Shift+Period), as Zed binds "add selection to thread". */
+function isAddToChatKey(event: KeyboardEvent): boolean {
+  return event.key === '>' || (event.shiftKey && event.code === 'Period');
 }
 
 function isEditable(event: KeyboardEvent): boolean {

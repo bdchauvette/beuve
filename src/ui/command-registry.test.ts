@@ -50,6 +50,7 @@ describe('commandRegistry', () => {
       '/trust',
       '/untrust',
       '/clear',
+      '/compact',
       '/help',
     ];
     for (const name of parsed) {
