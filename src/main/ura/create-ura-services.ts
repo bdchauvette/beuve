@@ -139,19 +139,28 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const listeners = new Set<(sessionId: string) => void>();
   const mappings = new LruCache<string, Promise<LineMapping | undefined>>(options.cacheSize ?? 64);
 
-  /** The session's verdict choice, dropped first if staged blockers have made it impossible. */
-  const settledChoice = (sessionId: string, items: readonly UraItem[]): UraVerdictChoice =>
+  /**
+   * The session's verdict choice, dropped first if the head moved since it was made or staged
+   * blockers have made it impossible.
+   */
+  const settledChoice = (
+    sessionId: string,
+    headSha: string,
+    items: readonly UraItem[],
+  ): UraVerdictChoice =>
     settleVerdictChoice(
       db,
       sessionId as SessionId,
+      headSha,
       items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
       deps.now(),
     );
 
   const changed = (sessionId: string): void => {
     const items = listUraItems(db, sessionId as SessionId);
-    if (items.ok) {
-      settledChoice(sessionId, items.value);
+    const session = loadSession(context, sessionId);
+    if (items.ok && session.ok) {
+      settledChoice(sessionId, session.value.headSha, items.value);
     }
     for (const listener of listeners) {
       try {
@@ -292,7 +301,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       repository: refreshed.repository,
     };
     const live = items.value.filter((item) => item.status.kind === 'staged');
-    const chosen = verdict ?? settledChoice(summary.sessionId, items.value).chosen;
+    const chosen = verdict ?? settledChoice(summary.sessionId, summary.headSha, items.value).chosen;
     const artifact = compileUraArtifact({
       summary,
       items: items.value,
@@ -304,9 +313,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
 
   const verdictState = (
     sessionId: string,
+    headSha: string,
     items: readonly UraItem[],
   ): Omit<UraVerdictStateView, 'sessionId'> => {
-    const choice = settledChoice(sessionId, items);
+    const choice = settledChoice(sessionId, headSha, items);
     return {
       derivedVerdict: deriveStagedVerdict(items),
       ...(choice.chosen !== undefined && { chosenVerdict: choice.chosen }),
@@ -333,7 +343,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         sessionId: head.value.sessionId,
         headSha: head.value.headSha,
         items: views,
-        ...verdictState(head.value.sessionId, items.value),
+        ...verdictState(head.value.sessionId, head.value.headSha, items.value),
       });
     },
 
@@ -511,14 +521,16 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const written = writeVerdictChoice(
         db,
         loaded.value.id,
-        verdict === undefined || verdict === derived ? {} : { chosen: verdict },
+        verdict === undefined || verdict === derived
+          ? {}
+          : { chosen: verdict, headSha: loaded.value.headSha },
         deps.now(),
       );
       if (!written.ok) {
         return uraFailure(logger, written.error);
       }
       changed(sessionId);
-      return ok({ sessionId, ...verdictState(sessionId, items.value) });
+      return ok({ sessionId, ...verdictState(sessionId, loaded.value.headSha, items.value) });
     },
 
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {

@@ -50,3 +50,4 @@ Template: [0000-template.md](0000-template.md)
 | [0042](0042-diff-display-modes-whitespace-variant-and-impact-chip.md) | Diff display modes, the whitespace-ignoring variant, and the ImpactGate chip | Accepted |
 | [0043](0043-inline-edits-become-suggestions.md)                       | Inline edits become suggested patches, never writes                          | Accepted |
 | [0044](0044-two-column-shell-open-flow-and-command-palette.md)        | Two-column shell, one open flow, and a command palette over one registry     | Accepted |
+| [0045](0045-verdict-choice-belongs-to-a-head.md)                      | A chosen verdict belongs to the head it was chosen at                        | Accepted |

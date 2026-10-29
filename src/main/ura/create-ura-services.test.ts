@@ -414,6 +414,29 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
     });
   });
 
+  it('drops a chosen verdict when the head moves and says so until the reviewer chooses again', async () => {
+    await note(2, 2, 'Prefer const');
+    value(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    expect(value(await services.ura.list({ sessionId })).chosenVerdict).toBe('approve');
+
+    repo.git('switch', '--quiet', 'feature');
+    repo.write('src/more.ts', 'export const more = 1;\n');
+    repo.commit('author pushes more');
+    repo.git('switch', '--quiet', 'main');
+    const moved = value(await services.ura.list({ sessionId }));
+    expect(moved.chosenVerdict).toBeUndefined();
+    expect(moved.derivedVerdict).toBe('comment');
+    expect(moved.verdictNotice).toBe('Verdict cleared: new commits since you chose it');
+    const read = await services.mcpTools.readHumanReview({});
+    expect(read.ok && read.value.structured['verdict']).toBe('comment');
+
+    value(services.ura.setVerdict({ sessionId, verdict: 'request-changes' }));
+    expect(value(await services.ura.list({ sessionId }))).toMatchObject({
+      chosenVerdict: 'request-changes',
+    });
+    expect(value(await services.ura.list({ sessionId })).verdictNotice).toBeUndefined();
+  });
+
   it('clears an approval when a blocker is staged, says so, and refuses a new one', async () => {
     await note(2, 2, 'Prefer const');
     value(services.ura.setVerdict({ sessionId, verdict: 'approve' }));

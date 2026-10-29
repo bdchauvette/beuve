@@ -118,6 +118,31 @@ export const uraMigrations: readonly Migration[] = [
       CREATE INDEX ura_item_postings_by_session ON ura_item_postings (session_id, posted_at);
     `,
   },
+  {
+    // ADR 0045: a chosen verdict belongs to the head it was chosen at. SQLite can't change a
+    // CHECK, so the table is rebuilt. A choice made before heads were recorded can't be tied to
+    // one, so it becomes a remembered clear and the reviewer is told once.
+    id: 'ura-0004-verdict-choice-head',
+    up: `
+      CREATE TABLE ura_verdict_choices_next (
+        session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
+        verdict TEXT CHECK (verdict IS NULL OR verdict IN ('approve', 'request-changes', 'comment')),
+        cleared_reason TEXT
+          CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged', 'head-moved')),
+        head_sha TEXT CHECK (head_sha IS NULL OR (${sha('head_sha')})),
+        updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
+        CHECK (verdict IS NULL OR cleared_reason IS NULL),
+        CHECK ((verdict IS NULL) = (head_sha IS NULL))
+      ) STRICT;
+
+      INSERT INTO ura_verdict_choices_next (session_id, verdict, cleared_reason, head_sha, updated_at)
+        SELECT session_id, NULL, coalesce(cleared_reason, 'head-moved'), NULL, updated_at
+        FROM ura_verdict_choices;
+
+      DROP TABLE ura_verdict_choices;
+      ALTER TABLE ura_verdict_choices_next RENAME TO ura_verdict_choices;
+    `,
+  },
 ];
 
 function allNull(columns: readonly string[]): string {
