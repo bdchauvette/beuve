@@ -129,6 +129,5 @@ jobs:
           brew tap bdchauvette/beuve https://github.com/bdchauvette/beuve
           brew install --cask bdchauvette/beuve/beuve
           test -d /Applications/beuve.app
-          ! xattr -p com.apple.quarantine /Applications/beuve.app 2>/dev/null
           codesign --verify --deep --strict /Applications/beuve.app
           brew uninstall --cask bdchauvette/beuve/beuve

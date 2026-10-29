@@ -1,6 +1,6 @@
 # 0049. CI matrix, versioning, GitHub Releases and a Homebrew cask in this repository
 
-- Status: Accepted
+- Status: Accepted, Gatekeeper decision amended 2026-10-29
 - Date: 2026-10-29
 
 ## Context
@@ -20,3 +20,7 @@ beuve targets macOS, but CI ran only on Ubuntu, so macOS-only failures surfaced 
 ## Consequences
 
 Platform differences fail on every push instead of at release. A release is two commands, and the Homebrew install follows without a manual step; the cask's `sha256` is a placeholder until the first release bumps it, so install the cask only from a tag's commit or later. The quarantine removal is a deliberate weakening that applies to this one app and is stated in the caveats. If the release job's cask push is rejected (branch protection), the release is still published and the cask must be bumped by hand. Unlike GitHub's notes, ours credit no authors or pull requests.
+
+## Amendment 2026-10-29: the cask leaves quarantine in place
+
+The Gatekeeper bullet above is superseded. The cask no longer has a `postflight_steps` block and does not remove `com.apple.quarantine`. Clearing the flag is a trust decision about an unnotarized build, and the user makes it, not the package manager. The caveats say plainly that beuve is ad-hoc signed and not notarized, so the first launch is blocked, and give the two options: "Open Anyway" in System Settings > Privacy & Security after a blocked launch, or `xattr -dr com.apple.quarantine /Applications/beuve.app` by hand. Control-click > Open no longer bypasses Gatekeeper on macOS 15 and later. The `verify-cask` job now asserts that the install succeeded, the app bundle is present and its ad-hoc signature verifies; it does not launch the app.

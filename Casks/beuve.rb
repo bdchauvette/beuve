@@ -17,12 +17,6 @@ cask "beuve" do
 
   app "beuve.app"
 
-  # beuve is ad-hoc signed, not notarized (ADR 0048), so Gatekeeper rejects a quarantined copy.
-  # Homebrew no longer has --no-quarantine; this removes the attribute from this one app only.
-  postflight_steps do
-    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/beuve.app"]
-  end
-
   zap trash: [
     "~/Library/Application Support/beuve",
     "~/Library/Caches/beuve",
@@ -34,9 +28,10 @@ cask "beuve" do
   ]
 
   caveats <<~EOS
-    beuve is ad-hoc signed and not notarized, so macOS Gatekeeper would block it.
-    This cask removes the com.apple.quarantine attribute from #{appdir}/beuve.app, and only
-    from that app, right after installing. That is you trusting this build; its checksum is
-    the sha256 above, from the release's SHA256SUMS.
+    beuve is ad-hoc signed and not notarized, so macOS will block its first launch.
+    To allow it, either:
+      - open beuve once, then go to System Settings > Privacy & Security and click
+        "Open Anyway" (Control-click > Open no longer works on macOS 15 and later), or
+      - run: xattr -dr com.apple.quarantine #{appdir}/beuve.app
   EOS
 end
