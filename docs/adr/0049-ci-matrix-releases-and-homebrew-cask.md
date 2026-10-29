@@ -1,6 +1,6 @@
 # 0049. CI matrix, versioning, GitHub Releases and a Homebrew cask in this repository
 
-- Status: Accepted, Gatekeeper decision amended 2026-10-29
+- Status: Accepted, Gatekeeper and versioning decisions amended 2026-10-29
 - Date: 2026-10-29
 
 ## Context
@@ -24,3 +24,12 @@ Platform differences fail on every push instead of at release. A release is two 
 ## Amendment 2026-10-29: the cask leaves quarantine in place
 
 The Gatekeeper bullet above is superseded. The cask no longer has a `postflight_steps` block and does not remove `com.apple.quarantine`. Clearing the flag is a trust decision about an unnotarized build, and the user makes it, not the package manager. The caveats say plainly that beuve is ad-hoc signed and not notarized, so the first launch is blocked, and give the two options: "Open Anyway" in System Settings > Privacy & Security after a blocked launch, or `xattr -dr com.apple.quarantine /Applications/beuve.app` by hand. Control-click > Open no longer bypasses Gatekeeper on macOS 15 and later. The `verify-cask` job now asserts that the install succeeded, the app bundle is present and its ad-hoc signature verifies; it does not launch the app.
+
+## Amendment 2026-10-29: calendar versioning `YYYY.M.N`
+
+The **Versioning** bullet above is superseded. Versions are `<year>.<month>.<n>`: `n` is the release number within the month, starting at 1 (`2026.10.1`, `2026.10.2`, `2026.11.1`), with plain integers because semver forbids leading zeros. Tags are `v2026.10.1`. They are valid semver with no pre-release or build suffix, so `package.json`, electron-builder, macOS bundle versions and Homebrew all accept them unchanged. Year and month are read in UTC so the version doesn't depend on where it is cut.
+
+- **Why not semver.** beuve is an application with no API consumers; major/minor/patch promises a compatibility contract nobody relies on, and every release was a judgement call about which number to bump. A date says when it shipped and needs no decision.
+- **Why not `YYYY.M.D-N` or `YYYY.M.D+N`.** In semver a `-N` suffix is a pre-release, which sorts before the bare date (`2026.10.29-2 < 2026.10.29`), so the second release of a day would rank lower than the first, and semver-aware tooling reads it as a prerelease. A `+N` suffix is build metadata, which has no precedence (`2026.10.29+1` equals `2026.10.29`) and some tools drop it, so two releases could collapse into one version. A counter in the third numeric field avoids both.
+- **Tooling.** `npm run release` (`scripts/release.ts`, logic in `src/pkg/release/`) replaces `npm version`: it requires a clean `main` equal to `origin/main`, picks max+1 over the month's tags, bumps `package.json` and the lockfile, commits `chore(release): <version>` and creates an annotated tag; the maintainer pushes with `git push --follow-tags origin main`. `release.yml` accepts only tags matching `^v\d{4}\.(?:[1-9]|1[0-2])\.[1-9]\d*$` that equal `package.json`'s version. Only a version with a `-` suffix (an untagged `-dev.<sha>` build) counts as a prerelease. Release notes run from the previous `v*` tag, sorted by version, which orders the old `0.x` tags before any calver tag. The cask's `livecheck` keeps `:github_latest` with an explicit calver regex.
+- **Consequences.** The first release is `v2026.10.1` (or the first of whichever month it is cut in). More than one release per month is fine. A version says nothing about compatibility. Tags can't be hand-written casually: the guard rejects anything else.

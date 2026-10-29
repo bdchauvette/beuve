@@ -10,6 +10,7 @@ cask "beuve" do
   livecheck do
     url :url
     strategy :github_latest
+    regex(/^v?(\d{4}\.\d{1,2}\.\d+)$/i)
   end
 
   depends_on arch: :arm64

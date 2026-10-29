@@ -30,9 +30,13 @@ jobs:
         run: |
           pkg=$(node -p "require('./package.json').version")
           if [ "$GITHUB_REF_TYPE" = tag ]; then
-            tag_version="${GITHUB_REF_NAME#v}"
-            if [ "$tag_version" != "$pkg" ]; then
-              echo "::error::tag $GITHUB_REF_NAME does not match package.json version $pkg; bump with 'npm version' and tag again"
+            # Calendar versions v<year>.<month>.<n>, no leading zeros (ADR 0049).
+            if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]{4}\.([1-9]|1[0-2])\.[1-9][0-9]*$'; then
+              echo "::error::tag $GITHUB_REF_NAME is not v<year>.<month>.<n> (for example v2026.10.1); create tags with 'npm run release'"
+              exit 1
+            fi
+            if [ "${GITHUB_REF_NAME#v}" != "$pkg" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match package.json version $pkg; delete the tag and use 'npm run release'"
               exit 1
             fi
             version="$pkg"
@@ -88,10 +92,10 @@ jobs:
         run: |
           node scripts/release-notes.ts > "$RUNNER_TEMP/notes.md"
           flags=()
-          # 0.2.0-beta.1 and the like are prereleases.
+          # Calendar releases never have a suffix; only -dev builds would be prereleases.
           case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/assets/* \
-            --verify-tag --title "beuve $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+            --verify-tag --title "beuve $VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
       - name: Update the Homebrew cask on main
         run: |
           case "$VERSION" in *-*) echo "Prerelease: leaving the cask alone"; exit 0 ;; esac

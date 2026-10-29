@@ -55,27 +55,27 @@ codesign --verify --deep --strict --verbose=2 /Applications/beuve.app
 
 ## Releasing
 
-`package.json` is the source of truth for the version. From a clean, up-to-date `main`:
+Versions are calendar versions, `<year>.<month>.<n>` (ADR 0049): `n` counts releases within the month from 1, with no leading zeros, so the sequence is `2026.10.1`, `2026.10.2`, `2026.11.1`. The year and month are UTC. The first calver release is `v2026.10.1` (or the first one of whatever month you run it in); `package.json` stays at `0.1.0` until then. From a clean `main` that equals `origin/main`:
 
 ```sh
-npm version patch        # or minor, major, or prerelease --preid beta (e.g. 0.2.0-beta.1)
-git push --follow-tags   # pushes main and the v<version> tag that npm version created
+npm run release                      # picks the version, commits chore(release): <version>, tags v<version>
+git push --follow-tags origin main   # pushes main and the tag; nothing is pushed until you run this
 ```
 
-`npm version` bumps `package.json` and `package-lock.json`, commits, and tags `v<version>`. Pushing the tag starts `release.yml`, which:
+`npm run release` (`scripts/release.ts`) refuses unless it is on `main`, the tree is clean and local `main` equals `origin/main` (it fetches first). It takes the highest existing `v<year>.<month>.*` tag, adds one, writes the version to `package.json` and `package-lock.json` and nothing else, commits and creates an annotated tag. Pushing the tag starts `release.yml`, which:
 
-1. Fails if the tag (without the `v`) differs from `package.json`'s version.
-2. Runs `npm run check` and `npm run dist:mac` on an Apple silicon runner (ad-hoc signed, no secrets).
+1. Fails unless the tag matches `^v\d{4}\.(?:[1-9]|1[0-2])\.[1-9]\d*$` and, without the `v`, equals `package.json`'s version.
+2. Runs `npm run check` and `npm run dist:mac` on an Apple silicon runner (ad-hoc signed, no secrets). electron-builder writes the version to both `CFBundleShortVersionString` and `CFBundleVersion`; `2026.10.1` is valid for both, so no override is needed.
 3. Writes `SHA256SUMS` for the dmg and zip.
-4. Generates release notes from the conventional commits since the previous `v*` tag (`scripts/release-notes.ts`: Features, Fixes, Performance, Refactoring, Documentation, Other changes) and publishes a GitHub Release, not a draft, with the dmg, zip and `SHA256SUMS` attached. A version with a suffix (`0.2.0-beta.1`) is marked as a prerelease and leaves the Homebrew cask alone.
-5. For a full release, downloads the published zip, hashes it, and pushes `chore(cask): beuve <version>` to `main` with the new `version` and `sha256` in `Casks/beuve.rb`. (A push made with `GITHUB_TOKEN` starts no workflows, and only tags start a release, so this cannot loop.)
+4. Generates release notes from the conventional commits since the previous `v*` tag (`scripts/release-notes.ts`: Features, Fixes, Performance, Refactoring, Documentation, Other changes; the whole history if there is none) and publishes a GitHub Release titled `beuve <version>`, not a draft, with the dmg, zip and `SHA256SUMS` attached. Calendar releases are never prereleases; only a version with a `-` suffix (a dev build) would be, and it leaves the Homebrew cask alone.
+5. Downloads the published zip, hashes it, and pushes `chore(cask): beuve <version>` to `main` with the new `version` and `sha256` in `Casks/beuve.rb`. (A push made with `GITHUB_TOKEN` starts no workflows, and only tags start a release, so this cannot loop.)
 6. Installs the cask from the tap on a macOS runner as a smoke test.
 
 Where things appear: the release at `https://github.com/bdchauvette/beuve/releases`, and a `beuve-<version>-mac-arm64` artifact on the workflow run (kept 90 days). Pull the cask commit (`git pull`) before your next release.
 
 A manual run of the workflow (Actions › Release › Run workflow) on a branch builds `<package version>-dev.<short sha>` and uploads the artifact only: no release, no cask change.
 
-If the guard step fails, delete the tag (`git push --delete origin v<x>` and `git tag -d v<x>`), fix the version, and tag again.
+If the guard step fails, delete the tag (`git push --delete origin v<x>` and `git tag -d v<x>`), reset the release commit if it was not pushed to others, and run `npm run release` again.
 
 ## Installing with Homebrew
 
