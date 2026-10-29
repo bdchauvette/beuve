@@ -3,25 +3,30 @@ import type {
   DiffLayoutView,
   IpcResult,
   SetDiffDisplayRequest,
+  SidebarSideView,
 } from '#contract/ipc-contract.ts';
 import { ok } from '#pkg/result/ok.ts';
 
 import { readSettingsFile } from '../settings/read-settings-file.ts';
 import { updateSettingsFile } from '../settings/update-settings-file.ts';
 
-/** `display:get` and `display:set`: the reviewer's diff layout and whitespace preference. */
+/** `display:get` and `display:set`: the diff layout, whitespace and sidebar side preferences. */
 export interface DisplayServices {
   readonly get: () => Promise<IpcResult<DiffDisplayView>>;
   readonly set: (request: SetDiffDisplayRequest) => Promise<IpcResult<DiffDisplayView>>;
 }
 
-const defaults: DiffDisplayView = { layout: 'split', ignoreWhitespace: false };
+const defaults: DiffDisplayView = {
+  layout: 'split',
+  ignoreWhitespace: false,
+  sidebarSide: 'right',
+};
 
 /**
- * Keeps the diff display preferences (ADR 0042) in the JSON file at `filePath`
- * (`<userData>/settings.json`) as `diffLayout` and `ignoreWhitespace`, next to any other keys.
- * A missing or malformed value reads as the default: split, whitespace shown. Without a path,
- * in memory.
+ * Keeps the display preferences (ADR 0042, 0044) in the JSON file at `filePath`
+ * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace` and `sidebarSide`, next to
+ * any other keys. A missing or malformed value reads as the default: split, whitespace shown,
+ * sidebar on the right. Without a path, in memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
   let remembered = defaults;
@@ -37,6 +42,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
           ...current,
           diffLayout: next.layout,
           ignoreWhitespace: next.ignoreWhitespace,
+          sidebarSide: next.sidebarSide,
         }));
       }
       return ok(next);
@@ -47,13 +53,19 @@ export function createDisplayServices(filePath?: string): DisplayServices {
 function toDisplay(settings: Readonly<Record<string, unknown>>): DiffDisplayView {
   const layout = settings['diffLayout'];
   const ignoreWhitespace = settings['ignoreWhitespace'];
+  const sidebarSide = settings['sidebarSide'];
   return {
     layout: isLayout(layout) ? layout : defaults.layout,
     ignoreWhitespace:
       typeof ignoreWhitespace === 'boolean' ? ignoreWhitespace : defaults.ignoreWhitespace,
+    sidebarSide: isSidebarSide(sidebarSide) ? sidebarSide : defaults.sidebarSide,
   };
 }
 
 function isLayout(value: unknown): value is DiffLayoutView {
   return value === 'split' || value === 'unified';
+}
+
+function isSidebarSide(value: unknown): value is SidebarSideView {
+  return value === 'left' || value === 'right';
 }

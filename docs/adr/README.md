@@ -49,3 +49,4 @@ Template: [0000-template.md](0000-template.md)
 | [0041](0041-trace-probe-trust-channels-and-cancellation.md)           | Trace probes in the app: trust, channels, cancellation and the MCP tool      | Accepted |
 | [0042](0042-diff-display-modes-whitespace-variant-and-impact-chip.md) | Diff display modes, the whitespace-ignoring variant, and the ImpactGate chip | Accepted |
 | [0043](0043-inline-edits-become-suggestions.md)                       | Inline edits become suggested patches, never writes                          | Accepted |
+| [0044](0044-two-column-shell-open-flow-and-command-palette.md)        | Two-column shell, one open flow, and a command palette over one registry     | Accepted |

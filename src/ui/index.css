@@ -13,8 +13,7 @@
 
   --beuve-titlebar-height: 38px;
   --beuve-statusbar-height: 26px;
-  --beuve-intent-width: 260px;
-  --beuve-ura-width: 320px;
+  --beuve-sidebar-width: clamp(300px, 26vw, 380px);
   --beuve-chat-height: 280px;
 
   --beuve-bg: #f7f7f8;
@@ -30,6 +29,7 @@
   --beuve-warn: #a86a00;
   --beuve-danger: #c8333a;
   --beuve-scrim: #0000004d;
+  --beuve-scrim-soft: #1b1c2014;
 
   /* Code surfaces follow the Alabaster palette (ADR 0025); syntax colors live in syntax-palettes.ts. */
   --beuve-code-bg: #f7f7f7;
@@ -62,6 +62,7 @@
     --beuve-warn: #e0a83a;
     --beuve-danger: #ff6b70;
     --beuve-scrim: #00000080;
+    --beuve-scrim-soft: #00000059;
 
     --beuve-code-bg: #0e1415;
     --beuve-code-text: #cecece;

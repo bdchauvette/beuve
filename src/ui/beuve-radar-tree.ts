@@ -133,6 +133,11 @@ export class BeuveRadarTree extends LitElement {
     this.fileTree?.focusPath(first.path);
   }
 
+  /** Focuses `path`'s row, for the palette's unchanged files. */
+  revealPath(path: string): void {
+    this.fileTree?.focusPath(path);
+  }
+
   protected override updated(changed: PropertyValues<this>): void {
     const { library } = this;
     const isRelevant = ['tree', 'files', 'mode', 'impact', 'library'].some((key) =>

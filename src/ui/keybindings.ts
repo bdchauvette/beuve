@@ -1,75 +1,15 @@
+import { commandRegistry } from './command-registry.ts';
+
 export interface Keybinding {
   readonly keys: readonly string[];
   readonly action: string;
+  readonly scope: string;
   readonly available: boolean;
 }
 
-/** The keyboard map of spec 5A. `available` marks what the shell already handles. */
-export const keybindings: readonly Keybinding[] = Object.freeze([
-  { keys: ['Tab', 'Shift+Tab'], action: 'Cycle zones', available: true },
-  { keys: ['?'], action: 'Show this overlay', available: true },
-  { keys: ['c'], action: 'Open / focus the chat input (again to close)', available: true },
-  {
-    keys: ['Enter'],
-    action: 'Chat: ask a question, or run a command (/review, /trust, /clear, /help)',
-    available: true,
-  },
-  { keys: ['Esc'], action: 'Chat: back to the diff stream', available: true },
-  {
-    keys: ['↑', '↓'],
-    action: 'Chat: move between citation pills and answer buttons (Enter activates)',
-    available: true,
-  },
-  { keys: ['j', 'k'], action: 'Next / previous hunk (across files)', available: true },
-  { keys: ['Space'], action: 'Expand / collapse', available: false },
-  { keys: ['f'], action: 'Toggle diff-only tree', available: true },
-  { keys: ['p'], action: 'Call-stack peek (callers)', available: true },
-  {
-    keys: ['Esc'],
-    action: 'Close the peek, flow or trace portal (stops a running probe)',
-    available: true,
-  },
-  { keys: [']', '['], action: 'Next / previous agent insight', available: true },
-  {
-    keys: ['y'],
-    action: 'Stage the agent insight in the dock (again to withdraw)',
-    available: true,
-  },
-  { keys: ['d'], action: 'Dismiss / restore the agent insight', available: true },
-  {
-    keys: ['m'],
-    action: 'Stage the selected lines, hunk or file as a note (Enter saves, Esc cancels)',
-    available: true,
-  },
-  { keys: ['j', 'k'], action: 'Dock: next / previous item', available: true },
-  { keys: ['Enter'], action: 'Dock: show the item in the diff stream', available: true },
-  { keys: ['Space'], action: 'Dock: edit title, body and severity', available: true },
-  { keys: ['x'], action: 'Dock: withdraw / restore the item', available: true },
-  { keys: ['a'], action: 'Dock: mark addressed / restage', available: true },
-  { keys: ['Shift+j', 'Shift+k'], action: 'Dock: move the item down / up', available: true },
-  {
-    keys: ['Shift+p'],
-    action: 'Control-flow graph of the function (Enter shows the code)',
-    available: true,
-  },
-  {
-    keys: ['r'],
-    action:
-      'Trace probe: run the tests covering the hunk and show what executed (asks once per repository; Enter shows the line)',
-    available: true,
-  },
-  {
-    keys: ['e'],
-    action:
-      'Suggest an edit to the hunk or selected lines (⌘Enter saves as a suggestion, Esc cancels; files are never written)',
-    available: true,
-  },
-  { keys: ['s'], action: 'Diffs side by side / inline', available: true },
-  { keys: ['w'], action: 'Hide / show whitespace-only changes', available: true },
-  { keys: ['i'], action: 'ImpactGate details of the file (Esc closes)', available: true },
-  {
-    keys: ['o'],
-    action: 'Open in your editor at this line (diff stream, dock item or chat citation)',
-    available: true,
-  },
-]);
+/** The keyboard map (spec 5A and the shell's own keys), read from the command registry. */
+export const keybindings: readonly Keybinding[] = Object.freeze(
+  commandRegistry
+    .filter((command) => command.keys.length > 0)
+    .map(({ keys, title, scope, available }) => ({ keys, action: title, scope, available })),
+);

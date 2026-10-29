@@ -1,34 +1,31 @@
 import { css } from 'lit';
 
-/** Shared chrome for zone elements: a header that lights up when the zone has focus. */
+/** Shared chrome for zone elements: a top accent line while the zone has focus, and body padding. */
 export const zoneStyles = css`
   :host {
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    position: relative;
     background: var(--beuve-surface);
     outline: none;
   }
 
-  header {
-    display: flex;
-    align-items: center;
-    gap: var(--beuve-space-2);
-    height: 32px;
-    flex: none;
-    padding: 0 var(--beuve-space-3);
-    border-bottom: 1px solid var(--beuve-border);
-    font: var(--beuve-font-small);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--beuve-text-muted);
+  /* No title bars: the focused region shows a thin accent line along its top edge. */
+  :host::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 4;
+    height: 2px;
+    background: transparent;
+    pointer-events: none;
+    transition: background 120ms;
   }
 
-  :host([focused]) header {
-    color: var(--beuve-accent);
-    box-shadow: inset 0 -2px 0 var(--beuve-accent);
+  :host([focused])::after {
+    background: var(--beuve-accent);
   }
 
   .body {

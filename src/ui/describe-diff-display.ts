@@ -11,7 +11,10 @@ export interface DiffDisplayLabel {
  * (narrow)` when a split doesn't fit, and `· whitespace hidden` while whitespace is ignored. The
  * tooltip says which keys change it.
  */
-export function describeDiffDisplay(display: DiffDisplayView, isNarrow: boolean): DiffDisplayLabel {
+export function describeDiffDisplay(
+  display: Pick<DiffDisplayView, 'layout' | 'ignoreWhitespace'>,
+  isNarrow: boolean,
+): DiffDisplayLabel {
   const isSplit = display.layout === 'split';
   const layout = isSplit ? (isNarrow ? 'Inline (narrow)' : 'Split') : 'Inline';
   const text = display.ignoreWhitespace ? `${layout} · whitespace hidden` : layout;

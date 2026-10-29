@@ -578,6 +578,20 @@ export class BeuveChatDrawer extends LitElement {
     }
   }
 
+  /** Types `text` into the input for the reviewer to finish (the palette's commands with arguments). */
+  prefill(text: string): void {
+    void this.updateComplete.then(() => {
+      const input = this.inputElement();
+      if (input === undefined) {
+        return;
+      }
+
+      input.value = text;
+      input.focus();
+      input.setSelectionRange(text.length, text.length);
+    });
+  }
+
   /** Focuses the command input, after the first render if it hasn't happened yet. */
   override focus(options?: FocusOptions): void {
     const input = this.inputElement();
@@ -592,7 +606,6 @@ export class BeuveChatDrawer extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <header>Chat <span>· read-only</span></header>
       <div class="body" @keydown=${this.onBodyKeyDown}>
         ${
           this.transcript.length === 0

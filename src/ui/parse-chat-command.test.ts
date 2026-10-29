@@ -113,4 +113,10 @@ describe('parseChatCommand', () => {
       message: 'Unknown command /explain. Type /help for the commands.',
     });
   });
+
+  it('parses /sidebar', () => {
+    expect(parseChatCommand('/sidebar left')).toEqual({ kind: 'sidebar', side: 'left' });
+    expect(parseChatCommand('/layout a').kind).toBe('invalid');
+    expect(parseChatCommand('/sidebar').kind).toBe('invalid');
+  });
 });

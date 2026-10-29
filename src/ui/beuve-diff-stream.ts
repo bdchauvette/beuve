@@ -70,7 +70,11 @@ export interface SuggestionJump {
   readonly nonce: number;
 }
 
-const defaultDisplay: DiffDisplayView = { layout: 'split', ignoreWhitespace: false };
+const defaultDisplay: DiffDisplayView = {
+  layout: 'split',
+  ignoreWhitespace: false,
+  sidebarSide: 'right',
+};
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
 const mountMargin = '1200px 0px';
@@ -883,7 +887,6 @@ export class BeuveDiffStream extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <header>Diff stream</header>
       ${this.review === undefined ? this.renderWelcome() : this.renderReview(this.review)}
     `;
   }

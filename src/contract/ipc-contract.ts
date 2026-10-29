@@ -15,6 +15,9 @@ export interface AppInfo {
   readonly nodeVersion: string;
 }
 
+/** Which side of the diff the sidebar sits on (ADR 0044). */
+export type SidebarSideView = 'left' | 'right';
+
 /** What a session reviews: a local branch or a GitHub pull request. */
 export type SessionSourceView =
   | {
@@ -70,6 +73,40 @@ export interface CreateLocalSessionRequest {
   readonly baseRef: string;
   readonly headRef: string;
 }
+
+/** A folder the reviewer picked, before any session exists for it. */
+export interface InspectRepositoryRequest {
+  /** Absolute path inside a git worktree. */
+  readonly path: string;
+}
+
+/** A local or remote-tracking branch by its short name (`main`, `origin/main`). */
+export interface BranchView {
+  readonly name: string;
+  readonly isRemote: boolean;
+  readonly committedAt: string;
+}
+
+/** The repository containing a folder, with branch suggestions for base and head. */
+export interface RepositoryInspectionView {
+  readonly root: string;
+  /** The checked-out branch; absent on a detached head. */
+  readonly currentBranch?: string;
+  /** `origin/HEAD`'s target, else `main` or `master`. */
+  readonly defaultBase?: string;
+  /** Most recently committed first. */
+  readonly branches: readonly BranchView[];
+}
+
+/** Shows the system folder picker. */
+export interface ChooseFolderRequest {
+  readonly title?: string;
+  /** Absolute path the picker starts in. */
+  readonly defaultPath?: string;
+}
+
+export type ChooseFolderResponse =
+  { readonly kind: 'chosen'; readonly path: string } | { readonly kind: 'cancelled' };
 
 export interface GetReviewRequest {
   readonly sessionId: string;
@@ -1142,16 +1179,18 @@ export interface SetPreferredEditorRequest {
 /** How a diff card lays out a modification: side by side, or one inline column (ADR 0042). */
 export type DiffLayoutView = 'split' | 'unified';
 
-/** The reviewer's diff display preferences, kept in `settings.json` (ADR 0042). */
+/** The reviewer's display preferences, kept in `settings.json` (ADR 0042, 0044). */
 export interface DiffDisplayView {
   readonly layout: DiffLayoutView;
   readonly ignoreWhitespace: boolean;
+  readonly sidebarSide: SidebarSideView;
 }
 
-/** Changes one or both preferences; what is left out stays as it was. */
+/** Changes some preferences; what is left out stays as it was. */
 export interface SetDiffDisplayRequest {
   readonly layout?: DiffLayoutView;
   readonly ignoreWhitespace?: boolean;
+  readonly sidebarSide?: SidebarSideView;
 }
 
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
@@ -1386,6 +1425,14 @@ export interface InvokeChannelMap {
   'session:create-local': {
     readonly request: CreateLocalSessionRequest;
     readonly response: IpcResult<SessionSummary>;
+  };
+  'repository:inspect': {
+    readonly request: InspectRepositoryRequest;
+    readonly response: IpcResult<RepositoryInspectionView>;
+  };
+  'dialog:choose-folder': {
+    readonly request: ChooseFolderRequest;
+    readonly response: IpcResult<ChooseFolderResponse>;
   };
   'session:get-review': {
     readonly request: GetReviewRequest;

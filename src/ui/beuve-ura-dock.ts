@@ -864,10 +864,6 @@ export class BeuveUraDock extends LitElement {
     const ordered = this.ordered();
     const stagedCount = this.items.filter((item) => item.status.kind === 'staged').length;
     return html`
-      <header>
-        Review dock
-        ${this.items.length === 0 ? nothing : html`<span class="count">${stagedCount} staged</span>`}
-      </header>
       <div class="body">
         <section>
           ${

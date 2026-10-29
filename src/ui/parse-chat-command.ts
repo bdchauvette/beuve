@@ -1,4 +1,9 @@
-import type { DiffLayoutView, EditorId, ReviewEffort } from '#contract/ipc-contract.ts';
+import type {
+  DiffLayoutView,
+  EditorId,
+  ReviewEffort,
+  SidebarSideView,
+} from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 
 /** What the reviewer typed into the chat drawer, parsed (ADR 0022). */
@@ -23,6 +28,8 @@ export type ChatCommand =
       readonly fresh: boolean;
       readonly effort?: ReviewEffort;
     }
+  /** Puts the sidebar on one side (ADR 0044). */
+  | { readonly kind: 'sidebar'; readonly side: SidebarSideView }
   /** Plain text: a question about the change for the Q&A chat (ADR 0031). */
   | { readonly kind: 'question'; readonly text: string }
   /** An unknown command or a malformed one; `message` says how to fix it. */
@@ -34,7 +41,7 @@ const whitespace = /\s+/u;
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
  * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, `/diff [split|inline]`,
- * `/whitespace [ignore|show]`, and
+ * `/whitespace [ignore|show]`, `/sidebar left|right`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -76,6 +83,12 @@ export function parseChatCommand(input: string): ChatCommand {
     }
     case '/review': {
       return parseReview(args);
+    }
+    case '/sidebar': {
+      const [side] = args;
+      return args.length === 1 && (side === 'left' || side === 'right')
+        ? { kind: 'sidebar', side }
+        : invalid('/sidebar takes left or right.');
     }
     default: {
       return { kind: 'invalid', message: `Unknown command ${name}. Type /help for the commands.` };

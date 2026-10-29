@@ -9,6 +9,7 @@ import type {
   AppInfo,
   CallHierarchyRequest,
   CallHierarchyView,
+  ChooseFolderResponse,
   ChatAskedView,
   ChatCancelledView,
   ChatClearedView,
@@ -33,6 +34,7 @@ import type {
   PullRequestSessionView,
   ReviewRunHandleView,
   ReviewRunRequest,
+  RepositoryInspectionView,
   RepositoryTreeView,
   ReviewView,
   SessionSummary,
@@ -52,6 +54,11 @@ import type { MainServices } from '../main-services.ts';
 export interface IpcPlatform {
   /** Absent outside Electron, where `clipboard:write-text` answers `not-wired`. */
   readonly writeClipboard?: (text: string) => Promise<void>;
+  /** The system folder picker; absent outside Electron, where `dialog:choose-folder` answers `not-wired`. */
+  readonly chooseFolder?: (options: {
+    readonly title?: string;
+    readonly defaultPath?: string;
+  }) => Promise<string | undefined>;
 }
 
 /** One handler per invoke channel. Each takes the raw, untrusted renderer argument. */
@@ -70,6 +77,21 @@ const localSessionRequest = z.strictObject({
   repoPath: z.string().min(1).max(4096),
   baseRef: revision,
   headRef: revision,
+});
+const windowsDrivePath = /^[A-Za-z]:[\\/]/u;
+const inspectRepositoryRequest = z.strictObject({
+  path: z
+    .string()
+    .min(1)
+    .max(4096)
+    .refine(
+      (value) => value.startsWith('/') || windowsDrivePath.test(value),
+      'expected an absolute path',
+    ),
+});
+const chooseFolderRequest = z.strictObject({
+  title: z.string().max(200).optional(),
+  defaultPath: z.string().min(1).max(4096).optional(),
 });
 const markReviewedRequest = z.strictObject({
   sessionId,
@@ -216,6 +238,7 @@ const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode
 const displayRequest = z.strictObject({
   layout: z.enum(['split', 'unified']).optional(),
   ignoreWhitespace: z.boolean().optional(),
+  sidebarSide: z.enum(['left', 'right']).optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -253,6 +276,27 @@ export function createIpcHandlers(
     'session:create-local': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = localSessionRequest.safeParse(request);
       return parsed.success ? services.sessions.createLocal(parsed.data) : invalid(parsed.error);
+    },
+    'repository:inspect': async (request): Promise<IpcResult<RepositoryInspectionView>> => {
+      const parsed = inspectRepositoryRequest.safeParse(request);
+      return parsed.success
+        ? services.sessions.inspectRepository(parsed.data)
+        : invalid(parsed.error);
+    },
+    'dialog:choose-folder': async (request): Promise<IpcResult<ChooseFolderResponse>> => {
+      const parsed = chooseFolderRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (platform.chooseFolder === undefined) {
+        return err({ code: 'not-wired', message: 'no folder picker outside Electron' });
+      }
+      const { title, defaultPath } = parsed.data;
+      const chosen = await platform.chooseFolder({
+        ...(title !== undefined && { title }),
+        ...(defaultPath !== undefined && { defaultPath }),
+      });
+      return ok(chosen === undefined ? { kind: 'cancelled' } : { kind: 'chosen', path: chosen });
     },
     'session:get-review': async (request): Promise<IpcResult<ReviewView>> => {
       const parsed = reviewRequest.safeParse(request);
@@ -473,10 +517,11 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { layout, ignoreWhitespace } = parsed.data;
+      const { layout, ignoreWhitespace, sidebarSide } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
         ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
+        ...(sidebarSide !== undefined && { sidebarSide }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {

@@ -30,6 +30,7 @@ import type {
   ReviewView,
   SessionSummary,
   SetDiffDisplayRequest,
+  SidebarSideView,
   UraExportTarget,
   UraItemView,
   UraSeverityView,
@@ -37,6 +38,8 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
+import './beuve-command-palette.ts';
+import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
@@ -44,6 +47,17 @@ import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
 import { beuveBridge } from './beuve-bridge.ts';
+import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
+import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
+import type {
+  BeuveOpenPanel,
+  FolderChooser,
+  OpenFailure,
+  RepositoryInspector,
+} from './beuve-open-panel.ts';
+import { commandRegistry } from './command-registry.ts';
+import type { AppAction, CommandDefinition } from './command-registry.ts';
+import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type {
   FileJump,
   InsightJump,
@@ -63,6 +77,7 @@ import { chatHelp } from './chat-help.ts';
 import { currentEditorName } from './current-editor-name.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
+import { displayKey } from './display-key.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { cycleZone } from './cycle-zone.ts';
@@ -96,19 +111,10 @@ export class BeuveApp extends LitElement {
     :host {
       display: grid;
       height: 100%;
-      grid-template-columns: var(--beuve-intent-width) minmax(0, 1fr) var(--beuve-ura-width);
-      grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) auto var(
-          --beuve-statusbar-height
-        );
-      grid-template-areas:
-        'title title title'
-        'intent diff ura'
-        'intent chat ura'
-        'status status status';
+      grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(--beuve-statusbar-height);
     }
 
     .titlebar {
-      grid-area: title;
       display: flex;
       align-items: center;
       gap: var(--beuve-space-3);
@@ -127,29 +133,170 @@ export class BeuveApp extends LitElement {
       font-weight: 600;
     }
 
-    .session {
+    .titlebar button {
+      min-width: 0;
+      padding: 2px var(--beuve-space-2);
+      overflow: hidden;
+      border: 1px solid transparent;
+      border-radius: var(--beuve-radius);
+      background: none;
+      color: var(--beuve-text-muted);
+      font: inherit;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar button:hover {
+      border-color: var(--beuve-border);
+      color: var(--beuve-text);
+    }
+
+    .titlebar .spacer {
+      flex: 1;
+    }
+
+    .titlebar kbd {
+      font: var(--beuve-font-mono);
+      font-size: 11px;
+    }
+
+    .workspace {
+      display: grid;
+      min-height: 0;
+      grid-template-columns: minmax(0, 1fr) var(--beuve-sidebar-width);
+      grid-template-areas: 'main side';
+    }
+
+    .workspace.left {
+      grid-template-columns: var(--beuve-sidebar-width) minmax(0, 1fr);
+      grid-template-areas: 'side main';
+    }
+
+    .workspace.solo {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'main';
+    }
+
+    .main {
+      grid-area: main;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .main > beuve-diff-stream,
+    .main > .empty {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .empty {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      overflow: auto;
+      padding: 14vh var(--beuve-space-6) var(--beuve-space-6);
+      background: var(--beuve-bg);
+      outline: none;
+    }
+
+    .empty > div {
+      width: min(620px, 100%);
+    }
+
+    .empty h1 {
+      margin: 0 0 var(--beuve-space-1);
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .empty p {
+      margin: 0 0 var(--beuve-space-4);
       color: var(--beuve-text-muted);
     }
 
-    beuve-intent-sidebar {
-      grid-area: intent;
+    .sidebar {
+      grid-area: side;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      border-left: 1px solid var(--beuve-border);
+      background: var(--beuve-surface);
     }
 
-    beuve-diff-stream {
-      grid-area: diff;
+    .workspace.left .sidebar {
+      border-right: 1px solid var(--beuve-border);
+      border-left: none;
     }
 
-    beuve-ura-dock {
-      grid-area: ura;
+    .sidebar > * {
+      border: none;
     }
 
-    beuve-chat-drawer {
-      grid-area: chat;
-      height: var(--beuve-chat-height);
+    .sidebar > [hidden] {
+      display: none;
     }
 
-    beuve-status-bar {
-      grid-area: status;
+    .sidebar > beuve-intent-sidebar,
+    .sidebar > beuve-ura-dock,
+    .sidebar > beuve-chat-drawer {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Intent & files, Review and Chat as three quiet tabs. */
+    .tabs {
+      display: flex;
+      flex: none;
+      gap: var(--beuve-space-4);
+      height: 30px;
+      padding: 0 var(--beuve-space-3);
+      border-bottom: 1px solid var(--beuve-border);
+    }
+
+    .tabs button {
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--beuve-text-muted);
+      font: var(--beuve-font-small);
+      box-shadow: inset 0 -2px 0 transparent;
+      cursor: pointer;
+    }
+
+    .tabs button[aria-selected='true'] {
+      color: var(--beuve-text);
+      box-shadow: inset 0 -2px 0 var(--beuve-border);
+    }
+
+    .tabs .count {
+      margin-left: 3px;
+      color: var(--beuve-text-muted);
+    }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 12vh;
+      background: var(--beuve-scrim-soft);
+    }
+
+    .dialog {
+      width: min(640px, calc(100vw - 48px));
+      box-sizing: border-box;
+      padding: var(--beuve-space-4);
+      border: 1px solid var(--beuve-border);
+      border-radius: 10px;
+      background: var(--beuve-surface);
+      box-shadow: 0 16px 48px #00000040;
     }
   `;
 
@@ -426,13 +573,44 @@ export class BeuveApp extends LitElement {
     void this.setInsightStatus(event.detail.insightId, event.detail.status);
   };
 
+  private readonly onPaletteRun = (event: CustomEvent<{ action: PaletteAction }>): void => {
+    this.paletteText = undefined;
+    void this.runPaletteAction(event.detail.action);
+  };
+
+  private readonly onPaletteClose = (): void => {
+    this.closePalette();
+  };
+
+  private readonly onOpenClose = (): void => {
+    this.closeOpenDialog();
+  };
+
+  private readonly chooseFolder: FolderChooser = async (
+    defaultPath: string | undefined,
+  ): Promise<string | undefined> => {
+    const chosen = await beuveBridge()?.invoke('dialog:choose-folder', {
+      ...(defaultPath !== undefined && { defaultPath }),
+    });
+    return chosen?.ok === true && chosen.value.kind === 'chosen' ? chosen.value.path : undefined;
+  };
+
+  private readonly inspectRepository: RepositoryInspector = async (path) =>
+    (await beuveBridge()?.invoke('repository:inspect', { path })) ?? {
+      ok: false,
+      error: { code: 'not-wired', message: 'no Electron bridge' },
+    };
+
   @state() accessor focusedZone: ZoneId = 'diff';
-  @state() accessor chatOpen = false;
   @state() accessor overlayOpen = false;
   @state() accessor statusNotice: StatusNotice | undefined;
   @state() accessor editorSettings: EditorSettingsView | undefined;
   /** Split or inline, and whether whitespace is ignored (ADR 0042); main stores it. */
-  @state() accessor display: DiffDisplayView = { layout: 'split', ignoreWhitespace: false };
+  @state() accessor display: DiffDisplayView = {
+    layout: 'split',
+    ignoreWhitespace: false,
+    sidebarSide: 'right',
+  };
   @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
@@ -450,7 +628,7 @@ export class BeuveApp extends LitElement {
   @state() accessor reviewError = '';
   @state() accessor marking = false;
   @state() accessor opening = false;
-  @state() accessor openError = '';
+  @state() accessor localFailure: OpenFailure | undefined;
   @state() accessor chat: ChatTranscript = emptyChatTranscript;
   /** Agent insights for the open review's head. */
   @state() accessor insights: readonly AgentInsightView[] = [];
@@ -471,8 +649,15 @@ export class BeuveApp extends LitElement {
   @state() accessor ci: CiStatusView | undefined;
   @state() accessor githubAuth: GithubAuthStatusView | undefined;
   @state() accessor openingPull = false;
-  @state() accessor pullError = '';
-  @state() accessor pullRemedy = '';
+  @state() accessor pullFailure: OpenFailure | undefined;
+  /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
+  @state() accessor sidebarSide: SidebarSideView = 'right';
+  @state() accessor sidebarHidden = false;
+  /** The sidebar tab on show: intent and files, the review or the chat. */
+  @state() accessor sidebarTab: SidebarZone = 'intent';
+  @state() accessor openDialog = false;
+  /** The palette's starting text while it is open. */
+  @state() accessor paletteText: string | undefined;
   @state() accessor githubPost: GithubPostState = { kind: 'idle' };
 
   constructor() {
@@ -581,21 +766,24 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.openingPull = true;
-    this.pullError = '';
-    this.pullRemedy = '';
+    this.pullFailure = undefined;
     const opened = await bridge.invoke('github:open-pr', request);
     this.openingPull = false;
     if (!opened.ok) {
-      this.pullError = opened.error.message;
+      this.pullFailure = { message: opened.error.message };
+      this.openDialog = this.review !== undefined;
       return;
     }
     if (opened.value.kind === 'failed') {
       const { message, remedy } = opened.value;
-      this.pullError = message;
-      this.pullRemedy = remedy === undefined || message.includes(remedy) ? '' : remedy;
-      this.focusedZone = 'intent';
+      this.pullFailure = {
+        message,
+        ...(remedy !== undefined && !message.includes(remedy) && { remedy }),
+      };
+      this.openDialog = this.review !== undefined;
       return;
     }
+    this.openDialog = false;
     await this.refreshSessions();
     await this.selectSession(opened.value.session.id);
   }
@@ -728,6 +916,7 @@ export class BeuveApp extends LitElement {
   private applyDisplay(display: DiffDisplayView): void {
     const isWhitespaceChanged = display.ignoreWhitespace !== this.display.ignoreWhitespace;
     this.display = display;
+    this.sidebarSide = display.sidebarSide;
     if (isWhitespaceChanged && this.selectedId !== '') {
       void this.selectSession(this.selectedId);
     }
@@ -739,7 +928,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return undefined;
     }
-    const isQuery = change.layout === undefined && change.ignoreWhitespace === undefined;
+    const isQuery = Object.keys(change).length === 0;
     const result = isQuery
       ? await bridge.invoke('display:get')
       : await bridge.invoke('display:set', change);
@@ -748,7 +937,7 @@ export class BeuveApp extends LitElement {
       return undefined;
     }
     this.applyDisplay(result.value);
-    if (!isQuery) {
+    if (change.layout !== undefined || change.ignoreWhitespace !== undefined) {
       this.showNotice({
         tone: 'info',
         text: `Diffs: ${describeDiffDisplay(result.value, false).text}`,
@@ -808,13 +997,14 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.opening = true;
-    this.openError = '';
+    this.localFailure = undefined;
     const created = await bridge.invoke('session:create-local', request);
     this.opening = false;
     if (!created.ok) {
-      this.openError = created.error.message;
+      this.localFailure = { message: created.error.message };
       return;
     }
+    this.openDialog = false;
     await this.refreshSessions();
     await this.selectSession(created.value.id);
   }
@@ -824,6 +1014,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return;
     }
+    this.openDialog = false;
     if (sessionId !== this.selectedId) {
       this.review = undefined;
       this.insights = [];
@@ -1232,6 +1423,13 @@ export class BeuveApp extends LitElement {
         void this.startReview(command);
         return;
       }
+      case 'sidebar': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.setSidebarSide(command.side).then(() => {
+          this.note('info', `Sidebar on the ${command.side}.`);
+        });
+        return;
+      }
     }
   }
 
@@ -1606,7 +1804,15 @@ export class BeuveApp extends LitElement {
   }
 
   private handleKey(event: KeyboardEvent): void {
-    if (event.ctrlKey || event.metaKey || event.altKey || isEditable(event)) {
+    if (
+      this.handleModifiedKey(event) ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      isEditable(event) ||
+      this.paletteText !== undefined ||
+      this.openDialog
+    ) {
       return;
     }
     if (this.overlayOpen) {
@@ -1616,55 +1822,297 @@ export class BeuveApp extends LitElement {
       }
       return;
     }
-    switch (event.key) {
-      case 'Tab': {
-        event.preventDefault();
-        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, event.shiftKey ? -1 : 1);
+    const action = plainKeyActions[event.key];
+    if (action === undefined || (action === 'cycle-zone' && event.key !== 'Tab')) {
+      return;
+    }
+    event.preventDefault();
+    if (action === 'cycle-zone') {
+      this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, event.shiftKey ? -1 : 1);
+      return;
+    }
+    this.runAppAction(action);
+  }
+
+  /** ⌘K / ⌘⇧P (palette), ⌘P (files), ⌘O (open), Ctrl on other platforms; work in text fields too. */
+  private handleModifiedKey(event: KeyboardEvent): boolean {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+      return false;
+    }
+    const key = event.key.toLowerCase();
+    const isPaletteOpen = this.paletteText !== undefined;
+    let action: AppAction | 'close' | undefined;
+    if (key === 'k' || (key === 'p' && event.shiftKey)) {
+      action = isPaletteOpen ? 'close' : 'palette';
+    } else if (key === 'p' && !isPaletteOpen && !this.openDialog) {
+      action = 'go-to-file';
+    } else if (key === 'o') {
+      action = 'open';
+    }
+    if (action === undefined) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (action === 'close') {
+      this.closePalette();
+    } else {
+      this.runAppAction(action);
+    }
+    return true;
+  }
+
+  private runAppAction(action: AppAction): void {
+    switch (action) {
+      case 'open': {
+        this.paletteText = undefined;
+        this.showOpenDialog();
         return;
       }
-      case '?': {
-        event.preventDefault();
+      case 'palette':
+      case 'go-to-file': {
+        this.openDialog = false;
+        this.overlayOpen = false;
+        this.paletteText = action === 'palette' ? '' : '@';
+        return;
+      }
+      case 'cycle-zone': {
+        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, 1);
+        return;
+      }
+      case 'shortcuts': {
         this.overlayOpen = true;
         return;
       }
-      case 'c': {
-        event.preventDefault();
+      case 'chat': {
         this.toggleChat();
         return;
       }
-      case 'f': {
-        event.preventDefault();
+      case 'tree-mode': {
         this.treeMode = this.treeMode === 'diff-only' ? 'neighborhood' : 'diff-only';
         return;
       }
-      default: {
+      case 'toggle-sidebar': {
+        this.sidebarHidden = !this.sidebarHidden;
+        if (this.sidebarHidden && this.focusedZone !== 'diff') {
+          this.focusedZone = 'diff';
+        }
         return;
+      }
+      case 'flip-sidebar': {
+        void this.setSidebarSide(this.sidebarSide === 'right' ? 'left' : 'right');
+        return;
+      }
+      case 'sidebar-overview': {
+        this.focusSidebar('intent');
+        return;
+      }
+      case 'sidebar-review': {
+        this.focusSidebar('ura');
+        return;
+      }
+      case 'sidebar-chat': {
+        this.focusSidebar('chat');
       }
     }
   }
 
-  private zoneOrder(): ZoneId[] {
-    return zones.map(({ id }) => id).filter((id) => id !== 'chat' || this.chatOpen);
+  private focusSidebar(zone: SidebarZone): void {
+    if (this.review === undefined) {
+      return;
+    }
+    this.sidebarHidden = false;
+    this.focusedZone = zone;
   }
 
-  /** `c`: opens the drawer, or focuses its input if it is open elsewhere; closes it from the drawer. */
+  /** `/sidebar left|right`: moves the sidebar now and stores the side in `settings.json`. */
+  private async setSidebarSide(side: SidebarSideView): Promise<void> {
+    this.sidebarSide = side;
+    if ((await this.setDisplay({ sidebarSide: side })) !== undefined) {
+      this.showNotice({ tone: 'info', text: `Sidebar on the ${side}` });
+    }
+  }
+
+  private showOpenDialog(): void {
+    this.overlayOpen = false;
+    this.openDialog = true;
+    void this.updateComplete.then(() => {
+      const panel = this.openPanel();
+      panel?.reset();
+      panel?.focus();
+    });
+  }
+
+  private closeOpenDialog(): void {
+    this.openDialog = false;
+    this.pullFailure = undefined;
+    this.localFailure = undefined;
+    this.refocusZone();
+  }
+
+  private closePalette(): void {
+    this.paletteText = undefined;
+    this.refocusZone();
+  }
+
+  private openPanel(): BeuveOpenPanel | undefined {
+    return (
+      this.renderRoot.querySelector<BeuveOpenPanel>(':scope .dialog beuve-open-panel') ?? undefined
+    );
+  }
+
+  /** Puts focus back in the focused zone after an overlay closes. */
+  private refocusZone(): void {
+    void this.updateComplete.then(() => {
+      this.zoneElement(this.focusedZone)?.focus();
+    });
+  }
+
+  private zoneElement(zone: ZoneId): HTMLElement | undefined {
+    return (
+      this.renderRoot.querySelector<HTMLElement>(`[data-zone='${CSS.escape(zone)}']`) ?? undefined
+    );
+  }
+
+  private async runPaletteAction(action: PaletteAction): Promise<void> {
+    switch (action.kind) {
+      case 'command': {
+        await this.runCommand(action.command);
+        return;
+      }
+      case 'session': {
+        await this.selectSession(action.sessionId);
+        return;
+      }
+      case 'open-pull': {
+        if (action.repoPath !== undefined) {
+          await this.openPullRequest({ ref: action.ref, repoPath: action.repoPath });
+          return;
+        }
+        this.showOpenDialog();
+        await this.updateComplete;
+        this.openPanel()?.showPullStep(action.ref);
+        return;
+      }
+      case 'open-step': {
+        this.showOpenDialog();
+        await this.updateComplete;
+        const panel = this.openPanel();
+        if (action.step === 'pull') {
+          panel?.showPullStep('');
+        } else {
+          panel?.showLocalStep(action.path ?? '');
+        }
+        return;
+      }
+      case 'file': {
+        this.goToFile(action.path, action.isChanged);
+        return;
+      }
+      case 'ura-item': {
+        const item = this.uraItems.find(({ id }) => id === action.itemId);
+        if (item !== undefined) {
+          this.onUraJump(new CustomEvent('beuve-ura-jump', { detail: { item } }));
+        }
+        return;
+      }
+      case 'insight': {
+        this.onCitation(
+          new CustomEvent('beuve-citation', { detail: { insightId: action.insightId } }),
+        );
+      }
+    }
+  }
+
+  /** A changed file scrolls the diff to it; any other file is shown in the tree. */
+  private goToFile(path: string, isChanged: boolean): void {
+    if (isChanged) {
+      this.onTreeSelect(new CustomEvent('beuve-tree-select', { detail: { path } }));
+      this.focusedZone = 'diff';
+      this.refocusZone();
+      return;
+    }
+    this.treeMode = 'neighborhood';
+    this.focusSidebar('intent');
+    void this.updateComplete.then(() => {
+      this.renderRoot.querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')?.revealPath(path);
+    });
+  }
+
+  private async runCommand(command: CommandDefinition): Promise<void> {
+    const { run } = command;
+    switch (run.kind) {
+      case 'app': {
+        this.runAppAction(run.action);
+        this.refocusZone();
+        return;
+      }
+      case 'zone-key': {
+        if (run.zone === 'diff' || run.zone === 'chat' || this.review === undefined) {
+          this.focusedZone = run.zone;
+        } else {
+          this.focusSidebar(run.zone);
+        }
+        await this.updateComplete;
+        const zone = this.zoneElement(run.zone);
+        zone?.focus();
+        zone?.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: run.key,
+            shiftKey: run.isShifted === true,
+            bubbles: true,
+            composed: true,
+          }),
+        );
+        return;
+      }
+      case 'slash': {
+        this.focusSidebar('chat');
+        await this.updateComplete;
+        if (run.isPrefill) {
+          this.renderRoot.querySelector<BeuveChatDrawer>('beuve-chat-drawer')?.prefill(run.text);
+        } else {
+          this.submitChat(run.text);
+        }
+        return;
+      }
+      case 'none': {
+        const zone = scopeZones[command.scope];
+        if (zone !== undefined) {
+          this.focusedZone = zone;
+        }
+        this.refocusZone();
+      }
+    }
+  }
+
+  /** Zones Tab visits: the sidebar's only while it shows. */
+  private zoneOrder(): ZoneId[] {
+    const hasSidebar = this.review !== undefined && !this.sidebarHidden;
+    return zones.map(({ id }) => id).filter((id) => id === 'diff' || hasSidebar);
+  }
+
+  /** `c`: shows the chat tab and focuses its input; from the chat, goes back to the diff. */
   private toggleChat(): void {
-    const isClosing = this.chatOpen && this.focusedZone === 'chat';
-    this.chatOpen = !isClosing;
-    this.focusedZone = isClosing ? 'diff' : 'chat';
+    if (this.focusedZone === 'chat') {
+      this.focusedZone = 'diff';
+    } else {
+      this.focusSidebar('chat');
+    }
   }
 
   private sessionLabel(): string {
     const session = this.sessions.find(({ id }) => id === this.selectedId);
     if (session === undefined) {
-      return 'No session';
+      return 'Open a review…';
     }
     const { source } = session;
+    const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
     if (source.kind === 'github-pull-request') {
       const title = session.pullRequest === undefined ? '' : ` ${session.pullRequest.title}`;
-      return `${source.owner}/${source.repo} #${String(source.number)}${title} · ${source.repoPath}`;
+      return `${source.owner}/${source.repo}#${String(source.number)}${title}`;
     }
-    return `${source.repoPath} · ${source.baseRef} ← ${source.headRef}`;
+    return `${folder} · ${source.headRef} against ${source.baseRef}`;
   }
 
   /** The dock's GitHub posting state, for pull request sessions only. */
@@ -1687,128 +2135,224 @@ export class BeuveApp extends LitElement {
     };
   }
 
+  private paletteSources(): PaletteSources {
+    return {
+      commands: commandRegistry,
+      sessions: this.sessions,
+      ...(this.review !== undefined && { files: this.review.files }),
+      ...(this.tree !== undefined && { trackedPaths: this.tree.paths }),
+      uraItems: this.uraItems,
+      insights: this.insights,
+    };
+  }
+
+  private renderTitlebar(): TemplateResult {
+    return html`<div class="titlebar">
+      <span class="brand">beuve</span>
+      <button
+        type="button"
+        title="Open a pull request, branch or recent review (⌘O)"
+        @click=${(): void => {
+          this.showOpenDialog();
+        }}
+      >
+        ${this.sessionLabel()}
+      </button>
+      <span class="spacer"></span>
+      <button
+        type="button"
+        title="Command palette"
+        @click=${(): void => {
+          this.runAppAction('palette');
+        }}
+      >
+        <kbd>${displayKey('⌘K', this.appInfo?.platform)}</kbd>
+      </button>
+    </div>`;
+  }
+
+  private renderIntent(): TemplateResult {
+    return html`<beuve-intent-sidebar
+      data-zone="intent"
+      tabindex="-1"
+      ?hidden=${this.sidebarTab !== 'intent'}
+      ?focused=${this.focusedZone === 'intent'}
+      .pullRequest=${this.pullRequest}
+      .files=${this.review?.files}
+      .tree=${this.tree}
+      .impact=${this.impact}
+      .treeMode=${this.treeMode}
+      @beuve-open-stack=${this.onOpenStack}
+      @beuve-open-link=${this.onOpenLink}
+      @beuve-tree-select=${this.onTreeSelect}
+    ></beuve-intent-sidebar>`;
+  }
+
+  private renderDiff(): TemplateResult {
+    if (this.review === undefined && !this.reviewLoading && this.reviewError === '') {
+      return html`<div class="empty">
+        <div>
+          <h1>Open a review</h1>
+          <p>Pick up where you left off, or paste the pull request you were asked to look at.</p>
+          ${this.renderOpenPanel(false, 'diff')}
+        </div>
+      </div>`;
+    }
+    return html`<beuve-diff-stream
+      data-zone="diff"
+      tabindex="-1"
+      ?focused=${this.focusedZone === 'diff'}
+      .sessionNote=${this.sessionNote}
+      .review=${this.review}
+      ?loading=${this.reviewLoading}
+      ?marking=${this.marking}
+      .error=${this.reviewError}
+      .impact=${this.impact}
+      .peek=${this.peek}
+      .flow=${this.flow}
+      .trace=${this.trace}
+      .insights=${this.insights}
+      .insightJump=${this.insightJump}
+      .fileJump=${this.fileJump}
+      .loadFilePair=${this.loadFilePair}
+      .uraItems=${this.uraItems}
+      .display=${this.display}
+      .suggestionJump=${this.suggestionJump}
+      @beuve-display-change=${this.onDisplayChange}
+      @beuve-status-notice=${this.onStatusNotice}
+      @beuve-ura-update=${this.onUraUpdate}
+      @beuve-mark-reviewed=${this.onMarkReviewed}
+      @beuve-insight-status=${this.onInsightStatus}
+      @beuve-peek-request=${this.onPeekRequest}
+      @beuve-peek-expand=${this.onPeekExpand}
+      @beuve-peek-close=${this.onPeekClose}
+      @beuve-flow-request=${this.onFlowRequest}
+      @beuve-flow-close=${this.onFlowClose}
+      @beuve-trace-request=${this.onTraceRequest}
+      @beuve-trace-close=${this.onTraceClose}
+      @beuve-trace-trust=${this.onTraceTrust}
+      @beuve-diff-rendered=${this.onDiffRendered}
+      @beuve-ura-create=${this.onUraCreate}
+      @beuve-active-file=${this.onActiveFile}
+      @beuve-open-editor=${this.onOpenEditor}
+      @beuve-ura-stage-finding=${this.onStageFinding}
+    ></beuve-diff-stream>`;
+  }
+
+  private renderOpenPanel(isClosable: boolean, zone: ZoneId | undefined): TemplateResult {
+    return html`<beuve-open-panel
+      data-zone=${zone ?? nothing}
+      ?closable=${isClosable}
+      .platform=${this.appInfo?.platform ?? ''}
+      .sessions=${this.sessions}
+      ?openingPull=${this.openingPull}
+      ?openingLocal=${this.opening}
+      .pullFailure=${this.pullFailure}
+      .localFailure=${this.localFailure}
+      .chooseFolder=${this.chooseFolder}
+      .inspect=${this.inspectRepository}
+      @beuve-select-session=${this.onSelectSession}
+      @beuve-open-pull-request=${this.onOpenPullRequest}
+      @beuve-open-repository=${this.onOpenRepository}
+      @beuve-open-close=${this.onOpenClose}
+    ></beuve-open-panel>`;
+  }
+
+  private renderDock(): TemplateResult {
+    return html`<beuve-ura-dock
+      data-zone="ura"
+      tabindex="-1"
+      ?hidden=${this.sidebarTab !== 'ura'}
+      ?focused=${this.focusedZone === 'ura'}
+      ?hasSession=${this.review !== undefined}
+      .items=${this.uraItems}
+      .derivedVerdict=${this.uraVerdict}
+      .chosenVerdict=${this.chosenVerdict}
+      .verdictNotice=${this.verdictNotice}
+      .notice=${this.dockNotice}
+      ?exporting=${this.exporting}
+      .github=${this.githubDock()}
+      @beuve-github-preview=${this.onGithubPreview}
+      @beuve-github-post=${this.onGithubPost}
+      @beuve-github-cancel=${this.onGithubCancel}
+      @beuve-open-link=${this.onOpenLink}
+      @beuve-ura-jump=${this.onUraJump}
+      @beuve-open-editor=${this.onOpenEditor}
+      @beuve-ura-update=${this.onUraUpdate}
+      @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
+      @beuve-ura-transition=${this.onUraTransition}
+      @beuve-ura-reorder=${this.onUraReorder}
+      @beuve-ura-export=${this.onUraExport}
+      @beuve-ura-set-verdict=${this.onUraSetVerdict}
+    ></beuve-ura-dock>`;
+  }
+
+  private renderChat(): TemplateResult {
+    return html`<beuve-chat-drawer
+      data-zone="chat"
+      tabindex="-1"
+      ?hidden=${this.sidebarTab !== 'chat'}
+      ?focused=${this.focusedZone === 'chat'}
+      .transcript=${this.chat.entries}
+      .diffPaths=${this.diffPaths()}
+      .stagedMessageIds=${this.stagedMessageIds()}
+      ?hasSession=${this.review !== undefined}
+      @beuve-chat-submit=${this.onChatSubmit}
+      @beuve-chat-escape=${this.onChatEscape}
+      @beuve-chat-cycle=${this.onChatCycle}
+      @beuve-chat-cancel=${this.onChatCancel}
+      @beuve-chat-stage=${this.onChatStage}
+      @beuve-chat-cite=${this.onChatCite}
+      @beuve-open-editor=${this.onOpenEditor}
+      @beuve-citation=${this.onCitation}
+    ></beuve-chat-drawer>`;
+  }
+
+  private stagedCount(): number {
+    return this.uraItems.filter((item) => item.status.kind === 'staged').length;
+  }
+
+  /** Intent and files, the review and the chat as quiet tabs (1, 2, 3). */
+  private renderTabs(): TemplateResult {
+    const tab = (zone: SidebarZone, label: string, extra: string): TemplateResult =>
+      html`<button
+        type="button"
+        role="tab"
+        aria-selected=${this.sidebarTab === zone ? 'true' : 'false'}
+        @click=${(): void => {
+          this.focusSidebar(zone);
+        }}
+      >
+        ${label}${extra === '' ? nothing : html`<span class="count">${extra}</span>`}
+      </button>`;
+    const staged = this.stagedCount();
+    return html`<nav class="tabs" role="tablist" aria-label="Sidebar">
+      ${tab('intent', this.pullRequest === undefined ? 'Files' : 'Intent & files', '')}
+      ${tab('ura', 'Review', staged === 0 ? '' : String(staged))} ${tab('chat', 'Chat', '')}
+    </nav>`;
+  }
+
+  private renderSidebar(): TemplateResult {
+    return html`<div class="sidebar">
+      ${this.renderTabs()} ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
+    </div>`;
+  }
+
   override render(): TemplateResult {
+    const hasSidebar = this.review !== undefined && !this.sidebarHidden;
+    const workspace = [hasSidebar ? '' : 'solo', this.sidebarSide === 'left' ? 'left' : '']
+      .filter((name) => name !== '')
+      .join(' ');
+    const focused = zones.find(({ id }) => id === this.focusedZone);
     return html`
-      <div class="titlebar">
-        <span class="brand">beuve</span>
-        <span class="session">${this.sessionLabel()}</span>
+      ${this.renderTitlebar()}
+      <div class="workspace ${workspace}">
+        <div class="main">${this.renderDiff()}</div>
+        ${hasSidebar ? this.renderSidebar() : nothing}
       </div>
-      <beuve-intent-sidebar
-        data-zone="intent"
-        tabindex="-1"
-        ?focused=${this.focusedZone === 'intent'}
-        .sessions=${this.sessions}
-        .selectedId=${this.selectedId}
-        .sessionNote=${this.sessionNote}
-        ?opening=${this.opening}
-        .openError=${this.openError}
-        .pullRequest=${this.pullRequest}
-        ?openingPull=${this.openingPull}
-        .pullError=${this.pullError}
-        .pullRemedy=${this.pullRemedy}
-        .clonePath=${
-          this.review?.session.source.kind === 'github-pull-request'
-            ? this.review.session.source.repoPath
-            : ''
-        }
-        .files=${this.review?.files}
-        .tree=${this.tree}
-        .impact=${this.impact}
-        .treeMode=${this.treeMode}
-        @beuve-open-repository=${this.onOpenRepository}
-        @beuve-open-pull-request=${this.onOpenPullRequest}
-        @beuve-open-stack=${this.onOpenStack}
-        @beuve-open-link=${this.onOpenLink}
-        @beuve-select-session=${this.onSelectSession}
-        @beuve-tree-select=${this.onTreeSelect}
-      ></beuve-intent-sidebar>
-      <beuve-diff-stream
-        data-zone="diff"
-        tabindex="-1"
-        ?focused=${this.focusedZone === 'diff'}
-        .sessionNote=${this.sessionNote}
-        .review=${this.review}
-        ?loading=${this.reviewLoading}
-        ?marking=${this.marking}
-        .error=${this.reviewError}
-        .impact=${this.impact}
-        .peek=${this.peek}
-        .flow=${this.flow}
-        .trace=${this.trace}
-        .insights=${this.insights}
-        .insightJump=${this.insightJump}
-        .fileJump=${this.fileJump}
-        .loadFilePair=${this.loadFilePair}
-        .uraItems=${this.uraItems}
-        .display=${this.display}
-        .suggestionJump=${this.suggestionJump}
-        @beuve-display-change=${this.onDisplayChange}
-        @beuve-status-notice=${this.onStatusNotice}
-        @beuve-ura-update=${this.onUraUpdate}
-        @beuve-mark-reviewed=${this.onMarkReviewed}
-        @beuve-insight-status=${this.onInsightStatus}
-        @beuve-peek-request=${this.onPeekRequest}
-        @beuve-peek-expand=${this.onPeekExpand}
-        @beuve-peek-close=${this.onPeekClose}
-        @beuve-flow-request=${this.onFlowRequest}
-        @beuve-flow-close=${this.onFlowClose}
-        @beuve-trace-request=${this.onTraceRequest}
-        @beuve-trace-close=${this.onTraceClose}
-        @beuve-trace-trust=${this.onTraceTrust}
-        @beuve-diff-rendered=${this.onDiffRendered}
-        @beuve-ura-create=${this.onUraCreate}
-        @beuve-active-file=${this.onActiveFile}
-        @beuve-open-editor=${this.onOpenEditor}
-        @beuve-ura-stage-finding=${this.onStageFinding}
-      ></beuve-diff-stream>
-      <beuve-ura-dock
-        data-zone="ura"
-        tabindex="-1"
-        ?focused=${this.focusedZone === 'ura'}
-        ?hasSession=${this.review !== undefined}
-        .items=${this.uraItems}
-        .derivedVerdict=${this.uraVerdict}
-        .chosenVerdict=${this.chosenVerdict}
-        .verdictNotice=${this.verdictNotice}
-        .notice=${this.dockNotice}
-        ?exporting=${this.exporting}
-        .github=${this.githubDock()}
-        @beuve-github-preview=${this.onGithubPreview}
-        @beuve-github-post=${this.onGithubPost}
-        @beuve-github-cancel=${this.onGithubCancel}
-        @beuve-open-link=${this.onOpenLink}
-        @beuve-ura-jump=${this.onUraJump}
-        @beuve-open-editor=${this.onOpenEditor}
-        @beuve-ura-update=${this.onUraUpdate}
-        @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
-        @beuve-ura-transition=${this.onUraTransition}
-        @beuve-ura-reorder=${this.onUraReorder}
-        @beuve-ura-export=${this.onUraExport}
-        @beuve-ura-set-verdict=${this.onUraSetVerdict}
-      ></beuve-ura-dock>
-      ${
-        this.chatOpen
-          ? html`<beuve-chat-drawer
-              data-zone="chat"
-              tabindex="-1"
-              ?focused=${this.focusedZone === 'chat'}
-              .transcript=${this.chat.entries}
-              .diffPaths=${this.diffPaths()}
-              .stagedMessageIds=${this.stagedMessageIds()}
-              ?hasSession=${this.review !== undefined}
-              @beuve-chat-submit=${this.onChatSubmit}
-              @beuve-chat-escape=${this.onChatEscape}
-              @beuve-chat-cycle=${this.onChatCycle}
-              @beuve-chat-cancel=${this.onChatCancel}
-              @beuve-chat-stage=${this.onChatStage}
-              @beuve-chat-cite=${this.onChatCite}
-              @beuve-open-editor=${this.onOpenEditor}
-              @beuve-citation=${this.onCitation}
-            ></beuve-chat-drawer>`
-          : nothing
-      }
       <beuve-status-bar
-        .zoneLabel=${zones.find(({ id }) => id === this.focusedZone)?.label ?? ''}
+        .zoneLabel=${this.review === undefined ? '' : (focused?.label ?? '')}
+        .zoneHints=${this.review === undefined ? '' : (focused?.hints ?? '')}
         .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
@@ -1816,27 +2360,89 @@ export class BeuveApp extends LitElement {
         .githubAuth=${this.githubAuth}
       ></beuve-status-bar>
       ${
+        this.openDialog
+          ? html`<div
+              class="scrim"
+              @click=${(event: MouseEvent): void => {
+                if (event.target === event.currentTarget) {
+                  this.closeOpenDialog();
+                }
+              }}
+            >
+              <div class="dialog" role="dialog" aria-modal="true" aria-label="Open">
+                ${this.renderOpenPanel(true, undefined)}
+              </div>
+            </div>`
+          : nothing
+      }
+      ${
+        this.paletteText === undefined
+          ? nothing
+          : html`<beuve-command-palette
+              .sources=${this.paletteSources()}
+              .initialText=${this.paletteText}
+              .platform=${this.appInfo?.platform ?? ''}
+              @beuve-palette-run=${this.onPaletteRun}
+              @beuve-palette-close=${this.onPaletteClose}
+            ></beuve-command-palette>`
+      }
+      ${
         this.overlayOpen
           ? html`<beuve-keybinding-overlay
               .editorName=${currentEditorName(this.editorSettings)}
               .displayName=${describeDiffDisplay(this.display, false).text}
+              .platform=${this.appInfo?.platform ?? ''}
             ></beuve-keybinding-overlay>`
           : nothing
       }
     `;
   }
 
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    const zone = this.focusedZone;
+    if (zone !== 'diff' && changed.has('focusedZone')) {
+      this.sidebarTab = zone;
+    }
+  }
+
   protected override updated(changed: PropertyValues<this>): void {
-    if (!changed.has('focusedZone') && !changed.has('chatOpen')) {
+    if (this.paletteText !== undefined && changed.has('paletteText')) {
+      this.renderRoot.querySelector('beuve-command-palette')?.focus();
       return;
     }
-    const selector = `[data-zone='${CSS.escape(this.focusedZone)}']`;
-    const element = this.renderRoot.querySelector<HTMLElement>(selector);
-    if (element !== null && !element.matches(':focus-within')) {
+    const isRelevant = ['focusedZone', 'sidebarHidden'].some((key) =>
+      changed.has(key as keyof BeuveApp),
+    );
+    if (!isRelevant || this.paletteText !== undefined || this.openDialog) {
+      return;
+    }
+    const element = this.zoneElement(this.focusedZone);
+    if (element !== undefined && !element.matches(':focus-within')) {
       element.focus();
     }
   }
 }
+
+type SidebarZone = Exclude<ZoneId, 'diff'>;
+
+/** Unmodified keys the shell handles itself, from the command registry's shortcuts. */
+const plainKeyActions: Readonly<Record<string, AppAction>> = {
+  Tab: 'cycle-zone',
+  '?': 'shortcuts',
+  c: 'chat',
+  f: 'tree-mode',
+  '\\': 'toggle-sidebar',
+  '1': 'sidebar-overview',
+  '2': 'sidebar-review',
+  '3': 'sidebar-chat',
+};
+
+const scopeZones: Readonly<Partial<Record<CommandDefinition['scope'], ZoneId>>> = {
+  Diff: 'diff',
+  Review: 'ura',
+  Chat: 'chat',
+  Files: 'intent',
+};
 
 function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchyView>): PeekState {
   if (!answer.ok) {

@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { IpcResult, ReviewView, SessionSummary } from '#contract/ipc-contract.ts';
+import type {
+  IpcResult,
+  RepositoryInspectionView,
+  ReviewView,
+  SessionSummary,
+} from '#contract/ipc-contract.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
@@ -12,6 +17,7 @@ import { ok } from '#pkg/result/ok.ts';
 import type { SessionServices } from '../main-services.ts';
 
 import { createLocalSession } from './create-local-session.ts';
+import { inspectRepository } from './inspect-repository.ts';
 import { loadReview } from './load-review.ts';
 import type { RangeDiff } from './load-review-diff.ts';
 import { loadSession } from './load-session.ts';
@@ -56,6 +62,8 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
       loadReview(context, sessionId, { cache, ignoreWhitespace: ignoreWhitespace === true }),
     markReviewed: async (request): Promise<IpcResult<SessionSummary>> =>
       markReviewed(context, request),
+    inspectRepository: async (request): Promise<IpcResult<RepositoryInspectionView>> =>
+      inspectRepository(context, request),
   };
 }
 

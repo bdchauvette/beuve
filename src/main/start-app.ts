@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, clipboard, ipcMain, session } from 'electron';
+import { BrowserWindow, clipboard, dialog, ipcMain, session } from 'electron';
 import type { App } from 'electron';
 
 import type { Logger } from '#pkg/logger/create-logger.ts';
@@ -98,6 +98,22 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   // The renderer's own clipboard needs a permission the hardened session denies (ADR 0027).
   const platform = {
     writeClipboard: async (text: string): Promise<void> => clipboard.writeText(text),
+    chooseFolder: async (picker: {
+      readonly title?: string;
+      readonly defaultPath?: string;
+    }): Promise<string | undefined> => {
+      const options: Electron.OpenDialogOptions = {
+        properties: ['openDirectory', 'createDirectory'],
+        ...(picker.title !== undefined && { title: picker.title }),
+        ...(picker.defaultPath !== undefined && { defaultPath: picker.defaultPath }),
+      };
+      const owner = BrowserWindow.getFocusedWindow();
+      const chosen =
+        owner === null
+          ? await dialog.showOpenDialog(options)
+          : await dialog.showOpenDialog(owner, options);
+      return chosen.canceled ? undefined : chosen.filePaths[0];
+    },
   };
   registerIpcHandlers(ipcMain, createIpcHandlers(services, readAppInfo(app), platform), {
     trustedUrl: pathToFileURL(options.indexHtmlPath).href,

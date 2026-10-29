@@ -71,6 +71,8 @@ E. Modular monolith: `src/internal/` and `src/pkg/` with `#internal/*` and `#pkg
 
 ## 4. Spatial architecture: four zones
 
+ADR 0044 overrides the geometry below: the diff stream and one tabbed sidebar (Zone 1, Zone 3 and Zone 4 as tabs), on the right by default, with no zone title bars.
+
 - Zone 1, Intent sidebar and radar tree (260px). Top: requirements (REQ-1, REQ-2) extracted from PR descriptions or agent prompts, mapped to hunks; unmapped diffs flagged as scope creep. Bottom: `@pierre/trees` package-aware tree that auto-expands packages with modified files, highlights touched files, and shows package-level ImpactGate percentiles. `f` toggles diff-only mode.
 - Zone 2, semantic diff stream (flexible). `@pierre/diffs` cards ordered by call-graph logic rather than path. Interdiff mode (rev 1 → rev 2). ImpactGate header banners. Inline tools: call-stack peek (`p`), control-flow graph (`Shift+p`), trace probe (`r`), inline edit (`e`), open in IDE (`o`).
 - Zone 3, URA staging dock (320px). Collects patches, severity tags, ImpactGate violations and notes; exports to GitHub PR review or Claude Code (MCP or XML with metrics).
