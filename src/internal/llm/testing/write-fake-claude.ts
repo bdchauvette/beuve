@@ -53,7 +53,9 @@ process.stdin.on('end', () => {
       init();
       emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
       emit({ type: 'stream_event', event: { type: 'message_stop' } });
-      const value = { args, stdin, cwd: process.cwd(), envKeys: Object.keys(process.env).sort() };
+      // macOS adds __CF_USER_TEXT_ENCODING to every spawned process; it isn't ours to assert on.
+      const envKeys = Object.keys(process.env).filter((key) => key !== '__CF_USER_TEXT_ENCODING').sort();
+      const value = { args, stdin, cwd: process.cwd(), envKeys };
       result({ result: JSON.stringify(value), structured_output: value,
         permission_denials: [{ tool_name: 'Bash' }] });
       break;
