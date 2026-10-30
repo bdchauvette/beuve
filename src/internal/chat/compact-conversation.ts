@@ -14,7 +14,7 @@ import type { DroppedCitation } from './validate-citations.ts';
 
 export interface CompactConversationDeps<E> {
   readonly model: ChatModel<E>;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   /** Defaults to {@link compactionBudgetFrom} the model's capabilities. */
   readonly budget?: CompactionBudget;
   /** Defaults to 3 minutes. */

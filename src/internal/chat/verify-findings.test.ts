@@ -54,6 +54,7 @@ function verdictModel(
 describe('verifyFindings', () => {
   test('asks about each numbered finding in the worktree and maps the verdicts back', async ({
     expect,
+    signal,
   }) => {
     const seen: ReviewModelRequest<unknown>[] = [];
     const result = await verifyFindings(baseRequest(), {
@@ -66,6 +67,7 @@ describe('verifyFindings', () => {
         seen,
       ),
       timeout: Temporal.Duration.from({ milliseconds: 1000 }),
+      signal,
     });
     expect(result).toStrictEqual({ ok: true, value: ['confirmed', 'unsure', 'refuted'] });
     expect(seen[0]).toMatchObject({
@@ -80,6 +82,7 @@ describe('verifyFindings', () => {
 
   test('shows a model without tools the hunk at each finding, with the effort asked', async ({
     expect,
+    signal,
   }) => {
     const seen: ReviewModelRequest<unknown>[] = [];
     const model = {
@@ -92,7 +95,7 @@ describe('verifyFindings', () => {
         findings: [finding(12, 'On the hunk'), { ...finding(2, 'Elsewhere'), path: 'src/c.ts' }],
         files: createChatQuestion().files,
       },
-      { model, effort: 'low', timeout: Temporal.Duration.from({ milliseconds: 1000 }) },
+      { model, effort: 'low', timeout: Temporal.Duration.from({ milliseconds: 1000 }), signal },
     );
     const text = promptTextOf(seen[0]);
     expect(text).toContain('The diff at these lines:\n\n```diff\n@@ -10,4 +10,5 @@');
@@ -102,7 +105,7 @@ describe('verifyFindings', () => {
     expect(seen[0]?.effort).toBe('low');
   });
 
-  test('passes the model failure through', async ({ expect }) => {
+  test('passes the model failure through', async ({ expect, signal }) => {
     const failing: ReviewModel<string> = {
       run: async () => {
         await Promise.resolve();
@@ -113,6 +116,7 @@ describe('verifyFindings', () => {
       verifyFindings(baseRequest(), {
         model: failing,
         timeout: Temporal.Duration.from({ milliseconds: 1 }),
+        signal,
       }),
     ).resolves.toStrictEqual({
       ok: false,

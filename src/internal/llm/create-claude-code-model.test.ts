@@ -70,6 +70,7 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const progress: ModelProgress[] = [];
     const outcome = okValueFrom(
@@ -78,11 +79,12 @@ describe('createClaudeCodeModel', () => {
           onProgress: (event) => {
             progress.push(event);
           },
+          signal,
         }),
       ),
     );
     const { value } = outcome;
-    expect(value.stdin).toBe(request(directory).messages[0]?.content);
+    expect(value.stdin).toBe(request(directory, { signal }).messages[0]?.content);
     expect(value.cwd).toBe(directory);
     expect(value.envKeys).toStrictEqual(['HOME', 'PATH']);
     expect(value.args).toContain('--print');
@@ -111,9 +113,10 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const outcome = await model(script, directory, 'text-result').run(
-      request(directory, { messages: [{ role: 'user', content: 'small' }] }),
+      request(directory, { messages: [{ role: 'user', content: 'small' }], signal }),
     );
     expect(outcome).toMatchObject({ ok: true, value: { value: { stdin: 'small' } } });
   });
@@ -122,9 +125,10 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     await expect(
-      model(script, directory, 'garbage').run(request(directory)),
+      model(script, directory, 'garbage').run(request(directory, { signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -138,8 +142,9 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
-    const outcome = await model(script, directory, 'mismatch').run(request(directory));
+    const outcome = await model(script, directory, 'mismatch').run(request(directory, { signal }));
     expect(outcome).toMatchObject({ ok: false, error: { kind: 'invalid-output' } });
   });
 
@@ -147,8 +152,11 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
-    await expect(model(script, directory, 'fail').run(request(directory))).resolves.toStrictEqual({
+    await expect(
+      model(script, directory, 'fail').run(request(directory, { signal })),
+    ).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'process-failed',
@@ -163,6 +171,7 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const progress: ModelProgress[] = [];
     const outcome = await model(script, directory, 'api-key').run(
@@ -170,6 +179,7 @@ describe('createClaudeCodeModel', () => {
         onProgress: (event) => {
           progress.push(event);
         },
+        signal,
       }),
     );
     expect(outcome).toMatchObject({
@@ -186,35 +196,37 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     await expect(
-      model(script, directory, 'not-logged-in').run(request(directory)),
+      model(script, directory, 'not-logged-in').run(request(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated', message: 'Not logged in · Please run /login' },
     });
     await expect(
-      model(script, directory, 'rate-limited').run(request(directory)),
+      model(script, directory, 'rate-limited').run(request(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'rate-limited', resetsAt: '2026-10-28T22:00:00.000Z' },
     });
-    await expect(model(script, directory, 'budget').run(request(directory))).resolves.toMatchObject(
-      {
-        ok: false,
-        error: { kind: 'model-failed', reason: 'error_max_budget_usd' },
-      },
-    );
+    await expect(
+      model(script, directory, 'budget').run(request(directory, { signal })),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'model-failed', reason: 'error_max_budget_usd' },
+    });
   });
 
   test('times out, killing the whole process group', async ({
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const pidFile = path.join(directory, 'timeout.json');
     const outcome = await model(script, directory, 'hang', pidFile).run(
-      request(directory, { timeout: Temporal.Duration.from({ milliseconds: 500 }) }),
+      request(directory, { timeout: Temporal.Duration.from({ milliseconds: 500 }), signal }),
     );
     expect(outcome).toStrictEqual({
       ok: false,
@@ -251,14 +263,14 @@ describe('createClaudeCodeModel', () => {
     });
   });
 
-  test('caps stdout', async ({ expect, fakeClaude: script, tempDir: directory }) => {
+  test('caps stdout', async ({ expect, fakeClaude: script, tempDir: directory, signal }) => {
     const capped = createClaudeCodeModel({
       command: process.execPath,
       leadingArgs: [script, 'flood', '-'],
       inheritedEnv: {},
       maxOutputBytes: 64 * 1024,
     });
-    await expect(capped.run(request(directory))).resolves.toStrictEqual({
+    await expect(capped.run(request(directory, { signal }))).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'output-too-large', maxBytes: 64 * 1024 },
     });
@@ -268,19 +280,20 @@ describe('createClaudeCodeModel', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const missing = createClaudeCodeModel({ command: path.join(directory, 'no-such-claude') });
-    await expect(missing.run(request(directory))).resolves.toStrictEqual({
+    await expect(missing.run(request(directory, { signal }))).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'not-installed', command: path.join(directory, 'no-such-claude') },
     });
-    const gone = request(directory, { cwd: path.join(directory, 'gone') });
+    const gone = request(directory, { cwd: path.join(directory, 'gone'), signal });
     await expect(model(script, directory, 'echo').run(gone)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd is not a directory' },
     });
     await expect(
-      model(script, directory, 'echo').run(request(directory, { cwd: 'relative' })),
+      model(script, directory, 'echo').run(request(directory, { cwd: 'relative', signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd must be absolute' },
@@ -293,6 +306,7 @@ describe('createClaudeCodeModel runText', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const events: TextStreamEvent[] = [];
     const outcome = await chat(script, directory, 'stream', {
@@ -303,6 +317,7 @@ describe('createClaudeCodeModel runText', () => {
         onText: (event) => {
           events.push(event);
         },
+        signal,
       }),
     );
     expect(outcome).toMatchObject({
@@ -325,9 +340,10 @@ describe('createClaudeCodeModel runText', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     const outcome = await chat(script, directory, 'quiet', { chunks: ['Plain.'] }).runText(
-      textRequest(directory),
+      textRequest(directory, { signal }),
     );
     expect(outcome).toMatchObject({ ok: true, value: { value: 'Plain.' } });
     expect(calls(directory, 'quiet')[0]?.args).not.toContain('--include-partial-messages');
@@ -337,15 +353,16 @@ describe('createClaudeCodeModel runText', () => {
     expect,
     fakeClaude: script,
     tempDir: directory,
+    signal,
   }) => {
     await expect(
-      model(script, directory, 'not-logged-in').runText(textRequest(directory)),
+      model(script, directory, 'not-logged-in').runText(textRequest(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated' },
     });
     await expect(
-      model(script, directory, 'fail').runText(textRequest(directory)),
+      model(script, directory, 'fail').runText(textRequest(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'process-failed', exitCode: 2 },

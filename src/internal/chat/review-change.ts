@@ -23,7 +23,7 @@ export interface ReviewChangeDeps<E> {
   readonly model: ReviewModel<E>;
   /** Runs the verification pass (a cheaper setting of the same adapter); omit for `--no-verify`. */
   readonly verifier?: ReviewModel<E>;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   readonly onProgress?: (progress: ReviewProgress) => void;
   /** Defaults to {@link chatPromptBudgetFrom} the first pass's model. */
   readonly budget?: ChatPromptBudget;

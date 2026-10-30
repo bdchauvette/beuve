@@ -19,6 +19,7 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
     expect,
     tempDir,
     claudeScript,
+    signal,
   }) => {
     const deltas: ChatDelta[] = [];
     const result = await askQuestion(createChatQuestion({ worktreePath: tempDir }), {
@@ -29,6 +30,7 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
       onDelta: (delta) => {
         deltas.push(delta);
       },
+      signal,
     });
     expect(result).toMatchObject({
       ok: true,
@@ -49,9 +51,15 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
     ).toBe(`It trims [[${tempDir}/src/a.ts:12-13]] and [[src/zzz.ts:1]].`);
   });
 
-  test('reports a failed run as the adapter error', async ({ expect, tempDir, claudeScript }) => {
+  test('reports a failed run as the adapter error', async ({
+    expect,
+    tempDir,
+    claudeScript,
+    signal,
+  }) => {
     const result = await askQuestion(createChatQuestion({ worktreePath: tempDir }), {
       model: fakeModel(claudeScript, tempDir, 'not-logged-in', 'login'),
+      signal,
     });
     expect(result).toMatchObject({
       ok: false,

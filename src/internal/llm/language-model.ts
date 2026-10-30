@@ -57,7 +57,7 @@ export interface BaseModelRequest {
   /** Absolute directory the model may read (the session worktree). It must never be written. */
   readonly cwd: string;
   readonly timeout: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   /** Coarse progress for a status line. Carries no prompt or file content. */
   readonly onProgress?: (progress: ModelProgress) => void;
   /** Overrides the configured effort for this request. */

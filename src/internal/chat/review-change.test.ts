@@ -65,6 +65,7 @@ function scripted(
 describe('reviewChange', () => {
   test('finds, keeps what is on the diff, verifies and drops the refuted findings', async ({
     expect,
+    signal,
   }) => {
     const seen: ReviewModelRequest<unknown>[] = [];
     const checked: ReviewModelRequest<unknown>[] = [];
@@ -83,6 +84,7 @@ describe('reviewChange', () => {
       onProgress: (event) => {
         progress.push(event);
       },
+      signal,
     });
     const { review, citations } = okValueFrom(result);
     expect(review).toStrictEqual({
@@ -120,9 +122,11 @@ describe('reviewChange', () => {
 
   test('skips the pass without a verifier, and keeps findings unchecked when it fails', async ({
     expect,
+    signal,
   }) => {
     const skipped = await reviewChange(question(), {
       model: firstPass(),
+      signal,
     });
     expect(skipped.ok && skipped.value.review).toMatchObject({
       verification: 'skipped',
@@ -131,6 +135,7 @@ describe('reviewChange', () => {
     const failed = await reviewChange(question(), {
       model: firstPass(),
       verifier: scripted(err('rate-limited')),
+      signal,
     });
     expect(failed.ok && failed.value.review).toMatchObject({
       verification: 'failed',
@@ -139,30 +144,38 @@ describe('reviewChange', () => {
     });
   });
 
-  test('shares one time budget: no verification once it is nearly spent', async ({ expect }) => {
+  test('shares one time budget: no verification once it is nearly spent', async ({
+    expect,
+    signal,
+  }) => {
     const checked: ReviewModelRequest<unknown>[] = [];
     const result = await reviewChange(question(), {
       model: firstPass(),
       verifier: scripted(ok({ verdicts: [] }), checked),
       timeout: Temporal.Duration.from({ seconds: 4 }),
+      signal,
     });
     expect(result.ok && result.value.review.verification).toBe('failed');
     expect(checked).toStrictEqual([]);
   });
 
-  test('gives the verifier what the first pass left of the budget', async ({ expect }) => {
+  test('gives the verifier what the first pass left of the budget', async ({ expect, signal }) => {
     const checked: ReviewModelRequest<unknown>[] = [];
     await reviewChange(question(), {
       model: firstPass(),
       verifier: scripted(ok({ verdicts: [] }), checked),
       timeout: Temporal.Duration.from({ minutes: 10 }),
+      signal,
     });
     const given = checked[0]?.timeout ?? new Temporal.Duration();
     expect(Temporal.Duration.compare(given, { minutes: 10 })).toBeLessThanOrEqual(0);
     expect(Temporal.Duration.compare(given, { minutes: 9, seconds: 55 })).toBeGreaterThan(0);
   });
 
-  test('fails on a cancelled verification and on a failed first pass', async ({ expect }) => {
+  test('fails on a cancelled verification and on a failed first pass', async ({
+    expect,
+    signal,
+  }) => {
     const controller = new AbortController();
     const cancelling: ReviewModel<string> = {
       run: async () => {
@@ -178,14 +191,15 @@ describe('reviewChange', () => {
     });
     expect(stopped).toStrictEqual({ ok: false, error: { kind: 'model', error: 'cancelled' } });
     const timeout = scripted(err('timeout'));
-    const failed = await reviewChange(question(), { model: timeout });
+    const failed = await reviewChange(question(), { model: timeout, signal });
     expect(failed).toStrictEqual({ ok: false, error: { kind: 'model', error: 'timeout' } });
   });
 
-  test('asks nothing when no changed text file is in scope', async ({ expect }) => {
+  test('asks nothing when no changed text file is in scope', async ({ expect, signal }) => {
     const seen: ReviewModelRequest<unknown>[] = [];
     const result = await reviewChange(createChatQuestion({ files: [] }), {
       model: firstPass(seen),
+      signal,
     });
     expect(result.ok && result.value.review).toMatchObject({ findings: [], fileCount: 0 });
     expect(seen).toStrictEqual([]);

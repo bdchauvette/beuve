@@ -16,7 +16,7 @@ import type { DroppedCitation } from './validate-citations.ts';
 /** `E` is the model adapter's error type. */
 export interface AskQuestionDeps<E> {
   readonly model: ChatModel<E>;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   /** The answer as it streams, when the adapter streams. */
   readonly onDelta?: (delta: ChatDelta) => void;
   readonly onProgress?: (progress: ChatModelProgress) => void;

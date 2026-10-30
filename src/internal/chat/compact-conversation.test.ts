@@ -57,12 +57,14 @@ function compaction(overrides: Partial<ChatCompaction> = {}): ChatCompaction {
 describe('compactConversation', () => {
   test('asks for a note over the turns and the earlier summary, and validates its citations', async ({
     expect,
+    signal,
   }) => {
     const seen: ChatModelRequest[] = [];
     const note =
       '**Asked**\n- why parse trims\n\n**Places**\n- [[src/a.ts:12-13]]\n- [[/work/repo/docs/x.md:2]]\n- [[ghost.ts:1]]\n- [[nope]]';
     const result = await compactConversation(compaction({ summary: 'Earlier: b.ts is new.' }), {
       model: fakeModel(ok(note), seen),
+      signal,
     });
     expect(result).toMatchObject({
       ok: true,
@@ -86,7 +88,7 @@ describe('compactConversation', () => {
     expect(promptTextOf(request)).toContain('- modified src/a.ts');
   });
 
-  test('drops the oldest turns past the budget and says so', async ({ expect }) => {
+  test('drops the oldest turns past the budget and says so', async ({ expect, signal }) => {
     const seen: ChatModelRequest[] = [];
     const turns = Array.from({ length: 6 }, (_, index) => ({
       role: 'user' as const,
@@ -95,6 +97,7 @@ describe('compactConversation', () => {
     const result = await compactConversation(compaction({ turns }), {
       model: fakeModel(ok('**Asked**\n- things'), seen),
       budget: { maxTurnsChars: 1000, maxTurnChars: 500, maxSummaryChars: 100, maxListedFiles: 1 },
+      signal,
     });
     expect(result).toMatchObject({ ok: true, value: { omittedTurns: 4 } });
     expect(promptTextOf(seen[0])).toContain('[beuve: 4 older turns omitted for size]');
@@ -103,14 +106,17 @@ describe('compactConversation', () => {
     expect(promptTextOf(seen[0])).toContain('[beuve: 1 more files]');
   });
 
-  test('refuses with nothing to compact and passes model failures through', async ({ expect }) => {
+  test('refuses with nothing to compact and passes model failures through', async ({
+    expect,
+    signal,
+  }) => {
     const seen: ChatModelRequest[] = [];
     const empty = compaction({ turns: [] });
-    const nothing = await compactConversation(empty, { model: fakeModel(ok('x'), seen) });
+    const nothing = await compactConversation(empty, { model: fakeModel(ok('x'), seen), signal });
     expect(nothing).toStrictEqual({ ok: false, error: { kind: 'nothing-to-compact' } });
     expect(seen).toStrictEqual([]);
     const failing = fakeModel(err('boom'));
-    const failed = await compactConversation(compaction(), { model: failing });
+    const failed = await compactConversation(compaction(), { model: failing, signal });
     expect(failed).toStrictEqual({ ok: false, error: { kind: 'model', error: 'boom' } });
   });
 });

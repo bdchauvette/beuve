@@ -40,6 +40,7 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi();
     api.reply({ kind: 'stream', reasoning: 'hmm', content: ['It ', 'adds a ', 'parser.'] });
@@ -54,6 +55,7 @@ describe('createOpenAiCompatibleModel', () => {
           onProgress: (event) => {
             progress.push(event);
           },
+          signal,
         }),
       ),
     );
@@ -95,6 +97,7 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi();
     api.reply({ kind: 'stream', content: ['ok'] });
@@ -109,10 +112,10 @@ describe('createOpenAiCompatibleModel', () => {
       contextWindowTokens: 32_768,
       streaming: true,
     });
-    await configured.runText(textRequest(tempDir, { model: 'other', effort: 'low' }));
+    await configured.runText(textRequest(tempDir, { model: 'other', effort: 'low', signal }));
     expect(api.requests[0]?.body).toMatchObject({ model: 'other', reasoning_effort: 'low' });
     api.reply({ kind: 'stream', content: ['ok'] });
-    await model(api.baseUrl).runText(textRequest(tempDir, { effort: 'low' }));
+    await model(api.baseUrl).runText(textRequest(tempDir, { effort: 'low', signal }));
     expect(api.requests[1]?.body).not.toHaveProperty('reasoning_effort');
   });
 
@@ -120,11 +123,12 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi();
     api.reply({ kind: 'stream', content: ['{"findings":', '["a"]}'] });
     const output = await model(api.baseUrl).run({
-      ...textRequest(tempDir),
+      ...textRequest(tempDir, { signal }),
       outputSchema: findingsSchema(),
     });
     expect(okValueFrom(output).value).toStrictEqual({ findings: ['a'] });
@@ -137,11 +141,12 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi({ rejectsResponseFormat: true });
     api.reply({ kind: 'stream', content: ['Here:\n```json\n{"findings":[]}\n```'] });
     const output = await model(api.baseUrl).run({
-      ...textRequest(tempDir),
+      ...textRequest(tempDir, { signal }),
       outputSchema: findingsSchema(),
     });
     expect(okValueFrom(output).value).toStrictEqual({ findings: [] });
@@ -154,12 +159,13 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi();
     api.reply({ kind: 'stream', content: ['{"wrong":1}'] }, { kind: 'stream', content: ['no'] });
     const prompted = model(api.baseUrl, { structuredOutput: 'prompted' });
     expect(prompted.capabilities.structuredOutput).toBe('prompted');
-    const request = { ...textRequest(tempDir), outputSchema: findingsSchema() };
+    const request = { ...textRequest(tempDir, { signal }), outputSchema: findingsSchema() };
     await expect(prompted.run(request)).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-output' },
@@ -175,10 +181,11 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     const api = await openAiApi();
     api.reply({ kind: 'json', content: 'Whole answer.' });
-    const output = await model(api.baseUrl).runText(textRequest(tempDir));
+    const output = await model(api.baseUrl).runText(textRequest(tempDir, { signal }));
     expect(okValueFrom(output).value).toBe('Whole answer.');
   });
 
@@ -186,6 +193,7 @@ describe('createOpenAiCompatibleModel', () => {
     expect,
     openAiApi,
     tempDir,
+    signal,
   }) => {
     mkdirSync(path.join(tempDir, 'src'));
     writeFileSync(path.join(tempDir, 'src', 'auth.ts'), 'export function validate() {}\n');
@@ -217,6 +225,7 @@ describe('createOpenAiCompatibleModel', () => {
           onProgress: (event) => {
             progress.push(event);
           },
+          signal,
         }),
       ),
     );
@@ -251,7 +260,7 @@ describe('createOpenAiCompatibleModel', () => {
     ]);
   });
 
-  test('stops a model that keeps calling tools', async ({ expect, openAiApi, tempDir }) => {
+  test('stops a model that keeps calling tools', async ({ expect, openAiApi, tempDir, signal }) => {
     const api = await openAiApi();
     const call = {
       kind: 'stream',
@@ -259,7 +268,7 @@ describe('createOpenAiCompatibleModel', () => {
     } as const;
     api.reply(call, call);
     await expect(
-      model(api.baseUrl, { tools: true, maxTurns: 2 }).runText(textRequest(tempDir)),
+      model(api.baseUrl, { tools: true, maxTurns: 2 }).runText(textRequest(tempDir, { signal })),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'model-failed', reason: 'max-turns' } });
   });
 
@@ -270,17 +279,24 @@ describe('createOpenAiCompatibleModel', () => {
     [500, {}, { kind: 'model-failed', reason: 'http-500', message: 'bad key', status: 500 }],
   ] as const)(
     'maps HTTP %i to a model error',
-    async ([status, headers, expected], { expect, openAiApi, tempDir }) => {
+    async ([status, headers, expected], { expect, openAiApi, tempDir, signal }) => {
       const api = await openAiApi();
       api.reply({ kind: 'error', status, body: '{"error":{"message":"bad key"}}', headers });
-      await expect(model(api.baseUrl).runText(textRequest(tempDir))).resolves.toStrictEqual({
+      await expect(
+        model(api.baseUrl).runText(textRequest(tempDir, { signal })),
+      ).resolves.toStrictEqual({
         ok: false,
         error: expected,
       });
     },
   );
 
-  test('maps 429 to rate-limited with the retry time', async ({ expect, openAiApi, tempDir }) => {
+  test('maps 429 to rate-limited with the retry time', async ({
+    expect,
+    openAiApi,
+    tempDir,
+    signal,
+  }) => {
     const api = await openAiApi();
     api.reply({
       kind: 'error',
@@ -288,7 +304,7 @@ describe('createOpenAiCompatibleModel', () => {
       body: '{"error":"slow down"}',
       headers: { 'retry-after': '30' },
     });
-    const output = await model(api.baseUrl).runText(textRequest(tempDir));
+    const output = await model(api.baseUrl).runText(textRequest(tempDir, { signal }));
     expect(output).toMatchObject({
       ok: false,
       error: {
@@ -299,21 +315,23 @@ describe('createOpenAiCompatibleModel', () => {
     });
   });
 
-  test('says when the server cannot be reached', async ({ expect, openAiApi, tempDir }) => {
+  test('says when the server cannot be reached', async ({ expect, openAiApi, tempDir, signal }) => {
     const api = await openAiApi();
     api.close();
-    await expect(model(api.baseUrl).runText(textRequest(tempDir))).resolves.toMatchObject({
+    await expect(
+      model(api.baseUrl).runText(textRequest(tempDir, { signal })),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'model-failed', reason: 'unreachable' },
     });
   });
 
-  test('times out, and cancels on the signal', async ({ expect, openAiApi, tempDir }) => {
+  test('times out, and cancels on the signal', async ({ expect, openAiApi, tempDir, signal }) => {
     const api = await openAiApi();
     api.reply({ kind: 'hang' }, { kind: 'hang' });
     const timeout = Temporal.Duration.from({ milliseconds: 200 });
     await expect(
-      model(api.baseUrl).runText(textRequest(tempDir, { timeout })),
+      model(api.baseUrl).runText(textRequest(tempDir, { timeout, signal })),
     ).resolves.toStrictEqual({ ok: false, error: { kind: 'timeout', timeout } });
     const controller = new AbortController();
     const running = model(api.baseUrl).runText(textRequest(tempDir, { signal: controller.signal }));
@@ -321,10 +339,10 @@ describe('createOpenAiCompatibleModel', () => {
     await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
   });
 
-  test('refuses a request that does not end with the user', async ({ expect, tempDir }) => {
+  test('refuses a request that does not end with the user', async ({ expect, tempDir, signal }) => {
     await expect(
       model('http://127.0.0.1:9/v1').runText(
-        textRequest(tempDir, { messages: [{ role: 'assistant', content: 'hi' }] }),
+        textRequest(tempDir, { messages: [{ role: 'assistant', content: 'hi' }], signal }),
       ),
     ).resolves.toStrictEqual({
       ok: false,
@@ -332,11 +350,11 @@ describe('createOpenAiCompatibleModel', () => {
     });
   });
 
-  test('fails an answer larger than the limit', async ({ expect, openAiApi, tempDir }) => {
+  test('fails an answer larger than the limit', async ({ expect, openAiApi, tempDir, signal }) => {
     const api = await openAiApi();
     api.reply({ kind: 'stream', content: ['x'.repeat(5000)] });
     await expect(
-      model(api.baseUrl, { maxResponseBytes: 1000 }).runText(textRequest(tempDir)),
+      model(api.baseUrl, { maxResponseBytes: 1000 }).runText(textRequest(tempDir, { signal })),
     ).resolves.toStrictEqual({ ok: false, error: { kind: 'output-too-large', maxBytes: 1000 } });
   });
 });

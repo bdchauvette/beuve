@@ -75,6 +75,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     messagesApi: api,
     tempDir,
     logger,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     api.reply({
@@ -93,6 +94,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
           onProgress: (event) => {
             progress.push(event);
           },
+          signal,
         }),
       ),
     );
@@ -132,6 +134,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     api.reply(
@@ -177,6 +180,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
                   : event.kind,
             );
           },
+          signal,
         }),
       ),
     );
@@ -202,6 +206,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd, secret } = worktree(tempDir);
     symlinkSync(secret, path.join(cwd, 'link.txt'));
@@ -237,7 +242,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
         stopReason: 'end_turn',
       },
     );
-    const output = okValueFrom(await model(api, tempDir).runText(textRequest(cwd)));
+    const output = okValueFrom(await model(api, tempDir).runText(textRequest(cwd, { signal })));
     expect(output.deniedToolUses).toBe(4);
     expect(JSON.stringify(lastToolResults(api))).not.toContain('TOP-SECRET-VALUE');
   });
@@ -246,6 +251,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     const target = path.join(cwd, 'written.txt');
@@ -270,7 +276,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       },
       { kind: 'message', content: [{ type: 'text', text: 'Done.' }], stopReason: 'end_turn' },
     );
-    okValueFrom(await model(api, tempDir).runText(textRequest(cwd)));
+    okValueFrom(await model(api, tempDir).runText(textRequest(cwd, { signal })));
     expect(existsSync(target)).toBe(false);
     expect(JSON.stringify(lastToolResults(api))).toContain('is_error');
   });
@@ -279,6 +285,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     api.reply(
@@ -298,7 +305,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     );
     const outputSchema = z.object({ exports: z.array(z.string()) });
     const output = okValueFrom(
-      await model(api, tempDir).run({ ...textRequest(cwd), outputSchema }),
+      await model(api, tempDir).run({ ...textRequest(cwd, { signal }), outputSchema }),
     );
     expect(output.value).toStrictEqual({ exports: ['greeting'] });
     const [sent] = messageRequests(api);
@@ -310,6 +317,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     api.reply(
@@ -332,7 +340,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     );
     await expect(
       model(api, tempDir).run({
-        ...textRequest(cwd),
+        ...textRequest(cwd, { signal }),
         outputSchema: z.object({ exports: lowercase }),
       }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'invalid-output' } });
@@ -342,6 +350,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     api.reply(
@@ -361,6 +370,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
           onText: (event) => {
             streamed.push(event);
           },
+          signal,
         }),
       ),
     );
@@ -378,6 +388,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     const refusal = {
@@ -386,13 +397,13 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       stopReason: 'refusal',
     } as const;
     api.reply(refusal, refusal, { ...refusal, model: 'claude-opus-4-8' }, refusal, refusal);
-    await expect(model(api, tempDir).runText(textRequest(cwd))).resolves.toMatchObject({
+    await expect(model(api, tempDir).runText(textRequest(cwd, { signal }))).resolves.toMatchObject({
       ok: false,
       error: { kind: 'model-failed' },
     });
   });
 
-  test('maps a 401 to not-authenticated', async ({ expect, messagesApi: api, tempDir }) => {
+  test('maps a 401 to not-authenticated', async ({ expect, messagesApi: api, tempDir, signal }) => {
     const { cwd } = worktree(tempDir);
     api.reply({
       kind: 'error',
@@ -400,13 +411,13 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       type: 'authentication_error',
       message: 'invalid x-api-key',
     });
-    await expect(model(api, tempDir).runText(textRequest(cwd))).resolves.toMatchObject({
+    await expect(model(api, tempDir).runText(textRequest(cwd, { signal }))).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated' },
     });
   });
 
-  test('maps a 429 to rate-limited', async ({ expect, messagesApi: api, tempDir }) => {
+  test('maps a 429 to rate-limited', async ({ expect, messagesApi: api, tempDir, signal }) => {
     const { cwd } = worktree(tempDir);
     api.reply({
       kind: 'error',
@@ -415,16 +426,16 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       message: 'Number of request tokens has exceeded your rate limit',
       headers: { 'retry-after': '30' },
     });
-    await expect(model(api, tempDir).runText(textRequest(cwd))).resolves.toMatchObject({
+    await expect(model(api, tempDir).runText(textRequest(cwd, { signal }))).resolves.toMatchObject({
       ok: false,
       error: { kind: 'rate-limited' },
     });
   });
 
-  test('requires an API key', async ({ expect, messagesApi: api, tempDir }) => {
+  test('requires an API key', async ({ expect, messagesApi: api, tempDir, signal }) => {
     const { cwd } = worktree(tempDir);
     await expect(
-      model(api, tempDir, { apiKey: ' ' }).runText(textRequest(cwd)),
+      model(api, tempDir, { apiKey: ' ' }).runText(textRequest(cwd, { signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'not-authenticated', message: 'No Anthropic API key is set.' },
@@ -435,12 +446,12 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
   test(
     'stops at the timeout',
     { timeout: 20_000 },
-    async ({ expect, messagesApi: api, tempDir }) => {
+    async ({ expect, messagesApi: api, tempDir, signal }) => {
       const { cwd } = worktree(tempDir);
       api.reply({ kind: 'hang', text: 'Thinking about' });
       const timeout = Temporal.Duration.from({ seconds: 2 });
       await expect(
-        model(api, tempDir).runText(textRequest(cwd, { timeout })),
+        model(api, tempDir).runText(textRequest(cwd, { timeout, signal })),
       ).resolves.toStrictEqual({ ok: false, error: { kind: 'timeout', timeout } });
     },
   );
@@ -465,11 +476,14 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect,
     messagesApi: api,
     tempDir,
+    signal,
   }) => {
     const { cwd } = worktree(tempDir);
     const missing = path.join(tempDir, 'no-such-claude');
     await expect(
-      model(api, tempDir, { pathToClaudeCodeExecutable: missing }).runText(textRequest(cwd)),
+      model(api, tempDir, { pathToClaudeCodeExecutable: missing }).runText(
+        textRequest(cwd, { signal }),
+      ),
     ).resolves.toStrictEqual({ ok: false, error: { kind: 'not-installed', command: missing } });
   });
 });

@@ -30,7 +30,7 @@ export interface VerificationRequest {
 export interface VerifyFindingsDeps<E> {
   readonly model: ReviewModel<E>;
   readonly timeout: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   readonly effort?: ChatEffort;
   /** The pass's coarse progress (its tool calls), as the first pass reports its own. */
   readonly onProgress?: (progress: ChatModelProgress) => void;

@@ -28,7 +28,7 @@ export interface ReviewModelRequest<T> {
   /** The shape of the answer. Adapters send it as JSON Schema and validate the reply against it. */
   readonly outputSchema: z.ZodType<T>;
   readonly timeout: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   readonly onProgress?: (progress: ChatModelProgress) => void;
   readonly effort?: ChatEffort;
 }
