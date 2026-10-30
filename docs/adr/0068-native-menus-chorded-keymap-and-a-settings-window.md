@@ -25,3 +25,7 @@ The review loop ran on bare letters (`j`/`k`, `v`, `m`, `e`, `o`, `p`, `r`, `s`,
 ## Consequences
 
 Every command is discoverable in a menu and searchable on macOS, and keys cannot drift between the menu, the palette, tooltips and the shortcuts window. Reviewers used to single letters relearn chords; there is no preset to keep them. The renderer must report its state for enablement, so a command's `when` and the window's conditions must agree (table tests cover `menuStateFrom` and `menuItemStatesFrom`). Adding a command means a catalog entry and a registry behaviour; a shortcut without a menu item fails a test. The Settings window adds a page, a preload and three channels (`claude:status`, `trace:list-trust`, `trace:remove-trust`) to the security surface; adding a channel to it means adding it to `settingsInvokeChannels` deliberately. Open Recent, the Linux Window menu's list of sheets and main-window Back/Forward history are not built.
+
+## Amendment 2026-10-30: Models and key storage
+
+ADR 0070 adds Settings ▸ Models and builds the key storage described above: `<userData>/model-secrets.json` holds `safeStorage` ciphertext, keys are entered write-only, and the `models:*` channels are the Settings window's alone (`settingsOnlyInvokeChannels`; the main window is registered with `mainWindowInvokeChannels` instead of every channel). The window is 620 by 780 points.

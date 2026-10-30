@@ -1,0 +1,27 @@
+# 0071. An OpenAI-compatible adapter: fetch, server-sent events and a read-only sandbox
+
+- Status: Accepted; adds an adapter to the port of [0070](0070-model-port-capabilities-and-a-model-registry.md)
+- Date: 2026-10-30
+
+## Context
+
+Reviewers want to run a model on their own machine (Ollama, llama.cpp, vLLM, LM Studio) or behind a company gateway. Nearly all of these serve OpenAI's `POST /v1/chat/completions` with streaming, and most serve `GET /v1/models`. ADR 0069 rejected building a file-tool sandbox for Claude, because the Agent SDK brings Claude Code's harness; an OpenAI-compatible server has no harness, and many small local models handle tools poorly or not at all, so tools must be optional. Dependencies need an ADR (CLAUDE.md), and the `openai` package would add an SDK for one endpoint.
+
+## Decision
+
+- **No dependency.** `createOpenAiCompatibleModel` (`src/internal/llm`) uses the global `fetch` and `readServerSentEvents` (`src/x/net`, a WHATWG event-stream reader with a byte cap). Requests go to `{baseUrl}/chat/completions` with `stream: true`, `redirect: 'error'`, the system prompt as a `system` message and the port's messages as they are (the `cache` marker is not sent; servers that cache prefixes do it themselves). A server that answers with plain JSON instead of a stream is read too. `reasoning_content`/`reasoning` deltas become `thinking` progress; text deltas stream as `append`, and a new turn after streamed text sends `reset`, as the Claude Code adapters do.
+- **Structured output**: `response_format: { type: 'json_schema', json_schema: { name: 'answer', schema, strict: false } }` by default (`auto`); when the server answers 400 or 422, the request is repeated with the schema in the system prompt (`prompted`, also configurable). The answer is parsed from the text, a code fence or its outermost object, and validated with zod either way (`invalid-output` otherwise).
+- **Tools off by default.** The model answers from the prompt: the diff, the reviewer's selections, the ImpactGate findings and, for the verification pass, the hunks at each finding (ADR 0070). With `tools` on, it gets `read_file { path, start_line?, end_line? }`, `grep { pattern, path?, glob?, ignore_case? }` and `glob { pattern }` over the worktree, for at most 24 requests per run and 16 calls per turn.
+- **Sandbox** (`createReadOnlySandbox`): nothing writes, runs or fetches. Paths are resolved against the worktree's real path and refused when they leave it lexically (`..`, absolute paths) or through a symbolic link (the target's real path must be inside); searches never follow links and skip `.git`. `grep` matches a fixed string, never a regular expression, so a model-written pattern can't hang main's event loop (the concern of ADR 0069); globs with more than 12 wildcards are refused for the same reason. Caps: 256 KiB per file read, 2000 lines, 100 matches, 500 paths, 20,000 directory entries per search; a capped answer says so. Refused calls count as `deniedToolUses`, and tool arguments are validated with zod.
+- **Errors**: 401/403 `not-authenticated`, 429 `rate-limited` (with `retry-after` seconds as `resetsAt`), other statuses `model-failed` with the status and the body's `error.message` (or Ollama's `error` string), a refused connection `model-failed`/`unreachable` ("Is the server running?"), the timeout `timeout`, the signal `cancelled`, a body over 32 MiB `output-too-large`, too many tool turns `model-failed`/`max-turns`.
+- **Effort**: `reasoning_effort` (`xhigh` and `max` sent as `high`) only when the entry sets an effort, since not every server accepts the field; a request's effort then overrides it.
+- **Keys and models**: the key is optional, stored like the Agent SDK's (ADR 0070) and sent as a bearer token. Settings lists `GET {baseUrl}/models` when the server has it; otherwise the user types the id. The default base URL is `http://localhost:11434/v1` (Ollama).
+- **Off-machine servers**: when the base URL's host is not `localhost`, `*.localhost`, `127.0.0.0/8` or `::1` (`isLoopbackUrl`), Settings shows a warning on the form and the entry ("the diff and your questions are sent to this server"). It does not ask for confirmation; the user decided a warning is enough.
+- **Tests** never call a real API: a fake OpenAI-compatible server (`testing/start-fake-open-ai-api.ts`) streams scripted replies in the chunk shape (tool call arguments split across chunks, usage last, `[DONE]`), can refuse `response_format`, and records every request. They cover streaming, native and prompted output, the fallback, tools with escapes, errors, timeout and cancellation; the sandbox has its own escape tests (`..`, absolute paths, symlinked files and directories), and an integration test verifies `/review` findings on an OpenAI-compatible `verify` model.
+
+## Consequences
+
+- Any OpenAI-compatible server works, local or remote, with no new dependency; servers that diverge from OpenAI's streaming shape may need small fixes in one file.
+- Without tools a model sees only what the prompt holds, and the budget of ADR 0070 keeps that small for a small context window. With tools, a weak model may loop; the turn cap and the per-call caps bound it.
+- The sandbox is code beuve owns (path confinement, caps, a fixed-string grep); it is deliberately smaller than Claude Code's tools, and a fixed-string grep finds less than a regular expression.
+- Prompt contents go wherever the base URL points. Loopback servers keep them on the machine; anything else is the user's choice, flagged in Settings.

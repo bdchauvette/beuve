@@ -26,3 +26,7 @@ The only adapter drives the user's installed `claude` CLI with their own Claude 
 - Cost: every request is billed to the key's Console account at API rates (Claude Opus 5.5: $4 / $20 per million input / output tokens, cache reads $0.20), with no subscription limits. A `/review` reads many files across many turns, so its prompt grows each turn; Claude Code's prompt caching keeps the repeated prefix cheap, and `effort`, `maxTurns` and `maxBudgetUsd` bound a run. `ModelOutput.costUsd` is Claude Code's estimate and `usage` the token counts, for main to show.
 - The app grows by the platform binary (about 280 MB on disk, less compressed).
 - Privacy is as in ADR 0019, but under the key owner's API terms and data settings instead of the user's Claude Code account.
+
+## Amendment 2026-10-30: wired through the model registry
+
+ADR 0070 gives the adapter its caller: a registry entry of kind `claude-agent-sdk` with its key in the `safeStorage`-encrypted secret store (the contract above, now built), and an executable that is either the user's installed `claude` (checked to be at least the pinned 2.1.312) or the bundled binary, which `electron-builder.yml` now packs and unpacks as described under Packaging. Requests carry messages, which the adapter joins into one prompt, and may override effort and model.

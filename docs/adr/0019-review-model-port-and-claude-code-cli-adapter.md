@@ -26,3 +26,7 @@ The preliminary agentic review (spec 5B) needs an LLM that can read the worktree
 ## Amendment 2026-10-30: the review domain is folded into the chat
 
 ADR 0055 makes `/review` a chat request. The port, the Claude Code adapter, its flags, process handling and error mapping are unchanged. The `review` domain, `review_runs` and `agent_insights` are removed. `buildReviewPrompt` gives way to the chat's prompt builder with a review task (same budget rules, shared fencing), `validateInsights` lives on as the chat domain's `validateFindings` (same rules), and insights are now findings stored with their answer.
+
+## Amendment 2026-10-30: requests carry messages, and a login check for `--bare`
+
+ADR 0070 replaces the request's `prompt` with `messages` (the adapter joins them for stdin), lets a request override `--effort` and `--model`, and has the adapter stop a run whose init event reports any credential source but `none` (the user's login), as a `--print` that defaulted to `--bare` would; `claude --help` for 2.1.314 has no flag to opt out of bare mode.
