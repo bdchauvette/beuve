@@ -53,6 +53,8 @@ import { syntaxPalettes } from './syntax-palettes.ts';
 import { toHeadSideAnnotations } from './to-head-side-annotations.ts';
 import { toTextmateTheme } from './to-textmate-theme.ts';
 import type { TextmateTheme } from './to-textmate-theme.ts';
+import { parseInlineTitle } from './parse-inline-title.ts';
+import type { InlineSpan } from './parse-markdown-subset.ts';
 import { toUraMarkers } from './to-ura-markers.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
@@ -437,6 +439,13 @@ export class BeuveFileCard extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       color: var(--beuve-text);
+    }
+
+    .ura-marker .ura-title code {
+      padding: 0 2px;
+      border-radius: 3px;
+      background: var(--beuve-surface-sunken);
+      font: var(--beuve-font-mono);
     }
 
     pre {
@@ -1444,9 +1453,32 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   kind.textContent = `Staged · ${labels.severity}${item.suggestedPatch === undefined ? '' : ' · suggestion'}`;
   const title = document.createElement('span');
   title.className = 'ura-title';
-  title.textContent = item.title;
+  title.append(...parseInlineTitle(item.title).map((span) => inlineNode(span)));
   marker.append(kind, title);
   return marker;
+}
+
+function inlineNode(span: InlineSpan): Node {
+  switch (span.kind) {
+    case 'text': {
+      return document.createTextNode(span.text);
+    }
+    case 'code': {
+      return inlineElement('code', span.text);
+    }
+    case 'strong': {
+      return inlineElement('strong', span.text);
+    }
+    case 'emphasis': {
+      return inlineElement('em', span.text);
+    }
+  }
+}
+
+function inlineElement(tag: 'code' | 'strong' | 'em', text: string): HTMLElement {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  return element;
 }
 
 /**

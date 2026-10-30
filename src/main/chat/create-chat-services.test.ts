@@ -224,6 +224,39 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     expect(calls(claude)[2]?.stdin).toContain('abc');
   });
 
+  it('cancels the running answer and the queued requests when the session head moves', async () => {
+    const claude = scripted(['a', 'b', 'c'], 120);
+    const { sessionId } = await start(claude);
+    const chat = must(services).chat;
+    const running = value(await chat.ask({ sessionId, question: 'Running?' }));
+    const waiting = value(await chat.ask({ sessionId, question: 'Waiting?' }));
+    const compaction = value(
+      await chat.ask({ sessionId, question: '/summarize', command: { kind: 'summarize' } }),
+    );
+    expect([running, waiting, compaction].map(({ answer }) => answer.status)).toEqual([
+      'streaming',
+      'queued',
+      'queued',
+    ]);
+    await waitUntil(
+      () => deltas.some(({ messageId, text }) => messageId === running.answer.id && text === 'a'),
+      'the running answer to stream',
+    );
+
+    repo.git('switch', '--quiet', 'feature');
+    repo.write('more.rs', 'pub fn more() {}\n');
+    repo.commit('push');
+    repo.git('switch', '--quiet', 'main');
+    value(await must(services).sessions.getReview({ sessionId }));
+
+    expect(await settled(running.answer.id)).toMatchObject({ status: 'cancelled' });
+    expect(await settled(waiting.answer.id)).toMatchObject({ status: 'cancelled', content: '' });
+    expect(await settled(compaction.answer.id)).toMatchObject({ status: 'cancelled', content: '' });
+    const after = value(await chat.ask({ sessionId, question: 'After the push?' }));
+    expect(await settled(after.answer.id)).toMatchObject({ status: 'complete', content: 'abc' });
+    expect(calls(claude)).toHaveLength(2);
+  });
+
   it('queues requests made at the same moment in the order they were made', async () => {
     const claude = scripted(['x'], 200);
     const { sessionId } = await start(claude);
