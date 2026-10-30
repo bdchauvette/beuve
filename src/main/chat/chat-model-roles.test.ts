@@ -55,7 +55,7 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
       await chat.ask({ sessionId, question: '/review', command: { kind: 'review' } }),
     );
     const answer = await settled(asked.answer.id);
-    expect(answer.status).toBe('complete');
+    expect(answer.status).toBe('done');
     expect(answer.review?.findings).toMatchObject([{ startLine: 2, check: 'confirmed' }]);
     expect(answer.review?.verification).toBe('verified');
     expect(

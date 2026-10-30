@@ -12,6 +12,8 @@ import type {
   ChatMessageBase,
   ChatMention,
   ChatMessageId,
+  ChatPart,
+  ChatStatus,
   ChatStoreError,
   Citation,
   CommitSha,
@@ -29,20 +31,8 @@ export function chatMessageFromRow(
 ): Result<ChatMessage, CorruptRow> {
   const corrupt = (reason: string): Result<ChatMessage, CorruptRow> =>
     err({ kind: 'corrupt-row', table: 'chat_messages', id: String(row['id']), reason });
-  const {
-    id,
-    session_id,
-    head_sha,
-    role,
-    content,
-    citations,
-    mentions,
-    status,
-    error_code,
-    kind,
-    review,
-    created_at,
-  } = row;
+  const { id, session_id, head_sha, role, parts, citations, status, kind, review, created_at } =
+    row;
 
   if (!isUuid(id) || !isUuid(session_id)) {
     return corrupt('id or session_id is not a UUID');
@@ -50,16 +40,13 @@ export function chatMessageFromRow(
   if (typeof head_sha !== 'string' || !commitSha.test(head_sha)) {
     return corrupt('head_sha is not a commit id');
   }
-  if (typeof content !== 'string') {
-    return corrupt('content is not text');
+  const parsedParts = parseParts(parts);
+  if (parsedParts === undefined) {
+    return corrupt('parts is not a JSON array of parts with distinct ids');
   }
   const parsedCitations = parseJsonList(citations, citationFrom);
   if (parsedCitations === undefined) {
     return corrupt('citations is not a JSON array of citations');
-  }
-  const parsedMentions = parseJsonList(mentions, mentionFrom);
-  if (parsedMentions === undefined) {
-    return corrupt('mentions is not a JSON array of mentions');
   }
   if (typeof created_at !== 'string' || !isoUtc.test(created_at)) {
     return corrupt('created_at is not an ISO-8601 UTC timestamp');
@@ -68,13 +55,16 @@ export function chatMessageFromRow(
     id: id as ChatMessageId,
     sessionId: session_id as SessionId,
     headSha: head_sha as CommitSha,
-    content,
+    parts: parsedParts,
     citations: parsedCitations,
-    mentions: parsedMentions,
     createdAt: created_at,
   };
   if (role === 'user' || role === 'system-notice' || role === 'summary') {
-    return status === 'complete' ? ok({ ...base, role }) : corrupt(`a ${role} is not complete`);
+    const allowed = role === 'user' ? questionPartKinds : textPartKinds;
+    if (parsedParts.some((part) => !allowed.has(part.kind))) {
+      return corrupt(`a ${role} has a part it can't have`);
+    }
+    return status === 'done' ? ok({ ...base, role }) : corrupt(`a ${role} is not done`);
   }
   if (role !== 'assistant') {
     return corrupt('role is not user, assistant, system-notice or summary');
@@ -82,30 +72,46 @@ export function chatMessageFromRow(
   if (!isAnswerKind(kind)) {
     return corrupt('kind is not answer, review or abstract');
   }
+  if (!isStatus(status)) {
+    return corrupt('status is not queued, submitted, streaming, done, error or cancelled');
+  }
+  if (parsedParts.some((part) => part.kind === 'mention')) {
+    return corrupt('an answer has a mention part');
+  }
+  if ((status === 'error') !== parsedParts.some((part) => part.kind === 'error')) {
+    return corrupt('an error part without an error status, or the other way round');
+  }
   const parsedReview = parseReview(review);
   if (parsedReview === 'corrupt') {
     return corrupt('review is not a stored review');
   }
-  const answer = {
+  const findings = parsedReview?.findings.length ?? 0;
+  if (parsedParts.some((part) => part.kind === 'finding' && part.finding >= findings)) {
+    return corrupt('a finding part names no finding of the review');
+  }
+  return ok({
     ...base,
-    role: 'assistant' as const,
+    role: 'assistant',
     kind,
+    status,
     ...(parsedReview !== undefined && { review: parsedReview }),
-  };
-  if (status === 'failed') {
-    return typeof error_code === 'string' && error_code.trim() !== ''
-      ? ok({ ...answer, status, errorCode: error_code })
-      : corrupt('a failed answer has no error code');
-  }
-  if (
-    status === 'queued' ||
-    status === 'streaming' ||
-    status === 'complete' ||
-    status === 'cancelled'
-  ) {
-    return error_code === null ? ok({ ...answer, status }) : corrupt('error_code without failure');
-  }
-  return corrupt('status is not queued, streaming, complete, failed or cancelled');
+  });
+}
+
+const questionPartKinds: ReadonlySet<ChatPart['kind']> = new Set(['text', 'mention']);
+const textPartKinds: ReadonlySet<ChatPart['kind']> = new Set(['text']);
+
+const statuses: readonly unknown[] = [
+  'queued',
+  'submitted',
+  'streaming',
+  'done',
+  'error',
+  'cancelled',
+] satisfies ChatStatus[];
+
+function isStatus(value: unknown): value is ChatStatus {
+  return statuses.includes(value);
 }
 
 const line = z.int().min(1);
@@ -146,6 +152,62 @@ const storedReview = z.object({
   verification,
   reusedFrom: z.string().optional(),
 });
+
+const partId = z.string().regex(/^p[1-9]\d{0,5}$/u);
+
+const storedMention = z.object({
+  path: text,
+  side: z.enum(['head', 'base']),
+  startLine: line.optional(),
+  endLine: line.optional(),
+  sha: z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u),
+});
+
+const storedPart = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('text'), id: partId, text: z.string() }),
+  z.object({
+    kind: z.literal('reasoning'),
+    id: partId,
+    state: z.enum(['running', 'done']),
+    summary: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal('tool-call'),
+    id: partId,
+    tool: text,
+    description: z.string(),
+    state: z.enum(['running', 'done', 'failed', 'stopped']),
+  }),
+  z.object({ kind: z.literal('mention'), id: partId, mention: storedMention }),
+  z.object({ kind: z.literal('finding'), id: partId, finding: count }),
+  z.object({ kind: z.literal('error'), id: partId, code: text }),
+]);
+
+function parseParts(value: unknown): ChatPart[] | undefined {
+  const parts = parseJsonList(value, (item) => {
+    const parsed = storedPart.safeParse(item);
+    return parsed.success ? partFrom(parsed.data) : undefined;
+  });
+  const ids = new Set(parts?.map((part) => part.id));
+  return parts?.length === ids.size ? parts : undefined;
+}
+
+/** Drops absent optional fields, so a parsed part equals the one stored. */
+function partFrom(part: z.infer<typeof storedPart>): ChatPart | undefined {
+  switch (part.kind) {
+    case 'reasoning': {
+      const { summary, ...rest } = part;
+      return { ...rest, ...(summary !== undefined && { summary }) };
+    }
+    case 'mention': {
+      const mention = mentionFrom(part.mention);
+      return mention === undefined ? undefined : { ...part, mention };
+    }
+    default: {
+      return part;
+    }
+  }
+}
 
 const answerKinds: readonly unknown[] = ['answer', 'review', 'abstract'] satisfies AnswerKind[];
 

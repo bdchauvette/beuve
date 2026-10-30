@@ -1,6 +1,7 @@
 import type { UraAnchorView } from '#contract/ipc-contract.ts';
 
 import type { ChatEntry } from './chat-entry.ts';
+import { chatTextFrom } from './chat-text-from.ts';
 import { citationMarker } from './citation-marker.ts';
 
 /** The URA note an answer becomes when the reviewer stages it (spec Zone 4, ADR 0023). */
@@ -38,14 +39,14 @@ export function planChatStage(
   const { message } = entry;
   if (
     message.role !== 'assistant' ||
-    message.status !== 'complete' ||
+    message.status !== 'done' ||
     message.answerKind === 'review' ||
-    message.content.trim() === ''
+    chatTextFrom(message.parts).trim() === ''
   ) {
     return undefined;
   }
   const anchored = message.citations.find((citation) => diffPaths.has(citation.path));
-  let body = message.content.trim();
+  let body = chatTextFrom(message.parts).trim();
   for (const citation of message.citations) {
     const code = `\`${citation.path}:${String(citation.startLine)}-${String(citation.endLine)}\``;
     body = body.replaceAll(citationMarker(citation), () => code);
@@ -75,7 +76,7 @@ function precedingQuestion(before: readonly ChatEntry[]): string {
   const asked = before.findLast(
     (entry) => entry.kind === 'message' && entry.message.role === 'user',
   );
-  return asked?.kind === 'message' ? asked.message.content : '';
+  return asked?.kind === 'message' ? chatTextFrom(asked.message.parts) : '';
 }
 
 function titleOf(question: string): string {

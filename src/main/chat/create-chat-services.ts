@@ -12,17 +12,20 @@ import type {
   ChatCommandRequest,
   ChatCompactedView,
   ChatCompactRequest,
-  ChatDeltaView,
   ChatErrorCode,
   ChatListRequest,
   ChatListView,
-  ChatMessageUpdatedView,
+  ChatStreamEvent,
   ImpactFindingView,
   IpcResult,
   ModelRole,
   ModelTestView,
 } from '#contract/ipc-contract.ts';
+import { answerPartsFrom } from '#internal/chat/answer-parts-from.ts';
+import type { AnswerEnding } from '#internal/chat/answer-parts-from.ts';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
+import { applyModelEvent } from '#internal/chat/apply-model-event.ts';
+import type { ModelStreamEvent, StreamedParts } from '#internal/chat/apply-model-event.ts';
 import { askQuestion } from '#internal/chat/ask-question.ts';
 import { clearChatMessages } from '#internal/chat/clear-chat-messages.ts';
 import type {
@@ -30,10 +33,14 @@ import type {
   ChatMention,
   ChatMessage,
   ChatMessageId,
+  Citation,
   CommitSha,
   SessionId,
 } from '#internal/chat/chat-message.ts';
-import type { ChatDelta } from '#internal/chat/chat-model.ts';
+import type { ChatReview } from '#internal/chat/chat-review.ts';
+import type { ChatPartEvent } from '#internal/chat/chat-part-event.ts';
+import { chatPartsFrom } from '#internal/chat/chat-parts-from.ts';
+import { chatTextFrom } from '#internal/chat/chat-text-from.ts';
 import type { ChatSelection, ChatTask } from '#internal/chat/chat-question.ts';
 import { compactConversation } from '#internal/chat/compact-conversation.ts';
 import { deleteChatMessages } from '#internal/chat/delete-chat-messages.ts';
@@ -42,6 +49,7 @@ import { normalizePathScope } from '#internal/chat/normalize-path-scope.ts';
 import { reviewChange } from '#internal/chat/review-change.ts';
 import type { ReviewProgress } from '#internal/chat/review-change.ts';
 import { splitAtCompaction } from '#internal/chat/split-at-compaction.ts';
+import { streamedPartsFrom } from '#internal/chat/streamed-parts-from.ts';
 import { chatHistoryFrom } from '#internal/chat/chat-history-from.ts';
 import { updateChatAnswer } from '#internal/chat/update-chat-answer.ts';
 import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
@@ -69,6 +77,7 @@ import { describeModelError } from '../models/describe-model-error.ts';
 import { resolveLanguageModel } from '../models/resolve-language-model.ts';
 import type { ModelResolverDeps, ResolvedModel } from '../models/resolve-language-model.ts';
 import { chatMessageViewFrom } from './chat-message-view-from.ts';
+import { chatPartViewFrom } from './chat-part-view-from.ts';
 import { chatQuestionFrom } from './chat-question-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
@@ -90,10 +99,8 @@ export interface ChatServices {
   readonly clear: (request: ChatClearRequest) => IpcResult<ChatClearedView>;
   /** Stops the session's requests that were asked at a head other than `headSha`. */
   readonly observeHead: (sessionId: string, headSha: string) => void;
-  /** Subscribes to `chat:delta` events; returns the unsubscribe function. */
-  readonly onDelta: (listener: (event: ChatDeltaView) => void) => () => void;
-  /** Subscribes to `chat:message-updated` events; returns the unsubscribe function. */
-  readonly onMessageUpdated: (listener: (event: ChatMessageUpdatedView) => void) => () => void;
+  /** Subscribes to `chat:stream` events (ADR 0072); returns the unsubscribe function. */
+  readonly onStream: (listener: (event: ChatStreamEvent) => void) => () => void;
   /**
    * Settings' Test (ADR 0070): one tiny request to a registry entry, queued like a question
    * (ADR 0057) in a queue of its own, in an empty scratch directory. Never rejects.
@@ -131,8 +138,10 @@ interface AnswerJob {
   readonly controller: AbortController;
   /** Stored as `queued`, so starting it must say so. */
   readonly wasQueued: boolean;
-  /** The raw answer streamed so far. */
-  streamed: string;
+  /** The answer's parts so far (ADR 0072). */
+  streamed: StreamedParts;
+  /** `streaming` once the first part arrived. */
+  status: 'submitted' | 'streaming';
 }
 
 /** Settings' Test of one registry entry; `settle` answers its `models:test` call. */
@@ -158,8 +167,11 @@ interface CompactJob {
 
 type Outcome =
   | {
-      readonly status: 'complete';
-      readonly answer: ChatAnswerUpdate;
+      readonly status: 'done';
+      /** The validated text, or a `/review`'s findings. */
+      readonly ending: Extract<AnswerEnding, { kind: 'text' | 'findings' }>;
+      readonly citations: readonly Citation[];
+      readonly review?: ChatReview;
       /** Earlier turns the prompt dropped for size. */
       readonly droppedTurns: number;
     }
@@ -180,8 +192,8 @@ interface Prepared {
  * one request at a time and queues the rest in order, at most `maxQueued` waiting. A request
  * builds the same diff `session:get-review` shows, adds the cached ImpactGate findings, the stored
  * history before its question and the head's paths, checks the head out (ADR 0020) and asks
- * Claude Code there. Deltas are pushed as they arrive and the preview is stored at most once per
- * interval; every state change is stored, then pushed. Cancelling stops one request, the rest of
+ * the model there. Its progress and text become parts (ADR 0072), pushed as part events as they
+ * arrive and stored at most once per interval; every status change is stored, then pushed. Cancelling stops one request, the rest of
  * the queue goes on; moving the head stops the requests asked at the old head; clearing and
  * quitting stop everything.
  */
@@ -194,12 +206,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   const { db, logger } = context;
   const claude = options.claude ?? {};
   const previewInterval = options.previewInterval ?? Temporal.Duration.from({ seconds: 1 });
-  const deltaListeners = new Set<(event: ChatDeltaView) => void>();
-  const updateListeners = new Set<(event: ChatMessageUpdatedView) => void>();
+  const streamListeners = new Set<(event: ChatStreamEvent) => void>();
   let isDisposed = false;
 
-  const notify = <T>(listeners: ReadonlySet<(event: T) => void>, event: T): void => {
-    for (const listener of listeners) {
+  const notify = (event: ChatStreamEvent): void => {
+    for (const listener of streamListeners) {
       try {
         listener(event);
       } catch (error: unknown) {
@@ -209,9 +220,22 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const publish = (message: ChatMessage, droppedTurns = 0): void => {
-    notify(updateListeners, {
+    notify({
+      type: 'message',
+      sessionId: message.sessionId,
+      messageId: message.id,
       message: chatMessageViewFrom(message),
       ...(droppedTurns > 0 && { droppedTurns }),
+    });
+  };
+
+  const pushStatus = (job: AnswerJob, activity?: string): void => {
+    notify({
+      type: 'status',
+      sessionId: job.sessionId,
+      messageId: job.assistant.id,
+      status: job.status,
+      ...(activity !== undefined && { activity }),
     });
   };
 
@@ -243,7 +267,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!shouldStore) {
       return;
     }
-    const update: ChatAnswerUpdate = { status: 'cancelled', content: '' };
+    const update: ChatAnswerUpdate = { status: 'cancelled', parts: [] };
     if (updateChatAnswer(db, job.assistant.id, update).ok) {
       publish({ ...job.assistant, ...update, citations: [] });
     }
@@ -313,19 +337,29 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     return ok(at === -1 ? stored.value : stored.value.slice(0, at));
   };
 
-  const streamInto = (job: AnswerJob): ((delta: ChatDelta) => void) => {
+  /**
+   * Folds the model's progress and text into the answer's parts (ADR 0072): pushes each part
+   * event, says `streaming` on the first part, and stores the parts at most once per interval.
+   */
+  const streamInto = (job: AnswerJob): ((event: ModelStreamEvent) => void) => {
     let lastStored: Stopwatch | undefined;
-    return (delta: ChatDelta): void => {
+    return (event: ModelStreamEvent): void => {
       if (job.controller.signal.aborted) {
         return;
       }
-      job.streamed = delta.kind === 'reset' ? '' : job.streamed + delta.text;
-      notify(deltaListeners, {
-        sessionId: job.sessionId,
-        messageId: job.assistant.id,
-        kind: delta.kind,
-        text: delta.kind === 'reset' ? '' : delta.text,
-      });
+      const applied = applyModelEvent(job.streamed, event);
+      job.streamed = applied.state;
+      if (applied.events.length === 0) {
+        return;
+      }
+      if (job.status === 'submitted') {
+        job.status = 'streaming';
+        pushStatus(job);
+        lastStored = undefined;
+      }
+      for (const partEvent of applied.events) {
+        notify(streamEventFrom(job, partEvent));
+      }
       if (
         lastStored !== undefined &&
         Temporal.Duration.compare(lastStored.elapsed(), previewInterval) < 0
@@ -334,7 +368,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       }
 
       lastStored = new Stopwatch();
-      updateChatAnswer(db, job.assistant.id, { status: 'streaming', content: job.streamed });
+      updateChatAnswer(db, job.assistant.id, { status: 'streaming', parts: job.streamed.parts });
     };
   };
 
@@ -352,7 +386,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       worktreePath: prepared.value.worktreePath,
       question: job.request.question,
       history: chatHistoryFrom(before.value),
-      summary: splitAtCompaction(before.value).summary?.content,
+      summary: summaryTextOf(before.value),
       selections: job.selections,
       focus: job.request.focus,
       impactFindings: prepared.value.findings,
@@ -390,20 +424,23 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return model.error;
     }
+    const stream = streamInto(job);
     const asked = await askQuestion<ModelError>(input, {
       model: model.value.model,
       signal: job.controller.signal,
-      onDelta: streamInto(job),
+      onDelta: (delta): void => {
+        stream({ kind: 'text', delta });
+      },
+      onProgress: (progress): void => {
+        stream({ kind: 'progress', progress });
+      },
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
     if (asked.ok) {
       return {
-        status: 'complete',
-        answer: {
-          status: 'complete',
-          content: asked.value.answer,
-          citations: asked.value.citations,
-        },
+        status: 'done',
+        ending: { kind: 'text', text: asked.value.answer },
+        citations: asked.value.citations,
         droppedTurns: asked.value.prompt.omittedTurns,
       };
     }
@@ -427,13 +464,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return earlier;
     }
     const progress = (text: string): void => {
-      notify(deltaListeners, {
-        sessionId: job.sessionId,
-        messageId: job.assistant.id,
-        kind: 'progress',
-        text,
-      });
+      pushStatus(job, text);
     };
+    const stream = streamInto(job);
     progress('Building the review diff');
     const prepared = await prepare(job, { withImpact: true });
     if (!prepared.ok) {
@@ -474,6 +507,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           return;
         }
         case 'model': {
+          stream({ kind: 'progress', progress: event.progress });
           if (event.progress.kind === 'tool-start') {
             toolUses += 1;
             progress(
@@ -510,23 +544,20 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       verification: reviewed.value.review.verification,
     });
     return {
-      status: 'complete',
-      answer: {
-        status: 'complete',
-        content: reviewed.value.content,
-        citations: reviewed.value.citations,
-        review: reviewed.value.review,
-      },
+      status: 'done',
+      ending: { kind: 'findings', count: reviewed.value.review.findings.length },
+      citations: reviewed.value.citations,
+      review: reviewed.value.review,
       droppedTurns: 0,
     };
   };
 
   const runAnswer = async (job: AnswerJob): Promise<void> => {
-    if (job.wasQueued) {
-      const started: ChatAnswerUpdate = { status: 'streaming', content: '' };
-      if (updateChatAnswer(db, job.assistant.id, started).ok) {
-        publish({ ...job.assistant, ...started });
-      }
+    if (
+      job.wasQueued &&
+      updateChatAnswer(db, job.assistant.id, { status: 'submitted', parts: [] }).ok
+    ) {
+      pushStatus(job);
     }
     let outcome: Outcome;
     try {
@@ -549,11 +580,19 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return;
     }
     const update: ChatAnswerUpdate =
-      outcome.status === 'complete'
-        ? outcome.answer
+      outcome.status === 'done'
+        ? {
+            status: 'done',
+            parts: answerPartsFrom(job.streamed, outcome.ending),
+            citations: outcome.citations,
+            ...(outcome.review !== undefined && { review: outcome.review }),
+          }
         : outcome.status === 'cancelled'
-          ? { status: 'cancelled', content: job.streamed }
-          : { status: 'failed', errorCode: outcome.code, content: job.streamed };
+          ? { status: 'cancelled', parts: answerPartsFrom(job.streamed, { kind: 'cancelled' }) }
+          : {
+              status: 'error',
+              parts: answerPartsFrom(job.streamed, { kind: 'error', code: outcome.code }),
+            };
     const stored = updateChatAnswer(db, job.assistant.id, update);
     if (!stored.ok) {
       logger.warn('chat answer not stored', { error: stored.error });
@@ -561,7 +600,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
     publish(
       { ...job.assistant, ...update, citations: update.citations ?? [] },
-      outcome.status === 'complete' ? outcome.droppedTurns : 0,
+      outcome.status === 'done' ? outcome.droppedTurns : 0,
     );
   };
 
@@ -621,7 +660,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
-    const summary = splitAtCompaction(stored.value).summary?.content;
+    const summary = summaryTextOf(stored.value);
     const compacted = await compactConversation<ModelError>(
       {
         baseSha: question.baseSha,
@@ -653,9 +692,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       sessionId: job.sessionId as SessionId,
       headSha: job.headSha as CommitSha,
       role: 'summary',
-      content: compacted.value.content,
+      parts: chatPartsFrom(compacted.value.content),
       citations: compacted.value.citations,
-      mentions: [],
       createdAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     };
     const appended = appendChatMessage(db, message);
@@ -722,21 +760,22 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       .all()
       .find((job): job is AnswerJob => job.kind === 'answer' && job.assistant.id === messageId);
 
-  /** A `queued` or `streaming` answer no job is writing (the app died) is shown as cancelled. */
+  /** An unfinished answer no job is writing (the app died) is shown, and stored, as cancelled. */
   const settleOrphan = (message: ChatMessage): ChatMessage => {
     if (
       message.role !== 'assistant' ||
-      (message.status !== 'streaming' && message.status !== 'queued') ||
+      !unfinished.has(message.status) ||
       jobOfMessage(message.id) !== undefined
     ) {
       return message;
     }
-    updateChatAnswer(db, message.id, {
+    const update: ChatAnswerUpdate = {
       status: 'cancelled',
-      content: message.content,
+      parts: answerPartsFrom(streamedPartsFrom(message.parts), { kind: 'cancelled' }),
       citations: message.citations,
-    });
-    return { ...message, status: 'cancelled' };
+    };
+    updateChatAnswer(db, message.id, update);
+    return { ...message, ...update };
   };
 
   const observeHead = (sessionId: string, headSha: string): void => {
@@ -809,9 +848,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           ...common,
           id: context.deps.newId() as ChatMessageId,
           role: 'user',
-          content: request.question.trim(),
+          parts: chatPartsFrom(request.question.trim(), mentions),
           citations: [],
-          mentions,
           createdAt,
         };
         const assistant: ChatMessage = {
@@ -819,10 +857,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           id: context.deps.newId() as ChatMessageId,
           role: 'assistant',
           kind: answerKindOf(request.command),
-          status: isQueued ? 'queued' : 'streaming',
-          content: '',
+          status: isQueued ? 'queued' : 'submitted',
+          parts: [],
           citations: [],
-          mentions: [],
           createdAt,
         };
         for (const message of [question, assistant]) {
@@ -841,7 +878,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           selections,
           controller: new AbortController(),
           wasQueued: isQueued,
-          streamed: '',
+          streamed: { parts: [], nextId: 1, tools: {} },
+          status: 'submitted',
         });
         return ok({
           question: chatMessageViewFrom(question),
@@ -966,17 +1004,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return settled.promise;
     },
 
-    onDelta: (listener): (() => void) => {
-      deltaListeners.add(listener);
+    onStream: (listener): (() => void) => {
+      streamListeners.add(listener);
       return (): void => {
-        deltaListeners.delete(listener);
-      };
-    },
-
-    onMessageUpdated: (listener): (() => void) => {
-      updateListeners.add(listener);
-      return (): void => {
-        updateListeners.delete(listener);
+        streamListeners.delete(listener);
       };
     },
 
@@ -993,6 +1024,32 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       await queue.idle();
     },
   };
+}
+
+/** Statuses of an answer whose request has not ended. */
+const unfinished: ReadonlySet<string> = new Set(['queued', 'submitted', 'streaming']);
+
+/** A part event of `job`'s answer, as `chat:stream` carries it. */
+function streamEventFrom(job: AnswerJob, event: ChatPartEvent): ChatStreamEvent {
+  const keys = { sessionId: job.sessionId, messageId: job.assistant.id };
+  switch (event.type) {
+    case 'part-start':
+    case 'part-end': {
+      return { ...keys, type: event.type, part: chatPartViewFrom(event.part) };
+    }
+    case 'text-delta': {
+      return { ...keys, type: 'text-delta', partId: event.partId, text: event.text };
+    }
+    case 'part-discard': {
+      return { ...keys, type: 'part-discard', partId: event.partId };
+    }
+  }
+}
+
+/** The latest `/compact` summary's text, if the transcript has one (ADR 0047). */
+function summaryTextOf(messages: readonly ChatMessage[]): string | undefined {
+  const { summary } = splitAtCompaction(messages);
+  return summary === undefined ? undefined : chatTextFrom(summary.parts);
 }
 
 /** The queue key of Settings' model tests, which no session id can equal (ADR 0070). */
@@ -1050,7 +1107,7 @@ function findReview(
     (message) =>
       message.role === 'assistant' &&
       message.kind === 'review' &&
-      message.status === 'complete' &&
+      message.status === 'done' &&
       message.headSha === job.headSha &&
       message.review !== undefined &&
       hasSameScope(message.review.pathScope, pathScope),
@@ -1059,13 +1116,10 @@ function findReview(
     return undefined;
   }
   return {
-    status: 'complete',
-    answer: {
-      status: 'complete',
-      content: earlier.content,
-      citations: earlier.citations,
-      review: { ...earlier.review, reusedFrom: earlier.review.reusedFrom ?? earlier.id },
-    },
+    status: 'done',
+    ending: { kind: 'findings', count: earlier.review.findings.length },
+    citations: earlier.citations,
+    review: { ...earlier.review, reusedFrom: earlier.review.reusedFrom ?? earlier.id },
     droppedTurns: 0,
   };
 }

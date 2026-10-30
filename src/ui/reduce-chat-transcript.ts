@@ -1,30 +1,33 @@
-import type { ChatDeltaView, ChatMessageView } from '#contract/ipc-contract.ts';
+import type { ChatMessageView, ChatPartView, ChatStreamEvent } from '#contract/ipc-contract.ts';
 
-import type { ChatEntry, ChatTranscript, MessageChatEntry, PendingAnswer } from './chat-entry.ts';
+import type { ChatEntry, ChatTranscript, MessageChatEntry } from './chat-entry.ts';
 import { emptyChatTranscript } from './empty-chat-transcript.ts';
 
-/** What happens to the stored part of the transcript (ADR 0031). */
+/** What happens to the stored part of the transcript (ADR 0031, 0072). */
 export type ChatTranscriptAction =
-  /** The session's history, replacing its message entries (an answer streaming here stays). */
+  /** The session's history, replacing its message entries (a request running here stays). */
   | { readonly kind: 'loaded'; readonly messages: readonly ChatMessageView[] }
-  /** `chat:ask` answered: the stored question and the streaming answer. */
+  /** `chat:ask` answered: the stored question and its answer, `queued` or `submitted`. */
   | {
       readonly kind: 'asked';
       readonly question: ChatMessageView;
       readonly answer: ChatMessageView;
     }
-  | { readonly kind: 'delta'; readonly delta: ChatDeltaView }
-  /** `chat:message-updated`: the answer started (it was queued), completed, failed or stopped. */
-  | { readonly kind: 'updated'; readonly message: ChatMessageView }
+  /** One `chat:stream` event of this session. */
+  | { readonly kind: 'stream'; readonly event: ChatStreamEvent }
   /** `/compact` stored its summary: it joins the transcript where the compaction entry was. */
   | { readonly kind: 'compacted'; readonly summary: ChatMessageView }
   /** `/clear`: every entry goes, local ones included. */
   | { readonly kind: 'cleared' };
 
 /**
- * Folds chat events into the transcript. Events can beat the `chat:ask` response (the answer
- * starts before it returns), so those for a message not yet listed wait in `pending` and are
- * replayed when `asked` lands. Pure.
+ * The chat's state machine (ADR 0072): folds `chat:list`, `chat:ask` and `chat:stream` into the
+ * transcript, so the drawer renders from data alone. A request's status moves through `queued`,
+ * `submitted` and `streaming`; parts start, grow by text deltas, end or are discarded; a
+ * `message` event replaces the message with the stored one and is the only way a request ends.
+ * Events for an ended message are stale and ignored. Events can beat the `chat:ask` response
+ * (the answer starts before it returns), so those for a message not yet listed wait in `pending`
+ * and are replayed in order when it lands. Pure.
  */
 export function reduceChatTranscript(
   state: ChatTranscript,
@@ -35,48 +38,41 @@ export function reduceChatTranscript(
       const local = state.entries.filter((entry) => entry.kind !== 'message');
       const live = new Map(
         state.entries.flatMap((entry) =>
-          entry.kind === 'message' && entry.message.status === 'streaming'
+          entry.kind === 'message' && isUnfinished(entry.message)
             ? [[entry.id, entry] as const]
             : [],
         ),
       );
-      // A streaming answer here is newer than the stored preview, which lags by up to a second.
+      // A running request here is newer than the stored preview, which lags by up to a second.
       const entries = action.messages.map(
         (message): MessageChatEntry =>
-          (message.status === 'streaming' ? live.get(message.id) : undefined) ?? entryFrom(message),
+          (isUnfinished(message) ? live.get(message.id) : undefined) ?? entryFrom(message),
       );
-      return { entries: [...entries, ...local], pending: {} };
+      return replayPending({ entries: [...entries, ...local], pending: state.pending });
     }
     case 'asked': {
       if (hasMessage(state.entries, action.answer.id)) {
         return state;
       }
-      const { [action.answer.id]: early, ...pending } = state.pending;
+      return replayPending({
+        entries: [...state.entries, entryFrom(action.question), entryFrom(action.answer)],
+        pending: state.pending,
+      });
+    }
+    case 'stream': {
+      const { event } = action;
+      if (!hasMessage(state.entries, event.messageId)) {
+        const early = state.pending[event.messageId] ?? [];
+        return { ...state, pending: { ...state.pending, [event.messageId]: [...early, event] } };
+      }
       return {
-        entries: [
-          ...state.entries,
-          entryFrom(action.question),
-          entryFrom(replay(action.answer, early)),
-        ],
-        pending,
+        ...state,
+        entries: state.entries.map((entry) =>
+          entry.kind === 'message' && entry.id === event.messageId
+            ? applyStreamEvent(entry, event)
+            : entry,
+        ),
       };
-    }
-    case 'delta': {
-      return applyDelta(state, action.delta);
-    }
-    case 'updated': {
-      return hasMessage(state.entries, action.message.id)
-        ? { ...state, entries: replaceMessage(state.entries, action.message) }
-        : {
-            ...state,
-            pending: {
-              ...state.pending,
-              [action.message.id]: {
-                text: state.pending[action.message.id]?.text ?? '',
-                settled: action.message,
-              },
-            },
-          };
     }
     case 'compacted': {
       if (hasMessage(state.entries, action.summary.id)) {
@@ -98,60 +94,81 @@ export function reduceChatTranscript(
   }
 }
 
-function applyDelta(state: ChatTranscript, delta: ChatDeltaView): ChatTranscript {
-  const grow = (text: string): string => {
-    switch (delta.kind) {
-      case 'reset': {
-        return '';
-      }
-      case 'append': {
-        return text + delta.text;
-      }
-      case 'progress': {
-        return text;
-      }
+/** One event applied to its message's entry. */
+function applyStreamEvent(entry: MessageChatEntry, event: ChatStreamEvent): MessageChatEntry {
+  const { message } = entry;
+  if (event.type === 'message') {
+    const { activity, ...rest } = entry;
+    const replaced = { ...rest, message: event.message };
+    return activity !== undefined && isUnfinished(event.message)
+      ? { ...replaced, activity }
+      : replaced;
+  }
+  if (!isUnfinished(message)) {
+    return entry;
+  }
+  const withParts = (parts: readonly ChatPartView[]): MessageChatEntry => ({
+    ...entry,
+    message: { ...message, parts },
+  });
+  switch (event.type) {
+    case 'status': {
+      const activity = event.activity ?? entry.activity;
+      return {
+        ...entry,
+        message: { ...message, status: event.status },
+        ...(activity !== undefined && { activity }),
+      };
     }
-  };
-  const listed = state.entries.find(
-    (entry): entry is MessageChatEntry =>
-      entry.kind === 'message' && entry.message.id === delta.messageId,
-  );
-  if (listed === undefined) {
-    const early = state.pending[delta.messageId];
-    const pending = {
-      ...state.pending,
-      [delta.messageId]: { ...early, text: grow(early?.text ?? '') },
-    };
-    return { ...state, pending };
+    case 'part-start': {
+      return message.parts.some((part) => part.id === event.part.id)
+        ? entry
+        : withParts([...message.parts, event.part]);
+    }
+    case 'text-delta': {
+      return withParts(
+        message.parts.map((part) =>
+          part.id === event.partId && part.kind === 'text'
+            ? { ...part, text: part.text + event.text }
+            : part,
+        ),
+      );
+    }
+    case 'part-end': {
+      return withParts(
+        message.parts.some((part) => part.id === event.part.id)
+          ? message.parts.map((part) => (part.id === event.part.id ? event.part : part))
+          : [...message.parts, event.part],
+      );
+    }
+    case 'part-discard': {
+      return withParts(message.parts.filter((part) => part.id !== event.partId));
+    }
   }
-  if (listed.message.status !== 'streaming') {
-    return state;
-  }
-  if (delta.kind === 'progress') {
-    return {
-      ...state,
-      entries: state.entries.map((entry) =>
-        entry === listed ? { ...listed, progress: delta.text } : entry,
-      ),
-    };
-  }
-  return {
-    ...state,
-    entries: replaceMessage(state.entries, {
-      ...listed.message,
-      content: grow(listed.message.content),
-    }),
-  };
 }
 
-function replay(answer: ChatMessageView, early: PendingAnswer | undefined): ChatMessageView {
-  if (early === undefined) {
-    return answer;
+/** Replays the waiting events of every message the transcript now lists. */
+function replayPending(state: ChatTranscript): ChatTranscript {
+  let replayed: ChatTranscript = { entries: state.entries, pending: {} };
+  const waiting: Record<string, readonly ChatStreamEvent[]> = {};
+  for (const [id, events] of Object.entries(state.pending)) {
+    if (!hasMessage(state.entries, id)) {
+      waiting[id] = events;
+      continue;
+    }
+
+    for (const event of events) {
+      replayed = reduceChatTranscript(replayed, { kind: 'stream', event });
+    }
   }
-  const { settled } = early;
-  return settled === undefined || settled.status === 'streaming'
-    ? { ...(settled ?? answer), content: early.text }
-    : settled;
+  return { ...replayed, pending: waiting };
+}
+
+/** Whether the message's request has not ended: queued, submitted or streaming. */
+function isUnfinished(message: ChatMessageView): boolean {
+  return (
+    message.status === 'queued' || message.status === 'submitted' || message.status === 'streaming'
+  );
 }
 
 function entryFrom(message: ChatMessageView): MessageChatEntry {
@@ -160,16 +177,4 @@ function entryFrom(message: ChatMessageView): MessageChatEntry {
 
 function hasMessage(entries: readonly ChatEntry[], id: string): boolean {
   return entries.some((entry) => entry.kind === 'message' && entry.message.id === id);
-}
-
-/** Replaces a message; a streaming answer keeps its status line until it settles. */
-function replaceMessage(entries: readonly ChatEntry[], message: ChatMessageView): ChatEntry[] {
-  return entries.map((entry) => {
-    if (entry.kind !== 'message' || entry.message.id !== message.id) {
-      return entry;
-    }
-    return message.status === 'streaming' && entry.progress !== undefined
-      ? { ...entryFrom(message), progress: entry.progress }
-      : entryFrom(message);
-  });
 }

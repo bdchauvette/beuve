@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 
 import { appendChatMessage } from './append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
+import { chatPartsFrom } from './chat-parts-from.ts';
 import { clearChatMessages } from './clear-chat-messages.ts';
 import { listChatMessages } from './list-chat-messages.ts';
 import { test } from './testing/test.ts';
@@ -12,9 +13,8 @@ describe('clearChatMessages', () => {
     const message = {
       headSha: 'c'.repeat(40) as CommitSha,
       role: 'user' as const,
-      content: 'Why?',
+      parts: chatPartsFrom('Why?'),
       citations: [],
-      mentions: [],
       createdAt: '2026-10-28T12:00:00.000Z',
     };
     appendChatMessage(db, {

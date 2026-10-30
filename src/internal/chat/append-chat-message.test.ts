@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 
 import { appendChatMessage } from './append-chat-message.ts';
 import type { ChatMessage, ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
+import { chatPartsFrom } from './chat-parts-from.ts';
 import { listChatMessages } from './list-chat-messages.ts';
 import { test } from './testing/test.ts';
 
@@ -16,47 +17,58 @@ describe('appendChatMessage', () => {
       sessionId: sessionId(),
       headSha: headSha(),
       citations: [],
-      mentions: [],
       createdAt: at,
     };
     const messages: ChatMessage[] = [
-      { ...base, id: id(1), role: 'user', content: 'Why?' },
+      { ...base, id: id(1), role: 'user', parts: chatPartsFrom('Why?') },
       {
         ...base,
         id: id(2),
         role: 'assistant',
         kind: 'answer',
-        status: 'complete',
-        content: 'Because [[src/a.ts:12-13]].',
+        status: 'done',
+        parts: chatPartsFrom('Because [[src/a.ts:12-13]].'),
         citations: [{ path: 'src/a.ts', startLine: 12, endLine: 13, side: 'head' }],
       },
-      { ...base, id: id(3), role: 'user', content: 'And?' },
+      { ...base, id: id(3), role: 'user', parts: chatPartsFrom('And?') },
       {
         ...base,
         id: id(4),
         role: 'assistant',
         kind: 'answer',
-        status: 'failed',
-        errorCode: 'timeout',
-        content: '',
+        status: 'error',
+        parts: [
+          { kind: 'tool-call', id: 'p1', tool: 'Read', description: 'read a.ts', state: 'stopped' },
+          { kind: 'error', id: 'p2', code: 'timeout' },
+        ],
       },
-      { ...base, id: id(5), role: 'system-notice', content: 'Head moved to cccc.' },
+      { ...base, id: id(5), role: 'system-notice', parts: chatPartsFrom('Head moved to cccc.') },
       {
         ...base,
         id: id(6),
         role: 'assistant',
         kind: 'answer',
         status: 'cancelled',
-        content: 'Partial',
+        parts: chatPartsFrom('Partial'),
       },
-      { ...base, id: id(10), role: 'assistant', kind: 'abstract', status: 'queued', content: '' },
+      {
+        ...base,
+        id: id(10),
+        role: 'assistant',
+        kind: 'abstract',
+        status: 'queued',
+        parts: chatPartsFrom(''),
+      },
       {
         ...base,
         id: id(11),
         role: 'assistant',
         kind: 'review',
-        status: 'complete',
-        content: '**Review** of 1 file: 1 finding.',
+        status: 'done',
+        parts: [
+          { kind: 'reasoning', id: 'p1', state: 'done', summary: 'Weighing' },
+          { kind: 'finding', id: 'p2', finding: 0 },
+        ],
         review: {
           findings: [
             {
@@ -88,17 +100,16 @@ describe('appendChatMessage', () => {
         ...base,
         id: id(7),
         role: 'user',
-        content: 'Why [[@1]] and [[@2]]?',
-        mentions: [
+        parts: chatPartsFrom('Why [[@1]] and [[@2]]?', [
           { path: 'src/a.ts', side: 'head', startLine: 27, endLine: 33, sha: headSha() },
           { path: 'src/old.ts', side: 'base', sha: 'b'.repeat(40) as CommitSha },
-        ],
+        ]),
       },
       {
         ...base,
         id: id(8),
         role: 'summary',
-        content: '**Asked**\n- why [[src/a.ts:27-33]]',
+        parts: chatPartsFrom('**Asked**\n- why [[src/a.ts:27-33]]'),
         citations: [{ path: 'src/a.ts', startLine: 27, endLine: 33, side: 'head' }],
       },
     ];
@@ -114,9 +125,8 @@ describe('appendChatMessage', () => {
       sessionId: sessionId(),
       headSha: headSha(),
       role: 'user',
-      content: 'Why?',
+      parts: chatPartsFrom('Why?'),
       citations: [],
-      mentions: [],
       createdAt: '2026-10-28T12:00:00.000Z',
     };
     const other = '22222222-2222-4222-8222-222222222222' as SessionId;

@@ -7,6 +7,7 @@ import type {
   ChatFindingView,
   ChatMentionView,
   ChatMessageView,
+  ChatPartView,
   ChatReviewView,
 } from '#contract/ipc-contract.ts';
 
@@ -21,8 +22,12 @@ import { insertDraftMention } from './insert-draft-mention.ts';
 import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
 import { removeDraftMention } from './remove-draft-mention.ts';
 import { serializeChatDraft } from './serialize-chat-draft.ts';
+import { chatTextFrom } from './chat-text-from.ts';
 import { draftPartsFrom } from './draft-parts-from.ts';
+import { isActiveRequest } from './is-active-request.ts';
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
+import { planMessageParts } from './plan-message-parts.ts';
+import type { MessageBlock, StepPart } from './plan-message-parts.ts';
 import type { AnswerBlock, AnswerSpan } from './parse-answer-markdown.ts';
 import { zoneStyles } from './zone-styles.ts';
 
@@ -104,7 +109,8 @@ export class BeuveChatDrawer extends LitElement {
         overflow-wrap: anywhere;
       }
 
-      .answer.streaming {
+      .answer.streaming,
+      .answer.submitted {
         border-left-color: var(--beuve-accent);
       }
 
@@ -143,6 +149,59 @@ export class BeuveChatDrawer extends LitElement {
       .marker {
         color: var(--beuve-text-muted);
         opacity: 0.55;
+      }
+
+      .steps {
+        margin: 0 0 var(--beuve-space-1);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .steps summary {
+        cursor: pointer;
+      }
+
+      .steps-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .step {
+        display: flex;
+        gap: var(--beuve-space-1);
+        align-items: baseline;
+        min-width: 0;
+      }
+
+      .step-name {
+        overflow: hidden;
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .step.reasoning .step-name {
+        font: var(--beuve-font-small);
+        font-style: italic;
+      }
+
+      .step.running .step-mark {
+        color: var(--beuve-accent);
+      }
+
+      .step.failed .step-mark {
+        color: var(--beuve-danger);
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
 
       .status {
@@ -574,6 +633,62 @@ export class BeuveChatDrawer extends LitElement {
     this.rememberCaret();
   };
 
+  /**
+   * Every button of the transcript, through one listener (event delegation): a button says what
+   * it does in `data-action` and what it acts on in `data-*`, read back from the transcript.
+   */
+  private readonly onTranscriptClick = (event: MouseEvent): void => {
+    const button =
+      event.target instanceof Element
+        ? (event.target.closest<HTMLElement>('[data-action]') ?? undefined)
+        : undefined;
+    if (button === undefined) {
+      return;
+    }
+    const { action, messageId = '', partId, finding, path = '', start, end } = button.dataset;
+    switch (action) {
+      case 'cancel': {
+        this.emit('beuve-chat-cancel', { messageId });
+        return;
+      }
+      case 'cancel-compaction': {
+        this.emit('beuve-chat-cancel-compaction');
+        return;
+      }
+      case 'clear-queue': {
+        this.emit('beuve-chat-clear-queue');
+        return;
+      }
+      case 'toggle-compacted': {
+        this.showsCompacted = !this.showsCompacted;
+        return;
+      }
+      case 'stage': {
+        this.emit('beuve-chat-stage', { messageId });
+        return;
+      }
+      case 'stage-finding': {
+        this.emit('beuve-chat-stage-finding', { messageId, finding: Number(finding) });
+        return;
+      }
+      case 'cite': {
+        const citation = { path, startLine: Number(start), endLine: Number(end) };
+        this.emit('beuve-chat-cite', { citation });
+        return;
+      }
+      case 'mention': {
+        const mention = this.mentionOf(messageId, partId);
+        if (mention !== undefined) {
+          this.emit('beuve-chat-mention', { mention });
+        }
+        return;
+      }
+      default: {
+        return;
+      }
+    }
+  };
+
   /** Each chip node's mention; chips are rebuilt from the model, never parsed from markup. */
   private readonly chipMentions = new WeakMap<Node, ChatMentionView>();
   /** The caret when the box last had it, so a chip added from elsewhere lands there. */
@@ -837,7 +952,7 @@ export class BeuveChatDrawer extends LitElement {
       (entry) =>
         (entry.kind === 'message' &&
           entry.message.role === 'assistant' &&
-          (entry.message.status === 'streaming' || entry.message.status === 'queued')) ||
+          (entry.message.status === 'queued' || isActiveRequest(entry.message))) ||
         (entry.kind === 'compaction' && entry.status === 'running'),
     );
   }
@@ -857,6 +972,16 @@ export class BeuveChatDrawer extends LitElement {
       }
     }
     return queued;
+  }
+
+  /** The mention part `partId` of message `messageId` in the transcript. */
+  private mentionOf(messageId: string, partId: string | undefined): ChatMentionView | undefined {
+    const entry = this.transcript.find(
+      (candidate): candidate is MessageChatEntry =>
+        candidate.kind === 'message' && candidate.id === messageId,
+    );
+    const part = entry?.message.parts.find((candidate) => candidate.id === partId);
+    return part?.kind === 'mention' ? part.mention : undefined;
   }
 
   private renderEntry(entry: ChatEntry): TemplateResult {
@@ -880,10 +1005,8 @@ export class BeuveChatDrawer extends LitElement {
                 type="button"
                 class="action"
                 data-nav
+                data-action="cancel-compaction"
                 title="Stop compacting; nothing is stored"
-                @click=${(): void => {
-                  this.emit('beuve-chat-cancel-compaction');
-                }}
               >
                 Cancel
               </button>
@@ -909,15 +1032,13 @@ export class BeuveChatDrawer extends LitElement {
         type="button"
         class="divider"
         data-nav
+        data-action="toggle-compacted"
         aria-expanded=${this.showsCompacted ? 'true' : 'false'}
         title=${
           this.showsCompacted
             ? 'Fold the messages the summary replaced'
             : 'Show the messages the summary replaced; questions no longer send them'
         }
-        @click=${(): void => {
-          this.showsCompacted = !this.showsCompacted;
-        }}
       >
         Compacted · ${count} ${this.showsCompacted ? '▾' : '▸'}
       </button>
@@ -937,8 +1058,8 @@ export class BeuveChatDrawer extends LitElement {
     }
     if (message.role !== 'assistant') {
       // No whitespace around the parts: the question is shown pre-wrapped.
-      const parts = draftPartsFrom(message.content, message.mentions).map((part) =>
-        part.kind === 'text' ? part.text : this.renderChip(part.mention),
+      const parts = message.parts.map((part) =>
+        part.kind === 'mention' ? this.renderChip(message.id, part.id, part.mention) : textOf(part),
       );
       const answerId = this.queued.get(message.id);
       const shown = answerId === undefined ? parts : [...parts, this.renderQueuedTag(answerId)];
@@ -948,91 +1069,146 @@ export class BeuveChatDrawer extends LitElement {
       // Its question says it waits; the answer appears when it starts.
       return html``;
     }
-    if (message.status === 'complete' && message.review !== undefined) {
+    if (message.status === 'done' && message.review !== undefined) {
       return this.renderReviewAnswer(message, message.review);
     }
-    if (message.answerKind === 'abstract' && message.status === 'complete') {
+    if (message.answerKind === 'abstract' && message.status === 'done') {
       return this.renderAbstract(message);
     }
-    const isStreaming = message.status === 'streaming';
-    const blocks = parseAnswerMarkdown(
-      message.content,
-      message.citations,
-      isStreaming ? 'streaming' : 'final',
-    );
+    const isActive = isActiveRequest(message);
     return html`<div
       class="entry answer ${message.status}"
       role="group"
       aria-label="Answer"
+      aria-busy=${isActive ? 'true' : 'false'}
       data-message-id=${message.id}
     >
-      ${
-        blocks.length === 0
-          ? nothing
-          : html`<div class="text">${blocks.map((block) => this.renderBlock(block))}</div>`
-      }
-      ${this.renderMessageStatus(message, entry.progress)}
+      ${planMessageParts(message.parts).map((block) => this.renderBlockOf(message, block))}
+      ${this.renderMessageStatus(message, entry.activity)}
     </div>`;
   }
 
-  private renderMessageStatus(message: ChatMessageView, progress?: string): TemplateResult {
-    switch (message.status) {
-      case 'queued': {
+  /** One block of an answer: a run of steps, text as safe Markdown, a finding or an error. */
+  private renderBlockOf(message: ChatMessageView, block: MessageBlock): TemplateResult {
+    if (block.kind === 'steps') {
+      return this.renderSteps(block, isActiveRequest(message));
+    }
+    const { part } = block;
+    switch (part.kind) {
+      case 'text': {
+        const blocks = parseAnswerMarkdown(
+          part.text,
+          message.citations,
+          isActiveRequest(message) ? 'streaming' : 'final',
+        );
+        return blocks.length === 0
+          ? html``
+          : html`<div class="text" data-part-id=${part.id}>
+              ${blocks.map((item) => this.renderBlock(item))}
+            </div>`;
+      }
+      case 'error': {
+        return html`<div class="status error" role="alert">${part.message}</div>`;
+      }
+      case 'finding':
+      case 'mention': {
         return html``;
       }
+    }
+  }
+
+  /**
+   * What the model did, in order: open while the request runs, then folded into its one-line
+   * label. Tool descriptions say what was looked at, never what was found.
+   */
+  private renderSteps(
+    block: Extract<MessageBlock, { kind: 'steps' }>,
+    isOpen: boolean,
+  ): TemplateResult {
+    const items = html`<ul class="steps-list">
+      ${block.parts.map((part) =>
+        part.kind === 'tool-call'
+          ? html`<li class="step ${part.state}" data-part-id=${part.id}>
+              <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
+              <span class="step-name">${part.description}</span>
+              <span class="visually-hidden">${stepStates[part.state]}</span>
+            </li>`
+          : html`<li class="step reasoning ${part.state}" data-part-id=${part.id}>
+              <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
+              <span class="step-name"
+                >${part.state === 'running' ? 'Thinking' : 'Thought'}${
+                  part.summary === undefined ? '' : `: ${part.summary}`
+                }</span
+              >
+            </li>`,
+      )}
+    </ul>`;
+    return isOpen
+      ? html`<div class="steps">${items}</div>`
+      : html`<details class="steps">
+          <summary>${block.label}</summary>
+          ${items}
+        </details>`;
+  }
+
+  private renderMessageStatus(message: ChatMessageView, activity?: string): TemplateResult {
+    switch (message.status) {
+      case 'queued':
+      case 'error': {
+        return html``;
+      }
+      case 'submitted':
       case 'streaming': {
+        const hasText = message.parts.some((part) => part.kind === 'text' && part.text !== '');
         return html`<div class="status" role="status">
-          <span
-            >${progress ?? (message.content === '' ? startedLabel(message) : 'Answering…')}</span
-          >
+          <span>${activity ?? (hasText ? 'Answering…' : startedLabel(message))}</span>
           <button
             type="button"
             class="action"
             data-nav
+            data-action="cancel"
+            data-message-id=${message.id}
             title="Stop this answer"
-            @click=${(): void => {
-              this.emit('beuve-chat-cancel', { messageId: message.id });
-            }}
           >
             Cancel
           </button>
         </div>`;
       }
-      case 'failed': {
-        return html`<div class="status error" role="alert">
-          ${message.errorMessage ?? 'The question was not answered.'}
-        </div>`;
-      }
       case 'cancelled': {
         return html`<div class="status">
-          ${message.content === '' ? 'Not asked.' : 'Stopped.'}
+          ${message.parts.length === 0 ? 'Not asked.' : 'Stopped.'}
         </div>`;
       }
-      case 'complete': {
-        if (message.content.trim() === '') {
-          return html``;
-        }
-        const isStaged = this.stagedMessageIds.has(message.id);
-        return html`<div class="status">
-          <button
-            type="button"
-            class="action"
-            data-nav
-            aria-disabled=${isStaged ? 'true' : 'false'}
-            title="Stage this answer as a question in the review dock"
-            @click=${(): void => {
-              this.emit('beuve-chat-stage', { messageId: message.id });
-            }}
-          >
-            ${isStaged ? 'Staged in the dock' : 'Stage as URA comment'}
-          </button>
-        </div>`;
+      case 'done': {
+        return chatTextFrom(message.parts).trim() === ''
+          ? html``
+          : this.renderStageButton(
+              message.id,
+              'Stage this answer as a question in the review dock',
+            );
       }
     }
   }
 
+  private renderStageButton(messageId: string, title: string): TemplateResult {
+    const isStaged = this.stagedMessageIds.has(messageId);
+    return html`<div class="status">
+      <button
+        type="button"
+        class="action"
+        data-nav
+        data-action="stage"
+        data-message-id=${messageId}
+        aria-disabled=${isStaged ? 'true' : 'false'}
+        title=${title}
+      >
+        ${isStaged ? 'Staged in the dock' : 'Stage as URA comment'}
+      </button>
+    </div>`;
+  }
+
   private renderSummary(message: ChatMessageView): TemplateResult {
-    const blocks = parseAnswerMarkdown(message.content, message.citations, 'final');
+    const blocks = parseAnswerMarkdown(chatTextFrom(message.parts), message.citations, 'final');
     return html`<div class="entry summary" role="group" aria-label="Conversation summary">
       <div
         class="label"
@@ -1044,17 +1220,17 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
-  private renderChip(mention: ChatMentionView): TemplateResult {
+  private renderChip(messageId: string, partId: string, mention: ChatMentionView): TemplateResult {
     const { label, title } = describeMention(mention);
     return html`<button
       type="button"
       class="chip"
       data-nav
+      data-action="mention"
+      data-message-id=${messageId}
+      data-part-id=${partId}
       data-side=${mention.side}
       title="${title} (show it)"
-      @click=${(): void => {
-        this.emit('beuve-chat-mention', { mention });
-      }}
     >
       ${label}
     </button>`;
@@ -1106,12 +1282,12 @@ export class BeuveChatDrawer extends LitElement {
       type="button"
       class="cite ${isOutside ? 'outside' : ''}"
       data-nav
+      data-action="cite"
       data-path=${citation.path}
       data-line=${citation.startLine}
+      data-start=${citation.startLine}
+      data-end=${citation.endLine}
       title=${isOutside ? `${title} (not in this diff)` : `${title} (show in the diff)`}
-      @click=${(): void => {
-        this.emit('beuve-chat-cite', { citation });
-      }}
     >
       ${label}
     </button>`;
@@ -1124,31 +1300,39 @@ export class BeuveChatDrawer extends LitElement {
         type="button"
         class="action"
         data-nav
+        data-action="cancel"
+        data-message-id=${answerId}
         title="Take it out of the queue"
-        @click=${(): void => {
-          this.emit('beuve-chat-cancel', { messageId: answerId });
-        }}
       >
         Cancel
       </button></span
     >`;
   }
 
-  /** A `/review` answer (ADR 0055): one summary line, then each finding with its own actions. */
+  /**
+   * A `/review` answer (ADR 0055): one summary line, then each finding part with its own
+   * actions, and what the model did folded above them.
+   */
   private renderReviewAnswer(message: ChatMessageView, review: ChatReviewView): TemplateResult {
     const labels = describeChatReview(review);
-    return html`<div class="entry answer complete" role="group" aria-label="Review">
+    const blocks = planMessageParts(message.parts);
+    const findings = message.parts.flatMap((part) => (part.kind === 'finding' ? part.finding : []));
+    return html`<div class="entry answer done" role="group" aria-label="Review">
       <div class="review-head">Review · ${labels.summary}</div>
+      ${blocks.flatMap((block) => (block.kind === 'steps' ? [this.renderSteps(block, false)] : []))}
       ${
-        review.findings.length === 0
+        findings.length === 0
           ? html`<p class="muted">
               Nothing worth your attention was found. That is no proof of correctness: the review
               doesn’t build or run the code.
             </p>`
           : html`<ol class="findings">
-              ${review.findings.map((finding, index) =>
-                this.renderFinding(message.id, index, finding, labels.findings[index]),
-              )}
+              ${findings.map((index) => {
+                const finding = review.findings[index];
+                return finding === undefined
+                  ? nothing
+                  : this.renderFinding(message.id, index, finding, labels.findings[index]);
+              })}
             </ol>`
       }
       ${labels.note === undefined ? nothing : html`<div class="status">${labels.note}</div>`}
@@ -1192,11 +1376,11 @@ export class BeuveChatDrawer extends LitElement {
           type="button"
           class="action"
           data-nav
+          data-action="stage-finding"
+          data-message-id=${messageId}
+          data-finding=${index}
           aria-disabled=${isStaged ? 'true' : 'false'}
           title="Stage this finding on its lines in the review dock"
-          @click=${(): void => {
-            this.emit('beuve-chat-stage-finding', { messageId, finding: index });
-          }}
         >
           ${isStaged ? 'Staged' : 'Stage'}
         </button>
@@ -1206,8 +1390,7 @@ export class BeuveChatDrawer extends LitElement {
 
   /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
   private renderAbstract(message: ChatMessageView): TemplateResult {
-    const blocks = parseAnswerMarkdown(message.content, message.citations, 'final');
-    const isStaged = this.stagedMessageIds.has(message.id);
+    const blocks = parseAnswerMarkdown(chatTextFrom(message.parts), message.citations, 'final');
     return html`<div class="entry abstract" role="group" aria-label="Summary of the change">
       <div
         class="label"
@@ -1216,20 +1399,7 @@ export class BeuveChatDrawer extends LitElement {
         Summary of the change · from the diff
       </div>
       <div class="text">${blocks.map((block) => this.renderBlock(block))}</div>
-      <div class="status">
-        <button
-          type="button"
-          class="action"
-          data-nav
-          aria-disabled=${isStaged ? 'true' : 'false'}
-          title="Stage this summary as a comment in the review dock"
-          @click=${(): void => {
-            this.emit('beuve-chat-stage', { messageId: message.id });
-          }}
-        >
-          ${isStaged ? 'Staged in the dock' : 'Stage as URA comment'}
-        </button>
-      </div>
+      ${this.renderStageButton(message.id, 'Stage this summary as a comment in the review dock')}
     </div>`;
   }
 
@@ -1246,10 +1416,8 @@ export class BeuveChatDrawer extends LitElement {
         type="button"
         class="action"
         data-nav
+        data-action="clear-queue"
         title="Drop the questions still waiting; the running answer goes on (/clear queue)"
-        @click=${(): void => {
-          this.emit('beuve-chat-clear-queue');
-        }}
       >
         Clear queue
       </button>
@@ -1356,7 +1524,7 @@ export class BeuveChatDrawer extends LitElement {
                 Claude Code only runs when you ask, with your own login: the question, the diff and
                 the files it reads leave this machine. It never edits anything.
               </p>`
-            : html`<div class="transcript" aria-live="polite">
+            : html`<div class="transcript" aria-live="polite" @click=${this.onTranscriptClick}>
                 ${this.renderTranscript()} ${this.renderQueue()}
               </div>`
         }
@@ -1409,6 +1577,26 @@ const chipKeys: ReadonlySet<string> = new Set([
   'Escape',
   'Shift',
 ]);
+
+/** What a step's state looks like, and says to a screen reader. */
+const stepMarks: Readonly<Record<StepPart['state'], string>> = {
+  running: '…',
+  done: '✓',
+  failed: '✗',
+  stopped: '–',
+};
+
+const stepStates: Readonly<Record<StepPart['state'], string>> = {
+  running: '(running)',
+  done: '(done)',
+  failed: '(failed)',
+  stopped: '(stopped)',
+};
+
+/** A question's text part, or nothing for any other part (questions hold text and mentions). */
+function textOf(part: ChatPartView): string {
+  return part.kind === 'text' ? part.text : '';
+}
 
 /** The id of the summary the transcript folds at, to unfold afresh when it changes. */
 function summaryOf(entries: readonly ChatEntry[] | undefined): string | undefined {

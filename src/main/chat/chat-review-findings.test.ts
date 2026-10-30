@@ -7,10 +7,10 @@ import { test } from './testing/test.ts';
 /**
  * The data path of the diff insights (ADR 0061): the renderer derives them from the stored
  * `/review` answers, so the findings, their lines and the head they were made at must arrive
- * on `chat:list` and `chat:message-updated` with no other channel.
+ * on `chat:list` and in `chat:stream`'s `message` events with no other channel (ADR 0072).
  */
 describe('chat: /review findings for the renderer (integration: SQLite + git + fake claude)', () => {
-  test('carry their lines, check and head on chat:list and chat:message-updated', async ({
+  test('carry their lines, check and head on chat:list and chat:stream', async ({
     expect,
     fakeClaude,
     startChat,
@@ -51,8 +51,8 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
       ({ answerKind }) => answerKind === 'review',
     );
     expect(listed.map(({ headSha: head, status }) => [head, status])).toStrictEqual([
-      [headSha, 'complete'],
-      [headSha, 'complete'],
+      [headSha, 'done'],
+      [headSha, 'done'],
     ]);
     expect(listed[0]?.review?.findings).toMatchObject([
       { path: 'feature.rs', startLine: 2, endLine: 2, severity: 'warning', check: 'confirmed' },

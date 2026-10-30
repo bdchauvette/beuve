@@ -1,4 +1,4 @@
-import type { ChatDeltaView, ChatMessageView } from '#contract/ipc-contract.ts';
+import type { ChatMessageView, ChatStreamEvent } from '#contract/ipc-contract.ts';
 import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
@@ -14,11 +14,11 @@ export interface ChatHarness {
   readonly services: MainServices;
   readonly chat: MainServices['chat'];
   readonly sessionId: string;
-  /** Every `chat:delta` so far. */
-  readonly deltas: ChatDeltaView[];
-  /** Every settled-or-started message update so far. */
+  /** Every `chat:stream` event so far but the `message` ones. */
+  readonly events: Exclude<ChatStreamEvent, { type: 'message' }>[];
+  /** The message of every `message` event so far: how requests ended or left the queue. */
   readonly updates: ChatMessageView[];
-  /** Resolves with the update that ends `messageId`'s run (anything but queued or streaming). */
+  /** Resolves with the update that ends `messageId`'s run (`done`, `error` or `cancelled`). */
   readonly settled: (messageId: string) => Promise<ChatMessageView>;
 }
 
@@ -42,13 +42,14 @@ function startChat(createServices: CreateServices, repo: TestRepository): StartC
     const services = createServices({
       claude: { killGrace: Temporal.Duration.from({ milliseconds: 200 }), ...claude },
     });
-    const deltas: ChatDeltaView[] = [];
+    const events: Exclude<ChatStreamEvent, { type: 'message' }>[] = [];
     const updates: ChatMessageView[] = [];
-    services.chat.onDelta((event) => {
-      deltas.push(event);
-    });
-    services.chat.onMessageUpdated((event) => {
-      updates.push(event.message);
+    services.chat.onStream((event) => {
+      if (event.type === 'message') {
+        updates.push(event.message);
+      } else {
+        events.push(event);
+      }
     });
     const { id } = okValueFrom(
       await services.sessions.createLocal({
@@ -59,6 +60,6 @@ function startChat(createServices: CreateServices, repo: TestRepository): StartC
     );
     const settled = async (messageId: string): Promise<ChatMessageView> =>
       waitForSettled(updates, messageId);
-    return { services, chat: services.chat, sessionId: id, deltas, updates, settled };
+    return { services, chat: services.chat, sessionId: id, events, updates, settled };
   };
 }

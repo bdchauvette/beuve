@@ -21,7 +21,7 @@ describe('planChatStage', () => {
     const entries = [
       ask('  Why does\n parse trim?  '),
       reply({
-        content: 'See [[lib/x.ts:9-9]] then [[src/a.ts:12-13]].',
+        text: 'See [[lib/x.ts:9-9]] then [[src/a.ts:12-13]].',
         citations: [
           { path: 'lib/x.ts', startLine: 9, endLine: 9 },
           { path: 'src/a.ts', startLine: 12, endLine: 13 },
@@ -60,7 +60,7 @@ describe('planChatStage', () => {
   }) => {
     expect(planChatStage([ask('q'), reply({ status: 'streaming' })], 'a', diff())).toBeUndefined();
     expect(planChatStage([ask('q'), reply({ status: 'cancelled' })], 'a', diff())).toBeUndefined();
-    expect(planChatStage([ask('q'), reply({ content: '  ' })], 'a', diff())).toBeUndefined();
+    expect(planChatStage([ask('q'), reply({ text: '  ' })], 'a', diff())).toBeUndefined();
     expect(planChatStage([ask('q'), reply({})], 'q', diff())).toBeUndefined();
     expect(planChatStage([ask('q')], 'zzz', diff())).toBeUndefined();
   });
@@ -93,22 +93,23 @@ function ask(content: string): ChatEntry {
     ...base(),
     id: 'q',
     role: 'user',
-    content,
+    parts: [{ kind: 'text', id: 'p1', text: content }],
     citations: [],
-    mentions: [],
-    status: 'complete',
+    status: 'done',
   });
 }
 
-function reply(overrides: Partial<ChatMessageView>): ChatEntry {
+function reply({
+  text = 'Because.',
+  ...overrides
+}: Partial<ChatMessageView> & { readonly text?: string }): ChatEntry {
   return entry({
     ...base(),
     id: 'a',
     role: 'assistant',
-    content: 'Because.',
+    parts: [{ kind: 'text', id: 'p1', text }],
     citations: [],
-    mentions: [],
-    status: 'complete',
+    status: 'done',
     ...overrides,
   });
 }

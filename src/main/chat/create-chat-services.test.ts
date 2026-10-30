@@ -15,6 +15,7 @@ import { createModelRegistryStore } from '../models/create-model-registry-store.
 import { createSecretStore } from '../models/create-secret-store.ts';
 import { createChatServices } from './create-chat-services.ts';
 import { test } from './testing/test.ts';
+import { textOf } from './testing/text-of.ts';
 import { waitForSettled } from './testing/wait-for-settled.ts';
 
 /** The chat through `createMainServices`, a temporary repository and the fake `claude` (ADR 0031). */
@@ -22,13 +23,13 @@ describe(
   'createChatServices (integration: SQLite + git + fake claude, no Electron)',
   { timeout: 30_000 },
   () => {
-    test('answers in the background: deltas, then a stored answer with validated citations', async ({
+    test('answers in the background: part events, then a stored answer with validated citations', async ({
       expect,
       fakeClaude,
       startChat,
     }) => {
       const claude = fakeClaude.scripted({ chunks: answerChunks(), delayMs: 20 });
-      const { chat, sessionId, deltas, updates, settled } = await startChat(claude.settings);
+      const { chat, sessionId, events, updates, settled } = await startChat(claude.settings);
 
       const asked = okValueFrom(
         await chat.ask({
@@ -39,31 +40,47 @@ describe(
       );
       expect(asked.question).toMatchObject({
         role: 'user',
-        content: 'What does it add?',
-        status: 'complete',
+        parts: [{ kind: 'text', id: 'p1', text: 'What does it add?' }],
+        status: 'done',
       });
-      expect(asked.answer).toMatchObject({ role: 'assistant', status: 'streaming', content: '' });
+      expect(asked.answer).toMatchObject({ role: 'assistant', status: 'submitted', parts: [] });
       expect(updates).toStrictEqual([]);
 
       const done = await settled(asked.answer.id);
+      const grep = { kind: 'tool-call', id: 'p2', tool: 'Grep', description: 'grep feature' };
       expect(done).toMatchObject({
-        status: 'complete',
-        content: answerText(),
+        status: 'done',
+        parts: [
+          { ...grep, state: 'done' },
+          { kind: 'text', id: 'p3', text: answerText() },
+        ],
         citations: [{ path: 'feature.rs', startLine: 1, endLine: 2 }],
       });
-      expect(deltas.map(({ kind, text }) => [kind, text])).toStrictEqual([
-        ['append', 'Looking.'],
-        ['reset', ''],
-        ['append', 'It adds '],
-        ['append', '[[feature.rs:1-2]] and '],
-        ['append', 'ignores [[ghost.rs:4]].'],
+      expect(
+        events.map((event) =>
+          'text' in event
+            ? [event.type, event.text]
+            : [event.type, 'part' in event ? event.part.id : ''],
+        ),
+      ).toStrictEqual([
+        ['status', ''],
+        ['part-start', 'p1'],
+        ['text-delta', 'Looking.'],
+        ['part-start', 'p2'],
+        ['part-end', 'p2'],
+        ['part-discard', ''],
+        ['part-start', 'p3'],
+        ['text-delta', 'It adds '],
+        ['text-delta', '[[feature.rs:1-2]] and '],
+        ['text-delta', 'ignores [[ghost.rs:4]].'],
       ]);
-      expect(deltas.every(({ messageId }) => messageId === asked.answer.id)).toBe(true);
+      expect(events[0]).toMatchObject({ type: 'status', status: 'streaming' });
+      expect(events.every(({ messageId }) => messageId === asked.answer.id)).toBe(true);
 
       const listed = okValueFrom(chat.list({ sessionId }));
       expect(listed.messages.map(({ id, role, status }) => [id, role, status])).toStrictEqual([
-        [asked.question.id, 'user', 'complete'],
-        [asked.answer.id, 'assistant', 'complete'],
+        [asked.question.id, 'user', 'done'],
+        [asked.answer.id, 'assistant', 'done'],
       ]);
       expect(listed.messages[1]).toStrictEqual(done);
 
@@ -106,12 +123,12 @@ describe(
         chunks: ['a', 'b', 'c'],
         delayMs: 600_000,
       });
-      const { chat, sessionId, deltas, updates, settled } = await startChat(claude.settings);
+      const { chat, sessionId, events, updates, settled } = await startChat(claude.settings);
       const first = okValueFrom(await chat.ask({ sessionId, question: 'First?' }));
       const second = okValueFrom(await chat.ask({ sessionId, question: 'Second?' }));
       const third = okValueFrom(await chat.ask({ sessionId, question: 'Third?' }));
       const fourth = okValueFrom(await chat.ask({ sessionId, question: 'Fourth?' }));
-      expect(first.answer.status).toBe('streaming');
+      expect(first.answer.status).toBe('submitted');
       expect([second, third, fourth].map(({ answer }) => answer.status)).toStrictEqual([
         'queued',
         'queued',
@@ -120,22 +137,25 @@ describe(
       expect(
         okValueFrom(chat.list({ sessionId })).messages.map(({ status }) => status),
       ).toStrictEqual([
-        'complete',
-        'streaming',
-        'complete',
+        'done',
+        expect.stringMatching(/^(?:submitted|streaming)$/u),
+        'done',
         'queued',
-        'complete',
+        'done',
         'queued',
-        'complete',
+        'done',
         'queued',
       ]);
 
       await waitUntil(
         () =>
-          deltas.some(
-            ({ messageId, text }) => messageId === first.answer.id && text === 'Looking.',
+          events.some(
+            (event) =>
+              event.messageId === first.answer.id &&
+              event.type === 'part-end' &&
+              event.part.kind === 'tool-call',
           ),
-        'the first answer to stream',
+        'the first answer to read',
       );
       claude.rescript(['a', 'b', 'c'], 0);
       expect(okValueFrom(chat.cancel({ messageId: first.answer.id }))).toStrictEqual({
@@ -146,24 +166,20 @@ describe(
       });
       await expect(settled(first.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
-        content: '',
+        parts: [{ kind: 'tool-call', tool: 'Grep', state: 'done' }],
       });
       await expect(settled(third.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
-        content: '',
+        parts: [],
       });
-      await expect(settled(fourth.answer.id)).resolves.toMatchObject({
-        status: 'complete',
-        content: 'abc',
-      });
-      const order = updates
-        .filter(({ status }) => status === 'streaming' || status === 'complete')
-        .map(({ id, status }) => [id, status]);
-      expect(order).toStrictEqual([
-        [second.answer.id, 'streaming'],
-        [second.answer.id, 'complete'],
-        [fourth.answer.id, 'streaming'],
-        [fourth.answer.id, 'complete'],
+      expect(textOf(await settled(fourth.answer.id))).toBe('abc');
+      const started = events.flatMap((event) =>
+        event.type === 'status' && event.status === 'submitted' ? event.messageId : [],
+      );
+      const finished = updates.flatMap(({ id, status }) => (status === 'done' ? id : []));
+      expect([started, finished]).toStrictEqual([
+        [second.answer.id, fourth.answer.id],
+        [second.answer.id, fourth.answer.id],
       ]);
       const asked = claude
         .calls()
@@ -189,7 +205,7 @@ describe(
         chunks: ['a', 'b', 'c'],
         delayMs: 600_000,
       });
-      const { services, chat, sessionId, deltas, updates, settled } = await startChat(
+      const { services, chat, sessionId, events, updates, settled } = await startChat(
         claude.settings,
       );
       const running = okValueFrom(await chat.ask({ sessionId, question: 'Running?' }));
@@ -198,14 +214,14 @@ describe(
         await chat.ask({ sessionId, question: '/summarize', command: { kind: 'summarize' } }),
       );
       expect([running, waiting, compaction].map(({ answer }) => answer.status)).toStrictEqual([
-        'streaming',
+        'submitted',
         'queued',
         'queued',
       ]);
       await waitUntil(
         () =>
-          deltas.some(
-            ({ messageId, text }) => messageId === running.answer.id && text === 'Looking.',
+          events.some(
+            (event) => event.messageId === running.answer.id && event.type === 'text-delta',
           ),
         'the running answer to stream',
       );
@@ -229,18 +245,16 @@ describe(
       await expect(settled(running.answer.id)).resolves.toMatchObject({ status: 'cancelled' });
       await expect(settled(waiting.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
-        content: '',
+        parts: [],
       });
       await expect(settled(compaction.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
-        content: '',
+        parts: [],
       });
       claude.rescript(['a', 'b', 'c'], 0);
       const after = okValueFrom(await chat.ask({ sessionId, question: 'After the push?' }));
-      await expect(settled(after.answer.id)).resolves.toMatchObject({
-        status: 'complete',
-        content: 'abc',
-      });
+      const answered = await settled(after.answer.id);
+      expect([answered.status, textOf(answered)]).toStrictEqual(['done', 'abc']);
       expect(claude.calls()).toHaveLength(2);
     });
 
@@ -261,10 +275,10 @@ describe(
       ]);
       const questions = okValueFrom(chat.list({ sessionId }))
         .messages.filter(({ role }) => role === 'user')
-        .map(({ content }) => content);
+        .map((message) => textOf(message));
       expect(questions).toStrictEqual(['One?', 'Two [[@1]]?', '/summarize', 'Four?']);
       expect(asked.map((result) => okValueFrom(result).answer.status)).toStrictEqual([
-        'streaming',
+        'submitted',
         'queued',
         'queued',
         'queued',
@@ -337,14 +351,14 @@ describe(
         },
         'review',
       );
-      const { services, chat, sessionId, deltas, settled } = await startChat(claude.settings);
+      const { services, chat, sessionId, events, settled } = await startChat(claude.settings);
       const asked = okValueFrom(
         await chat.ask({ sessionId, question: '/review', command: { kind: 'review' } }),
       );
-      expect(asked.answer).toMatchObject({ answerKind: 'review', status: 'streaming' });
+      expect(asked.answer).toMatchObject({ answerKind: 'review', status: 'submitted' });
       const reviewed = await settled(asked.answer.id);
       expect(reviewed).toMatchObject({
-        status: 'complete',
+        status: 'done',
         answerKind: 'review',
         citations: [{ path: 'feature.rs', startLine: 2, endLine: 2 }],
         review: {
@@ -366,11 +380,17 @@ describe(
           verification: 'verified',
         },
       });
-      expect(reviewed.content).toContain('1 dropped as unconfirmed');
-      expect(reviewed.content).toContain('[[feature.rs:2-2]]');
-      expect(deltas.filter(({ kind }) => kind === 'progress').map(({ text }) => text)).toContain(
-        'Checking 2 findings against the code',
-      );
+      expect(
+        reviewed.parts.map((part) => [part.kind, 'description' in part ? part.description : '']),
+      ).toStrictEqual([
+        ['tool-call', 'grep feature'],
+        ['tool-call', 'read feature.rs:1-3'],
+        ['finding', ''],
+      ]);
+      expect(reviewed.parts.at(-1)).toStrictEqual({ kind: 'finding', id: 'p3', finding: 0 });
+      expect(
+        events.flatMap((event) => (event.type === 'status' ? (event.activity ?? []) : [])),
+      ).toContain('Checking 2 findings against the code');
 
       const [find, verify] = claude.calls();
       expect(find?.args.some((arg) => arg.startsWith('--json-schema='))).toBe(true);
@@ -399,7 +419,8 @@ describe(
         await chat.ask({ sessionId, question: '/review', command: { kind: 'review' } }),
       );
       await expect(settled(again.answer.id)).resolves.toMatchObject({
-        status: 'complete',
+        status: 'done',
+        parts: [{ kind: 'finding', id: 'p1', finding: 0 }],
         review: { reusedFrom: asked.answer.id, findings: [{ check: 'confirmed' }] },
       });
       expect(claude.calls()).toHaveLength(2);
@@ -412,7 +433,7 @@ describe(
         }),
       );
       await expect(settled(fresh.answer.id)).resolves.toMatchObject({
-        status: 'complete',
+        status: 'done',
         review: {
           pathScope: ['feature.rs'],
           verification: 'skipped',
@@ -430,8 +451,8 @@ describe(
         }),
       );
       await expect(settled(nothing.answer.id)).resolves.toMatchObject({
-        status: 'failed',
-        errorCode: 'nothing-to-review',
+        status: 'error',
+        parts: [{ kind: 'error', code: 'nothing-to-review' }],
       });
 
       const followUp = okValueFrom(await chat.ask({ sessionId, question: 'Is finding 1 real?' }));
@@ -452,13 +473,18 @@ describe(
       const { chat, sessionId, settled } = missingClaude;
       const missing = okValueFrom(await chat.ask({ sessionId, question: 'Anyone there?' }));
       await expect(settled(missing.answer.id)).resolves.toMatchObject({
-        status: 'failed',
-        errorCode: 'not-installed',
-        errorMessage: expect.stringContaining('BEUVE_CLAUDE_PATH') as string,
+        status: 'error',
+        parts: [
+          {
+            kind: 'error',
+            code: 'not-installed',
+            message: expect.stringContaining('BEUVE_CLAUDE_PATH') as string,
+          },
+        ],
       });
       expect(okValueFrom(chat.list({ sessionId })).messages[1]).toMatchObject({
-        status: 'failed',
-        errorCode: 'not-installed',
+        status: 'error',
+        parts: [{ kind: 'error', code: 'not-installed' }],
       });
       await missingClaude.services.dispose();
 
@@ -470,8 +496,8 @@ describe(
         await loggedOut.chat.ask({ sessionId: loggedOut.sessionId, question: 'Hello?' }),
       );
       await expect(loggedOut.settled(second.answer.id)).resolves.toMatchObject({
-        status: 'failed',
-        errorCode: 'not-authenticated',
+        status: 'error',
+        parts: [{ kind: 'error', code: 'not-authenticated' }],
       });
     });
 
@@ -508,9 +534,9 @@ describe(
       startChat,
     }) => {
       const claude = fakeClaude.scripted({ chunks: ['a', 'b'], delayMs: 600_000 });
-      const { services, chat, sessionId, deltas, settled } = await startChat(claude.settings);
+      const { services, chat, sessionId, events, settled } = await startChat(claude.settings);
       const asked = okValueFrom(await chat.ask({ sessionId, question: 'Slow?' }));
-      await waitUntil(() => deltas.length > 0, 'the answer to start streaming');
+      await waitUntil(() => events.length > 0, 'the answer to start streaming');
       await services.dispose();
       await expect(settled(asked.answer.id)).resolves.toMatchObject({ status: 'cancelled' });
       await expect(chat.ask({ sessionId, question: 'Too late?' })).resolves.toMatchObject({
@@ -539,7 +565,10 @@ describe(
       const asked = okValueFrom(
         await chat.ask({ sessionId, question: 'Why [[@1]] and not [[@2]]?', mentions }),
       );
-      expect(asked.question).toMatchObject({ content: 'Why [[@1]] and not [[@2]]?', mentions });
+      expect(textOf(asked.question)).toBe('Why [[@1]] and not [[@2]]?');
+      expect(
+        asked.question.parts.flatMap((part) => (part.kind === 'mention' ? [part.mention] : [])),
+      ).toStrictEqual(mentions);
       await settled(asked.answer.id);
 
       const [call] = claude.calls();
@@ -560,8 +589,8 @@ describe(
       );
 
       const listed = okValueFrom(chat.list({ sessionId })).messages;
-      expect(listed[0]).toMatchObject({ role: 'user', mentions });
-      expect(listed[1]?.mentions).toStrictEqual([]);
+      expect(listed[0]).toStrictEqual(asked.question);
+      expect(listed[1]?.parts.some((part) => part.kind === 'mention')).toBe(false);
 
       const followUp = okValueFrom(await chat.ask({ sessionId, question: 'And then?' }));
       await settled(followUp.answer.id);
@@ -659,9 +688,14 @@ describe(
         outcome: 'compacted',
         summary: {
           role: 'summary',
-          status: 'complete',
-          content:
-            '**Asked**\n- what feature adds\n\n**Places**\n- [[feature.rs:1-3]] `ghost.rs:1-1`',
+          status: 'done',
+          parts: [
+            {
+              kind: 'text',
+              id: 'p1',
+              text: '**Asked**\n- what feature adds\n\n**Places**\n- [[feature.rs:1-3]] `ghost.rs:1-1`',
+            },
+          ],
           citations: [{ path: 'feature.rs', startLine: 1, endLine: 3 }],
         },
       });
@@ -711,10 +745,8 @@ describe(
       claude.rescript(['Later.'], 0);
       expect(okValueFrom(chat.cancel({ sessionId }))).toStrictEqual({ cancelled: true });
       expect(okValueFrom(await running)).toStrictEqual({ outcome: 'cancelled' });
-      await expect(settled(next.answer.id)).resolves.toMatchObject({
-        status: 'complete',
-        content: 'Later.',
-      });
+      const later = await settled(next.answer.id);
+      expect([later.status, textOf(later)]).toStrictEqual(['done', 'Later.']);
       expect(okValueFrom(chat.list({ sessionId })).messages.map(({ role }) => role)).toStrictEqual([
         'user',
         'assistant',
@@ -745,14 +777,24 @@ describe(
         role: 'assistant',
         kind: 'answer',
         status: 'streaming',
-        content: 'half an ans',
+        parts: [
+          { kind: 'tool-call', id: 'p1', tool: 'Grep', description: 'grep x', state: 'running' },
+          { kind: 'text', id: 'p2', text: 'half an ans' },
+        ],
         citations: [],
-        mentions: [],
         createdAt: '2026-10-28T11:00:00.000Z',
       });
-      expect(okValueFrom(chat.list({ sessionId })).messages).toMatchObject([
-        { status: 'cancelled', content: 'half an ans' },
-      ]);
+      const orphan = [
+        {
+          status: 'cancelled',
+          parts: [
+            { kind: 'tool-call', id: 'p1', tool: 'Grep', description: 'grep x', state: 'stopped' },
+            { kind: 'text', id: 'p2', text: 'half an ans' },
+          ],
+        },
+      ];
+      expect(okValueFrom(chat.list({ sessionId })).messages).toMatchObject(orphan);
+      expect(okValueFrom(chat.list({ sessionId })).messages).toMatchObject(orphan);
     });
   },
 );
@@ -803,8 +845,8 @@ describe(
         intentFor: () => 'AUTHOR-CLAIM: this change makes everything faster.',
       });
       const updates: ChatMessageView[] = [];
-      chat.onMessageUpdated(({ message }) => {
-        updates.push(message);
+      chat.onStream((event) => {
+        updates.push(...(event.type === 'message' ? [event.message] : []));
       });
       try {
         const { id: sessionId } = okValueFrom(
@@ -820,10 +862,10 @@ describe(
           await chat.ask({ sessionId, question: '/summarize', command: { kind: 'summarize' } }),
         );
         const question = okValueFrom(await chat.ask({ sessionId, question: 'What is it for?' }));
-        expect(summary.answer).toMatchObject({ answerKind: 'abstract', status: 'streaming' });
+        expect(summary.answer).toMatchObject({ answerKind: 'abstract', status: 'submitted' });
         expect(question.answer.status).toBe('queued');
         await expect(finished(summary.answer.id)).resolves.toMatchObject({
-          status: 'complete',
+          status: 'done',
           answerKind: 'abstract',
           citations: [{ path: 'feature.rs', startLine: 1, endLine: 3 }],
         });

@@ -83,7 +83,7 @@ describe('reviewChange', () => {
         progress.push(event.kind);
       },
     });
-    const { review, citations, content } = okValueFrom(result);
+    const { review, citations } = okValueFrom(result);
     expect(review).toStrictEqual({
       findings: [{ ...findings()[0], check: 'unconfirmed' }],
       dropped: {
@@ -101,8 +101,6 @@ describe('reviewChange', () => {
     expect(citations).toStrictEqual([
       { path: 'src/a.ts', startLine: 12, endLine: 12, side: 'head' },
     ]);
-    expect(content).toContain('2 files: 1 finding, 1 dropped as unconfirmed.');
-    expect(content).toContain('[[src/a.ts:12-12]]');
     expect(seen[0]?.system).toContain("beuve's preliminary reviewer");
     expect(promptTextOf(seen[0])).toContain('Review the whole change');
     expect(promptTextOf(seen[0])).not.toContain("## The reviewer's question");

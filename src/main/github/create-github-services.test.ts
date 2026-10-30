@@ -382,13 +382,12 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     world,
   }) => {
     const sessionId = await opened();
-    const answered = new Promise<void>((resolve) => {
-      services.chat.onMessageUpdated(() => {
-        resolve();
-      });
+    const types: string[] = [];
+    services.chat.onStream((event) => {
+      types.push(event.type);
     });
     okValueFrom(await services.chat.ask({ sessionId, question: 'Why 42?' }));
-    await answered;
+    await waitUntil(() => types.includes('message'), 'the answer to end');
     const [call] = world.claude.calls();
     expect(call?.stdin).toContain("## The author's stated intent");
     expect(call?.stdin).toContain('Make the answer right\n\nREQ-1: the answer is 42.');

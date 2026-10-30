@@ -522,22 +522,25 @@ function storeReview(
     sessionId: sessionId as SessionId,
     headSha: head as CommitSha,
     citations: [],
-    mentions: [],
     createdAt: '2026-10-28T12:00:00.000Z',
   };
   appendChatMessage(db, {
     ...common,
     id: '22222222-2222-4222-8222-222222222222' as ChatMessageId,
     role: 'user',
-    content: '/review',
+    parts: [{ kind: 'text', id: 'p1', text: '/review' }],
   });
   const stored = appendChatMessage(db, {
     ...common,
     id: reviewMessageId() as ChatMessageId,
     role: 'assistant',
     kind: 'review',
-    status: 'complete',
-    content: '**Review**',
+    status: 'done',
+    parts: findings.map((_, finding) => ({
+      kind: 'finding',
+      id: `p${String(finding + 1)}`,
+      finding,
+    })),
     review: {
       findings,
       dropped: {

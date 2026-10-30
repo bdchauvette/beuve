@@ -1,4 +1,4 @@
-import type { ChatMessageView } from '#contract/ipc-contract.ts';
+import type { ChatMessageView, ChatStreamEvent } from '#contract/ipc-contract.ts';
 
 /**
  * One item of the chat drawer's transcript. `message` entries are the session's stored Q&A,
@@ -30,21 +30,15 @@ export type LocalChatEntry = Exclude<ChatEntry, MessageChatEntry>;
 export interface MessageChatEntry {
   readonly id: string;
   readonly kind: 'message';
+  /** Built from `chat:stream` events while the request runs (ADR 0072), then the stored one. */
   readonly message: ChatMessageView;
-  /** The latest coarse status line of an answer that doesn't stream text (`/review`). */
-  readonly progress?: string;
+  /** The latest coarse status line of a running request (`/review`'s), never content. */
+  readonly activity?: string;
 }
 
-/** The transcript plus streamed text that arrived before its message was known. */
+/** The transcript plus stream events that arrived before their message was known. */
 export interface ChatTranscript {
   readonly entries: readonly ChatEntry[];
-  /** By message id: events that beat the `chat:ask` response, replayed when it lands. */
-  readonly pending: Readonly<Record<string, PendingAnswer>>;
-}
-
-export interface PendingAnswer {
-  /** The raw text streamed so far. */
-  readonly text: string;
-  /** The final state, if the answer finished before the response landed. */
-  readonly settled?: ChatMessageView;
+  /** By message id: events that beat the `chat:ask` response, replayed in order when it lands. */
+  readonly pending: Readonly<Record<string, readonly ChatStreamEvent[]>>;
 }

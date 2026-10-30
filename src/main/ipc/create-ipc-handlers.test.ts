@@ -1078,8 +1078,7 @@ function stubServices(
       cancel: notWiredError,
       compact: notWired,
       clear: notWiredError,
-      onDelta: () => doNothingSync,
-      onMessageUpdated: () => doNothingSync,
+      onStream: () => doNothingSync,
       dispose: doNothing,
     },
     ura: {

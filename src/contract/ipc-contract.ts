@@ -980,10 +980,10 @@ export interface ChatReviewView {
 }
 
 /**
- * One entry of a session's Q&A transcript (Zone 4). `content` is Markdown: while an assistant
- * message `streaming` it is the raw, unvalidated preview (it may hold `[[…]]` markers that
- * `citations` doesn't list); once `complete` its only markers are the listed citations. A
- * `failed` message has an `errorCode` and a `errorMessage` that says what to do.
+ * One entry of a session's Q&A transcript (Zone 4), as a list of typed parts (ADR 0072): the same
+ * shape whether it was listed or is being streamed. A `done` answer's text parts hold only the
+ * `[[path:start-end]]` markers `citations` lists; while it streams they are the raw, unvalidated
+ * preview (and `citations` is empty).
  */
 export interface ChatMessageView {
   readonly id: string;
@@ -991,24 +991,60 @@ export interface ChatMessageView {
   readonly headSha: string;
   /** `summary` is a `/compact` note (ADR 0047): it stands for every message before it. */
   readonly role: 'user' | 'assistant' | 'system-notice' | 'summary';
-  /** A question's `[[@n]]` tokens stand for the n-th of its `mentions` (ADR 0046). */
-  readonly content: string;
-  readonly citations: readonly ChatCitationView[];
-  /** What a question was about; empty for every other role. */
-  readonly mentions: readonly ChatMentionView[];
   /**
-   * `queued`: waiting behind the session's running request (ADR 0057); only answers are ever
-   * anything but `complete`.
+   * In order. A question is text and mention parts, a notice or summary one text part, an
+   * answer text, reasoning, tool calls, `/review` findings and, when it failed, an error.
    */
-  readonly status: 'queued' | 'streaming' | 'complete' | 'failed' | 'cancelled';
+  readonly parts: readonly ChatPartView[];
+  readonly citations: readonly ChatCitationView[];
+  /** Only answers are ever anything but `done`. */
+  readonly status: ChatStatusView;
   /** Set on assistant messages. */
   readonly answerKind?: AnswerKindView;
-  /** A completed `/review` answer's findings. */
+  /** A completed `/review` answer's findings; its `finding` parts point into them. */
   readonly review?: ChatReviewView;
-  readonly errorCode?: ChatErrorCode;
-  readonly errorMessage?: string;
   readonly createdAt: string;
 }
+
+/**
+ * Where a chat request stands (ADR 0072): `queued` behind the session's running request (ADR
+ * 0057), `submitted` once it runs and before any part arrived, `streaming` while parts arrive,
+ * then `done`, `error` or `cancelled`. Cancel works in every state before the last three.
+ */
+export type ChatStatusView = 'queued' | 'submitted' | 'streaming' | 'done' | 'error' | 'cancelled';
+
+/**
+ * One typed piece of a chat message (ADR 0072); `id` is unique within the message and never
+ * reused. `text` is untrusted Markdown (render it as text nodes); `reasoning` says the model
+ * thought, with a short content-free `summary` when the backend gives one; a `tool-call` names
+ * what a read-only tool looked at (`read src/auth.ts:1-40`), never what it found; a `mention` is
+ * lines attached to a question, where the question names them; a `finding` is the n-th (0-based)
+ * of the message's `review.findings`; an `error` says why the request failed and what to do.
+ */
+export type ChatPartView =
+  | { readonly kind: 'text'; readonly id: string; readonly text: string }
+  | {
+      readonly kind: 'reasoning';
+      readonly id: string;
+      readonly state: 'running' | 'done';
+      readonly summary?: string;
+    }
+  | {
+      readonly kind: 'tool-call';
+      readonly id: string;
+      readonly tool: string;
+      readonly description: string;
+      /** `stopped`: the request ended before the tool answered. */
+      readonly state: 'running' | 'done' | 'failed' | 'stopped';
+    }
+  | { readonly kind: 'mention'; readonly id: string; readonly mention: ChatMentionView }
+  | { readonly kind: 'finding'; readonly id: string; readonly finding: number }
+  | {
+      readonly kind: 'error';
+      readonly id: string;
+      readonly code: ChatErrorCode;
+      readonly message: string;
+    };
 
 /**
  * Lines the reviewer attached to a question (ADR 0046): one side of a file at a commit, 1-based
@@ -1049,8 +1085,7 @@ export type ChatCommandRequest =
  * Asks a read-only question about the session's current change (ADR 0031), or runs a chat
  * `command`. Answers at once with the stored question and the answer, `streaming` or, while the
  * session runs another request, `queued` (ADR 0057): requests run one at a time, in order, at most
- * 10 waiting (more is `refused`). The text arrives as `chat:delta` events and each state change
- * (queued to streaming, then final) as `chat:message-updated`.
+ * 10 waiting (more is `refused`). The answer's parts and status changes arrive on `chat:stream`.
  */
 export interface ChatAskRequest {
   readonly sessionId: string;
@@ -1105,24 +1140,33 @@ export interface ChatClearedView {
 }
 
 /**
- * Pushed on `chat:delta` while an answer streams. `append` adds text; `reset` drops what was
- * streamed (the model wrote it before a tool call). The text is a raw preview. `progress` is a
- * coarse status line for answers that don't stream text (`/review`), never content.
+ * Pushed on `chat:stream` while chat requests run (ADR 0072), keyed by message id and, for parts,
+ * part id. `status` says a request was taken from the queue (`submitted`) or its first part
+ * arrived (`streaming`), with `activity` as a coarse status line (`/review`'s, never content). A
+ * part starts (a text part empty), a text part grows by `text-delta`s in order, a part ends with
+ * its final state, or a text part is discarded (the model wrote it before a tool call; its final
+ * answer is the last turn's). `message` is the stored message, authoritative: it replaces what
+ * the events built, and it is how a request ends (`done`, `error`, `cancelled`) or leaves the
+ * queue unstarted. A text part's deltas, from its `part-start` to its `part-end`, `part-discard`
+ * or the message's end, concatenate to its text, so they map onto a `ReadableStream<string>`.
  */
-export interface ChatDeltaView {
-  readonly sessionId: string;
-  readonly messageId: string;
-  readonly kind: 'append' | 'reset' | 'progress';
-  /** Empty for `reset`. */
-  readonly text: string;
-}
-
-/** Pushed on `chat:message-updated` when an answer starts, completes, fails or is cancelled. */
-export interface ChatMessageUpdatedView {
-  readonly message: ChatMessageView;
-  /** Earlier turns the prompt had to drop for size, so the drawer can suggest `/compact`. */
-  readonly droppedTurns?: number;
-}
+export type ChatStreamEvent = { readonly sessionId: string; readonly messageId: string } & (
+  | {
+      readonly type: 'status';
+      readonly status: 'submitted' | 'streaming';
+      readonly activity?: string;
+    }
+  | { readonly type: 'part-start'; readonly part: ChatPartView }
+  | { readonly type: 'text-delta'; readonly partId: string; readonly text: string }
+  | { readonly type: 'part-end'; readonly part: ChatPartView }
+  | { readonly type: 'part-discard'; readonly partId: string }
+  | {
+      readonly type: 'message';
+      readonly message: ChatMessageView;
+      /** Earlier turns the prompt had to drop for size, so the drawer can suggest `/compact`. */
+      readonly droppedTurns?: number;
+    }
+);
 
 /** Condenses the session's conversation into a summary message (ADR 0047). */
 export interface ChatCompactRequest {
@@ -2146,8 +2190,7 @@ export type McpStatus =
 /** Payloads main pushes to the renderer with `webContents.send`. */
 export interface EventChannelMap {
   'mcp:status': McpStatus;
-  'chat:delta': ChatDeltaView;
-  'chat:message-updated': ChatMessageUpdatedView;
+  'chat:stream': ChatStreamEvent;
   'ura:changed': UraChangedView;
   'github:pr-updated': PullRequestUpdatedView;
   'github:ci-status': CiStatusChangedView;

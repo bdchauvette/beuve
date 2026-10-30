@@ -16,10 +16,9 @@ function message(id: string, role: ChatMessageView['role']): ChatEntry {
       sessionId: 's1',
       headSha: 'a'.repeat(40),
       role,
-      content: id,
+      parts: [{ kind: 'text', id: 'p1', text: id }],
       citations: [],
-      mentions: [],
-      status: 'complete',
+      status: 'done',
       createdAt: '2026-10-28T12:00:00.000Z',
     },
   };

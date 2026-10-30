@@ -115,14 +115,9 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     });
   };
 
-  services.chat.onDelta((event) => {
+  services.chat.onStream((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
-      sendEvent(window.webContents, 'chat:delta', event);
-    }
-  });
-  services.chat.onMessageUpdated((event) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      sendEvent(window.webContents, 'chat:message-updated', event);
+      sendEvent(window.webContents, 'chat:stream', event);
     }
   });
   services.trace.onStatus((event) => {

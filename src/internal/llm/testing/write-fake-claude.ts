@@ -9,10 +9,11 @@ import path from 'node:path';
  * - `echo`: succeeds with `{ args, stdin, cwd, envKeys }` as structured output.
  * - `chat`: the second argument names a JSON file `{ preamble?, chunks, delayMs?, findings?,
  *   verdicts? }`, read afresh on every run, and every run appends `{ args, cwd, stdin }` as one
- *   line to `<file>.calls`. A text run writes `preamble` (text before a Grep call), then the
+ *   line to `<file>.calls`. A text run writes `preamble` (text before a Grep call that finds
+ *   something), then the
  *   answer as `chunks`, each a text delta when the argv has `--include-partial-messages` (as the
  *   real CLI does), waiting `delayMs` before each chunk, and succeeds with the joined chunks as
- *   `result`. A structured run (`--json-schema`) reads with Grep and Read, waits `delayMs` and
+ *   `result`. A structured run (`--json-schema`) greps, waits `delayMs`, reads `feature.rs` and
  *   succeeds with `{ verdicts }` when the schema asks for verdicts (the `/review` verification
  *   pass), else `{ findings }`.
  * - `text-result`: succeeds with the JSON only in `result`, no `structured_output`.
@@ -42,6 +43,10 @@ const [mode, pidFile, ...args] = process.argv.slice(2);
 const emit = (event) => process.stdout.write(JSON.stringify(event) + '\n');
 const init = () => emit({ type: 'system', subtype: 'init', cwd: process.cwd(), model: 'fake-model-1',
   claude_code_version: '0.0.0-fake', tools: ['Glob', 'Grep', 'Read', 'StructuredOutput'] });
+const toolUse = (id, name, input) => {
+  emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name, input }] } });
+  emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'found' }] } });
+};
 const result = (fields) => emit({ type: 'result', subtype: 'success', is_error: false,
   api_error_status: null, duration_ms: 5, num_turns: 2, total_cost_usd: 0.01,
   permission_denials: [], ...fields });
@@ -68,9 +73,9 @@ process.stdin.on('end', () => {
       const schema = args.find((arg) => arg.startsWith('--json-schema='));
       if (schema !== undefined) {
         init();
-        emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: {} }] } });
+        toolUse('toolu_grep', 'Grep', { pattern: 'feature' });
         setTimeout(() => {
-          emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
+          toolUse('toolu_read', 'Read', { file_path: 'feature.rs', offset: 1, limit: 3 });
           const value = schema.includes('"verdicts"')
             ? { verdicts: script.verdicts ?? [] }
             : { findings: script.findings ?? [] };
@@ -88,7 +93,9 @@ process.stdin.on('end', () => {
         start();
         delta(script.preamble);
         emit({ type: 'assistant', message: { content: [{ type: 'text', text: script.preamble },
-          { type: 'tool_use', name: 'Grep', input: {} }] } });
+          { type: 'tool_use', id: 'toolu_preamble', name: 'Grep', input: { pattern: 'feature' } }] } });
+        emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_preamble',
+          content: 'found' }] } });
       }
       start();
       const chunks = [...script.chunks];

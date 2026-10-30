@@ -7,9 +7,9 @@ import type {
   CallHierarchyView,
   ChatCitationView,
   ChatCommandRequest,
-  ChatDeltaView,
   ChatMentionView,
   ChatMessageView,
+  ChatStreamEvent,
   CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
@@ -94,6 +94,7 @@ import { parseChatCommand } from './parse-chat-command.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 import { emptyChatTranscript } from './empty-chat-transcript.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
+import { isActiveRequest } from './is-active-request.ts';
 import { reduceChatTranscript } from './reduce-chat-transcript.ts';
 import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
 import type { FlowState } from './flow-state.ts';
@@ -812,19 +813,8 @@ export class BeuveApp extends LitElement {
       bridge.on('mcp:status', (status) => {
         this.mcpStatus = status;
       }),
-      bridge.on('chat:delta', (delta) => {
-        this.applyChatDelta(delta);
-      }),
-      bridge.on('chat:message-updated', ({ message, droppedTurns }) => {
-        if (message.sessionId !== this.review?.session.id) {
-          return;
-        }
-        this.dispatchChat({ kind: 'updated', message });
-        if (droppedTurns === undefined || this.compactHinted.has(message.sessionId)) {
-          return;
-        }
-        this.compactHinted.add(message.sessionId);
-        this.note('info', 'Older turns are being dropped — /compact to keep a summary.');
+      bridge.on('chat:stream', (event) => {
+        this.applyChatStream(event);
       }),
       bridge.on('ura:changed', ({ sessionId }) => {
         if (sessionId === this.review?.session.id) {
@@ -1775,10 +1765,21 @@ export class BeuveApp extends LitElement {
     this.chat = reduceChatTranscript(this.chat, action);
   }
 
-  private applyChatDelta(delta: ChatDeltaView): void {
-    if (delta.sessionId === this.review?.session.id) {
-      this.dispatchChat({ kind: 'delta', delta });
+  /** One `chat:stream` event (ADR 0072): the reducer builds the transcript from it. */
+  private applyChatStream(event: ChatStreamEvent): void {
+    if (event.sessionId !== this.review?.session.id) {
+      return;
     }
+    this.dispatchChat({ kind: 'stream', event });
+    if (
+      event.type !== 'message' ||
+      event.droppedTurns === undefined ||
+      this.compactHinted.has(event.sessionId)
+    ) {
+      return;
+    }
+    this.compactHinted.add(event.sessionId);
+    this.note('info', 'Older turns are being dropped — /compact to keep a summary.');
   }
 
   /** The session's stored transcript, shown above this window's command results. */
@@ -2478,11 +2479,11 @@ export class BeuveApp extends LitElement {
       this.closeTrace();
       return;
     }
-    const streaming = this.chat.entries.find(
-      (entry) => entry.kind === 'message' && entry.message.status === 'streaming',
+    const running = this.chat.entries.find(
+      (entry) => entry.kind === 'message' && isActiveRequest(entry.message),
     );
-    if (streaming?.kind === 'message') {
-      void beuveBridge()?.invoke('chat:cancel', { messageId: streaming.message.id });
+    if (running?.kind === 'message') {
+      void beuveBridge()?.invoke('chat:cancel', { messageId: running.message.id });
     }
   }
 
@@ -2544,7 +2545,7 @@ export class BeuveApp extends LitElement {
       isBusy:
         this.trace?.status === 'loading' ||
         this.chat.entries.some(
-          (entry) => entry.kind === 'message' && entry.message.status === 'streaming',
+          (entry) => entry.kind === 'message' && isActiveRequest(entry.message),
         ),
       isPullRequest: this.pullRequest !== undefined,
       stagedCount: this.stagedCount(),

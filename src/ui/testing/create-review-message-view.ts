@@ -12,11 +12,14 @@ export function createReviewMessageView(
     sessionId: 's1',
     headSha: 'a'.repeat(40),
     role: 'assistant',
-    content: '',
+    parts: findings.map((_, finding) => ({
+      kind: 'finding',
+      id: `p${String(finding + 1)}`,
+      finding,
+    })),
     citations: [],
-    mentions: [],
     createdAt: '2026-10-30T10:00:00.000Z',
-    status: 'complete',
+    status: 'done',
     answerKind: 'review',
     review: {
       findings,

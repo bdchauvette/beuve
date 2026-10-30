@@ -65,24 +65,30 @@ export interface ChatMessageBase {
   readonly sessionId: SessionId;
   readonly headSha: CommitSha;
   /**
-   * Markdown. An assistant's finished answer contains only validated `[[path:start-end]]`
-   * markers, each matching one of `citations`; while streaming it is the raw, unvalidated text.
+   * What the message says, in order (ADR 0072). A question is text and `mention` parts; a notice
+   * or a summary one text part; an answer any of text, reasoning, tool calls, findings and, when
+   * it failed, an error.
    */
-  readonly content: string;
-  /** In order of first appearance; empty for user messages and notices. */
+  readonly parts: readonly ChatPart[];
+  /**
+   * The validated `[[path:start-end]]` markers of the text parts, in order of first appearance;
+   * empty for user messages and notices, and while an answer streams.
+   */
   readonly citations: readonly Citation[];
-  /** What the question was about, in `[[@n]]` order; empty for everything but user messages. */
-  readonly mentions: readonly ChatMention[];
   readonly createdAt: string;
 }
 
 /**
- * Where an assistant answer stands: `queued` behind another request of its session (ADR 0057),
- * then `streaming`, then final. Only `failed` carries a code (main's error code, e.g. `timeout`).
+ * Where an assistant answer's request stands (ADR 0072): `queued` behind another request of its
+ * session (ADR 0057), `submitted` once it runs and before any part arrived, `streaming` while
+ * parts arrive, then `done`, `error` (its last part is the `error` part) or `cancelled`. Every
+ * other message is `done`.
  */
-export type AssistantState =
-  | { readonly status: 'queued' | 'streaming' | 'complete' | 'cancelled' }
-  | { readonly status: 'failed'; readonly errorCode: string };
+export interface AssistantState {
+  readonly status: ChatStatus;
+}
+
+export type ChatStatus = 'queued' | 'submitted' | 'streaming' | 'done' | 'error' | 'cancelled';
 
 /** Expected failures of the chat repository. */
 export type ChatStoreError =
@@ -95,3 +101,40 @@ export type ChatStoreError =
       readonly id: string;
       readonly reason: string;
     };
+
+/**
+ * One typed piece of a chat message (ADR 0072). A message is an ordered list of parts, stored as
+ * it streams and once final, so a reloaded transcript has the same shape as a live one. `id` is
+ * unique within its message (`p1`, `p2`, …) and never reused, also after a part is discarded.
+ *
+ * - `text`: Markdown. In a final answer its only `[[path:start-end]]` markers are the message's
+ *   validated citations; while streaming it is the raw preview.
+ * - `reasoning`: the model thought; `summary` only when the backend gives a short, content-free
+ *   one.
+ * - `tool-call`: a read-only tool the model ran, with what it looked at (`read src/a.ts:1-40`),
+ *   never what it found.
+ * - `mention`: lines the reviewer attached to a question, where the question names them.
+ * - `finding`: the n-th (0-based) finding of the message's `/review` result.
+ * - `error`: why the request failed; main's error code (`timeout`, …).
+ */
+export type ChatPart =
+  | { readonly kind: 'text'; readonly id: string; readonly text: string }
+  | {
+      readonly kind: 'reasoning';
+      readonly id: string;
+      readonly state: 'running' | 'done';
+      readonly summary?: string;
+    }
+  | {
+      readonly kind: 'tool-call';
+      readonly id: string;
+      readonly tool: string;
+      readonly description: string;
+      readonly state: ToolCallState;
+    }
+  | { readonly kind: 'mention'; readonly id: string; readonly mention: ChatMention }
+  | { readonly kind: 'finding'; readonly id: string; readonly finding: number }
+  | { readonly kind: 'error'; readonly id: string; readonly code: string };
+
+/** `stopped`: the request ended (cancelled or failed) before the tool answered. */
+export type ToolCallState = 'running' | 'done' | 'failed' | 'stopped';

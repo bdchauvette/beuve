@@ -34,7 +34,7 @@ export function mergeReviewInsights(
       (message) =>
         message.role === 'assistant' &&
         message.answerKind === 'review' &&
-        message.status === 'complete' &&
+        message.status === 'done' &&
         message.review !== undefined &&
         message.headSha === headSha,
     )
