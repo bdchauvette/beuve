@@ -3,7 +3,7 @@ import type { UraAnchorView } from '#contract/ipc-contract.ts';
 import type { ReviewTarget } from './target-from.ts';
 
 /**
- * Where `m` stages a note on `target` (ADR 0063). URA anchors are head-side only (ADR 0023), so
+ * Where Add Note stages a note on `target` (ADR 0063). URA anchors are head-side only (ADR 0023), so
  * a base selection takes its mapped head lines and a pure deletion the head line before it; a
  * deleted file's lines anchor to the file. Pure.
  */

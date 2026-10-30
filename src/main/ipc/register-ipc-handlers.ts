@@ -6,7 +6,7 @@ import { err } from '#x/result/err.ts';
 import { invokeChannels } from '#contract/invoke-channels.ts';
 import type { InvokeChannel, IpcResult } from '#contract/ipc-contract.ts';
 
-import type { IpcHandlers } from './create-ipc-handlers.ts';
+import type { IpcHandlers, IpcSender } from './create-ipc-handlers.ts';
 
 /** A page of beuve's own and the channels it may call; `all` for the main window's page. */
 export interface TrustedPage {
@@ -17,7 +17,7 @@ export interface TrustedPage {
 /**
  * Registers every contract channel on `ipcMain`. Calls from frames other than the top-level
  * frame of one of beuve's own pages, for a channel that page may not call (a sheet calls only the
- * sheet channels, ADR 0067), or with more than one argument, are refused before reaching a
+ * sheet channels, ADR 0067, and the Settings window only its own, ADR 0068), or with more than one argument, are refused before reaching a
  * handler; unexpected exceptions become `internal` errors so the renderer never sees a stack.
  * Returns an unregister function.
  */
@@ -28,8 +28,10 @@ export function registerIpcHandlers(
 ): () => void {
   const { pages, logger } = options;
   for (const channel of invokeChannels) {
-    const handler: (request: unknown) => IpcResult<unknown> | Promise<IpcResult<unknown>> =
-      handlers[channel];
+    const handler: (
+      request: unknown,
+      sender: IpcSender,
+    ) => IpcResult<unknown> | Promise<IpcResult<unknown>> = handlers[channel];
     ipcMain.handle(
       channel,
       async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IpcResult<unknown>> => {
@@ -41,7 +43,7 @@ export function registerIpcHandlers(
           return err({ code: 'invalid-request', message: 'expected at most one argument' });
         }
         try {
-          return await handler(args[0]);
+          return await handler(args[0], { webContentsId: event.sender.id });
         } catch (error: unknown) {
           logger.error('ipc handler failed', { channel, error });
           return err({ code: 'internal', message: 'internal error' });

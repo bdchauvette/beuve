@@ -1,0 +1,1397 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
+[
+  {
+    "label": "&File",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+O",
+        "id": "open",
+        "label": "&Open Pull Request or Branch…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Export Review",
+        "submenu": [
+          {
+            "id": "export-agent-xml",
+            "label": "&Copy for Claude Code (XML)",
+          },
+          {
+            "id": "export-agent-json",
+            "label": "Copy &for Agents (JSON)",
+          },
+          {
+            "id": "export-github",
+            "label": "Copy &GitHub Review (JSON)",
+          },
+        ],
+      },
+      {
+        "id": "post-review",
+        "label": "&Post Review to GitHub…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+W",
+        "label": "&Close Window",
+        "role": "close",
+      },
+      {
+        "id": "close-all-sheets",
+        "label": "Close &All Sheets",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Q",
+        "label": "&Quit",
+        "role": "quit",
+      },
+    ],
+  },
+  {
+    "label": "&Edit",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+Z",
+        "label": "&Undo",
+        "role": "undo",
+      },
+      {
+        "accelerator": "Ctrl+Shift+Z",
+        "label": "&Redo",
+        "role": "redo",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+X",
+        "label": "&Cut",
+        "role": "cut",
+      },
+      {
+        "accelerator": "Ctrl+C",
+        "label": "C&opy",
+        "role": "copy",
+      },
+      {
+        "accelerator": "Ctrl+V",
+        "label": "&Paste",
+        "role": "paste",
+      },
+      {
+        "accelerator": "Ctrl+A",
+        "label": "&Select All",
+        "role": "selectAll",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Shift+C",
+        "id": "copy-permalink",
+        "label": "Copy &GitHub Permalink",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Find",
+        "submenu": [
+          {
+            "accelerator": "Ctrl+F",
+            "id": "find",
+            "label": "&Find…",
+          },
+          {
+            "accelerator": "Ctrl+G",
+            "id": "find-next",
+            "label": "Find &Next",
+          },
+          {
+            "accelerator": "Ctrl+Shift+G",
+            "id": "find-previous",
+            "label": "Find &Previous",
+          },
+          {
+            "id": "find-selection",
+            "label": "&Use Selection for Find",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "find-match-case",
+            "label": "&Match Case",
+            "type": "checkbox",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+,",
+        "id": "settings",
+        "label": "Pr&eferences…",
+      },
+    ],
+  },
+  {
+    "label": "&View",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+K",
+        "id": "palette",
+        "label": "&Command Palette…",
+      },
+      {
+        "accelerator": "Ctrl+Shift+P",
+        "id": "palette~1",
+        "label": "Command Palette…",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Sidebar",
+        "submenu": [
+          {
+            "accelerator": "F9",
+            "id": "toggle-sidebar",
+            "label": "&Show Sidebar",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "accelerator": "Ctrl+1",
+            "id": "sidebar-overview",
+            "label": "&Intent && Files",
+          },
+          {
+            "accelerator": "Ctrl+2",
+            "id": "sidebar-review",
+            "label": "&Review",
+          },
+          {
+            "accelerator": "Ctrl+3",
+            "id": "sidebar-chat",
+            "label": "&Chat",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "sidebar-left",
+            "label": "&On the Left",
+            "type": "radio",
+          },
+          {
+            "id": "sidebar-right",
+            "label": "On &the Right",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Diff",
+        "submenu": [
+          {
+            "id": "diff-split",
+            "label": "&Side by Side",
+            "type": "radio",
+          },
+          {
+            "id": "diff-inline",
+            "label": "&Inline",
+            "type": "radio",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "whitespace",
+            "label": "&Hide Whitespace Changes",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-generated",
+            "label": "Show &Generated Files",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-insights",
+            "label": "Show &Review Insights",
+            "type": "checkbox",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "tree-mode",
+        "label": "Changed &Files Only",
+        "type": "checkbox",
+      },
+      {
+        "label": "&Order Files By",
+        "submenu": [
+          {
+            "id": "order-path",
+            "label": "&Path",
+            "type": "radio",
+          },
+          {
+            "id": "order-imports",
+            "label": "&Imports",
+            "type": "radio",
+          },
+          {
+            "id": "order-calls",
+            "label": "&Calls",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "label": "Open Definitions &In",
+        "submenu": [
+          {
+            "id": "sheets-window",
+            "label": "&Sheet Windows",
+            "type": "radio",
+          },
+          {
+            "id": "sheets-inline",
+            "label": "&Over the Diff",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Shift+]",
+        "id": "expand",
+        "label": "&Expand File",
+      },
+      {
+        "accelerator": "Ctrl+Shift+[",
+        "id": "collapse",
+        "label": "Co&llapse File",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+0",
+        "label": "&Actual Size",
+        "role": "resetZoom",
+      },
+      {
+        "accelerator": "Ctrl+Plus",
+        "label": "&Zoom In",
+        "role": "zoomIn",
+      },
+      {
+        "accelerator": "Ctrl+-",
+        "label": "Zoo&m Out",
+        "role": "zoomOut",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "F11",
+        "label": "&Toggle Full Screen",
+        "role": "togglefullscreen",
+      },
+    ],
+  },
+  {
+    "label": "&Go",
+    "submenu": [
+      {
+        "accelerator": "Alt+Left",
+        "id": "back",
+        "label": "&Back",
+      },
+      {
+        "accelerator": "Alt+Right",
+        "id": "forward",
+        "label": "&Forward",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Alt+Down",
+        "id": "next-hunk",
+        "label": "&Next Change",
+      },
+      {
+        "accelerator": "F7",
+        "id": "next-hunk~1",
+        "label": "Next Change",
+        "visible": false,
+      },
+      {
+        "accelerator": "Alt+Up",
+        "id": "previous-hunk",
+        "label": "&Previous Change",
+      },
+      {
+        "accelerator": "Shift+F7",
+        "id": "previous-hunk~1",
+        "label": "Previous Change",
+        "visible": false,
+      },
+      {
+        "accelerator": "Ctrl+PageDown",
+        "id": "next-file",
+        "label": "N&ext File",
+      },
+      {
+        "accelerator": "Ctrl+PageUp",
+        "id": "previous-file",
+        "label": "P&revious File",
+      },
+      {
+        "id": "toggle-skip-reviewed",
+        "label": "&Skip Reviewed Files",
+        "type": "checkbox",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+P",
+        "id": "go-to-file",
+        "label": "&Go to File…",
+      },
+      {
+        "accelerator": "Ctrl+B",
+        "id": "open-definition",
+        "label": "Go &to Definition",
+      },
+      {
+        "accelerator": "F12",
+        "id": "open-definition~1",
+        "label": "Go to Definition",
+        "visible": false,
+      },
+      {
+        "accelerator": "Ctrl+Shift+B",
+        "id": "open-type-definition",
+        "label": "Go to Type &Definition",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "F6",
+        "id": "cycle-zone",
+        "label": "Ne&xt Region",
+      },
+      {
+        "accelerator": "Ctrl+Tab",
+        "id": "cycle-zone~1",
+        "label": "Next Region",
+        "visible": false,
+      },
+      {
+        "accelerator": "Shift+F6",
+        "id": "cycle-zone-back",
+        "label": "Pre&vious Region",
+      },
+      {
+        "accelerator": "Ctrl+Shift+Tab",
+        "id": "cycle-zone-back~1",
+        "label": "Previous Region",
+        "visible": false,
+      },
+    ],
+  },
+  {
+    "label": "&Review",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+D",
+        "id": "toggle-reviewed",
+        "label": "&File Reviewed",
+        "type": "checkbox",
+      },
+      {
+        "accelerator": "Ctrl+S",
+        "id": "save-progress",
+        "label": "&Save Progress",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+/",
+        "id": "stage",
+        "label": "&Add Note",
+      },
+      {
+        "accelerator": "Ctrl+Shift+E",
+        "id": "suggest-edit",
+        "label": "Suggest &Edit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+I",
+        "id": "peek",
+        "label": "Show &Callers",
+      },
+      {
+        "accelerator": "Ctrl+Shift+I",
+        "id": "flow",
+        "label": "S&how Control Flow",
+      },
+      {
+        "accelerator": "Ctrl+R",
+        "id": "trace",
+        "label": "&Run Trace Probe",
+      },
+      {
+        "id": "stop",
+        "label": "S&top",
+      },
+      {
+        "accelerator": "Alt+Return",
+        "id": "impact-details",
+        "label": "&ImpactGate Details",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Shift+O",
+        "id": "open-in-editor",
+        "label": "&Open in Editor",
+      },
+      {
+        "label": "Open &With",
+        "submenu": [
+          {
+            "id": "editor-zed",
+            "label": "&Zed",
+            "type": "radio",
+          },
+          {
+            "id": "editor-vscode",
+            "label": "&VS Code",
+            "type": "radio",
+          },
+          {
+            "id": "editor-cursor",
+            "label": "&Cursor",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "id": "open-permalink",
+        "label": "Open on &GitHub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "commit-pairs",
+        "label": "Filter &by Commit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "&Note",
+        "submenu": [
+          {
+            "id": "dock-show",
+            "label": "&Show in Diff",
+          },
+          {
+            "id": "dock-edit",
+            "label": "&Edit Note…",
+          },
+          {
+            "id": "dock-withdraw",
+            "label": "&Withdraw or Restore",
+          },
+          {
+            "id": "dock-addressed",
+            "label": "&Addressed",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "dock-move-up",
+            "label": "&Move Up",
+          },
+          {
+            "id": "dock-move-down",
+            "label": "Move &Down",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "trust",
+        "label": "Tr&ust Repository Tests…",
+      },
+      {
+        "id": "untrust",
+        "label": "Sto&p Trusting Repository Tests",
+      },
+    ],
+  },
+  {
+    "label": "&Chat",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+L",
+        "id": "chat",
+        "label": "&Focus Chat",
+      },
+      {
+        "accelerator": "Ctrl+>",
+        "id": "add-to-chat",
+        "label": "&Add to Chat",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "summarize",
+        "label": "&Summarize Change",
+      },
+      {
+        "id": "review",
+        "label": "&Review Change",
+      },
+      {
+        "label": "Review &With",
+        "submenu": [
+          {
+            "id": "review-paths",
+            "label": "&Only Some Paths…",
+          },
+          {
+            "id": "review-fresh",
+            "label": "&Fresh Run",
+          },
+          {
+            "id": "review-no-verify",
+            "label": "&No Verification Pass",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "review-effort-low",
+            "label": "&Low Effort",
+          },
+          {
+            "id": "review-effort-medium",
+            "label": "&Medium Effort",
+          },
+          {
+            "id": "review-effort-high",
+            "label": "&High Effort",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "compact-chat",
+        "label": "&Compact Chat",
+      },
+      {
+        "id": "clear-queue",
+        "label": "Clear &Queue",
+      },
+      {
+        "id": "clear-chat",
+        "label": "C&lear Chat…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "help",
+        "label": "C&hat Commands",
+      },
+    ],
+  },
+  {
+    "label": "&Window",
+    "submenu": [
+      {
+        "label": "&Minimize",
+        "role": "minimize",
+      },
+    ],
+  },
+  {
+    "label": "&Help",
+    "submenu": [
+      {
+        "accelerator": "Ctrl+?",
+        "id": "shortcuts",
+        "label": "&Keyboard Shortcuts",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "github-home",
+        "label": "&beuve on GitHub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "about",
+        "label": "&About beuve",
+      },
+    ],
+  },
+]
+`;
+
+exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
+[
+  {
+    "label": "beuve",
+    "submenu": [
+      {
+        "id": "about",
+        "label": "About beuve",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+,",
+        "id": "settings",
+        "label": "Settings…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Services",
+        "role": "services",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+H",
+        "label": "Hide beuve",
+        "role": "hide",
+      },
+      {
+        "accelerator": "Alt+Cmd+H",
+        "label": "Hide Others",
+        "role": "hideOthers",
+      },
+      {
+        "label": "Show All",
+        "role": "unhide",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+Q",
+        "label": "Quit beuve",
+        "role": "quit",
+      },
+    ],
+  },
+  {
+    "label": "File",
+    "submenu": [
+      {
+        "accelerator": "Cmd+O",
+        "id": "open",
+        "label": "Open Pull Request or Branch…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Export Review",
+        "submenu": [
+          {
+            "id": "export-agent-xml",
+            "label": "Copy for Claude Code (XML)",
+          },
+          {
+            "id": "export-agent-json",
+            "label": "Copy for Agents (JSON)",
+          },
+          {
+            "id": "export-github",
+            "label": "Copy GitHub Review (JSON)",
+          },
+        ],
+      },
+      {
+        "id": "post-review",
+        "label": "Post Review to GitHub…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+W",
+        "label": "Close Window",
+        "role": "close",
+      },
+      {
+        "accelerator": "Alt+Cmd+W",
+        "id": "close-all-sheets",
+        "label": "Close All Sheets",
+      },
+    ],
+  },
+  {
+    "label": "Edit",
+    "submenu": [
+      {
+        "accelerator": "Cmd+Z",
+        "label": "Undo",
+        "role": "undo",
+      },
+      {
+        "accelerator": "Shift+Cmd+Z",
+        "label": "Redo",
+        "role": "redo",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+X",
+        "label": "Cut",
+        "role": "cut",
+      },
+      {
+        "accelerator": "Cmd+C",
+        "label": "Copy",
+        "role": "copy",
+      },
+      {
+        "accelerator": "Cmd+V",
+        "label": "Paste",
+        "role": "paste",
+      },
+      {
+        "accelerator": "Cmd+A",
+        "label": "Select All",
+        "role": "selectAll",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Shift+Cmd+C",
+        "id": "copy-permalink",
+        "label": "Copy GitHub Permalink",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Find",
+        "submenu": [
+          {
+            "accelerator": "Cmd+F",
+            "id": "find",
+            "label": "Find…",
+          },
+          {
+            "accelerator": "Cmd+G",
+            "id": "find-next",
+            "label": "Find Next",
+          },
+          {
+            "accelerator": "Shift+Cmd+G",
+            "id": "find-previous",
+            "label": "Find Previous",
+          },
+          {
+            "accelerator": "Cmd+E",
+            "id": "find-selection",
+            "label": "Use Selection for Find",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "accelerator": "Alt+Cmd+C",
+            "id": "find-match-case",
+            "label": "Match Case",
+            "type": "checkbox",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    "label": "View",
+    "submenu": [
+      {
+        "accelerator": "Cmd+K",
+        "id": "palette",
+        "label": "Command Palette…",
+      },
+      {
+        "accelerator": "Shift+Cmd+P",
+        "id": "palette~1",
+        "label": "Command Palette…",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Sidebar",
+        "submenu": [
+          {
+            "accelerator": "Ctrl+Cmd+S",
+            "id": "toggle-sidebar",
+            "label": "Show Sidebar",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "accelerator": "Cmd+1",
+            "id": "sidebar-overview",
+            "label": "Intent & Files",
+          },
+          {
+            "accelerator": "Cmd+2",
+            "id": "sidebar-review",
+            "label": "Review",
+          },
+          {
+            "accelerator": "Cmd+3",
+            "id": "sidebar-chat",
+            "label": "Chat",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "sidebar-left",
+            "label": "On the Left",
+            "type": "radio",
+          },
+          {
+            "id": "sidebar-right",
+            "label": "On the Right",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Diff",
+        "submenu": [
+          {
+            "id": "diff-split",
+            "label": "Side by Side",
+            "type": "radio",
+          },
+          {
+            "id": "diff-inline",
+            "label": "Inline",
+            "type": "radio",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "whitespace",
+            "label": "Hide Whitespace Changes",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-generated",
+            "label": "Show Generated Files",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-insights",
+            "label": "Show Review Insights",
+            "type": "checkbox",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "tree-mode",
+        "label": "Changed Files Only",
+        "type": "checkbox",
+      },
+      {
+        "label": "Order Files By",
+        "submenu": [
+          {
+            "id": "order-path",
+            "label": "Path",
+            "type": "radio",
+          },
+          {
+            "id": "order-imports",
+            "label": "Imports",
+            "type": "radio",
+          },
+          {
+            "id": "order-calls",
+            "label": "Calls",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "label": "Open Definitions In",
+        "submenu": [
+          {
+            "id": "sheets-window",
+            "label": "Sheet Windows",
+            "type": "radio",
+          },
+          {
+            "id": "sheets-inline",
+            "label": "Over the Diff",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Alt+Cmd+Right",
+        "id": "expand",
+        "label": "Expand File",
+      },
+      {
+        "accelerator": "Alt+Cmd+Left",
+        "id": "collapse",
+        "label": "Collapse File",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+0",
+        "label": "Actual Size",
+        "role": "resetZoom",
+      },
+      {
+        "accelerator": "Cmd+Plus",
+        "label": "Zoom In",
+        "role": "zoomIn",
+      },
+      {
+        "accelerator": "Cmd+-",
+        "label": "Zoom Out",
+        "role": "zoomOut",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Cmd+F",
+        "label": "Toggle Full Screen",
+        "role": "togglefullscreen",
+      },
+    ],
+  },
+  {
+    "label": "Go",
+    "submenu": [
+      {
+        "accelerator": "Cmd+[",
+        "id": "back",
+        "label": "Back",
+      },
+      {
+        "accelerator": "Cmd+]",
+        "id": "forward",
+        "label": "Forward",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+Down",
+        "id": "next-hunk",
+        "label": "Next Change",
+      },
+      {
+        "accelerator": "F7",
+        "id": "next-hunk~1",
+        "label": "Next Change",
+        "visible": false,
+      },
+      {
+        "accelerator": "Cmd+Up",
+        "id": "previous-hunk",
+        "label": "Previous Change",
+      },
+      {
+        "accelerator": "Shift+F7",
+        "id": "previous-hunk~1",
+        "label": "Previous Change",
+        "visible": false,
+      },
+      {
+        "accelerator": "Alt+Cmd+Down",
+        "id": "next-file",
+        "label": "Next File",
+      },
+      {
+        "accelerator": "Alt+Cmd+Up",
+        "id": "previous-file",
+        "label": "Previous File",
+      },
+      {
+        "id": "toggle-skip-reviewed",
+        "label": "Skip Reviewed Files",
+        "type": "checkbox",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+P",
+        "id": "go-to-file",
+        "label": "Go to File…",
+      },
+      {
+        "accelerator": "Cmd+B",
+        "id": "open-definition",
+        "label": "Go to Definition",
+      },
+      {
+        "accelerator": "F12",
+        "id": "open-definition~1",
+        "label": "Go to Definition",
+        "visible": false,
+      },
+      {
+        "accelerator": "Shift+Cmd+B",
+        "id": "open-type-definition",
+        "label": "Go to Type Definition",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+Tab",
+        "id": "cycle-zone",
+        "label": "Next Region",
+      },
+      {
+        "accelerator": "F6",
+        "id": "cycle-zone~1",
+        "label": "Next Region",
+        "visible": false,
+      },
+      {
+        "accelerator": "Ctrl+Shift+Tab",
+        "id": "cycle-zone-back",
+        "label": "Previous Region",
+      },
+      {
+        "accelerator": "Shift+F6",
+        "id": "cycle-zone-back~1",
+        "label": "Previous Region",
+        "visible": false,
+      },
+    ],
+  },
+  {
+    "label": "Review",
+    "submenu": [
+      {
+        "accelerator": "Cmd+D",
+        "id": "toggle-reviewed",
+        "label": "File Reviewed",
+        "type": "checkbox",
+      },
+      {
+        "accelerator": "Cmd+S",
+        "id": "save-progress",
+        "label": "Save Progress",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+/",
+        "id": "stage",
+        "label": "Add Note",
+      },
+      {
+        "accelerator": "Alt+Cmd+E",
+        "id": "suggest-edit",
+        "label": "Suggest Edit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+I",
+        "id": "peek",
+        "label": "Show Callers",
+      },
+      {
+        "accelerator": "Shift+Cmd+I",
+        "id": "flow",
+        "label": "Show Control Flow",
+      },
+      {
+        "accelerator": "Cmd+R",
+        "id": "trace",
+        "label": "Run Trace Probe",
+      },
+      {
+        "accelerator": "Cmd+.",
+        "id": "stop",
+        "label": "Stop",
+      },
+      {
+        "accelerator": "Alt+Cmd+I",
+        "id": "impact-details",
+        "label": "ImpactGate Details",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Alt+Cmd+O",
+        "id": "open-in-editor",
+        "label": "Open in Editor",
+      },
+      {
+        "label": "Open With",
+        "submenu": [
+          {
+            "id": "editor-zed",
+            "label": "Zed",
+            "type": "radio",
+          },
+          {
+            "id": "editor-vscode",
+            "label": "VS Code",
+            "type": "radio",
+          },
+          {
+            "id": "editor-cursor",
+            "label": "Cursor",
+            "type": "radio",
+          },
+        ],
+      },
+      {
+        "id": "open-permalink",
+        "label": "Open on GitHub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "commit-pairs",
+        "label": "Filter by Commit…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Note",
+        "submenu": [
+          {
+            "id": "dock-show",
+            "label": "Show in Diff",
+          },
+          {
+            "id": "dock-edit",
+            "label": "Edit Note…",
+          },
+          {
+            "id": "dock-withdraw",
+            "label": "Withdraw or Restore",
+          },
+          {
+            "id": "dock-addressed",
+            "label": "Addressed",
+            "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "dock-move-up",
+            "label": "Move Up",
+          },
+          {
+            "id": "dock-move-down",
+            "label": "Move Down",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "trust",
+        "label": "Trust Repository Tests…",
+      },
+      {
+        "id": "untrust",
+        "label": "Stop Trusting Repository Tests",
+      },
+    ],
+  },
+  {
+    "label": "Chat",
+    "submenu": [
+      {
+        "accelerator": "Cmd+L",
+        "id": "chat",
+        "label": "Focus Chat",
+      },
+      {
+        "accelerator": "Cmd+>",
+        "id": "add-to-chat",
+        "label": "Add to Chat",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "summarize",
+        "label": "Summarize Change",
+      },
+      {
+        "id": "review",
+        "label": "Review Change",
+      },
+      {
+        "label": "Review With",
+        "submenu": [
+          {
+            "id": "review-paths",
+            "label": "Only Some Paths…",
+          },
+          {
+            "id": "review-fresh",
+            "label": "Fresh Run",
+          },
+          {
+            "id": "review-no-verify",
+            "label": "No Verification Pass",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "review-effort-low",
+            "label": "Low Effort",
+          },
+          {
+            "id": "review-effort-medium",
+            "label": "Medium Effort",
+          },
+          {
+            "id": "review-effort-high",
+            "label": "High Effort",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "compact-chat",
+        "label": "Compact Chat",
+      },
+      {
+        "id": "clear-queue",
+        "label": "Clear Queue",
+      },
+      {
+        "id": "clear-chat",
+        "label": "Clear Chat…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "help",
+        "label": "Chat Commands",
+      },
+    ],
+  },
+  {
+    "role": "windowMenu",
+  },
+  {
+    "label": "Help",
+    "role": "help",
+    "submenu": [
+      {
+        "id": "shortcuts",
+        "label": "Keyboard Shortcuts",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "github-home",
+        "label": "beuve on GitHub",
+      },
+    ],
+  },
+]
+`;

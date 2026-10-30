@@ -1,20 +1,21 @@
 import { describe } from 'vitest';
 
+import { acceleratorsFor } from '#contract/accelerators-for.ts';
+import { commandCatalog } from '#contract/command-catalog.ts';
+
 import { test } from './testing/test.ts';
 
 import { chatHelp } from './chat-help.ts';
 import { commandRegistry } from './command-registry.ts';
-import { keybindings } from './keybindings.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('commandRegistry', () => {
-  test('has no agent-insight keys any more', ({ expect }) => {
-    const keys = commandRegistry
-      .filter((command) => command.scope === 'Diff')
-      .flatMap((command) => command.keys);
-    for (const key of [']', '[', 'y', 'd']) {
-      expect(keys).not.toContain(key);
-    }
+  test('gives every catalog command, and only those, a behaviour, in catalog order', ({
+    expect,
+  }) => {
+    expect(commandRegistry.map((command) => command.id)).toStrictEqual(
+      commandCatalog.map((command) => command.id),
+    );
   });
 
   test('has unique ids', ({ expect }) => {
@@ -22,10 +23,40 @@ describe('commandRegistry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test('feeds the shortcuts overlay every command with a key, in order', ({ expect }) => {
-    expect(keybindings.map((binding) => binding.action)).toStrictEqual(
-      commandRegistry.filter((command) => command.keys.length > 0).map((command) => command.title),
+  test('gives every shortcut a menu item on both platforms (ADR 0068)', ({ expect }) => {
+    const unlisted = commandCatalog.filter(
+      (command) =>
+        (acceleratorsFor(command, 'mac').length > 0 && command.menu === undefined) ||
+        (acceleratorsFor(command, 'linux').length > 0 &&
+          (command.linuxMenu ?? command.menu) === undefined),
     );
+    expect(unlisted.map((command) => command.id)).toStrictEqual([]);
+  });
+
+  test('binds no bare letter, digit or punctuation key', ({ expect }) => {
+    const bare = commandCatalog.flatMap((command) =>
+      [...acceleratorsFor(command, 'mac'), ...acceleratorsFor(command, 'linux')].filter(
+        (key) => !/(?:^|\+)(?:Cmd|Ctrl|Alt)\+/u.test(key) && !/(?:^|\+)F\d+$/u.test(key),
+      ),
+    );
+    expect(bare).toStrictEqual([]);
+  });
+
+  test('runs main commands in main and documents in-place keys only', ({ expect }) => {
+    expect(
+      commandRegistry
+        .filter((command) => (command.run.kind === 'main') !== (command.handler === 'main'))
+        .map((command) => command.id),
+    ).toStrictEqual([]);
+    expect(
+      commandRegistry
+        .filter(
+          (command) =>
+            command.run.kind === 'none' &&
+            (command.menu !== undefined || command.keys !== undefined),
+        )
+        .map((command) => command.id),
+    ).toStrictEqual([]);
   });
 
   test('feeds /help every chat command', ({ expect }) => {
@@ -42,16 +73,10 @@ describe('commandRegistry', () => {
     const mismatched = commandRegistry.filter(
       (command) =>
         command.run.kind === 'slash' &&
-        command.slash?.startsWith(command.run.text.trim().split('=', 1)[0] ?? '') !== true,
+        command.slash !== undefined &&
+        !command.slash.startsWith(command.run.text.trim().split('=', 1)[0] ?? ''),
     );
     expect(mismatched).toStrictEqual([]);
-  });
-
-  test('marks unavailable commands as doing nothing', ({ expect }) => {
-    const unavailable = commandRegistry.filter((entry) => !entry.available);
-    expect(unavailable.map((command) => command.run.kind)).toStrictEqual(
-      unavailable.map(() => 'none'),
-    );
   });
 
   test('has an entry for every chat command the parser knows', ({ expect }) => {
@@ -84,31 +109,4 @@ describe('commandRegistry', () => {
       .filter((name) => name !== undefined);
     expect(registered.filter((name) => !parsed.has(name))).toStrictEqual([]);
   });
-
-  test('has a runnable entry for every diff stream key', ({ expect }) => {
-    const diffKeys = [
-      'j',
-      'k',
-      'p',
-      'Shift+p',
-      'r',
-      'Esc',
-      'm',
-      'e',
-      'i',
-      's',
-      'w',
-      'o',
-      'v',
-      'Space',
-    ];
-    const listed = commandRegistry
-      .filter((command) => command.scope === 'Diff' && command.run.kind === 'zone-key')
-      .flatMap((command) => command.keys);
-    expect(listed.toSorted(byName)).toStrictEqual(diffKeys.toSorted(byName));
-  });
 });
-
-function byName(left: string, right: string): number {
-  return left.localeCompare(right);
-}

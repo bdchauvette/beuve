@@ -1,11 +1,16 @@
-import { css, html, LitElement, nothing } from 'lit';
+import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { displayKey } from './display-key.ts';
-import { keybindings } from './keybindings.ts';
+import { commandCatalog } from '#contract/command-catalog.ts';
 
-/** Modal list of the spec 5A keys, opened with `?`. Closing is handled by `beuve-app`. */
+import { keyPlatformOf } from './key-platform-of.ts';
+import { shortcutSectionsFor } from './shortcut-sections-for.ts';
+
+/**
+ * Help ▸ Keyboard Shortcuts (ADR 0068): every key of the catalog, grouped by menu and then by
+ * the place it works in. Esc or × emits `beuve-shortcuts-close`.
+ */
 @customElement('beuve-keybinding-overlay')
 export class BeuveKeybindingOverlay extends LitElement {
   static override styles = css`
@@ -19,7 +24,7 @@ export class BeuveKeybindingOverlay extends LitElement {
     }
 
     .panel {
-      width: min(460px, calc(100vw - 48px));
+      width: min(520px, calc(100vw - 48px));
       max-height: calc(100vh - 48px);
       overflow: auto;
       box-sizing: border-box;
@@ -30,10 +35,37 @@ export class BeuveKeybindingOverlay extends LitElement {
       box-shadow: 0 12px 40px #0000004d;
     }
 
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--beuve-space-2);
+    }
+
     h1 {
-      margin: 0 0 var(--beuve-space-3);
+      margin: 0;
       font-size: 15px;
       font-weight: 600;
+    }
+
+    h2 {
+      margin: var(--beuve-space-3) 0 var(--beuve-space-1);
+      font: var(--beuve-font-small);
+      font-weight: 600;
+      color: var(--beuve-text-muted);
+    }
+
+    .close {
+      padding: 0 var(--beuve-space-2);
+      border: none;
+      background: none;
+      color: var(--beuve-text-muted);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .panel:focus {
+      outline: none;
     }
 
     table {
@@ -45,18 +77,9 @@ export class BeuveKeybindingOverlay extends LitElement {
       padding: var(--beuve-space-1) 0;
     }
 
-    td:first-child {
-      width: 120px;
-    }
-
-    .soon td {
-      color: var(--beuve-text-muted);
-    }
-
-    .badge {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
+    td.keys {
       text-align: right;
+      white-space: nowrap;
     }
 
     kbd {
@@ -73,52 +96,73 @@ export class BeuveKeybindingOverlay extends LitElement {
       text-align: center;
       color: var(--beuve-text);
     }
-
-    footer {
-      margin-top: var(--beuve-space-3);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
   `;
 
-  /** The name of the editor `o` opens, e.g. “Zed”; absent while unknown. */
-  @property() accessor editorName = '';
-  /** How diffs are shown now, e.g. “Split · whitespace hidden”. */
-  @property() accessor displayName = '';
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.close();
+  };
+
+  private readonly close = (): void => {
+    this.dispatchEvent(new CustomEvent('beuve-shortcuts-close', { bubbles: true, composed: true }));
+  };
+
   /** `process.platform`, for writing shortcuts the platform's way. */
   @property() accessor platform = '';
 
+  override connectedCallback(): void {
+    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
+    super.connectedCallback();
+    this.addEventListener('keydown', this.onKeyDown);
+  }
+
+  override disconnectedCallback(): void {
+    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
+    super.disconnectedCallback();
+    this.removeEventListener('keydown', this.onKeyDown);
+  }
+
   override render(): TemplateResult {
+    const sections = shortcutSectionsFor(commandCatalog, keyPlatformOf(this.platform));
     return html`
-      <div class="panel" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-        <h1>Keyboard shortcuts</h1>
-        <table>
-          ${keybindings.map(
-            (binding) => html`
-              <tr class=${binding.available ? '' : 'soon'}>
-                <td>
-                  ${binding.keys.map((key) => html`<kbd>${displayKey(key, this.platform)}</kbd>`)}
-                </td>
-                <td>${binding.action}</td>
-                <td class="badge">${binding.scope === 'Anywhere' ? '' : binding.scope}</td>
-                <td class="badge">${binding.available ? '' : 'coming soon'}</td>
-              </tr>
-            `,
-          )}
-        </table>
-        <footer>
-          Editor for <kbd>o</kbd>: ${this.editorName === '' ? 'first one found' : this.editorName} ·
-          change with <code>/editor zed|vscode|cursor</code> in the chat
-        </footer>
-        ${
-          this.displayName === ''
-            ? nothing
-            : html`<footer>
-                Diffs: ${this.displayName} · <code>/diff split|inline</code>,
-                <code>/whitespace ignore|show</code>
-              </footer>`
-        }
-        <footer><kbd>Esc</kbd> or <kbd>?</kbd> closes</footer>
+      <div
+        class="panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard Shortcuts"
+        tabindex="-1"
+      >
+        <header>
+          <h1>Keyboard Shortcuts</h1>
+          <button
+            type="button"
+            class="close"
+            title="Close (Esc)"
+            aria-label="Close"
+            @click=${this.close}
+          >
+            ×
+          </button>
+        </header>
+        ${sections.map(
+          (section) => html`
+            <h2>${section.title}</h2>
+            <table>
+              ${section.rows.map(
+                (row) => html`
+                  <tr>
+                    <td>${row.title}</td>
+                    <td class="keys">${row.keys.map((key) => html`<kbd>${key}</kbd>`)}</td>
+                  </tr>
+                `,
+              )}
+            </table>
+          `,
+        )}
       </div>
     `;
   }

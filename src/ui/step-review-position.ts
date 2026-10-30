@@ -1,5 +1,5 @@
 /**
- * Where `j`/`k` are in the diff stream: a file, and a hunk of it, or `-1` for the file's header
+ * Where Next/Previous Change are in the diff stream: a file, and a hunk of it, or `-1` for the file's header
  * (where a click or a tree selection lands).
  */
 export interface ReviewPosition {
@@ -8,7 +8,7 @@ export interface ReviewPosition {
 }
 
 /**
- * One `j` (`step` 1) or `k` (-1) through every hunk of every file in stream order, given each
+ * One Next Change (`step` 1) or Previous Change (-1) through every hunk of every file in stream order, given each
  * file's hunk count. A file without hunks (a binary or pure rename) is one stop at its header.
  * Stops at either end; an out-of-range position is clamped first.
  */

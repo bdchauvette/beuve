@@ -1,23 +1,30 @@
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, clipboard, dialog, ipcMain, session } from 'electron';
+import { BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
 import type { App } from 'electron';
 
 import type { Logger } from '#x/log/create-logger.ts';
 
+import type { CommandId } from '#contract/command-catalog.ts';
 import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
+import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 
 import { createIpcHandlers } from './ipc/create-ipc-handlers.ts';
 import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';
 import { sendEvent } from './ipc/send-event.ts';
+import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
 import type { MainServices } from './main-services.ts';
 import { launchMcpServer } from './mcp/launch-mcp-server.ts';
+import { createAppMenus } from './menu/create-app-menus.ts';
 import { createMainWindow } from './window/create-main-window.ts';
+import { createSettingsWindow } from './window/create-settings-window.ts';
 import { createSheetWindows } from './window/create-sheet-windows.ts';
 import { hardenSession } from './window/harden-session.ts';
 import { hardenWebContents } from './window/harden-web-contents.ts';
+
+const projectUrl = 'https://github.com/bdchauvette/beuve';
 
 export interface StartAppOptions {
   readonly services: MainServices;
@@ -26,14 +33,17 @@ export interface StartAppOptions {
   /** The sheet page and its preload (ADR 0067). */
   readonly sheetPreloadPath: string;
   readonly sheetHtmlPath: string;
+  /** The Settings window's page and preload (ADR 0068). */
+  readonly settingsPreloadPath: string;
+  readonly settingsHtmlPath: string;
   readonly mcpPort: number;
   readonly logger: Logger;
 }
 
 /**
  * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC,
- * review progress, chat, URA and GitHub events, the clipboard, the main window (whose focus sets
- * the GitHub polling pace) and the MCP server; preliminary reviews are aborted and language
+ * review progress, chat, URA and GitHub events, the clipboard, the menus (ADR 0068), the main
+ * window (whose focus sets the GitHub polling pace), sheets, Settings and the MCP server; preliminary reviews are aborted and language
  * servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
  * level (see CLAUDE.md).
  */
@@ -46,8 +56,52 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       sendEvent(window.webContents, 'mcp:status', status);
     }
   };
+  const handleMainCommand = (id: CommandId): void => {
+    switch (id) {
+      case 'settings': {
+        settingsWindow.open();
+        return;
+      }
+      case 'about': {
+        app.showAboutPanel();
+        return;
+      }
+      case 'close-all-sheets': {
+        sheets.closeAll();
+        return;
+      }
+      case 'github-home': {
+        void shell.openExternal(projectUrl);
+        return;
+      }
+      default: {
+        logger.warn('not a main-process command', { id });
+      }
+    }
+  };
+  const menus = createAppMenus({
+    platform: process.platform === 'darwin' ? 'mac' : 'linux',
+    isPackaged: app.isPackaged,
+    runMain: handleMainCommand,
+    logger,
+  });
+  const sheets = createSheetWindows({
+    preloadPath: options.sheetPreloadPath,
+    sheetHtmlPath: options.sheetHtmlPath,
+    onCreated: (window) => {
+      menus.track(window, 'sheet');
+    },
+  });
+  const settingsWindow = createSettingsWindow({
+    preloadPath: options.settingsPreloadPath,
+    settingsHtmlPath: options.settingsHtmlPath,
+    onCreated: (window) => {
+      menus.track(window, 'settings');
+    },
+  });
   const openWindow = (): void => {
     const window = createMainWindow(options);
+    menus.track(window, 'main');
     window.webContents.on('did-finish-load', () => {
       sendEvent(window.webContents, 'mcp:status', mcpStatus);
     });
@@ -115,21 +169,20 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       return chosen.canceled ? undefined : chosen.filePaths[0];
     },
   };
-  const sheets = createSheetWindows({
-    preloadPath: options.sheetPreloadPath,
-    sheetHtmlPath: options.sheetHtmlPath,
+  const handlers = createIpcHandlers(services, readAppInfo(app), {
+    ...platform,
+    openSheet: sheets.open,
+    menus,
   });
-  registerIpcHandlers(
-    ipcMain,
-    createIpcHandlers(services, readAppInfo(app), { ...platform, openSheet: sheets.open }),
-    {
-      pages: [
-        { url: pathToFileURL(options.indexHtmlPath).href, channels: 'all' },
-        { url: pathToFileURL(options.sheetHtmlPath).href, channels: sheetInvokeChannels },
-      ],
-      logger,
-    },
-  );
+
+  registerIpcHandlers(ipcMain, withSettingsBroadcast(handlers, announceSettingsChanged), {
+    pages: [
+      { url: pathToFileURL(options.indexHtmlPath).href, channels: 'all' },
+      { url: pathToFileURL(options.sheetHtmlPath).href, channels: sheetInvokeChannels },
+      { url: pathToFileURL(options.settingsHtmlPath).href, channels: settingsInvokeChannels },
+    ],
+    logger,
+  });
 
   openWindow();
   app.on('activate', () => {
@@ -157,10 +210,19 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   });
 }
 
-/** Sheets alone don't count as the app being open: the dock icon brings the main window back. */
+/** Sheets and Settings alone don't count as the app being open: the dock icon brings the main window back. */
 function isMainWindow(window: BrowserWindow, options: StartAppOptions): boolean {
   const url = window.webContents.getURL();
   return url === '' || url.startsWith(pathToFileURL(options.indexHtmlPath).href);
+}
+
+/** `settings:changed` to every window but the one that made the change. */
+function announceSettingsChanged(sender: { readonly webContentsId: number } | undefined): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.webContents.id !== sender?.webContentsId) {
+      sendEvent(window.webContents, 'settings:changed', {});
+    }
+  }
 }
 
 function readAppInfo(app: App): AppInfo {

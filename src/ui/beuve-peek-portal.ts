@@ -23,6 +23,21 @@ export class BeuvePeekPortal extends LitElement {
       font: var(--beuve-font-small);
     }
 
+    .close,
+    .again {
+      padding: 0 var(--beuve-space-1);
+      border: none;
+      background: none;
+      color: var(--beuve-text-muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .close {
+      font-size: 15px;
+      line-height: 1;
+    }
+
     .heading {
       display: flex;
       align-items: baseline;
@@ -285,7 +300,19 @@ export class BeuvePeekPortal extends LitElement {
       <div class="heading" role="heading" aria-level="3">
         <span>Callers of ${target}</span>
         <span class="spacer"></span>
-        <span><kbd>Esc</kbd> closes</span>
+        <button
+          type="button"
+          class="close"
+          title="Close (Esc)"
+          aria-label="Close"
+          @click=${(): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-peek-close', { bubbles: true, composed: true }),
+            );
+          }}
+        >
+          ×
+        </button>
       </div>
       ${this.renderBody(peek)}
     `;

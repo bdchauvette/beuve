@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 
-import type { TraceTrustView } from '#contract/ipc-contract.ts';
+import type { TraceTrustEntryView, TraceTrustView } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 
@@ -12,6 +12,10 @@ export interface TraceTrust {
   readonly status: (repository: GitRepository) => Promise<TraceTrustView>;
   readonly grant: (repository: GitRepository) => Promise<TraceTrustView>;
   readonly revoke: (repository: GitRepository) => Promise<TraceTrustView>;
+  /** Every stored approval, by repository path (the Settings window, ADR 0068). */
+  readonly list: () => Promise<readonly TraceTrustEntryView[]>;
+  /** Withdraws the approval stored under `repositoryPath`, whether or not the folder still exists. */
+  readonly remove: (repositoryPath: string) => Promise<readonly TraceTrustEntryView[]>;
 }
 
 export interface TraceTrustOptions {
@@ -84,7 +88,27 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
     });
   };
 
+  const list = async (): Promise<readonly TraceTrustEntryView[]> => {
+    const settings =
+      settingsPath === undefined
+        ? { [settingsKey]: Object.fromEntries(remembered) }
+        : await readSettingsFile(settingsPath);
+    const stored = settings[settingsKey];
+    const entries = Object.entries(typeof stored === 'object' && stored !== null ? stored : {});
+    return entries
+      .flatMap(([repositoryPath, value]): TraceTrustEntryView[] => {
+        const approval = approvalFrom(value);
+        return approval === undefined ? [] : [{ repositoryPath, ...approval }];
+      })
+      .toSorted((left, right) => left.repositoryPath.localeCompare(right.repositoryPath));
+  };
+
   return {
+    list,
+    remove: async (repositoryPath): Promise<readonly TraceTrustEntryView[]> => {
+      await write(repositoryPath, undefined);
+      return list();
+    },
     status: view,
     grant: async (repository): Promise<TraceTrustView> => {
       const { key, remoteUrl } = await identify(repository);

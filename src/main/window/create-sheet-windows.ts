@@ -9,18 +9,22 @@ export interface SheetWindowsOptions {
   /** The sheet preload, which exposes only the sheet channels (ADR 0067). */
   readonly preloadPath: string;
   readonly sheetHtmlPath: string;
+  /** Called with each new sheet, so main can give it its menu (ADR 0068). */
+  readonly onCreated: (window: BrowserWindow) => void;
 }
 
 /** Opens sheet windows: read-only snapshots of one file at one commit (ADR 0067). */
 export interface SheetWindows {
   readonly open: (request: OpenSheetRequest) => void;
+  /** Closes every open sheet (File ▸ Close All Sheets). */
+  readonly closeAll: () => void;
 }
 
 /**
  * Every `open` makes a new small window; sheets are never reused or refreshed, and there is no
  * limit. Each has the main window's ADR 0005 baseline (isolated, sandboxed, no Node, web security
  * on); navigation and popups are denied app-wide by `hardenWebContents`, the CSP is the `<meta>`
- * tag of `src/ui/sheet.html`, and its preload exposes only the sheet channels, which main also
+ * tag of `src/ui/sheet.html`, its menu bar hides until Alt on Linux (ADR 0068), and its preload exposes only the sheet channels, which main also
  * enforces per page. The request travels in the page's query string, so the page reads its
  * snapshot on load. The size and place the reviewer last gave a session's sheet are remembered
  * in memory for that session's next sheet.
@@ -61,9 +65,8 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
           spellcheck: false,
         },
       });
-      // A sheet is a page, not an app: no menu bar on Linux and Windows (macOS menus are app-wide).
-      window.removeMenu();
       siblings.add(window);
+      options.onCreated(window);
       const remember = (): void => {
         if (!window.isDestroyed() && !window.isMinimized() && !window.isFullScreen()) {
           remembered.set(request.sessionId, window.getBounds());
@@ -78,6 +81,12 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
         window.show();
       });
       void window.loadFile(options.sheetHtmlPath, { query: queryFrom(request) });
+    },
+    closeAll: (): void => {
+      const windows = Array.from(open.values(), (siblings) => [...siblings]).flat();
+      for (const window of windows) {
+        window.close();
+      }
     },
   };
 }

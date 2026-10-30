@@ -23,7 +23,7 @@ const trailingSlash = /\/$/u;
  * The radar tree in Zone 1 (spec section 4, ADR 0026): a `@pierre/trees` view of the repository at
  * the session head that opens the packages a change touches down to its files, marks changed
  * files with their git status, and puts ImpactGate percentiles and finding counts on changed
- * files and their packages, with a `✓` on files marked reviewed (ADR 0064). `mode` is neighborhood or diff-only (`f`). Arrow keys move through
+ * files and their packages, with a `✓` on files marked reviewed (ADR 0064). `mode` is neighborhood or diff-only (View ▸ Changed Files Only). Arrow keys move through
  * the rows; selecting a file (click, Enter or Space) emits `beuve-tree-select` with `{ path }`
  * when that file is part of the review.
  */
@@ -147,7 +147,7 @@ export class BeuveRadarTree extends LitElement {
     this.fileTree?.focusPath(first.path);
   }
 
-  /** The file whose row has keyboard focus, for ⌘> (ADR 0046); `undefined` on a folder. */
+  /** The file whose row has keyboard focus, for Add to Chat (ADR 0046); `undefined` on a folder. */
   focusedPath(): string | undefined {
     const path = this.fileTree?.getFocusedPath() ?? undefined;
     return path === undefined || path.endsWith('/') ? undefined : path;

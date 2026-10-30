@@ -3,7 +3,7 @@ import type { ReviewPosition } from './step-review-position.ts';
 
 /**
  * {@link stepReviewPosition}, passing over the files `skipped` marks (reviewed files, when the
- * reviewer asked `j`/`k` to skip them, ADR 0064). When every stop that way is skipped, the
+ * reviewer asked Next/Previous Change to skip them, ADR 0064). When every stop that way is skipped, the
  * position stays where it was. Pure.
  */
 export function stepReviewPositionSkipping(

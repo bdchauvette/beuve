@@ -421,6 +421,80 @@ describe('createIpcHandlers for trace probes', () => {
   });
 });
 
+describe('createIpcHandlers for menus and the Settings window', () => {
+  test('validates menu:set-state and passes it on with its sender', ({ expect }) => {
+    const states: unknown[] = [];
+    const handlers = createIpcHandlers(stubServices({}), appInfo(), {
+      menus: {
+        setState: (webContentsId, state): void => {
+          states.push({ webContentsId, state });
+        },
+        popup: () => true,
+        runMainCommand: (_webContentsId, id) => id === 'settings',
+      },
+    });
+    const sender = { webContentsId: 3 };
+    for (const bad of [
+      undefined,
+      { conditions: ['session'] },
+      { conditions: ['sudo'], checked: [] },
+      { conditions: [], checked: ['rm-rf'] },
+      { conditions: [], checked: [], extra: 1 },
+      { conditions: 'session '.repeat(40).trim().split(' '), checked: [] },
+    ]) {
+      expect(handlers['menu:set-state'](bad, sender)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-request' },
+      });
+    }
+    const good = { conditions: ['session', 'text-focus'], checked: ['whitespace'] };
+    expect(handlers['menu:set-state'](good, sender)).toStrictEqual(ok({ applied: true }));
+    expect(states).toStrictEqual([{ webContentsId: 3, state: good }]);
+    expect(handlers['menu:context']({ kind: 'line', x: 4.5, y: 9 }, sender)).toStrictEqual(
+      ok({ shown: true }),
+    );
+    expect(handlers['menu:context']({ kind: 'window' }, sender)).toMatchObject({ ok: false });
+    expect(handlers['menu:run-main']({ id: 'settings' }, sender)).toStrictEqual(ok({ ran: true }));
+    expect(handlers['menu:run-main']({ id: 'stage' }, sender)).toMatchObject({
+      ok: false,
+      error: { code: 'refused' },
+    });
+  });
+
+  test('answers not-wired for menus outside Electron', ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    expect(
+      handlers['menu:set-state']({ conditions: [], checked: [] }, { webContentsId: 1 }),
+    ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+
+  test('validates trace:remove-trust and the read-only settings channels', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        trace: {
+          ...stubServices({}).trace,
+          removeTrust: async (request) => {
+            calls.push(request);
+            await Promise.resolve();
+            return ok([]);
+          },
+        },
+      },
+      appInfo(),
+    );
+    await expectInvalid(expect, handlers['trace:remove-trust']({ repositoryPath: '' }));
+    await expectInvalid(expect, handlers['trace:remove-trust']({}));
+    await expectInvalid(expect, handlers['trace:list-trust']({ all: true }));
+    await expectInvalid(expect, handlers['claude:status']({ probe: true }));
+    await expect(
+      handlers['trace:remove-trust']({ repositoryPath: '/repo' }),
+    ).resolves.toStrictEqual(ok([]));
+    expect(calls).toStrictEqual([{ repositoryPath: '/repo' }]);
+  });
+});
+
 describe('createIpcHandlers for the chat', () => {
   const mention = {
     path: 'src/discounts.ts',
@@ -928,6 +1002,8 @@ function stubServices(
       cancel: notWiredError,
       getTrust: notWired,
       setTrust: notWired,
+      listTrust: notWired,
+      removeTrust: notWired,
       onStatus: () => doNothingSync,
       dispose: doNothing,
     },
@@ -945,6 +1021,7 @@ function stubServices(
       dispose: doNothingSync,
       ...github,
     },
+    claude: { status: notWired },
     mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,
     dispose: doNothing,

@@ -11,9 +11,9 @@ export interface FindQueryDetail {
 }
 
 /**
- * The "Find in review" bar (⌘F / Ctrl+F, ADR 0051) above the diff stream: a query, the hit count
- * and arrows. Enter and Shift+Enter (or F3, ↓/↑) step through the hits, Alt+C toggles case and
- * Escape closes. Keys typed here never reach the stream's shortcuts. Emits `beuve-find-query`,
+ * The "Find in review" bar (Edit ▸ Find, ADR 0051) above the diff stream: a query, the hit count
+ * and arrows. Enter and Shift+Enter (or F3, ↓/↑) step through the hits and Escape closes; Find
+ * Next, Find Previous and Match Case come from the menu (ADR 0068). Emits `beuve-find-query`,
  * `beuve-find-step` (`{ step: 1 | -1 }`) and `beuve-find-close`; the stream searches the review
  * data and reveals each hit.
  */
@@ -71,10 +71,8 @@ export class BeuveFindBar extends LitElement {
       color: var(--beuve-accent);
     }
 
-    .hint {
+    .spacer {
       flex: 1;
-      text-align: right;
-      color: var(--beuve-text-muted);
     }
   `;
 
@@ -85,17 +83,12 @@ export class BeuveFindBar extends LitElement {
       this.emit('beuve-find-close');
       return;
     }
-    if (stepKeys.has(event.key)) {
-      event.preventDefault();
-      const isBack = event.shiftKey || event.key === 'ArrowUp';
-      this.emit('beuve-find-step', { step: isBack ? -1 : 1 });
-      return;
-    }
-    if (!event.altKey || event.code !== 'KeyC') {
+    if (!stepKeys.has(event.key) || event.altKey || event.ctrlKey || event.metaKey) {
       return;
     }
     event.preventDefault();
-    this.emitQuery(this.query, !this.isCaseSensitive);
+    const isBack = event.shiftKey || event.key === 'ArrowUp';
+    this.emit('beuve-find-step', { step: isBack ? -1 : 1 });
   };
 
   @property() accessor query = '';
@@ -104,6 +97,12 @@ export class BeuveFindBar extends LitElement {
   @property({ type: Number }) accessor count = 0;
   @property({ type: Number }) accessor current = -1;
   @property({ type: Boolean }) accessor isCapped = false;
+  /** Tooltip shortcuts for Find Next, Find Previous and Match Case, as the platform writes them. */
+  @property({ attribute: false }) accessor shortcuts: {
+    readonly next: string;
+    readonly previous: string;
+    readonly matchCase: string;
+  } = { next: '', previous: '', matchCase: '' };
 
   private emit(name: string, detail?: unknown): void {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
@@ -136,8 +135,8 @@ export class BeuveFindBar extends LitElement {
     const label = this.describeCount();
     return html`<input
         type="search"
-        aria-label="Find in review"
-        placeholder="Find in review"
+        aria-label="Find in all files"
+        placeholder="Find in all files"
         spellcheck="false"
         .value=${this.query}
         @input=${(event: Event): void => {
@@ -150,7 +149,7 @@ export class BeuveFindBar extends LitElement {
       >
       <button
         type="button"
-        title="Previous (Shift+Enter)"
+        title=${withKey('Previous', this.shortcuts.previous)}
         aria-label="Previous match"
         @click=${(): void => {
           this.emit('beuve-find-step', { step: -1 });
@@ -160,7 +159,7 @@ export class BeuveFindBar extends LitElement {
       </button>
       <button
         type="button"
-        title="Next (Enter)"
+        title=${withKey('Next', this.shortcuts.next)}
         aria-label="Next match"
         @click=${(): void => {
           this.emit('beuve-find-step', { step: 1 });
@@ -170,7 +169,7 @@ export class BeuveFindBar extends LitElement {
       </button>
       <button
         type="button"
-        title="Match case (Alt+C)"
+        title=${withKey('Match Case', this.shortcuts.matchCase)}
         aria-pressed=${this.isCaseSensitive ? 'true' : 'false'}
         @click=${(): void => {
           this.emitQuery(this.query, !this.isCaseSensitive);
@@ -178,7 +177,7 @@ export class BeuveFindBar extends LitElement {
       >
         Aa
       </button>
-      <span class="hint">Searches every file’s diff, collapsed ones too · Esc closes</span>
+      <span class="spacer"></span>
       <button
         type="button"
         aria-label="Close find"
@@ -190,6 +189,10 @@ export class BeuveFindBar extends LitElement {
         ×
       </button>`;
   }
+}
+
+function withKey(label: string, key: string): string {
+  return key === '' ? label : `${label} (${key})`;
 }
 
 declare global {

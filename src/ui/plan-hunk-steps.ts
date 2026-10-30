@@ -9,7 +9,7 @@ export interface HunkShape {
 }
 
 /**
- * Where `j`/`k` land in one hunk: its first run of changes, on the side the run starts on (removed
+ * Where Next/Previous Change land in one hunk: its first run of changes, on the side the run starts on (removed
  * lines come first in a unified diff), as the inclusive line range to select and reveal.
  */
 export interface HunkStep {

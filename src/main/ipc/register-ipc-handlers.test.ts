@@ -3,6 +3,7 @@ import { describe } from 'vitest';
 
 import { invokeChannels } from '#contract/invoke-channels.ts';
 import type { InvokeChannel } from '#contract/ipc-contract.ts';
+import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 import { ok } from '#x/result/ok.ts';
 
@@ -26,7 +27,11 @@ function fakeIpcMain(registered: Map<string, Registered>): IpcMain {
 
 function handlersAnsweringOk(): IpcHandlers {
   return Object.fromEntries(
-    invokeChannels.map((channel) => [channel, (): unknown => ok(channel)]),
+    invokeChannels.map((channel) => [
+      channel,
+      (_request: unknown, sender?: { readonly webContentsId: number }): unknown =>
+        channel === 'menu:set-state' ? ok(sender) : ok(channel),
+    ]),
   ) as unknown as IpcHandlers;
 }
 
@@ -34,6 +39,7 @@ function eventFrom(url: string, isTopLevel = true): IpcMainInvokeEvent {
   return {
     // eslint-disable-next-line unicorn/no-null -- Electron marks a top-level frame with a null parent.
     senderFrame: { url, parent: isTopLevel ? null : {} },
+    sender: { id: 7 },
   } as unknown as IpcMainInvokeEvent;
 }
 
@@ -65,5 +71,31 @@ describe('registerIpcHandlers', () => {
     await expect(call('file:///elsewhere/sheet.html', 'sheet:get-file')).resolves.toStrictEqual(
       refused,
     );
+  });
+
+  test('lets the Settings window call only its channels, and names the sender', async ({
+    expect,
+    logger,
+  }) => {
+    const registered = new Map<string, Registered>();
+    const settings = 'file:///app/dist/ui/settings.html';
+    registerIpcHandlers(fakeIpcMain(registered), handlersAnsweringOk(), {
+      pages: [{ url: settings, channels: settingsInvokeChannels }],
+      logger: logger.logger,
+    });
+    const call = async (channel: InvokeChannel): Promise<unknown> =>
+      registered.get(channel)?.(eventFrom(settings), undefined);
+    const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
+    await expect(call('display:set')).resolves.toStrictEqual(ok('display:set'));
+    await expect(call('trace:remove-trust')).resolves.toStrictEqual(ok('trace:remove-trust'));
+    await expect(call('menu:set-state')).resolves.toStrictEqual(ok({ webContentsId: 7 }));
+    for (const channel of [
+      'session:get-review',
+      'ura:create',
+      'editor:open',
+      'menu:run-main',
+    ] as const) {
+      await expect(call(channel)).resolves.toStrictEqual(refused);
+    }
   });
 });

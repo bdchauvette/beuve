@@ -6,7 +6,7 @@ export interface StatusNotice {
   readonly text: string;
 }
 
-/** What the status bar says after `o`; a beuve checkout is called out as not the reviewer's own. */
+/** What the status bar says after Open in Editor; a beuve checkout is called out as not the reviewer's own. */
 export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {
   if (response.kind === 'failed') {
     return { tone: 'error', text: response.message };

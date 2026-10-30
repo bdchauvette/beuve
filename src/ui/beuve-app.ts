@@ -57,6 +57,7 @@ import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveCommandPalette } from './beuve-command-palette.ts';
 import type { BeuveDiffStream } from './beuve-diff-stream.ts';
+import type { BeuveSheetView } from './beuve-sheet-view.ts';
 import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
 import type { BeuveUraDock } from './beuve-ura-dock.ts';
 import type { MentionTarget } from './chat-draft.ts';
@@ -66,18 +67,21 @@ import type {
   OpenFailure,
   RepositoryInspector,
 } from './beuve-open-panel.ts';
+import type { CommandId } from '#contract/command-catalog.ts';
+
 import { commandRegistry } from './command-registry.ts';
-import type { AppAction, CommandDefinition } from './command-registry.ts';
+import type { CommandDefinition } from './command-registry.ts';
+import { shortcutOf } from './shortcut-of.ts';
+import { keyPlatformOf } from './key-platform-of.ts';
+import { menuStateFrom } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import type { ChatEntry, ChatTranscript, LocalChatEntry } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
-import { currentEditorName } from './current-editor-name.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
-import { displayKey } from './display-key.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
@@ -325,10 +329,6 @@ export class BeuveApp extends LitElement {
   private jumpNonce = 0;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
 
-  private readonly onKeyDown = (event: KeyboardEvent): void => {
-    this.handleKey(event);
-  };
-
   private readonly onFocusIn = (event: FocusEvent): void => {
     const zone = event
       .composedPath()
@@ -336,7 +336,35 @@ export class BeuveApp extends LitElement {
     if (zone instanceof HTMLElement) {
       this.focusedZone = zone.dataset['zone'] as ZoneId;
     }
+    this.scheduleMenuSync();
   };
+
+  private readonly onFocusOut = (): void => {
+    this.scheduleMenuSync();
+  };
+
+  /** A right-click: the context menu of what it landed on, built by main from the catalog. */
+  private readonly onContextMenu = (event: MouseEvent): void => {
+    const kind = this.contextKindAt(event);
+    if (kind === undefined) {
+      return;
+    }
+    event.preventDefault();
+    this.scheduleMenuSync();
+    void this.updateComplete.then(async () => {
+      this.syncMenuState();
+      await beuveBridge()?.invoke('menu:context', {
+        kind,
+        x: event.clientX,
+        y: event.clientY,
+      });
+    });
+  };
+
+  /** The chat answer a context menu was opened on, for Stage Answer as a Note. */
+  private contextAnswerId: string | undefined;
+  private isMenuSyncPending = false;
+  private lastMenuState = '';
 
   private readonly onOpenRepository = (event: CustomEvent<CreateLocalSessionRequest>): void => {
     void this.openRepository(event.detail);
@@ -457,11 +485,6 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
-  /** Tab typed in the chat input (the shell ignores keys typed in inputs). */
-  private readonly onChatCycle = (event: CustomEvent<{ step: 1 | -1 }>): void => {
-    this.focusedZone = cycleZone(this.zoneOrder(), 'chat', event.detail.step);
-  };
-
   private readonly onChatCancel = (event: CustomEvent<{ messageId: string }>): void => {
     void beuveBridge()?.invoke('chat:cancel', { messageId: event.detail.messageId });
   };
@@ -507,7 +530,7 @@ export class BeuveApp extends LitElement {
     void this.openInEditor(event.detail.path, event.detail.line);
   };
 
-  /** `v` in the stream: mark the file reviewed or take the mark back (ADR 0064). */
+  /** File Reviewed in the stream: mark the file reviewed or take the mark back (ADR 0064). */
   private readonly onFileReviewed = (
     event: CustomEvent<{ path: string; reviewed: boolean }>,
   ): void => {
@@ -516,6 +539,7 @@ export class BeuveApp extends LitElement {
 
   private readonly onActiveFile = (event: CustomEvent<{ path: string | undefined }>): void => {
     this.activePath = event.detail.path;
+    this.scheduleMenuSync();
   };
 
   /** Sessions whose chat already suggested /compact in this window. */
@@ -526,6 +550,10 @@ export class BeuveApp extends LitElement {
 
   private readonly onDiffRendered = (): void => {
     this.releaseImpact?.();
+  };
+
+  private readonly onTreeMode = (event: CustomEvent<{ mode: RadarTreeMode }>): void => {
+    this.treeMode = event.detail.mode;
   };
 
   private readonly onTreeSelect = (event: CustomEvent<{ path: string }>): void => {
@@ -573,7 +601,7 @@ export class BeuveApp extends LitElement {
     void this.uraCall(async (bridge) => bridge.invoke('ura:update', event.detail));
   };
 
-  /** The dock's "Edit suggestion": the stream opens `e` on the item's lines (ADR 0043). */
+  /** The dock's "Edit suggestion": the stream opens Suggest Edit on the item's lines (ADR 0043). */
   private readonly onUraEditSuggestion = (event: CustomEvent<{ itemId: string }>): void => {
     this.jumpNonce += 1;
     this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
@@ -584,7 +612,7 @@ export class BeuveApp extends LitElement {
     this.showNotice(event.detail);
   };
 
-  /** `s`/`w` in the stream: store the preference, and refetch the diff if whitespace changed. */
+  /** A display change from the stream: store it, and refetch the diff if whitespace changed. */
   private readonly onDisplayChange = (event: CustomEvent<SetDiffDisplayRequest>): void => {
     void this.setDisplay(event.detail);
   };
@@ -667,6 +695,11 @@ export class BeuveApp extends LitElement {
     this.closeOpenDialog();
   };
 
+  private readonly onShortcutsClose = (): void => {
+    this.overlayOpen = false;
+    this.refocusZone();
+  };
+
   private readonly chooseFolder: FolderChooser = async (
     defaultPath: string | undefined,
   ): Promise<string | undefined> => {
@@ -721,6 +754,9 @@ export class BeuveApp extends LitElement {
   @state() accessor reviewLoading = false;
   @state() accessor reviewError = '';
   @state() accessor marking = false;
+  /** The checkpoint Save Progress recorded in this window, for the header's quiet status. */
+  @state() accessor savedProgress:
+    { readonly sessionId: string; readonly sha: string; readonly at: Temporal.Instant } | undefined;
   @state() accessor opening = false;
   @state() accessor localFailure: OpenFailure | undefined;
   @state() accessor chat: ChatTranscript = emptyChatTranscript;
@@ -764,8 +800,9 @@ export class BeuveApp extends LitElement {
   }
 
   private connect(): void {
-    addEventListener('keydown', this.onKeyDown, { capture: true });
     this.addEventListener('focusin', this.onFocusIn);
+    this.addEventListener('focusout', this.onFocusOut);
+    this.addEventListener('contextmenu', this.onContextMenu);
     const bridge = beuveBridge();
     if (bridge === undefined) {
       this.sessionNote = 'Running without the Electron bridge.';
@@ -805,13 +842,20 @@ export class BeuveApp extends LitElement {
           this.ci = ci;
         }
       }),
+      bridge.on('menu:run', ({ id }) => {
+        this.runCommandId(id);
+      }),
+      bridge.on('settings:changed', () => {
+        void this.reloadSettings();
+      }),
     ];
     void this.loadInitialState();
   }
 
   private disconnect(): void {
-    removeEventListener('keydown', this.onKeyDown, { capture: true });
     this.removeEventListener('focusin', this.onFocusIn);
+    this.removeEventListener('focusout', this.onFocusOut);
+    this.removeEventListener('contextmenu', this.onContextMenu);
     for (const unsubscribe of this.unsubscribes) {
       unsubscribe();
     }
@@ -840,6 +884,24 @@ export class BeuveApp extends LitElement {
       this.applyDisplay(display.value);
     }
     await this.loadGithubAuth(undefined);
+  }
+
+  /** `settings:changed`: the Settings window changed a preference; read them again. */
+  private async reloadSettings(): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const [display, editors] = await Promise.all([
+      bridge.invoke('display:get'),
+      bridge.invoke('editor:get-settings'),
+    ]);
+    if (display.ok) {
+      this.applyDisplay(display.value);
+    }
+    if (editors.ok) {
+      this.editorSettings = editors.value;
+    }
   }
 
   /** Who beuve posts to GitHub as; `host` defaults to the open pull request's. */
@@ -996,7 +1058,7 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  /** `o`: opens the head-side file in the reviewer's editor (ADR 0033). */
+  /** Open in Editor: opens the head-side file in the reviewer's editor (ADR 0033). */
   private async openInEditor(path: string, line: number): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
@@ -1065,7 +1127,7 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  /** `/editor [id]`: shows or sets the editor `o` opens. */
+  /** `/editor [id]`: shows or sets the editor Open in Editor opens. */
   private async runEditorCommand(editorId: EditorId | undefined): Promise<void> {
     const bridge = beuveBridge();
     if (bridge === undefined) {
@@ -1219,7 +1281,7 @@ export class BeuveApp extends LitElement {
     this.reviewProgress = review.reviewProgress;
   }
 
-  /** `v`: stores the mark against the head the reviewer sees; a moved head says so. */
+  /** File Reviewed: stores the mark against the head the reviewer sees; a moved head says so. */
   private async setFileReviewed(path: string, isReviewed: boolean): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
@@ -1369,7 +1431,7 @@ export class BeuveApp extends LitElement {
     this.flow = flowStateFrom(path, line, answer);
   }
 
-  /** `r`: runs the tests covering the hunk with tracing; the portal follows `trace:status`. */
+  /** Run Trace Probe: runs the tests covering the hunk with tracing; the portal follows `trace:status`. */
   private async openTrace(path: string, line: number | undefined): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
@@ -1498,9 +1560,9 @@ export class BeuveApp extends LitElement {
       ...(isTrusting
         ? [
             `Trusted ${repositoryPath}.`,
-            'Pressing r on a hunk now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
+            'Run Trace Probe now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
           ]
-        : [`No longer trusting ${repositoryPath}. Pressing r will ask again.`]),
+        : [`No longer trusting ${repositoryPath}. Run Trace Probe will ask again.`]),
     );
     if (!isTrusting) {
       this.closeTrace();
@@ -1559,6 +1621,11 @@ export class BeuveApp extends LitElement {
       this.reviewError = marked.error.message;
       return;
     }
+    this.savedProgress = {
+      sessionId: review.session.id,
+      sha: review.headSha,
+      at: Temporal.Now.instant(),
+    };
     await this.refreshSessions();
     await this.selectSession(review.session.id);
   }
@@ -1894,7 +1961,7 @@ export class BeuveApp extends LitElement {
   }
 
   /**
-   * ⌘> (ADR 0046): what the focused region points at becomes a chip in the chat input. The diff
+   * Add to Chat (ADR 0046): what the focused region points at becomes a chip in the chat input. The diff
    * gives its selection, hunk or file; the dock its item's anchor; the tree its focused file; the
    * palette its highlighted file or note. The chat tab opens with the input focused.
    */
@@ -2176,84 +2243,12 @@ export class BeuveApp extends LitElement {
       : { tone: 'error', text: `Could not copy: ${copied.error.message}` };
   }
 
-  private handleKey(event: KeyboardEvent): void {
-    if (
-      this.handleModifiedKey(event) ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey ||
-      isEditable(event) ||
-      this.paletteText !== undefined ||
-      this.openDialog
-    ) {
+  /** Runs a catalog command `beuve-app` handles itself (ADR 0068). */
+  private runAppCommand(id: CommandId): void {
+    if (this.runSheetCommand(id)) {
       return;
     }
-    if (this.overlayOpen) {
-      if (event.key === 'Escape' || event.key === '?') {
-        event.preventDefault();
-        this.overlayOpen = false;
-      }
-      return;
-    }
-    const sheetKey = sheetKeyActions[event.key];
-    if (sheetKey !== undefined && this.focusedZone === 'diff' && this.review !== undefined) {
-      event.preventDefault();
-      this.runAppAction(sheetKey);
-      return;
-    }
-    const action = plainKeyActions[event.key];
-    if (action === undefined || (action === 'cycle-zone' && event.key !== 'Tab')) {
-      return;
-    }
-    event.preventDefault();
-    if (action === 'cycle-zone') {
-      this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, event.shiftKey ? -1 : 1);
-      return;
-    }
-    this.runAppAction(action);
-  }
-
-  /** ⌘K / ⌘⇧P (palette), ⌘P (files), ⌘O (open), Ctrl on other platforms; work in text fields too. */
-  private handleModifiedKey(event: KeyboardEvent): boolean {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey) {
-      return false;
-    }
-    if (isAddToChatKey(event)) {
-      if (isEditable(event) && this.paletteText === undefined) {
-        return false;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.runAppAction('add-to-chat');
-      return true;
-    }
-    const key = event.key.toLowerCase();
-    const isPaletteOpen = this.paletteText !== undefined;
-    let action: AppAction | 'close' | undefined;
-    if (key === 'k' || (key === 'p' && event.shiftKey)) {
-      action = isPaletteOpen ? 'close' : 'palette';
-    } else if (key === 'p' && !isPaletteOpen && !this.openDialog) {
-      action = 'go-to-file';
-    } else if (key === 'o') {
-      action = 'open';
-    } else if (!isPaletteOpen && key === 'f' && !event.shiftKey && !this.openDialog) {
-      action = 'find';
-    }
-    if (action === undefined) {
-      return false;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    if (action === 'close') {
-      this.closePalette();
-    } else {
-      this.runAppAction(action);
-    }
-    return true;
-  }
-
-  private runAppAction(action: AppAction): void {
-    switch (action) {
+    switch (id) {
       case 'open': {
         this.paletteText = undefined;
         this.showOpenDialog();
@@ -2261,17 +2256,35 @@ export class BeuveApp extends LitElement {
       }
       case 'palette':
       case 'go-to-file': {
+        if (this.paletteText !== undefined) {
+          this.closePalette();
+          return;
+        }
         this.openDialog = false;
         this.overlayOpen = false;
-        this.paletteText = action === 'palette' ? '' : '@';
+        this.paletteText = id === 'palette' ? '' : '@';
         return;
       }
-      case 'cycle-zone': {
-        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, 1);
+      case 'cycle-zone':
+      case 'cycle-zone-back': {
+        this.focusedZone = cycleZone(
+          this.zoneOrder(),
+          this.focusedZone,
+          id === 'cycle-zone' ? 1 : -1,
+        );
+        this.refocusZone();
         return;
       }
       case 'shortcuts': {
-        this.overlayOpen = true;
+        this.overlayOpen = !this.overlayOpen;
+        if (this.overlayOpen) {
+          void this.updateComplete.then(() => {
+            this.renderRoot
+              .querySelector('beuve-keybinding-overlay')
+              ?.shadowRoot?.querySelector<HTMLElement>('.panel')
+              ?.focus();
+          });
+        }
         return;
       }
       case 'chat': {
@@ -2297,6 +2310,11 @@ export class BeuveApp extends LitElement {
         void this.setSidebarSide(this.sidebarSide === 'right' ? 'left' : 'right');
         return;
       }
+      case 'sidebar-left':
+      case 'sidebar-right': {
+        void this.setSidebarSide(id === 'sidebar-left' ? 'left' : 'right');
+        return;
+      }
       case 'sidebar-overview': {
         this.focusSidebar('intent');
         return;
@@ -2312,7 +2330,23 @@ export class BeuveApp extends LitElement {
       case 'find': {
         this.overlayOpen = false;
         this.focusedZone = 'diff';
-        void this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream')?.openFind();
+        void this.stream()?.openFind();
+        return;
+      }
+      case 'find-next':
+      case 'find-previous':
+      case 'find-selection':
+      case 'find-match-case': {
+        this.stream()?.runCommand(id);
+        return;
+      }
+      case 'diff-split':
+      case 'diff-inline': {
+        void this.setDisplay({ layout: id === 'diff-split' ? 'split' : 'unified' });
+        return;
+      }
+      case 'whitespace': {
+        void this.setDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
         return;
       }
       case 'toggle-generated': {
@@ -2330,7 +2364,18 @@ export class BeuveApp extends LitElement {
       case 'order-path':
       case 'order-imports':
       case 'order-calls': {
-        void this.setDisplay({ reviewOrder: orderActions[action] });
+        void this.setDisplay({ reviewOrder: orderActions[id] });
+        return;
+      }
+      case 'sheets-window':
+      case 'sheets-inline': {
+        void this.setDisplay({ sheets: id === 'sheets-window' ? 'window' : 'inline' });
+        return;
+      }
+      case 'editor-zed':
+      case 'editor-vscode':
+      case 'editor-cursor': {
+        void this.setPreferredEditor(editorActions[id]);
         return;
       }
       case 'commit-pairs': {
@@ -2341,14 +2386,223 @@ export class BeuveApp extends LitElement {
       case 'open-type-definition':
       case 'copy-permalink':
       case 'open-permalink': {
-        const target = this.renderRoot
-          .querySelector<BeuveDiffStream>('beuve-diff-stream')
-          ?.target();
+        const target = this.stream()?.target();
         if (target !== undefined) {
-          void this.sheetAction({ kind: sheetActionKinds[action], target });
+          void this.sheetAction({ kind: sheetActionKinds[id], target });
         }
+        return;
+      }
+      case 'toggle-reviewed': {
+        const path = this.treePath();
+        if (path === undefined) {
+          this.stream()?.runCommand(id);
+        } else {
+          void this.setFileReviewed(path, this.reviewMarks.get(path) !== 'yes');
+        }
+        return;
+      }
+      case 'open-in-editor': {
+        this.openInEditorFromFocus();
+        return;
+      }
+      case 'save-progress': {
+        void this.markReviewed();
+        return;
+      }
+      case 'stop': {
+        this.stopRunning();
+        return;
+      }
+      case 'export-agent-xml':
+      case 'export-agent-json':
+      case 'export-github': {
+        void this.exportUra(exportActions[id]);
+        return;
+      }
+      case 'post-review': {
+        this.focusSidebar('ura');
+        void this.previewGithubReview();
+        return;
+      }
+      case 'stage-answer': {
+        const messageId = this.contextAnswerId;
+        if (messageId !== undefined) {
+          void this.stageChatAnswer(messageId);
+        }
+        return;
+      }
+      default: {
+        return;
       }
     }
+  }
+
+  /** Back, Forward, Find and the definition and permalink commands go to a focused inline sheet. */
+  private runSheetCommand(id: CommandId): boolean {
+    return this.focusedSheet()?.runCommand(id) === true;
+  }
+
+  private focusedSheet(): BeuveSheetView | undefined {
+    const sheet = this.renderRoot.querySelector<BeuveSheetView>('beuve-sheet-view') ?? undefined;
+    return sheet?.matches(':focus-within') === true ? sheet : undefined;
+  }
+
+  private stream(): BeuveDiffStream | undefined {
+    return this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream') ?? undefined;
+  }
+
+  /** The file focused in the tree, while the tree has the focus. */
+  private treePath(): string | undefined {
+    return this.focusedZone === 'intent'
+      ? this.renderRoot.querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')?.focusedPath()
+      : undefined;
+  }
+
+  /** Open in Editor: the dock's note, the tree's file or the diff's line, by focus. */
+  private openInEditorFromFocus(): void {
+    if (this.focusedZone === 'ura') {
+      this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.runCommand('open-in-editor');
+      return;
+    }
+    const path = this.treePath();
+    if (path !== undefined) {
+      void this.openInEditor(path, 1);
+      return;
+    }
+    this.stream()?.runCommand('open-in-editor');
+  }
+
+  /** Stop: the running trace probe, else the answer being written. */
+  private stopRunning(): void {
+    if (this.trace?.status === 'loading') {
+      this.closeTrace();
+      return;
+    }
+    const streaming = this.chat.entries.find(
+      (entry) => entry.kind === 'message' && entry.message.status === 'streaming',
+    );
+    if (streaming?.kind === 'message') {
+      void beuveBridge()?.invoke('chat:cancel', { messageId: streaming.message.id });
+    }
+  }
+
+  /** Review ▸ Open With: stores the editor Open in Editor uses. */
+  private async setPreferredEditor(editorId: EditorId): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const result = await bridge.invoke('editor:set-preferred', { editorId });
+    if (result.ok) {
+      this.editorSettings = result.value;
+      this.showNotice({ tone: 'info', text: describeEditorSettings(result.value).join(' ') });
+    } else {
+      this.showNotice({ tone: 'error', text: result.error.message });
+    }
+  }
+
+  /** `menu:run` from main: the menu bar, a shortcut or a context menu chose `id`. */
+  private runCommandId(id: CommandId): void {
+    const command = commandRegistry.find((candidate) => candidate.id === id);
+    if (command !== undefined) {
+      void this.runCommand(command, false);
+    }
+  }
+
+  /** Coalesces menu state updates to one per task. */
+  private scheduleMenuSync(): void {
+    if (this.isMenuSyncPending) {
+      return;
+    }
+    this.isMenuSyncPending = true;
+    queueMicrotask(() => {
+      this.isMenuSyncPending = false;
+      this.syncMenuState();
+    });
+  }
+
+  /** Tells main which menu items apply now (ADR 0068), when that changed. */
+  private syncMenuState(): void {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const dock =
+      this.focusedZone === 'ura'
+        ? this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem()
+        : undefined;
+    const treePath = this.treePath();
+    const markedPath = treePath ?? this.activePath;
+    const sheet = this.focusedSheet();
+    const state = menuStateFrom({
+      hasSession: this.review !== undefined,
+      activePath: treePath ?? this.activePath,
+      isActiveReviewed: markedPath !== undefined && this.reviewMarks.get(markedPath) === 'yes',
+      focusedZone: this.focusedZone,
+      dockItem: dock === undefined ? undefined : { isAddressed: dock.status.kind === 'addressed' },
+      isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
+      isBusy:
+        this.trace?.status === 'loading' ||
+        this.chat.entries.some(
+          (entry) => entry.kind === 'message' && entry.message.status === 'streaming',
+        ),
+      isPullRequest: this.pullRequest !== undefined,
+      stagedCount: this.stagedCount(),
+      isSidebarShown: this.review !== undefined && !this.sidebarHidden,
+      display: this.display,
+      treeMode: this.treeMode,
+      preferredEditor: this.editorSettings?.preferred,
+      isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
+      sheetHistory: sheet?.historyState(),
+    });
+    const key = JSON.stringify(state);
+    if (key === this.lastMenuState) {
+      return;
+    }
+    this.lastMenuState = key;
+    void bridge.invoke('menu:set-state', state);
+  }
+
+  /** What a right-click landed on, recording the answer, note or tree row it chose. */
+  private contextKindAt(
+    event: MouseEvent,
+  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'sheet' | 'text' | undefined {
+    const path = event.composedPath().filter((target) => target instanceof HTMLElement);
+    if (path.some((element) => isEditableElement(element))) {
+      return 'text';
+    }
+    if (path.some((element) => element.localName === 'beuve-sheet-view')) {
+      return 'sheet';
+    }
+    const answer = path.find((element) => element.dataset['messageId'] !== undefined);
+    if (answer !== undefined) {
+      this.contextAnswerId = answer.dataset['messageId'];
+      return 'answer';
+    }
+    const note = path.find((element) => element.dataset['itemId'] !== undefined);
+    if (note !== undefined) {
+      this.renderRoot
+        .querySelector<BeuveUraDock>('beuve-ura-dock')
+        ?.selectItem(note.dataset['itemId'] ?? '');
+      this.focusedZone = 'ura';
+      return 'note';
+    }
+    const row = path.find((element) => element.dataset['itemPath'] !== undefined);
+    if (row !== undefined) {
+      this.renderRoot
+        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
+        ?.revealPath(row.dataset['itemPath'] ?? '');
+      this.focusedZone = 'intent';
+      return 'tree';
+    }
+    const card = path.find((element) => element.localName === 'beuve-file-card');
+    if (card === undefined) {
+      return undefined;
+    }
+    const isHeader = path.some((element) => element.classList.contains('header'));
+    this.stream()?.activateCard(card);
+    this.focusedZone = 'diff';
+    return isHeader ? 'file' : 'line';
   }
 
   /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
@@ -2452,7 +2706,7 @@ export class BeuveApp extends LitElement {
   private async runPaletteAction(action: PaletteAction): Promise<void> {
     switch (action.kind) {
       case 'command': {
-        await this.runCommand(action.command);
+        await this.runCommand(action.command, true);
         return;
       }
       case 'session': {
@@ -2508,62 +2762,62 @@ export class BeuveApp extends LitElement {
     });
   }
 
-  private async runCommand(command: CommandDefinition): Promise<void> {
+  /**
+   * Runs a registry command. From the palette the command's zone gets the focus first, as if the
+   * reviewer had gone there; from a menu or shortcut the focus stays where it is.
+   */
+  private async runCommand(command: CommandDefinition, isFromPalette: boolean): Promise<void> {
     const { run } = command;
     switch (run.kind) {
       case 'app': {
-        this.runAppAction(run.action);
-        if (run.action !== 'commit-pairs') {
+        this.runAppCommand(command.id);
+        if (isFromPalette && command.id !== 'commit-pairs') {
           this.refocusZone();
         }
         return;
       }
-      case 'zone-key': {
-        if (run.zone === 'diff' || run.zone === 'chat' || this.review === undefined) {
-          this.focusedZone = run.zone;
-        } else {
-          this.focusSidebar(run.zone);
+      case 'zone': {
+        if (isFromPalette || this.focusedZone !== run.zone) {
+          if (run.zone === 'diff' || run.zone === 'chat' || this.review === undefined) {
+            this.focusedZone = run.zone;
+          } else {
+            this.focusSidebar(run.zone);
+          }
+          await this.updateComplete;
+          this.zoneElement(run.zone)?.focus();
         }
-        await this.updateComplete;
-        const zone = this.zoneElement(run.zone);
-        zone?.focus();
-        zone?.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: run.key,
-            shiftKey: run.isShifted === true,
-            bubbles: true,
-            composed: true,
-          }),
-        );
+        const zone = this.zoneElement(run.zone) as
+          (HTMLElement & { readonly runCommand?: (id: CommandId) => boolean }) | undefined;
+        zone?.runCommand?.(command.id);
         return;
       }
       case 'slash': {
         this.focusSidebar('chat');
         await this.updateComplete;
         if (run.isPrefill) {
-          this.renderRoot.querySelector<BeuveChatDrawer>('beuve-chat-drawer')?.prefill(run.text);
+          this.chatDrawer()?.prefill(run.text);
         } else {
           this.submitChat(run.text);
         }
         return;
       }
+      case 'main': {
+        await beuveBridge()?.invoke('menu:run-main', { id: command.id });
+        return;
+      }
       case 'none': {
-        const zone = scopeZones[command.scope];
-        if (zone !== undefined) {
-          this.focusedZone = zone;
-        }
-        this.refocusZone();
+        return;
       }
     }
   }
 
-  /** Zones Tab visits: the sidebar's only while it shows. */
+  /** Regions Next Region visits: the sidebar's only while it shows. */
   private zoneOrder(): ZoneId[] {
     const hasSidebar = this.review !== undefined && !this.sidebarHidden;
     return zones.map(({ id }) => id).filter((id) => id === 'diff' || hasSidebar);
   }
 
-  /** `c`: shows the chat tab and focuses its input; from the chat, goes back to the diff. */
+  /** Focus Chat: shows the chat tab and focuses its input; from the chat, goes back to the diff. */
   private toggleChat(): void {
     if (this.focusedZone === 'chat') {
       this.focusedZone = 'diff';
@@ -2595,6 +2849,7 @@ export class BeuveApp extends LitElement {
   private paletteSources(): PaletteSources {
     return {
       commands: commandRegistry,
+      platform: keyPlatformOf(this.appInfo?.platform),
       sessions: this.sessions,
       ...(this.review !== undefined && { files: this.review.files }),
       ...(this.tree !== undefined && { trackedPaths: this.tree.paths }),
@@ -2607,7 +2862,7 @@ export class BeuveApp extends LitElement {
       <span class="brand">beuve</span>
       <button
         type="button"
-        title="Open a pull request, branch or recent review (⌘O)"
+        title=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
         @click=${(): void => {
           this.showOpenDialog();
         }}
@@ -2617,14 +2872,19 @@ export class BeuveApp extends LitElement {
       <span class="spacer"></span>
       <button
         type="button"
-        title="Command palette"
+        class="search"
+        title=${`Command Palette (${this.shortcut('palette')})`}
         @click=${(): void => {
-          this.runAppAction('palette');
+          this.runAppCommand('palette');
         }}
       >
-        <kbd>${displayKey('⌘K', this.appInfo?.platform)}</kbd>
+        Search or run a command
       </button>
     </div>`;
+  }
+
+  private shortcut(id: CommandId): string {
+    return shortcutOf(id, keyPlatformOf(this.appInfo?.platform));
   }
 
   private renderIntent(): TemplateResult {
@@ -2640,6 +2900,7 @@ export class BeuveApp extends LitElement {
       .generatedPaths=${this.reviewDeferrals().generated}
       .reviewMarks=${this.reviewMarks}
       .treeMode=${this.treeMode}
+      @beuve-tree-mode=${this.onTreeMode}
       @beuve-open-stack=${this.onOpenStack}
       @beuve-open-link=${this.onOpenLink}
       @beuve-tree-select=${this.onTreeSelect}
@@ -2667,6 +2928,10 @@ export class BeuveApp extends LitElement {
       .order=${this.order}
       ?loading=${this.reviewLoading}
       ?marking=${this.marking}
+      .savedProgress=${
+        this.savedProgress?.sessionId === this.review?.session.id ? this.savedProgress : undefined
+      }
+      .platform=${this.appInfo?.platform ?? ''}
       .error=${this.reviewError}
       .impact=${this.impact}
       .peek=${this.peek}
@@ -2730,6 +2995,7 @@ export class BeuveApp extends LitElement {
       ?hidden=${this.sidebarTab !== 'ura'}
       ?focused=${this.focusedZone === 'ura'}
       ?hasSession=${this.review !== undefined}
+      .platform=${this.appInfo?.platform ?? ''}
       .items=${this.uraItems}
       .derivedVerdict=${this.uraVerdict}
       .chosenVerdict=${this.chosenVerdict}
@@ -2765,7 +3031,6 @@ export class BeuveApp extends LitElement {
       ?hasSession=${this.review !== undefined}
       @beuve-chat-submit=${this.onChatSubmit}
       @beuve-chat-escape=${this.onChatEscape}
-      @beuve-chat-cycle=${this.onChatCycle}
       @beuve-chat-cancel=${this.onChatCancel}
       @beuve-chat-stage=${this.onChatStage}
       @beuve-chat-stage-finding=${this.onChatStageFinding}
@@ -2821,7 +3086,6 @@ export class BeuveApp extends LitElement {
       </div>
       <beuve-status-bar
         .zoneLabel=${this.review === undefined ? '' : (focused?.label ?? '')}
-        .zoneHints=${this.review === undefined ? '' : (focused?.hints ?? '')}
         .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
@@ -2872,9 +3136,8 @@ export class BeuveApp extends LitElement {
       ${
         this.overlayOpen
           ? html`<beuve-keybinding-overlay
-              .editorName=${currentEditorName(this.editorSettings)}
-              .displayName=${describeDiffDisplay(this.display, false).text}
               .platform=${this.appInfo?.platform ?? ''}
+              @beuve-shortcuts-close=${this.onShortcutsClose}
             ></beuve-keybinding-overlay>`
           : nothing
       }
@@ -2889,6 +3152,7 @@ export class BeuveApp extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    this.scheduleMenuSync();
     if (this.paletteText !== undefined && changed.has('paletteText')) {
       this.renderRoot.querySelector('beuve-command-palette')?.focus();
       return;
@@ -2908,7 +3172,6 @@ export class BeuveApp extends LitElement {
 
 type SidebarZone = Exclude<ZoneId, 'diff'>;
 
-/** Unmodified keys the shell handles itself, from the command registry's shortcuts. */
 function describeGenerated(isShown: boolean): string {
   return isShown
     ? 'Generated files: shown (/generated hide collapses them)'
@@ -2925,8 +3188,8 @@ function describeInsights(isShown: boolean): string {
 
 function describeSkipReviewed(isSkipping: boolean | undefined): string {
   return isSkipping === true
-    ? 'j and k skip files marked reviewed'
-    : 'j and k stop at every file, reviewed or not';
+    ? 'Next and Previous Change skip files marked reviewed'
+    : 'Next and Previous Change stop at every file, reviewed or not';
 }
 
 function describeOrder(mode: ReviewOrderMode = 'path'): string {
@@ -2939,18 +3202,22 @@ const orderDescriptions: Readonly<Record<ReviewOrderMode, string>> = {
   calls: 'Files by calls: what a function calls comes before it',
 };
 
-const orderActions: Readonly<Record<Extract<AppAction, `order-${string}`>, ReviewOrderMode>> = {
+const orderActions: Readonly<Record<Extract<CommandId, `order-${string}`>, ReviewOrderMode>> = {
   'order-path': 'path',
   'order-imports': 'imports',
   'order-calls': 'calls',
 };
 
-/** Diff keys for sheets and permalinks (ADR 0067): `Shift+d`, `Shift+t`, `Shift+y`, `Shift+o`. */
-const sheetKeyActions: Readonly<Record<string, AppAction>> = {
-  D: 'open-definition',
-  T: 'open-type-definition',
-  Y: 'copy-permalink',
-  O: 'open-permalink',
+const editorActions: Readonly<Record<Extract<CommandId, `editor-${string}`>, EditorId>> = {
+  'editor-zed': 'zed',
+  'editor-vscode': 'vscode',
+  'editor-cursor': 'cursor',
+};
+
+const exportActions: Readonly<Record<Extract<CommandId, `export-${string}`>, UraExportTarget>> = {
+  'export-agent-xml': 'agent-xml',
+  'export-agent-json': 'agent-json',
+  'export-github': 'github',
 };
 
 const sheetActionKinds = {
@@ -2959,24 +3226,6 @@ const sheetActionKinds = {
   'copy-permalink': 'copy-link',
   'open-permalink': 'open-link',
 } as const;
-
-const plainKeyActions: Readonly<Record<string, AppAction>> = {
-  Tab: 'cycle-zone',
-  '?': 'shortcuts',
-  c: 'chat',
-  f: 'tree-mode',
-  '\\': 'toggle-sidebar',
-  '1': 'sidebar-overview',
-  '2': 'sidebar-review',
-  '3': 'sidebar-chat',
-};
-
-const scopeZones: Readonly<Partial<Record<CommandDefinition['scope'], ZoneId>>> = {
-  Diff: 'diff',
-  Review: 'ura',
-  Chat: 'chat',
-  Files: 'intent',
-};
 
 function peekStateFrom(
   path: string,
@@ -3034,18 +3283,24 @@ function formatBytes(characters: number): string {
 const nothingSelected =
   'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
 
-/** ⌘> / Ctrl+> (Shift+Period), as Zed binds "add selection to thread". */
-function isAddToChatKey(event: KeyboardEvent): boolean {
-  return event.key === '>' || (event.shiftKey && event.code === 'Period');
+/** Whether the focus, through shadow roots, is in a field that takes typing. */
+function isTextFocused(): boolean {
+  let element: Element | null = document.activeElement;
+  while (
+    element?.shadowRoot?.activeElement !== undefined &&
+    element.shadowRoot.activeElement !== null
+  ) {
+    element = element.shadowRoot.activeElement;
+  }
+  return element instanceof HTMLElement && isEditableElement(element);
 }
 
-function isEditable(event: KeyboardEvent): boolean {
-  const [target] = event.composedPath();
+function isEditableElement(element: HTMLElement): boolean {
   return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement ||
+    element.isContentEditable
   );
 }
 

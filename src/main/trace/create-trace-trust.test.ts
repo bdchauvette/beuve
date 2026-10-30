@@ -47,6 +47,43 @@ describe('createTraceTrust', () => {
   );
 
   test(
+    'lists stored approvals by path and removes one without opening its repository',
+    { concurrent: false },
+    async ({ expect, clock, repositories, tempDir }) => {
+      clock.set('2026-10-28T12:00:00Z');
+      const { repo, git } = await openFirstCommit(repositories);
+      const settingsPath = path.join(tempDir, 'settings.json');
+      const gone = path.join(tempDir, 'moved-away');
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          traceTrustedRepositories: { [gone]: { trustedAt: '2026-10-01T09:00:00.000Z' }, bad: 3 },
+        }),
+      );
+      const trust = createTraceTrust({ settingsPath });
+      await trust.grant(git);
+      await expect(trust.list()).resolves.toStrictEqual(
+        [
+          { repositoryPath: gone, trustedAt: '2026-10-01T09:00:00.000Z' },
+          { repositoryPath: repo.directory, trustedAt: '2026-10-28T12:00:00.000Z' },
+        ].toSorted((left, right) => left.repositoryPath.localeCompare(right.repositoryPath)),
+      );
+      await expect(trust.remove(gone)).resolves.toStrictEqual([
+        { repositoryPath: repo.directory, trustedAt: '2026-10-28T12:00:00.000Z' },
+      ]);
+      await expect(trust.status(git)).resolves.toMatchObject({ trusted: true });
+    },
+  );
+
+  test('keeps approvals in memory without a settings file', async ({ expect, repositories }) => {
+    const { repo, git } = await openFirstCommit(repositories);
+    const trust = createTraceTrust({});
+    await trust.grant(git);
+    await expect(trust.list()).resolves.toMatchObject([{ repositoryPath: repo.directory }]);
+    await expect(trust.remove(repo.directory)).resolves.toStrictEqual([]);
+  });
+
+  test(
     'keys the approval by real path and withdraws it when the recorded remote is gone',
     { concurrent: false },
     async ({ expect, clock, repositories, tempDir }) => {

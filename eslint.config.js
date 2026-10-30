@@ -20,7 +20,9 @@ const testFiles = ['**/*.test.ts'];
 const entrypointFiles = [
   'src/*/index.ts',
   'src/preload/sheet-preload.ts',
+  'src/preload/settings-preload.ts',
   'src/ui/sheet-entry.ts',
+  'src/ui/settings-entry.ts',
   'scripts/**/*.ts',
   'src/main/impact/impact-worker.ts',
   'src/main/impact/testing/scripted-impact-worker.ts',

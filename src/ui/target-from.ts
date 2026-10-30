@@ -19,14 +19,14 @@ export interface LineRange {
 
 /**
  * What the reviewer points at in the diff stream (ADR 0063), the one answer every action
- * (`m`, ⌘>, `e`, `o`, `p`, `Shift+p`, `r`) adapts to what it needs:
+ * (Add Note, Add to Chat, Suggest Edit, Open in Editor, Show Callers, Show Control Flow, Run Trace Probe) adapts to what it needs:
  *
  * - `selection`: lines the reviewer selected, or a citation or find hit selected for them.
  *   `side` says which numbering `start`–`end` use: `base` when both ends are on deleted rows or
  *   the split view's left column, else `head` (a selection mixing both sides is mapped to head
  *   lines). `head` is the selection's head-side range, mapped from the base when needed;
  *   `undefined` only for a deleted file.
- * - `hunk`: the hunk `j`/`k` stopped at. `head` is its head lines (`undefined` for a pure
+ * - `hunk`: the hunk Next/Previous Change stopped at. `head` is its head lines (`undefined` for a pure
  *   deletion), `base` its base lines (`undefined` for a pure addition) and `line` its first
  *   changed head line (for a deletion, the head line before the gap).
  * - `line`: one head line a jump landed on (a citation, a flow node, a trace line).
@@ -58,9 +58,9 @@ export type ReviewTarget =
 export interface TargetState {
   /** The active card's file; `undefined` when no file is active. */
   readonly file: DiffFileView | undefined;
-  /** The hunk `j`/`k` stopped at; `-1` for none. */
+  /** The hunk Next/Previous Change stopped at; `-1` for none. */
   readonly hunk: number;
-  /** The reviewer's own selection (not the one `j`/`k` draws). */
+  /** The reviewer's own selection (not the one Next/Previous Change draws). */
   readonly selection: SelectedLines | undefined;
   /** The head line the last jump landed on. */
   readonly line: number | undefined;

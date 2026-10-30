@@ -6,7 +6,7 @@ import './flow-graph-view.ts';
 import type { FlowState } from './flow-state.ts';
 
 /**
- * The control-flow portal (spec 5D, `Shift+p`): a heading and the function's flowchart in the
+ * The control-flow portal (spec 5D, Show Control Flow): a heading and the function's flowchart in the
  * inline area of a file card, where the call-stack peek also lives. Presentational: errors and
  * loading are text, `flow-node-activate` bubbles up from the chart, and the owner closes it.
  * Focus moves into the chart when it appears, so the arrow keys work at once.
@@ -19,6 +19,21 @@ export class BeuveFlowPortal extends LitElement {
       border-bottom: 1px solid var(--beuve-border);
       background: var(--beuve-bg);
       font: var(--beuve-font-small);
+    }
+
+    .close,
+    .again {
+      padding: 0 var(--beuve-space-1);
+      border: none;
+      background: none;
+      color: var(--beuve-text-muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .close {
+      font-size: 15px;
+      line-height: 1;
     }
 
     .heading {
@@ -100,9 +115,19 @@ export class BeuveFlowPortal extends LitElement {
       <div class="heading" role="heading" aria-level="3">
         <span>Control flow of ${target}</span>
         <span class="spacer"></span>
-        <span
-          ><kbd>↑</kbd> <kbd>↓</kbd> walk · <kbd>⏎</kbd> show in code · <kbd>Esc</kbd> closes</span
+        <button
+          type="button"
+          class="close"
+          title="Close (Esc)"
+          aria-label="Close"
+          @click=${(): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-flow-close', { bubbles: true, composed: true }),
+            );
+          }}
         >
+          ×
+        </button>
       </div>
       ${this.renderBody(flow)}
     `;

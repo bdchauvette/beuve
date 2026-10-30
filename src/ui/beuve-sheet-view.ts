@@ -10,6 +10,8 @@ import type {
   SheetRangeView,
 } from '#contract/ipc-contract.ts';
 
+import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
+
 import './beuve-sheet-code.ts';
 import type { BeuveSheetCode, SheetSelectDetail, SheetTokenDetail } from './beuve-sheet-code.ts';
 import { findSheetMatches } from './find-sheet-matches.ts';
@@ -36,10 +38,10 @@ interface FindState {
 /**
  * A sheet (ADR 0067): one file of a session as it is at one commit, like a printout of a draft.
  * Read-only and calm: line numbers, the change's marks against the review base, staged notes when
- * the commit is the session head, a line cursor (`j`/`k`, `g`/`Shift+g`), find (⌘F, Enter and
- * Shift+Enter or `n`/`Shift+n`), `Shift+d`/`Shift+t` (and ⌘-click) to follow a definition or a
- * type at the same commit, with back and forward (`[`/`]`, ⌘[/⌘]), `Shift+y` to copy a permalink
- * and `Shift+o` to open it on GitHub. Esc or ⌘W closes it. Never refreshed: when the session
+ * the commit is the session head, a line cursor (↑/↓, Home/End, clicking a line), find (Enter and
+ * Shift+Enter in the bar), and from the menus (ADR 0068) Go to Definition and Type Definition (and
+ * ⌘-click) at the same commit, Back and Forward, Next and Previous Change over the marks, and
+ * Copy GitHub Permalink and Open on GitHub. Esc or Close Window closes it. Never refreshed: when the session
  * head moves on, a quiet note says so.
  */
 @customElement('beuve-sheet-view')
@@ -175,6 +177,26 @@ export class BeuveSheetView extends LitElement {
   private printedHead: string | undefined;
   private readonly files = new Map<string, Promise<IpcResult<SheetFileView>>>();
   private readonly printedAt = Temporal.Now.plainTimeISO().toString({ smallestUnit: 'minute' });
+  private lastMenuState: string | undefined;
+
+  private readonly onFocusChange = (): void => {
+    queueMicrotask(() => {
+      this.syncMenuState();
+    });
+  };
+
+  private readonly onContextMenu = (event: MouseEvent): void => {
+    if (this.mode !== 'window' || this.api === undefined) {
+      return;
+    }
+    event.preventDefault();
+    this.syncMenuState();
+    void this.api.invoke('menu:context', {
+      kind: isTypingNow(this.shadowRoot) ? 'text' : 'sheet',
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (!this.handleKey(event)) {
@@ -203,11 +225,17 @@ export class BeuveSheetView extends LitElement {
   @property() accessor sha = '';
   @property({ attribute: false }) accessor place: SheetPlace | undefined;
   @property() accessor mode: SheetMode = 'window';
+  /** `process.platform`'s shortcuts for the toolbar's tooltips (ADR 0068); none in a test. */
+  @property({ attribute: false }) accessor shortcuts: {
+    readonly back: string;
+    readonly forward: string;
+    readonly copyLink: string;
+  } = { back: '', forward: '', copyLink: '' };
 
   @state() accessor history: SheetHistory = { places: [], index: 0 };
   @state() accessor loaded: Loaded = { status: 'loading' };
   @state() accessor cursor: SheetSelectDetail | undefined;
-  /** The column the last click landed on, for `Shift+d` on that line. */
+  /** The column the last click landed on, for Go to Definition on that line. */
   @state() accessor column: { readonly line: number; readonly character: number } | undefined;
   @state() accessor find: FindState | undefined;
   @state() accessor notice: { readonly text: string; readonly isError: boolean } | undefined;
@@ -289,83 +317,76 @@ export class BeuveSheetView extends LitElement {
       : `The session head has moved on to ${this.movedHead.slice(0, 7)} since this was printed.`;
   }
 
-  /** Every key the sheet knows; true when it handled `event`. */
+  /** The sheet's in-place keys (ADR 0068): ↑/↓ and Home/End move the line cursor, Esc closes. */
   private handleKey(event: KeyboardEvent): boolean {
-    const isCommand = event.metaKey || event.ctrlKey;
-    const key = event.key;
-    if (isCommand && key.toLowerCase() === 'f') {
-      this.find ??= { query: '', matches: [], index: 0 };
-      void this.updateComplete.then(() => {
-        this.renderRoot.querySelector<HTMLInputElement>(':scope .find input')?.select();
-      });
-      return true;
+    if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event)) {
+      return false;
     }
-    if (isCommand && key.toLowerCase() === 'w') {
-      this.close();
-      return true;
-    }
-    if (isCommand && (key === '[' || key === ']')) {
-      this.step(key === '[' ? 'back' : 'forward');
-      return true;
-    }
-    if (event.altKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-      this.step(key === 'ArrowLeft' ? 'back' : 'forward');
-      return true;
-    }
-    return !isCommand && !event.altKey && !isTyping(event) && this.handlePlainKey(key);
-  }
-
-  private handlePlainKey(key: string): boolean {
     const keys: Readonly<Record<string, () => void>> = {
-      j: (): void => {
-        this.moveCursor(1);
-      },
       ArrowDown: (): void => {
         this.moveCursor(1);
-      },
-      k: (): void => {
-        this.moveCursor(-1);
       },
       ArrowUp: (): void => {
         this.moveCursor(-1);
       },
-      g: (): void => {
+      Home: (): void => {
         this.moveCursorTo(1);
       },
-      G: (): void => {
+      End: (): void => {
         this.moveCursorTo(Number.MAX_SAFE_INTEGER);
-      },
-      n: (): void => {
-        this.moveMatch(1);
-      },
-      N: (): void => {
-        this.moveMatch(-1);
-      },
-      D: (): void => {
-        void this.jump('definition');
-      },
-      T: (): void => {
-        void this.jump('type-definition');
-      },
-      Y: (): void => {
-        void this.permalink(false);
-      },
-      O: (): void => {
-        void this.permalink(true);
-      },
-      '[': (): void => {
-        this.step('back');
-      },
-      ']': (): void => {
-        this.step('forward');
       },
       Escape: (): void => {
         this.close();
       },
     };
-    const run = keys[key];
+    const run = keys[event.key];
     run?.();
     return run !== undefined;
+  }
+
+  /** Next or Previous Change in a sheet: the next block of the change's marks. */
+  private moveToMark(step: 1 | -1): void {
+    if (this.loaded.status !== 'ready') {
+      return;
+    }
+    const { marks } = this.loaded.file;
+    const starts = [
+      ...new Set([
+        ...marks.added.map((mark) => mark.startLine),
+        ...marks.modified.map((mark) => mark.startLine),
+        ...marks.deletedAt,
+      ]),
+    ].toSorted((left, right) => left - right);
+    const from = this.cursor?.start ?? 0;
+    const next =
+      step === 1 ? starts.find((line) => line > from) : starts.findLast((line) => line < from);
+    if (next === undefined) {
+      this.note(step === 1 ? 'No more changes below.' : 'No more changes above.', false);
+      return;
+    }
+    this.notice = undefined;
+    this.moveCursorTo(next);
+  }
+
+  /** Tells main which menu items the sheet window enables (ADR 0068). */
+  private syncMenuState(): void {
+    if (this.mode !== 'window' || this.api === undefined) {
+      return;
+    }
+    const { canGoBack, canGoForward } = this.historyState();
+    const conditions: MenuCondition[] = [
+      'session',
+      ...(this.loaded.status === 'ready' ? (['file'] as const) : []),
+      ...(canGoBack ? (['back'] as const) : []),
+      ...(canGoForward ? (['forward'] as const) : []),
+      ...(isTypingNow(this.shadowRoot) ? (['text-focus'] as const) : []),
+    ];
+    const key = conditions.join(' ');
+    if (key === this.lastMenuState) {
+      return;
+    }
+    this.lastMenuState = key;
+    void this.api.invoke('menu:set-state', { conditions, checked: [] });
   }
 
   private current(): SheetPlace | undefined {
@@ -484,7 +505,7 @@ export class BeuveSheetView extends LitElement {
     const place = this.current();
     const line = this.cursor?.start;
     if (api === undefined || place === undefined || line === undefined) {
-      this.note('Put the cursor on a line first (j/k, or click a word).', false);
+      this.note('Put the cursor on a line first (click a word, or use the arrow keys).', false);
       return;
     }
     this.note('Asking the language server…', false);
@@ -563,11 +584,71 @@ export class BeuveSheetView extends LitElement {
     this.notice = { text, isError };
   }
 
+  /**
+   * Runs a menu command in the sheet (ADR 0068): its window's menu sends them, and in the main
+   * window `beuve-app` hands them over while the inline sheet has the focus. True when handled.
+   */
+  runCommand(id: CommandId): boolean {
+    switch (id) {
+      case 'find': {
+        this.find ??= { query: '', matches: [], index: 0 };
+        void this.updateComplete.then(() => {
+          this.renderRoot.querySelector<HTMLInputElement>(':scope .find input')?.select();
+        });
+        return true;
+      }
+      case 'find-next':
+      case 'find-previous': {
+        this.moveMatch(id === 'find-next' ? 1 : -1);
+        return true;
+      }
+      case 'find-selection': {
+        const selected = getSelection()?.toString().trim() ?? '';
+        if (selected !== '' && !selected.includes('\n')) {
+          this.search(selected);
+        }
+        return this.runCommand('find');
+      }
+      case 'back':
+      case 'forward': {
+        this.step(id);
+        return true;
+      }
+      case 'next-hunk':
+      case 'previous-hunk': {
+        this.moveToMark(id === 'next-hunk' ? 1 : -1);
+        return true;
+      }
+      case 'open-definition':
+      case 'open-type-definition': {
+        void this.jump(id === 'open-definition' ? 'definition' : 'type-definition');
+        return true;
+      }
+      case 'copy-permalink':
+      case 'open-permalink': {
+        void this.permalink(id === 'open-permalink');
+        return true;
+      }
+      default: {
+        return false;
+      }
+    }
+  }
+
+  /** Whether Back and Forward have somewhere to go. */
+  historyState(): { readonly canGoBack: boolean; readonly canGoForward: boolean } {
+    const { index, places } = this.history;
+    return { canGoBack: index > 0, canGoForward: index < places.length - 1 };
+  }
+
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
     this.tabIndex = 0;
     this.addEventListener('keydown', this.onKeyDown);
+    this.addEventListener('focusin', this.onFocusChange);
+    this.addEventListener('focusout', this.onFocusChange);
+    this.addEventListener('contextmenu', this.onContextMenu);
     addEventListener('focus', this.onFocus);
   }
 
@@ -575,6 +656,9 @@ export class BeuveSheetView extends LitElement {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.disconnectedCallback();
     this.removeEventListener('keydown', this.onKeyDown);
+    this.removeEventListener('focusin', this.onFocusChange);
+    this.removeEventListener('focusout', this.onFocusChange);
+    this.removeEventListener('contextmenu', this.onContextMenu);
     removeEventListener('focus', this.onFocus);
   }
 
@@ -590,6 +674,10 @@ export class BeuveSheetView extends LitElement {
     void this.show(this.place);
   }
 
+  protected override updated(): void {
+    this.syncMenuState();
+  }
+
   override render(): TemplateResult {
     const place = this.current();
     const line = this.cursor?.start ?? place?.range?.startLine;
@@ -602,7 +690,7 @@ export class BeuveSheetView extends LitElement {
       <header>
         <button
           type="button"
-          title="Back ([ or ⌘[)"
+          title=${withKey('Back', this.shortcuts.back)}
           aria-label="Back"
           ?disabled=${index === 0}
           @click=${(): void => {
@@ -613,7 +701,7 @@ export class BeuveSheetView extends LitElement {
         </button>
         <button
           type="button"
-          title="Forward (] or ⌘])"
+          title=${withKey('Forward', this.shortcuts.forward)}
           aria-label="Forward"
           ?disabled=${index >= places.length - 1}
           @click=${(): void => {
@@ -626,7 +714,7 @@ export class BeuveSheetView extends LitElement {
         <span class="stamp">printed ${this.printedAt}</span>
         <button
           type="button"
-          title="Copy a permalink to these lines (Shift+y)"
+          title=${withKey('Copy GitHub Permalink', this.shortcuts.copyLink)}
           @click=${(): void => {
             void this.permalink(false);
           }}
@@ -635,7 +723,7 @@ export class BeuveSheetView extends LitElement {
         </button>
         <button
           type="button"
-          title="Open these lines on GitHub (Shift+o)"
+          title="Open these lines on GitHub"
           @click=${(): void => {
             void this.permalink(true);
           }}
@@ -653,10 +741,6 @@ export class BeuveSheetView extends LitElement {
       <footer>
         <span class="notice ${this.notice?.isError === true ? 'error' : ''}"
           >${this.notice?.text ?? this.headNote()}</span
-        >
-        <span
-          ><kbd>⇧D</kbd> definition · <kbd>⇧T</kbd> type · <kbd>[</kbd><kbd>]</kbd> history ·
-          <kbd>⌘F</kbd> find · <kbd>Esc</kbd> close</span
         >
       </footer>
     `;
@@ -676,6 +760,15 @@ function describePermalink(link: PermalinkView, isOpening: boolean): string {
       return 'This repository has no GitHub remote to link to.';
     }
   }
+}
+
+function withKey(label: string, key: string): string {
+  return key === '' ? label : `${label} (${key})`;
+}
+
+function isTypingNow(root: ShadowRoot | null): boolean {
+  const active = root?.activeElement;
+  return active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
 }
 
 function isTyping(event: KeyboardEvent): boolean {

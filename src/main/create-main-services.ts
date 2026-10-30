@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { IpcResult, ReviewView, SessionSummary } from '#contract/ipc-contract.ts';
+import type {
+  ClaudeStatusView,
+  IpcResult,
+  ReviewView,
+  SessionSummary,
+} from '#contract/ipc-contract.ts';
 import { createCachedCredentialProvider } from '#internal/auth/create-cached-credential-provider.ts';
 import { createGhCliCredentialProvider } from '#internal/auth/create-gh-cli-credential-provider.ts';
 import type { GithubCredentialProvider } from '#internal/auth/github-credential-provider.ts';
@@ -14,6 +19,7 @@ import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
 import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
 import type { Logger } from '#x/log/create-logger.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
@@ -38,6 +44,7 @@ import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
+import { readClaudeStatus } from './chat/read-claude-status.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import { createSheetServices } from './sheets/create-sheet-services.ts';
 import { createRemoteServices } from './remote/create-remote-services.ts';
@@ -246,6 +253,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ura,
     trace,
     github,
+    claude: {
+      status: async (): Promise<IpcResult<ClaudeStatusView>> =>
+        ok(await readClaudeStatus(options.claude ?? {})),
+    },
     mcpTools: createMcpTools({
       context,
       impact,

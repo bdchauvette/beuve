@@ -75,6 +75,8 @@ async function launch(): Promise<void> {
       indexHtmlPath: path.join(import.meta.dirname, '../ui/index.html'),
       sheetPreloadPath: path.join(import.meta.dirname, '../preload/sheet-preload.cjs'),
       sheetHtmlPath: path.join(import.meta.dirname, '../ui/sheet.html'),
+      settingsPreloadPath: path.join(import.meta.dirname, '../preload/settings-preload.cjs'),
+      settingsHtmlPath: path.join(import.meta.dirname, '../ui/settings.html'),
       mcpPort: parsePort(process.env['BEUVE_MCP_PORT']) ?? defaultMcpPort,
       logger,
     });

@@ -51,6 +51,7 @@ function item(): UraItemView {
 function sources(): PaletteSources {
   return {
     commands: commandRegistry,
+    platform: 'mac',
     sessions: [session()],
     files: [file('src/total.ts'), file('src/checkout.ts')],
     trackedPaths: ['README.md', 'src/checkout.ts', 'src/total.ts', 'src/util/tax-table.ts'],
@@ -60,19 +61,22 @@ function sources(): PaletteSources {
 
 describe('planPalette', () => {
   test('lists commands with their shortcuts after >', ({ expect }) => {
-    const entries = planPalette('>peek', sources());
-    expect(entries[0]).toMatchObject({ title: 'Call-stack peek (callers)', keys: ['p'] });
+    const entries = planPalette('>show callers', sources());
+    expect(entries[0]).toMatchObject({ title: 'Show Callers', detail: 'Review', keys: ['⌘I'] });
     expect(entries.every((entry) => entry.group === 'commands')).toBe(true);
+    expect(
+      planPalette('>show callers', { ...sources(), platform: 'linux' })[0]?.keys,
+    ).toStrictEqual(['Ctrl+I']);
   });
 
   test('shows a chat command’s usage as its key', ({ expect }) => {
-    const [entry] = planPalette('>clear chat', sources());
+    const [entry] = planPalette('>clear chat…', sources());
     expect(entry?.keys).toStrictEqual(['/clear']);
   });
 
-  test('leaves unbuilt commands out', ({ expect }) => {
-    expect(planPalette('>inline edit', sources()).map((entry) => entry.title)).not.toContain(
-      'Inline edit',
+  test('leaves keys that work only in place out', ({ expect }) => {
+    expect(planPalette('>back to the diff', sources()).map((entry) => entry.title)).not.toContain(
+      'Back to the Diff',
     );
   });
 

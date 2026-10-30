@@ -5,8 +5,8 @@ import { lineFromTarget } from './line-from-target.ts';
 import type { ReviewTarget } from './target-from.ts';
 
 /**
- * The head lines `e` edits (ADR 0043), and the staged item the suggestion attaches to, if any;
- * without one, saving opens the `m` composer with the patch.
+ * The head lines Suggest Edit edits (ADR 0043), and the staged item the suggestion attaches to, if any;
+ * without one, saving opens the Add Note composer with the patch.
  */
 export interface EditTarget {
   readonly path: string;
@@ -18,9 +18,9 @@ export interface EditTarget {
 }
 
 /**
- * What `e` edits for `target` (ADR 0043, 0063): when its head line (as `o` takes it) lies on the
+ * What Suggest Edit edits for `target` (ADR 0043, 0063): when its head line (as Open in Editor takes it) lies on the
  * anchor of a staged line note written against the head being shown, that note's lines, so the
- * suggestion attaches to it; otherwise the lines `m` would stage. Nothing for a deleted or binary
+ * suggestion attaches to it; otherwise the lines Add Note would stage. Nothing for a deleted or binary
  * file, or when the target is a whole file or the whole change. Notes from an older head are
  * skipped: their lines number a different file.
  */

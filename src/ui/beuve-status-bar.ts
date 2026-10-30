@@ -16,7 +16,7 @@ import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 
 /**
- * Bottom bar: the focused region and its main keys, a transient notice, whose turn the open pull
+ * Bottom bar: the focused region's name (keys live in the menus, ADR 0068), a transient notice, whose turn the open pull
  * request is (ADR 0066, reasons on hover), its CI rollup, GitHub
  * sign-in, MCP server state and app version.
  */
@@ -91,16 +91,9 @@ export class BeuveStatusBar extends LitElement {
       color: var(--beuve-accent);
       font-weight: 600;
     }
-
-    kbd {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-    }
   `;
 
   @property() accessor zoneLabel = '';
-  /** Keys for the focused region, e.g. `j k hunks · m stage`. */
-  @property() accessor zoneHints = '';
   @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
@@ -160,10 +153,7 @@ export class BeuveStatusBar extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <span
-        ><span class="zone">${this.zoneLabel}</span
-        >${this.zoneHints === '' ? nothing : html`<span class="hints"> · ${this.zoneHints}</span>`}</span
-      >
+      <span class="zone">${this.zoneLabel}</span>
       ${
         this.notice === undefined
           ? nothing
@@ -174,7 +164,6 @@ export class BeuveStatusBar extends LitElement {
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.renderMcp()}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
-      <span><kbd>?</kbd> keys</span>
     `;
   }
 }

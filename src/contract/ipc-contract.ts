@@ -1,5 +1,7 @@
 import type { Result } from '#x/result/result.ts';
 
+import type { CommandId, ContextKind, MenuCondition } from './command-catalog.ts';
+
 /**
  * The typed IPC contract between main, preload and ui (ADR 0011). Plain serializable data
  * only: everything here crosses a structured-clone boundary and must stay DOM- and Node-free.
@@ -1716,6 +1718,59 @@ export interface IpcError {
   readonly message: string;
 }
 
+/**
+ * `menu:set-state` (ADR 0068): what the calling window reports about its focus and contents.
+ * Main enables the menu items whose conditions hold and checks the toggles listed in `checked`.
+ */
+export interface MenuStateRequest {
+  readonly conditions: readonly MenuCondition[];
+  readonly checked: readonly CommandId[];
+}
+
+/** `menu:context`: pops up the context menu of `kind` at the pointer (or the focused element). */
+export interface MenuContextRequest {
+  readonly kind: ContextKind | 'text';
+  readonly x?: number;
+  readonly y?: number;
+}
+
+/** `menu:run-main`: runs a command main handles itself (Settings, About, …) from the palette. */
+export interface MenuRunMainRequest {
+  readonly id: CommandId;
+}
+
+/** `menu:run` (main to the focused window): run the catalog command `id`. */
+export interface MenuRunView {
+  readonly id: CommandId;
+}
+
+/** One repository the reviewer allowed to run its tests for trace probes (ADR 0041). */
+export interface TraceTrustEntryView {
+  readonly repositoryPath: string;
+  readonly remoteUrl?: string;
+  /** ISO-8601 UTC. */
+  readonly trustedAt: string;
+}
+
+/** `trace:remove-trust`: withdraws the approval stored for one repository path. */
+export interface TraceRemoveTrustRequest {
+  readonly repositoryPath: string;
+}
+
+/**
+ * The Claude Code CLI beuve would run (ADR 0022), for the Settings window: where it was found and
+ * the version it reports. Reading it never makes a model call.
+ */
+export type ClaudeStatusView =
+  | {
+      readonly kind: 'found';
+      readonly command: string;
+      readonly source: 'env' | 'known-location' | 'path' | 'configured';
+      /** `claude --version`'s first line, when it answered in time. */
+      readonly version?: string;
+    }
+  | { readonly kind: 'missing'; readonly message: string };
+
 /** Every invoke response is a `Result`, so expected failures never surface as rejected promises. */
 export type IpcResult<T> = Result<T, IpcError>;
 
@@ -1913,6 +1968,30 @@ export interface InvokeChannelMap {
     readonly request: OpenGithubLinkRequest;
     readonly response: IpcResult<{ readonly opened: true }>;
   };
+  'menu:set-state': {
+    readonly request: MenuStateRequest;
+    readonly response: IpcResult<{ readonly applied: true }>;
+  };
+  'menu:context': {
+    readonly request: MenuContextRequest;
+    readonly response: IpcResult<{ readonly shown: boolean }>;
+  };
+  'menu:run-main': {
+    readonly request: MenuRunMainRequest;
+    readonly response: IpcResult<{ readonly ran: true }>;
+  };
+  'trace:list-trust': {
+    readonly request: undefined;
+    readonly response: IpcResult<readonly TraceTrustEntryView[]>;
+  };
+  'trace:remove-trust': {
+    readonly request: TraceRemoveTrustRequest;
+    readonly response: IpcResult<readonly TraceTrustEntryView[]>;
+  };
+  'claude:status': {
+    readonly request: undefined;
+    readonly response: IpcResult<ClaudeStatusView>;
+  };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -1935,6 +2014,10 @@ export interface EventChannelMap {
   'github:pr-updated': PullRequestUpdatedView;
   'github:ci-status': CiStatusChangedView;
   'trace:status': TraceStatusView;
+  /** Run a menu, shortcut or context menu command in this window (ADR 0068). */
+  'menu:run': MenuRunView;
+  /** Preferences changed in another window (the Settings window); read them again. */
+  'settings:changed': Readonly<Record<string, never>>;
 }
 
 export type EventChannel = keyof EventChannelMap;
@@ -1951,11 +2034,35 @@ export type SheetInvokeChannel =
   | 'sheet:get-head'
   | 'remote:permalink'
   | 'remote:open-permalink'
-  | 'clipboard:write-text';
+  | 'clipboard:write-text'
+  | 'menu:set-state'
+  | 'menu:context';
 
-/** The API the sheet preload exposes as `window.beuve`: invoke only, sheet channels only. */
+/** The API the sheet preload exposes as `window.beuve`: sheet channels, and `menu:run` only. */
 export interface SheetApi {
   readonly invoke: <C extends SheetInvokeChannel>(
+    channel: C,
+    ...request: InvokeRequest<C> extends undefined ? [] : [InvokeRequest<C>]
+  ) => Promise<InvokeResponse<C>>;
+  /** In a sheet window only: the menu's commands for this window (ADR 0068). */
+  readonly onMenuRun?: (listener: (payload: MenuRunView) => void) => Unsubscribe;
+}
+
+/** The channels the Settings window may call (ADR 0068); its preload and main allow nothing else. */
+export type SettingsInvokeChannel =
+  | 'display:get'
+  | 'display:set'
+  | 'editor:get-settings'
+  | 'editor:set-preferred'
+  | 'github:auth-status'
+  | 'claude:status'
+  | 'trace:list-trust'
+  | 'trace:remove-trust'
+  | 'menu:set-state';
+
+/** The API the Settings preload exposes as `window.beuve`: invoke only, settings channels only. */
+export interface SettingsApi {
+  readonly invoke: <C extends SettingsInvokeChannel>(
     channel: C,
     ...request: InvokeRequest<C> extends undefined ? [] : [InvokeRequest<C>]
   ) => Promise<InvokeResponse<C>>;

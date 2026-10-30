@@ -99,13 +99,15 @@ export default {
       name: 'no-entrypoint-imports',
       severity: 'error',
       comment:
-        'Process entrypoints (src/*/index.ts, the sheet page and preload) are never imported.',
+        'Process entrypoints (src/*/index.ts, the sheet and Settings pages and preloads) are never imported.',
       from: {},
       to: {
         path: [
           '^src/[^/]+/index\\.ts$',
           '^src/preload/sheet-preload\\.ts$',
+          '^src/preload/settings-preload\\.ts$',
           '^src/ui/sheet-entry\\.ts$',
+          '^src/ui/settings-entry\\.ts$',
         ],
       },
     },

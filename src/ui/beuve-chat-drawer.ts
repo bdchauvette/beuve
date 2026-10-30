@@ -42,10 +42,10 @@ const maxMentions = 8;
  * `/review` answers as a list of findings (severity, category, confidence, whether a second pass
  * confirmed it, a pill and a Stage button each), `/summarize` answers as a calm block, `/compact`
  * summaries with everything before the latest folded under a divider, and the commands' results. Nothing typed here can change the worktree. Presentational: emits
- * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`, `beuve-chat-cycle` (Tab),
+ * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`,
  * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-clear-queue`,
  * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-cite`, `beuve-chat-mention` (a chip)
- * and `beuve-open-editor` (`o` on a pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
+ * and `beuve-open-editor` (Open in Editor on a pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
  * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
  */
 @customElement('beuve-chat-drawer')
@@ -505,13 +505,6 @@ export class BeuveChatDrawer extends LitElement {
         this.emit('beuve-chat-escape');
         return;
       }
-      case 'Tab': {
-        // The shell ignores keys typed in inputs, and the browser would move focus to the body.
-        event.preventDefault();
-        event.stopPropagation();
-        this.emit('beuve-chat-cycle', { step: event.shiftKey ? -1 : 1 });
-        return;
-      }
       case 'ArrowUp': {
         const buttons = this.navButtons();
         if (buttons.length > 0) {
@@ -535,14 +528,6 @@ export class BeuveChatDrawer extends LitElement {
     if (event.key === 'Escape') {
       event.preventDefault();
       this.emit('beuve-chat-escape');
-      return;
-    }
-    if (event.key === 'o') {
-      const { path, line } = target.dataset;
-      if (path !== undefined && line !== undefined) {
-        event.preventDefault();
-        this.emit('beuve-open-editor', { path, line: Number(line) });
-      }
       return;
     }
     const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[event.key];
@@ -975,7 +960,12 @@ export class BeuveChatDrawer extends LitElement {
       message.citations,
       isStreaming ? 'streaming' : 'final',
     );
-    return html`<div class="entry answer ${message.status}" role="group" aria-label="Answer">
+    return html`<div
+      class="entry answer ${message.status}"
+      role="group"
+      aria-label="Answer"
+      data-message-id=${message.id}
+    >
       ${
         blocks.length === 0
           ? nothing
@@ -1364,8 +1354,7 @@ export class BeuveChatDrawer extends LitElement {
                     : 'Open a review session, then ask a question about it.'
                 }
                 Claude Code only runs when you ask, with your own login: the question, the diff and
-                the files it reads leave this machine. It never edits anything. /help lists the
-                commands. <kbd>Esc</kbd> returns to the diff.
+                the files it reads leave this machine. It never edits anything.
               </p>`
             : html`<div class="transcript" aria-live="polite">
                 ${this.renderTranscript()} ${this.renderQueue()}

@@ -10,7 +10,11 @@ import type {
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
+import type { CommandId } from '#contract/command-catalog.ts';
+
 import './beuve-patch-preview.ts';
+import { displayAccelerator } from './display-accelerator.ts';
+import { keyPlatformOf } from './key-platform-of.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import type { GithubDockState } from './github-post-state.ts';
@@ -51,10 +55,11 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
 /**
  * Zone 3: the Universal Review Artifact staging dock (ADR 0023, 0027). Lists the session's staged
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
- * outdated marker), then the withdrawn and addressed ones. While the zone has focus: `j`/`k`
- * move, Enter jumps the diff stream to the item, `o` opens it in the editor (`beuve-open-editor`), Space opens its editor (title, body, severity),
- * `x` withdraws or restores it, `a` marks it addressed (or restages it), and `Shift+J`/`Shift+K`
- * move it down or up the export order. A verdict selector shows the derived default and refuses
+ * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
+ * Return jumps the diff stream to the item, Space opens its editor (title, body, severity), Delete
+ * withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; Review ▸ Note and the
+ * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
+ * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocker; export buttons copy the compiled review. Items carrying a
  * suggested patch say `suggestion` and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
@@ -335,92 +340,32 @@ export class BeuveUraDock extends LitElement {
       .note.error {
         color: var(--beuve-danger);
       }
-
-      .keys {
-        margin: var(--beuve-space-2) 0 0;
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-      }
-
-      .keys b {
-        font: var(--beuve-font-mono);
-        font-size: 11px;
-        font-weight: 400;
-        color: var(--beuve-text);
-      }
     `,
   ];
 
+  /** The dock's in-place keys (ADR 0068): ↑/↓ move, Return shows, Space edits, Delete withdraws, ⌥↑/⌥↓ reorder. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) {
+    if (event.ctrlKey || event.metaKey || event.defaultPrevented) {
       return;
     }
     if (isTextEntry(event)) {
       this.editorKey(event);
       return;
     }
-    const ordered = this.ordered();
-    const current = ordered[this.cursor];
-    const key = event.shiftKey ? event.key.toUpperCase() : event.key;
-    switch (key) {
-      case 'j':
-      case 'k':
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        event.preventDefault();
-        const step = key === 'j' || key === 'ArrowDown' ? 1 : -1;
-        this.cursor = Math.min(Math.max(0, this.cursor + step), Math.max(0, ordered.length - 1));
-        this.editingId = undefined;
-        void this.revealCursor();
-        return;
-      }
-      case 'J':
-      case 'K': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.move(current, key === 'J' ? 1 : -1);
-        }
-        return;
-      }
-      case 'Enter': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.emit('beuve-ura-jump', { item: current });
-        }
-        return;
-      }
-      case 'o': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.openInEditor(current);
-        }
-        return;
-      }
-      case ' ': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.toggleEditor(current);
-        }
-        return;
-      }
-      case 'x': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.transition(current, current.status.kind === 'withdrawn' ? 'staged' : 'withdrawn');
-        }
-        return;
-      }
-      case 'a': {
-        event.preventDefault();
-        if (current !== undefined) {
-          this.transition(current, current.status.kind === 'addressed' ? 'staged' : 'addressed');
-        }
-        return;
-      }
-      default: {
-        return;
-      }
+    const step = ({ ArrowDown: 1, ArrowUp: -1 } as const)[event.key];
+    if (step !== undefined && !event.altKey && !event.shiftKey) {
+      event.preventDefault();
+      this.moveCursor(step);
+      return;
     }
+    const key = event.altKey ? `Alt+${event.key}` : event.key;
+    const id = inPlaceKeys[key];
+    if (id === undefined) {
+      return;
+    }
+
+    event.preventDefault();
+    this.runCommand(id);
   };
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
@@ -443,9 +388,19 @@ export class BeuveUraDock extends LitElement {
   @state() accessor editingId: string | undefined;
   @state() accessor verdictRefusal = '';
 
+  /** `process.platform`, for the Save button's tooltip. */
+  @property() accessor platform = '';
+
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+  }
+
+  private moveCursor(step: 1 | -1): void {
+    const ordered = this.ordered();
+    this.cursor = Math.min(Math.max(0, this.cursor + step), Math.max(0, ordered.length - 1));
+    this.editingId = undefined;
+    void this.revealCursor();
   }
 
   /** Staged items first, in export order, then withdrawn and addressed ones. */
@@ -456,7 +411,7 @@ export class BeuveUraDock extends LitElement {
     ];
   }
 
-  /** `o`: the item's file at its current first line (line 1 for file notes and outdated items). */
+  /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
   private openInEditor(item: UraItemView): void {
     const target = item.placement.kind === 'current' ? item.placement.anchor : item.anchor;
     if (target.kind === 'change') {
@@ -642,23 +597,23 @@ export class BeuveUraDock extends LitElement {
       <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
       ${this.renderSuggestionActions(item)}
       <div class="row">
-        <span class="note">⌘Enter saves · Esc closes</span>
         <span class="spacer"></span>
         <button
           type="button"
+          title="Cancel (Esc)"
           @click=${(): void => {
             this.closeEditor();
           }}
         >
           Cancel
         </button>
-        <button type="submit" class="primary">Save</button>
+        <button type="submit" class="primary" title=${`Save (${this.saveKey()})`}>Save</button>
       </div>
     </form>`;
   }
 
   /**
-   * Re-edit or remove a suggestion. Editing happens in the diff stream (`e` there), so it is
+   * Re-edit or remove a suggestion. Editing happens in the diff stream (Suggest Edit there), so it is
    * offered only for line notes current on the head they were written against.
    */
   private renderSuggestionActions(item: UraItemView): TemplateResult | typeof nothing {
@@ -864,7 +819,71 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  /** The item under the dock's cursor, which ⌘> adds to the chat by its anchor (ADR 0046). */
+  private saveKey(): string {
+    const platform = keyPlatformOf(this.platform);
+    return displayAccelerator(platform === 'mac' ? 'Cmd+Return' : 'Ctrl+Return', platform);
+  }
+
+  /** Runs a Review ▸ Note command, or Open in Editor, on the item under the cursor. */
+  runCommand(id: CommandId): boolean {
+    const ordered = this.ordered();
+    const current = ordered[this.cursor];
+    switch (id) {
+      case 'dock-move': {
+        return true;
+      }
+      case 'dock-move-up':
+      case 'dock-move-down': {
+        if (current !== undefined) {
+          this.move(current, id === 'dock-move-down' ? 1 : -1);
+        }
+        return true;
+      }
+      case 'dock-show': {
+        if (current !== undefined) {
+          this.emit('beuve-ura-jump', { item: current });
+        }
+        return true;
+      }
+      case 'open-in-editor': {
+        if (current !== undefined) {
+          this.openInEditor(current);
+        }
+        return true;
+      }
+      case 'dock-edit': {
+        if (current !== undefined) {
+          this.toggleEditor(current);
+        }
+        return true;
+      }
+      case 'dock-withdraw': {
+        if (current !== undefined) {
+          this.transition(current, current.status.kind === 'withdrawn' ? 'staged' : 'withdrawn');
+        }
+        return true;
+      }
+      case 'dock-addressed': {
+        if (current !== undefined) {
+          this.transition(current, current.status.kind === 'addressed' ? 'staged' : 'addressed');
+        }
+        return true;
+      }
+      default: {
+        return false;
+      }
+    }
+  }
+
+  /** Puts the cursor on item `itemId`, for a context menu opened on it. */
+  selectItem(itemId: string): void {
+    const index = this.ordered().findIndex((item) => item.id === itemId);
+    if (index !== -1) {
+      this.cursor = index;
+    }
+  }
+
+  /** The item under the dock's cursor, which Add to Chat adds by its anchor (ADR 0046). */
   cursorItem(): UraItemView | undefined {
     return this.ordered()[this.cursor];
   }
@@ -880,23 +899,13 @@ export class BeuveUraDock extends LitElement {
               ? html`<p class="empty">
                   ${
                     this.hasSession
-                      ? html`Nothing staged. <kbd>m</kbd> in the diff stream stages the focused hunk
-                          or selected lines; a chat answer or a /review finding stages with its
-                          Stage button.`
+                      ? 'Nothing staged yet. Choose Review ▸ Add Note on a diff selection, or Stage on a chat answer.'
                       : 'Open a review session to stage notes.'
                   }
                 </p>`
               : html`<ol aria-label="Staged review items">
                   ${ordered.map((item, index) => this.renderItem(item, index))}
                 </ol>`
-          }
-          ${
-            ordered.length === 0
-              ? nothing
-              : html`<p class="keys">
-                  <b>j k</b> move · <b>⏎</b> show · <b>Space</b> edit · <b>x</b> withdraw ·
-                  <b>a</b> addressed · <b>⇧J ⇧K</b> reorder
-                </p>`
           }
         </section>
         ${this.renderExport(stagedCount)}
@@ -916,6 +925,15 @@ export class BeuveUraDock extends LitElement {
     }
   }
 }
+
+const inPlaceKeys: Readonly<Record<string, CommandId>> = {
+  Enter: 'dock-show',
+  ' ': 'dock-edit',
+  Delete: 'dock-withdraw',
+  Backspace: 'dock-withdraw',
+  'Alt+ArrowUp': 'dock-move-up',
+  'Alt+ArrowDown': 'dock-move-down',
+};
 
 /** ⌘/Ctrl+Enter in the editor saves, as Enter in its title does. */
 function submitOnModEnter(event: KeyboardEvent): void {

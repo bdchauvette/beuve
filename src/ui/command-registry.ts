@@ -1,684 +1,239 @@
+import { commandCatalog } from '#contract/command-catalog.ts';
+import type { CatalogCommand, CommandId } from '#contract/command-catalog.ts';
+
 import type { ZoneId } from './zones.ts';
 
-/** Shell actions `beuve-app` performs itself. */
-export type AppAction =
-  | 'open'
-  | 'palette'
-  | 'go-to-file'
-  | 'cycle-zone'
-  | 'shortcuts'
-  | 'chat'
-  | 'add-to-chat'
-  | 'tree-mode'
-  | 'toggle-sidebar'
-  | 'flip-sidebar'
-  | 'sidebar-overview'
-  | 'sidebar-review'
-  | 'sidebar-chat'
-  | 'find'
-  | 'toggle-generated'
-  | 'toggle-insights'
-  | 'toggle-skip-reviewed'
-  | 'order-path'
-  | 'order-imports'
-  | 'order-calls'
-  | 'commit-pairs'
-  | 'open-definition'
-  | 'open-type-definition'
-  | 'copy-permalink'
-  | 'open-permalink';
-
-/** What running a command from the palette does. */
+/** What running a command does in the main window. */
 export type CommandRun =
-  | { readonly kind: 'app'; readonly action: AppAction }
-  /** Focuses the zone and presses the key there, so the zone's own handler runs it. */
-  | {
-      readonly kind: 'zone-key';
-      readonly zone: ZoneId;
-      readonly key: string;
-      readonly isShifted?: boolean;
-    }
+  /** `beuve-app` runs it itself. */
+  | { readonly kind: 'app' }
+  /** Focuses the zone and hands it the command id, so the zone's own method runs it. */
+  | { readonly kind: 'zone'; readonly zone: ZoneId }
   /**
    * A chat command: runs `text` at once, or, when it takes an argument, opens the chat with
    * `text` typed for the reviewer to finish.
    */
   | { readonly kind: 'slash'; readonly text: string; readonly isPrefill: boolean }
+  /** Main runs it (Settings, About, …): the palette asks with `menu:run-main`. */
+  | { readonly kind: 'main' }
   /** Describes a key that only means something in place (typing in the chat, a portal). */
   | { readonly kind: 'none' };
 
-/** Where a shortcut works. */
-export type CommandScope = 'Anywhere' | 'Diff' | 'Review' | 'Chat' | 'Files';
-
-export interface CommandDefinition {
-  readonly id: string;
-  /** What the palette and the shortcuts overlay call it. */
-  readonly title: string;
-  readonly scope: CommandScope;
-  /** Display names of its shortcuts; empty for palette- or chat-only commands. */
-  readonly keys: readonly string[];
+/** What the main window adds to a catalog command. */
+interface CommandBehaviour {
+  readonly run: CommandRun;
   /** The chat command and its usage, e.g. `/editor zed|vscode|cursor`. */
   readonly slash?: string;
   /** The `/help` line after the usage; defaults to the title. */
   readonly help?: string;
-  /** False for spec keys that aren't built yet. */
-  readonly available: boolean;
-  readonly run: CommandRun;
 }
 
-const none: CommandRun = { kind: 'none' };
+/** A catalog command (ADR 0068) with what running it does in the main window. */
+export type CommandDefinition = CatalogCommand & CommandBehaviour & { readonly id: CommandId };
 
 /**
- * Every command beuve has, in the order the shortcuts overlay lists them: the spec 5A keys, the
- * shell's own and the chat's slash commands. The keybinding overlay, `/help`, the palette and the
- * key handlers' documentation all read this list, so they can't drift apart.
+ * Every catalog command with its behaviour in the main window, in catalog order. The palette, the
+ * Keyboard Shortcuts window and `/help` read this list, and `menu:run` dispatches through it, so
+ * no command can be in one and not the others. Titles and keys live in the catalog only.
  */
-export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
-  {
-    id: 'palette',
-    title: 'Command palette',
-    scope: 'Anywhere',
-    keys: ['⌘K', '⌘⇧P'],
-    available: true,
-    run: app('palette'),
-  },
-  {
-    id: 'open',
-    title: 'Open a pull request, branch or recent review…',
-    scope: 'Anywhere',
-    keys: ['⌘O'],
-    available: true,
-    run: app('open'),
-  },
-  {
-    id: 'go-to-file',
-    title: 'Go to file…',
-    scope: 'Anywhere',
-    keys: ['⌘P'],
-    available: true,
-    run: app('go-to-file'),
-  },
-  {
-    id: 'cycle-zone',
-    title: 'Cycle focus between regions',
-    scope: 'Anywhere',
-    keys: ['Tab', 'Shift+Tab'],
-    available: true,
-    run: app('cycle-zone'),
-  },
-  {
-    id: 'shortcuts',
-    title: 'Show keyboard shortcuts',
-    scope: 'Anywhere',
-    keys: ['?'],
-    available: true,
-    run: app('shortcuts'),
-  },
-  {
-    id: 'chat',
-    title: 'Open / focus the chat input (again to close)',
-    scope: 'Anywhere',
-    keys: ['c'],
-    available: true,
-    run: app('chat'),
-  },
-  {
-    id: 'add-to-chat',
-    title: 'Add selection to chat: the selected lines, hunk, staged note or file',
-    scope: 'Anywhere',
-    keys: ['⌘>'],
-    available: true,
-    run: app('add-to-chat'),
-  },
-  {
-    id: 'tree-mode',
-    title: 'Toggle diff-only file tree',
-    scope: 'Anywhere',
-    keys: ['f'],
-    available: true,
-    run: app('tree-mode'),
-  },
-  {
-    id: 'toggle-sidebar',
-    title: 'Show / hide the sidebar',
-    scope: 'Anywhere',
-    keys: ['\\'],
-    available: true,
-    run: app('toggle-sidebar'),
-  },
-  {
-    id: 'sidebar-overview',
-    title: 'Sidebar: intent and files',
-    scope: 'Anywhere',
-    keys: ['1'],
-    available: true,
-    run: app('sidebar-overview'),
-  },
-  {
-    id: 'sidebar-review',
-    title: 'Sidebar: staged review',
-    scope: 'Anywhere',
-    keys: ['2'],
-    available: true,
-    run: app('sidebar-review'),
-  },
-  {
-    id: 'sidebar-chat',
-    title: 'Sidebar: chat',
-    scope: 'Anywhere',
-    keys: ['3'],
-    available: true,
-    run: app('sidebar-chat'),
-  },
-  {
-    id: 'find',
-    title: 'Find in review (every file’s diff, collapsed ones too)',
-    scope: 'Anywhere',
-    keys: ['⌘F'],
-    available: true,
-    run: app('find'),
-  },
-  {
-    id: 'toggle-generated',
-    title: 'Show / collapse generated files',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('toggle-generated'),
-  },
-  {
-    id: 'toggle-insights',
-    title: 'Show / hide review insights on the diff',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('toggle-insights'),
-  },
-  {
-    id: 'toggle-skip-reviewed',
-    title: 'Skip / stop skipping reviewed files with j and k',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('toggle-skip-reviewed'),
-  },
-  {
-    id: 'order-path',
-    title: 'Order files by path',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('order-path'),
-  },
-  {
-    id: 'order-imports',
-    title: 'Order files by imports (what a file uses comes first)',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('order-imports'),
-  },
-  {
-    id: 'order-calls',
-    title: 'Order files by calls (asks the language server)',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('order-calls'),
-  },
-  {
-    id: 'commit-pairs',
-    title: 'Commits since the last review: filter the diff to one',
-    scope: 'Anywhere',
-    keys: [],
-    available: true,
-    run: app('commit-pairs'),
-  },
-  {
-    id: 'flip-sidebar',
-    title: 'Move the sidebar to the other side',
-    scope: 'Anywhere',
-    keys: [],
-    slash: '/sidebar left|right',
-    help: 'put the sidebar on the left or the right (remembered in settings.json)',
-    available: true,
-    run: app('flip-sidebar'),
-  },
-  {
-    id: 'next-hunk',
-    title: 'Next hunk (across files)',
-    scope: 'Diff',
-    keys: ['j'],
-    available: true,
-    run: zoneKey('diff', 'j'),
-  },
-  {
-    id: 'previous-hunk',
-    title: 'Previous hunk',
-    scope: 'Diff',
-    keys: ['k'],
-    available: true,
-    run: zoneKey('diff', 'k'),
-  },
-  {
-    id: 'expand',
-    title: 'Load / collapse the file’s diff (lockfiles, generated and large diffs start collapsed)',
-    scope: 'Diff',
-    keys: ['Space'],
-    available: true,
-    run: zoneKey('diff', ' '),
-  },
-  {
-    id: 'peek',
-    title: 'Call-stack peek (callers)',
-    scope: 'Diff',
-    keys: ['p'],
-    available: true,
-    run: zoneKey('diff', 'p'),
-  },
-  {
-    id: 'flow',
-    title: 'Control-flow graph of the function (Enter shows the code)',
-    scope: 'Diff',
-    keys: ['Shift+p'],
-    available: true,
-    run: zoneKey('diff', 'P', true),
-  },
-  {
-    id: 'trace',
-    title:
-      'Trace probe: run the tests covering the hunk and show what executed (asks once per repository)',
-    scope: 'Diff',
-    keys: ['r'],
-    available: true,
-    run: zoneKey('diff', 'r'),
-  },
-  {
-    id: 'close-portal',
-    title: 'Close the peek, flow or trace portal (stops a running probe)',
-    scope: 'Diff',
-    keys: ['Esc'],
-    available: true,
-    run: zoneKey('diff', 'Escape'),
-  },
-  {
-    id: 'stage',
-    title: 'Stage the selected lines, hunk or file as a note',
-    scope: 'Diff',
-    keys: ['m'],
-    available: true,
-    run: zoneKey('diff', 'm'),
-  },
-  {
-    id: 'suggest-edit',
-    title: 'Suggest an edit to the hunk or selected lines (⌘Enter saves, files are never written)',
-    scope: 'Diff',
-    keys: ['e'],
-    available: true,
-    run: zoneKey('diff', 'e'),
-  },
-  {
-    id: 'split-diff',
-    title: 'Diffs side by side / inline',
-    scope: 'Diff',
-    keys: ['s'],
-    available: true,
-    run: zoneKey('diff', 's'),
-  },
-  {
-    id: 'whitespace',
-    title: 'Hide / show whitespace-only changes',
-    scope: 'Diff',
-    keys: ['w'],
-    available: true,
-    run: zoneKey('diff', 'w'),
-  },
-  {
-    id: 'impact-details',
-    title: 'ImpactGate details of the file (Esc closes)',
-    scope: 'Diff',
-    keys: ['i'],
-    available: true,
-    run: zoneKey('diff', 'i'),
-  },
-  {
-    id: 'open-in-editor',
-    title: 'Open in your editor at this line',
-    scope: 'Diff',
-    keys: ['o'],
-    available: true,
-    run: zoneKey('diff', 'o'),
-  },
-  {
-    id: 'open-definition',
-    title: 'Open the definition of this line’s symbol in a sheet (a new window per jump)',
-    scope: 'Diff',
-    keys: ['Shift+d'],
-    available: true,
-    run: app('open-definition'),
-  },
-  {
-    id: 'open-type-definition',
-    title: 'Open the type of this line’s symbol in a sheet',
-    scope: 'Diff',
-    keys: ['Shift+t'],
-    available: true,
-    run: app('open-type-definition'),
-  },
-  {
-    id: 'copy-permalink',
-    title: 'Copy a GitHub permalink to these lines',
-    scope: 'Diff',
-    keys: ['Shift+y'],
-    available: true,
-    run: app('copy-permalink'),
-  },
-  {
-    id: 'open-permalink',
-    title: 'Open these lines on GitHub',
-    scope: 'Diff',
-    keys: ['Shift+o'],
-    available: true,
-    run: app('open-permalink'),
-  },
-  {
-    id: 'toggle-reviewed',
-    title: 'Mark the file reviewed / not reviewed (reviewed files collapse)',
-    scope: 'Diff',
-    keys: ['v'],
-    available: true,
-    run: zoneKey('diff', 'v'),
-  },
-  {
-    id: 'dock-move',
-    title: 'Review: next / previous item',
-    scope: 'Review',
-    keys: ['j', 'k'],
-    available: true,
-    run: zoneKey('ura', 'j'),
-  },
-  {
-    id: 'dock-show',
-    title: 'Review: show the item in the diff',
-    scope: 'Review',
-    keys: ['Enter'],
-    available: true,
-    run: zoneKey('ura', 'Enter'),
-  },
-  {
-    id: 'dock-edit',
-    title: 'Review: edit title, body and severity',
-    scope: 'Review',
-    keys: ['Space'],
-    available: true,
-    run: zoneKey('ura', ' '),
-  },
-  {
-    id: 'dock-withdraw',
-    title: 'Review: withdraw / restore the item',
-    scope: 'Review',
-    keys: ['x'],
-    available: true,
-    run: zoneKey('ura', 'x'),
-  },
-  {
-    id: 'dock-addressed',
-    title: 'Review: mark addressed / restage',
-    scope: 'Review',
-    keys: ['a'],
-    available: true,
-    run: zoneKey('ura', 'a'),
-  },
-  {
-    id: 'dock-reorder',
-    title: 'Review: move the item down / up',
-    scope: 'Review',
-    keys: ['Shift+j', 'Shift+k'],
-    available: true,
-    run: zoneKey('ura', 'J', true),
-  },
-  {
-    id: 'chat-ask',
-    title: 'Chat: ask a question, or run a command',
-    scope: 'Chat',
-    keys: ['Enter'],
-    available: true,
-    run: none,
-  },
-  {
-    id: 'chat-back',
-    title: 'Chat: back to the diff',
-    scope: 'Chat',
-    keys: ['Esc'],
-    available: true,
-    run: none,
-  },
-  {
-    id: 'chat-pills',
-    title: 'Chat: move between citation pills and answer buttons',
-    scope: 'Chat',
-    keys: ['↑', '↓'],
-    available: true,
-    run: none,
-  },
-  {
-    id: 'chat-chips',
-    title:
-      'Chat input: select the context chip beside the caret (Enter shows it, Backspace removes it)',
-    scope: 'Chat',
-    keys: ['←', '→'],
-    available: true,
-    run: none,
-  },
-  {
-    id: 'review',
-    title: 'Review the change: findings checked against the code',
-    scope: 'Chat',
-    keys: [],
-    slash: '/review',
-    help: 'a preliminary review as a chat answer: findings with severity and confidence, each checked against the code by a second, cheaper pass (unconfirmed ones are dropped) and stageable one by one. Uses your Claude Code login; the diff, ImpactGate findings and any worktree files Claude reads are sent to Anthropic under your account’s terms.',
-    available: true,
-    run: slash('/review'),
-  },
-  {
-    id: 'review-paths',
-    title: 'Review only some paths…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/review <path-prefix>…',
-    help: 'only files at or under these paths, e.g. /review src/ui docs/adr',
-    available: true,
-    run: slash('/review ', true),
-  },
-  {
-    id: 'review-fresh',
-    title: 'Rerun the review even if this head was reviewed',
-    scope: 'Chat',
-    keys: [],
-    slash: '/review --fresh',
-    help: 'rerun even if the chat already reviewed this head and scope (otherwise that answer is repeated)',
-    available: true,
-    run: slash('/review --fresh'),
-  },
-  {
-    id: 'review-no-verify',
-    title: 'Review without the verification pass',
-    scope: 'Chat',
-    keys: [],
-    slash: '/review --no-verify',
-    help: 'skip the second pass: faster and cheaper, but findings stay unchecked',
-    available: true,
-    run: slash('/review --no-verify'),
-  },
-  {
-    id: 'review-effort',
-    title: 'Review with more or less effort…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/review --effort=low|medium|high',
-    help: 'how hard Claude Code thinks',
-    available: true,
-    run: slash('/review --effort=', true),
-  },
-  {
-    id: 'summarize',
-    title: 'Summarize the change from the diff',
-    scope: 'Chat',
-    keys: [],
-    slash: '/summarize',
-    help: 'beuve’s own summary of the change, written from the diff and the code, never the pull request description: what changed, why (inferred), risky areas and files by purpose, with links',
-    available: true,
-    run: slash('/summarize'),
-  },
-  {
-    id: 'abstract',
-    title: 'Abstract of the change (same as /summarize)',
-    scope: 'Chat',
-    keys: [],
-    slash: '/abstract',
-    help: 'the same as /summarize',
-    available: true,
-    run: slash('/abstract'),
-  },
-  {
-    id: 'editor',
-    title: 'Choose the editor o opens…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/editor zed|vscode|cursor',
-    help: 'choose the editor the o key opens (just /editor shows the current one)',
-    available: true,
-    run: slash('/editor ', true),
-  },
-  {
-    id: 'sheets-mode',
-    title: 'Open definitions in sheet windows or over the diff…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/sheets window|inline',
-    help: 'definitions (Shift+d) open in a new sheet window each, or over the diff (just /sheets shows the current one)',
-    available: true,
-    run: slash('/sheets ', true),
-  },
-  {
-    id: 'diff-layout',
-    title: 'Show diffs side by side or inline…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/diff split|inline',
-    help: 'side-by-side or inline diffs (s in the diff; just /diff shows the current one)',
-    available: true,
-    run: slash('/diff ', true),
-  },
-  {
-    id: 'whitespace-mode',
-    title: 'Ignore or show whitespace-only changes…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/whitespace ignore|show',
-    help: 'hide or show whitespace-only changes, computed by git diff -w (w in the diff)',
-    available: true,
-    run: slash('/whitespace ', true),
-  },
-  {
-    id: 'generated-mode',
-    title: 'Show or collapse generated files…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/generated show|hide',
-    help: 'expand or collapse files .gitattributes marks linguist-generated (and minified bundles, source maps, protobuf output); remembered in settings.json',
-    available: true,
-    run: slash('/generated ', true),
-  },
-  {
-    id: 'insights-mode',
-    title: 'Show or hide review insights…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/insights show|hide',
-    help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
-    available: true,
-    run: slash('/insights ', true),
-  },
-  {
-    id: 'review-order',
-    title: 'Order the files by path, imports or calls…',
-    scope: 'Chat',
-    keys: [],
-    slash: '/order path|imports|calls',
-    help: 'the order the diff lists files in: path, imports (what a file uses comes first) or calls (asks the language server); config and mechanical files always go last. Remembered in settings.json; just /order shows the current one',
-    available: true,
-    run: slash('/order ', true),
-  },
-  {
-    id: 'trust',
-    title: 'Trust this repository’s tests for trace probes',
-    scope: 'Chat',
-    keys: [],
-    slash: '/trust',
-    help: 'allow this repository’s tests to run on this machine for trace probes (r). They execute the repository’s test code and Vitest config.',
-    available: true,
-    run: slash('/trust'),
-  },
-  {
-    id: 'untrust',
-    title: 'Stop trusting this repository’s tests',
-    scope: 'Chat',
-    keys: [],
-    slash: '/untrust',
-    help: 'withdraw that approval; r then asks again.',
-    available: true,
-    run: slash('/untrust'),
-  },
-  {
-    id: 'compact-chat',
-    title: 'Compact the chat into a summary',
-    scope: 'Chat',
-    keys: [],
-    slash: '/compact',
-    help: 'condense the conversation so far into a short note with its citations; later questions send the note instead of the older turns, which stay readable above it',
-    available: true,
-    run: slash('/compact'),
-  },
-  {
-    id: 'clear-chat',
-    title: 'Clear this session’s chat',
-    scope: 'Chat',
-    keys: [],
-    slash: '/clear',
-    help: 'delete this session’s chat (stops the answer in progress and empties the queue)',
-    available: true,
-    run: slash('/clear'),
-  },
-  {
-    id: 'clear-queue',
-    title: 'Drop the questions waiting in the chat queue',
-    scope: 'Chat',
-    keys: [],
-    slash: '/clear queue',
-    help: 'drop only the questions and commands still waiting; the running answer goes on',
-    available: true,
-    run: slash('/clear queue'),
-  },
-  {
-    id: 'help',
-    title: 'List the chat commands',
-    scope: 'Chat',
-    keys: [],
-    slash: '/help',
-    help: 'this list.',
-    available: true,
-    run: slash('/help'),
-  },
-] satisfies readonly CommandDefinition[]);
+export const commandRegistry: readonly CommandDefinition[] = Object.freeze(registered());
 
-function zoneKey(zone: ZoneId, key: string, isShifted = false): CommandRun {
-  return { kind: 'zone-key', zone, key, ...(isShifted && { isShifted }) };
+function registered(): CommandDefinition[] {
+  const table = behaviours();
+  return commandCatalog.map((command): CommandDefinition => ({ ...command, ...table[command.id] }));
 }
 
-function app(action: AppAction): CommandRun {
-  return { kind: 'app', action };
-}
-
-function slash(text: string, isPrefill = false): CommandRun {
-  return { kind: 'slash', text, isPrefill };
+function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
+  const app: CommandBehaviour = { run: { kind: 'app' } };
+  const main: CommandBehaviour = { run: { kind: 'main' } };
+  const none: CommandBehaviour = { run: { kind: 'none' } };
+  const diff: CommandBehaviour = { run: { kind: 'zone', zone: 'diff' } };
+  const dock: CommandBehaviour = { run: { kind: 'zone', zone: 'ura' } };
+  return {
+    about: main,
+    settings: main,
+    open: app,
+    'export-agent-xml': app,
+    'export-agent-json': app,
+    'export-github': app,
+    'post-review': app,
+    'close-all-sheets': main,
+    'copy-permalink': app,
+    find: app,
+    'find-next': app,
+    'find-previous': app,
+    'find-selection': app,
+    'find-match-case': app,
+    palette: app,
+    'toggle-sidebar': app,
+    'sidebar-overview': app,
+    'sidebar-review': app,
+    'sidebar-chat': app,
+    'sidebar-left': app,
+    'sidebar-right': app,
+    'flip-sidebar': {
+      ...app,
+      slash: '/sidebar left|right',
+      help: 'put the sidebar on the left or the right (remembered in settings.json)',
+    },
+    'diff-split': {
+      ...app,
+      slash: '/diff split|inline',
+      help: 'side-by-side or inline diffs (just /diff shows the current one)',
+    },
+    'diff-inline': app,
+    whitespace: {
+      ...app,
+      slash: '/whitespace ignore|show',
+      help: 'hide or show whitespace-only changes, computed by git diff -w',
+    },
+    'toggle-generated': {
+      ...app,
+      slash: '/generated show|hide',
+      help: 'expand or collapse files .gitattributes marks linguist-generated (and minified bundles, source maps, protobuf output); remembered in settings.json',
+    },
+    'toggle-insights': {
+      ...app,
+      slash: '/insights show|hide',
+      help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
+    },
+    'tree-mode': app,
+    'order-path': {
+      ...app,
+      slash: '/order path|imports|calls',
+      help: 'the order the diff lists files in: path, imports (what a file uses comes first) or calls (asks the language server); config and mechanical files always go last. Remembered in settings.json; just /order shows the current one',
+    },
+    'order-imports': app,
+    'order-calls': app,
+    'sheets-window': {
+      ...app,
+      slash: '/sheets window|inline',
+      help: 'definitions open in a new sheet window each, or over the diff (just /sheets shows the current one)',
+    },
+    'sheets-inline': app,
+    expand: diff,
+    collapse: diff,
+    back: app,
+    forward: app,
+    'next-hunk': diff,
+    'previous-hunk': diff,
+    'next-file': diff,
+    'previous-file': diff,
+    'toggle-skip-reviewed': app,
+    'go-to-file': app,
+    'open-definition': app,
+    'open-type-definition': app,
+    'cycle-zone': app,
+    'cycle-zone-back': app,
+    'toggle-reviewed': app,
+    'save-progress': app,
+    stage: diff,
+    'suggest-edit': diff,
+    peek: diff,
+    flow: diff,
+    trace: diff,
+    stop: app,
+    'impact-details': diff,
+    'open-in-editor': app,
+    'editor-zed': {
+      ...app,
+      slash: '/editor zed|vscode|cursor',
+      help: 'choose the editor Open in Editor uses (just /editor shows the current one)',
+    },
+    'editor-vscode': app,
+    'editor-cursor': app,
+    'open-permalink': app,
+    'commit-pairs': app,
+    'dock-show': dock,
+    'dock-edit': dock,
+    'dock-withdraw': dock,
+    'dock-addressed': dock,
+    'dock-move-up': dock,
+    'dock-move-down': dock,
+    'dock-move': none,
+    trust: {
+      run: { kind: 'slash', text: '/trust', isPrefill: false },
+      slash: '/trust',
+      help: 'allow this repository’s tests to run on this machine for trace probes. They execute the repository’s test code and Vitest config.',
+    },
+    untrust: {
+      run: { kind: 'slash', text: '/untrust', isPrefill: false },
+      slash: '/untrust',
+      help: 'withdraw that approval; a trace probe then asks again.',
+    },
+    chat: app,
+    'add-to-chat': app,
+    'stage-answer': app,
+    summarize: {
+      run: { kind: 'slash', text: '/summarize', isPrefill: false },
+      slash: '/summarize',
+      help: 'beuve’s own summary of the change, written from the diff and the code, never the pull request description: what changed, why (inferred), risky areas and files by purpose, with links',
+    },
+    abstract: {
+      run: { kind: 'slash', text: '/abstract', isPrefill: false },
+      slash: '/abstract',
+      help: 'the same as /summarize',
+    },
+    review: {
+      run: { kind: 'slash', text: '/review', isPrefill: false },
+      slash: '/review',
+      help: 'a preliminary review as a chat answer: findings with severity and confidence, each checked against the code by a second, cheaper pass (unconfirmed ones are dropped) and stageable one by one. Uses your Claude Code login; the diff, ImpactGate findings and any worktree files Claude reads are sent to Anthropic under your account’s terms.',
+    },
+    'review-paths': {
+      run: { kind: 'slash', text: '/review ', isPrefill: true },
+      slash: '/review <path-prefix>…',
+      help: 'only files at or under these paths, e.g. /review src/ui docs/adr',
+    },
+    'review-fresh': {
+      run: { kind: 'slash', text: '/review --fresh', isPrefill: false },
+      slash: '/review --fresh',
+      help: 'rerun even if the chat already reviewed this head and scope (otherwise that answer is repeated)',
+    },
+    'review-no-verify': {
+      run: { kind: 'slash', text: '/review --no-verify', isPrefill: false },
+      slash: '/review --no-verify',
+      help: 'skip the second pass: faster and cheaper, but findings stay unchecked',
+    },
+    'review-effort-low': {
+      run: { kind: 'slash', text: '/review --effort=low', isPrefill: false },
+      slash: '/review --effort=low|medium|high',
+      help: 'how hard Claude Code thinks',
+    },
+    'review-effort-medium': {
+      run: { kind: 'slash', text: '/review --effort=medium', isPrefill: false },
+    },
+    'review-effort-high': {
+      run: { kind: 'slash', text: '/review --effort=high', isPrefill: false },
+    },
+    'compact-chat': {
+      run: { kind: 'slash', text: '/compact', isPrefill: false },
+      slash: '/compact',
+      help: 'condense the conversation so far into a short note with its citations; later questions send the note instead of the older turns, which stay readable above it',
+    },
+    'clear-queue': {
+      run: { kind: 'slash', text: '/clear queue', isPrefill: false },
+      slash: '/clear queue',
+      help: 'drop only the questions and commands still waiting; the running answer goes on',
+    },
+    'clear-chat': {
+      run: { kind: 'slash', text: '/clear', isPrefill: false },
+      slash: '/clear',
+      help: 'delete this session’s chat (stops the answer in progress and empties the queue)',
+    },
+    help: {
+      run: { kind: 'slash', text: '/help', isPrefill: false },
+      slash: '/help',
+      help: 'this list.',
+    },
+    'chat-ask': none,
+    'chat-back': none,
+    'chat-pills': none,
+    'chat-chips': none,
+    'close-portal': none,
+    'portal-walk': none,
+    'sheet-cursor': none,
+    'list-move': none,
+    shortcuts: app,
+    'github-home': main,
+  };
 }

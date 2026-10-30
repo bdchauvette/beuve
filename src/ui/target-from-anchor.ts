@@ -5,7 +5,7 @@ import type { ReviewTarget } from './target-from.ts';
 
 /**
  * The {@link ReviewTarget} a staged note's head-side anchor (ADR 0023) names in the review shown
- * (ADR 0063), so the dock's ⌘> goes through the same adapters as the diff's: its lines as a head
+ * (ADR 0063), so the dock's Add to Chat goes through the same adapters as the diff's: its lines as a head
  * selection, its file as the file, the change as the change. `undefined` when the anchor's file is
  * not in `files`. Pure.
  */

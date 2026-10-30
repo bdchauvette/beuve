@@ -17,8 +17,9 @@ const dist = path.join(root, 'dist');
 await buildAll();
 
 /**
- * Bundles main (ESM), the main and sheet preloads (CJS, sandboxed per ADR 0005, 0067) and ui (ESM,
- * code-split per ADR 0025, with the sheet page `sheet-entry.js` as a second entry sharing its chunks)
+ * Bundles main (ESM), the main, sheet and Settings preloads (CJS, sandboxed per ADR 0005, 0067, 0068)
+ * and ui (ESM, code-split per ADR 0025, with the sheet page `sheet-entry.js` and the Settings page
+ * `settings-entry.js` as further entries sharing its chunks)
  * into dist/ (plus main's ImpactGate worker as `dist/main/impact-worker.js`, ADR 0053), and copies the Tree-sitter runtime and grammar wasm files main loads from
  * `dist/main/wasm/` (ADR 0014). Prints the renderer's eager size.
  */
@@ -31,9 +32,11 @@ async function buildAll(): Promise<void> {
     build(impactWorkerOptions()),
     build(preloadOptions()),
     build(sheetPreloadOptions()),
+    build(settingsPreloadOptions()),
   ]);
   await copyFile(path.join(root, 'src/ui/index.html'), path.join(dist, 'ui/index.html'));
   await copyFile(path.join(root, 'src/ui/sheet.html'), path.join(dist, 'ui/sheet.html'));
+  await copyFile(path.join(root, 'src/ui/settings.html'), path.join(dist, 'ui/settings.html'));
   await copyWasmAssets(path.join(dist, 'main/wasm'));
   if (ui.metafile !== undefined) {
     reportUiSize(ui.metafile);
@@ -118,6 +121,15 @@ function sheetPreloadOptions(): BuildOptions {
   };
 }
 
+/** The Settings window's preload (ADR 0068), which exposes only the settings channels. */
+function settingsPreloadOptions(): BuildOptions {
+  return {
+    ...preloadOptions(),
+    entryPoints: [path.join(root, 'src/preload/settings-preload.ts')],
+    outfile: path.join(dist, 'preload/settings-preload.cjs'),
+  };
+}
+
 /**
  * The renderer splits so Shiki grammars load lazily through `import()` (ADR 0018). Chunks live in
  * `dist/ui/chunks/` and load over `file://` like the entry.
@@ -128,6 +140,7 @@ function uiOptions(): BuildOptions {
     entryPoints: [
       path.join(root, 'src/ui/index.ts'),
       path.join(root, 'src/ui/sheet-entry.ts'),
+      path.join(root, 'src/ui/settings-entry.ts'),
       path.join(root, 'src/ui/index.css'),
     ],
     outdir: path.join(dist, 'ui'),

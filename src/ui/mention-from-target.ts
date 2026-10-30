@@ -2,7 +2,7 @@ import type { MentionTarget } from './chat-draft.ts';
 import type { ReviewTarget } from './target-from.ts';
 
 /**
- * What ⌘> adds to the chat from `target` (ADR 0046, 0063): a selection on its own side (base
+ * What Add to Chat adds to the chat from `target` (ADR 0046, 0063): a selection on its own side (base
  * lines under the base path), a hunk's head lines (a pure deletion: its base lines), a jump's
  * line, or the whole file (the base side of a deleted file). Nothing for the whole change. Pure.
  */

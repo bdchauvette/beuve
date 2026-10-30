@@ -6,6 +6,8 @@ import type { UraSeverityView } from '#contract/ipc-contract.ts';
 
 import './beuve-patch-preview.ts';
 
+import { keyPlatformOf } from './key-platform-of.ts';
+
 /** What the composer submits: a new note's severity, one-line title and Markdown body. */
 export interface UraDraft {
   readonly severity: UraSeverityView;
@@ -16,9 +18,9 @@ export interface UraDraft {
 const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 'nit', 'praise'];
 
 /**
- * The compact note composer `m` opens under the staged lines (ADR 0027): severity (`issue` by
+ * The compact note composer Add Note opens under the staged lines (ADR 0027): severity (`issue` by
  * default), title and body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
- * With a suggestion from an `e` edit (ADR 0043) it previews the patch that is staged with the
+ * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Emits
  * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.
  */
@@ -234,14 +236,15 @@ export class BeuveUraComposer extends LitElement {
       }
       <div class="row">
         <span class="where">${this.where}</span>
-        ${
-          this.error === ''
-            ? html`<span class="hint">Enter saves · Esc cancels</span>`
-            : html`<span class="error" role="alert">${this.error}</span>`
-        }
+        ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
         <span class="spacer"></span>
-        <button type="button" @click=${this.onCancel}>Cancel</button>
-        <button type="submit" class="primary" ?disabled=${this.saving}>
+        <button type="button" title="Cancel (Esc)" @click=${this.onCancel}>Cancel</button>
+        <button
+          type="submit"
+          class="primary"
+          title=${`Stage (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})`}
+          ?disabled=${this.saving}
+        >
           ${this.saving ? 'Staging…' : 'Stage'}
         </button>
       </div>

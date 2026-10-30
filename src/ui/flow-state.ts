@@ -1,7 +1,7 @@
 import type { FlowGraphView } from '#contract/ipc-contract.ts';
 
 /**
- * The control-flow portal of one file card (`Shift+p`): the graph of the function enclosing
+ * The control-flow portal of one file card (Show Control Flow): the graph of the function enclosing
  * head line `line`, or why there is none.
  */
 export type FlowState = {

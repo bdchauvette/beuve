@@ -14,6 +14,8 @@ import type {
   TraceRunStartedView,
   TraceSetTrustRequest,
   TraceStatusView,
+  TraceRemoveTrustRequest,
+  TraceTrustEntryView,
   TraceTrustView,
 } from '#contract/ipc-contract.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
@@ -72,6 +74,11 @@ export interface TraceServices {
   readonly cancel: (request: TraceCancelRequest) => IpcResult<TraceCancelledView>;
   readonly getTrust: (request: TraceGetTrustRequest) => Promise<IpcResult<TraceTrustView>>;
   readonly setTrust: (request: TraceSetTrustRequest) => Promise<IpcResult<TraceTrustView>>;
+  /** Every stored approval, for the Settings window (ADR 0068). */
+  readonly listTrust: () => Promise<IpcResult<readonly TraceTrustEntryView[]>>;
+  readonly removeTrust: (
+    request: TraceRemoveTrustRequest,
+  ) => Promise<IpcResult<readonly TraceTrustEntryView[]>>;
   /** Aborts the session's probe if it started at a head other than `headSha`. */
   readonly observeHead: (sessionId: string, headSha: string) => void;
   readonly onStatus: (listener: (event: TraceStatusView) => void) => () => void;
@@ -425,6 +432,12 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       const { repository } = refreshed.value;
       return ok(trusted ? await trust.grant(repository) : await trust.revoke(repository));
     },
+
+    listTrust: async (): Promise<IpcResult<readonly TraceTrustEntryView[]>> =>
+      ok(await trust.list()),
+
+    removeTrust: async ({ repositoryPath }): Promise<IpcResult<readonly TraceTrustEntryView[]>> =>
+      ok(await trust.remove(repositoryPath)),
 
     observeHead: (sessionId, headSha): void => {
       const job = jobs.get(sessionId);

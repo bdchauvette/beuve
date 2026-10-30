@@ -49,7 +49,7 @@ const markers: Readonly<Record<string, string | undefined>> = {
 };
 
 /**
- * A small control-flow chart of one function (Shift+p, spec 5D): plain text in thin outlines, lines
+ * A small control-flow chart of one function (Show Control Flow, spec 5D): plain text in thin outlines, lines
  * the review changed in the diff "added" colour. Nodes are focusable; arrow keys walk the flow and
  * Enter fires `flow-node-activate` so Zone 2 can jump to the code.
  */

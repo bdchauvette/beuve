@@ -5,14 +5,12 @@ export interface Zone {
   readonly id: ZoneId;
   /** The status bar's name for the focused region. */
   readonly label: string;
-  /** The few keys worth showing while the region has focus. */
-  readonly hints: string;
 }
 
-/** Zones in Tab order. */
+/** Zones in Next Region order (ADR 0068). */
 export const zones: readonly Zone[] = Object.freeze([
-  { id: 'intent', label: 'Intent & files', hints: '↑↓ move · ⏎ show file · f changed only' },
-  { id: 'diff', label: 'Diff', hints: 'j k hunks · v reviewed · m stage · e suggest · p peek' },
-  { id: 'ura', label: 'Review', hints: 'j k move · ⏎ show · Space edit · x withdraw' },
-  { id: 'chat', label: 'Chat', hints: '⏎ ask · ↑ answers · Esc back' },
+  { id: 'intent', label: 'Intent & files' },
+  { id: 'diff', label: 'Diff' },
+  { id: 'ura', label: 'Review' },
+  { id: 'chat', label: 'Chat' },
 ]);

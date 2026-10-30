@@ -17,8 +17,8 @@ import { zoneStyles } from './zone-styles.ts';
 
 /**
  * Zone 1: a pull request session's intent (title, body, stack) and the radar tree of the open
- * review's files (`f` toggles diff-only); focusing the zone focuses the tree. No title bar: the
- * content says what it is. Sessions are opened from the open dialog and the palette, not here.
+ * review's files under a header row whose All · Changed toggle (View ▸ Changed Files Only) emits
+ * `beuve-tree-mode { mode }`; focusing the zone focuses the tree. Sessions are opened from the open dialog and the palette, not here.
  * Requirements mapping arrives later. The tree emits `beuve-tree-select`, the intent
  * `beuve-open-link` and `beuve-open-stack`.
  */
@@ -40,13 +40,39 @@ export class BeuveIntentSidebar extends LitElement {
         min-height: 240px;
       }
 
-      .mode {
-        position: absolute;
-        top: -2px;
-        right: 0;
-        z-index: 1;
+      .files-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 22px;
+        margin-bottom: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
+      }
+
+      .segments {
+        display: inline-flex;
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        overflow: hidden;
+      }
+
+      .segments button {
+        padding: 1px var(--beuve-space-2);
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .segments button + button {
+        border-left: 1px solid var(--beuve-border);
+      }
+
+      .segments button[aria-pressed='true'] {
+        background: var(--beuve-surface-sunken);
+        color: var(--beuve-text);
       }
 
       beuve-radar-tree {
@@ -62,7 +88,7 @@ export class BeuveIntentSidebar extends LitElement {
     `,
   ];
 
-  /** Tab into Zone 1 lands in the radar tree, so arrow keys work at once. */
+  /** Focusing Zone 1 lands in the radar tree, so arrow keys work at once. */
   private readonly onFocus = (): void => {
     this.renderRoot.querySelector('beuve-radar-tree')?.focusTree();
   };
@@ -88,9 +114,13 @@ export class BeuveIntentSidebar extends LitElement {
 
   private renderFiles(files: readonly DiffFileView[]): TemplateResult {
     return html`<section class="files">
-      <span class="mode" title="f toggles"
-        >${this.treeMode === 'diff-only' ? 'changed only' : 'with neighbours'} · <kbd>f</kbd></span
-      >
+      <div class="files-header">
+        <span>Files</span>
+        <span class="segments" role="group" aria-label="Files shown">
+          ${this.renderMode('neighborhood', 'All', 'Show the changed files with their neighbours')}
+          ${this.renderMode('diff-only', 'Changed', 'Show changed files only')}
+        </span>
+      </div>
       <beuve-radar-tree
         .tree=${this.tree}
         .files=${files}
@@ -102,7 +132,22 @@ export class BeuveIntentSidebar extends LitElement {
     </section>`;
   }
 
-  /** The file focused in the radar tree, which ⌘> adds to the chat whole. */
+  private renderMode(mode: RadarTreeMode, label: string, title: string): TemplateResult {
+    return html`<button
+      type="button"
+      title=${title}
+      aria-pressed=${this.treeMode === mode ? 'true' : 'false'}
+      @click=${(): void => {
+        this.dispatchEvent(
+          new CustomEvent('beuve-tree-mode', { detail: { mode }, bubbles: true, composed: true }),
+        );
+      }}
+    >
+      ${label}
+    </button>`;
+  }
+
+  /** The file focused in the radar tree, which Add to Chat adds whole. */
   focusedPath(): string | undefined {
     return this.renderRoot.querySelector('beuve-radar-tree')?.focusedPath();
   }

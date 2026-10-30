@@ -6,8 +6,10 @@ import type { TraceResultView } from '#contract/ipc-contract.ts';
 
 import { describeTraceSummary } from './describe-trace-summary.ts';
 import { findAnchorRow } from './find-anchor-row.ts';
+import { keyPlatformOf } from './key-platform-of.ts';
 import { planTraceTimeline } from './plan-trace-timeline.ts';
 import type { TraceCase, TraceRow } from './plan-trace-timeline.ts';
+import { shortcutOf } from './shortcut-of.ts';
 import type { TraceState } from './trace-state.ts';
 
 /** Detail of `trace-line-activate`: the head line of the step the reviewer chose. */
@@ -16,7 +18,7 @@ export interface TraceLineActivateDetail {
 }
 
 /**
- * The trace timeline portal (spec 5E, `r`): the tests that covered the hunk, each with its steps
+ * The trace timeline portal (spec 5E, Run Trace Probe): the tests that covered the hunk, each with its steps
  * in order, indented by call depth; steps inside the hunk carry the accent and every line number
  * jumps to that line in the card. Before the first run in a repository it asks for approval to
  * run the repository's tests (ADR 0041). Presentational: it fires `trace-line-activate`,
@@ -30,6 +32,21 @@ export class BeuveTracePortal extends LitElement {
       border-bottom: 1px solid var(--beuve-border);
       background: var(--beuve-bg);
       font: var(--beuve-font-small);
+    }
+
+    .close,
+    .again {
+      padding: 0 var(--beuve-space-1);
+      border: none;
+      background: none;
+      color: var(--beuve-text-muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .close {
+      font-size: 15px;
+      line-height: 1;
     }
 
     .heading {
@@ -511,12 +528,37 @@ export class BeuveTracePortal extends LitElement {
         <span class="spacer"></span>
         ${
           trace.status === 'ready'
-            ? html`<span
-                ><kbd>↑</kbd> <kbd>↓</kbd> walk · <kbd>⏎</kbd> show in code · <kbd>r</kbd> run again
-                · <kbd>Esc</kbd> closes</span
-              >`
-            : html`<span><kbd>Esc</kbd> closes</span>`
+            ? html`<button
+                type="button"
+                class="again"
+                title=${`Run Again (${shortcutOf('trace', keyPlatformOf(navigator.platform))})`}
+                @click=${(): void => {
+                  this.dispatchEvent(
+                    new CustomEvent('beuve-trace-request', {
+                      detail: { path: trace.path, line: trace.line },
+                      bubbles: true,
+                      composed: true,
+                    }),
+                  );
+                }}
+              >
+                Run Again
+              </button>`
+            : nothing
         }
+        <button
+          type="button"
+          class="close"
+          title="Close (Esc)"
+          aria-label="Close"
+          @click=${(): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-trace-close', { bubbles: true, composed: true }),
+            );
+          }}
+        >
+          ×
+        </button>
       </div>
       ${this.renderBody(trace)}
     `;

@@ -35,7 +35,7 @@ export type SheetOutcome =
   | { readonly kind: 'inline'; readonly sha: string; readonly place: SheetPlace };
 
 /**
- * Runs `Shift+d`, `Shift+t`, `Shift+y`, `Shift+o` and a peek node's "Open" from the main window
+ * Runs Go to Definition, Go to Type Definition, Copy GitHub Permalink, Open on GitHub and a peek node's "Open" from the main window
  * (ADR 0067): a definition at the target's head line (main picks the token) opens a new sheet
  * window, or the inline overlay; a permalink goes to the clipboard or the browser, for the
  * target's own side and lines. All IPC goes through `bridge`; main validates everything again.
@@ -66,7 +66,7 @@ async function define(
 ): Promise<SheetOutcome> {
   const line = lineFromTarget(target);
   if (line === undefined || target.kind === 'change') {
-    return info('Pick a line on the head side first (j/k, or select lines).');
+    return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
   }
   const answer = await context.bridge.invoke('lsp:definition', {
     sessionId: context.sessionId,

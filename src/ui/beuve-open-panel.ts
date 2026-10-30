@@ -12,7 +12,6 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import { describePullRequestState } from './describe-pull-request-state.ts';
-import { displayKey } from './display-key.ts';
 import { findKnownClone } from './find-known-clone.ts';
 import { formatRelativeTime } from './format-relative-time.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
@@ -41,7 +40,7 @@ type Row =
   | { readonly kind: 'step'; readonly step: 'pull' | 'local' };
 
 /**
- * The one place sessions are opened from: the ⌘O dialog and the empty main area. A single input
+ * The one place sessions are opened from: the File ▸ Open dialog and the empty main area. A single input
  * takes a pull request link (Enter opens it, in the clone the reviewer last used for that
  * repository), a folder path, or words that filter the recent sessions; arrow keys pick a row.
  * Two steps cover the rest: "Pull request…" (link and local clone, with a folder picker) and
@@ -132,6 +131,19 @@ export class BeuveOpenPanel extends LitElement {
       white-space: nowrap;
     }
 
+    li[aria-selected='false'] .when.enter {
+      visibility: hidden;
+    }
+
+    .link {
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--beuve-accent);
+      font: inherit;
+      cursor: pointer;
+    }
+
     .state.ok {
       color: var(--beuve-ok);
     }
@@ -142,12 +154,6 @@ export class BeuveOpenPanel extends LitElement {
 
     .state.danger {
       color: var(--beuve-danger);
-    }
-
-    .hint {
-      margin: var(--beuve-space-3) 0 0;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
     }
 
     form {
@@ -277,12 +283,6 @@ export class BeuveOpenPanel extends LitElement {
       }
       return;
     }
-    const row = rows[this.cursor];
-    if (event.key === 'Tab' && row?.kind === 'open-pull') {
-      event.preventDefault();
-      this.activate(row, true);
-      return;
-    }
     if (!(event.key === 'Escape' && this.closable)) {
       return;
     }
@@ -405,7 +405,7 @@ export class BeuveOpenPanel extends LitElement {
     ];
   }
 
-  /** `edit` (Shift+Enter, or Tab on a link) opens the pull request step instead of opening at once. */
+  /** `edit` (Shift+Enter, or Change… on a link) opens the pull request step instead of opening at once. */
   private activate(row: Row, isEditing: boolean): void {
     switch (row.kind) {
       case 'session': {
@@ -496,19 +496,29 @@ export class BeuveOpenPanel extends LitElement {
         const clone = findKnownClone(this.sessions, pull);
         return html`<span class="glyph">#${pull.number}</span>
           <span class="line">Open ${pull.owner}/${pull.repo}#${pull.number}</span>
-          <span class="when"><kbd>⏎</kbd></span>
+          <span class="when enter" aria-hidden="true">↩</span>
           <span class="detail"
             >${
               clone === undefined
                 ? 'Choose the local clone to fetch it into'
-                : html`into ${shortenPath(clone)} · <kbd>Tab</kbd> to change`
+                : html`into ${shortenPath(clone)} ·
+                    <button
+                      type="button"
+                      class="link"
+                      @click=${(event: Event): void => {
+                        event.stopPropagation();
+                        this.activate(row, true);
+                      }}
+                    >
+                      Change…
+                    </button>`
             }</span
           >`;
       }
       case 'open-folder': {
         return html`<span class="glyph">dir</span>
           <span class="line">Review a branch in ${row.path}</span>
-          <span class="when"><kbd>⏎</kbd></span>`;
+          <span class="when enter" aria-hidden="true">↩</span>`;
       }
       case 'session': {
         return this.renderSession(row.session);
@@ -576,12 +586,6 @@ export class BeuveOpenPanel extends LitElement {
       <ol role="listbox" aria-label=${hasRecent ? 'Recent reviews and actions' : 'Actions'}>
         ${rows.map((row, index) => this.renderRow(row, index, rows))}
       </ol>
-      <p class="hint">
-        <kbd>↑</kbd> <kbd>↓</kbd> choose · <kbd>⏎</kbd> open
-        ${this.closable ? html` · <kbd>Esc</kbd> close` : nothing} ·
-        <kbd>${displayKey('⌘O', this.platform)}</kbd>
-        opens this anywhere
-      </p>
     `;
   }
 
@@ -726,7 +730,7 @@ export class BeuveOpenPanel extends LitElement {
         this.focus();
       }}
     >
-      ← Recent and links · <kbd>Esc</kbd>
+      ‹ Back
     </button>`;
   }
 

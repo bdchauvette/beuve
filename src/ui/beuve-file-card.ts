@@ -60,23 +60,25 @@ import { describeInsightCount } from './describe-insight-count.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { planInsightMarks } from './plan-insight-marks.ts';
 import { insightMarkCssFrom } from './insight-mark-css-from.ts';
+import { keyPlatformOf } from './key-platform-of.ts';
+import { shortcutOf } from './shortcut-of.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
 
-/** The note composer `m` opened on this card, and how saving it went. */
+/** The note composer Add Note opened on this card, and how saving it went. */
 export interface ComposerState {
   readonly path: string;
   readonly anchor: UraAnchorView;
   readonly where: string;
   readonly saving: boolean;
   readonly error: string;
-  /** The suggestion an `e` edit produced, staged with the note (ADR 0043). */
+  /** The suggestion an Suggest Edit edit produced, staged with the note (ADR 0043). */
   readonly suggestedPatch?: string;
 }
 
 /**
- * An `e` edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
+ * An Suggest Edit edit on this card (ADR 0043): loading the file pair and the editor, editing, or failed
  * to start; `error` is shown in the edit bar (e.g. an edit outside the range).
  */
 export interface EditSession {
@@ -85,7 +87,7 @@ export interface EditSession {
   readonly error: string;
 }
 
-/** Sent when an `e` edit is saved: the edited range and its suggested patch. */
+/** Sent when an Suggest Edit edit is saved: the edited range and its suggested patch. */
 export interface SuggestionSaveDetail {
   readonly target: EditTarget;
   readonly patch: string;
@@ -116,7 +118,7 @@ const estimatedSeparatorHeight = 32;
  * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting. The diff mounts while the stream sets `mounted` (the card is near
  * the viewport); otherwise a placeholder of the diff's last or estimated height stands in. If the
  * library fails to render, the card falls back to a plain `<pre>` of the patch. Staged URA items
- * show as subtle markers under their lines, the `m` composer opens under the lines it stages,
+ * show as subtle markers under their lines, the Add Note composer opens under the lines it stages,
  * and the ImpactGate banner offers to stage its findings. Emits `beuve-diff-rendered` each time
  * its diff mounts and `beuve-ura-stage-finding` from the banner.
  */
@@ -368,7 +370,11 @@ export class BeuveFileCard extends LitElement {
       flex: none;
       width: 14px;
       height: 14px;
+      padding: 0;
+      border: none;
+      background: none;
       color: var(--beuve-ok);
+      cursor: pointer;
     }
 
     .reviewed-mark svg {
@@ -673,13 +679,13 @@ export class BeuveFileCard extends LitElement {
     }
   });
   private composerElement: BeuveUraComposer | undefined;
-  /** The step `j`/`k` last selected, to tell it apart from the reviewer's own selection. */
+  /** The step Next/Previous Change last selected, to tell it apart from the reviewer's own selection. */
   private programmaticStep: HunkStep | undefined;
-  /** Lines the reviewer selected in the gutter, until `j`/`k` moves on. */
+  /** Lines the reviewer selected in the gutter, until Next/Previous Change moves on. */
   private lineSelection: SelectedLines | undefined;
-  /** The head line a jump (citation, flow node, trace line) landed on, until `j`/`k` moves on. */
+  /** The head line a jump (citation, flow node, trace line) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
-  /** The `e` editor attached to the diff, and the head text it started from. */
+  /** The Suggest Edit editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', CardSlot> | undefined;
   private editHead: string | undefined;
   /** Insight notes the reviewer expanded, by insight key. */
@@ -769,6 +775,19 @@ export class BeuveFileCard extends LitElement {
   };
 
   /** A reviewed card is only its header (ADR 0064); a click on it shows the diff again. */
+  private readonly onUnmarkClick = (event: Event): void => {
+    event.stopPropagation();
+    const path = this.file?.path;
+    if (path !== undefined) {
+      this.dispatchEvent(
+        new CustomEvent('beuve-file-reviewed', {
+          detail: { path, reviewed: false },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  };
   private readonly onTitleClick = (event: Event): void => {
     if (this.collapsed && this.reviewed === 'yes') {
       this.expand(event);
@@ -787,7 +806,7 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor flow: FlowState | undefined;
   /** The trace timeline portal; it shares the place of the peek and flow portals too. */
   @property({ attribute: false }) accessor trace: TraceState | undefined;
-  /** The hunk `j`/`k` stopped at, selected in the diff; `-1` for none. */
+  /** The hunk Next/Previous Change stopped at, selected in the diff; `-1` for none. */
   @property({ type: Number }) accessor activeHunk = -1;
   /** Enables hunk expansion; absent outside Electron. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
@@ -795,7 +814,7 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings on this file's lines, not yet staged (ADR 0061); empty when hidden. */
   @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
-  /** The `m` composer, when it is open on this file. */
+  /** The Add Note composer, when it is open on this file. */
   @property({ attribute: false }) accessor composer: ComposerState | undefined;
   /** How the diff is laid out ({@link planDiffLayout} in the stream, ADR 0042). */
   @property() accessor diffStyle: DiffLayoutView = 'unified';
@@ -805,7 +824,7 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor deferral: DiffDeferral | undefined;
   /**
    * Shows the header and a "Load diff" line instead of the diff, which stays unmounted; the
-   * stream decides, from `deferral`, the generated-files preference and Space.
+   * stream decides, from `deferral`, the generated-files preference and Expand or Collapse File.
    */
   @property({ type: Boolean, reflect: true }) accessor collapsed = false;
   /** Generated or `-diff` (ADR 0052): labelled, and dimmed while collapsed. */
@@ -816,7 +835,7 @@ export class BeuveFileCard extends LitElement {
    */
   @property({ reflect: true }) accessor reviewed: FileReviewStateView = 'no';
 
-  /** The `e` edit in progress on this card (ADR 0043). */
+  /** The Suggest Edit edit in progress on this card (ADR 0043). */
   @state() accessor edit: EditSession | undefined;
 
   @state() accessor isFallback = false;
@@ -988,7 +1007,7 @@ export class BeuveFileCard extends LitElement {
       return;
     }
     this.isGutterLabelled = true;
-    button.title = 'Add to the chat (⌘>); drag to take more lines';
+    button.title = `Add to Chat (${shortcutOf('add-to-chat', keyPlatformOf(navigator.platform))}); drag to take more lines`;
     button.setAttribute('aria-label', 'Add these lines to the chat');
     const namespace = 'http://www.w3.org/2000/svg';
     const icon = document.createElementNS(namespace, 'svg');
@@ -1106,7 +1125,7 @@ export class BeuveFileCard extends LitElement {
 
   /**
    * The ImpactGate indicator in the title bar (ADR 0042) and its popover, which opens on hover,
-   * on keyboard focus and with `i`, closes with Escape, and never traps focus.
+   * on keyboard focus and with ImpactGate Details, closes with Escape, and never traps focus.
    */
   private renderImpactChip(): TemplateResult | typeof nothing {
     const chip = planImpactChip(this.impact, this.findings, this.cognitiveLimit);
@@ -1215,7 +1234,6 @@ export class BeuveFileCard extends LitElement {
       }
       ${chip.note === '' ? nothing : html`<p>${chip.note}</p>`}
       <div class="actions">
-        <span class="keys">Esc closes</span>
         ${
           chip.findings.length === 0
             ? nothing
@@ -1333,20 +1351,25 @@ export class BeuveFileCard extends LitElement {
   }
 
   /** A check before the status of a file marked reviewed (ADR 0064). */
+
   private renderReviewedMark(): TemplateResult | typeof nothing {
     return this.reviewed === 'yes'
-      ? html`<span class="reviewed-mark" title="Reviewed (v unmarks)" aria-label="Reviewed"
-          >${checkIcon}</span
-        >`
+      ? html`<button
+          type="button"
+          class="reviewed-mark"
+          title=${`Reviewed — click to unmark (${shortcutOf('toggle-reviewed', keyPlatformOf(navigator.platform))})`}
+          aria-label="Reviewed; unmark"
+          @click=${this.onUnmarkClick}
+        >
+          ${checkIcon}
+        </button>`
       : nothing;
   }
 
   /** Marked reviewed, but the file's diff is not the one that was reviewed any more. */
   private renderChangedSince(): TemplateResult | typeof nothing {
     return this.reviewed === 'changed-since'
-      ? html`<span
-          class="changed-since"
-          title="You marked this file reviewed, and its changes moved on since (v marks it again)"
+      ? html`<span class="changed-since" title="Changed since you reviewed it"
           >changed since reviewed</span
         >`
       : nothing;
@@ -1387,8 +1410,13 @@ export class BeuveFileCard extends LitElement {
     return html`<div class="collapsed-body">
       <span class="why">${deferral?.why ?? 'Collapsed.'}</span>
       ${size === '' ? nothing : html`<span class="size">${size}</span>`}
-      <button type="button" @click=${expand}>Load diff</button>
-      <span><kbd>Space</kbd> on the card</span>
+      <button
+        type="button"
+        title=${`Expand File (${shortcutOf('expand', keyPlatformOf(navigator.platform))})`}
+        @click=${expand}
+      >
+        Load diff
+      </button>
     </div>`;
   }
 
@@ -1477,7 +1505,7 @@ ${splitPatch(file.patch).map(
         ? 'Opening the editor…'
         : edit.phase === 'failed'
           ? ''
-          : '⌘Enter saves as a suggestion · Esc cancels · your files are never written';
+          : 'Your files are never written';
     return html`<div class="edit-bar" role="status">
       <span class="what">${what}</span>
       <span>${state}</span>
@@ -1500,7 +1528,7 @@ ${splitPatch(file.patch).map(
     this.hideImpact();
   }
 
-  /** `i`: focuses the ImpactGate indicator, which opens its popover; `false` without one. */
+  /** ImpactGate Details: focuses the ImpactGate indicator, which opens its popover; `false` without one. */
   focusImpact(): boolean {
     const chip = this.impactParts()?.chip;
     chip?.focus();
@@ -1523,7 +1551,7 @@ ${splitPatch(file.patch).map(
 
   /**
    * Scrolls to lines `start`–`end` of one side and selects them, for a chat chip: head lines as
-   * `o` and citations find them, base lines by their own numbers on the deleted side.
+   * Open in Editor and citations find them, base lines by their own numbers on the deleted side.
    */
   async revealRange(start: number, end: number, side: 'head' | 'base'): Promise<void> {
     this.mounted = true;
@@ -1542,7 +1570,7 @@ ${splitPatch(file.patch).map(
     this.scrollToRow(row);
   }
 
-  /** What `e` would edit here: the target's lines, or the staged note under them. */
+  /** What Suggest Edit would edit here: the target's lines, or the staged note under them. */
   editTarget(items: readonly UraItemView[], headSha: string): EditTarget | undefined {
     return editTargetFrom(this.target(), items, headSha);
   }
@@ -1714,7 +1742,7 @@ ${splitPatch(file.patch).map(
       <div class="header">
         <div
           class="title"
-          title=${this.collapsed && this.reviewed === 'yes' ? 'Reviewed: click or Space shows the diff' : ''}
+          title=${this.collapsed && this.reviewed === 'yes' ? 'Reviewed: click to show the diff' : ''}
           @click=${this.onTitleClick}
         >
           ${this.renderReviewedMark()}
@@ -1842,7 +1870,7 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
 
 const sharedEditor: { module: Promise<typeof DiffsEdit> | undefined } = { module: undefined };
 
-/** `@pierre/diffs/edit`, a lazy chunk loaded by the first `e` (ADR 0043). */
+/** `@pierre/diffs/edit`, a lazy chunk loaded by the first Suggest Edit (ADR 0043). */
 async function loadEditor(): Promise<typeof DiffsEdit> {
   sharedEditor.module ??= import('@pierre/diffs/edit');
   return sharedEditor.module;

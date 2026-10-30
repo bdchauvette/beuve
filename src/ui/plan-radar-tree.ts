@@ -1,6 +1,6 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
-/** `f` switches between the package neighborhood and the changed files alone. */
+/** Changed Files Only switches between the package neighborhood and the changed files alone. */
 export type RadarTreeMode = 'neighborhood' | 'diff-only';
 
 /** The radar tree's git lanes; `ignored` is the dimmed lane generated files take (ADR 0052). */

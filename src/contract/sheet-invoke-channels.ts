@@ -9,4 +9,6 @@ export const sheetInvokeChannels = Object.freeze([
   'remote:permalink',
   'remote:open-permalink',
   'clipboard:write-text',
+  'menu:set-state',
+  'menu:context',
 ] as const satisfies readonly SheetInvokeChannel[]);

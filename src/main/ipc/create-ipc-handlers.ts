@@ -4,9 +4,16 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err } from '#x/result/result.ts';
 
+import { commandCatalog } from '#contract/command-catalog.ts';
+import type { CommandId } from '#contract/command-catalog.ts';
+import { menuConditions } from '#contract/menu-conditions.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 import type {
   AppInfo,
+  ClaudeStatusView,
+  MenuContextRequest,
+  MenuStateRequest,
+  TraceTrustEntryView,
   CallHierarchyRequest,
   CallHierarchyView,
   ChooseFolderResponse,
@@ -73,12 +80,24 @@ export interface IpcPlatform {
    * Electron, where `sheet:open` answers `not-wired`.
    */
   readonly openSheet?: (request: OpenSheetRequest) => void;
+  /** Menu state, context menus and main-run commands (ADR 0068); absent outside Electron. */
+  readonly menus?: {
+    readonly setState: (webContentsId: number, state: MenuStateRequest) => void;
+    readonly popup: (webContentsId: number, request: MenuContextRequest) => boolean;
+    readonly runMainCommand: (webContentsId: number, id: string) => boolean;
+  };
+}
+
+/** Who called: the web contents of the page, as `registerIpcHandlers` saw it. */
+export interface IpcSender {
+  readonly webContentsId: number;
 }
 
 /** One handler per invoke channel. Each takes the raw, untrusted renderer argument. */
 export type IpcHandlers = {
   readonly [C in InvokeChannel]: (
     request: unknown,
+    sender?: IpcSender,
   ) => InvokeResponse<C> | Promise<InvokeResponse<C>>;
 };
 
@@ -354,6 +373,24 @@ const displayRequest = z.strictObject({
   skipReviewed: z.boolean().optional(),
   sheets: z.enum(['window', 'inline']).optional(),
 });
+
+const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
+const commandId = z
+  .string()
+  .max(64)
+  .refine((id) => catalogIds.has(id), 'expected a catalog command')
+  .transform((id) => id as CommandId);
+const menuStateRequest = z.strictObject({
+  conditions: z.array(z.enum(menuConditions)).max(menuConditions.length),
+  checked: z.array(commandId).max(commandCatalog.length),
+});
+const menuContextRequest = z.strictObject({
+  kind: z.enum(['line', 'file', 'tree', 'note', 'answer', 'sheet', 'text']),
+  x: z.number().min(0).max(100_000).optional(),
+  y: z.number().min(0).max(100_000).optional(),
+});
+const menuRunMainRequest = z.strictObject({ id: commandId });
+const traceRemoveTrustRequest = z.strictObject({ repositoryPath: z.string().min(1).max(4096) });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
@@ -767,6 +804,58 @@ export function createIpcHandlers(
     'github:open-link': async (request): Promise<IpcResult<{ opened: true }>> => {
       const parsed = githubLinkRequest.safeParse(request);
       return parsed.success ? services.github.openLink(parsed.data) : invalid(parsed.error);
+    },
+    'menu:set-state': (request, sender): IpcResult<{ readonly applied: true }> => {
+      const parsed = menuStateRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (sender === undefined || platform.menus === undefined) {
+        return err({ code: 'not-wired', message: 'no menus outside Electron' });
+      }
+      platform.menus.setState(sender.webContentsId, parsed.data);
+      return ok({ applied: true });
+    },
+    'menu:context': (request, sender): IpcResult<{ readonly shown: boolean }> => {
+      const parsed = menuContextRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (sender === undefined || platform.menus === undefined) {
+        return err({ code: 'not-wired', message: 'no menus outside Electron' });
+      }
+      const { kind, x, y } = parsed.data;
+      return ok({
+        shown: platform.menus.popup(sender.webContentsId, {
+          kind,
+          ...(x !== undefined && { x }),
+          ...(y !== undefined && { y }),
+        }),
+      });
+    },
+    'menu:run-main': (request, sender): IpcResult<{ readonly ran: true }> => {
+      const parsed = menuRunMainRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (sender === undefined || platform.menus === undefined) {
+        return err({ code: 'not-wired', message: 'no menus outside Electron' });
+      }
+      return platform.menus.runMainCommand(sender.webContentsId, parsed.data.id)
+        ? ok({ ran: true })
+        : err({ code: 'refused', message: `${parsed.data.id} is not a main-process command` });
+    },
+    'trace:list-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
+      const parsed = noRequest.safeParse(request);
+      return parsed.success ? services.trace.listTrust() : invalid(parsed.error);
+    },
+    'trace:remove-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
+      const parsed = traceRemoveTrustRequest.safeParse(request);
+      return parsed.success ? services.trace.removeTrust(parsed.data) : invalid(parsed.error);
+    },
+    'claude:status': async (request): Promise<IpcResult<ClaudeStatusView>> => {
+      const parsed = noRequest.safeParse(request);
+      return parsed.success ? services.claude.status() : invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

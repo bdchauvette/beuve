@@ -1,4 +1,5 @@
 import type {
+  ClaudeStatusView,
   CreateLocalSessionRequest,
   GetReviewRequest,
   InspectRepositoryRequest,
@@ -65,6 +66,8 @@ export interface MainServices {
   >;
   readonly trace: Omit<TraceServices, 'observeHead' | 'probe'>;
   readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;
+  /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
+  readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;

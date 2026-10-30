@@ -1,6 +1,10 @@
 import type { DiffFileView, SessionSummary, UraItemView } from '#contract/ipc-contract.ts';
 
+import { acceleratorsFor } from '#contract/accelerators-for.ts';
+import type { KeyPlatform } from '#contract/command-catalog.ts';
+
 import type { CommandDefinition } from './command-registry.ts';
+import { displayAccelerator } from './display-accelerator.ts';
 import { findKnownClone } from './find-known-clone.ts';
 import { fuzzyMatch } from './fuzzy-match.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
@@ -11,6 +15,8 @@ import { shortenPath } from './shorten-path.ts';
 /** The palette's sources, as `beuve-app` holds them. */
 export interface PaletteSources {
   readonly commands: readonly CommandDefinition[];
+  /** Whose keys the commands show. */
+  readonly platform: KeyPlatform;
   readonly sessions: readonly SessionSummary[];
   /** The open review's files, changed first in review order; absent with no session. */
   readonly files?: readonly DiffFileView[];
@@ -39,6 +45,17 @@ export interface PaletteEntry {
   readonly matches: readonly number[];
   readonly action: PaletteAction;
 }
+
+const menuNames: Readonly<Record<string, string>> = {
+  file: 'File',
+  edit: 'Edit',
+  view: 'View',
+  go: 'Go',
+  review: 'Review',
+  chat: 'Chat',
+  window: 'Window',
+  help: 'Help',
+};
 
 const mixedLimit = 5;
 const groupLimit = 60;
@@ -94,7 +111,7 @@ function rank(candidates: readonly Candidate[], text: string, limit: number): Pa
 function candidates(group: PaletteGroup, text: string, sources: PaletteSources): Candidate[] {
   switch (group) {
     case 'commands': {
-      return commandCandidates(sources.commands);
+      return commandCandidates(sources.commands, sources.platform);
     }
     case 'open': {
       return openCandidates(text, sources.sessions);
@@ -108,24 +125,32 @@ function candidates(group: PaletteGroup, text: string, sources: PaletteSources):
   }
 }
 
-function commandCandidates(commands: readonly CommandDefinition[]): Candidate[] {
+function commandCandidates(
+  commands: readonly CommandDefinition[],
+  platform: KeyPlatform,
+): Candidate[] {
   return commands
-    .filter((command) => command.available && command.id !== 'palette')
-    .map((command) => ({
-      entry: {
-        id: `command:${command.id}`,
-        group: 'commands',
-        title: command.title,
-        ...(command.scope !== 'Anywhere' && { detail: command.scope }),
-        keys:
-          command.keys.length > 0
-            ? command.keys
-            : command.slash === undefined
-              ? []
-              : [command.slash],
-        action: { kind: 'command', command },
-      },
-    }));
+    .filter((command) => command.run.kind !== 'none' && command.id !== 'palette')
+    .map((command) => {
+      const [key] = acceleratorsFor(command, platform);
+      const keys =
+        key === undefined
+          ? command.slash === undefined
+            ? []
+            : [command.slash]
+          : [displayAccelerator(key, platform)];
+      const menu = command.menu?.menu;
+      return {
+        entry: {
+          id: `command:${command.id}`,
+          group: 'commands',
+          title: command.title,
+          ...(menu !== undefined && menu !== 'app' && { detail: menuNames[menu] }),
+          keys,
+          action: { kind: 'command', command },
+        },
+      };
+    });
 }
 
 function openCandidates(text: string, sessions: readonly SessionSummary[]): Candidate[] {

@@ -1,7 +1,7 @@
 import type { TraceFailureKind, TraceResultView } from '#contract/ipc-contract.ts';
 
 /**
- * The trace timeline portal of one file card (`r`): the probe for the hunk around head line
+ * The trace timeline portal of one file card (Run Trace Probe): the probe for the hunk around head line
  * `line` of `path` while it runs, the prompt asking to trust the repository, why there is no
  * trace, or the trace itself. A failing test still shows its trace, with a `note`.
  */

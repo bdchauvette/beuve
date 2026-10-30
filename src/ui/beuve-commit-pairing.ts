@@ -15,7 +15,7 @@ export interface CommitPairFilterDetail {
 
 /**
  * The commits of an interdiff paired across a rebase (ADR 0054): previous → new sha, a kind chip,
- * the subject and the new commit's +/−. One tab stop; `j`/`k`, the arrows, `Home` and `End` move
+ * the subject and the new commit's +/−. One tab stop; Next/Previous Change, the arrows, `Home` and `End` move
  * the cursor, `Enter` or `Space` filters the diff stream to the pair under it (again clears it),
  * `Escape` clears. Each change emits a bubbling, composed `beuve-commit-pair-filter` event with a
  * {@link CommitPairFilterDetail}; the owner sets `selectedId` from it.

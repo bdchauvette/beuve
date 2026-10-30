@@ -9,7 +9,7 @@ export interface PermalinkPlace {
 }
 
 /**
- * The place `Shift+y` and `Shift+o` link to, from the review target (ADR 0063): a selection's own
+ * The place Copy GitHub Permalink and Open on GitHub link to, from the review target (ADR 0063): a selection's own
  * lines on its side, a hunk's head lines (its base lines for a pure deletion), a jump's line, and
  * the whole file for a file target; a deleted file links its base side. `undefined` for the
  * whole change. Pure.

@@ -1,5 +1,5 @@
 /**
- * The row a key moves the commit-pair list's cursor to: `j`/`ArrowDown` and `k`/`ArrowUp` step
+ * The row a key moves the commit-pair list's cursor to: `ArrowDown` and `ArrowUp` step
  * (clamped), `Home`/`End` jump. `undefined` for any other key, so the caller leaves it alone.
  */
 export function moveCommitPairCursor(
@@ -13,11 +13,9 @@ export function moveCommitPairCursor(
   const last = count - 1;
   const current = Math.min(Math.max(cursor, 0), last);
   switch (key) {
-    case 'j':
     case 'ArrowDown': {
       return Math.min(current + 1, last);
     }
-    case 'k':
     case 'ArrowUp': {
       return Math.max(current - 1, 0);
     }

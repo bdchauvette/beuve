@@ -3,7 +3,6 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
-import { displayKey } from './display-key.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { planPalette } from './plan-palette.ts';
@@ -273,14 +272,12 @@ export class BeuveCommandPalette extends LitElement {
       ${
         entry.keys === undefined || entry.keys.length === 0
           ? nothing
-          : html`<span class="keys"
-              >${entry.keys.map((key) => html`<kbd>${displayKey(key, this.platform)}</kbd>`)}</span
-            >`
+          : html`<span class="keys">${entry.keys.map((key) => html`<kbd>${key}</kbd>`)}</span>`
       }
     </li>`;
   }
 
-  /** The highlighted entry's action, for ⌘> on a file or a staged note (ADR 0046). */
+  /** The highlighted entry's action, for Add to Chat on a file or a staged note (ADR 0046). */
   activeAction(): PaletteEntry['action'] | undefined {
     return this.entries[this.cursor]?.action;
   }
@@ -336,10 +333,6 @@ export class BeuveCommandPalette extends LitElement {
                 <code>${key}</code> ${groupLabels[group].toLowerCase()}
               </button>`,
           )}
-          <span class="spacer"></span>
-          <span
-            >↑↓ choose · ⏎ run · ${displayKey('⌘>', this.platform)} add to chat · Esc close</span
-          >
         </footer>
       </div>
     `;
