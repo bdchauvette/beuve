@@ -101,11 +101,11 @@ export function createSyntaxParser(options: SyntaxParserOptions = {}): SyntaxPar
     if (tree === null) {
       return err({ kind: 'load-failed', language, message: 'the parser returned no tree' });
     }
-    try {
-      return ok(use(tree.rootNode, language));
-    } finally {
+    using stack = new DisposableStack();
+    stack.defer(() => {
       tree.delete();
-    }
+    });
+    return ok(use(tree.rootNode, language));
   };
 
   return { parse };

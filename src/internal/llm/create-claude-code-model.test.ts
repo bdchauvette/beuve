@@ -251,6 +251,20 @@ describe('createClaudeCodeModel', () => {
     await expectReaped(expect, pidFile);
   });
 
+  test('reports a caller’s own timeout signal as a cancellation, reaping the group', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const pidFile = path.join(directory, 'caller-timeout.json');
+    const signal = AbortSignal.timeout(300);
+    const outcome = await model(script, directory, 'hang', pidFile).run(
+      request(directory, { signal }),
+    );
+    expect(outcome).toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
+    await expectReaped(expect, pidFile);
+  });
+
   test('does not start when already aborted', async ({
     expect,
     fakeClaude: script,

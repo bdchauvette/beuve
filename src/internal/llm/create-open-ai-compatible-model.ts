@@ -8,6 +8,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { createReadOnlySandbox } from './create-read-only-sandbox.ts';
 import type { ReadOnlySandbox, SandboxLimits } from './create-read-only-sandbox.ts';
@@ -187,46 +188,29 @@ async function runChat(
   if (sandbox !== undefined && !(await isDirectory(request.cwd))) {
     return err({ kind: 'invalid-request', reason: 'cwd is not a directory' });
   }
-  const controller = new AbortController();
-  let termination: 'timeout' | 'cancelled' | undefined;
-  const terminate = (reason: 'timeout' | 'cancelled'): void => {
-    termination ??= reason;
-    controller.abort();
-  };
-  const timer = setTimeout(() => {
-    terminate('timeout');
-  }, request.timeout.total('milliseconds'));
-  const onAbort = (): void => {
-    terminate('cancelled');
-  };
-  request.signal?.addEventListener('abort', onAbort, { once: true });
+  const deadline = timeoutSignal(request.timeout);
+  const signal =
+    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
   const stopwatch = new Stopwatch();
   options.logger?.debug('openai-compatible: starting', {
     model: request.model ?? options.model,
     tools: sandbox !== undefined,
     messages: request.messages.length,
   });
-  try {
-    const run = await converse(request, options, mode, sandbox, controller.signal);
-    const ended = termination;
-    if (ended === 'timeout') {
-      return err({ kind: 'timeout', timeout: request.timeout });
-    }
-    if (ended === 'cancelled') {
-      return err({ kind: 'cancelled' });
-    }
-    if (!run.ok) {
-      options.logger?.info('openai-compatible: run failed', {
-        duration: stopwatch.elapsed(),
-        error: run.error.kind,
-      });
-      return run;
-    }
-    return ok({ ...run.value, duration: stopwatch.elapsed() });
-  } finally {
-    clearTimeout(timer);
-    request.signal?.removeEventListener('abort', onAbort);
+  const run = await converse(request, options, mode, sandbox, signal);
+  if (signal.aborted) {
+    return signal.reason === deadline.reason
+      ? err({ kind: 'timeout', timeout: request.timeout })
+      : err({ kind: 'cancelled' });
   }
+  if (!run.ok) {
+    options.logger?.info('openai-compatible: run failed', {
+      duration: stopwatch.elapsed(),
+      error: run.error.kind,
+    });
+    return run;
+  }
+  return ok({ ...run.value, duration: stopwatch.elapsed() });
 }
 
 async function converse(

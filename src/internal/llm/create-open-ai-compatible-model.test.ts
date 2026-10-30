@@ -339,6 +339,19 @@ describe('createOpenAiCompatibleModel', () => {
     await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
   });
 
+  test('reports a caller’s own timeout signal as a cancellation', async ({
+    expect,
+    openAiApi,
+    tempDir,
+  }) => {
+    const api = await openAiApi();
+    api.reply({ kind: 'hang' });
+    const signal = AbortSignal.timeout(100);
+    await expect(
+      model(api.baseUrl).runText(textRequest(tempDir, { signal })),
+    ).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
+  });
+
   test('refuses a request that does not end with the user', async ({ expect, tempDir, signal }) => {
     await expect(
       model('http://127.0.0.1:9/v1').runText(

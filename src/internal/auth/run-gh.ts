@@ -41,46 +41,42 @@ const stderrTailChars = 4096;
  */
 export async function runGh(invocation: GhInvocation): Promise<Result<GhExit, GhRunFailure>> {
   const maxOutputBytes = invocation.maxOutputBytes ?? defaultMaxOutputBytes;
-  return new Promise((resolve) => {
-    const child = spawn(
-      invocation.command,
-      [...(invocation.leadingArgs ?? []), ...invocation.args],
-      {
-        cwd: invocation.cwd,
-        env: invocation.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false,
-        windowsHide: true,
-      },
-    );
-    let failure: GhRunFailure | undefined;
-    const stop = (reason: GhRunFailure): void => {
-      failure ??= reason;
-      child.kill('SIGKILL');
-    };
-    const timer = setTimeout(() => {
-      stop({ kind: 'timeout' });
-    }, invocation.timeout.total('milliseconds'));
+  const child = spawn(invocation.command, [...(invocation.leadingArgs ?? []), ...invocation.args], {
+    cwd: invocation.cwd,
+    env: invocation.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
+    windowsHide: true,
+  });
+  let failure: GhRunFailure | undefined;
+  const stop = (reason: GhRunFailure): void => {
+    failure ??= reason;
+    child.kill('SIGKILL');
+  };
+  using _timer = setTimeout(() => {
+    stop({ kind: 'timeout' });
+  }, invocation.timeout.total('milliseconds'));
 
-    let stdout = '';
-    let outputBytes = 0;
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      outputBytes += Buffer.byteLength(chunk);
-      if (outputBytes > maxOutputBytes) {
-        stop({ kind: 'output-too-large' });
-        return;
-      }
-      stdout += chunk;
-    });
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      stderr = (stderr + chunk).slice(-stderrTailChars);
-    });
+  let stdout = '';
+  let outputBytes = 0;
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => {
+    outputBytes += Buffer.byteLength(chunk);
+    if (outputBytes > maxOutputBytes) {
+      stop({ kind: 'output-too-large' });
+      return;
+    }
+    stdout += chunk;
+  });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr = (stderr + chunk).slice(-stderrTailChars);
+  });
 
+  // Awaited, not returned: the timer must outlive the process.
+  return await new Promise((resolve) => {
     child.once('error', (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
       resolve(
         err(
           error.code === 'ENOENT' || error.code === 'EACCES'
@@ -90,12 +86,11 @@ export async function runGh(invocation: GhInvocation): Promise<Result<GhExit, Gh
       );
     });
     child.once('close', (code, signal) => {
-      clearTimeout(timer);
-      if (failure !== undefined) {
-        resolve(err(failure));
-        return;
-      }
-      resolve(ok({ exitCode: code ?? undefined, signal: signal ?? undefined, stdout, stderr }));
+      resolve(
+        failure === undefined
+          ? ok({ exitCode: code ?? undefined, signal: signal ?? undefined, stdout, stderr })
+          : err(failure),
+      );
     });
   });
 }

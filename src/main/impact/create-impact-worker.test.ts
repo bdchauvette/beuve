@@ -133,6 +133,20 @@ describe('createImpactWorker with a scripted worker', () => {
     });
   });
 
+  test('lets go of a settled run’s signal: aborting it later cancels nothing', async ({
+    expect,
+    createRunner,
+    scriptedWorkerUrl,
+    signal,
+  }) => {
+    const runner = createRunner(scriptedWorkerUrl);
+    const finished = new AbortController();
+    await expect(runner.run(source('a'), finished.signal)).resolves.toMatchObject({ ok: true });
+    const running = runner.run(source('delay-30'), signal);
+    finished.abort();
+    await expect(running).resolves.toMatchObject({ ok: true });
+  });
+
   test('cancels everything pending on dispose and refuses later runs', async ({
     expect,
     createRunner,

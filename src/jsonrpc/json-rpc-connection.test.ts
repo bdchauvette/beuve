@@ -62,6 +62,29 @@ describe('JsonRpcConnection', () => {
     ).resolves.toStrictEqual(err({ kind: 'cancelled', method: 'x' }));
   });
 
+  test('reports a caller’s own timeout signal as a cancellation, not as its timeout', async ({
+    expect,
+    closing,
+  }) => {
+    const peer = closing(createFakePeer());
+    const pending = peer.connection.request('long', {}, { signal: AbortSignal.timeout(10) });
+    await expect(pending).resolves.toStrictEqual(err({ kind: 'cancelled', method: 'long' }));
+  });
+
+  test('lets go of the signal once answered: a later abort sends no cancel', async ({
+    expect,
+    closing,
+  }) => {
+    const peer = closing(createFakePeer());
+    const controller = new AbortController();
+    const pending = peer.connection.request('quick', {}, { signal: controller.signal });
+    await expect(peer.nextSent()).resolves.toMatchObject({ id: 1, method: 'quick' });
+    peer.send({ jsonrpc: '2.0', id: 1, result: 'done' });
+    await expect(pending).resolves.toStrictEqual(ok('done'));
+    controller.abort();
+    expect(peer.sent).toStrictEqual([{ jsonrpc: '2.0', id: 1, method: 'quick', params: {} }]);
+  });
+
   test('dispatches notifications and answers peer requests', async ({ expect, closing }) => {
     const notifications: unknown[] = [];
     const peer = closing(

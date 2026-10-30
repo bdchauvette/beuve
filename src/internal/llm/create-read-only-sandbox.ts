@@ -337,17 +337,13 @@ async function readCapped(
   if (!stats.isFile()) {
     return undefined;
   }
-  const handle = await open(file, 'r');
-  try {
-    const buffer = Buffer.alloc(Math.min(maxBytes, stats.size));
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    const bytes = buffer.subarray(0, bytesRead);
-    return bytes.includes(0)
-      ? undefined
-      : { content: bytes.toString('utf8'), isCut: stats.size > maxBytes };
-  } finally {
-    await handle.close();
-  }
+  await using handle = await open(file, 'r');
+  const buffer = Buffer.alloc(Math.min(maxBytes, stats.size));
+  const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+  const bytes = buffer.subarray(0, bytesRead);
+  return bytes.includes(0)
+    ? undefined
+    : { content: bytes.toString('utf8'), isCut: stats.size > maxBytes };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtempDisposable } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -725,7 +725,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       : err({ code: 'not-found', message: 'no such session' });
   };
 
-  /** Settings' Test: "ok" through the entry's adapter, in a scratch directory, timed. */
+  /**
+   * Settings' Test: "ok" through the entry's adapter, in a scratch directory, timed. The directory
+   * is gone by the time the Test answers.
+   */
   const runProbe = async (job: ProbeJob): Promise<void> => {
     const stopwatch = new Stopwatch();
     const failed = (error: ModelError): ModelTestView => ({
@@ -734,37 +737,28 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       errorKind: error.kind,
       message: describeModelError(error),
     });
-    let directory: string | undefined;
-    try {
+    const probe = async (): Promise<ModelTestView> => {
       const resolved = await resolveLanguageModel({ entryId: job.entryId }, options.models);
       if (!resolved.ok) {
-        job.settle(failed(resolved.error));
-        return;
+        return failed(resolved.error);
       }
-      directory = await mkdtemp(path.join(os.tmpdir(), 'beuve-model-test-'));
+      await using directory = await mkdtempDisposable(path.join(os.tmpdir(), 'beuve-model-test-'));
       const answered = await resolved.value.model.runText({
         system: 'This is a connection test. Reply with the single word: ok',
         messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
-        cwd: directory,
+        cwd: directory.path,
         timeout: Temporal.Duration.from({ minutes: 2 }),
         signal: job.controller.signal,
       });
-      job.settle(
-        answered.ok
-          ? {
-              outcome: 'ok',
-              elapsedMs: elapsedMilliseconds(stopwatch),
-              model: answered.value.model,
-            }
-          : failed(answered.error),
-      );
+      return answered.ok
+        ? { outcome: 'ok', elapsedMs: elapsedMilliseconds(stopwatch), model: answered.value.model }
+        : failed(answered.error);
+    };
+    try {
+      job.settle(await probe());
     } catch (error: unknown) {
       logger.error('model test failed unexpectedly', { error });
       job.settle(failed({ kind: 'invalid-output', reason: 'internal error' }));
-    } finally {
-      if (directory !== undefined) {
-        await rm(directory, { recursive: true, force: true });
-      }
     }
   };
 

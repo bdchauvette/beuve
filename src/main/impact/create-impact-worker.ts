@@ -40,7 +40,8 @@ interface Job {
   readonly id: number;
   readonly sources: readonly ImpactSourceFile[];
   readonly settle: (result: Result<ImpactReport, ImpactRunFailure>) => void;
-  readonly cleanup: () => void;
+  /** Released when the job settles: its listener on the caller's signal. */
+  readonly resources: DisposableStack;
 }
 
 const cancelled = err<ImpactRunFailure>({ kind: 'cancelled' });
@@ -103,7 +104,7 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
   };
 
   const finish = (job: Job, result: Result<ImpactReport, ImpactRunFailure>): void => {
-    job.cleanup();
+    job.resources.dispose();
     job.settle(result);
     if (current !== job) {
       return;
@@ -149,18 +150,18 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
           resolve(cancelled);
           return;
         }
-        const onAbort = (): void => {
-          cancel(job);
-        };
-        const job: Job = {
-          id: nextId++,
-          sources,
-          settle: resolve,
-          cleanup: () => {
-            signal?.removeEventListener('abort', onAbort);
+        const resources = new DisposableStack();
+        const job: Job = { id: nextId++, sources, settle: resolve, resources };
+        const listeners = resources.adopt(new AbortController(), (controller) => {
+          controller.abort();
+        });
+        signal?.addEventListener(
+          'abort',
+          () => {
+            cancel(job);
           },
-        };
-        signal?.addEventListener('abort', onAbort, { once: true });
+          { once: true, signal: listeners.signal },
+        );
         queue.push(job);
         pump();
       }),
@@ -170,7 +171,7 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
       const pending = [...queue.splice(0), ...(current === undefined ? [] : [current])];
       current = undefined;
       for (const job of pending) {
-        job.cleanup();
+        job.resources.dispose();
         job.settle(cancelled);
       }
     },

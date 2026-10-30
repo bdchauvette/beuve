@@ -152,21 +152,17 @@ export async function startLanguageServer(
     if (hasExited) {
       return true;
     }
-    let timer: NodeJS.Timeout | undefined;
-    const timedOut = new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => {
-        resolve(false);
-      }, shutdownStep.total('milliseconds'));
-    });
-    const isFinished = await Promise.race([
+    const { promise: timedOut, resolve } = Promise.withResolvers<boolean>();
+    using _timer = setTimeout(() => {
+      resolve(false);
+    }, shutdownStep.total('milliseconds'));
+    return await Promise.race([
       (async (): Promise<boolean> => {
         await exited;
         return true;
       })(),
       timedOut,
     ]);
-    clearTimeout(timer);
-    return isFinished;
   };
   let stopping: Promise<void> | undefined;
   const shutdown = async (): Promise<void> => {

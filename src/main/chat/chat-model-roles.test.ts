@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe } from 'vitest';
 
 import { okValueFrom } from '#testing/ok-value-from.ts';
@@ -109,6 +112,9 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
       outcome: 'ok',
       model: 'fake-model-1',
     });
+    const probe = claude.calls().at(-1)?.cwd ?? '';
+    expect(path.basename(probe)).toMatch(/^beuve-model-test-/u);
+    expect(existsSync(probe)).toBe(false);
   });
 });
 

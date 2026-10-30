@@ -1,11 +1,10 @@
 import { spawn } from 'node:child_process';
 import {
   mkdir,
-  mkdtemp,
+  mkdtempDisposable,
   readdir,
   readFile,
   realpath,
-  rm,
   stat,
   symlink,
   writeFile,
@@ -28,6 +27,7 @@ import type { TraceError } from './trace-error.ts';
 import type { TraceRecord } from './trace-record.ts';
 import type { TraceRunner, TraceRunOutput, TraceRunRequest } from './trace-runner.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 export interface VitestTraceRunnerOptions {
   /** The Node binary that runs Vitest (in the app: `process.execPath` with `ELECTRON_RUN_AS_NODE`). */
@@ -89,14 +89,9 @@ export function createVitestTraceRunner(options: VitestTraceRunnerOptions): Trac
         return entry;
       }
       await mkdir(options.temporaryDirectory, { recursive: true });
-      const directory = await realpath(
-        await mkdtemp(path.join(options.temporaryDirectory, 'trace-')),
-      );
-      try {
-        return await runIn(options, request, workspace.value, entry.value.script, directory);
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
+      const parent = await realpath(options.temporaryDirectory);
+      await using directory = await mkdtempDisposable(path.join(parent, 'trace-'));
+      return await runIn(options, request, workspace.value, entry.value.script, directory.path);
     },
   };
 }
@@ -244,8 +239,16 @@ async function spawnVitest(
       // The group is already gone.
     }
   };
+  using stack = new DisposableStack();
+  // Last out: reaps whatever Vitest left running in its group, after any other cleanup.
+  stack.defer(() => {
+    signalGroup('SIGKILL');
+  });
   let stopped: Exit['stopped'];
   let killTimer: NodeJS.Timeout | undefined;
+  stack.defer(() => {
+    clearTimeout(killTimer);
+  });
   const stop = (reason: 'timeout' | 'cancelled'): void => {
     stopped ??= reason;
     signalGroup('SIGTERM');
@@ -256,36 +259,33 @@ async function spawnVitest(
       (options.killGrace ?? Temporal.Duration.from({ seconds: 1 })).total('milliseconds'),
     );
   };
-  const timer = setTimeout(() => {
-    stop('timeout');
-  }, request.timeout.total('milliseconds'));
-  const onAbort = (): void => {
-    stop('cancelled');
+  const deadline = timeoutSignal(request.timeout);
+  const bounded =
+    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const onStop = (): void => {
+    stop(bounded.reason === deadline.reason ? 'timeout' : 'cancelled');
   };
-  request.signal?.addEventListener('abort', onAbort, { once: true });
-  if (request.signal?.aborted === true) {
-    onAbort();
+  const listeners = stack.adopt(new AbortController(), (controller) => {
+    controller.abort();
+  });
+  bounded.addEventListener('abort', onStop, { once: true, signal: listeners.signal });
+  if (bounded.aborted) {
+    onStop();
   }
-  try {
-    return await new Promise<Exit>((resolve) => {
-      child.once('error', (error) => {
-        resolve({
-          code: undefined,
-          signal: undefined,
-          stopped,
-          output: `${output}\n${error.message}`,
-        });
-      });
-      child.once('close', (code, signal) => {
-        resolve({ code: code ?? undefined, signal: signal ?? undefined, stopped, output });
+  // Awaited, not returned: the stack must outlive the process.
+  return await new Promise<Exit>((resolve) => {
+    child.once('error', (error) => {
+      resolve({
+        code: undefined,
+        signal: undefined,
+        stopped,
+        output: `${output}\n${error.message}`,
       });
     });
-  } finally {
-    clearTimeout(timer);
-    clearTimeout(killTimer);
-    request.signal?.removeEventListener('abort', onAbort);
-    signalGroup('SIGKILL');
-  }
+    child.once('close', (code, signal) => {
+      resolve({ code: code ?? undefined, signal: signal ?? undefined, stopped, output });
+    });
+  });
 }
 
 async function readRecords(directory: string, worktree: string): Promise<TraceRecord[]> {

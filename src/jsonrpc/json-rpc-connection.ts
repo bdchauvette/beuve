@@ -4,6 +4,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { ContentLengthDecoder } from './content-length-decoder.ts';
 import type { FramingError } from './content-length-decoder.ts';
@@ -300,27 +301,33 @@ export class JsonRpcConnection {
     this.#nextId += 1;
     const timeout =
       options.timeout ?? this.#options.defaultTimeout ?? Temporal.Duration.from({ seconds: 30 });
+    const deadline = timeoutSignal(timeout);
+    const stopped =
+      options.signal === undefined ? deadline : AbortSignal.any([options.signal, deadline]);
+    const listeners = new AbortController();
     return new Promise((resolve) => {
-      const giveUp = (error: JsonRpcRequestError): void => {
-        if (!this.#pending.has(id)) {
-          return;
-        }
-        settle(err(error));
-        this.#sendCancel(id);
-      };
-      const timer = setTimeout(() => {
-        giveUp({ kind: 'timeout', method, timeout });
-      }, timeout.total('milliseconds'));
-      const onAbort = (): void => {
-        giveUp({ kind: 'cancelled', method });
-      };
       const settle = (outcome: Result<unknown, JsonRpcRequestError>): void => {
-        clearTimeout(timer);
-        options.signal?.removeEventListener('abort', onAbort);
+        listeners.abort();
         this.#pending.delete(id);
         resolve(outcome);
       };
-      options.signal?.addEventListener('abort', onAbort, { once: true });
+      stopped.addEventListener(
+        'abort',
+        () => {
+          if (!this.#pending.has(id)) {
+            return;
+          }
+          settle(
+            err(
+              stopped.reason === deadline.reason
+                ? { kind: 'timeout', method, timeout }
+                : { kind: 'cancelled', method },
+            ),
+          );
+          this.#sendCancel(id);
+        },
+        { once: true, signal: listeners.signal },
+      );
       this.#pending.set(id, { method, settle });
       const request: JsonRpcRequest =
         params === undefined

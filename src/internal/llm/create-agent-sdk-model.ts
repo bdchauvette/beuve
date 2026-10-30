@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtempDisposable, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -12,6 +12,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
@@ -176,7 +177,7 @@ async function runAgent(
   if (!(await isDirectory(request.cwd))) {
     return err({ kind: 'invalid-request', reason: 'cwd is not a directory' });
   }
-  const configDir = await mkdtemp(path.join(os.tmpdir(), 'beuve-claude-'));
+  await using configDir = await mkdtempDisposable(path.join(os.tmpdir(), 'beuve-claude-'));
   const stopwatch = new Stopwatch();
   options.logger?.debug('agent-sdk: starting', {
     cwd: request.cwd,
@@ -184,35 +185,31 @@ async function runAgent(
     promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
     systemChars: request.system.length,
   });
-  try {
-    const run = await execute(request, options, mode, configDir);
-    const duration = stopwatch.elapsed();
-    if (!run.ok) {
-      options.logger?.info('agent-sdk: run failed', { duration, error: run.error.kind });
-      return run;
-    }
-    const { outcome, model } = run.value;
-    const classified = classifyClaudeCodeOutcome(
-      outcome,
-      mode.schema === undefined ? 'text' : 'json',
-    );
-    if (!classified.ok) {
-      options.logger?.info('agent-sdk: run failed', { duration, error: classified.error.kind });
-      return classified;
-    }
-    const { result } = classified.value;
-    return ok({
-      value: classified.value.value,
-      model,
-      turns: result.turns,
-      costUsd: result.costUsd,
-      duration,
-      deniedToolUses: result.deniedToolUses,
-      ...(result.usage !== undefined && { usage: result.usage }),
-    });
-  } finally {
-    await rm(configDir, { recursive: true, force: true });
+  const run = await execute(request, options, mode, configDir.path);
+  const duration = stopwatch.elapsed();
+  if (!run.ok) {
+    options.logger?.info('agent-sdk: run failed', { duration, error: run.error.kind });
+    return run;
   }
+  const { outcome, model } = run.value;
+  const classified = classifyClaudeCodeOutcome(
+    outcome,
+    mode.schema === undefined ? 'text' : 'json',
+  );
+  if (!classified.ok) {
+    options.logger?.info('agent-sdk: run failed', { duration, error: classified.error.kind });
+    return classified;
+  }
+  const { result } = classified.value;
+  return ok({
+    value: classified.value.value,
+    model,
+    turns: result.turns,
+    costUsd: result.costUsd,
+    duration,
+    deniedToolUses: result.deniedToolUses,
+    ...(result.usage !== undefined && { usage: result.usage }),
+  });
 }
 
 function logFinished(output: ModelOutput<unknown>, options: AgentSdkModelOptions): void {
@@ -236,6 +233,7 @@ async function execute(
   mode: OutputMode,
   configDir: string,
 ): Promise<Result<Execution, ModelError>> {
+  using stack = new DisposableStack();
   const controller = new AbortController();
   type Termination = 'timeout' | 'cancelled' | 'wrong-credential';
   let termination: Termination | undefined;
@@ -243,13 +241,19 @@ async function execute(
     termination ??= reason;
     controller.abort();
   };
-  const timeout = setTimeout(() => {
-    terminate('timeout');
-  }, request.timeout.total('milliseconds'));
-  const onAbort = (): void => {
-    terminate('cancelled');
-  };
-  request.signal?.addEventListener('abort', onAbort, { once: true });
+  const deadline = timeoutSignal(request.timeout);
+  const stopped =
+    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const listeners = stack.adopt(new AbortController(), (adopted) => {
+    adopted.abort();
+  });
+  stopped.addEventListener(
+    'abort',
+    () => {
+      terminate(stopped.reason === deadline.reason ? 'timeout' : 'cancelled');
+    },
+    { once: true, signal: listeners.signal },
+  );
 
   let stderr = '';
   let failure: unknown;
@@ -259,6 +263,9 @@ async function execute(
     ...(mode.onText !== undefined && { onText: mode.onText }),
   });
   let conversation: Query | undefined;
+  stack.defer(() => {
+    conversation?.close();
+  });
   const onMessage = (message: unknown): void => {
     const event = claudeCodeEventFrom(message);
     reader.read(event);
@@ -287,10 +294,6 @@ async function execute(
     }
   } catch (error) {
     failure = error;
-  } finally {
-    clearTimeout(timeout);
-    request.signal?.removeEventListener('abort', onAbort);
-    conversation?.close();
   }
 
   switch (termination) {

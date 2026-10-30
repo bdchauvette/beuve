@@ -10,6 +10,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { buildClaudeCodeArgs } from './build-claude-code-args.ts';
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
@@ -246,9 +247,17 @@ async function execute(
     }
   };
 
+  using stack = new DisposableStack();
+  // Last out: reaps whatever the CLI left running in its group, after any other cleanup.
+  stack.defer(() => {
+    signalGroup('SIGKILL');
+  });
   type Termination = 'timeout' | 'cancelled' | 'output-too-large' | 'wrong-credential';
   let termination: Termination | undefined;
   let killTimer: NodeJS.Timeout | undefined;
+  stack.defer(() => {
+    clearTimeout(killTimer);
+  });
   const terminate = (reason: Termination): void => {
     if (termination !== undefined) {
       return;
@@ -262,13 +271,19 @@ async function execute(
       (options.killGrace ?? Temporal.Duration.from({ seconds: 2 })).total('milliseconds'),
     );
   };
-  const timeout = setTimeout(() => {
-    terminate('timeout');
-  }, request.timeout.total('milliseconds'));
-  const onAbort = (): void => {
-    terminate('cancelled');
-  };
-  request.signal?.addEventListener('abort', onAbort, { once: true });
+  const deadline = timeoutSignal(request.timeout);
+  const stopped =
+    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const listeners = stack.adopt(new AbortController(), (controller) => {
+    controller.abort();
+  });
+  stopped.addEventListener(
+    'abort',
+    () => {
+      terminate(stopped.reason === deadline.reason ? 'timeout' : 'cancelled');
+    },
+    { once: true, signal: listeners.signal },
+  );
 
   const reader = new ClaudeCodeStreamReader({
     cwd: request.cwd,
@@ -322,10 +337,6 @@ async function execute(
       resolve({ exitCode: code ?? undefined, signal: closeSignal ?? undefined });
     });
   });
-  clearTimeout(timeout);
-  clearTimeout(killTimer);
-  request.signal?.removeEventListener('abort', onAbort);
-  signalGroup('SIGKILL');
 
   switch (termination) {
     case 'timeout': {
