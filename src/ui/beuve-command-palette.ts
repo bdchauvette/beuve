@@ -3,6 +3,7 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { planPalette } from './plan-palette.ts';
@@ -231,6 +232,27 @@ export class BeuveCommandPalette extends LitElement {
   constructor() {
     super();
     this.addEventListener('click', this.onScrimClick);
+    // ADR 0074: the entries and prefix buttons, through one listener per type.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          entry: ({ index }): void => {
+            const entry = this.entries[Number(index)];
+            if (entry !== undefined) {
+              this.run(entry);
+            }
+          },
+          prefix: ({ prefix = '' }): void => {
+            this.setPrefix(prefix);
+          },
+        },
+        mousemove: {
+          entry: ({ index }): void => {
+            this.cursor = Number(index);
+          },
+        },
+      }),
+    );
   }
 
   private run(entry: PaletteEntry): void {
@@ -260,12 +282,8 @@ export class BeuveCommandPalette extends LitElement {
       class="entry"
       role="option"
       aria-selected=${index === this.cursor ? 'true' : 'false'}
-      @click=${(): void => {
-        this.run(entry);
-      }}
-      @mousemove=${(): void => {
-        this.cursor = index;
-      }}
+      data-action="entry"
+      data-index=${index}
     >
       <span class="title ${isPath ? 'path' : ''}">${highlight(entry)}</span>
       <span class="detail">${entry.detail ?? ''}</span>
@@ -324,12 +342,7 @@ export class BeuveCommandPalette extends LitElement {
         <footer>
           ${Object.entries(palettePrefixes).map(
             ([key, group]) =>
-              html`<button
-                type="button"
-                @click=${(): void => {
-                  this.setPrefix(key);
-                }}
-              >
+              html`<button type="button" data-action="prefix" data-prefix=${key}>
                 <code>${key}</code> ${groupLabels[group].toLowerCase()}
               </button>`,
           )}

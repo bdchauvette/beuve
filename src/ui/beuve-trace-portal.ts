@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { TraceResultView } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describeTraceSummary } from './describe-trace-summary.ts';
 import { findAnchorRow } from './find-anchor-row.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
@@ -341,6 +342,26 @@ export class BeuveTracePortal extends LitElement {
   /** The row that takes the arrow keys, as `case:row`. */
   @state() accessor activeRow = '';
 
+  constructor() {
+    super();
+    // ADR 0074: the timeline's rows, through one listener per type.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          row: ({ row = '', line }): void => {
+            this.activeRow = row;
+            this.activate(Number(line));
+          },
+        },
+        focusin: {
+          row: ({ row = '' }): void => {
+            this.activeRow = row;
+          },
+        },
+      }),
+    );
+  }
+
   private plan(result: TraceResultView): readonly TraceCase[] {
     if (this.casesFor !== result) {
       this.cases = planTraceTimeline(result);
@@ -365,17 +386,12 @@ export class BeuveTracePortal extends LitElement {
       <button
         type="button"
         class="row ${row.inHunk ? 'in-hunk' : ''} ${row.tone}"
+        data-action="row"
         data-row=${key}
+        data-line=${row.line}
         tabindex=${key === this.activeRow ? 0 : -1}
         title=${`Show line ${String(row.line)} in the code`}
         style=${`--depth:${String(row.depth)}`}
-        @click=${(): void => {
-          this.activeRow = key;
-          this.activate(row.line);
-        }}
-        @focus=${(): void => {
-          this.activeRow = key;
-        }}
       >
         <span class="line">${row.line}</span>
         <span class="indent"></span>

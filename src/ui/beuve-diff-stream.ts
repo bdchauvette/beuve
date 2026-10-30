@@ -33,6 +33,8 @@ import type {
   SuggestionSaveDetail,
 } from './beuve-file-card.ts';
 import type { UraDraft } from './beuve-ura-composer.ts';
+import { ActionDelegation } from './action-delegation.ts';
+import { withPayload } from './with-payload.ts';
 import type { MentionTarget } from './chat-draft.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { shortcutOf } from './shortcut-of.ts';
@@ -609,6 +611,41 @@ export class BeuveDiffStream extends LitElement {
 
   constructor() {
     super();
+    // ADR 0074: the cards' clicks, keys and pointer moves reach their cards through these, so a
+    // card adds no listener per event type of its own. A card's control that stops a click's
+    // propagation keeps it from the host's listener, which activates the card.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          card: forwardToCard,
+          order: withPayload(
+            ({ mode }) => orderModes.find((entry) => entry.mode === mode)?.mode,
+            (mode): void => {
+              this.chooseOrder(mode);
+            },
+          ),
+        },
+        keydown: { card: forwardToCard },
+        pointermove: {
+          card: (_data, _event, card): void => {
+            (card as BeuveFileCard).notePointerMove();
+          },
+        },
+      }),
+    );
+    this.addController(
+      new ActionDelegation(
+        this,
+        {
+          click: {
+            card: ({ index }): void => {
+              this.activate(Number(index));
+            },
+          },
+        },
+        'host',
+      ),
+    );
     this.addEventListener('keydown', this.onKeyDown);
     this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
@@ -1213,9 +1250,8 @@ export class BeuveDiffStream extends LitElement {
                           .reviewed=${this.reviewMarks.get(file.path) ?? 'no'}
                           ?generated=${isGenerated(this.deferrals.get(file.path))}
                           ?active=${index === this.activeIndex}
-                          @click=${(): void => {
-                            this.activate(index);
-                          }}
+                          data-action="card"
+                          data-index=${index}
                         ></beuve-file-card>`,
                   )}
                 </div>`
@@ -1237,17 +1273,6 @@ export class BeuveDiffStream extends LitElement {
     const fallback = describeOrderFallback(
       this.order?.headSha === this.review?.headSha ? this.order : undefined,
     );
-    const choose = (mode: ReviewOrderMode): void => {
-      if (mode !== requested) {
-        this.dispatchEvent(
-          new CustomEvent('beuve-display-change', {
-            detail: { reviewOrder: mode },
-            bubbles: true,
-            composed: true,
-          }),
-        );
-      }
-    };
     return html`<span
       class="order"
       role="radiogroup"
@@ -1261,15 +1286,26 @@ export class BeuveDiffStream extends LitElement {
             role="radio"
             tabindex="-1"
             aria-checked=${mode === requested ? 'true' : 'false'}
-            @click=${(): void => {
-              choose(mode);
-            }}
+            data-action="order"
+            data-mode=${mode}
           >
             ${label}
           </button>`,
       )}
       ${fallback === undefined ? nothing : html`<span class="fallback">${fallback}</span>`}
     </span>`;
+  }
+
+  private chooseOrder(mode: ReviewOrderMode): void {
+    if (mode !== (this.display.reviewOrder ?? 'path')) {
+      this.dispatchEvent(
+        new CustomEvent('beuve-display-change', {
+          detail: { reviewOrder: mode },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
   }
 
   private renderGroupLabel(plan: ReviewStreamPlan, index: number): TemplateResult | typeof nothing {
@@ -1597,6 +1633,11 @@ function rangeTitle(review: ReviewView): string {
   return review.scope.kind === 'interdiff'
     ? `Changes since reviewed head ${review.scope.fromHeadSha}, now at ${review.headSha} (forked from ${review.baseSha})`
     : `${review.baseSha}..${review.headSha}`;
+}
+
+/** Runs a card's own action for an event the stream's delegated listener caught on it. */
+function forwardToCard(_data: unknown, event: Event, card: HTMLElement): void {
+  (card as BeuveFileCard).runAction(event);
 }
 
 declare global {

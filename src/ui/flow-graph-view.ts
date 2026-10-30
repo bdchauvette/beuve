@@ -2,6 +2,9 @@ import { css, html, LitElement, nothing, svg } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
+import { ActionDelegation } from './action-delegation.ts';
+import type { ActionData } from './dispatch-action.ts';
+import { withPayload } from './with-payload.ts';
 import { flowLayout } from './flow-layout.ts';
 import type {
   FlowLayout,
@@ -231,6 +234,32 @@ export class FlowGraphView extends LitElement {
   @property({ attribute: false }) accessor graph: FlowViewGraph | undefined;
   @state() accessor activeId: number | undefined;
 
+  constructor() {
+    super();
+    // ADR 0074: the nodes, through one listener per type.
+    const nodeOf = ({ nodeId }: ActionData): FlowViewNode | undefined =>
+      this.graph?.nodes.find((candidate) => String(candidate.id) === nodeId);
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          node: withPayload(nodeOf, (node): void => {
+            this.activate(node);
+          }),
+        },
+        focusin: {
+          node: withPayload(nodeOf, (node): void => {
+            this.activeId = node.id;
+          }),
+        },
+        keydown: {
+          node: withPayload(nodeOf, (node, event: KeyboardEvent): void => {
+            this.handleKey(event, node);
+          }),
+        },
+      }),
+    );
+  }
+
   private renderEdge(edge: PositionedFlowEdge): TemplateResult {
     const path = edge.points
       .map((point, at) => `${at === 0 ? 'M' : 'L'}${String(point.x)} ${String(point.y)}`)
@@ -263,16 +292,8 @@ export class FlowGraphView extends LitElement {
         role="button"
         tabindex=${node.id === this.activeId ? 0 : -1}
         data-node-id=${node.id}
+        data-action="node"
         aria-label=${`${node.kind} ${node.label}, ${lines}${node.changed ? ', changed' : ''}`}
-        @click=${(): void => {
-          this.activate(node);
-        }}
-        @focus=${(): void => {
-          this.activeId = node.id;
-        }}
-        @keydown=${(event: KeyboardEvent): void => {
-          this.handleKey(event, node);
-        }}
       >
         <title>${lines}</title>
         <rect

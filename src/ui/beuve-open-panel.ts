@@ -11,6 +11,7 @@ import type {
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describePullRequestState } from './describe-pull-request-state.ts';
 import { findKnownClone } from './find-known-clone.ts';
 import { formatRelativeTime } from './format-relative-time.ts';
@@ -387,6 +388,37 @@ export class BeuveOpenPanel extends LitElement {
   @state() accessor headRef = '';
   @state() accessor baseRef = '';
 
+  constructor() {
+    super();
+    // ADR 0074: the rows, through one listener per type.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          row: ({ index }): void => {
+            const row = this.rows()[Number(index)];
+            if (row === undefined) {
+              return;
+            }
+            this.cursor = Number(index);
+            this.activate(row, false);
+          },
+          'change-clone': ({ index }, event): void => {
+            event.stopPropagation();
+            const row = this.rows()[Number(index)];
+            if (row !== undefined) {
+              this.activate(row, true);
+            }
+          },
+        },
+        mousemove: {
+          row: ({ index }): void => {
+            this.cursor = Number(index);
+          },
+        },
+      }),
+    );
+  }
+
   private rows(): Row[] {
     const parsed = parseOpenQuery(this.text);
     const filter = parsed.kind === 'filter' ? parsed.text : '';
@@ -472,24 +504,18 @@ export class BeuveOpenPanel extends LitElement {
   private renderRow(row: Row, index: number, rows: readonly Row[]): TemplateResult {
     const selected = index === this.cursor ? 'true' : 'false';
     const isSeparated = row.kind === 'step' && rows[index - 1]?.kind !== 'step' && index > 0;
-    const click = (): void => {
-      this.cursor = index;
-      this.activate(row, false);
-    };
     return html`<li
       role="option"
       aria-selected=${selected}
       class=${isSeparated ? 'separated' : ''}
-      @click=${click}
-      @mousemove=${(): void => {
-        this.cursor = index;
-      }}
+      data-action="row"
+      data-index=${index}
     >
-      ${this.renderRowContent(row)}
+      ${this.renderRowContent(row, index)}
     </li>`;
   }
 
-  private renderRowContent(row: Row): TemplateResult {
+  private renderRowContent(row: Row, index: number): TemplateResult {
     switch (row.kind) {
       case 'open-pull': {
         const { query: pull } = row;
@@ -505,10 +531,8 @@ export class BeuveOpenPanel extends LitElement {
                     <button
                       type="button"
                       class="link"
-                      @click=${(event: Event): void => {
-                        event.stopPropagation();
-                        this.activate(row, true);
-                      }}
+                      data-action="change-clone"
+                      data-index=${index}
                     >
                       Change…
                     </button>`

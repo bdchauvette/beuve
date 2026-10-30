@@ -56,6 +56,11 @@ import { parseInlineTitle } from './parse-inline-title.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
 import { createInsightElement } from './create-insight-element.ts';
+import { delegateActions } from './delegate-actions.ts';
+import type { DelegatedActions } from './delegate-actions.ts';
+import { dispatchAction } from './dispatch-action.ts';
+import type { ActionHandlers } from './dispatch-action.ts';
+import { setInsightOpen } from './set-insight-open.ts';
 import { describeInsightCount } from './describe-insight-count.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { planInsightMarks } from './plan-insight-marks.ts';
@@ -741,13 +746,6 @@ export class BeuveFileCard extends LitElement {
     }
   };
 
-  /** The library attaches its gutter button on hover; it is relabelled once per diff. */
-  private readonly onPointerMove = (): void => {
-    if (!this.isGutterLabelled) {
-      this.labelGutterButton();
-    }
-  };
-
   private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
     event.stopPropagation();
     void this.focusLine(event.detail.startLine);
@@ -774,25 +772,102 @@ export class BeuveFileCard extends LitElement {
     }
   };
 
-  /** A reviewed card is only its header (ADR 0064); a click on it shows the diff again. */
-  private readonly onUnmarkClick = (event: Event): void => {
-    event.stopPropagation();
-    const path = this.file?.path;
-    if (path !== undefined) {
-      this.dispatchEvent(
-        new CustomEvent('beuve-file-reviewed', {
-          detail: { path, reviewed: false },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    }
-  };
-  private readonly onTitleClick = (event: Event): void => {
-    if (this.collapsed && this.reviewed === 'yes') {
-      this.expand(event);
-    }
-  };
+  /**
+   * The card's actions (ADR 0074), which the diff stream's listeners run through {@link runAction}:
+   * a card adds no click or key listener of its own. Focus and hover moves inside a card never
+   * reach the stream (their related target is in the same shadow root), so the `crossing` ones
+   * are delegated to the card's own root, and only while it shows an ImpactGate chip or insights.
+   */
+  private readonly actions = {
+    click: {
+      title: (_data, event): void => {
+        if (this.collapsed && this.reviewed === 'yes') {
+          this.expand(event);
+        }
+      },
+      unmark: (_data, event): void => {
+        this.unmark(event);
+      },
+      'impact-chip': (_data, event): void => {
+        event.stopPropagation();
+        this.showImpact();
+      },
+      'impact-popover': (_data, event): void => {
+        event.stopPropagation();
+      },
+      'impact-stage': (_data, event): void => {
+        this.stageImpactFindings(event);
+      },
+      expand: (_data, event): void => {
+        this.expand(event);
+      },
+      'insight-line': (_data, _event, line): void => {
+        this.toggleInsight(line, undefined);
+      },
+      'insight-stage': (_data, _event, button): void => {
+        this.emitInsight(button, 'beuve-insight-stage');
+      },
+      'insight-show': (_data, _event, button): void => {
+        this.emitInsight(button, 'beuve-insight-show-in-chat');
+      },
+    },
+    keydown: {
+      'impact-chip': (_data, event): void => {
+        this.onImpactKey(event);
+      },
+      'impact-popover': (_data, event): void => {
+        this.onImpactKey(event);
+      },
+      insight: (_data, event, note): void => {
+        this.onInsightKey(event, note);
+      },
+    },
+  } satisfies DelegatedActions;
+
+  private readonly crossing = {
+    pointerover: {
+      'impact-chip': (): void => {
+        this.showImpact();
+      },
+      'impact-popover': (): void => {
+        this.showImpact();
+      },
+    },
+    pointerout: {
+      'impact-chip': (): void => {
+        this.scheduleImpactHide();
+      },
+      'impact-popover': (): void => {
+        this.scheduleImpactHide();
+      },
+    },
+    focusin: {
+      'impact-chip': (): void => {
+        this.showImpact();
+      },
+      'impact-popover': (): void => {
+        this.showImpact();
+      },
+      'insight-line': (_data, _event, line): void => {
+        if (line.matches(':focus-visible') && line.getAttribute('aria-expanded') !== 'true') {
+          this.toggleInsight(line, true);
+        }
+      },
+    },
+    focusout: {
+      'impact-chip': (): void => {
+        this.scheduleImpactHide();
+      },
+      'impact-popover': (): void => {
+        this.scheduleImpactHide();
+      },
+    },
+  } satisfies DelegatedActions;
+
+  /** The {@link crossing} listeners, while the card has something they act on. */
+  private crossingDelegation: AbortController | undefined;
+  /** The editing keys' listeners, while a Suggest Edit edit is in progress. */
+  private editKeys: AbortController | undefined;
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
   @property({ type: Boolean, reflect: true }) accessor active = false;
@@ -844,9 +919,6 @@ export class BeuveFileCard extends LitElement {
 
   constructor() {
     super();
-    this.addEventListener('keydown', this.onEditKeyCapture, { capture: true });
-    this.addEventListener('keydown', this.onEditKeyBubble);
-    this.addEventListener('pointermove', this.onPointerMove);
     this.addController({
       hostConnected: (): void => {
         // A card moved in the stream (a new file order) was disconnected, which dropped its diff.
@@ -1041,6 +1113,46 @@ export class BeuveFileCard extends LitElement {
     );
   }
 
+  /** A reviewed card is only its header (ADR 0064); a click on its check shows the diff again. */
+  private unmark(event: Event): void {
+    event.stopPropagation();
+    const path = this.file?.path;
+    if (path !== undefined) {
+      this.dispatchEvent(
+        new CustomEvent('beuve-file-reviewed', {
+          detail: { path, reviewed: false },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  }
+
+  /** Delegates the crossing events while the chip or an insight note is there to act on them. */
+  private syncCrossingDelegation(): void {
+    const isNeeded = this.insights.length > 0 || this.impactParts() !== undefined;
+    if (isNeeded && this.crossingDelegation === undefined) {
+      this.crossingDelegation = new AbortController();
+      delegateActions(this.renderRoot, this.crossing, { signal: this.crossingDelegation.signal });
+    } else if (!isNeeded && this.crossingDelegation !== undefined) {
+      this.crossingDelegation.abort();
+      this.crossingDelegation = undefined;
+    }
+  }
+
+  /** While editing, the editing keys come first: listeners on the host, from start to end. */
+  private syncEditKeys(): void {
+    if (this.edit !== undefined && this.editKeys === undefined) {
+      this.editKeys = new AbortController();
+      const { signal } = this.editKeys;
+      this.addEventListener('keydown', this.onEditKeyCapture, { capture: true, signal });
+      this.addEventListener('keydown', this.onEditKeyBubble, { signal });
+    } else if (this.edit === undefined && this.editKeys !== undefined) {
+      this.editKeys.abort();
+      this.editKeys = undefined;
+    }
+  }
+
   private noteElement(note: CardNote): HTMLElement {
     switch (note.kind) {
       case 'ura': {
@@ -1057,26 +1169,58 @@ export class BeuveFileCard extends LitElement {
 
   /** A `/review` finding's note; it stays expanded across re-renders until the reviewer collapses it. */
   private insightNode(insight: ReviewInsight): HTMLElement {
+    return createInsightElement(insight, this.openInsights.has(insight.key));
+  }
+
+  /** The insight note `element` is in, and its insight. */
+  private insightOf(
+    element: HTMLElement,
+  ): { readonly note: HTMLElement; readonly insight: ReviewInsight } | undefined {
+    const note = element.closest<HTMLElement>('[data-insight-key]');
+    const key = note?.dataset['insightKey'];
+    const insight = this.insights.find((candidate) => candidate.key === key);
+    return note === null || insight === undefined ? undefined : { note, insight };
+  }
+
+  /** Expands or collapses (`undefined`: toggles) the note `element` is in, and remembers it. */
+  private toggleInsight(element: HTMLElement, isOpen: boolean | undefined): void {
+    const found = this.insightOf(element);
+    if (found === undefined) {
+      return;
+    }
+    const { note, insight } = found;
+    const isOpening = isOpen ?? !note.classList.contains('open');
+    setInsightOpen(note, insight, isOpening);
+    if (isOpening) {
+      this.openInsights.add(insight.key);
+    } else {
+      this.openInsights.delete(insight.key);
+    }
+  }
+
+  /** Enter or Space on the note's line toggles it; Escape collapses it, back on its line. */
+  private onInsightKey(event: KeyboardEvent, note: HTMLElement): void {
+    const line = note.querySelector<HTMLElement>('.insight-line');
+    const isOpen = note.classList.contains('open');
+    if (event.composedPath()[0] === line && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.toggleInsight(note, !isOpen);
+    } else if (isOpen && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.toggleInsight(note, false);
+      line?.focus({ preventScroll: true });
+    }
+  }
+
+  private emitInsight(element: HTMLElement, name: string): void {
+    const insight = this.insightOf(element)?.insight;
+    if (insight === undefined) {
+      return;
+    }
     const detail = { messageId: insight.messageId, finding: insight.index };
-    const emit = (name: string): void => {
-      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
-    };
-    return createInsightElement(insight, {
-      isOpen: this.openInsights.has(insight.key),
-      onToggle: (isOpen): void => {
-        if (isOpen) {
-          this.openInsights.add(insight.key);
-        } else {
-          this.openInsights.delete(insight.key);
-        }
-      },
-      onStage: (): void => {
-        emit('beuve-insight-stage');
-      },
-      onShowInChat: (): void => {
-        emit('beuve-insight-show-in-chat');
-      },
-    });
+    this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
   /** Gutter marks for the insights: one adopted style sheet in the diff's shadow root (ADR 0061). */
@@ -1132,22 +1276,6 @@ export class BeuveFileCard extends LitElement {
     if (chip === undefined) {
       return nothing;
     }
-    const show = (): void => {
-      this.showImpact();
-    };
-    const hide = (): void => {
-      this.scheduleImpactHide();
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      this.hideImpact();
-      this.dispatchEvent(new CustomEvent('beuve-impact-close', { bubbles: true, composed: true }));
-    };
     const label = chip.tone === 'warning' ? `ImpactGate: ${chip.label}` : 'ImpactGate details';
     return html`<button
         type="button"
@@ -1155,15 +1283,7 @@ export class BeuveFileCard extends LitElement {
         aria-label=${label}
         aria-haspopup="dialog"
         aria-controls="impact-popover"
-        @mouseenter=${show}
-        @mouseleave=${hide}
-        @focus=${show}
-        @blur=${hide}
-        @click=${(event: Event): void => {
-          event.stopPropagation();
-          this.showImpact();
-        }}
-        @keydown=${onKey}
+        data-action="impact-chip"
       >
         ${chip.tone === 'warning' ? warningIcon : gaugeIcon}${chip.label}
       </button>
@@ -1173,33 +1293,41 @@ export class BeuveFileCard extends LitElement {
         popover="manual"
         role="dialog"
         aria-label="ImpactGate"
-        @mouseenter=${show}
-        @mouseleave=${hide}
-        @focusin=${show}
-        @focusout=${hide}
-        @keydown=${onKey}
-        @click=${(event: Event): void => {
-          event.stopPropagation();
-        }}
+        data-action="impact-popover"
       >
         ${this.renderImpactDetails(chip)}
       </div>`;
   }
 
+  /** Escape on the chip or in its popover closes the popover. */
+  private onImpactKey(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.hideImpact();
+    this.dispatchEvent(new CustomEvent('beuve-impact-close', { bubbles: true, composed: true }));
+  }
+
+  /** Stages the chip's findings that are not in the review dock yet. */
+  private stageImpactFindings(event: Event): void {
+    event.stopPropagation();
+    const chip = planImpactChip(this.impact, this.findings, this.cognitiveLimit);
+    const unstaged = chip?.findings.filter((finding) => !this.isStaged(finding)) ?? [];
+    for (const finding of unstaged) {
+      this.dispatchEvent(
+        new CustomEvent('beuve-ura-stage-finding', {
+          detail: { path: finding.path, functionName: finding.functionName },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  }
+
   private renderImpactDetails(chip: ImpactChip): TemplateResult {
     const unstaged = chip.findings.filter((finding) => !this.isStaged(finding));
-    const stage = (event: Event): void => {
-      event.stopPropagation();
-      for (const finding of unstaged) {
-        this.dispatchEvent(
-          new CustomEvent('beuve-ura-stage-finding', {
-            detail: { path: finding.path, functionName: finding.functionName },
-            bubbles: true,
-            composed: true,
-          }),
-        );
-      }
-    };
     return html`<h3>ImpactGate</h3>
       <p>${chip.summary}</p>
       ${
@@ -1245,7 +1373,7 @@ export class BeuveFileCard extends LitElement {
                     ? 'Staged in the review dock'
                     : `Stage ${unstaged.length === 1 ? 'this finding' : `these ${String(unstaged.length)} findings`} in the review dock`
                 }
-                @click=${stage}
+                data-action="impact-stage"
               >
                 ${unstaged.length === 0 ? 'Staged' : 'Stage'}
               </button>`
@@ -1359,7 +1487,7 @@ export class BeuveFileCard extends LitElement {
           class="reviewed-mark"
           title=${`Reviewed — click to unmark (${shortcutOf('toggle-reviewed', keyPlatformOf(navigator.platform))})`}
           aria-label="Reviewed; unmark"
-          @click=${this.onUnmarkClick}
+          data-action="unmark"
         >
           ${checkIcon}
         </button>`
@@ -1400,9 +1528,6 @@ export class BeuveFileCard extends LitElement {
   /** What a collapsed card says instead of its diff: why, how big, and how to load it. */
   private renderCollapsed(): TemplateResult {
     const { deferral } = this;
-    const expand = (event: Event): void => {
-      this.expand(event);
-    };
     const size =
       deferral === undefined
         ? ''
@@ -1413,7 +1538,7 @@ export class BeuveFileCard extends LitElement {
       <button
         type="button"
         title=${`Expand File (${shortcutOf('expand', keyPlatformOf(navigator.platform))})`}
-        @click=${expand}
+        data-action="expand"
       >
         Load diff
       </button>
@@ -1576,6 +1701,22 @@ ${splitPatch(file.patch).map(
   }
 
   /**
+   * Runs the card's action for a click or key event that the diff stream's delegated listener
+   * caught on this card (ADR 0074).
+   */
+  runAction(event: Event): void {
+    const handlers = (this.actions as DelegatedActions)[event.type as 'click' | 'keydown'];
+    dispatchAction(event, this.renderRoot, handlers as ActionHandlers<Event> | undefined);
+  }
+
+  /** A pointer moved over the card: the library attaches its gutter button on hover, labelled once per diff. */
+  notePointerMove(): void {
+    if (!this.isGutterLabelled) {
+      this.labelGutterButton();
+    }
+  }
+
+  /**
    * Opens `@pierre/diffs/edit` on the head side of this diff (ADR 0043), once both full files are
    * loaded through `session:get-file-pair`, with the caret on the target's first line. Nothing
    * is ever written: saving builds a suggested patch for the target lines and emits
@@ -1661,6 +1802,7 @@ ${splitPatch(file.patch).map(
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
+    this.syncEditKeys();
     if (changed.has('activeHunk')) {
       this.focusedLine = undefined;
     }
@@ -1707,6 +1849,7 @@ ${splitPatch(file.patch).map(
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    this.syncCrossingDelegation();
     const { library, metadata } = this;
     if (
       library === undefined ||
@@ -1743,7 +1886,7 @@ ${splitPatch(file.patch).map(
         <div
           class="title"
           title=${this.collapsed && this.reviewed === 'yes' ? 'Reviewed: click to show the diff' : ''}
-          @click=${this.onTitleClick}
+          data-action="title"
         >
           ${this.renderReviewedMark()}
           <span class="status">${file.status}</span>

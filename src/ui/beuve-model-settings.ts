@@ -14,6 +14,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { modelRoles } from '#contract/model-roles.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describeModelEntry } from './describe-model-entry.ts';
 import { describeModelTest } from './describe-model-test.ts';
 import { isRemoteBaseUrl } from './is-remote-base-url.ts';
@@ -173,6 +174,56 @@ export class BeuveModelSettings extends LitElement {
   @state() accessor tests: Readonly<Record<string, string>> = {};
   @state() accessor error = '';
 
+  constructor() {
+    super();
+    // ADR 0074: the entries' buttons, the executable choices and the role menus, through one
+    // listener per type.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          test: ({ model = '' }): void => {
+            void this.test(model);
+          },
+          edit: ({ model }): void => {
+            const entry = this.entryOf(model);
+            if (entry !== undefined) {
+              this.startEdit(entry);
+            }
+          },
+          remove: ({ model = '' }): void => {
+            void this.removeModel(model);
+          },
+        },
+        change: {
+          executable: ({ source }): void => {
+            if (source === 'installed' || source === 'bundled') {
+              this.edit({ executable: source });
+            }
+          },
+          role: ({ role }, event): void => {
+            const known = modelRoles.find((candidate) => candidate === role);
+            const id = (event.target as HTMLSelectElement).value;
+            if (known !== undefined) {
+              void this.setRole(known, id);
+            }
+          },
+        },
+      }),
+    );
+  }
+
+  private entryOf(id: string | undefined): ModelEntryView | undefined {
+    return this.registry?.entries.find((entry) => entry.id === id);
+  }
+
+  private async removeModel(id: string): Promise<void> {
+    this.apply(await this.api?.invoke('models:remove', { id }));
+  }
+
+  private async setRole(role: ModelRole, id: string): Promise<void> {
+    this.apply(await this.api?.invoke('models:set-role', { role, id }));
+  }
+
   /** Reads the registry afresh, on connection and whenever the window regains focus. */
   private async load(): Promise<void> {
     const listed = await this.api?.invoke('models:list');
@@ -323,24 +374,12 @@ export class BeuveModelSettings extends LitElement {
             }
           </div>
           <span class="actions">
-            <button type="button" @click=${(): void => void this.test(entry.id)}>Test</button>
-            <button
-              type="button"
-              @click=${(): void => {
-                this.startEdit(entry);
-              }}
-            >
-              Edit
-            </button>
+            <button type="button" data-action="test" data-model=${entry.id}>Test</button>
+            <button type="button" data-action="edit" data-model=${entry.id}>Edit</button>
             ${
               entry.isDefault
                 ? nothing
-                : html`<button
-                    type="button"
-                    @click=${async (): Promise<void> => {
-                      this.apply(await this.api?.invoke('models:remove', { id: entry.id }));
-                    }}
-                  >
+                : html`<button type="button" data-action="remove" data-model=${entry.id}>
                     Remove
                   </button>`
             }
@@ -472,9 +511,8 @@ export class BeuveModelSettings extends LitElement {
                             name="executable"
                             .checked=${draft.executable === source}
                             ?disabled=${source === 'bundled' && !registry.hasBundledClaudeCode}
-                            @change=${(): void => {
-                              this.edit({ executable: source });
-                            }}
+                            data-action="executable"
+                            data-source=${source}
                           />
                           ${source === 'installed' ? 'Installed' : 'Bundled'}
                         </label>`,
@@ -613,13 +651,7 @@ export class BeuveModelSettings extends LitElement {
           (role) =>
             html`<div class="row">
               <label for=${`role-${role}`}>${roleLabels[role]}</label>
-              <select
-                id=${`role-${role}`}
-                @change=${async (event: Event): Promise<void> => {
-                  const id = (event.target as HTMLSelectElement).value;
-                  this.apply(await this.api?.invoke('models:set-role', { role, id }));
-                }}
-              >
+              <select id=${`role-${role}`} data-action="role" data-role=${role}>
                 ${registry.entries.map(
                   (entry) =>
                     html`<option value=${entry.id} ?selected=${registry.roles[role] === entry.id}>

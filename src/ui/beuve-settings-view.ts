@@ -15,6 +15,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
+import { ActionDelegation } from './action-delegation.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 
@@ -156,6 +157,20 @@ export class BeuveSettingsView extends LitElement {
   @state() accessor claude: ClaudeStatusView | undefined;
   @state() accessor trusted: readonly TraceTrustEntryView[] = [];
   @state() accessor error = '';
+
+  constructor() {
+    super();
+    // ADR 0074: the trusted repositories' Remove buttons, through one listener.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          'remove-trust': ({ path = '' }): void => {
+            void this.removeTrust(path);
+          },
+        },
+      }),
+    );
+  }
 
   /** Reads every setting and account afresh. */
   private async load(): Promise<void> {
@@ -386,9 +401,8 @@ export class BeuveSettingsView extends LitElement {
                     <span class="detail">since ${entry.trustedAt.slice(0, 10)}</span>
                     <button
                       type="button"
-                      @click=${(): void => {
-                        void this.removeTrust(entry.repositoryPath);
-                      }}
+                      data-action="remove-trust"
+                      data-path=${entry.repositoryPath}
                     >
                       Remove
                     </button>

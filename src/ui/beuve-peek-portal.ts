@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { CallHierarchyCallView, CallHierarchyNodeView } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import type { PeekState } from './peek-state.ts';
 
 const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'External' };
@@ -166,10 +167,36 @@ export class BeuvePeekPortal extends LitElement {
     }
   `;
 
+  /** The nodes the last render showed, by id, for the delegated actions to act on. */
+  private readonly shownNodes = new Map<string, CallHierarchyNodeView>();
+
   @property({ attribute: false }) accessor peek: PeekState | undefined;
 
   /** Expanded node ids; the root is always expanded. */
   @state() accessor expanded: ReadonlySet<string> = new Set();
+
+  constructor() {
+    super();
+    // ADR 0074: the tree's rows and Open buttons, through one listener.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          toggle: ({ nodeId = '' }): void => {
+            const node = this.shownNodes.get(nodeId);
+            if (node !== undefined) {
+              this.toggle(node);
+            }
+          },
+          open: ({ nodeId = '' }): void => {
+            const node = this.shownNodes.get(nodeId);
+            if (node !== undefined) {
+              this.openDefinition(node);
+            }
+          },
+        },
+      }),
+    );
+  }
 
   private toggle(node: CallHierarchyNodeView): void {
     const next = new Set(this.expanded);
@@ -214,14 +241,14 @@ export class BeuvePeekPortal extends LitElement {
     isRoot = false,
   ): TemplateResult {
     const isOpen = isRoot || this.expanded.has(node.id);
+    this.shownNodes.set(node.id, node);
     return html`<li role="treeitem" aria-expanded=${isOpen ? 'true' : 'false'}>
       <button
         type="button"
         class="row"
         ?disabled=${isRoot}
-        @click=${(): void => {
-          this.toggle(node);
-        }}
+        data-action="toggle"
+        data-node-id=${node.id}
       >
         <span class="twisty">${isOpen ? '▾' : '▸'}</span>
         <span class="name">${node.name}</span>
@@ -235,34 +262,37 @@ export class BeuvePeekPortal extends LitElement {
 
   /** Opens the node's declaration in a sheet (ADR 0067); `beuve-app` decides window or overlay. */
   private renderOpen(node: CallHierarchyNodeView): TemplateResult {
-    const { file } = node;
     return html`<button
       type="button"
       class="open"
       title="Open the definition in a sheet"
-      @click=${(): void => {
-        if (file.kind !== 'workspace') {
-          return;
-        }
-        this.dispatchEvent(
-          new CustomEvent('beuve-sheet-request', {
-            detail: {
-              path: file.path,
-              range: {
-                startLine: node.selectionLine,
-                startCharacter: 0,
-                endLine: node.endLine,
-                endCharacter: 0,
-              },
-            },
-            bubbles: true,
-            composed: true,
-          }),
-        );
-      }}
+      data-action="open"
+      data-node-id=${node.id}
     >
       Open
     </button>`;
+  }
+
+  private openDefinition(node: CallHierarchyNodeView): void {
+    const { file } = node;
+    if (file.kind !== 'workspace') {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-sheet-request', {
+        detail: {
+          path: file.path,
+          range: {
+            startLine: node.selectionLine,
+            startCharacter: 0,
+            endLine: node.endLine,
+            endCharacter: 0,
+          },
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private renderChildren(node: CallHierarchyNodeView): TemplateResult {
@@ -295,6 +325,7 @@ export class BeuvePeekPortal extends LitElement {
     if (peek === undefined) {
       return html``;
     }
+    this.shownNodes.clear();
     const target = peek.status === 'ready' ? html`<code>${peek.root.name}</code>` : 'the change';
     return html`
       <div class="heading" role="heading" aria-level="3">

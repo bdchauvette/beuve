@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { CommitPairView } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describeCommitPair } from './describe-commit-pair.ts';
 import type { CommitPairRow } from './describe-commit-pair.ts';
 import { moveCommitPairCursor } from './move-commit-pair-cursor.ts';
@@ -173,6 +174,25 @@ export class BeuveCommitPairing extends LitElement {
   /** Leaves out the count and "Show all" line, for a host that shows them itself. */
   @property({ type: Boolean }) accessor headless = false;
 
+  constructor() {
+    super();
+    // ADR 0074: the rows, through one listener.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          pair: ({ index }): void => {
+            const pair = this.pairs[Number(index)];
+            if (pair === undefined) {
+              return;
+            }
+            this.cursor = Number(index);
+            this.toggle(describeCommitPair(pair));
+          },
+        },
+      }),
+    );
+  }
+
   private renderRow(row: CommitPairRow, index: number): TemplateResult {
     const isCursor = index === this.clampedCursor(this.pairs.length);
     return html`
@@ -183,10 +203,8 @@ export class BeuveCommitPairing extends LitElement {
         aria-selected=${row.id === this.selectedId ? 'true' : 'false'}
         aria-disabled=${row.isFilterable ? 'false' : 'true'}
         title=${row.title}
-        @click=${(): void => {
-          this.cursor = index;
-          this.toggle(row);
-        }}
+        data-action="pair"
+        data-index=${index}
       >
         <span class="commits">${row.commits}</span>
         <span class="chip">${row.chip}</span>

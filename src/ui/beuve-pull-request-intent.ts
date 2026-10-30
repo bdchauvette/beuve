@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type { PullRequestSessionView, PullRequestStackEntryView } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describePullRequestState } from './describe-pull-request-state.ts';
 import { parsePullRequestMarkdown } from './parse-pull-request-markdown.ts';
 import type { BodyBlock, BodySpan } from './parse-pull-request-markdown.ts';
@@ -145,6 +146,24 @@ export class BeuvePullRequestIntent extends LitElement {
 
   @property({ attribute: false }) accessor view: PullRequestSessionView | undefined;
 
+  constructor() {
+    super();
+    // ADR 0074: the description's links and the stack's chips, through one listener.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          link: ({ url = '' }, event): void => {
+            event.preventDefault();
+            this.emit('beuve-open-link', { url });
+          },
+          stack: ({ ref = '' }): void => {
+            this.emit('beuve-open-stack', { ref });
+          },
+        },
+      }),
+    );
+  }
+
   private emit(name: string, detail: object): void {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
@@ -164,13 +183,7 @@ export class BeuvePullRequestIntent extends LitElement {
         return html`<em>${span.text}</em>`;
       }
       case 'link': {
-        return html`<a
-          href=${span.href}
-          title=${span.href}
-          @click=${(event: MouseEvent): void => {
-            event.preventDefault();
-            this.emit('beuve-open-link', { url: span.href });
-          }}
+        return html`<a href=${span.href} title=${span.href} data-action="link" data-url=${span.href}
           >${span.text}</a
         >`;
       }
@@ -201,9 +214,8 @@ export class BeuvePullRequestIntent extends LitElement {
       title="${direction === '↑' ? 'Base' : 'Stacked on this'}: ${entry.title}${
         entry.isDraft ? ' (draft)' : ''
       }"
-      @click=${(): void => {
-        this.emit('beuve-open-stack', { ref: entry.ref });
-      }}
+      data-action="stack"
+      data-ref=${entry.ref}
     >
       ${label}
     </button>`;
@@ -229,9 +241,8 @@ export class BeuvePullRequestIntent extends LitElement {
           type="button"
           class="link"
           title=${pullRequest.htmlUrl}
-          @click=${(): void => {
-            this.emit('beuve-open-link', { url: pullRequest.htmlUrl });
-          }}
+          data-action="link"
+          data-url=${pullRequest.htmlUrl}
         >
           ${pullRequest.owner}/${pullRequest.repo}#${pullRequest.number}
         </button>

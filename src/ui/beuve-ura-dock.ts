@@ -13,6 +13,8 @@ import type {
 import type { CommandId } from '#contract/command-catalog.ts';
 
 import './beuve-patch-preview.ts';
+import { ActionDelegation } from './action-delegation.ts';
+import { withPayload } from './with-payload.ts';
 import { displayAccelerator } from './display-accelerator.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
@@ -394,6 +396,73 @@ export class BeuveUraDock extends LitElement {
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+    // ADR 0074: the items, their editor and the export buttons, through one listener per type.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          item: withPayload(
+            ({ itemId }) => this.itemOf(itemId),
+            (found): void => {
+              this.cursor = this.ordered().indexOf(found);
+            },
+          ),
+          editor: (_data, event): void => {
+            event.stopPropagation();
+          },
+          'cancel-edit': (_data, event): void => {
+            event.stopPropagation();
+            this.closeEditor();
+          },
+          'edit-suggestion': withPayload(
+            ({ itemId }) => this.itemOf(itemId),
+            (found, event): void => {
+              event.stopPropagation();
+              this.closeEditor();
+              this.emit('beuve-ura-edit-suggestion', { itemId: found.id });
+            },
+          ),
+          'remove-suggestion': withPayload(
+            ({ itemId }) => this.itemOf(itemId),
+            (found, event): void => {
+              event.stopPropagation();
+              this.emit('beuve-ura-update', { itemId: found.id, suggestedPatch: '' });
+            },
+          ),
+          export: withPayload(
+            ({ target }) => exports.find((entry) => entry.target === target)?.target,
+            (target): void => {
+              this.exportTo(target);
+            },
+          ),
+        },
+        dblclick: {
+          item: withPayload(
+            ({ itemId }) => this.itemOf(itemId),
+            (found): void => {
+              this.emit('beuve-ura-jump', { item: found });
+            },
+          ),
+        },
+        submit: {
+          editor: withPayload(
+            ({ itemId }) => this.itemOf(itemId),
+            (found, event, form): void => {
+              event.preventDefault();
+              this.saveEditor(found, form as HTMLFormElement);
+            },
+          ),
+        },
+        keydown: {
+          editor: (_data, event, form): void => {
+            submitOnModEnter(event, form as HTMLFormElement);
+          },
+        },
+      }),
+    );
+  }
+
+  private itemOf(itemId: string | undefined): UraItemView | undefined {
+    return this.items.find((item) => item.id === itemId);
   }
 
   private moveCursor(step: 1 | -1): void {
@@ -524,13 +593,8 @@ export class BeuveUraDock extends LitElement {
           : '';
     return html`<li
       class="${index === this.cursor ? 'cursor' : ''} ${isDone ? 'done' : ''}"
+      data-action="item"
       data-item-id=${item.id}
-      @click=${(): void => {
-        this.cursor = index;
-      }}
-      @dblclick=${(): void => {
-        this.emit('beuve-ura-jump', { item });
-      }}
     >
       <div class="meta">
         <span class="severity ${item.severity}">${labels.severity}</span>
@@ -571,18 +635,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   private renderEditor(item: UraItemView): TemplateResult {
-    const onSubmit = (event: SubmitEvent): void => {
-      event.preventDefault();
-      this.saveEditor(item, event.target as HTMLFormElement);
-    };
-    return html`<form
-      class="editor"
-      @submit=${onSubmit}
-      @keydown=${submitOnModEnter}
-      @click=${(event: Event): void => {
-        event.stopPropagation();
-      }}
-    >
+    return html`<form class="editor" data-action="editor" data-item-id=${item.id}>
       <div class="row">
         <select name="severity" aria-label="Severity">
           ${severities.map(
@@ -598,15 +651,7 @@ export class BeuveUraDock extends LitElement {
       ${this.renderSuggestionActions(item)}
       <div class="row">
         <span class="spacer"></span>
-        <button
-          type="button"
-          title="Cancel (Esc)"
-          @click=${(): void => {
-            this.closeEditor();
-          }}
-        >
-          Cancel
-        </button>
+        <button type="button" title="Cancel (Esc)" data-action="cancel-edit">Cancel</button>
         <button type="submit" class="primary" title=${`Save (${this.saveKey()})`}>Save</button>
       </div>
     </form>`;
@@ -627,13 +672,7 @@ export class BeuveUraDock extends LitElement {
     return html`<div class="suggestion-actions">
       ${
         isEditable
-          ? html`<button
-              type="button"
-              @click=${(): void => {
-                this.closeEditor();
-                this.emit('beuve-ura-edit-suggestion', { itemId: item.id });
-              }}
-            >
+          ? html`<button type="button" data-action="edit-suggestion" data-item-id=${item.id}>
               ${item.suggestedPatch === undefined ? 'Suggest a change…' : 'Edit suggestion…'}
             </button>`
           : nothing
@@ -641,12 +680,7 @@ export class BeuveUraDock extends LitElement {
       ${
         item.suggestedPatch === undefined
           ? nothing
-          : html`<button
-              type="button"
-              @click=${(): void => {
-                this.emit('beuve-ura-update', { itemId: item.id, suggestedPatch: '' });
-              }}
-            >
+          : html`<button type="button" data-action="remove-suggestion" data-item-id=${item.id}>
               Remove suggestion
             </button>`
       }
@@ -696,9 +730,8 @@ export class BeuveUraDock extends LitElement {
                 type="button"
                 title=${entry.title}
                 ?disabled=${!this.hasSession || this.exporting}
-                @click=${(): void => {
-                  this.exportTo(entry.target);
-                }}
+                data-action="export"
+                data-target=${entry.target}
               >
                 ${entry.label}
               </button>`,
@@ -936,12 +969,12 @@ const inPlaceKeys: Readonly<Record<string, CommandId>> = {
 };
 
 /** ⌘/Ctrl+Enter in the editor saves, as Enter in its title does. */
-function submitOnModEnter(event: KeyboardEvent): void {
+function submitOnModEnter(event: KeyboardEvent, form: HTMLFormElement): void {
   if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
     return;
   }
   event.preventDefault();
-  (event.currentTarget as HTMLFormElement).requestSubmit();
+  form.requestSubmit();
 }
 
 /** Typing in the editor is never a dock shortcut. */

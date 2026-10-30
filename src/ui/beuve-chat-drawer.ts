@@ -17,7 +17,9 @@ import type { ChatEntry, MessageChatEntry } from './chat-entry.ts';
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 import { describeChatReview } from './describe-chat-review.ts';
 import type { FindingLabels } from './describe-chat-review.ts';
+import { ActionDelegation } from './action-delegation.ts';
 import { citationMarker } from './citation-marker.ts';
+import type { DelegatedActions } from './delegate-actions.ts';
 import type { MarkdownRenderers } from './create-markdown-nodes.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeMention } from './describe-mention.ts';
@@ -682,75 +684,47 @@ export class BeuveChatDrawer extends LitElement {
   };
 
   /**
-   * Every button of the transcript, through one listener (event delegation): a button says what
-   * it does in `data-action` and what it acts on in `data-*`, read back from the transcript.
+   * Every button and link of the transcript, through one listener per type (ADR 0074): an
+   * element says what it does in `data-action` and what it acts on in `data-*`, read back from
+   * the transcript.
    */
-  private readonly onTranscriptClick = (event: MouseEvent): void => {
-    const button =
-      event.target instanceof Element
-        ? (event.target.closest<HTMLElement>('[data-action]') ?? undefined)
-        : undefined;
-    if (button === undefined) {
-      return;
-    }
-    const {
-      action,
-      messageId = '',
-      partId,
-      finding,
-      path = '',
-      start,
-      end,
-      url = '',
-    } = button.dataset;
-    switch (action) {
-      case 'link': {
+  private readonly transcriptActions = {
+    click: {
+      link: ({ url = '' }, event): void => {
         // A link in an answer never navigates the window; main opens what it allows (ADR 0040).
         event.preventDefault();
         this.emit('beuve-open-link', { url });
-        return;
-      }
-      case 'cancel': {
+      },
+      cancel: ({ messageId = '' }): void => {
         this.emit('beuve-chat-cancel', { messageId });
-        return;
-      }
-      case 'cancel-compaction': {
+      },
+      'cancel-compaction': (): void => {
         this.emit('beuve-chat-cancel-compaction');
-        return;
-      }
-      case 'clear-queue': {
+      },
+      'clear-queue': (): void => {
         this.emit('beuve-chat-clear-queue');
-        return;
-      }
-      case 'toggle-compacted': {
+      },
+      'toggle-compacted': (): void => {
         this.showsCompacted = !this.showsCompacted;
-        return;
-      }
-      case 'stage': {
+      },
+      stage: ({ messageId = '' }): void => {
         this.emit('beuve-chat-stage', { messageId });
-        return;
-      }
-      case 'stage-finding': {
+      },
+      'stage-finding': ({ messageId = '', finding }): void => {
         this.emit('beuve-chat-stage-finding', { messageId, finding: Number(finding) });
-        return;
-      }
-      case 'cite': {
+      },
+      cite: ({ path = '', start, end }): void => {
         const citation = { path, startLine: Number(start), endLine: Number(end) };
         this.emit('beuve-chat-cite', { citation });
-        return;
-      }
-      case 'mention': {
+      },
+      mention: ({ messageId = '', partId }): void => {
         const mention = this.mentionOf(messageId, partId);
         if (mention !== undefined) {
           this.emit('beuve-chat-mention', { mention });
         }
-        return;
-      }
-      default: {
-        return;
-      }
-    }
-  };
+      },
+    },
+  } satisfies DelegatedActions;
 
   /** Each chip node's mention; chips are rebuilt from the model, never parsed from markup. */
   private readonly chipMentions = new WeakMap<Node, ChatMentionView>();
@@ -782,6 +756,11 @@ export class BeuveChatDrawer extends LitElement {
   @state() accessor isDraftEmpty = true;
   /** Whether the messages a summary replaced are unfolded. */
   @state() accessor showsCompacted = false;
+
+  constructor() {
+    super();
+    this.addController(new ActionDelegation(this, this.transcriptActions));
+  }
 
   private editorElement(): HTMLElement | undefined {
     return this.renderRoot.querySelector<HTMLElement>('.editor') ?? undefined;
@@ -1645,7 +1624,7 @@ export class BeuveChatDrawer extends LitElement {
                 Claude Code only runs when you ask, with your own login: the question, the diff and
                 the files it reads leave this machine. It never edits anything.
               </p>`
-            : html`<div class="transcript" aria-live="polite" @click=${this.onTranscriptClick}>
+            : html`<div class="transcript" aria-live="polite">
                 ${this.renderTranscript()} ${this.renderQueue()}
               </div>`
         }
