@@ -173,6 +173,15 @@ export class BeuveFileCard extends LitElement {
       text-transform: uppercase;
     }
 
+    .counts {
+      display: inline-flex;
+      flex: none;
+      gap: var(--beuve-space-1);
+      justify-content: flex-end;
+      min-width: 11ch;
+      font-variant-numeric: tabular-nums;
+    }
+
     .additions {
       font: var(--beuve-font-mono);
       color: var(--beuve-diff-added-text);
@@ -334,7 +343,11 @@ export class BeuveFileCard extends LitElement {
     }
 
     .tag {
-      flex: none;
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       padding: 0 var(--beuve-space-1);
       border-radius: 4px;
       background: var(--beuve-surface);
@@ -368,7 +381,11 @@ export class BeuveFileCard extends LitElement {
     }
 
     .changed-since {
-      flex: none;
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       padding: 0 var(--beuve-space-1);
       border: 1px dashed var(--beuve-border);
       border-radius: 4px;
@@ -1709,10 +1726,12 @@ ${splitPatch(file.patch).map(
                 : html`<span class="old-path">${file.oldPath} → </span>`
             }${file.path}
           </span>
-          <span class="additions">+${file.additions}</span>
-          <span class="deletions">−${file.deletions}</span>
           ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
           ${this.renderImpactChip()}
+          <span class="counts"
+            ><span class="additions">+${file.additions}</span>
+            <span class="deletions">−${file.deletions}</span></span
+          >
         </div>
         ${this.renderEditBar()}
       </div>
