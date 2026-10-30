@@ -171,7 +171,13 @@ describe(
       startChat,
       repo,
     }) => {
-      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 1500 });
+      // The preamble streams at once and the chunks only after `delayMs`, far longer than the test:
+      // the running answer is provably streaming, and provably unfinished until it is cancelled.
+      const claude = fakeClaude.scripted({
+        preamble: 'Looking.',
+        chunks: ['a', 'b', 'c'],
+        delayMs: 600_000,
+      });
       const { services, chat, sessionId, deltas, updates, settled } = await startChat(
         claude.settings,
       );
@@ -186,7 +192,10 @@ describe(
         'queued',
       ]);
       await waitUntil(
-        () => deltas.some(({ messageId, text }) => messageId === running.answer.id && text === 'a'),
+        () =>
+          deltas.some(
+            ({ messageId, text }) => messageId === running.answer.id && text === 'Looking.',
+          ),
         'the running answer to stream',
       );
 
