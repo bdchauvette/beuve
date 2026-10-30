@@ -3,7 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { CommitSha } from './chat-message.ts';
-import type { ChatEffort } from './chat-model.ts';
+import type { ChatEffort, ChatModelProgress } from './chat-model.ts';
 import type { ChatFile } from './chat-question.ts';
 import type { ModelFinding } from './finding-output-schema.ts';
 import { fenceUntrusted } from './fence-untrusted.ts';
@@ -32,6 +32,8 @@ export interface VerifyFindingsDeps<E> {
   readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
   readonly effort?: ChatEffort;
+  /** The pass's coarse progress (its tool calls), as the first pass reports its own. */
+  readonly onProgress?: (progress: ChatModelProgress) => void;
 }
 
 /**
@@ -54,6 +56,7 @@ export async function verifyFindings<E>(
     timeout: deps.timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
     ...(deps.effort !== undefined && { effort: deps.effort }),
+    ...(deps.onProgress !== undefined && { onProgress: deps.onProgress }),
   });
   if (!output.ok) {
     return err(output.error);

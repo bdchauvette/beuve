@@ -42,7 +42,12 @@ export interface ReviewChangeDeps<E> {
 /** Coarse progress for the transcript's status line; never prompt or file content. */
 export type ReviewProgress =
   | { readonly kind: 'reviewing'; readonly files: number }
-  | { readonly kind: 'model'; readonly progress: ChatModelProgress }
+  /** What a pass's model is doing: the first `review` or the `verify` pass. */
+  | {
+      readonly kind: 'model';
+      readonly pass: 'review' | 'verify';
+      readonly progress: ChatModelProgress;
+    }
   | { readonly kind: 'verifying'; readonly findings: number };
 
 export interface ReviewedChange {
@@ -89,7 +94,7 @@ export async function reviewChange<E>(
     timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
     ...(deps.effort !== undefined && { effort: deps.effort }),
-    onProgress: (progress) => deps.onProgress?.({ kind: 'model', progress }),
+    onProgress: (progress) => deps.onProgress?.({ kind: 'model', pass: 'review', progress }),
   });
   if (!output.ok) {
     return err({ kind: 'model', error: output.error });
@@ -124,6 +129,7 @@ export async function reviewChange<E>(
       model: deps.verifier,
       effort: deps.verifierEffort ?? 'low',
       timeout: remaining,
+      onProgress: (progress) => deps.onProgress?.({ kind: 'model', pass: 'verify', progress }),
       ...(deps.signal !== undefined && { signal: deps.signal }),
     },
   );

@@ -57,13 +57,28 @@ describe(
         citations: [{ path: 'feature.rs', startLine: 1, endLine: 2 }],
       });
       expect(
-        events.map((event) =>
-          'text' in event
-            ? [event.type, event.text]
-            : [event.type, 'part' in event ? event.part.id : ''],
+        events.flatMap((event) =>
+          event.type === 'status' ? [[event.status, event.activity]] : [],
         ),
       ).toStrictEqual([
-        ['status', ''],
+        ['submitted', 'Asking Claude Code'],
+        ['streaming', undefined],
+        ['streaming', 'Claude Code is writing'],
+        ['streaming', 'Claude Code: grep feature'],
+        ['streaming', 'Claude Code is thinking'],
+        ['streaming', 'Claude Code is writing'],
+      ]);
+      expect(
+        events.flatMap((event) =>
+          event.type === 'status'
+            ? []
+            : [
+                'text' in event
+                  ? [event.type, event.text]
+                  : [event.type, 'part' in event ? event.part.id : ''],
+              ],
+        ),
+      ).toStrictEqual([
         ['part-start', 'p1'],
         ['text-delta', 'Looking.'],
         ['part-start', 'p2'],
@@ -74,7 +89,6 @@ describe(
         ['text-delta', '[[feature.rs:1-2]] and '],
         ['text-delta', 'ignores [[ghost.rs:4]].'],
       ]);
-      expect(events[0]).toMatchObject({ type: 'status', status: 'streaming' });
       expect(events.every(({ messageId }) => messageId === asked.answer.id)).toBe(true);
 
       const listed = okValueFrom(chat.list({ sessionId }));
@@ -174,7 +188,9 @@ describe(
       });
       expect(textOf(await settled(fourth.answer.id))).toBe('abc');
       const started = events.flatMap((event) =>
-        event.type === 'status' && event.status === 'submitted' ? event.messageId : [],
+        event.type === 'status' && event.status === 'submitted' && event.activity === undefined
+          ? event.messageId
+          : [],
       );
       const finished = updates.flatMap(({ id, status }) => (status === 'done' ? id : []));
       expect([started, finished]).toStrictEqual([
@@ -385,12 +401,20 @@ describe(
       ).toStrictEqual([
         ['tool-call', 'grep feature'],
         ['tool-call', 'read feature.rs:1-3'],
+        ['tool-call', 'grep feature'],
+        ['tool-call', 'read feature.rs:1-3'],
         ['finding', ''],
       ]);
-      expect(reviewed.parts.at(-1)).toStrictEqual({ kind: 'finding', id: 'p3', finding: 0 });
+      expect(reviewed.parts.at(-1)).toStrictEqual({ kind: 'finding', id: 'p5', finding: 0 });
       expect(
         events.flatMap((event) => (event.type === 'status' ? (event.activity ?? []) : [])),
-      ).toContain('Checking 2 findings against the code');
+      ).toStrictEqual(
+        expect.arrayContaining([
+          'Checking 2 findings against the code',
+          'Checking 2 findings against the code: grep feature',
+          'Checking 2 findings against the code: read feature.rs:1-3',
+        ]),
+      );
 
       const [find, verify] = claude.calls();
       expect(find?.args.some((arg) => arg.startsWith('--json-schema='))).toBe(true);

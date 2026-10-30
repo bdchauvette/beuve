@@ -42,6 +42,7 @@ function scripted(
       request: ReviewModelRequest<T>,
     ): Promise<Result<ReviewModelOutput<T>, string>> => {
       seen.push(request);
+      request.onProgress?.({ kind: 'tool-start', id: 't1', tool: 'Read', description: 'read it' });
       await Promise.resolve();
       if (!answer.ok) {
         return answer;
@@ -67,7 +68,7 @@ describe('reviewChange', () => {
   }) => {
     const seen: ReviewModelRequest<unknown>[] = [];
     const checked: ReviewModelRequest<unknown>[] = [];
-    const progress: ReviewProgress['kind'][] = [];
+    const progress: ReviewProgress[] = [];
     const result = await reviewChange(question(), {
       model: firstPass(seen),
       verifier: scripted(
@@ -80,7 +81,7 @@ describe('reviewChange', () => {
         checked,
       ),
       onProgress: (event) => {
-        progress.push(event.kind);
+        progress.push(event);
       },
     });
     const { review, citations } = okValueFrom(result);
@@ -105,7 +106,13 @@ describe('reviewChange', () => {
     expect(promptTextOf(seen[0])).toContain('Review the whole change');
     expect(promptTextOf(seen[0])).not.toContain("## The reviewer's question");
     expect(promptTextOf(checked[0])).toContain('## Finding 2: src/b.ts:2-2');
-    expect(progress).toStrictEqual(['reviewing', 'verifying']);
+    const read = { kind: 'tool-start', id: 't1', tool: 'Read', description: 'read it' } as const;
+    expect(progress).toStrictEqual([
+      { kind: 'reviewing', files: 2 },
+      { kind: 'model', pass: 'review', progress: read },
+      { kind: 'verifying', findings: 2 },
+      { kind: 'model', pass: 'verify', progress: read },
+    ]);
     expect(seen[0]?.messages[0]?.cache).toBe(true);
     expect(seen[0]?.effort).toBeUndefined();
     expect(checked[0]?.effort).toBe('low');

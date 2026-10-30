@@ -70,6 +70,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 
 import type { ClaudeCodeSettings } from './claude-code-settings.ts';
+import { describeChatActivity } from './describe-chat-activity.ts';
 import { describeChatError } from './describe-chat-error.ts';
 import { chatFailureFromModelError } from './chat-failure-from-model-error.ts';
 import { resolveChatMentions } from './resolve-chat-mentions.ts';
@@ -142,6 +143,8 @@ interface AnswerJob {
   streamed: StreamedParts;
   /** `streaming` once the first part arrived. */
   status: 'submitted' | 'streaming';
+  /** The status line last pushed, so an unchanged one isn't pushed again. */
+  activity?: string;
 }
 
 /** Settings' Test of one registry entry; `settle` answers its `models:test` call. */
@@ -230,6 +233,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const pushStatus = (job: AnswerJob, activity?: string): void => {
+    if (activity !== undefined) {
+      job.activity = activity;
+    }
     notify({
       type: 'status',
       sessionId: job.sessionId,
@@ -424,15 +430,24 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return model.error;
     }
+    const { name } = model.value;
     const stream = streamInto(job);
+    const report = (event: ModelStreamEvent): void => {
+      stream(event);
+      const activity = describeChatActivity(name, event);
+      if (activity !== undefined && activity !== job.activity && !job.controller.signal.aborted) {
+        pushStatus(job, activity);
+      }
+    };
+    pushStatus(job, role === 'summarize' ? `${name} is summarizing the change` : `Asking ${name}`);
     const asked = await askQuestion<ModelError>(input, {
       model: model.value.model,
       signal: job.controller.signal,
       onDelta: (delta): void => {
-        stream({ kind: 'text', delta });
+        report({ kind: 'text', delta });
       },
       onProgress: (progress): void => {
-        stream({ kind: 'progress', progress });
+        report({ kind: 'progress', progress });
       },
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
@@ -500,6 +515,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
     const { name } = model.value;
     let toolUses = 0;
+    let checking = 'Checking the findings against the code';
     const onProgress = (event: ReviewProgress): void => {
       switch (event.kind) {
         case 'reviewing': {
@@ -508,6 +524,12 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         }
         case 'model': {
           stream({ kind: 'progress', progress: event.progress });
+          if (event.pass === 'verify') {
+            if (event.progress.kind === 'tool-start') {
+              progress(`${checking}: ${event.progress.description}`);
+            }
+            return;
+          }
           if (event.progress.kind === 'tool-start') {
             toolUses += 1;
             progress(
@@ -519,7 +541,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           return;
         }
         case 'verifying': {
-          progress(`Checking ${plural(event.findings, 'finding')} against the code`);
+          checking = `Checking ${plural(event.findings, 'finding')} against the code`;
+          progress(checking);
           return;
         }
       }
