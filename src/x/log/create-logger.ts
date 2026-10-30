@@ -19,8 +19,6 @@ export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Where lines go. Defaults to stderr. */
   readonly sink?: LogSink;
-  /** Clock, injectable for tests. */
-  readonly now?: () => Date;
 }
 
 /**
@@ -31,13 +29,17 @@ export interface LoggerOptions {
 export function createLogger(namespace: string, options: LoggerOptions = {}): Logger {
   const threshold = rank(options.level ?? parseLevel(process.env['BEUVE_LOG_LEVEL']) ?? 'info');
   const sink = options.sink ?? writeToStderr;
-  const now = options.now ?? ((): Date => new Date());
 
   const emit = (level: LogLevel, message: string, fields: LogFields = {}): void => {
     if (rank(level) < threshold) {
       return;
     }
-    const core = { time: now().toISOString(), level, namespace, message };
+    const core = {
+      time: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+      level,
+      namespace,
+      message,
+    };
     sink(serialize({ ...core, ...fields, ...core }));
   };
 

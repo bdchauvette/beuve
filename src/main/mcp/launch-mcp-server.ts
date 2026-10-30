@@ -54,7 +54,7 @@ export async function launchMcpServer(
     url: handle.value.url,
     token: token.value,
     pid: process.pid,
-    startedAt: new Date().toISOString(),
+    startedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
   });
   if (!discovery.ok) {
     await handle.value.stop();

@@ -180,9 +180,11 @@ async function runIn(
   }
   args.push(...workspace.testFiles);
 
-  const started = performance.now();
+  const started = Temporal.Now.instant();
   const exit = await spawnVitest(options, request, args, workspace.root);
-  const durationMs = Math.round(performance.now() - started);
+  const durationMs = Temporal.Now.instant()
+    .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+    .total('milliseconds');
   options.logger?.debug('trace: vitest exited', { durationMs, ...exit, output: undefined });
   if (exit.stopped === 'cancelled') {
     return err({ kind: 'cancelled' });

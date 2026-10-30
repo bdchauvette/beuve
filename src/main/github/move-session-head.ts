@@ -14,7 +14,7 @@ export function moveSessionHead(
   session: Session,
   headSha: CommitSha,
 ): Result<Session, IpcError> {
-  const advanced = advanceHead(session, headSha, context.deps);
+  const advanced = advanceHead(session, headSha);
   if (advanced === session) {
     return ok(session);
   }

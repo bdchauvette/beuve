@@ -1,34 +1,36 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { openDatabase } from '#sqlite/open-database.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
+import { test as databaseTest } from '#testing/test.ts';
 
 import { sessionMigrations } from './session-migrations.ts';
+import { test } from './testing/test.ts';
 
-const id = '00000000-0000-4000-8000-000000000001';
-const otherId = '00000000-0000-4000-8000-000000000002';
-const checkpointId = '00000000-0000-4000-8000-00000000000c';
-const sha = 'a'.repeat(40);
-const time = '2026-10-28T12:00:00.000Z';
+/** Fixed ids and values for the rows these tests insert by hand. */
+interface Row {
+  readonly id: string;
+  readonly otherId: string;
+  readonly checkpointId: string;
+  readonly sha: string;
+  readonly time: string;
+}
 
 describe('sessionMigrations', () => {
-  it('uses session-prefixed ids and applies idempotently', () => {
-    const db = openDatabase(':memory:');
-    expect(runMigrations(db, sessionMigrations)).toEqual(['session-0001-initial']);
-    expect(runMigrations(db, sessionMigrations)).toEqual([]);
+  databaseTest('uses session-prefixed ids and applies idempotently', ({ expect, db }) => {
+    expect(runMigrations(db, sessionMigrations)).toStrictEqual(['session-0001-initial']);
+    expect(runMigrations(db, sessionMigrations)).toStrictEqual([]);
   });
 
-  it('accepts a valid row of each kind', () => {
-    const db = setup();
+  test('accepts a valid row of each kind', ({ expect, db }) => {
     expect(() => {
       insertLocal(db, {});
-      insertPull(db, { id: otherId });
+      insertPull(db, { id: row().otherId });
     }).not.toThrow();
   });
 
-  it.each<[string, Record<string, unknown>]>([
+  test.for<[string, Record<string, unknown>]>([
     ['an unknown kind', { kind: 'gitlab' }],
     ['a short sha', { head_sha: 'abc' }],
     ['an uppercase sha', { head_sha: 'A'.repeat(40) }],
@@ -36,40 +38,39 @@ describe('sessionMigrations', () => {
     ['a missing head ref', { head_ref: undefined }],
     ['a pull request field on a local session', { pr_number: 3 }],
     ['a host', { host: 'github.com' }],
-  ])('rejects a local session with %s', (_label, overrides) => {
+  ])('rejects a local session with %s', ([, overrides], { expect, db }) => {
     expect(() => {
-      insertLocal(setup(), overrides);
+      insertLocal(db, overrides);
     }).toThrow('CHECK constraint failed');
   });
 
-  it.each<[string, Record<string, unknown>]>([
+  test.for<[string, Record<string, unknown>]>([
     ['a missing owner', { owner: undefined }],
     ['a non-positive number', { pr_number: 0 }],
     ['a head ref', { head_ref: 'feature' }],
     ['an uppercase host', { host: 'GitHub.com' }],
     ['a host with a scheme', { host: 'https://github.com' }],
-  ])('rejects a pull request session with %s', (_label, overrides) => {
+  ])('rejects a pull request session with %s', ([, overrides], { expect, db }) => {
     expect(() => {
-      insertPull(setup(), overrides);
+      insertPull(db, overrides);
     }).toThrow('CHECK constraint failed');
   });
 
-  it('rejects text in the integer column (STRICT)', () => {
+  test('rejects text in the integer column (STRICT)', ({ expect, db }) => {
     expect(() => {
-      insertPull(setup(), { pr_number: 'seven' });
+      insertPull(db, { pr_number: 'seven' });
     }).toThrow('cannot store TEXT value in INTEGER column');
   });
 
-  it('rejects a second session for the same change', () => {
-    const db = setup();
+  test('rejects a second session for the same change', ({ expect, db }) => {
     insertLocal(db, {});
     expect(() => {
-      insertLocal(db, { id: otherId });
+      insertLocal(db, { id: row().otherId });
     }).toThrow('UNIQUE constraint failed');
   });
 
-  it('rejects checkpoints for unknown sessions and cascades deletes', () => {
-    const db = setup();
+  test('rejects checkpoints for unknown sessions and cascades deletes', ({ expect, db }) => {
+    const { checkpointId, id, sha, time } = row();
     const insertCheckpoint = (): void => {
       db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?);').run(
         checkpointId,
@@ -85,13 +86,13 @@ describe('sessionMigrations', () => {
     insertLocal(db, {});
     insertCheckpoint();
     db.prepare('DELETE FROM sessions;').run();
-    expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT count(*) AS n FROM checkpoints;').get()).toMatchObject({ n: 0 });
   });
 });
 
 describe('checkpoints', () => {
-  it('requires a full base sha', () => {
-    const db = setup();
+  test('requires a full base sha', ({ expect, db }) => {
+    const { checkpointId, id, sha, time } = row();
     insertLocal(db, {});
     expect(() => {
       db.prepare('INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?);').run(
@@ -106,25 +107,29 @@ describe('checkpoints', () => {
 });
 
 describe('pull request hosts', () => {
-  it('keys pull requests by host', () => {
-    const db = setup();
+  test('keys pull requests by host', ({ expect, db }) => {
     insertPull(db, {});
     expect(() => {
-      insertPull(db, { id: checkpointId, host: 'ghe.example.com' });
+      insertPull(db, { id: row().checkpointId, host: 'ghe.example.com' });
     }).not.toThrow();
     expect(() => {
-      insertPull(db, { id: otherId });
+      insertPull(db, { id: row().otherId });
     }).toThrow('UNIQUE constraint failed');
   });
 });
 
-function setup(): DatabaseSync {
-  const db = openDatabase(':memory:');
-  runMigrations(db, sessionMigrations);
-  return db;
+function row(): Row {
+  return {
+    id: '00000000-0000-4000-8000-000000000001',
+    otherId: '00000000-0000-4000-8000-000000000002',
+    checkpointId: '00000000-0000-4000-8000-00000000000c',
+    sha: 'a'.repeat(40),
+    time: '2026-10-28T12:00:00.000Z',
+  };
 }
 
 function insertLocal(db: DatabaseSync, overrides: Record<string, unknown>): void {
+  const { id, sha, time } = row();
   insert(db, {
     id,
     kind: 'local',
@@ -139,6 +144,7 @@ function insertLocal(db: DatabaseSync, overrides: Record<string, unknown>): void
 }
 
 function insertPull(db: DatabaseSync, overrides: Record<string, unknown>): void {
+  const { id, sha, time } = row();
   insert(db, {
     id,
     kind: 'github-pull-request',

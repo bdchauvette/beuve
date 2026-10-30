@@ -5,7 +5,7 @@ import { testUraIds } from './testing/test-ura-ids.ts';
 import { transitionUraItem } from './transition-ura-item.ts';
 import type { UraStatus } from './ura-item.ts';
 
-const later = new Date('2026-10-29T08:00:00.000Z');
+const later = Temporal.Instant.from('2026-10-29T08:00:00.000Z');
 const addressed: UraStatus = { kind: 'addressed', atSha: testUraIds.laterHeadSha, by: 'reviewer' };
 
 describe('transitionUraItem', () => {
@@ -14,7 +14,11 @@ describe('transitionUraItem', () => {
     const done = transitionUraItem(item, addressed, later);
     expect(done).toEqual({
       ok: true,
-      value: { ...item, status: addressed, updatedAt: later.toISOString() },
+      value: {
+        ...item,
+        status: addressed,
+        updatedAt: later.toString({ fractionalSecondDigits: 3 }),
+      },
     });
     const withdrawn = transitionUraItem(item, { kind: 'withdrawn' }, later);
     expect(withdrawn.ok && withdrawn.value.status).toEqual({ kind: 'withdrawn' });

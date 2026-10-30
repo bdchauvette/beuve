@@ -63,7 +63,7 @@ export function createGhCliCredentialProvider(
       resolved = found.value;
     }
     const command = resolved;
-    const started = performance.now();
+    const started = Temporal.Now.instant();
     const outcome = await runGh({
       command,
       ...(options.leadingArgs !== undefined && { leadingArgs: options.leadingArgs }),
@@ -74,7 +74,9 @@ export function createGhCliCredentialProvider(
     });
     options.logger?.debug('gh: finished', {
       subcommand: args.slice(0, 2).join(' '),
-      durationMs: Math.round(performance.now() - started),
+      durationMs: Temporal.Now.instant()
+        .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+        .total('milliseconds'),
       outcome: outcome.ok ? outcome.value.exitCode : outcome.error.kind,
     });
     if (outcome.ok) {

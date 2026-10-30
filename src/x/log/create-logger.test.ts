@@ -1,15 +1,22 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createLogger } from './create-logger.ts';
 
 describe('createLogger', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'Temporal'],
+      now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
+    });
+  });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
   it('writes one JSON record per call with namespace and fields', () => {
     const { records, sink } = capture();
-    createLogger('git', { sink, now: fixedClock }).info('checked out', { sha: 'abc' });
+    createLogger('git', { sink }).info('checked out', { sha: 'abc' });
     expect(records).toEqual([
       {
         time: '2026-10-28T12:00:00.000Z',
@@ -23,7 +30,7 @@ describe('createLogger', () => {
 
   it('does not let fields overwrite the core keys', () => {
     const { records, sink } = capture();
-    createLogger('git', { sink, now: fixedClock }).warn('real', { message: 'fake', level: 'x' });
+    createLogger('git', { sink }).warn('real', { message: 'fake', level: 'x' });
     expect(records[0]).toMatchObject({ level: 'warn', message: 'real' });
   });
 
@@ -51,7 +58,7 @@ describe('createLogger', () => {
 
   it('serializes errors and bigints, and survives circular fields', () => {
     const { records, sink } = capture();
-    const logger = createLogger('x', { sink, now: fixedClock });
+    const logger = createLogger('x', { sink });
     const circular: Record<string, unknown> = {};
     circular['self'] = circular;
 
@@ -63,10 +70,6 @@ describe('createLogger', () => {
     expect(typeof records[1]?.['serializationError']).toBe('string');
   });
 });
-
-function fixedClock(): Date {
-  return new Date('2026-10-28T12:00:00.000Z');
-}
 
 function capture(): { records: Record<string, unknown>[]; sink: (line: string) => void } {
   const records: Record<string, unknown>[] = [];

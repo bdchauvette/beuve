@@ -33,7 +33,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', () => {
     services = createMainServices({
       db,
       logger: silentLogger(),
-      deps: steppingDeps(),
+      deps: countingDeps(),
       worktreeRoot: path.join(repo.scratch(), 'worktrees'),
     });
     sessions = services.sessions;
@@ -277,7 +277,7 @@ describe(
       services = createMainServices({
         db,
         logger: silentLogger(),
-        deps: steppingDeps(),
+        deps: countingDeps(),
         worktreeRoot,
       });
       typescriptBranch(repo);
@@ -559,11 +559,9 @@ function lines(content: readonly string[]): string {
   return content.map((line) => `${line}\n`).join('');
 }
 
-function steppingDeps(): SessionDeps {
-  let tick = 0;
+function countingDeps(): SessionDeps {
   let id = 0;
   return {
-    now: (): Date => new Date(Date.UTC(2026, 9, 28, 12, 0, tick++)),
     newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
   };
 }
@@ -584,7 +582,7 @@ describe(
       services = createMainServices({
         db,
         logger: silentLogger(),
-        deps: steppingDeps(),
+        deps: countingDeps(),
         worktreeRoot: path.join(repo.scratch(), 'worktrees'),
         impactRunner: runner.runner,
       });

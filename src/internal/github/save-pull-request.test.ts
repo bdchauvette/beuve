@@ -24,12 +24,12 @@ describe('savePullRequest', () => {
       throw new Error(decoded.error);
     }
     const pullRequest: PullRequest = decoded.value;
-    savePullRequest(db, ref, pullRequest, new Date('2026-10-28T12:00:00.000Z'));
+    savePullRequest(db, ref, pullRequest, Temporal.Instant.from('2026-10-28T12:00:00.000Z'));
     savePullRequest(
       db,
       ref,
       { ...pullRequest, title: 'Renamed', isDraft: true, state: 'merged' },
-      new Date('2026-10-28T13:00:00.000Z'),
+      Temporal.Instant.from('2026-10-28T13:00:00.000Z'),
     );
     expect(findStoredPullRequest(db, ref)).toEqual({
       ok: true,

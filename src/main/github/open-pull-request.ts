@@ -92,8 +92,8 @@ export async function openPullRequest(
   if (!session.ok) {
     return githubFailure('github-failed', session.error.message);
   }
-  const { db, deps } = context.session;
-  savePullRequest(db, ref, synced.value.pullRequest, deps.now());
+  const { db } = context.session;
+  savePullRequest(db, ref, synced.value.pullRequest, Temporal.Now.instant());
   const stored = findStoredPullRequest(db, ref);
   if (!stored.ok || stored.value === undefined) {
     return githubFailure('github-failed', 'the pull request metadata could not be stored');

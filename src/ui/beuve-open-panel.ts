@@ -253,7 +253,7 @@ export class BeuveOpenPanel extends LitElement {
     }
   `;
 
-  private now = Date.now();
+  private now = Temporal.Now.instant();
 
   private readonly onQueryInput = (event: InputEvent): void => {
     this.text = (event.currentTarget as HTMLInputElement).value;
@@ -745,7 +745,7 @@ export class BeuveOpenPanel extends LitElement {
     this.step = 'list';
     this.text = '';
     this.cursor = 0;
-    this.now = Date.now();
+    this.now = Temporal.Now.instant();
   }
 
   /** Shows the pull request step, e.g. for a link pasted into the palette. */

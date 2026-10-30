@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { classifyGithubResponse } from './classify-github-response.ts';
 
-const now = new Date('2026-10-28T12:00:00Z');
+const now = Temporal.Instant.from('2026-10-28T12:00:00Z');
 
 function head(
   status: number,

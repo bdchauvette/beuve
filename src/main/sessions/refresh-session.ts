@@ -46,7 +46,7 @@ export async function refreshSession(
   if (!head.ok) {
     return gitFailure(logger, head.error);
   }
-  const advanced = advanceHead(session, head.value, context.deps);
+  const advanced = advanceHead(session, head.value);
   if (advanced !== session) {
     const saved = updateSessionHead(context.db, advanced);
     if (!saved.ok) {

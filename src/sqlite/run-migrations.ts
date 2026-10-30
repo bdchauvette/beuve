@@ -25,7 +25,7 @@ export function runMigrations(db: DatabaseSync, migrations: readonly Migration[]
     .map((migration) =>
       withTransaction(db, () => {
         db.exec(migration.up);
-        record.run(migration.id, new Date().toISOString());
+        record.run(migration.id, Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }));
         return migration.id;
       }),
     );

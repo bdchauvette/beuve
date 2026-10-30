@@ -20,7 +20,7 @@ export function createSession(
   deps: SessionDeps = systemSessionDeps,
 ): Result<UnreviewedSession, Extract<SessionError, { kind: 'invalid-source' }>> {
   return andThen(parseSessionSource(source), (valid) => {
-    const now = deps.now().toISOString();
+    const now = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
     return ok({
       id: deps.newId() as SessionId,
       source: valid,

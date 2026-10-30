@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { BigIntStats } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -122,7 +123,7 @@ interface ServerEntry {
   readonly definition: ServerDefinition;
   session: ServerSession | undefined;
   starting: Promise<Result<ServerSession, LspError>> | undefined;
-  crashes: number[];
+  crashes: Temporal.Instant[];
   lastExit: ServerExit | undefined;
   restarts: number;
 }
@@ -153,6 +154,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const entries = new Map<string, ServerEntry>();
   const nodes = new LruCache<string, NodeHandle>(options.maxNodes ?? 10_000);
   const idleTimeoutMs = options.idleTimeoutMs ?? 5 * 60_000;
+  const idleTimeout = Temporal.Duration.from({ milliseconds: idleTimeoutMs });
   const lifecycle = { isDisposed: false };
 
   const definitionFor = (file: WorkspaceFile): ServerDefinition | undefined => {
@@ -203,7 +205,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return;
     }
 
-    entry.crashes.push(performance.now());
+    entry.crashes.push(Temporal.Now.instant());
     entry.lastExit = exit;
   };
 
@@ -235,8 +237,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (entry.starting !== undefined) {
       return entry.starting;
     }
-    const windowStart = performance.now() - (options.restartWindowMs ?? 5 * 60_000);
-    entry.crashes = entry.crashes.filter((at) => at >= windowStart);
+    const windowStart = Temporal.Now.instant().subtract({
+      milliseconds: options.restartWindowMs ?? 5 * 60_000,
+    });
+    entry.crashes = entry.crashes.filter((at) => Temporal.Instant.compare(at, windowStart) >= 0);
     if (entry.crashes.length > (options.maxRestarts ?? 3)) {
       return err({
         kind: 'server-exited',
@@ -254,7 +258,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       const started = await startSession(current);
       current.starting = undefined;
       if (!started.ok) {
-        current.crashes.push(performance.now());
+        current.crashes.push(Temporal.Now.instant());
         return started;
       }
       if (lifecycle.isDisposed) {
@@ -272,17 +276,18 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     displayPath: string,
   ): Promise<Result<{ text: string; stamp: FileStamp }, LspError>> => {
     try {
-      const stats = await stat(absolutePath);
-      if (stats.size > maxFileBytes) {
+      const stats = await stat(absolutePath, { bigint: true });
+      const size = Number(stats.size);
+      if (size > maxFileBytes) {
         return err({
           kind: 'file-too-large',
           path: displayPath,
-          bytes: stats.size,
+          bytes: size,
           maxBytes: maxFileBytes,
         });
       }
       const text = await readFile(absolutePath, 'utf8');
-      return ok({ text, stamp: { mtimeMs: stats.mtimeMs, size: stats.size } });
+      return ok({ text, stamp: stampFrom(stats) });
     } catch {
       return err({
         kind: 'invalid-path',
@@ -300,8 +305,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     for (const document of session.openDocuments) {
       let stamp: FileStamp | undefined;
       try {
-        const stats = await stat(document.absolutePath);
-        stamp = { mtimeMs: stats.mtimeMs, size: stats.size };
+        stamp = stampFrom(await stat(document.absolutePath, { bigint: true }));
       } catch {
         stamp = undefined;
       }
@@ -309,7 +313,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         session.close(document.uri);
         continue;
       }
-      if (stamp.mtimeMs === document.stamp.mtimeMs && stamp.size === document.stamp.size) {
+      if (stamp.mtime.equals(document.stamp.mtime) && stamp.size === document.stamp.size) {
         continue;
       }
       const resolved = await resolveWorkspaceFile(root, document.absolutePath);
@@ -469,7 +473,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
           () => {
             for (const entry of entries.values()) {
               const { session } = entry;
-              if (session === undefined || !(session.idleMs >= idleTimeoutMs)) {
+              if (
+                session === undefined ||
+                Temporal.Duration.compare(session.idle, idleTimeout) < 0
+              ) {
                 continue;
               }
 
@@ -640,4 +647,8 @@ async function readInsideRoot(
   } catch {
     return undefined;
   }
+}
+
+function stampFrom(stats: BigIntStats): FileStamp {
+  return { mtime: Temporal.Instant.fromEpochNanoseconds(stats.mtimeNs), size: Number(stats.size) };
 }

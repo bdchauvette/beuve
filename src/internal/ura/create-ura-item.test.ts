@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createUraItem } from './create-ura-item.ts';
 import { fixedUraDeps } from './testing/fixed-ura-deps.ts';
@@ -16,6 +16,13 @@ const draft = {
 
 describe('createUraItem', () => {
   it('builds a staged item with a fresh id and timestamps', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'Temporal'],
+      now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
+    });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     expect(createUraItem(draft, fixedUraDeps())).toEqual({
       ok: true,
       value: {

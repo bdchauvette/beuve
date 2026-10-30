@@ -45,7 +45,7 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
     repo = createTestRepository();
     db = openAppDatabase(':memory:');
     script = writeFakeClaude(repo.scratch());
-    deps = steppingDeps();
+    deps = countingDeps();
     deltas = [];
     updates = [];
     repo.write('app.rs', 'fn main() {\n  run();\n}\n');
@@ -717,7 +717,7 @@ describe('createChatServices /summarize (integration: fake claude, a stated inte
     const repo = createTestRepository();
     const db = openAppDatabase(':memory:');
     const logger = createLogger('test', { sink: (): void => undefined });
-    const deps = steppingDeps();
+    const deps = countingDeps();
     const script = writeFakeClaude(repo.scratch());
     const file = path.join(repo.scratch(), 'summary.json');
     writeFileSync(
@@ -858,11 +858,9 @@ function value<T>(result: IpcResult<T>): T {
   return result.value;
 }
 
-function steppingDeps(): SessionDeps {
-  let tick = 0;
+function countingDeps(): SessionDeps {
   let id = 0;
   return {
-    now: (): Date => new Date(Date.UTC(2026, 9, 28, 12, 0, tick++)),
     newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
   };
 }

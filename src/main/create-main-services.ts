@@ -179,7 +179,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     context,
     worktrees,
     parse: parser.parse,
-    trust: createTraceTrust({ settingsPath: options.trace?.settingsPath, now: context.deps.now }),
+    trust: createTraceTrust({ settingsPath: options.trace?.settingsPath }),
     ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
     ...(options.trace?.temporaryDirectory !== undefined && {
       temporaryDirectory: options.trace.temporaryDirectory,

@@ -12,7 +12,7 @@ import type { UraItem } from './ura-item.ts';
 import { updateUraItem } from './update-ura-item.ts';
 
 const { sessionId, itemId } = testUraIds;
-const later = new Date('2026-10-29T08:00:00.000Z');
+const later = Temporal.Instant.from('2026-10-29T08:00:00.000Z');
 
 /** One item of every anchor, origin and status shape, with patches where they fit. */
 function sampleItems(): UraItem[] {

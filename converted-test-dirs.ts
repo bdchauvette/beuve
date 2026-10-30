@@ -5,4 +5,8 @@
  * these files and `vitest.config.ts` runs them in the concurrent project; add a directory here in
  * the same commit that converts it.
  */
-export const convertedTestDirs: readonly string[] = ['eslint-local-rules', 'src/internal/git'];
+export const convertedTestDirs: readonly string[] = [
+  'eslint-local-rules',
+  'src/internal/git',
+  'src/internal/session',
+];

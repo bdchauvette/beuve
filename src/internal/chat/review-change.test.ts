@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -130,10 +130,13 @@ describe('reviewChange', () => {
   });
 
   it('shares one time budget: no verification once it is nearly spent', async () => {
-    let now = 0;
+    vi.useFakeTimers({ toFake: ['Date', 'Temporal'], now: 0 });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const slow: ReviewModel<string> = {
       run: async (request) => {
-        now += 598_000;
+        vi.setSystemTime(Temporal.Now.instant().add({ seconds: 598 }).toString());
         return scripted(ok({ findings })).run(request);
       },
     };
@@ -141,22 +144,20 @@ describe('reviewChange', () => {
     const result = await reviewChange(question, {
       model: slow,
       verifier: scripted(ok({ verdicts: [] }), checked),
-      now: () => now,
     });
     expect(result.ok && result.value.review.verification).toBe('failed');
     expect(checked).toEqual([]);
 
-    now = 0;
+    vi.setSystemTime(0);
     const quick: ReviewModel<string> = {
       run: async (request) => {
-        now += 60_000;
+        vi.setSystemTime(Temporal.Now.instant().add({ seconds: 60 }).toString());
         return scripted(ok({ findings })).run(request);
       },
     };
     await reviewChange(question, {
       model: quick,
       verifier: scripted(ok({ verdicts: [] }), checked),
-      now: () => now,
     });
     expect(checked[0]?.timeoutMs).toBe(540_000);
   });

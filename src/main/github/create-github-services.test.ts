@@ -88,7 +88,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     services = createMainServices({
       db,
       logger: createLogger('test', { sink: (): void => undefined }),
-      deps: steppingDeps(),
+      deps: countingDeps(),
       worktreeRoot: path.join(scratch, 'worktrees'),
       claude: {
         command: process.execPath,
@@ -149,7 +149,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     const next = createMainServices({
       db,
       logger: createLogger('test', { sink: (): void => undefined }),
-      deps: steppingDeps(),
+      deps: countingDeps(),
       worktreeRoot: path.join(scratch, 'worktrees'),
       github: {
         credentials: createGhCliCredentialProvider({
@@ -501,11 +501,9 @@ function lines(content: readonly string[]): string {
   return `${content.join('\n')}\n`;
 }
 
-function steppingDeps(): SessionDeps {
-  let tick = 0;
+function countingDeps(): SessionDeps {
   let id = 0;
   return {
-    now: (): Date => new Date(Date.UTC(2026, 9, 28, 12, 0, tick++)),
     newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
   };
 }

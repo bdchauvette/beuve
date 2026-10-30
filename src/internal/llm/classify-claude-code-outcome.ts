@@ -93,7 +93,12 @@ function failedResult(result: ClaudeCodeResult, outcome: ClaudeCodeOutcome): Mod
     return {
       kind: 'rate-limited',
       message,
-      resetsAt: resetsAt === undefined ? undefined : new Date(resetsAt * 1000).toISOString(),
+      resetsAt:
+        resetsAt === undefined
+          ? undefined
+          : Temporal.Instant.fromEpochMilliseconds(Math.round(resetsAt * 1000)).toString({
+              fractionalSecondDigits: 3,
+            }),
     };
   }
   return { kind: 'model-failed', reason: result.subtype, message };

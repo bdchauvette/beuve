@@ -12,7 +12,7 @@ import { validateUraItem } from './validate-ura-item.ts';
 export function transitionUraItem(
   item: UraItem,
   to: UraStatus,
-  now: Date,
+  now: Temporal.Instant,
 ): Result<UraItem, UraItemError> {
   const from = item.status.kind;
   const isAllowed = from === 'staged' ? to.kind !== 'staged' : to.kind === 'staged';
@@ -31,6 +31,6 @@ export function transitionUraItem(
     ...item,
     suggestion: item.suggestion?.text,
     status: to,
-    updatedAt: now.toISOString(),
+    updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });
 }

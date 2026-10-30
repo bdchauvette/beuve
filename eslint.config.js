@@ -26,6 +26,7 @@ const entrypointFiles = [
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
 const convertedTestFiles = convertedTestDirs.map((directory) => `${directory}/*.test.ts`);
+const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
 
 export default defineConfig(
   globalIgnores(['dist/', 'out/', 'coverage/']),
@@ -136,6 +137,42 @@ export default defineConfig(
     extends: [wcConfigs['flat/best-practice'], litConfigs['flat/recommended']],
     languageOptions: { globals: globals.browser },
     settings: { wc: { elementBaseClasses: ['LitElement'] } },
+  },
+
+  {
+    name: 'beuve/time',
+    // ADR 0059: Temporal only. Applies to shipped code, scripts and converted tests.
+    files: timedFiles,
+    ignores: testFiles,
+    rules: {
+      'local/no-date': 'error',
+      'local/no-time-number-arithmetic': [
+        'error',
+        // Structured log fields and the ms-typed options internal APIs still take.
+        { sinkProperties: ['durationMs', 'computeMs', 'timeoutMs'] },
+      ],
+    },
+  },
+
+  {
+    name: 'beuve/time-in-converted-tests',
+    files: convertedTestFiles,
+    rules: {
+      'local/no-date': 'error',
+      'local/no-time-number-arithmetic': [
+        'error',
+        { sinkProperties: ['durationMs', 'computeMs', 'timeoutMs'] },
+      ],
+    },
+  },
+
+  {
+    name: 'beuve/time-foreign-dates',
+    // Records arbitrary values from the program under test, which may be Dates (ADR 0036).
+    files: ['src/internal/trace/create-trace-recorder.ts'],
+    rules: {
+      'local/no-date': ['error', { allowGlobalUses: ['instanceof', 'prototype'] }],
+    },
   },
 
   {

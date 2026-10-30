@@ -69,13 +69,15 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     if (pending !== undefined) {
       return pending;
     }
-    const started = performance.now();
+    const started = Temporal.Now.instant();
     const adding = (async (): Promise<Result<string, GitError>> => {
       const added = await addWorktree(repository, { root, commit: headSha });
       if (added.ok) {
         logger.debug('worktree ready', {
           path: added.value.path,
-          durationMs: Math.round(performance.now() - started),
+          durationMs: Temporal.Now.instant()
+            .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+            .total('milliseconds'),
         });
       }
       return added.ok ? ok(added.value.path) : added;

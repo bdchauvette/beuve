@@ -7,7 +7,7 @@ import { writeVerdictChoice } from './write-verdict-choice.ts';
 
 const session = '11111111-1111-4111-8111-111111111111' as SessionId;
 const head = 'a'.repeat(40);
-const now = new Date('2026-10-28T12:00:00.000Z');
+const now = Temporal.Instant.from('2026-10-28T12:00:00.000Z');
 const checkFailed = /CHECK/u;
 
 describe('writeVerdictChoice', () => {

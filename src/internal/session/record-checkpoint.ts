@@ -16,7 +16,7 @@ export function recordCheckpoint(
     sessionId: session.id,
     baseSha: reviewed.baseSha,
     headSha: reviewed.headSha,
-    createdAt: deps.now().toISOString(),
+    createdAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
   };
   return {
     session: {

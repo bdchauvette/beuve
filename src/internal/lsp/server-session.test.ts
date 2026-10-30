@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -78,7 +78,7 @@ function content(name: string, text: string): DocumentContent {
     absolutePath: `/workspace/${name}`,
     languageId: 'typescript',
     text,
-    stamp: { mtimeMs: 1, size: text.length },
+    stamp: { mtime: Temporal.Instant.fromEpochMilliseconds(1), size: text.length },
   };
 }
 
@@ -238,16 +238,19 @@ describe('ServerSession', () => {
   });
 
   it('tracks busy and idle time around requests', async () => {
-    let now = 0;
+    vi.useFakeTimers({ toFake: ['Date', 'Temporal'], now: 0 });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const fake = createFakeServer();
-    const session = new ServerSession(fake.server, { now: (): number => now });
-    now = 50;
-    expect(session.idleMs).toBe(50);
+    const session = new ServerSession(fake.server);
+    vi.setSystemTime(50);
+    expect(session.idle.total('milliseconds')).toBe(50);
     const pending = session.request('x', {});
     expect(session.isBusy).toBe(true);
-    expect(session.idleMs).toBe(0);
+    expect(session.idle.total('milliseconds')).toBe(0);
     await pending;
-    now = 70;
-    expect(session.idleMs).toBe(20);
+    vi.setSystemTime(70);
+    expect(session.idle.total('milliseconds')).toBe(20);
   });
 });

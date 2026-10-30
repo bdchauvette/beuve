@@ -62,7 +62,7 @@ function upsert(
     return sessionFailure(logger, existing.error);
   }
   if (existing.value !== undefined) {
-    const advanced = advanceHead(existing.value, headSha, deps);
+    const advanced = advanceHead(existing.value, headSha);
     if (advanced === existing.value) {
       return ok(advanced);
     }

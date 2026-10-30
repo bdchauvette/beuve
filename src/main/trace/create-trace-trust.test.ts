@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
@@ -11,16 +11,16 @@ import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 
 import { createTraceTrust } from './create-trace-trust.ts';
 
-function now(): Date {
-  return new Date(Date.UTC(2026, 9, 28, 12, 0, 0));
-}
-
 describe('createTraceTrust', () => {
   let repo: TestRepository;
   let git: GitRepository;
   let directory: string;
   let settingsPath: string;
   beforeEach(async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'Temporal'],
+      now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
+    });
     repo = createTestRepository();
     repo.write('a.txt', 'a\n');
     repo.commit('first');
@@ -34,13 +34,14 @@ describe('createTraceTrust', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     repo.cleanup();
     rmSync(directory, { recursive: true, force: true });
   });
 
   it('trusts nothing by default and keeps approvals in settings.json beside other keys', async () => {
     writeFileSync(settingsPath, JSON.stringify({ preferredEditor: 'zed' }));
-    const trust = createTraceTrust({ settingsPath, now });
+    const trust = createTraceTrust({ settingsPath });
     await expect(trust.status(git)).resolves.toEqual({
       trusted: false,
       repositoryPath: repo.directory,
@@ -50,7 +51,7 @@ describe('createTraceTrust', () => {
       trusted: true,
       repositoryPath: repo.directory,
     });
-    const fresh = createTraceTrust({ settingsPath, now });
+    const fresh = createTraceTrust({ settingsPath });
     await expect(fresh.status(git)).resolves.toMatchObject({ trusted: true });
     expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
       preferredEditor: 'zed',
@@ -66,7 +67,7 @@ describe('createTraceTrust', () => {
 
   it('keys the approval by real path and withdraws it when the recorded remote is gone', async () => {
     repo.git('remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
-    const trust = createTraceTrust({ settingsPath, now });
+    const trust = createTraceTrust({ settingsPath });
     await expect(trust.grant(git)).resolves.toMatchObject({
       trusted: true,
       remoteUrl: 'https://github.com/acme/widgets.git',
@@ -86,7 +87,7 @@ describe('createTraceTrust', () => {
   });
 
   it('keeps approvals in memory without a settings file and ignores malformed entries', async () => {
-    const memory = createTraceTrust({ now });
+    const memory = createTraceTrust({});
     await expect(memory.grant(git)).resolves.toMatchObject({ trusted: true });
     await expect(memory.revoke(git)).resolves.toMatchObject({ trusted: false });
 
@@ -94,7 +95,7 @@ describe('createTraceTrust', () => {
       settingsPath,
       JSON.stringify({ traceTrustedRepositories: { [repo.directory]: 'yes' } }),
     );
-    await expect(createTraceTrust({ settingsPath, now }).status(git)).resolves.toMatchObject({
+    await expect(createTraceTrust({ settingsPath }).status(git)).resolves.toMatchObject({
       trusted: false,
     });
   });

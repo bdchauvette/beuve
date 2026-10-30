@@ -42,7 +42,7 @@ export async function postGithubReview(
   }
   const { htmlUrl, movedToBody } = posted.value;
   const wereAllMoved = movedToBody > 0 && movedToBody >= payload.comments.length;
-  const postedAt = context.session.deps.now().toISOString();
+  const postedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
   ura.recordPostings(
     preview.sessionId,
     entries.map(({ entry, inline }): UraPosting => ({

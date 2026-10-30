@@ -31,8 +31,6 @@ export interface ReviewChangeDeps<E> {
   readonly minConfidence?: number;
   /** For both passes together; defaults to 10 minutes. */
   readonly timeoutMs?: number;
-  /** Milliseconds since some epoch, for the shared deadline; defaults to `Date.now`. */
-  readonly now?: () => number;
 }
 
 /** Coarse progress for the transcript's status line; never prompt or file content. */
@@ -49,7 +47,7 @@ export interface ReviewedChange {
 }
 
 /** Below this much time left, the verification pass is not started. */
-const minVerifyMs = 5000;
+const minVerify = Temporal.Duration.from({ seconds: 5 });
 
 /**
  * `/review` as a chat request (ADR 0055): asks the model for findings through the structured
@@ -63,9 +61,8 @@ export async function reviewChange<E>(
   input: ChatQuestion,
   deps: ReviewChangeDeps<E>,
 ): Promise<Result<ReviewedChange, ChatError<E>>> {
-  const now = deps.now ?? Date.now;
   const timeoutMs = deps.timeoutMs ?? 10 * 60 * 1000;
-  const deadline = now() + timeoutMs;
+  const deadline = Temporal.Now.instant().add({ milliseconds: timeoutMs });
   const maxFindings = deps.maxFindings ?? 12;
   const pathScope = input.task?.kind === 'review' ? input.task.pathScope : [];
   const task = { kind: 'review', pathScope, maxFindings } as const;
@@ -98,8 +95,8 @@ export async function reviewChange<E>(
       assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'skipped'),
     );
   }
-  const remaining = deadline - now();
-  if (remaining < minVerifyMs) {
+  const remaining = Temporal.Now.instant().until(deadline);
+  if (Temporal.Duration.compare(remaining, minVerify) < 0) {
     return ok(
       assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'),
     );
@@ -115,7 +112,7 @@ export async function reviewChange<E>(
     },
     {
       model: deps.verifier,
-      timeoutMs: remaining,
+      timeoutMs: remaining.total('milliseconds'),
       ...(deps.signal !== undefined && { signal: deps.signal }),
     },
   );

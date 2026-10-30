@@ -18,7 +18,7 @@ export function settleVerdictChoice(
   sessionId: SessionId,
   headSha: string,
   stagedSeverities: readonly UraSeverity[],
-  now: Date,
+  now: Temporal.Instant,
 ): UraVerdictChoice {
   const choice = readVerdictChoice(db, sessionId);
   if (choice.chosen === undefined) {

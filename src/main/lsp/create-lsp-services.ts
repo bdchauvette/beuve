@@ -147,7 +147,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
 
   return {
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
-      const started = performance.now();
+      const started = Temporal.Now.instant();
       const cachedSpans = spansBySession.get(request.sessionId);
       if (cachedSpans !== undefined && request.nodeId !== undefined) {
         const calls = await expand(request.nodeId, request.direction, cachedSpans);
@@ -192,7 +192,9 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       logger.debug('call hierarchy', {
         path: file,
         direction: request.direction,
-        durationMs: Math.round(performance.now() - started),
+        durationMs: Temporal.Now.instant()
+          .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+          .total('milliseconds'),
       });
       return calls.ok
         ? ok({ direction: request.direction, root: toNodeView(root, spans), calls: calls.value })
@@ -203,7 +205,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       sessionId,
       path: requested,
     }): Promise<Result<AgentDiagnosticsReport, IpcError>> => {
-      const started = performance.now();
+      const started = Temporal.Now.instant();
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
         return loaded;
@@ -225,7 +227,9 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       logger.debug('diagnostics', {
         path: file,
         freshness: report.value.freshness,
-        durationMs: Math.round(performance.now() - started),
+        durationMs: Temporal.Now.instant()
+          .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+          .total('milliseconds'),
       });
       return ok({
         sessionId: session.id,

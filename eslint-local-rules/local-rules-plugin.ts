@@ -4,8 +4,10 @@ import { enforceSingleNamedExport } from './enforce-single-named-export.ts';
 import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-syntax.ts';
 import { exportNameMatchesFilename } from './export-name-matches-filename.ts';
 import { noBarrelFiles } from './no-barrel-files.ts';
+import { noDate } from './no-date.ts';
 import { noModuleMocking } from './no-module-mocking.ts';
 import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
+import { noTimeNumberArithmetic } from './no-time-number-arithmetic.ts';
 import { requireSequentialFakeTime } from './require-sequential-fake-time.ts';
 
 /**
@@ -25,8 +27,10 @@ const plugin = {
     'expect-from-test-context': expectFromTestContext,
     'export-name-matches-filename': exportNameMatchesFilename,
     'no-barrel-files': noBarrelFiles,
+    'no-date': noDate,
     'no-module-mocking': noModuleMocking,
     'no-module-scope-bindings': noModuleScopeBindings,
+    'no-time-number-arithmetic': noTimeNumberArithmetic,
     'require-sequential-fake-time': requireSequentialFakeTime,
   },
 };

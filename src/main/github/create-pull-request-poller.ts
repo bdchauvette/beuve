@@ -64,7 +64,7 @@ interface PollState {
   ci?: CiStatusView;
   stack?: PullRequestStackView;
   failures: number;
-  lastPolledAt: number;
+  lastPolledAt: Temporal.Instant | undefined;
 }
 
 const backgroundFactor = 5;
@@ -90,7 +90,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     if (existing !== undefined) {
       return existing;
     }
-    const created: PollState = { failures: 0, lastPolledAt: 0 };
+    const created: PollState = { failures: 0, lastPolledAt: undefined };
     states.set(sessionId, created);
     return created;
   };
@@ -112,8 +112,15 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   ): number => {
     state.failures += 1;
     if (error.kind === 'rate-limited' && error.resetAt !== undefined) {
-      const untilReset = Date.parse(error.resetAt) - context.session.deps.now().getTime() + 1000;
-      return Math.min(maxBackoffMs, Math.max(intervalMs, untilReset));
+      const untilReset = Temporal.Now.instant()
+        .until(Temporal.Instant.from(error.resetAt))
+        .add({ seconds: 1 });
+      const floor = Temporal.Duration.from({ milliseconds: intervalMs });
+      const ceiling = Temporal.Duration.from({ milliseconds: maxBackoffMs });
+      const [, clamped = floor] = [floor, untilReset, ceiling].toSorted((a, b) =>
+        Temporal.Duration.compare(a, b),
+      );
+      return clamped.total('milliseconds');
     }
     return Math.min(maxBackoffMs, intervalMs * 2 ** state.failures);
   };
@@ -146,19 +153,14 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return false;
     }
     if (synced.value.pullRequest !== pullRequest) {
-      savePullRequest(
-        context.session.db,
-        ref,
-        synced.value.pullRequest,
-        context.session.deps.now(),
-      );
+      savePullRequest(context.session.db, ref, synced.value.pullRequest, Temporal.Now.instant());
     }
     return moveSessionHead(context.session, session, synced.value.headSha).ok;
   };
 
   const pollOnce = async (sessionId: string): Promise<number> => {
     const state = stateOf(sessionId);
-    state.lastPolledAt = Date.now();
+    state.lastPolledAt = Temporal.Now.instant();
     const loaded = loadSession(context.session, sessionId);
     if (!loaded.ok) {
       return intervalMs;
@@ -180,7 +182,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     let headSha: string = session.headSha;
     if (pulled.value.kind === 'modified') {
       const pullRequest = pulled.value.value;
-      savePullRequest(context.session.db, ref, pullRequest, context.session.deps.now());
+      savePullRequest(context.session.db, ref, pullRequest, Temporal.Now.instant());
       const stack = await context.clients.withClient(host, async (client) =>
         findPullRequestStack(client, pullRequest),
       );
@@ -247,7 +249,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return started;
   };
 
-  const schedule = (delayMs: number): void => {
+  const schedule = (delay: Temporal.Duration): void => {
     clearTimeout(timer);
     timer = undefined;
     if (!isScheduled || isDisposed || watched === undefined) {
@@ -258,10 +260,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       void (async (): Promise<void> => {
         const next = await pollShared(sessionId);
         if (watched === sessionId) {
-          schedule(isForeground ? next : next * backgroundFactor);
+          schedule(
+            Temporal.Duration.from({ milliseconds: isForeground ? next : next * backgroundFactor }),
+          );
         }
       })();
-    }, delayMs);
+    }, delay.total('milliseconds'));
     timer.unref();
   };
 
@@ -271,7 +275,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
         return;
       }
       watched = sessionId;
-      schedule(0);
+      schedule(new Temporal.Duration());
     },
     pollNow: async (sessionId): Promise<void> => {
       await pollShared(sessionId);
@@ -282,8 +286,13 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       if (!isNowForeground || !wasBackground || watched === undefined) {
         return;
       }
-      const since = Date.now() - stateOf(watched).lastPolledAt;
-      schedule(Math.max(0, intervalMs - since));
+      const last = stateOf(watched).lastPolledAt;
+      const interval = Temporal.Duration.from({ milliseconds: intervalMs });
+      const remaining =
+        last === undefined
+          ? new Temporal.Duration()
+          : interval.subtract(last.until(Temporal.Now.instant()));
+      schedule(remaining.sign < 0 ? new Temporal.Duration() : remaining);
     },
     snapshot: (sessionId): ReturnType<PullRequestPoller['snapshot']> => {
       const state = states.get(sessionId);

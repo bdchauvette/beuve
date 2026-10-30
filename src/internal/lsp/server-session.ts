@@ -23,7 +23,7 @@ export interface SyncedDocument {
 
 /** On-disk identity used to skip re-reading unchanged files. */
 export interface FileStamp {
-  readonly mtimeMs: number;
+  readonly mtime: Temporal.Instant;
   readonly size: number;
 }
 
@@ -52,8 +52,6 @@ export interface SessionDiagnostics {
 export interface ServerSessionOptions {
   /** Documents kept open; the least recently used is closed beyond this. Defaults to 64. */
   readonly maxOpenDocuments?: number;
-  /** Monotonic clock in ms, injectable for tests. */
-  readonly now?: () => number;
 }
 
 interface OpenDocument {
@@ -74,7 +72,7 @@ interface Report {
   readonly diagnostics: readonly LspDiagnostic[];
   readonly version: number | undefined;
   readonly sequence: number;
-  readonly receivedAt: number;
+  readonly receivedAt: Temporal.Instant;
 }
 
 /**
@@ -89,17 +87,15 @@ export class ServerSession {
   readonly #progress = new Set<string>();
   readonly #listeners = new Set<() => void>();
   readonly #maxOpenDocuments: number;
-  readonly #now: () => number;
   #sequence = 0;
   #inFlight = 0;
-  #lastActivity: number;
+  #lastActivity: Temporal.Instant;
   #exit: ServerExit | undefined;
 
   constructor(server: LanguageServer, options: ServerSessionOptions = {}) {
     this.#server = server;
     this.#maxOpenDocuments = options.maxOpenDocuments ?? 64;
-    this.#now = options.now ?? ((): number => performance.now());
-    this.#lastActivity = this.#now();
+    this.#lastActivity = Temporal.Now.instant();
     server.setNotificationListener((method, params) => {
       this.#onNotification(method, params);
     });
@@ -128,7 +124,7 @@ export class ServerSession {
         diagnostics,
         version,
         sequence: this.#sequence,
-        receivedAt: this.#now(),
+        receivedAt: Temporal.Now.instant(),
       });
       this.#emit();
     } else if (method === '$/progress' && 'token' in params && 'value' in params) {
@@ -154,15 +150,18 @@ export class ServerSession {
     }
   }
 
-  /** Resolves on the next publish or progress event, or after `delayMs`. */
-  async #nextEvent(delayMs: number): Promise<void> {
+  /** Resolves on the next publish or progress event, or after `delay`. */
+  async #nextEvent(delay: Temporal.Duration): Promise<void> {
     return new Promise((resolve) => {
       const done = (): void => {
         clearTimeout(timer);
         this.#listeners.delete(done);
         resolve();
       };
-      const timer = setTimeout(done, Math.max(1, Math.ceil(delayMs)));
+      const timer = setTimeout(
+        done,
+        delay.round({ smallestUnit: 'millisecond', roundingMode: 'ceil' }).total('milliseconds'),
+      );
       this.#listeners.add(done);
     });
   }
@@ -200,12 +199,12 @@ export class ServerSession {
 
   async #track<T>(work: () => Promise<T>): Promise<T> {
     this.#inFlight += 1;
-    this.#lastActivity = this.#now();
+    this.#lastActivity = Temporal.Now.instant();
     try {
       return await work();
     } finally {
       this.#inFlight -= 1;
-      this.#lastActivity = this.#now();
+      this.#lastActivity = Temporal.Now.instant();
     }
   }
 
@@ -229,8 +228,10 @@ export class ServerSession {
     const open = this.#documents.get(document.uri);
     const syncedAt = open?.syncedAt ?? this.#sequence;
     const hasPriorReport = open?.hadReport ?? false;
-    const started = this.#now();
-    const deadline = started + wait.timeoutMs;
+    const started = Temporal.Now.instant();
+    const deadline = started.add({ milliseconds: wait.timeoutMs });
+    const quiet = Temporal.Duration.from({ milliseconds: wait.quietMs });
+    const grace = Temporal.Duration.from({ milliseconds: wait.graceMs });
     for (;;) {
       if (this.#exit !== undefined) {
         return err({
@@ -241,29 +242,42 @@ export class ServerSession {
           restartsExhausted: false,
         });
       }
-      const now = this.#now();
+      const now = Temporal.Now.instant();
       const report = this.#reports.get(document.uri);
       const isCurrent =
         report !== undefined &&
         report.sequence > syncedAt &&
         (report.version === undefined || report.version >= document.version);
       const isBusy = this.#progress.size > 0;
-      if (isCurrent && !isBusy && now - report.receivedAt >= wait.quietMs) {
+      if (
+        isCurrent &&
+        !isBusy &&
+        Temporal.Duration.compare(report.receivedAt.until(now), quiet) >= 0
+      ) {
         return ok({ diagnostics: report.diagnostics, freshness: 'fresh' });
       }
       const previous = report?.diagnostics ?? [];
-      if (now >= deadline) {
+      if (Temporal.Instant.compare(now, deadline) >= 0) {
         return ok({ diagnostics: previous, freshness: 'timed-out' });
       }
-      if (!isCurrent && hasPriorReport && !isBusy && now - started >= wait.graceMs) {
+      if (
+        !isCurrent &&
+        hasPriorReport &&
+        !isBusy &&
+        Temporal.Duration.compare(started.until(now), grace) >= 0
+      ) {
         return ok({ diagnostics: previous, freshness: 'assumed-unchanged' });
       }
       const wakeAt = isCurrent
-        ? report.receivedAt + wait.quietMs
+        ? report.receivedAt.add(quiet)
         : hasPriorReport
-          ? started + wait.graceMs
+          ? started.add(grace)
           : deadline;
-      await this.#nextEvent(Math.min(deadline, Math.max(wakeAt, now + 1)) - now);
+      const [soonest = deadline] = [
+        deadline,
+        latestOf(wakeAt, now.add({ milliseconds: 1 })),
+      ].toSorted((a, b) => Temporal.Instant.compare(a, b));
+      await this.#nextEvent(now.until(soonest));
     }
   }
 
@@ -290,9 +304,9 @@ export class ServerSession {
     return this.#inFlight > 0;
   }
 
-  /** Milliseconds since the last request, sync or wait finished. */
-  get idleMs(): number {
-    return this.isBusy ? 0 : this.#now() - this.#lastActivity;
+  /** Time since the last request, sync or wait finished; zero while busy. */
+  get idle(): Temporal.Duration {
+    return this.isBusy ? new Temporal.Duration() : this.#lastActivity.until(Temporal.Now.instant());
   }
 
   /** The stamp of an open document, to decide whether it needs re-reading. */
@@ -311,7 +325,7 @@ export class ServerSession {
    * dependencies that changed on disk. Marks the document most recently used.
    */
   sync(content: DocumentContent, options: { readonly recheck?: boolean } = {}): SyncedDocument {
-    this.#lastActivity = this.#now();
+    this.#lastActivity = Temporal.Now.instant();
     const key = normalizeUri(content.uri);
     const existing = this.#documents.get(key);
     if (existing?.languageId !== content.languageId) {
@@ -399,4 +413,8 @@ function toSynced(document: OpenDocument, hasChanged: boolean): SyncedDocument {
     lines: document.lines,
     changed: hasChanged,
   };
+}
+
+function latestOf(a: Temporal.Instant, b: Temporal.Instant): Temporal.Instant {
+  return Temporal.Instant.compare(a, b) >= 0 ? a : b;
 }

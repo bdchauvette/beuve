@@ -64,7 +64,6 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     repo.git('switch', '--quiet', 'main');
     let id = 0;
     const deps: SessionDeps = {
-      now: (): Date => new Date(Date.UTC(2026, 9, 28)),
       newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
     };
     services = createMainServices({

@@ -1,28 +1,34 @@
-const minute = 60_000;
-const hour = 60 * minute;
-const day = 24 * hour;
-
 /** “just now”, “5 min ago”, “3 h ago”, “yesterday”, “4 days ago”, then a date. Pure. */
-export function formatRelativeTime(iso: string, now: number): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) {
+export function formatRelativeTime(iso: string, now: Temporal.Instant): string {
+  let then: Temporal.Instant;
+  try {
+    then = Temporal.Instant.from(iso);
+  } catch {
     return '';
   }
-  const elapsed = Math.max(0, now - then);
-  if (elapsed < minute) {
+  const elapsed =
+    Temporal.Instant.compare(then, now) > 0 ? new Temporal.Duration() : then.until(now);
+  const whole = elapsed.round({
+    largestUnit: 'day',
+    smallestUnit: 'minute',
+    roundingMode: 'trunc',
+  });
+  const isUnder = (limit: Temporal.DurationLike): boolean =>
+    Temporal.Duration.compare(elapsed, limit) < 0;
+  if (isUnder({ minutes: 1 })) {
     return 'just now';
   }
-  if (elapsed < hour) {
-    return `${String(Math.floor(elapsed / minute))} min ago`;
+  if (isUnder({ hours: 1 })) {
+    return `${String(whole.minutes)} min ago`;
   }
-  if (elapsed < day) {
-    return `${String(Math.floor(elapsed / hour))} h ago`;
+  if (isUnder({ days: 1 })) {
+    return `${String(whole.hours)} h ago`;
   }
-  if (elapsed < 2 * day) {
+  if (isUnder({ days: 2 })) {
     return 'yesterday';
   }
-  if (elapsed < 7 * day) {
-    return `${String(Math.floor(elapsed / day))} days ago`;
+  if (isUnder({ days: 7 })) {
+    return `${String(whole.days)} days ago`;
   }
-  return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return then.toLocaleString(undefined, { month: 'short', day: 'numeric' });
 }

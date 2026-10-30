@@ -166,7 +166,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   const { context, impact, worktrees } = options;
   const { db, logger } = context;
   const claude = options.claude ?? {};
-  const previewIntervalMs = options.previewIntervalMs ?? 1000;
+  const previewInterval = Temporal.Duration.from({
+    milliseconds: options.previewIntervalMs ?? 1000,
+  });
   const deltaListeners = new Set<(event: ChatDeltaView) => void>();
   const updateListeners = new Set<(event: ChatMessageUpdatedView) => void>();
   let isDisposed = false;
@@ -273,7 +275,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const streamInto = (job: AnswerJob): ((delta: ChatDelta) => void) => {
-    let lastStoredAt = 0;
+    let lastStoredAt: Temporal.Instant | undefined;
     return (delta: ChatDelta): void => {
       if (job.controller.signal.aborted) {
         return;
@@ -285,8 +287,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         kind: delta.kind,
         text: delta.kind === 'reset' ? '' : delta.text,
       });
-      const now = Date.now();
-      if (!(now - lastStoredAt >= previewIntervalMs)) {
+      const now = Temporal.Now.instant();
+      if (
+        lastStoredAt !== undefined &&
+        Temporal.Duration.compare(lastStoredAt.until(now), previewInterval) < 0
+      ) {
         return;
       }
 
@@ -603,7 +608,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       content: compacted.value.content,
       citations: compacted.value.citations,
       mentions: [],
-      createdAt: context.deps.now().toISOString(),
+      createdAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     };
     const appended = appendChatMessage(db, message);
     return appended.ok
@@ -701,7 +706,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         if (queue.isFull(sessionId)) {
           return queueFull();
         }
-        const createdAt = context.deps.now().toISOString();
+        const createdAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
         const common = { sessionId: sessionId as SessionId, headSha: headSha as CommitSha };
         const isQueued = queue.isBusy(sessionId);
         const question: ChatMessage = {

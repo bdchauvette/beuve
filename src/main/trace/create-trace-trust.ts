@@ -17,7 +17,6 @@ export interface TraceTrust {
 export interface TraceTrustOptions {
   /** `<userData>/settings.json`; approvals live in memory without it. */
   readonly settingsPath?: string | undefined;
-  readonly now: () => Date;
 }
 
 interface Approval {
@@ -90,7 +89,7 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
     grant: async (repository): Promise<TraceTrustView> => {
       const { key, remoteUrl } = await identify(repository);
       await write(key, {
-        trustedAt: options.now().toISOString(),
+        trustedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
         ...(remoteUrl !== undefined && { remoteUrl }),
       });
       return view(repository);

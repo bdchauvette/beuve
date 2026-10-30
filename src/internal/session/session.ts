@@ -83,9 +83,8 @@ export type ReviewRange =
     }
   | { readonly kind: 'up-to-date'; readonly headSha: CommitSha };
 
-/** Effects the pure transformations need, injected for determinism. */
+/** Effects the transformations need, injected for determinism. Time is not injected (ADR 0059). */
 export interface SessionDeps {
-  readonly now: () => Date;
   readonly newId: () => string;
 }
 

@@ -36,7 +36,6 @@ export interface GithubClientOptions<E> {
   /** Sent as `X-GitHub-Api-Version`. Defaults to `2022-11-28`. */
   readonly apiVersion?: string;
   readonly userAgent?: string;
-  readonly now?: () => Date;
   /** Gets method, path, status, duration and remaining rate limit; never the token or a query. */
   readonly logger?: Logger;
 }
@@ -57,7 +56,6 @@ export function createGithubClient<E>(
   const base = options.apiBase ?? resolveGithubApiBase(host);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? 20_000;
-  const now = options.now ?? ((): Date => new Date());
 
   const send = async (request: GithubRequest): Promise<Result<GithubResponse, GithubError<E>>> => {
     const token = await options.getToken(host);
@@ -73,13 +71,15 @@ export function createGithubClient<E>(
     if (!built.ok) {
       return err({ kind: 'invalid-request', reason: built.error });
     }
-    const started = performance.now();
+    const started = Temporal.Now.instant();
     const response = await exchange(built.value, fetchImpl, timeoutMs, request.signal);
     options.logger?.debug('github: request', {
       method: request.method,
       path: new URL(built.value.url).pathname,
       status: response.ok ? response.value.status : response.error.kind,
-      durationMs: Math.round(performance.now() - started),
+      durationMs: Temporal.Now.instant()
+        .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+        .total('milliseconds'),
       rateLimitRemaining: response.ok ? response.value.rateLimitRemaining : undefined,
     });
     if (!response.ok) {
@@ -97,7 +97,11 @@ export function createGithubClient<E>(
     const body = parseBody(text);
     if (status < 200 || status > 299) {
       return err(
-        classifyGithubResponse({ status, headers }, body === invalidJson ? undefined : body, now()),
+        classifyGithubResponse(
+          { status, headers },
+          body === invalidJson ? undefined : body,
+          Temporal.Now.instant(),
+        ),
       );
     }
     if (body === invalidJson) {

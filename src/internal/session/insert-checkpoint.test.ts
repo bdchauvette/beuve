@@ -1,9 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { describe, expect, it } from 'vitest';
-
-import { openDatabase } from '#sqlite/open-database.ts';
-import { runMigrations } from '#sqlite/run-migrations.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { advanceHead } from './advance-head.ts';
 import { computeReviewRange } from './compute-review-range.ts';
@@ -14,109 +11,112 @@ import { insertSession } from './insert-session.ts';
 import { listCheckpoints } from './list-checkpoints.ts';
 import { recordCheckpoint } from './record-checkpoint.ts';
 import type { CheckpointId, CommitSha, Session, SessionDeps, SessionId } from './session.ts';
-import { sessionMigrations } from './session-migrations.ts';
+import { countingSessionDeps } from './testing/counting-session-deps.ts';
+import { test } from './testing/test.ts';
 import { updateSessionHead } from './update-session-head.ts';
 
-const rev1 = '1'.repeat(40) as CommitSha;
-const rev2 = '2'.repeat(40) as CommitSha;
-const fork = 'f'.repeat(40) as CommitSha;
+test('insertCheckpoint persists the checkpoint so the stored review state matches the pure one', ({
+  expect,
+  db,
+  deps,
+}) => {
+  const session = storedSession(db, deps);
+  const { session: reviewed, checkpoint } = recordCheckpoint(
+    session,
+    { baseSha: sha('f'), headSha: sha('1') },
+    deps,
+  );
+  expect(insertCheckpoint(db, checkpoint)).toStrictEqual({ ok: true, value: undefined });
+  expect(findSession(db, session.id)).toStrictEqual({ ok: true, value: reviewed });
+  expect(listCheckpoints(db, session.id)).toStrictEqual({ ok: true, value: [checkpoint] });
+});
 
-describe('insertCheckpoint', () => {
-  it('persists the checkpoint so the stored review state matches the pure one', () => {
-    const { db, deps, session } = setup();
-    const { session: reviewed, checkpoint } = recordCheckpoint(
-      session,
-      { baseSha: fork, headSha: rev1 },
-      deps,
-    );
-    expect(insertCheckpoint(db, checkpoint)).toEqual({ ok: true, value: undefined });
-    expect(findSession(db, session.id)).toEqual({ ok: true, value: reviewed });
-    expect(listCheckpoints(db, session.id)).toEqual({ ok: true, value: [checkpoint] });
-  });
-
-  it('drives the Rev 1 to Rev 2 interdiff across reloads', () => {
-    const { db, deps, session } = setup();
-    const first = recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, deps);
+test(
+  'insertCheckpoint drives the Rev 1 to Rev 2 interdiff across reloads',
+  { concurrent: false },
+  ({ expect, clock, db, deps }) => {
+    const session = storedSession(db, deps);
+    clock.advance({ minutes: 1 });
+    const first = recordCheckpoint(session, { baseSha: sha('f'), headSha: sha('1') }, deps);
     insertCheckpoint(db, first.checkpoint);
-    const pushed = advanceHead(first.session, rev2, deps);
-    expect(updateSessionHead(db, pushed)).toEqual({ ok: true, value: undefined });
-
-    const loaded = findSession(db, session.id);
-    expect(loaded.ok && loaded.value && computeReviewRange(loaded.value)).toEqual({
+    clock.advance({ minutes: 1 });
+    const pushed = advanceHead(first.session, sha('2'));
+    expect(updateSessionHead(db, pushed)).toStrictEqual({ ok: true, value: undefined });
+    expect(computeReviewRange(reload(db, session.id))).toStrictEqual({
       kind: 'interdiff',
       baseRef: 'main',
-      fromBaseSha: fork,
-      fromHeadSha: rev1,
-      toHeadSha: rev2,
+      fromBaseSha: sha('f'),
+      fromHeadSha: sha('1'),
+      toHeadSha: sha('2'),
     });
 
-    const second = recordCheckpoint(pushed, { baseSha: fork, headSha: rev2 }, deps);
+    clock.advance({ minutes: 1 });
+    const second = recordCheckpoint(pushed, { baseSha: sha('f'), headSha: sha('2') }, deps);
     insertCheckpoint(db, second.checkpoint);
-    const reloaded = findSession(db, session.id);
-    expect(reloaded.ok && reloaded.value && computeReviewRange(reloaded.value)).toEqual({
+    expect(computeReviewRange(reload(db, session.id))).toStrictEqual({
       kind: 'up-to-date',
-      headSha: rev2,
+      headSha: sha('2'),
     });
-    expect(listCheckpoints(db, session.id)).toEqual({
+    expect(listCheckpoints(db, session.id)).toStrictEqual({
       ok: true,
       value: [first.checkpoint, second.checkpoint],
     });
-  });
+  },
+);
 
-  it('picks the later-inserted checkpoint when timestamps tie', () => {
-    const { db, session } = setup();
-    const sameInstant: SessionDeps = {
-      now: (): Date => new Date(Date.UTC(2026, 9, 28, 13)),
-      newId: counter(50),
-    };
+test(
+  'insertCheckpoint picks the later-inserted checkpoint when timestamps tie',
+  { concurrent: false },
+  ({ expect, clock, db, deps }) => {
+    const session = storedSession(db, deps);
+    clock.set('2026-10-28T13:00:00Z');
+    const sameInstant = countingSessionDeps(50);
     insertCheckpoint(
       db,
-      recordCheckpoint(session, { baseSha: fork, headSha: rev1 }, sameInstant).checkpoint,
+      recordCheckpoint(session, { baseSha: sha('f'), headSha: sha('1') }, sameInstant).checkpoint,
     );
-    const latest = recordCheckpoint(session, { baseSha: fork, headSha: rev2 }, sameInstant);
+    const latest = recordCheckpoint(session, { baseSha: sha('f'), headSha: sha('2') }, sameInstant);
     insertCheckpoint(db, latest.checkpoint);
-    expect(findSession(db, session.id)).toEqual({ ok: true, value: latest.session });
-  });
+    expect(findSession(db, session.id)).toStrictEqual({ ok: true, value: latest.session });
+  },
+);
 
-  it('reports an unknown session', () => {
-    const { db } = setup();
-    const sessionId = '00000000-0000-4000-8000-0000000000ff' as SessionId;
-    const checkpoint = {
-      id: '00000000-0000-4000-8000-0000000000fe' as CheckpointId,
-      sessionId,
-      baseSha: fork,
-      headSha: rev1,
-      createdAt: '2026-10-28T12:00:00.000Z',
-    };
-    expect(insertCheckpoint(db, checkpoint)).toEqual({
-      ok: false,
-      error: { kind: 'session-not-found', sessionId },
-    });
-    expect(listCheckpoints(db, sessionId)).toEqual({ ok: true, value: [] });
+test('insertCheckpoint reports an unknown session', ({ expect, db }) => {
+  const sessionId = '00000000-0000-4000-8000-0000000000ff' as SessionId;
+  const checkpoint = {
+    id: '00000000-0000-4000-8000-0000000000fe' as CheckpointId,
+    sessionId,
+    baseSha: sha('f'),
+    headSha: sha('1'),
+    createdAt: '2026-10-28T12:00:00.000Z',
+  };
+  expect(insertCheckpoint(db, checkpoint)).toStrictEqual({
+    ok: false,
+    error: { kind: 'session-not-found', sessionId },
   });
+  expect(listCheckpoints(db, sessionId)).toStrictEqual({ ok: true, value: [] });
 });
 
-function setup(): { db: DatabaseSync; deps: SessionDeps; session: Session } {
-  const db = openDatabase(':memory:');
-  runMigrations(db, sessionMigrations);
-  let minute = 0;
-  const deps: SessionDeps = {
-    now: (): Date => new Date(Date.UTC(2026, 9, 28, 12, minute++)),
-    newId: counter(1),
-  };
-  const created = createSession(
-    { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feat' },
-    rev1,
-    deps,
-  );
-  if (!created.ok) {
-    throw new Error('fixture source is invalid');
-  }
-  insertSession(db, created.value);
-  return { db, deps, session: created.value };
+function sha(digit: string): CommitSha {
+  return digit.repeat(40) as CommitSha;
 }
 
-function counter(start: number): () => string {
-  let next = start;
-  return (): string => `00000000-0000-4000-8000-${String(next++).padStart(12, '0')}`;
+function storedSession(db: DatabaseSync, deps: SessionDeps): Session {
+  const created = okValueFrom(
+    createSession(
+      { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feat' },
+      sha('1'),
+      deps,
+    ),
+  );
+  insertSession(db, created);
+  return created;
+}
+
+function reload(db: DatabaseSync, id: SessionId): Session {
+  const loaded = okValueFrom(findSession(db, id));
+  if (loaded === undefined) {
+    throw new Error(`session ${id} is missing`);
+  }
+  return loaded;
 }

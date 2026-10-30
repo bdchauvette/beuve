@@ -10,7 +10,7 @@ export function savePullRequest(
   db: DatabaseSync,
   ref: PullRequestRef,
   pullRequest: PullRequest,
-  fetchedAt: Date,
+  fetchedAt: Temporal.Instant,
 ): void {
   db.prepare(
     `INSERT INTO github_pull_requests (
@@ -44,6 +44,6 @@ export function savePullRequest(
     head_sha: pullRequest.head.sha,
     is_cross_repository: pullRequest.isCrossRepository ? 1 : 0,
     github_updated_at: pullRequest.updatedAt,
-    fetched_at: fetchedAt.toISOString(),
+    fetched_at: fetchedAt.toString({ fractionalSecondDigits: 3 }),
   });
 }

@@ -19,7 +19,7 @@ export function writeVerdictChoice(
   db: DatabaseSync,
   sessionId: SessionId,
   choice: UraVerdictChoice,
-  now: Date,
+  now: Temporal.Instant,
 ): Result<void, Extract<UraStoreError, { kind: 'session-not-found' }>> {
   const stored = choice.chosen ?? choice.cleared;
   if (stored === undefined || (choice.chosen !== undefined && choice.headSha === undefined)) {
@@ -39,7 +39,7 @@ export function writeVerdictChoice(
       is_choice: choice.chosen === undefined ? 0 : 1,
       stored,
       head_sha: choice.headSha ?? '',
-      updated_at: now.toISOString(),
+      updated_at: now.toString({ fractionalSecondDigits: 3 }),
     });
   } catch (error: unknown) {
     if (sqliteErrorCode(error) === foreignKeyViolation) {

@@ -60,7 +60,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     diff: ReviewDiff,
     signal: AbortSignal,
   ): Promise<Result<ImpactView, IpcError>> => {
-    const started = performance.now();
+    const started = Temporal.Now.instant();
     const input = await assembleImpactInput(diff.refreshed.repository, diff.files);
     if (!input.ok) {
       return gitFailure(context.logger, input.error);
@@ -74,7 +74,9 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
       );
     }
     const report = run.value;
-    const computeMs = Math.round(performance.now() - started);
+    const computeMs = Temporal.Now.instant()
+      .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+      .total('milliseconds');
     context.logger.debug('impact computed', {
       sessionId,
       files: diff.files.length,

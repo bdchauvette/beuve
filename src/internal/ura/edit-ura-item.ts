@@ -19,7 +19,7 @@ export interface UraItemEdit {
 export function editUraItem(
   item: UraItem,
   edit: UraItemEdit,
-  now: Date,
+  now: Temporal.Instant,
 ): Result<UraItem, UraItemError> {
   const suggestion = edit.suggestion ?? item.suggestion?.text;
   return validateUraItem({
@@ -28,6 +28,6 @@ export function editUraItem(
     title: edit.title?.trim() ?? item.title,
     body: edit.body ?? item.body,
     suggestion: suggestion === '' ? undefined : suggestion,
-    updatedAt: now.toISOString(),
+    updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });
 }

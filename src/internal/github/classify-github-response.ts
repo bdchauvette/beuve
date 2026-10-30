@@ -12,12 +12,13 @@ export interface ResponseHead {
  * `{ message, errors?, documentation_url }`). 403 and 429 are `rate-limited` when
  * `x-ratelimit-remaining` is 0, a `Retry-After` is present, or the message names a (secondary)
  * rate limit; the reset time comes from `x-ratelimit-reset` or `Retry-After`. 404 and 410 are
- * `not-found` (GitHub also answers 404 for private repositories the token can't see). Pure.
+ * `not-found` (GitHub also answers 404 for private repositories the token can't see). A
+ * `Retry-After` counts from `receivedAt`. Pure.
  */
 export function classifyGithubResponse(
   head: ResponseHead,
   body: unknown,
-  now: Date,
+  receivedAt: Temporal.Instant,
 ): GithubError<never> {
   const message = readMessage(body) ?? `HTTP ${String(head.status)}`;
   switch (head.status) {
@@ -26,7 +27,7 @@ export function classifyGithubResponse(
     }
     case 403:
     case 429: {
-      const resetAt = readResetAt(head.headers, now);
+      const resetAt = readResetAt(head.headers, receivedAt);
       const isRateLimited =
         head.status === 429 ||
         head.headers.get('x-ratelimit-remaining') === '0' ||
@@ -56,13 +57,23 @@ function readMessage(body: unknown): string | undefined {
   return undefined;
 }
 
-function readResetAt(headers: ResponseHead['headers'], now: Date): string | undefined {
-  const retryAfter = Number(headers.get('retry-after') ?? NaN);
-  if (Number.isFinite(retryAfter) && retryAfter >= 0) {
-    return new Date(now.getTime() + retryAfter * 1000).toISOString();
+function readResetAt(
+  headers: ResponseHead['headers'],
+  receivedAt: Temporal.Instant,
+): string | undefined {
+  const retryAfterSeconds = Number(headers.get('retry-after') ?? NaN);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    const retryAfter = Temporal.Duration.from({
+      milliseconds: Math.round(retryAfterSeconds * 1000),
+    });
+    return receivedAt.add(retryAfter).toString({ fractionalSecondDigits: 3 });
   }
-  const reset = Number(headers.get('x-ratelimit-reset') ?? NaN);
-  return Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : undefined;
+  const resetSeconds = Number(headers.get('x-ratelimit-reset') ?? NaN);
+  return Number.isFinite(resetSeconds) && resetSeconds > 0
+    ? Temporal.Instant.fromEpochMilliseconds(Math.round(resetSeconds * 1000)).toString({
+        fractionalSecondDigits: 3,
+      })
+    : undefined;
 }
 
 function readSsoUrl(headers: ResponseHead['headers']): string | undefined {

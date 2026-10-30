@@ -1,13 +1,12 @@
-import type { CommitSha, Session, SessionDeps } from './session.ts';
-import { systemSessionDeps } from './system-session-deps.ts';
+import type { CommitSha, Session } from './session.ts';
 
 /** Moves the session to a new head (commits pushed, rebased or amended). Same head is a no-op. */
-export function advanceHead(
-  session: Session,
-  headSha: CommitSha,
-  deps: Pick<SessionDeps, 'now'> = systemSessionDeps,
-): Session {
+export function advanceHead(session: Session, headSha: CommitSha): Session {
   return headSha === session.headSha
     ? session
-    : { ...session, headSha, updatedAt: deps.now().toISOString() };
+    : {
+        ...session,
+        headSha,
+        updatedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+      };
 }

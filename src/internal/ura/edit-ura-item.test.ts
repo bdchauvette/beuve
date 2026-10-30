@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { editUraItem } from './edit-ura-item.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 
-const later = new Date('2026-10-29T08:00:00.000Z');
+const later = Temporal.Instant.from('2026-10-29T08:00:00.000Z');
 const patch = '@@ -11 +11 @@\n-a\n+b\n';
 
 describe('editUraItem', () => {
@@ -17,7 +17,7 @@ describe('editUraItem', () => {
         severity: 'blocker',
         title: 'New',
         body: 'More.',
-        updatedAt: later.toISOString(),
+        updatedAt: later.toString({ fractionalSecondDigits: 3 }),
       },
     });
   });

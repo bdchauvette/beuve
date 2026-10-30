@@ -154,7 +154,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       sessionId as SessionId,
       headSha,
       items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
-      deps.now(),
+      Temporal.Now.instant(),
     );
 
   const changed = (sessionId: string): void => {
@@ -263,7 +263,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     if (existing.value.status.kind !== 'withdrawn') {
       return ok({ item: existing.value, created: false });
     }
-    const restaged = transitionUraItem(existing.value, { kind: 'staged' }, deps.now());
+    const restaged = transitionUraItem(existing.value, { kind: 'staged' }, Temporal.Now.instant());
     if (!restaged.ok) {
       return restaged;
     }
@@ -398,7 +398,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
           suggestion: suggestedPatch.trim() === '' ? '' : suggestedPatch,
         }),
       };
-      const edited = editUraItem(found.value, edit, deps.now());
+      const edited = editUraItem(found.value, edit, Temporal.Now.instant());
       if (!edited.ok) {
         return uraFailure(logger, edited.error);
       }
@@ -423,7 +423,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         }
         status = { kind: 'addressed', atSha: head.value.headSha as CommitSha, by: 'reviewer' };
       }
-      const moved = transitionUraItem(found.value, status, deps.now());
+      const moved = transitionUraItem(found.value, status, Temporal.Now.instant());
       if (!moved.ok) {
         return uraFailure(logger, moved.error);
       }
@@ -520,7 +520,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         verdict === undefined || verdict === derived
           ? {}
           : { chosen: verdict, headSha: loaded.value.headSha },
-        deps.now(),
+        Temporal.Now.instant(),
       );
       if (!written.ok) {
         return uraFailure(logger, written.error);

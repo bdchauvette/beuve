@@ -27,7 +27,6 @@ export interface FakeGithubOptions {
   readonly host?: string;
   /** `undefined` makes the token source fail with `'no-token'`. */
   readonly token?: string | undefined;
-  readonly now?: Date;
 }
 
 /**
@@ -64,7 +63,6 @@ export function createFakeGithub(
         headers: { 'content-type': 'application/json; charset=utf-8', ...response.headers },
       });
     },
-    ...(options.now !== undefined && { now: (): Date => options.now ?? new Date() }),
   });
   if (!created.ok) {
     throw new Error(created.error);

@@ -109,9 +109,8 @@ export interface UraItem {
   readonly updatedAt: string;
 }
 
-/** Effects the pure constructors need, injected for determinism. */
+/** Effects the constructors need, injected for determinism. Time is not injected (ADR 0059). */
 export interface UraDeps {
-  readonly now: () => Date;
   readonly newId: () => string;
 }
 

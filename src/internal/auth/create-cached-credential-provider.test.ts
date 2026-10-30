@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -48,13 +48,16 @@ async function reveal(provider: GithubCredentialProvider, host = 'github.com'): 
 
 describe('createCachedCredentialProvider', () => {
   it('reuses a token until the TTL passes', async () => {
-    let now = 0;
+    vi.useFakeTimers({ toFake: ['Date', 'Temporal'], now: 0 });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const source = inner();
-    const cached = createCachedCredentialProvider(source, { ttlMs: 1000, now: () => now });
+    const cached = createCachedCredentialProvider(source, { ttlMs: 1000 });
     expect(await reveal(cached)).toBe('gho_token1');
-    now = 999;
+    vi.setSystemTime(999);
     expect(await reveal(cached, 'GITHUB.com')).toBe('gho_token1');
-    now = 1000;
+    vi.setSystemTime(1000);
     expect(await reveal(cached)).toBe('gho_token2');
     expect(source.calls).toHaveLength(2);
   });

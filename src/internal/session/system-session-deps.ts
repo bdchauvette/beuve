@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { SessionDeps } from './session.ts';
 
-/** The real clock and `crypto.randomUUID()`. */
+/** `crypto.randomUUID()`. Time is read from `Temporal.Now` directly (ADR 0059). */
 export const systemSessionDeps: SessionDeps = {
-  now: (): Date => new Date(),
   newId: (): string => randomUUID(),
 };

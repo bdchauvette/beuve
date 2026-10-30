@@ -1,99 +1,90 @@
-import type { DatabaseSync } from 'node:sqlite';
-
-import { describe, expect, it } from 'vitest';
-
-import { openDatabase } from '#sqlite/open-database.ts';
-import { runMigrations } from '#sqlite/run-migrations.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { createSession } from './create-session.ts';
 import { findSessionBySource } from './find-session-by-source.ts';
 import { findSession } from './find-session.ts';
 import { insertSession } from './insert-session.ts';
 import { listSessions } from './list-sessions.ts';
-import type {
-  CommitSha,
-  SessionDeps,
-  SessionId,
-  SessionSource,
-  UnreviewedSession,
-} from './session.ts';
-import { sessionMigrations } from './session-migrations.ts';
+import type { CommitSha, SessionId, SessionSource, UnreviewedSession } from './session.ts';
+import { countingSessionDeps } from './testing/counting-session-deps.ts';
+import { test } from './testing/test.ts';
 
-const head = 'a'.repeat(40) as CommitSha;
-const local: SessionSource = { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feat' };
-const pull: SessionSource = {
-  kind: 'github-pull-request',
-  repoPath: '/repo',
-  baseRef: 'main',
-  host: 'github.com',
-  owner: 'acme',
-  repo: 'beuve',
-  number: 7,
-};
+test(
+  'insertSession round-trips both kinds through findSession, findSessionBySource and listSessions',
+  { concurrent: false },
+  ({ expect, clock, db }) => {
+    const first = make(local(), 1);
+    clock.advance({ minutes: 1 });
+    const second = make(pull(), 2);
+    expect(insertSession(db, first)).toStrictEqual({ ok: true, value: undefined });
+    expect(insertSession(db, second)).toStrictEqual({ ok: true, value: undefined });
 
-describe('insertSession', () => {
-  it('round-trips both kinds through findSession, findSessionBySource and listSessions', () => {
-    const db = setup();
-    const first = make(local, 1);
-    const second = make(pull, 2);
-    expect(insertSession(db, first)).toEqual({ ok: true, value: undefined });
-    expect(insertSession(db, second)).toEqual({ ok: true, value: undefined });
+    expect(findSession(db, first.id)).toStrictEqual({ ok: true, value: first });
+    expect(findSessionBySource(db, pull())).toStrictEqual({ ok: true, value: second });
+    expect(listSessions(db)).toStrictEqual({ ok: true, value: [second, first] });
+  },
+);
 
-    expect(findSession(db, first.id)).toEqual({ ok: true, value: first });
-    expect(findSessionBySource(db, pull)).toEqual({ ok: true, value: second });
-    expect(listSessions(db)).toEqual({ ok: true, value: [second, first] });
-  });
-
-  it('reports a missing session as undefined', () => {
-    const db = setup();
-    const missing = '00000000-0000-4000-8000-0000000000ff' as SessionId;
-    expect(findSession(db, missing)).toEqual({ ok: true, value: undefined });
-    expect(findSessionBySource(db, local)).toEqual({ ok: true, value: undefined });
-    expect(findSessionBySource(db, { ...pull, number: 8 })).toEqual({ ok: true, value: undefined });
-  });
-
-  it('keeps the same pull request number on two hosts apart', () => {
-    const db = setup();
-    const enterprise: SessionSource = { ...pull, host: 'ghe.example.com' };
-    const first = make(pull, 1);
-    const second = make(enterprise, 2);
-    expect(insertSession(db, first).ok).toBe(true);
-    expect(insertSession(db, second).ok).toBe(true);
-    expect(findSessionBySource(db, enterprise)).toEqual({ ok: true, value: second });
-    expect(findSessionBySource(db, pull)).toEqual({ ok: true, value: first });
-  });
-
-  it('refuses a second session for the same change', () => {
-    const db = setup();
-    insertSession(db, make(local, 1));
-    expect(insertSession(db, make(local, 2))).toEqual({
-      ok: false,
-      error: { kind: 'duplicate-session', source: local },
-    });
-    expect(insertSession(db, make({ ...local, headRef: 'other' }, 3)).ok).toBe(true);
-  });
-
-  it('throws on an id collision, which is a bug rather than an expected failure', () => {
-    const db = setup();
-    insertSession(db, make(local, 1));
-    expect(() => insertSession(db, make({ ...local, headRef: 'other' }, 1))).toThrow('sessions.id');
+test('insertSession reports a missing session as undefined', ({ expect, db }) => {
+  const missing = '00000000-0000-4000-8000-0000000000ff' as SessionId;
+  expect(findSession(db, missing)).toStrictEqual({ ok: true, value: undefined });
+  expect(findSessionBySource(db, local())).toStrictEqual({ ok: true, value: undefined });
+  expect(findSessionBySource(db, { ...pull(), number: 8 })).toStrictEqual({
+    ok: true,
+    value: undefined,
   });
 });
 
-function setup(): DatabaseSync {
-  const db = openDatabase(':memory:');
-  runMigrations(db, sessionMigrations);
-  return db;
+test('insertSession keeps the same pull request number on two hosts apart', ({ expect, db }) => {
+  const enterprise: SessionSource = { ...pull(), host: 'ghe.example.com' };
+  const first = make(pull(), 1);
+  const second = make(enterprise, 2);
+  expect(insertSession(db, first).ok).toBe(true);
+  expect(insertSession(db, second).ok).toBe(true);
+  expect(findSessionBySource(db, enterprise)).toStrictEqual({ ok: true, value: second });
+  expect(findSessionBySource(db, pull())).toStrictEqual({ ok: true, value: first });
+});
+
+test('insertSession refuses a second session for the same change', ({ expect, db }) => {
+  insertSession(db, make(local(), 1));
+  const duplicate = make(local(), 2);
+  expect(insertSession(db, duplicate)).toStrictEqual({
+    ok: false,
+    error: { kind: 'duplicate-session', source: local() },
+  });
+  const otherBranch = make({ ...local(), headRef: 'other' }, 3);
+  expect(insertSession(db, otherBranch).ok).toBe(true);
+});
+
+test('insertSession throws on an id collision, which is a bug rather than an expected failure', ({
+  expect,
+  db,
+}) => {
+  insertSession(db, make(local(), 1));
+  const sameId = make({ ...local(), headRef: 'other' }, 1);
+  expect(() => insertSession(db, sameId)).toThrow('sessions.id');
+});
+
+function local(): LocalSource {
+  return { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feat' };
+}
+
+function pull(): PullRequestSource {
+  return {
+    kind: 'github-pull-request',
+    repoPath: '/repo',
+    baseRef: 'main',
+    host: 'github.com',
+    owner: 'acme',
+    repo: 'beuve',
+    number: 7,
+  };
 }
 
 function make(source: SessionSource, n: number): UnreviewedSession {
-  const deps: SessionDeps = {
-    now: (): Date => new Date(Date.UTC(2026, 9, 28, 12, n)),
-    newId: (): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
-  };
-  const created = createSession(source, head, deps);
-  if (!created.ok) {
-    throw new Error('fixture source is invalid');
-  }
-  return created.value;
+  return okValueFrom(createSession(source, 'a'.repeat(40) as CommitSha, countingSessionDeps(n)));
 }
+
+type LocalSource = Extract<SessionSource, { readonly kind: 'local' }>;
+
+type PullRequestSource = Extract<SessionSource, { readonly kind: 'github-pull-request' }>;

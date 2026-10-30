@@ -137,7 +137,7 @@ async function runClaudeCode(
     ...(options.maxBudgetUsd !== undefined && { maxBudgetUsd: options.maxBudgetUsd }),
   });
   const command = options.command ?? 'claude';
-  const started = performance.now();
+  const started = Temporal.Now.instant();
   options.logger?.debug('claude-code: starting', {
     command,
     cwd: request.cwd,
@@ -152,7 +152,9 @@ async function runClaudeCode(
     mode.onText,
     options,
   );
-  const durationMs = Math.round(performance.now() - started);
+  const durationMs = Temporal.Now.instant()
+    .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+    .total('milliseconds');
   if (!run.ok) {
     options.logger?.info('claude-code: run failed', { durationMs, error: run.error.kind });
     return run;

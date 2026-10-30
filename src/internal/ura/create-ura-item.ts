@@ -28,7 +28,7 @@ export interface UraItemDraft {
 
 /** A new, `staged` item. The title is trimmed; everything else must already be valid. */
 export function createUraItem(draft: UraItemDraft, deps: UraDeps): Result<UraItem, UraItemError> {
-  const now = deps.now().toISOString();
+  const now = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
   return validateUraItem({
     id: deps.newId() as UraItemId,
     sessionId: draft.sessionId,

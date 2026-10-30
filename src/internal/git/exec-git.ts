@@ -68,7 +68,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
   const gitBinary = request.gitBinary ?? 'git';
   const timeoutMs = request.timeoutMs ?? defaultTimeoutMs;
   const maxBufferBytes = request.maxBufferBytes ?? defaultMaxBufferBytes;
-  const started = performance.now();
+  const started = Temporal.Now.instant();
   const outcome = await execute(gitBinary, [...hardeningArgs, ...request.args], {
     cwd: request.cwd,
     timeoutMs,
@@ -78,7 +78,9 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
   request.logger?.debug('git', {
     args: request.args,
     cwd: request.cwd,
-    durationMs: Math.round(performance.now() - started),
+    durationMs: Temporal.Now.instant()
+      .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+      .total('milliseconds'),
     exitCode: outcome.error === null ? 0 : outcome.error.code,
   });
   return outcome.error === null

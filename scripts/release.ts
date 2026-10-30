@@ -16,7 +16,10 @@ release();
 function release(): void {
   try {
     ensureReleasable();
-    const version = nextCalverVersion(git(['tag', '--list', 'v*']).split('\n'), new Date());
+    const version = nextCalverVersion(
+      git(['tag', '--list', 'v*']).split('\n'),
+      Temporal.Now.plainDateISO('UTC'),
+    );
     setVersion('package.json', version, false);
     setVersion('package-lock.json', version, true);
     git(['add', 'package.json', 'package-lock.json']);
