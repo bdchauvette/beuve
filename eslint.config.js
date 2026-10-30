@@ -141,6 +141,8 @@ export default defineConfig(
       'local/enforce-top-level-function-syntax': 'error',
       // ADR 0075.
       'local/forward-abort-signal': 'error',
+      // ADR 0076.
+      'local/prefer-using': 'error',
     },
   },
 

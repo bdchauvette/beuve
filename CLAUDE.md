@@ -38,6 +38,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - `import type` for type-only imports.
 - Forward an `AbortSignal` in scope (a parameter, options `signal`, the test context's `signal`, a local or field controller) to every callee that takes one (ADR 0075, `local/forward-abort-signal`); disable the line with a reason only for work that must outlive the caller.
 - Thin data, pure functions; discriminated unions (`#x/result/`) and branded types (`#x/brand/brand.ts`) for illegal states. Expected failures are `Result`s, not exceptions.
+- Resources (temp dirs, file handles, timers, listeners, processes) are released by `using`/`await using`, with a per-call `DisposableStack` for what isn't a disposable value; deadlines are `AbortSignal.any([signal, timeoutSignal(d)])`, told from cancels by `reason`; `finally` is for bookkeeping only (ADR 0076, `local/prefer-using`).
 - No enums, namespaces or parameter properties (`erasableSyntaxOnly`).
 - No comments that restate code. Brief doc comments on exported API.
 - Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#sqlite/`.

@@ -10,6 +10,7 @@ import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template
 import { noModuleMocking } from './no-module-mocking.ts';
 import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
 import { noTimeNumberArithmetic } from './no-time-number-arithmetic.ts';
+import { preferUsing } from './prefer-using.ts';
 import { requireSequentialFakeTime } from './require-sequential-fake-time.ts';
 
 /**
@@ -35,6 +36,7 @@ const plugin = {
     'no-module-mocking': noModuleMocking,
     'no-module-scope-bindings': noModuleScopeBindings,
     'no-time-number-arithmetic': noTimeNumberArithmetic,
+    'prefer-using': preferUsing,
     'require-sequential-fake-time': requireSequentialFakeTime,
   },
 };
