@@ -31,6 +31,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Render hostile file names and contents in the built app (ADR 0077)
+        if: runner.os == 'Linux'
+        run: |
+          # Ubuntu 24.04's AppArmor denies Chromium's sandbox the unprivileged user namespaces it
+          # needs; allow them rather than run Electron with --no-sandbox.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          npm run build
+          xvfb-run -a -s '-screen 0 1600x1000x24' \
+            node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
+      - name: Upload the hostile-render screenshots
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostile-render-screenshots
+          path: ${{ runner.temp }}/hostile-render
+          if-no-files-found: ignore
       - name: Lint the Homebrew cask
         if: runner.os == 'macOS'
         env:
