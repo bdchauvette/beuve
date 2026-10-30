@@ -15,6 +15,8 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import type { GithubDockState } from './github-post-state.ts';
 import { moveUraItem } from './move-ura-item.ts';
+import { parseInlineTitle } from './parse-inline-title.ts';
+import type { InlineSpan } from './parse-markdown-subset.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
 
@@ -178,6 +180,13 @@ export class BeuveUraDock extends LitElement {
       .title {
         margin-top: 1px;
         overflow-wrap: anywhere;
+      }
+
+      .title code {
+        padding: 0 2px;
+        border-radius: 3px;
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-mono);
       }
 
       .suggestion {
@@ -596,7 +605,7 @@ export class BeuveUraDock extends LitElement {
         }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
-      <div class="title">${item.title}</div>
+      <div class="title">${parseInlineTitle(item.title).map((span) => renderInlineSpan(span))}</div>
       ${
         item.suggestedPatch !== undefined && (index === this.cursor || this.editingId === item.id)
           ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
@@ -930,5 +939,23 @@ function isTextEntry(event: KeyboardEvent): boolean {
 declare global {
   interface HTMLElementTagNameMap {
     'beuve-ura-dock': BeuveUraDock;
+  }
+}
+
+/** An inline span of an item's title as a template: text stays text, never HTML. */
+function renderInlineSpan(span: InlineSpan): TemplateResult | string {
+  switch (span.kind) {
+    case 'text': {
+      return span.text;
+    }
+    case 'code': {
+      return html`<code>${span.text}</code>`;
+    }
+    case 'strong': {
+      return html`<strong>${span.text}</strong>`;
+    }
+    case 'emphasis': {
+      return html`<em>${span.text}</em>`;
+    }
   }
 }
