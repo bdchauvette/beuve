@@ -56,3 +56,4 @@ Template: [0000-template.md](0000-template.md)
 | [0048](0048-packaging-signing-and-release.md)                         | Packaging, signing and release with electron-builder                             | Accepted |
 | [0049](0049-ci-matrix-releases-and-homebrew-cask.md)                  | CI matrix, versioning, GitHub Releases and a Homebrew cask in this repository    | Accepted |
 | [0053](0053-impactgate-in-a-worker-thread.md)                         | ImpactGate parses in a worker thread and ships a slim view to the renderer       | Accepted |
+| [0054](0054-commit-pairing-and-stack-aware-fork-points.md)            | Commit pairing across rebases, and stack-aware fork points                       | Accepted |

@@ -19,3 +19,7 @@ The `git` domain resolves revisions, diffs pull-request ranges, manages review w
 ## Consequences
 
 beuve requires a system git and pays a process spawn per operation, but gets git's own semantics, worktrees and merge machinery with no native dependency. Interdiff limits: lines changed when the author resolved a rebase conflict can't be separated from upstream, so conflicts fall back to a full review; in the clean case, anything that differs from the mechanical replay (including edits the author needed to adapt to upstream) shows as an author change, which is intended; the replay uses git's default merge and rename heuristics; content is decoded as UTF-8, so other encodings display lossily. Repositories owned by another user surface as `unsafe-repository` rather than being trusted silently.
+
+## Amendment 2026-10-30: stacks and commit pairs
+
+ADR 0054 replaces the merge-base with a stack-aware fork point (a parent already on the base, or a reviewed base still under the head) for full reviews, interdiffs and checkpoints, and, when the range replay conflicts, retries by replaying the paired reviewed commits one by one before falling back.

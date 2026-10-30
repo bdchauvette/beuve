@@ -23,3 +23,7 @@ Interdiffs survive rebases, and the session domain stays free of git. Every revi
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `session-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The `session-0002-checkpoint-base` rebuild is gone, along with its dropping of stray rows.
+
+## Amendment 2026-10-30: stacks and commit pairs
+
+ADR 0054 replaces the merge-base with a stack-aware fork point (a parent already on the base, or a reviewed base still under the head) for full reviews, interdiffs and checkpoints, and, when the range replay conflicts, retries by replaying the paired reviewed commits one by one before falling back.
