@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -189,6 +189,62 @@ describe('createSessionWorktrees', () => {
     expect(readFileSync(path.join(kept, 'f.txt'), 'utf8')).toBe('1\n');
   });
 
+  test('leases a checkout it made without asking git again, until it is gone from disk (ADR 0081)', async ({
+    expect,
+    repo,
+    repository,
+    worktreeRoot,
+    logger,
+    signal,
+  }) => {
+    const { c1 } = await twoCommits(repo);
+    const { worktrees, heads } = manager(worktreeRoot, logger.logger, {
+      signal,
+      logger: logger.logger,
+    });
+    heads.set('S', c1);
+    using first = okValueFrom(await worktrees.acquire(repository, head('S', c1), { signal }));
+    okValueFrom(await worktrees.acquire(repository, head('S', c1), { signal }))[Symbol.dispose]();
+    okValueFrom(await worktrees.acquire(repository, head('S', c1), { signal }))[Symbol.dispose]();
+    expect(worktreeCommands(logger.lines)).toStrictEqual([['list'], ['add']]);
+    await rm(first.path, { recursive: true, force: true });
+    using again = okValueFrom(await worktrees.acquire(repository, head('S', c1), { signal }));
+    expect(again.path).toBe(first.path);
+    expect(readFileSync(path.join(again.path, 'f.txt'), 'utf8')).toBe('1\n');
+    expect(worktreeCommands(logger.lines)).toStrictEqual([
+      ['list'],
+      ['add'],
+      ['list'],
+      ['prune'],
+      ['add'],
+    ]);
+  });
+
+  test('leases a checkout the startup prune kept without asking git again', async ({
+    expect,
+    repo,
+    repository,
+    worktreeRoot,
+    logger,
+    signal,
+  }) => {
+    const { c1 } = await twoCommits(repo);
+    const before = manager(worktreeRoot, logger.logger, { signal });
+    before.heads.set('S', c1);
+    okValueFrom(await before.worktrees.acquire(repository, head('S', c1), { signal }))[
+      Symbol.dispose
+    ]();
+    await before.worktrees.settled();
+    const after = manager(worktreeRoot, logger.logger, { signal, logger: logger.logger });
+    after.heads.set('S', c1);
+    await after.worktrees.prune([{ repoPath: repo.directory, headSha: c1 }]);
+    const pruned = worktreeCommands(logger.lines);
+    using lease = okValueFrom(await after.worktrees.acquire(repository, head('S', c1), { signal }));
+    expect(readFileSync(path.join(lease.path, 'f.txt'), 'utf8')).toBe('1\n');
+    expect(pruned).toStrictEqual([['prune'], ['list']]);
+    expect(worktreeCommands(logger.lines)).toStrictEqual(pruned);
+  });
+
   test('an already aborted signal checks nothing out', async ({
     expect,
     repo,
@@ -243,6 +299,15 @@ async function opened(
   signal: AbortSignal,
 ): Promise<GitRepository> {
   return okValueFrom(await openRepository(repo.directory, { gitBinary, signal }));
+}
+
+/** The `git worktree` subcommands logged so far, oldest first. */
+function worktreeCommands(lines: readonly Readonly<Record<string, unknown>>[]): string[][] {
+  return lines
+    .filter((line) => line['message'] === 'git')
+    .map((line) => line['args'] as readonly string[])
+    .filter((args) => args[0] === 'worktree')
+    .map((args) => args.slice(1, 2));
 }
 
 /** Lock files anywhere under the repository's `.git`, worktree administrative files included. */

@@ -88,4 +88,25 @@ describe('openRepository', () => {
       },
     });
   });
+
+  test('binds a handle to a kept probe without asking git again', async ({
+    expect,
+    repo,
+    repository,
+    signal,
+  }) => {
+    const probe = { root: repository.root, version: repository.version };
+    const missingGit = path.join(repo.scratch(), 'no-such-git');
+    const rebound = okValueFrom(
+      await openRepository(repo.directory, { gitBinary: missingGit, probe, signal }),
+    );
+    expect({ root: rebound.root, version: rebound.version }).toStrictEqual(probe);
+    const bound = okValueFrom(await openRepository(repo.directory, { probe, signal }));
+    await expect(
+      bound[gitRunner].run(['rev-parse', '--show-prefix'], { policy: { kind: 'read' }, signal }),
+    ).resolves.toStrictEqual({ ok: true, value: '\n' });
+    await expect(
+      rebound[gitRunner].run(['status'], { policy: { kind: 'read' }, signal }),
+    ).resolves.toMatchObject({ ok: false, error: { kind: 'git-not-found' } });
+  });
 });

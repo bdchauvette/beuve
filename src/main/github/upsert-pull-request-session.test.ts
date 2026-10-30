@@ -3,6 +3,7 @@ import { describe } from 'vitest';
 import type { CommitSha } from '#internal/session/session.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { createGitCaches } from '../sessions/create-git-caches.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import { test } from '../testing/test.ts';
@@ -22,6 +23,7 @@ describe('upsertPullRequestSession', () => {
       deps,
       logger: logger.logger,
       git: {},
+      caches: createGitCaches(),
       onHeadMoved: (_, headSha) => {
         moves.push(headSha);
       },
@@ -37,7 +39,13 @@ describe('upsertPullRequestSession', () => {
   });
 
   test('an open that saw the stored head moves it', ({ expect, db, deps, logger }) => {
-    const context: SessionContext = { db, deps, logger: logger.logger, git: {} };
+    const context: SessionContext = {
+      db,
+      deps,
+      logger: logger.logger,
+      git: {},
+      caches: createGitCaches(),
+    };
     const source = pullRequest();
     const opened = okValueFrom(upsertPullRequestSession(context, source, sha('1'), undefined));
     const observedFrom = okValueFrom(loadSession(context, opened.id));

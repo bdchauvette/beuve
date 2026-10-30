@@ -14,6 +14,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { createIpcHandlers } from '../ipc/create-ipc-handlers.ts';
 import { RequestScopes } from '../ipc/request-scopes.ts';
 import type { MainServices } from '../main-services.ts';
+import { createGitCaches } from '../sessions/create-git-caches.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { lines } from '../testing/lines.ts';
 import { waitUntil } from '../testing/wait-until.ts';
@@ -229,7 +230,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     world,
   }) => {
     const { firstHead, baseSha } = world;
-    const context = { db, deps, logger: logger.logger, git: {} };
+    const context = { db, deps, logger: logger.logger, git: {}, caches: createGitCaches() };
     const sessionId = await opened();
     await services.github.pollNow(sessionId);
     const polled = okValueFrom(loadSession(context, sessionId));

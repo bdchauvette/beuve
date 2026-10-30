@@ -3,7 +3,6 @@ import type {
   IpcError,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
-import { openRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { advanceHead } from '#internal/session/advance-head.ts';
 import { createSession } from '#internal/session/create-session.ts';
@@ -16,6 +15,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
+import { openSessionRepository } from './open-session-repository.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
 import { sessionSummaryFrom } from './session-summary-from.ts';
@@ -30,7 +30,7 @@ export async function createLocalSession(
   request: CreateLocalSessionRequest,
 ): Promise<Result<SessionSummary, IpcError>> {
   const { logger } = context;
-  const repository = await openRepository(request.repoPath, context.git);
+  const repository = await openSessionRepository(context, request.repoPath);
   if (!repository.ok) {
     return gitFailure(logger, repository.error);
   }

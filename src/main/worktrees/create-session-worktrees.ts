@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, rm } from 'node:fs/promises';
+import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { addWorktree } from '#internal/git/add-worktree.ts';
@@ -105,12 +105,22 @@ interface Entry {
   tail: Promise<unknown>;
 }
 
-/** Creates the worktree manager. It holds only in-memory bookkeeping; git holds the rest. */
+/**
+ * Creates the worktree manager. It holds in-memory bookkeeping; git holds the rest, and is asked
+ * again whenever the bookkeeping and the disk might disagree.
+ */
 export function createSessionWorktrees(options: SessionWorktreesOptions): SessionWorktrees {
   const { logger } = options;
   const entries = new Map<string, Entry>();
   /** Holder (a session, or a sheet's pinned commit) → the checkout path it keeps. */
   const holders = new Map<string, string>();
+  /**
+   * Checkouts this manager made or the startup prune kept, path → commit (ADR 0081). A lease on
+   * one whose directory is still there skips `git worktree list`; anything else (an unknown path,
+   * a failed add or removal, a directory gone from disk) goes back through `addWorktree`, which
+   * asks git and repairs what it finds. Changed only on a path's serial chain, or by the prune.
+   */
+  const checkedOut = new Map<string, CommitSha>();
   const handles = new Map<string, Promise<Result<GitRepository, GitError>>>();
   let canonicalRoot: Promise<Result<string, GitError>> | undefined;
   let pruning: Promise<void> | undefined;
@@ -190,6 +200,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       if (entry.leases > 0 || isHeld(path)) {
         return;
       }
+      checkedOut.delete(path);
       const removed = await removeWorktree(entry.repository, path, { force: true });
       if (!removed.ok) {
         logger.warn('could not remove an unused worktree', { path, error: removed.error });
@@ -222,12 +233,17 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     claim: WorktreeClaim,
     commit: CommitSha,
   ): Promise<Result<undefined, WorktreeLeaseError>> => {
-    const stopwatch = new Stopwatch();
-    const added = await addWorktree(entry.repository, { root, commit });
-    if (!added.ok) {
-      return added;
+    const isKnown = checkedOut.get(entry.path) === commit && (await isCheckoutPresent(entry.path));
+    if (!isKnown) {
+      checkedOut.delete(entry.path);
+      const stopwatch = new Stopwatch();
+      const added = await addWorktree(entry.repository, { root, commit });
+      if (!added.ok) {
+        return added;
+      }
+      checkedOut.set(entry.path, commit);
+      logger.debug('worktree ready', { path: entry.path, duration: stopwatch.elapsed() });
     }
-    logger.debug('worktree ready', { path: entry.path, duration: stopwatch.elapsed() });
     const stale = staleness(claim);
     if (stale !== undefined) {
       return err(stale);
@@ -302,8 +318,12 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     },
     prune: async (keep): Promise<void> => {
       pruning = (async (): Promise<void> => {
+        checkedOut.clear();
         try {
-          await pruneAll(options, keep);
+          const kept = await pruneAll(options, keep);
+          for (const [path, commit] of kept) {
+            checkedOut.set(path, commit);
+          }
         } catch (error: unknown) {
           logger.warn('worktree cleanup failed', { error });
         }
@@ -334,14 +354,28 @@ function holderOf(claim: WorktreeClaim): string {
     : `pinned\0${claim.sessionId}\0${claim.commit}`;
 }
 
+/**
+ * Whether a linked worktree this manager checked out is still on disk, judged by its `.git`
+ * file. Only asked of checkouts whose add finished, so a half-written one never gets here.
+ */
+async function isCheckoutPresent(worktreePath: string): Promise<boolean> {
+  try {
+    const stats = await stat(path.join(worktreePath, '.git'));
+    return stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Prunes every repository in `keep` and the root; answers the checkouts kept, path → commit. */
 async function pruneAll(
   options: SessionWorktreesOptions,
   keep: readonly WorktreeKeep[],
-): Promise<void> {
+): Promise<ReadonlyMap<string, CommitSha>> {
   const { logger } = options;
   await mkdir(options.root, { recursive: true });
   const root = await realpath(options.root);
-  const registered = new Set<string>();
+  const registered = new Map<string, CommitSha>();
   const repoPaths = new Set(keep.map((entry) => entry.repoPath));
   for (const repoPath of repoPaths) {
     const repository = await openRepository(repoPath, options.git);
@@ -351,20 +385,21 @@ async function pruneAll(
     }
     const heads = keep.filter((entry) => entry.repoPath === repoPath).map((entry) => entry.headSha);
     const kept = await pruneRepository(repository.value, root, heads, logger);
-    for (const worktreePath of kept) {
-      registered.add(worktreePath);
+    for (const worktree of kept) {
+      registered.set(worktree.path, worktree.head);
     }
   }
   await removeStrayDirectories(root, registered, logger);
+  return registered;
 }
 
-/** Removes this repository's worktrees under `root` except those at `heads`; returns the kept paths. */
+/** Removes this repository's worktrees under `root` except those at `heads`; returns the kept ones. */
 async function pruneRepository(
   repository: GitRepository,
   root: string,
   heads: readonly CommitSha[],
   logger: Logger,
-): Promise<readonly string[]> {
+): Promise<readonly { readonly path: string; readonly head: CommitSha }[]> {
   await pruneWorktrees(repository);
   const worktrees = await listWorktrees(repository);
   if (!worktrees.ok) {
@@ -377,13 +412,14 @@ async function pruneRepository(
       wanted.add(planned.value);
     }
   }
-  const kept: string[] = [];
+  const kept: { readonly path: string; readonly head: CommitSha }[] = [];
   for (const worktree of worktrees.value) {
     if (!isInside(root, worktree.path)) {
       continue;
     }
-    if (wanted.has(worktree.path) && worktree.head !== undefined && heads.includes(worktree.head)) {
-      kept.push(worktree.path);
+    const { head } = worktree;
+    if (head !== undefined && wanted.has(worktree.path) && heads.includes(head)) {
+      kept.push({ path: worktree.path, head });
       continue;
     }
     const removed = await removeWorktree(repository, worktree.path, { force: true });
@@ -400,7 +436,7 @@ async function pruneRepository(
 /** Deletes checkouts under `root` that no known repository has registered (`<root>/<repo>/<commit>`). */
 async function removeStrayDirectories(
   root: string,
-  registered: ReadonlySet<string>,
+  registered: ReadonlyMap<string, CommitSha>,
   logger: Logger,
 ): Promise<void> {
   const repositories = await listDirectories(root);

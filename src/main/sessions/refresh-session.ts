@@ -1,6 +1,6 @@
 import type { IpcError } from '#contract/ipc-contract.ts';
+import type { GitError } from '#internal/git/git-error.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
-import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { advanceHead } from '#internal/session/advance-head.ts';
@@ -12,6 +12,7 @@ import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
 import { loadSession } from './load-session.ts';
+import { openSessionRepository } from './open-session-repository.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
 
@@ -51,10 +52,8 @@ export async function refreshSession(
   options: RefreshSessionOptions = {},
 ): Promise<Result<RefreshedSession, IpcError>> {
   const { logger } = context;
-  const repository = await openRepository(session.source.repoPath, {
-    ...context.git,
-    signal: combinedSignal(context.git.signal, options.signal),
-  });
+  const { repoPath } = session.source;
+  const repository = await openSessionRepository(context, repoPath, options.signal);
   if (!repository.ok) {
     return gitFailure(logger, repository.error);
   }
@@ -63,6 +62,9 @@ export async function refreshSession(
       ? await resolveRevision(repository.value, session.source.baseRef)
       : ok(options.baseTip);
   if (!baseTip.ok) {
+    if (isRepositoryGone(baseTip.error)) {
+      context.caches.probes.delete(repoPath);
+    }
     return gitFailure(logger, baseTip.error);
   }
   if (options.headSha !== undefined) {
@@ -125,9 +127,14 @@ async function advanceLocalHead(
   }
 }
 
-function combinedSignal(
-  bound: AbortSignal | undefined,
-  own: AbortSignal | undefined,
-): AbortSignal | undefined {
-  return bound === undefined || own === undefined ? (bound ?? own) : AbortSignal.any([bound, own]);
+/**
+ * Whether a failure means the kept probe of the directory no longer holds: the repository moved
+ * or went away, or git did. The next open then probes again.
+ */
+function isRepositoryGone(error: GitError): boolean {
+  return (
+    error.kind === 'not-a-repository' ||
+    error.kind === 'git-not-found' ||
+    error.kind === 'unsafe-repository'
+  );
 }

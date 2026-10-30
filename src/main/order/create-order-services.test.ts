@@ -7,6 +7,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import type { MainServices } from '../main-services.ts';
 import { lines } from '../testing/lines.ts';
+import { createGitCaches } from '../sessions/create-git-caches.ts';
 import { test } from '../testing/test.ts';
 
 import { createOrderServices } from './create-order-services.ts';
@@ -103,7 +104,13 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     const queried: string[] = [];
     const orderWith = (callHierarchy: OrderServicesOptions['callHierarchy']): OrderServices =>
       createOrderServices({
-        context: { db, deps, logger: logger.logger, git: { logger: logger.logger } },
+        context: {
+          db,
+          deps,
+          logger: logger.logger,
+          git: { logger: logger.logger },
+          caches: createGitCaches(),
+        },
         parse: createSyntaxParser().parse,
         callHierarchy,
         getFileAttributes: services.files.getFileAttributes,

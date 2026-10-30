@@ -55,6 +55,7 @@ import { createSessionServices } from './sessions/create-session-services.ts';
 import { createSheetServices } from './sheets/create-sheet-services.ts';
 import { createRemoteServices } from './remote/create-remote-services.ts';
 import { createShellServices } from './shell/create-shell-services.ts';
+import { createGitCaches } from './sessions/create-git-caches.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createTraceServices } from './trace/create-trace-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
@@ -73,6 +74,11 @@ export interface MainServicesOptions {
   readonly worktreeRoot: string;
   readonly deps?: SessionDeps;
   readonly git?: OpenRepositoryOptions;
+  /**
+   * `false` turns off the shared git caches (ADR 0081): every probe, fork point and review diff
+   * is computed again for each request. Only for the test that compares the two.
+   */
+  readonly caching?: boolean;
   /** The packaged app passes `wasmDirectory`; tests load grammars from `node_modules`. */
   readonly syntax?: SyntaxParserOptions;
   /**
@@ -159,19 +165,25 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     heads.trace?.observeHead(sessionId, headSha);
     heads.impact?.observeHead(sessionId, headSha);
   };
+  const caches = createGitCaches({ enabled: options.caching !== false });
   const context: SessionContext = {
     db: options.db,
     logger,
     deps: options.deps ?? systemSessionDeps,
     git: { ...options.git, logger: options.git?.logger ?? logger },
+    caches,
     onHeadMoved,
   };
   const open: { sessionId: string | undefined } = { sessionId: undefined };
   const gh: { services: GithubServices | undefined } = { services: undefined };
   const sessions = withPullRequestBadges(
-    trackOpenSession(createSessionServices({ ...options, onHeadMoved }), open, (id, isPull) => {
-      gh.services?.watch(isPull ? id : undefined);
-    }),
+    trackOpenSession(
+      createSessionServices({ ...options, onHeadMoved, caches }),
+      open,
+      (id, isPull) => {
+        gh.services?.watch(isPull ? id : undefined);
+      },
+    ),
     (summary) =>
       summary.source.kind === 'github-pull-request'
         ? gh.services?.badgeFor(summary.source)

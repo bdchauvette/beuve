@@ -9,6 +9,7 @@ import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-me
 import { okValueFrom } from '#testing/ok-value-from.ts';
 import { err } from '#x/result/err.ts';
 
+import { createGitCaches } from '../sessions/create-git-caches.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { createSessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 import { waitUntil } from '../testing/wait-until.ts';
@@ -860,7 +861,13 @@ describe(
         'summary',
       );
       const main = createServices({ claude: claude.settings });
-      const context = { db, logger: logger.logger, deps, git: { logger: logger.logger } };
+      const context = {
+        db,
+        logger: logger.logger,
+        deps,
+        git: { logger: logger.logger },
+        caches: createGitCaches(),
+      };
       const chat = createChatServices({
         context,
         impact: { getImpact: noImpact },

@@ -44,22 +44,53 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     await expect(newer).resolves.toMatchObject({ ok: true, value: { files: [{ path: 'f.txt' }] } });
   });
 
-  test('another window’s load is not superseded', async ({
+  test('another window’s load is not superseded, and both share one diff (ADR 0081)', async ({
     expect,
     repo,
     createServices,
     closing,
     signal,
   }) => {
-    const { server, handlers, sessionId } = await heldDiffs(repo, createServices, closing, signal);
+    const { server, git, handlers, sessionId } = await heldDiffs(
+      repo,
+      createServices,
+      closing,
+      signal,
+    );
     const first = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
-    const firstDiff = await server.next();
+    const diff = await server.next();
     const second = handlers['session:get-review']({ sessionId }, { webContentsId: 2 });
-    const secondDiff = await server.next();
-    firstDiff.release();
-    secondDiff.release();
+    diff.release();
     await expect(first).resolves.toMatchObject({ ok: true });
     await expect(second).resolves.toMatchObject({ ok: true });
+    expect(git.terminations()).toStrictEqual([]);
+  });
+
+  test('closing one window leaves the diff another window waits for running', async ({
+    expect,
+    repo,
+    createServices,
+    closing,
+    signal,
+  }) => {
+    const { server, git, scopes, handlers, sessionId } = await heldDiffs(
+      repo,
+      createServices,
+      closing,
+      signal,
+    );
+    const waiting = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
+    const diff = await server.next();
+    const closed = handlers['session:get-review']({ sessionId }, { webContentsId: 2 });
+    scopes.closeWindow(2);
+    await expect(closed).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } });
+    expect(git.terminations()).toStrictEqual([]);
+    diff.release();
+    await expect(waiting).resolves.toMatchObject({
+      ok: true,
+      value: { files: [{ path: 'f.txt' }] },
+    });
+    await expect(diff.ended).resolves.toBe('closed');
   });
 
   test('closing the window stops its loads', async ({

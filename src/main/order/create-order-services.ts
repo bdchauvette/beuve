@@ -21,7 +21,7 @@ import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { headPathOf } from '../sessions/head-path-of.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
-import type { RangeDiff, ReviewDiff } from '../sessions/load-review-diff.ts';
+import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
 import { buildCallEdges } from './build-call-edges.ts';
@@ -54,8 +54,6 @@ export interface OrderServicesOptions {
   readonly cacheSize?: number;
 }
 
-const diffCacheSize = 8;
-
 interface EdgePlan {
   readonly mode: ReviewOrderMode;
   readonly edges: readonly DependencyEdge[];
@@ -73,7 +71,6 @@ interface EdgePlan {
 export function createOrderServices(options: OrderServicesOptions): OrderServices {
   const { context, parse } = options;
   const resolvers = new LruCache<string, ModuleResolver>(options.cacheSize ?? 4);
-  const diffs = new LruCache<string, RangeDiff>(diffCacheSize);
 
   const importEdges = async (
     review: ReviewDiff,
@@ -133,9 +130,8 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
       const { signal } = call;
       const requestedMode = request.mode ?? (await options.defaultMode());
       const [diff, ignoring, attributes] = await Promise.all([
-        loadReviewDiff(context, request.sessionId, { cache: diffs, signal }),
+        loadReviewDiff(context, request.sessionId, { signal }),
         loadReviewDiff(context, request.sessionId, {
-          cache: diffs,
           ignoreWhitespace: true,
           signal,
         }),

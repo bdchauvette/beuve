@@ -1,52 +1,42 @@
 import type { InterdiffFallbackView, IpcError, ReviewScope } from '#contract/ipc-contract.ts';
 import { attributeHunks } from '#internal/git/attribute-hunks.ts';
-import type { FileAttribution } from '#internal/git/attribute-hunks.ts';
 import { computeCommitPairs } from '#internal/git/compute-commit-pairs.ts';
-import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import { computeInterdiff } from '#internal/git/compute-interdiff.ts';
 import type { Interdiff } from '#internal/git/compute-interdiff.ts';
 import { diffObjects } from '#internal/git/diff-objects.ts';
-import type { DiffFile } from '#internal/git/diff-model.ts';
-import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
+import type { GitError } from '#internal/git/git-error.ts';
 import type { StackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
+import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { computeReviewRange } from '#internal/session/compute-review-range.ts';
 import type { ReviewRange } from '#internal/session/session.ts';
-import type { LruCache } from '#x/collections/lru-cache.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { findSessionForkPoint } from './find-session-fork-point.ts';
 import { gitFailure } from './git-failure.ts';
+import { ipcErrorFromGitError } from './ipc-error-from-git-error.ts';
 import { loadSession } from './load-session.ts';
+import type { RangeDiff } from './range-diff.ts';
+import { rebindRepository } from './rebind-repository.ts';
 import { refreshSession } from './refresh-session.ts';
 import type { RefreshedSession } from './refresh-session.ts';
 import type { SessionContext } from './session-context.ts';
-
-/** A computed review diff without the session behind it, as {@link ReviewDiffOptions} caches it. */
-export interface RangeDiff {
-  readonly scope: ReviewScope;
-  readonly baseSha: CommitSha;
-  readonly files: readonly DiffFile[];
-  /** Where the change starts, when that isn't the merge-base (a stacked parent, ADR 0054). */
-  readonly forkPoint?: StackForkPoint;
-  /** For an interdiff whose ranges were short enough to pair (ADR 0054). */
-  readonly commitPairs?: CommitPairs;
-  /** Aligned with `files`, when `commitPairs` is set. */
-  readonly attribution?: readonly FileAttribution[];
-}
 
 /** Display variants of the diff (ADR 0042); the default is the plain diff every service uses. */
 export interface ReviewDiffOptions {
   /** `git diff --ignore-all-space`: hides whitespace-only lines; head line numbers are unchanged. */
   readonly ignoreWhitespace?: boolean;
-  /** Diffs keyed by repository, commits and variant, which never change once computed. */
-  readonly cache?: LruCache<string, RangeDiff>;
   /** Diff at this head, which the caller checked, instead of reading the head again (ADR 0078). */
   readonly headSha?: CommitSha;
   /** Diff from this base tip, which the caller resolved, instead of reading the base again. */
   readonly baseTip?: CommitSha;
-  /** Aborts the diff's git commands (ADR 0079). */
+  /**
+   * Aborts this request's git commands (ADR 0079). The diff itself is shared with every other
+   * request for the same commits, so it stops only when no request waits for it (ADR 0081).
+   */
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -58,7 +48,8 @@ export interface ReviewDiff extends RangeDiff {
 /**
  * What the reviewer should look at now: refreshes the head from git, asks the session domain
  * which range still needs review, and has the git domain diff it (full range, or a rebase-aware
- * interdiff from the last checkpoint). Main translates between the two domains here.
+ * interdiff from the last checkpoint). Main translates between the two domains here. The refs
+ * are read for every call; the diff for the commits they name comes from `context.caches`.
  */
 export async function loadReviewDiff(
   context: SessionContext,
@@ -78,54 +69,74 @@ export async function loadReviewDiff(
     return refreshed;
   }
   const range = computeReviewRange(refreshed.value.session);
-  const diff = await cachedRangeDiff(context, refreshed.value, range, options);
+  const diff = await sharedRangeDiff(context, refreshed.value, range, options);
   return diff.ok ? ok({ ...diff.value, refreshed: refreshed.value }) : diff;
 }
 
-async function cachedRangeDiff(
+/**
+ * The diff for `range`, from `context.caches.rangeDiffs`. The key holds everything the diff is a
+ * function of: the repository, the git that computes it, the base tip, the range's commits, the
+ * reviewed base the stack-aware fork point may use, and the variant. All but the root are SHAs or
+ * fixed values, so a kept diff is never stale. The computation runs on its own handle and signal,
+ * so one request giving up doesn't stop it for another.
+ */
+async function sharedRangeDiff(
   context: SessionContext,
   refreshed: RefreshedSession,
   range: ReviewRange,
   options: ReviewDiffOptions,
 ): Promise<Result<RangeDiff, IpcError>> {
   const isIgnoringWhitespace = options.ignoreWhitespace === true;
+  const { repository, session } = refreshed;
   const key = [
-    refreshed.repository.root,
+    repository.root,
+    repository.version.raw,
     refreshed.baseTip,
     range.kind,
     range.kind === 'interdiff' ? `${range.fromBaseSha}:${range.fromHeadSha}` : '',
-    refreshed.session.review.kind === 'reviewed' ? refreshed.session.review.checkpoint.baseSha : '',
+    session.review.kind === 'reviewed' ? session.review.checkpoint.baseSha : '',
     range.kind === 'interdiff' ? range.toHeadSha : range.headSha,
     isIgnoringWhitespace ? 'w' : '',
   ].join('\0');
-  const cached = options.cache?.get(key);
-  if (cached !== undefined) {
-    return ok(cached);
-  }
-  const diff = await diffReviewRange(context, refreshed, range, isIgnoringWhitespace);
-  if (diff.ok) {
-    options.cache?.set(key, diff.value);
-  }
-  return diff;
+  const diff = await context.caches.rangeDiffs.get(
+    key,
+    async (shared): Promise<Result<RangeDiff, IpcError>> => {
+      const own = await rebindRepository(context, repository, shared);
+      if (!own.ok) {
+        return gitFailure(context.logger, own.error);
+      }
+      const computing: Computing = { context, refreshed, repository: own.value, signal: shared };
+      return diffReviewRange(computing, range, isIgnoringWhitespace);
+    },
+    { signal: options.signal },
+  );
+  return diff === 'aborted' ? err(ipcErrorFromGitError({ kind: 'aborted', args: ['diff'] })) : diff;
+}
+
+/** One shared diff computation: its own handle and signal, and the refresh it diffs for. */
+interface Computing {
+  readonly context: SessionContext;
+  readonly refreshed: RefreshedSession;
+  readonly repository: GitRepository;
+  readonly signal: AbortSignal | undefined;
 }
 
 async function diffReviewRange(
-  context: SessionContext,
-  refreshed: RefreshedSession,
+  computing: Computing,
   range: ReviewRange,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
-  const { repository, baseTip } = refreshed;
+  const { context, refreshed } = computing;
   switch (range.kind) {
     case 'full': {
-      return diffFull(context, refreshed, range.headSha, { kind: 'full' }, isIgnoringWhitespace);
+      return diffFull(computing, range.headSha, { kind: 'full' }, isIgnoringWhitespace);
     }
     case 'up-to-date': {
       const { review } = refreshed.session;
-      const fork = await findStackForkPoint(
-        repository,
-        { base: baseTip, head: range.headSha },
-        { reviewedBases: review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [] },
+      const fork = await forkPointOf(
+        computing,
+        range.headSha,
+        review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [],
       );
       return fork.ok
         ? ok({
@@ -137,20 +148,32 @@ async function diffReviewRange(
         : gitFailure(context.logger, fork.error);
     }
     case 'interdiff': {
-      return diffInterdiff(context, refreshed, range, isIgnoringWhitespace);
+      return diffInterdiff(computing, range, isIgnoringWhitespace);
     }
   }
 }
 
+async function forkPointOf(
+  computing: Computing,
+  head: CommitSha,
+  reviewedBases: readonly CommitSha[],
+): Promise<Result<StackForkPoint, GitError>> {
+  return findSessionForkPoint(
+    computing.context,
+    computing.repository,
+    { base: computing.refreshed.baseTip, head },
+    { reviewedBases, signal: computing.signal },
+  );
+}
+
 async function diffFull(
-  context: SessionContext,
-  refreshed: RefreshedSession,
+  computing: Computing,
   headSha: CommitSha,
   scope: ReviewScope,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
-  const { repository } = refreshed;
-  const fork = await findStackForkPoint(repository, { base: refreshed.baseTip, head: headSha });
+  const { context, repository } = computing;
+  const fork = await forkPointOf(computing, headSha, []);
   if (!fork.ok) {
     return gitFailure(context.logger, fork.error);
   }
@@ -168,12 +191,11 @@ async function diffFull(
 }
 
 async function diffInterdiff(
-  context: SessionContext,
-  refreshed: RefreshedSession,
+  computing: Computing,
   range: Extract<ReviewRange, { kind: 'interdiff' }>,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
-  const { repository, baseTip } = refreshed;
+  const { context, repository } = computing;
   const from = { fromBaseSha: range.fromBaseSha, fromHeadSha: range.fromHeadSha };
   const present = await Promise.all([
     resolveRevision(repository, range.fromBaseSha),
@@ -185,8 +207,7 @@ async function diffInterdiff(
       return gitFailure(context.logger, missing.error);
     }
     return diffFull(
-      context,
-      refreshed,
+      computing,
       range.toHeadSha,
       {
         kind: 'interdiff',
@@ -196,11 +217,7 @@ async function diffInterdiff(
       isIgnoringWhitespace,
     );
   }
-  const fork = await findStackForkPoint(
-    repository,
-    { base: baseTip, head: range.toHeadSha },
-    { reviewedBases: [range.fromBaseSha] },
-  );
+  const fork = await forkPointOf(computing, range.toHeadSha, [range.fromBaseSha]);
   if (!fork.ok) {
     return gitFailure(context.logger, fork.error);
   }

@@ -65,3 +65,7 @@ AbortSignals can't cross IPC, so main keeps one per renderer request in `Request
 A signal can now be forwarded to any git operation without asking whether it is safe to kill: the operation decides. A cancelled worktree add costs the rest of its checkout instead of a broken directory. Adding a git operation means choosing its policy, and adding a raw command outside the git domain fails `npm run deps`. A hung atomic command can only be stopped by its timeout.
 
 A checkout is now removed in the background when its last lease goes, not by the request that moved the head, so that request no longer waits for a large directory to be deleted. A language server started in a removed checkout is still left to the multiplexer's idle timeout (ADR 0020); it holds no lease between requests. A request that asked for a head that had just moved is refused instead of answered from the old commit; the poller's head move already aborts the chat, trace and ImpactGate work behind it.
+
+## Amendment 2026-10-30 (ADR 0081)
+
+Probes, fork points and review diffs are shared between requests. A shared computation runs on a handle of its own, bound to no request's signal; a request that gives up stops waiting, and the computation is aborted only when no request waits for it, as for ImpactGate's shared runs. A lease on a checkout the manager made, still on disk, no longer runs `git worktree list`.

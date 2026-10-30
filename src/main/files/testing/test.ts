@@ -4,6 +4,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { test as baseTest } from '../../testing/test.ts';
 import { createSessionServices } from '../../sessions/create-session-services.ts';
+import { createGitCaches } from '../../sessions/create-git-caches.ts';
 import { createFileServices } from '../create-file-services.ts';
 import type { FileServices } from '../create-file-services.ts';
 import { filesBranchTemplate } from './files-branch-template.ts';
@@ -23,6 +24,7 @@ export const test = baseTest
       logger: logger.logger,
       deps: systemSessionDeps,
       git: { logger: logger.logger },
+      caches: createGitCaches(),
     };
     return createFileServices({ context });
   })

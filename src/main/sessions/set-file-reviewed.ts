@@ -13,7 +13,6 @@ import type { Result } from '#x/result/result.ts';
 import { carryOverReviewMarks } from './carry-over-review-marks.ts';
 import { headPathOf } from './head-path-of.ts';
 import { loadReviewDiff } from './load-review-diff.ts';
-import type { ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
 
@@ -25,9 +24,8 @@ import { sessionFailure } from './session-failure.ts';
 export async function setFileReviewed(
   context: SessionContext,
   request: SetFileReviewedRequest,
-  options: Pick<ReviewDiffOptions, 'cache'> = {},
 ): Promise<Result<SetFileReviewedResponse, IpcError>> {
-  const diff = await loadReviewDiff(context, request.sessionId, options);
+  const diff = await loadReviewDiff(context, request.sessionId);
   if (!diff.ok) {
     return diff;
   }

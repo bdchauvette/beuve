@@ -6,7 +6,6 @@ import type {
   CiStatusView,
 } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
-import { openRepository } from '#internal/git/open-repository.ts';
 import { findPullRequestStack } from '#internal/github/find-pull-request-stack.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
 import { getCiStatus } from '#internal/github/get-ci-status.ts';
@@ -20,6 +19,7 @@ import { savePullRequest } from '#internal/github/save-pull-request.ts';
 import type { Session } from '#internal/session/session.ts';
 
 import { loadSession } from '../sessions/load-session.ts';
+import { openSessionRepository } from '../sessions/open-session-repository.ts';
 
 import { fetchPullRequest } from './fetch-pull-request.ts';
 import { findMatchingRemote } from './find-matching-remote.ts';
@@ -198,7 +198,11 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     ref: PullRequestRef,
     pullRequest: PullRequest,
   ): Promise<string | undefined> => {
-    const repository = await openRepository(session.source.repoPath, context.session.git);
+    const repository = await openSessionRepository(
+      context.session,
+      session.source.repoPath,
+      disposal.signal,
+    );
     if (!repository.ok) {
       logger.warn('github poll: clone unavailable', { error: repository.error });
       return undefined;

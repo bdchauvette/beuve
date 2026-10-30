@@ -22,3 +22,7 @@ Agents and the peek portal see exactly the reviewed commit, and the user's check
 ## Amendment (2026-10-30, ADR 0079)
 
 `ensure` became `acquire`, which returns a lease released with `using`, and checks a `session-head` claim against the session's stored head. A checkout is removed when no lease holds it and it is no session's current checkout (or a sheet's pinned one), in the background rather than by the request that moved the head; adds and removals of one path are serialised, so a lease never gets a checkout that is being removed. Worktree add, remove and prune are `atomic`: an abort lets them finish.
+
+## Amendment (2026-10-30, ADR 0081)
+
+The manager remembers the checkouts it made and the ones the startup prune kept. A lease on one of them whose directory is still there is granted without asking git; any other state (an unknown path, a failed add or removal, a directory deleted behind beuve's back) goes through `addWorktree`, which asks git and repairs.

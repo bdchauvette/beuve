@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { createGitCaches } from '../sessions/create-git-caches.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import { lines } from '../testing/lines.ts';
 import { createUraServices } from '../ura/create-ura-services.ts';
@@ -36,6 +37,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       deps,
       logger: logger.logger,
       git: { logger: logger.logger },
+      caches: createGitCaches(),
     };
     const held = holdCompile(createUraServices({ context: session, impact: services.impact }));
     const context = { session };
@@ -83,6 +85,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       deps,
       logger: logger.logger,
       git: { logger: logger.logger },
+      caches: createGitCaches(),
     };
     const held = holdCompile(createUraServices({ context: session, impact: services.impact }));
     const preparing = prepareGithubReview({ session }, held.ura, {

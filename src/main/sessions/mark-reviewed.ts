@@ -1,11 +1,11 @@
 import type { IpcError, MarkReviewedRequest, SessionSummary } from '#contract/ipc-contract.ts';
-import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import { insertCheckpoint } from '#internal/session/insert-checkpoint.ts';
 import { recordCheckpoint } from '#internal/session/record-checkpoint.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { findSessionForkPoint } from './find-session-fork-point.ts';
 import { gitFailure } from './git-failure.ts';
 import { loadSession } from './load-session.ts';
 import { refreshSession } from './refresh-session.ts';
@@ -38,7 +38,8 @@ export async function markReviewed(
     });
   }
   const { review } = session;
-  const fork = await findStackForkPoint(
+  const fork = await findSessionForkPoint(
+    context,
     repository,
     { base: baseTip, head: session.headSha },
     { reviewedBases: review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [] },

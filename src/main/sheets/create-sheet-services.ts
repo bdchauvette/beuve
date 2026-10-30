@@ -8,10 +8,10 @@ import type {
   UraItemView,
 } from '#contract/ipc-contract.ts';
 import { diffObjects } from '#internal/git/diff-objects.ts';
-import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import { ok } from '#x/result/ok.ts';
 
 import type { RequestOptions } from '../request-options.ts';
+import { findSessionForkPoint } from '../sessions/find-session-fork-point.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -59,7 +59,12 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         return contents;
       }
       const { repository, baseTip, session } = commit.value.refreshed;
-      const fork = await findStackForkPoint(repository, { base: baseTip, head: commit.value.sha });
+      const fork = await findSessionForkPoint(
+        context,
+        repository,
+        { base: baseTip, head: commit.value.sha },
+        { signal: call.signal },
+      );
       if (!fork.ok) {
         return gitFailure(context.logger, fork.error);
       }
