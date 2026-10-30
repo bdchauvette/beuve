@@ -260,12 +260,12 @@ describe('ServerSession', () => {
     expect(isAtLeast(waited.elapsed(), 300)).toBe(false);
   });
 
-  test('tracks busy and idle time around requests', async ({ expect }) => {
+  test('tracks busy and idle time around requests', async ({ expect, signal }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(isAtLeast(session.idle, 30)).toBe(true);
-    const pending = session.request('x', {});
+    const pending = session.request('x', {}, { signal });
     expect(session.isBusy).toBe(true);
     expect(session.idle.sign).toBe(0);
     await pending;

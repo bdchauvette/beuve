@@ -19,6 +19,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
     expect,
     tempDir: directory,
     fakeServerScript: script,
+    signal,
   }) => {
     const server = okValueFrom(await start(directory, script, 'normal'));
     expect(server.capabilities).toMatchObject({
@@ -38,7 +39,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
       signal: undefined,
       expected: true,
     });
-    await expect(server.request('test/clientAnswers', {})).resolves.toMatchObject({
+    await expect(server.request('test/clientAnswers', {}, { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'server-exited' },
     });

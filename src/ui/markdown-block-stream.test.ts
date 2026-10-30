@@ -11,7 +11,7 @@ import { test } from './testing/test.ts';
 async function streamed(deltas: readonly string[], signal: AbortSignal): Promise<MarkdownChunk[]> {
   const chunks: MarkdownChunk[] = [];
   await textStream(deltas)
-    .pipeThrough(new MarkdownBlockStream())
+    .pipeThrough(new MarkdownBlockStream(), { signal })
     .pipeTo(
       new WritableStream({
         write: (chunk): void => {

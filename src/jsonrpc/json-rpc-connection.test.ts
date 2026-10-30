@@ -7,10 +7,14 @@ import { ok } from '#x/result/ok.ts';
 
 import { createFakePeer } from './testing/create-fake-peer.ts';
 describe('JsonRpcConnection', () => {
-  test('correlates out-of-order responses with their requests', async ({ expect, closing }) => {
+  test('correlates out-of-order responses with their requests', async ({
+    expect,
+    closing,
+    signal,
+  }) => {
     const peer = closing(createFakePeer());
-    const first = peer.connection.request('a', { n: 1 });
-    const second = peer.connection.request('b', [2]);
+    const first = peer.connection.request('a', { n: 1 }, { signal });
+    const second = peer.connection.request('b', [2], { signal });
     await expect(peer.nextSent()).resolves.toMatchObject({ id: 1, method: 'a', params: { n: 1 } });
     await expect(peer.nextSent()).resolves.toMatchObject({ id: 2, method: 'b' });
     peer.send({ jsonrpc: '2.0', id: 2, result: 'two' });
@@ -25,10 +29,12 @@ describe('JsonRpcConnection', () => {
   test('times out and sends $/cancelRequest, ignoring the late response', async ({
     expect,
     closing,
+    signal,
   }) => {
     const peer = closing(createFakePeer());
     const result = await peer.connection.request('slow', undefined, {
       timeout: Temporal.Duration.from({ milliseconds: 20 }),
+      signal,
     });
     expect(result).toStrictEqual(
       err({
@@ -123,11 +129,11 @@ describe('JsonRpcConnection', () => {
     expect(wasAborted).toBe(true);
   });
 
-  test('drops malformed messages and keeps going', async ({ expect, closing }) => {
+  test('drops malformed messages and keeps going', async ({ expect, closing, signal }) => {
     const peer = closing(createFakePeer());
     const body = '{"jsonrpc":"1.0"}';
     peer.sendRaw(`Content-Length: ${String(body.length)}\r\n\r\n${body}`);
-    const pending = peer.connection.request('still-alive', {});
+    const pending = peer.connection.request('still-alive', {}, { signal });
     await peer.nextSent();
     peer.send({ jsonrpc: '2.0', id: 1, result: true });
     await expect(pending).resolves.toStrictEqual(ok(true));
@@ -136,21 +142,22 @@ describe('JsonRpcConnection', () => {
   test('settles pending requests as closed when input ends, and refuses new work', async ({
     expect,
     closing,
+    signal,
   }) => {
     const peer = closing(createFakePeer());
-    const pending = peer.connection.request('a', {});
+    const pending = peer.connection.request('a', {}, { signal });
     peer.endInput();
     await expect(pending).resolves.toStrictEqual(err({ kind: 'closed', method: 'a' }));
     expect(peer.closes).toStrictEqual([{ kind: 'input-ended' }]);
-    await expect(peer.connection.request('b', {})).resolves.toStrictEqual(
+    await expect(peer.connection.request('b', {}, { signal })).resolves.toStrictEqual(
       err({ kind: 'closed', method: 'b' }),
     );
     expect(peer.connection.notify('c')).toStrictEqual(err({ kind: 'closed', method: 'c' }));
   });
 
-  test('closes on a framing error', async ({ expect, closing }) => {
+  test('closes on a framing error', async ({ expect, closing, signal }) => {
     const peer = closing(createFakePeer());
-    const pending = peer.connection.request('a', {});
+    const pending = peer.connection.request('a', {}, { signal });
     peer.sendRaw('Bogus: header\r\n\r\n');
     await expect(pending).resolves.toStrictEqual(err({ kind: 'closed', method: 'a' }));
     expect(peer.closes).toMatchObject([

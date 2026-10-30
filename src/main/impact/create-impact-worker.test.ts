@@ -12,6 +12,7 @@ describe('createImpactWorker with the real worker', () => {
   test('round-trips blob texts and changed ranges to a report', async ({
     expect,
     createRunner,
+    signal,
   }) => {
     const runner = createRunner();
     const source: ImpactSourceFile = {
@@ -21,10 +22,10 @@ describe('createImpactWorker with the real worker', () => {
         'export function f(a: number): number {\n  if (a > 1 && a < 5) {\n    return 1;\n  }\n  return a;\n}\n',
       changedLines: { base: [], head: [{ start: 2, end: 4 }] },
     };
-    const result = await runner.run([
-      source,
-      { path: 'notes.md', baseText: '# a', headText: '# b', changedLines: noLines() },
-    ]);
+    const result = await runner.run(
+      [source, { path: 'notes.md', baseText: '# a', headText: '# b', changedLines: noLines() }],
+      signal,
+    );
     expect(result.ok).toBe(true);
     const report = result.ok ? result.value : undefined;
     expect(report?.files[0]).toMatchObject({
@@ -42,12 +43,17 @@ function source(path: string): ImpactSourceFile[] {
 }
 
 describe('createImpactWorker with a scripted worker', () => {
-  test('serves queued runs in order', async ({ expect, createRunner, scriptedWorkerUrl }) => {
+  test('serves queued runs in order', async ({
+    expect,
+    createRunner,
+    scriptedWorkerUrl,
+    signal,
+  }) => {
     const runner = createRunner(scriptedWorkerUrl);
     const results = await Promise.all([
-      runner.run(source('delay-30')),
-      runner.run(source('a')),
-      runner.run(source('b')),
+      runner.run(source('delay-30'), signal),
+      runner.run(source('a'), signal),
+      runner.run(source('b'), signal),
     ]);
     expect(results.map((result) => result.ok)).toStrictEqual([true, true, true]);
   });
@@ -56,13 +62,14 @@ describe('createImpactWorker with a scripted worker', () => {
     expect,
     createRunner,
     scriptedWorkerUrl,
+    signal,
   }) => {
     const runner = createRunner(scriptedWorkerUrl);
-    const first = await runner.run(source('a'));
+    const first = await runner.run(source('a'), signal);
     expect(first.ok).toBe(true);
-    const crashed = await runner.run(source('crash'));
+    const crashed = await runner.run(source('crash'), signal);
     expect(crashed).toMatchObject({ ok: false, error: { kind: 'worker-failed' } });
-    const after = await runner.run(source('a'));
+    const after = await runner.run(source('a'), signal);
     expect(after.ok).toBe(true);
   });
 
@@ -70,19 +77,20 @@ describe('createImpactWorker with a scripted worker', () => {
     expect,
     createRunner,
     scriptedWorkerUrl,
+    signal,
   }) => {
     const runner = createRunner(scriptedWorkerUrl);
-    await expect(runner.run(source('fail'))).resolves.toStrictEqual({
+    await expect(runner.run(source('fail'), signal)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'worker-failed', message: 'scripted failure' },
     });
-    const after = await runner.run(source('a'));
+    const after = await runner.run(source('a'), signal);
     expect(after.ok).toBe(true);
   });
 
-  test('fails when the worker script cannot start', async ({ expect, createRunner }) => {
+  test('fails when the worker script cannot start', async ({ expect, createRunner, signal }) => {
     const runner = createRunner(new URL('no-such-worker.ts', import.meta.url));
-    await expect(runner.run(source('a'))).resolves.toMatchObject({
+    await expect(runner.run(source('a'), signal)).resolves.toMatchObject({
       ok: false,
       error: { kind: 'worker-failed' },
     });
@@ -92,11 +100,12 @@ describe('createImpactWorker with a scripted worker', () => {
     expect,
     createRunner,
     scriptedWorkerUrl,
+    signal,
   }) => {
     const runner = createRunner(scriptedWorkerUrl);
     const controller = new AbortController();
     const hung = runner.run(source('hang'), controller.signal);
-    const queued = runner.run(source('a'));
+    const queued = runner.run(source('a'), signal);
     await new Promise((resolve) => setTimeout(resolve, 50));
     controller.abort();
     await expect(hung).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
@@ -108,10 +117,11 @@ describe('createImpactWorker with a scripted worker', () => {
     expect,
     createRunner,
     scriptedWorkerUrl,
+    signal,
   }) => {
     const runner = createRunner(scriptedWorkerUrl);
     const controller = new AbortController();
-    const first = runner.run(source('delay-50'));
+    const first = runner.run(source('delay-50'), signal);
     const second = runner.run(source('hang'), controller.signal);
     controller.abort();
     await expect(second).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
@@ -127,15 +137,16 @@ describe('createImpactWorker with a scripted worker', () => {
     expect,
     createRunner,
     scriptedWorkerUrl,
+    signal,
   }) => {
     const runner = createRunner(scriptedWorkerUrl);
-    const hung = runner.run(source('hang'));
-    const queued = runner.run(source('a'));
+    const hung = runner.run(source('hang'), signal);
+    const queued = runner.run(source('a'), signal);
     await new Promise((resolve) => setTimeout(resolve, 50));
     runner.dispose();
     await expect(hung).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
     await expect(queued).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
-    await expect(runner.run(source('a'))).resolves.toStrictEqual({
+    await expect(runner.run(source('a'), signal)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'cancelled' },
     });

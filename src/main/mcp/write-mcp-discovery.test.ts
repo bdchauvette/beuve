@@ -22,10 +22,16 @@ function discovery(): McpDiscovery {
 }
 
 describe('writeMcpDiscovery', () => {
-  test('writes an owner-only descriptor and removes it again', async ({ expect, tempDir }) => {
+  test('writes an owner-only descriptor and removes it again', async ({
+    expect,
+    tempDir,
+    signal,
+  }) => {
     const remove = okValueFrom(await writeMcpDiscovery(tempDir, discovery()));
     const file = path.join(tempDir, 'mcp-server.json');
-    expect(JSON.parse(await readFile(file, 'utf8'))).toStrictEqual(discovery());
+    expect(JSON.parse(await readFile(file, { encoding: 'utf8', signal }))).toStrictEqual(
+      discovery(),
+    );
     const { mode } = await stat(file);
     expect(mode & 0o777).toBe(0o600);
 

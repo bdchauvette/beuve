@@ -4,9 +4,9 @@ import { vi } from 'vitest';
 import { Stopwatch } from './stopwatch.ts';
 import { test } from '#testing/test.ts';
 
-test('measures real elapsed time as a Duration', async ({ expect }) => {
+test('measures real elapsed time as a Duration', async ({ expect, signal }) => {
   const stopwatch = new Stopwatch();
-  await sleep(30);
+  await sleep(30, undefined, { signal });
   const elapsed = stopwatch.elapsed();
   expect(Temporal.Duration.compare(elapsed, { milliseconds: 25 })).toBeGreaterThanOrEqual(0);
   expect(Temporal.Duration.compare(elapsed, { seconds: 5 })).toBeLessThan(0);
@@ -29,22 +29,26 @@ test('reads elapsed time from an injected clock', ({ expect }) => {
   );
 });
 
-test('is not moved by the faked wall clock', { concurrent: false }, async ({ expect, clock }) => {
-  const stopwatch = new Stopwatch();
-  clock.advance({ hours: 5 });
-  await sleep(1);
-  expect(Temporal.Duration.compare(stopwatch.elapsed(), { minutes: 1 })).toBeLessThan(0);
-});
+test(
+  'is not moved by the faked wall clock',
+  { concurrent: false },
+  async ({ expect, clock, signal }) => {
+    const stopwatch = new Stopwatch();
+    clock.advance({ hours: 5 });
+    await sleep(1, undefined, { signal });
+    expect(Temporal.Duration.compare(stopwatch.elapsed(), { minutes: 1 })).toBeLessThan(0);
+  },
+);
 
 test(
   'falls back to performance.now where there is no process',
   { concurrent: false },
-  async ({ expect }) => {
+  async ({ expect, signal }) => {
     // The renderer has no `process`; the only way to run that path is to remove it.
     // eslint-disable-next-line vitest/no-restricted-vi-methods -- stubbing the environment, not a module
     vi.stubGlobal('process', undefined);
     const stopwatch = new Stopwatch();
-    await sleep(30);
+    await sleep(30, undefined, { signal });
     const elapsed = stopwatch.elapsed();
     vi.unstubAllGlobals();
     expect(Temporal.Duration.compare(elapsed, { milliseconds: 25 })).toBeGreaterThanOrEqual(0);

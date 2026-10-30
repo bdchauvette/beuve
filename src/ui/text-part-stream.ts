@@ -9,7 +9,7 @@ export interface TextPartStreamOptions {
   /** Text the part already has (a renderer that starts mid-stream); enqueued first. */
   readonly initialText?: string;
   /** Aborting errors the stream with the signal's reason and unsubscribes. */
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 /**

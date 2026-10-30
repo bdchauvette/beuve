@@ -101,11 +101,15 @@ function runnerFor(
 
 // Slow: each run starts a real Vitest process (about 0.5 to 1.5 s).
 describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
-  test('traces each test without writing into the worktree', async ({ expect, vitestFixtures }) => {
+  test('traces each test without writing into the worktree', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
     const { fixture, plan } = await mathProject(vitestFixtures);
     const before = snapshot(fixture.worktree);
     const result = await runTraceProbe(
-      { ...request(fixture), plan, source: math() },
+      { ...request(fixture, { signal }), plan, source: math() },
       runnerFor(fixture),
     );
 
@@ -135,10 +139,14 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     expect(readdirSync(fixture.temporaryDirectory)).toStrictEqual([]);
   });
 
-  test('runs only the tests matching a name pattern', async ({ expect, vitestFixtures }) => {
+  test('runs only the tests matching a name pattern', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
     const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
-      { ...request(fixture, { testNamePattern: 'in range' }), plan, source: math() },
+      { ...request(fixture, { testNamePattern: 'in range', signal }), plan, source: math() },
       runnerFor(fixture),
     );
     expect(okValueFrom(result).timelines.map((timeline) => timeline.titles)).toStrictEqual([
@@ -149,10 +157,11 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
   test('fails the test file instead of tracing a source that changed since planning', async ({
     expect,
     vitestFixtures,
+    signal,
   }) => {
     const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
-      { ...request(fixture), plan, source: math().replace('low', 'lowest') },
+      { ...request(fixture, { signal }), plan, source: math().replace('low', 'lowest') },
       runnerFor(fixture),
     );
     const { timelines } = okValueFrom(result);
@@ -162,13 +171,14 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     expect(timelines[0]?.failure).toContain('differs from the text');
   });
 
-  test('kills a run that outlives its timeout', async ({ expect, vitestFixtures }) => {
+  test('kills a run that outlives its timeout', async ({ expect, vitestFixtures, signal }) => {
     const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
       {
         ...request(fixture, {
           testFiles: ['src/hang.test.ts'],
           timeout: Temporal.Duration.from({ milliseconds: 1500 }),
+          signal,
         }),
         plan,
         source: math(),
@@ -226,34 +236,34 @@ describe('createVitestTraceRunner cancelled during setup', { timeout: 60_000 }, 
 });
 
 describe('createVitestTraceRunner refusals', () => {
-  test('refuses untrusted runs', async ({ expect, vitestFixtures }) => {
+  test('refuses untrusted runs', async ({ expect, vitestFixtures, signal }) => {
     const { run } = refusalRunner(vitestFixtures);
-    await expect(run({ trusted: false as unknown as true })).resolves.toStrictEqual({
+    await expect(run({ trusted: false as unknown as true, signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'untrusted' },
     });
   });
 
-  test('refuses paths outside the worktree', async ({ expect, vitestFixtures }) => {
+  test('refuses paths outside the worktree', async ({ expect, vitestFixtures, signal }) => {
     const { run } = refusalRunner(vitestFixtures);
-    await expect(run({ testFiles: ['../dependencies/x.test.ts'] })).resolves.toMatchObject({
+    await expect(run({ testFiles: ['../dependencies/x.test.ts'], signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-path', path: '../dependencies/x.test.ts' },
     });
-    await expect(run({ testFiles: ['/etc/passwd'] })).resolves.toMatchObject({
+    await expect(run({ testFiles: ['/etc/passwd'], signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-path' },
     });
-    await expect(run({ testFiles: [] })).resolves.toMatchObject({
+    await expect(run({ testFiles: [], signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'no-tests' },
     });
   });
 
-  test('reports a dependency root without Vitest', async ({ expect, vitestFixtures }) => {
+  test('reports a dependency root without Vitest', async ({ expect, vitestFixtures, signal }) => {
     const { fixture, run } = refusalRunner(vitestFixtures);
     const worktree = fixture.worktree;
-    await expect(run({ dependencyRoot: worktree })).resolves.toStrictEqual({
+    await expect(run({ dependencyRoot: worktree, signal })).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'vitest-not-found',

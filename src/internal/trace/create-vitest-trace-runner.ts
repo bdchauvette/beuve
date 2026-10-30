@@ -160,6 +160,8 @@ async function runIn(
   );
   const runFile = path.join(directory, 'run.json');
   const setupFile = path.join(directory, 'setup.mjs');
+  /* eslint-disable local/forward-abort-signal -- Small temporary files; an abort is answered once Vitest
+     starts (`spawnVitest` stops it at once), so the run resolves `cancelled` instead of rejecting. */
   await writeFile(runFile, JSON.stringify({ files: workspace.files }));
   await writeFile(setupFile, renderSetupModule(eventsDirectory));
   await writeFile(
@@ -175,6 +177,7 @@ async function runIn(
       cacheDirectory: path.join(directory, 'cache'),
     }),
   );
+  /* eslint-enable local/forward-abort-signal */
   const args = [script, 'run', '--config', configFile, '--root', workspace.root];
   if (request.testNamePattern !== undefined) {
     args.push(`--testNamePattern=${request.testNamePattern}`);
@@ -215,6 +218,7 @@ async function spawnVitest(
   cwd: string,
 ): Promise<Exit> {
   const isOwnGroup = process.platform !== 'win32';
+  // eslint-disable-next-line local/forward-abort-signal -- `onAbort` below stops the whole process group, with a grace period; spawn's `signal` would kill only the child.
   const child = spawn(options.nodePath, args, {
     cwd,
     env: createTraceEnvironment(options.inheritedEnvironment, options.extraEnvironment),

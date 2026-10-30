@@ -28,7 +28,7 @@ export interface ServerExit {
 
 export interface ServerRequestOptions {
   readonly timeout?: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** A running, initialized language server. The seam `ServerSession` builds on (and tests fake). */

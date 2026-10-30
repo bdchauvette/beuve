@@ -28,7 +28,7 @@ export interface TraceRunRequest {
   readonly testNamePattern?: string;
   readonly files: readonly InstrumentedFile[];
   readonly timeout: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';

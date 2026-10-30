@@ -67,7 +67,7 @@ export interface JsonRpcConnectionOptions {
 
 export interface JsonRpcRequestOptions {
   readonly timeout?: Temporal.Duration;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 interface PendingRequest {
