@@ -3,7 +3,8 @@ import type { DiffFileView } from '#contract/ipc-contract.ts';
 /** `f` switches between the package neighborhood and the changed files alone. */
 export type RadarTreeMode = 'neighborhood' | 'diff-only';
 
-export type RadarGitStatus = 'added' | 'deleted' | 'modified' | 'renamed';
+/** The radar tree's git lanes; `ignored` is the dimmed lane generated files take (ADR 0052). */
+export type RadarGitStatus = 'added' | 'deleted' | 'modified' | 'renamed' | 'ignored';
 
 /** What the radar tree shows, as `@pierre/trees` takes it. */
 export interface RadarTreePlan {

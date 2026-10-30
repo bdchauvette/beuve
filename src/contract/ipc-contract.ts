@@ -429,6 +429,24 @@ export interface RepositoryTreeView {
   readonly packageRoots: readonly string[];
 }
 
+export interface GetFileAttributesRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * What `.gitattributes` at the session head says about the review's files (ADR 0052), by head
+ * path (base path for a deleted file): `linguist-generated` set (`generated`) or explicitly
+ * unset or `false` (`notGenerated`, which overrides beuve's own guesses), and `-diff` (`noDiff`).
+ * Files with none of these are in no list. All lists are empty when git is older than 2.40.
+ */
+export interface FileAttributesView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly generated: readonly string[];
+  readonly notGenerated: readonly string[];
+  readonly noDiff: readonly string[];
+}
+
 /**
  * Call hierarchy for the peek portal, run by the language server against a checkout of the
  * session head. Without `nodeId`, the hierarchy is rooted at the callable at `line` (1-based) and
@@ -1298,6 +1316,8 @@ export interface DiffDisplayView {
   readonly layout: DiffLayoutView;
   readonly ignoreWhitespace: boolean;
   readonly sidebarSide: SidebarSideView;
+  /** Whether generated files (`linguist-generated`, ADR 0052) render expanded; collapsed by default. */
+  readonly showGenerated: boolean;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1305,6 +1325,7 @@ export interface SetDiffDisplayRequest {
   readonly layout?: DiffLayoutView;
   readonly ignoreWhitespace?: boolean;
   readonly sidebarSide?: SidebarSideView;
+  readonly showGenerated?: boolean;
 }
 
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
@@ -1563,6 +1584,10 @@ export interface InvokeChannelMap {
   'session:get-tree': {
     readonly request: GetTreeRequest;
     readonly response: IpcResult<RepositoryTreeView>;
+  };
+  'session:get-file-attributes': {
+    readonly request: GetFileAttributesRequest;
+    readonly response: IpcResult<FileAttributesView>;
   };
   'lsp:call-hierarchy': {
     readonly request: CallHierarchyRequest;

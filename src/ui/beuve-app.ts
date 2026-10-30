@@ -27,6 +27,8 @@ import type {
   PullRequestSessionView,
   PullRequestUpdatedView,
   RepositoryTreeView,
+  DiffFileView,
+  FileAttributesView,
   ReviewProgressView,
   ReviewView,
   SessionSummary,
@@ -47,6 +49,8 @@ import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { advanceReviewEntry } from './advance-review-entry.ts';
+import { planDiffDeferrals } from './plan-diff-deferrals.ts';
+import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveCommandPalette } from './beuve-command-palette.ts';
@@ -482,6 +486,14 @@ export class BeuveApp extends LitElement {
     this.fileJump = { path: event.detail.path, nonce: this.jumpNonce };
   };
 
+  /** {@link planDiffDeferrals} for the review and its attributes, recomputed when either changes. */
+  private deferralPlan: {
+    readonly files: readonly DiffFileView[] | undefined;
+    readonly attributes: FileAttributesView | undefined;
+    readonly deferrals: ReadonlyMap<string, DiffDeferral>;
+    readonly generated: ReadonlySet<string>;
+  } = { files: undefined, attributes: undefined, deferrals: new Map(), generated: new Set() };
+
   /** Hunk expansion reads whole files through `session:get-file-pair`. */
   private readonly loadFilePair: FilePairLoader = async (
     path: string,
@@ -638,7 +650,10 @@ export class BeuveApp extends LitElement {
     layout: 'split',
     ignoreWhitespace: false,
     sidebarSide: 'right',
+    showGenerated: false,
   };
+  /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
+  @state() accessor fileAttributes: FileAttributesView | undefined;
   @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
@@ -971,6 +986,9 @@ export class BeuveApp extends LitElement {
       return undefined;
     }
     this.applyDisplay(result.value);
+    if (change.showGenerated !== undefined) {
+      this.showNotice({ tone: 'info', text: describeGenerated(result.value.showGenerated) });
+    }
     if (change.layout !== undefined || change.ignoreWhitespace !== undefined) {
       this.showNotice({
         tone: 'info',
@@ -1053,6 +1071,7 @@ export class BeuveApp extends LitElement {
       this.review = undefined;
       this.insights = [];
       this.tree = undefined;
+      this.fileAttributes = undefined;
       this.uraItems = [];
       this.chosenVerdict = undefined;
       this.verdictNotice = '';
@@ -1087,6 +1106,7 @@ export class BeuveApp extends LitElement {
       }
       void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
+      void this.loadFileAttributes(review.value);
       void this.refreshInsights(review.value.session.id);
       void this.refreshUra(review.value.session.id);
       void this.loadChat(review.value.session.id);
@@ -1148,6 +1168,37 @@ export class BeuveApp extends LitElement {
     const tree = await bridge.invoke('session:get-tree', { sessionId: review.session.id });
     if (this.review === review && tree.ok) {
       this.tree = tree.value;
+    }
+  }
+
+  private reviewDeferrals(): typeof this.deferralPlan {
+    const files = this.review?.files;
+    const attributes =
+      this.fileAttributes?.headSha === this.review?.headSha ? this.fileAttributes : undefined;
+    if (this.deferralPlan.files === files && this.deferralPlan.attributes === attributes) {
+      return this.deferralPlan;
+    }
+    const deferrals = planDiffDeferrals(files ?? [], attributes);
+    const generated = new Set(
+      [...deferrals]
+        .filter(([, deferral]) => deferral.reason === 'generated' || deferral.reason === 'no-diff')
+        .map(([path]) => path),
+    );
+    this.deferralPlan = { files, attributes, deferrals, generated };
+    return this.deferralPlan;
+  }
+
+  /** Which review files `.gitattributes` marks generated or `-diff` (ADR 0052). */
+  private async loadFileAttributes(review: ReviewView): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const attributes = await bridge.invoke('session:get-file-attributes', {
+      sessionId: review.session.id,
+    });
+    if (this.review === review && attributes.ok) {
+      this.fileAttributes = attributes.value;
     }
   }
 
@@ -1442,6 +1493,17 @@ export class BeuveApp extends LitElement {
       case 'diff': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runDisplayCommand(command.layout === undefined ? {} : { layout: command.layout });
+        return;
+      }
+      case 'generated': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.setDisplay(
+          command.showGenerated === undefined ? {} : { showGenerated: command.showGenerated },
+        ).then((display) => {
+          if (display !== undefined) {
+            this.note('info', `${describeGenerated(display.showGenerated)}.`);
+          }
+        });
         return;
       }
       case 'whitespace': {
@@ -2072,6 +2134,8 @@ export class BeuveApp extends LitElement {
       action = 'go-to-file';
     } else if (key === 'o') {
       action = 'open';
+    } else if (!isPaletteOpen && key === 'f' && !event.shiftKey && !this.openDialog) {
+      action = 'find';
     }
     if (action === undefined) {
       return false;
@@ -2141,6 +2205,16 @@ export class BeuveApp extends LitElement {
       }
       case 'sidebar-chat': {
         this.focusSidebar('chat');
+        return;
+      }
+      case 'find': {
+        this.overlayOpen = false;
+        this.focusedZone = 'diff';
+        void this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream')?.openFind();
+        return;
+      }
+      case 'toggle-generated': {
+        void this.setDisplay({ showGenerated: !this.display.showGenerated });
       }
     }
   }
@@ -2397,6 +2471,7 @@ export class BeuveApp extends LitElement {
       .files=${this.review?.files}
       .tree=${this.tree}
       .impact=${this.impact}
+      .generatedPaths=${this.reviewDeferrals().generated}
       .treeMode=${this.treeMode}
       @beuve-open-stack=${this.onOpenStack}
       @beuve-open-link=${this.onOpenLink}
@@ -2434,6 +2509,7 @@ export class BeuveApp extends LitElement {
       .uraItems=${this.uraItems}
       .display=${this.display}
       .suggestionJump=${this.suggestionJump}
+      .deferrals=${this.reviewDeferrals().deferrals}
       @beuve-display-change=${this.onDisplayChange}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
@@ -2645,6 +2721,12 @@ export class BeuveApp extends LitElement {
 type SidebarZone = Exclude<ZoneId, 'diff'>;
 
 /** Unmodified keys the shell handles itself, from the command registry's shortcuts. */
+function describeGenerated(isShown: boolean): string {
+  return isShown
+    ? 'Generated files: shown (/generated hide collapses them)'
+    : 'Generated files: collapsed (/generated show expands them)';
+}
+
 const plainKeyActions: Readonly<Record<string, AppAction>> = {
   Tab: 'cycle-zone',
   '?': 'shortcuts',

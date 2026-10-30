@@ -7,6 +7,8 @@ import type {
   AgentInsightView,
   DiffDisplayView,
   DiffFileView,
+  FileImpactView,
+  ImpactFindingView,
   ImpactView,
   InsightStatusView,
   ReviewView,
@@ -15,6 +17,8 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-file-card.ts';
+import './beuve-find-bar.ts';
+import type { BeuveFindBar, FindQueryDetail } from './beuve-find-bar.ts';
 import type {
   BeuveFileCard,
   ComposerState,
@@ -27,9 +31,13 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { findFirstChangedLine } from './find-first-changed-line.ts';
+import { findInReview } from './find-in-review.ts';
+import type { ReviewMatch } from './find-in-review.ts';
+import { groupStable } from './group-stable.ts';
 import type { FlowState } from './flow-state.ts';
 import { minimumSplitWidth } from './minimum-split-width.ts';
 import { planDiffLayout } from './plan-diff-layout.ts';
+import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import type { EditTarget } from './plan-edit-target.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
@@ -79,7 +87,16 @@ const defaultDisplay: DiffDisplayView = {
   layout: 'split',
   ignoreWhitespace: false,
   sidebarSide: 'right',
+  showGenerated: false,
 };
+
+const noInsights: readonly AgentInsightView[] = [];
+const noUraItems: readonly UraItemView[] = [];
+const noFindings: readonly ImpactFindingView[] = [];
+const noPaths: ReadonlySet<string> = new Set();
+/** {@link findInReview}'s default cap. */
+const findLimit = 5000;
+const noDeferrals: ReadonlyMap<string, DiffDeferral> = new Map();
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
 const mountMargin = '1200px 0px';
@@ -281,14 +298,20 @@ export class BeuveDiffStream extends LitElement {
       );
       return;
     }
+    if (event.key === ' ') {
+      event.preventDefault();
+      this.toggleCollapsed(this.activeIndex);
+      return;
+    }
     const step = ({ j: 1, k: -1 } as const)[event.key];
     const files = this.review?.files ?? [];
     if (step === undefined || files.length === 0) {
       return;
     }
     event.preventDefault();
+    // A collapsed card is one stop at its header, so j/k never walk through an unloaded body.
     const next = stepReviewPosition(
-      files.map((file) => file.hunks.length),
+      files.map((file) => (this.isCollapsed(file) ? 0 : file.hunks.length)),
       { file: this.activeIndex, hunk: this.activeHunk },
       step,
     );
@@ -368,6 +391,39 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   };
 
+  private readonly onFindQuery = (event: CustomEvent<FindQueryDetail>): void => {
+    this.findQuery = event.detail.query;
+    this.isFindCaseSensitive = event.detail.isCaseSensitive;
+    this.runFind();
+    const first = this.findMatches.findIndex((match) => match.fileIndex >= this.activeIndex);
+    this.showMatch(this.findMatches.length === 0 ? -1 : Math.max(0, first));
+  };
+
+  private readonly onFindStep = (event: CustomEvent<{ step: 1 | -1 }>): void => {
+    const count = this.findMatches.length;
+    if (count === 0) {
+      return;
+    }
+    const from = this.findIndex === -1 && event.detail.step === -1 ? 0 : this.findIndex;
+    this.showMatch((from + event.detail.step + count) % count);
+  };
+
+  private readonly onFindClose = (): void => {
+    this.isFindOpen = false;
+    this.focus();
+  };
+
+  /** "Load diff" on a collapsed card. */
+  private readonly onDiffToggle = (event: CustomEvent<{ path: string; expand: boolean }>): void => {
+    const index = this.review?.files.findIndex((file) => file.path === event.detail.path) ?? -1;
+    if (index === -1) {
+      return;
+    }
+    this.activeIndex = index;
+    this.activeHunk = -1;
+    this.setCollapsed(event.detail.path, !event.detail.expand);
+  };
+
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries.at(-1)?.contentRect.width;
     if (width !== undefined && width > 0) {
@@ -389,6 +445,27 @@ export class BeuveDiffStream extends LitElement {
         (entry.target as BeuveFileCard).mounted = false;
       }
     }
+  };
+
+  /**
+   * Per-file slices of the stream's arrays, rebuilt only when their source array changes and
+   * keeping each file's slice while its members are the same, so a card's properties change only
+   * when its own data does and `j`/`k` update one or two cards, not all of them (ADR 0050).
+   */
+  private slices: {
+    readonly insights: readonly AgentInsightView[];
+    readonly insightsByPath: ReadonlyMap<string, readonly AgentInsightView[]>;
+    readonly uraItems: readonly UraItemView[];
+    readonly uraItemsByPath: ReadonlyMap<string, readonly UraItemView[]>;
+    readonly impact: ImpactView | undefined;
+    readonly impactByPath: ReadonlyMap<string, FileImpactView>;
+  } = {
+    insights: noInsights,
+    insightsByPath: new Map(),
+    uraItems: noUraItems,
+    uraItemsByPath: new Map(),
+    impact: undefined,
+    impactByPath: new Map(),
   };
 
   private observers:
@@ -424,6 +501,18 @@ export class BeuveDiffStream extends LitElement {
   /** The reviewer's diff layout and whitespace preference (ADR 0042). */
   @property({ attribute: false }) accessor display: DiffDisplayView = defaultDisplay;
   @property({ attribute: false }) accessor suggestionJump: SuggestionJump | undefined;
+  /** Files that start collapsed and why (ADR 0052), from {@link planDiffDeferrals}. */
+  @property({ attribute: false }) accessor deferrals: ReadonlyMap<string, DiffDeferral> =
+    noDeferrals;
+  /** Deferred files the reviewer loaded, and other files they collapsed with Space. */
+  @state() accessor expandedPaths: ReadonlySet<string> = noPaths;
+  @state() accessor collapsedPaths: ReadonlySet<string> = noPaths;
+  /** "Find in review" (ADR 0051): the bar, its query and hits, and the hit shown. */
+  @state() accessor isFindOpen = false;
+  @state() accessor findQuery = '';
+  @state() accessor isFindCaseSensitive = false;
+  @state() accessor findMatches: readonly ReviewMatch[] = [];
+  @state() accessor findIndex = -1;
   /** The stream's width, which decides whether a split fits. */
   @state() accessor streamWidth: number | undefined;
 
@@ -442,6 +531,10 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
     this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
     this.addEventListener('beuve-impact-close', this.onImpactClose);
+    this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
+    this.addEventListener('beuve-find-query', this.onFindQuery as EventListener);
+    this.addEventListener('beuve-find-step', this.onFindStep as EventListener);
+    this.addEventListener('beuve-find-close', this.onFindClose);
     this.addController({
       hostConnected: (): void => {
         this.resizeObserver.observe(this);
@@ -457,6 +550,78 @@ export class BeuveDiffStream extends LitElement {
     return this.renderRoot.querySelectorAll('beuve-file-card');
   }
 
+  /**
+   * Whether a card shows only its header (ADR 0052): the reviewer collapsed it, or it is deferred
+   * and they haven't loaded it, unless it is only generated and generated files are shown.
+   */
+  private isCollapsed(file: DiffFileView): boolean {
+    if (this.collapsedPaths.has(file.path)) {
+      return true;
+    }
+    const deferral = this.deferrals.get(file.path);
+    return (
+      deferral !== undefined &&
+      !this.expandedPaths.has(file.path) &&
+      !(deferral.isGeneratedOnly && this.display.showGenerated)
+    );
+  }
+
+  private setCollapsed(path: string, isCollapsed: boolean): void {
+    const without = (paths: ReadonlySet<string>): ReadonlySet<string> =>
+      new Set([...paths].filter((entry) => entry !== path));
+    this.expandedPaths = isCollapsed
+      ? without(this.expandedPaths)
+      : new Set([...this.expandedPaths, path]);
+    this.collapsedPaths = isCollapsed
+      ? new Set([...this.collapsedPaths, path])
+      : without(this.collapsedPaths);
+  }
+
+  private runFind(): void {
+    this.findMatches = findInReview(this.review?.files ?? [], this.findQuery, {
+      isCaseSensitive: this.isFindCaseSensitive,
+    });
+    this.findIndex = -1;
+  }
+
+  /** Reveals hit `index` through the same jump as a citation: its card loads, then the line. */
+  private showMatch(index: number): void {
+    const match = this.findMatches[index];
+    this.findIndex = match === undefined ? -1 : index;
+    if (match === undefined) {
+      return;
+    }
+    this.activeIndex = match.fileIndex;
+    this.activeHunk = -1;
+    void this.revealRange(match.fileIndex, match.line, match.line, match.side);
+  }
+
+  /** Space: loads a collapsed card's diff, or collapses an open one, and shows its header. */
+  private toggleCollapsed(index: number): void {
+    const file = this.review?.files[index];
+    if (file === undefined || file.hunks.length === 0) {
+      return;
+    }
+    this.setCollapsed(file.path, !this.isCollapsed(file));
+    this.activeHunk = -1;
+    void this.revealPosition();
+  }
+
+  /**
+   * The card at `index`, its diff loaded first when it is collapsed: every jump to a line, hunk
+   * or insight (citations, the dock, the palette, find) goes through here.
+   */
+  private async loadedCard(index: number): Promise<BeuveFileCard | undefined> {
+    const file = this.review?.files[index];
+    if (file !== undefined && this.isCollapsed(file)) {
+      this.setCollapsed(file.path, false);
+    }
+    await this.updateComplete;
+    const card = this.cards()[index];
+    await card?.updateComplete;
+    return card;
+  }
+
   /** Scrolls to the active hunk, or the active card's header. */
   private async revealPosition(): Promise<void> {
     await this.updateComplete;
@@ -468,7 +633,8 @@ export class BeuveDiffStream extends LitElement {
       card.scrollIntoView({ block: 'start' });
       return;
     }
-    await card.revealHunk(this.activeHunk);
+    const loaded = await this.loadedCard(this.activeIndex);
+    await loaded?.revealHunk(this.activeHunk);
   }
 
   /** A click on a card makes it active, at its header unless it already was. */
@@ -505,13 +671,13 @@ export class BeuveDiffStream extends LitElement {
     end: number,
     side: 'head' | 'base',
   ): Promise<void> {
-    await this.updateComplete;
-    await this.cards()[index]?.revealRange(start, end, side);
+    const card = await this.loadedCard(index);
+    await card?.revealRange(start, end, side);
   }
 
   private async revealLine(index: number, line: number): Promise<void> {
-    await this.updateComplete;
-    await this.cards()[index]?.revealLine(line);
+    const card = await this.loadedCard(index);
+    await card?.revealLine(line);
   }
 
   /** `o`: asks the shell to open the active card's file in the editor at the cursor line. */
@@ -550,7 +716,7 @@ export class BeuveDiffStream extends LitElement {
       this.notify('info', 'Pick a hunk with j/k, or select head lines, to suggest an edit.');
       return;
     }
-    void card.startEdit(target);
+    void this.loadedCard(this.activeIndex).then(async (loaded) => loaded?.startEdit(target));
   }
 
   /** The dock asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
@@ -571,7 +737,7 @@ export class BeuveDiffStream extends LitElement {
     }
     this.activeIndex = index;
     this.activeHunk = -1;
-    await this.updateComplete;
+    const card = await this.loadedCard(index);
     const target: EditTarget = {
       path: anchor.path,
       startLine: anchor.startLine,
@@ -579,7 +745,7 @@ export class BeuveDiffStream extends LitElement {
       itemId,
       ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
     };
-    await this.cards()[index]?.startEdit(target);
+    await card?.startEdit(target);
   }
 
   /**
@@ -620,8 +786,7 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private async revealComposer(anchor: UraAnchorView): Promise<void> {
-    await this.updateComplete;
-    const card = this.cards()[this.activeIndex];
+    const card = await this.loadedCard(this.activeIndex);
     await card?.revealLine(anchor.kind === 'lines' ? anchor.endLine : undefined);
     const element = await waitForComposer(card);
     element?.focus();
@@ -712,8 +877,8 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private async revealInsight(fileIndex: number, insightId: string): Promise<void> {
-    await this.updateComplete;
-    await this.cards()[fileIndex]?.revealInsight(insightId);
+    const card = await this.loadedCard(fileIndex);
+    await card?.revealInsight(insightId);
   }
 
   private toggleFocusedInsight(status: Exclude<InsightStatusView, 'pending'>): void {
@@ -825,7 +990,30 @@ export class BeuveDiffStream extends LitElement {
     `;
   }
 
+  private refreshSlices(): void {
+    const { slices, insights, uraItems, impact } = this;
+    this.slices = {
+      insights,
+      insightsByPath:
+        slices.insights === insights
+          ? slices.insightsByPath
+          : groupStable(insights, (insight) => [insight.path], slices.insightsByPath),
+      uraItems,
+      uraItemsByPath:
+        slices.uraItems === uraItems
+          ? slices.uraItemsByPath
+          : groupStable(uraItems, uraItemPaths, slices.uraItemsByPath),
+      impact,
+      impactByPath:
+        slices.impact === impact
+          ? slices.impactByPath
+          : new Map((impact?.files ?? []).map((entry) => [entry.path, entry])),
+    };
+  }
+
   private renderReview(review: ReviewView): TemplateResult {
+    this.refreshSlices();
+    const { insightsByPath, uraItemsByPath, impactByPath } = this.slices;
     const additions = review.files.reduce((sum, file) => sum + file.additions, 0);
     const deletions = review.files.reduce((sum, file) => sum + file.deletions, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
@@ -849,6 +1037,17 @@ export class BeuveDiffStream extends LitElement {
           ${this.marking ? 'Marking…' : 'Mark reviewed'}
         </button>
       </div>
+      ${
+        this.isFindOpen
+          ? html`<beuve-find-bar
+              .query=${this.findQuery}
+              .isCaseSensitive=${this.isFindCaseSensitive}
+              .count=${this.findMatches.length}
+              .current=${this.findIndex}
+              .isCapped=${this.findMatches.length >= findLimit}
+            ></beuve-find-bar>`
+          : nothing
+      }
       <div class="body">
         ${
           isUpToDate
@@ -864,15 +1063,18 @@ export class BeuveDiffStream extends LitElement {
                       .cognitiveLimit=${this.impact?.cognitiveMax}
                       .loadFilePair=${this.loadFilePair}
                       .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
-                      .impact=${this.impact?.files.find((entry) => entry.path === file.path)}
-                      .findings=${this.impact?.findings ?? []}
+                      .impact=${impactByPath.get(file.path)}
+                      .findings=${this.impact?.findings ?? noFindings}
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
                       .flow=${this.flow?.path === file.path ? this.flow : undefined}
                       .trace=${this.trace?.path === file.path ? this.trace : undefined}
-                      .insights=${this.insights.filter((insight) => insight.path === file.path)}
-                      .uraItems=${this.uraItems}
+                      .insights=${insightsByPath.get(file.path) ?? noInsights}
+                      .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
                       .composer=${this.composer?.path === file.path ? this.composer : undefined}
                       .focusedInsightId=${this.focusedInsightId}
+                      .deferral=${this.deferrals.get(file.path)}
+                      ?collapsed=${this.isCollapsed(file)}
+                      ?generated=${isGenerated(this.deferrals.get(file.path))}
                       ?active=${index === this.activeIndex}
                       @click=${(): void => {
                         this.activate(index);
@@ -905,6 +1107,16 @@ export class BeuveDiffStream extends LitElement {
     >`;
   }
 
+  /** ⌘F / Ctrl+F: opens the find bar (or focuses it again) over this review. */
+  async openFind(): Promise<void> {
+    if (this.review === undefined) {
+      return;
+    }
+    this.isFindOpen = true;
+    await this.updateComplete;
+    this.renderRoot.querySelector<BeuveFindBar>('beuve-find-bar')?.focusInput();
+  }
+
   /** What ⌘> adds to the chat (ADR 0046): the active card's selection, hunk or file. */
   chatMention(): MentionTarget | undefined {
     return this.cards()[this.activeIndex]?.chatMention();
@@ -927,6 +1139,13 @@ export class BeuveDiffStream extends LitElement {
           : -1;
       this.activeIndex = Math.max(0, kept);
       this.activeHunk = -1;
+      if (previous?.session.id !== this.review?.session.id) {
+        this.expandedPaths = noPaths;
+        this.collapsedPaths = noPaths;
+      }
+      if (this.isFindOpen) {
+        this.runFind();
+      }
       const path = this.composer?.path;
       const isShown = this.review?.files.some((file) => file.path === path) === true;
       this.composer = isShown ? this.composer : undefined;
@@ -965,6 +1184,25 @@ export class BeuveDiffStream extends LitElement {
       void this.editItem(suggestionJump.itemId);
     }
   }
+}
+
+function isGenerated(deferral: DiffDeferral | undefined): boolean {
+  return deferral?.reason === 'generated' || deferral?.reason === 'no-diff';
+}
+
+/**
+ * The files a URA item concerns: where it was written and where it sits now. A card reads both
+ * (its markers follow the placement, its ImpactGate chip the original anchor).
+ */
+function uraItemPaths(item: UraItemView): string[] {
+  const placed = item.placement.kind === 'current' ? item.placement.anchor : undefined;
+  const paths: string[] = [];
+  for (const anchor of [item.anchor, placed]) {
+    if (anchor !== undefined && anchor.kind !== 'change') {
+      paths.push(anchor.path);
+    }
+  }
+  return paths;
 }
 
 /** Polls a few frames for the composer the card renders through the library's annotations. */

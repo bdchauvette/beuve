@@ -1,5 +1,7 @@
 import type {
+  FileAttributesView,
   FilePairView,
+  GetFileAttributesRequest,
   GetFilePairRequest,
   GetTreeRequest,
   IpcResult,
@@ -8,6 +10,8 @@ import type {
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
+import { readDiffAttributes } from '#internal/git/read-diff-attributes.ts';
+import type { DiffAttributes } from '#internal/git/parse-check-attr.ts';
 import type { BlobContent } from '#internal/git/read-blobs.ts';
 import { LruCache } from '#pkg/datastructures/lru-cache.ts';
 import { err } from '#pkg/result/err.ts';
@@ -21,11 +25,19 @@ import type { SessionContext } from '../sessions/session-context.ts';
 
 import { findPackageRoots } from './find-package-roots.ts';
 
-/** Whole files and the repository tree, for the radar tree and hunk expansion (ADR 0018). */
+/**
+ * Whole files and the repository tree, for the radar tree and hunk expansion (ADR 0018), and the
+ * review files' `.gitattributes` (ADR 0052).
+ */
 export interface FileServices {
   readonly getTree: (request: GetTreeRequest) => Promise<IpcResult<RepositoryTreeView>>;
   readonly getFilePair: (request: GetFilePairRequest) => Promise<IpcResult<FilePairView>>;
+  readonly getFileAttributes: (
+    request: GetFileAttributesRequest,
+  ) => Promise<IpcResult<FileAttributesView>>;
 }
+
+type AttributeLists = Pick<FileAttributesView, 'generated' | 'notGenerated' | 'noDiff'>;
 
 export interface FileServicesOptions {
   readonly context: SessionContext;
@@ -39,12 +51,16 @@ const zeroIdPattern = /^0+$/u;
  * `session:get-tree` lists the session head's tree (refreshing the head first) and its package
  * roots, cached per (repository, head). `session:get-file-pair` reads both sides of one file of
  * the review the session shows now, by the blob ids in its diff, so only reviewed files are read.
+ * `session:get-file-attributes` reads `linguist-generated` and `diff` for the files of that
+ * review from `.gitattributes` at the head (one `git check-attr`), cached per head and paths; a
+ * git without `check-attr --source` answers empty lists.
  */
 export function createFileServices(options: FileServicesOptions): FileServices {
   const { context } = options;
   const trees = new LruCache<string, Pick<RepositoryTreeView, 'paths' | 'packageRoots'>>(
     options.cacheSize ?? 8,
   );
+  const attributes = new LruCache<string, AttributeLists>(options.cacheSize ?? 8);
   return {
     getTree: async ({ sessionId }): Promise<IpcResult<RepositoryTreeView>> => {
       const loaded = loadSession(context, sessionId);
@@ -97,6 +113,37 @@ export function createFileServices(options: FileServicesOptions): FileServices {
         ...(newContents.value !== undefined && { newContents: newContents.value }),
       });
     },
+    getFileAttributes: async ({ sessionId }): Promise<IpcResult<FileAttributesView>> => {
+      const diff = await loadReviewDiff(context, sessionId);
+      if (!diff.ok) {
+        return diff;
+      }
+      const { repository, session } = diff.value.refreshed;
+      const paths = diff.value.files.map((file) => headPath(file));
+      const key = [repository.root, session.headSha, ...paths].join('\0');
+      const cached = attributes.get(key);
+      if (cached !== undefined) {
+        return ok({ sessionId, headSha: session.headSha, ...cached });
+      }
+      const read = await readDiffAttributes(repository, session.headSha, paths);
+      if (!read.ok && read.error.kind !== 'unsupported-git-version') {
+        return gitFailure(context.logger, read.error);
+      }
+      const lists = toAttributeLists(read.ok ? read.value : new Map());
+      attributes.set(key, lists);
+      return ok({ sessionId, headSha: session.headSha, ...lists });
+    },
+  };
+}
+
+function toAttributeLists(read: ReadonlyMap<string, DiffAttributes>): AttributeLists {
+  const entries = [...read];
+  const where = (isListed: (value: DiffAttributes) => boolean): string[] =>
+    entries.filter(([, value]) => isListed(value)).map(([path]) => path);
+  return {
+    generated: where((value) => value.generated === true),
+    notGenerated: where((value) => value.generated === false),
+    noDiff: where((value) => value.diff === false),
   };
 }
 

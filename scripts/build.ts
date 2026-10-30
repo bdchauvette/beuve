@@ -24,7 +24,12 @@ await buildAll();
 async function buildAll(): Promise<void> {
   await rm(dist, { recursive: true, force: true });
   const ui = await build(uiOptions());
-  await Promise.all([build(mainOptions()), build(impactWorkerOptions()), build(preloadOptions())]);
+  await Promise.all([
+    build(workerOptions()),
+    build(mainOptions()),
+    build(impactWorkerOptions()),
+    build(preloadOptions()),
+  ]);
   await copyFile(path.join(root, 'src/ui/index.html'), path.join(dist, 'ui/index.html'));
   await copyWasmAssets(path.join(dist, 'main/wasm'));
   if (ui.metafile !== undefined) {
@@ -118,6 +123,21 @@ function uiOptions(): BuildOptions {
     minify: true,
     metafile: true,
     plugins: [curatedShikiPlugin()],
+  };
+}
+
+/**
+ * The `@pierre/diffs` highlighting worker (ADR 0050) as its own entry, `dist/ui/diff-worker/
+ * worker.js`, with its own chunks. It can't be an entry of the ui build: the file has top-level
+ * side effects (it installs the worker's message handler), and code splitting would hoist them
+ * into a chunk the page shares. The same curated grammars and stubs apply.
+ */
+function workerOptions(): BuildOptions {
+  return {
+    ...uiOptions(),
+    entryPoints: { worker: path.join(root, 'node_modules/@pierre/diffs/dist/worker/worker.js') },
+    outdir: path.join(dist, 'ui/diff-worker'),
+    metafile: false,
   };
 }
 

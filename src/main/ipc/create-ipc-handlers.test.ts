@@ -130,6 +130,10 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             calls.push(['pair', request]);
             return notWired;
           },
+          getFileAttributes: async (request) => {
+            calls.push(['attributes', request]);
+            return notWired;
+          },
         },
       },
       appInfo,
@@ -139,9 +143,12 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
     await expectInvalid(handlers['session:get-file-pair']({ sessionId: 's1', path: '' }));
     await handlers['session:get-tree']({ sessionId: 's1' });
     await handlers['session:get-file-pair']({ sessionId: 's1', path: 'src/a.ts' });
+    await expectInvalid(handlers['session:get-file-attributes']({ sessionId: 's1', paths: [] }));
+    await handlers['session:get-file-attributes']({ sessionId: 's1' });
     expect(calls).toEqual([
       ['tree', { sessionId: 's1' }],
       ['pair', { sessionId: 's1', path: 'src/a.ts' }],
+      ['attributes', { sessionId: 's1' }],
     ]);
   });
 
@@ -634,10 +641,16 @@ describe('createIpcHandlers for the editor', () => {
     );
     await expectInvalid(handlers['display:set']({ layout: 'diagonal' }));
     await expectInvalid(handlers['display:set']({ ignoreWhitespace: 'yes' }));
+    await expectInvalid(handlers['display:set']({ showGenerated: 1 }));
     await expectInvalid(handlers['display:get']({ x: 1 }));
     await handlers['display:set']({ layout: 'unified' });
     await handlers['display:set']({ ignoreWhitespace: false });
-    expect(calls).toEqual([{ layout: 'unified' }, { ignoreWhitespace: false }]);
+    await handlers['display:set']({ showGenerated: true });
+    expect(calls).toEqual([
+      { layout: 'unified' },
+      { ignoreWhitespace: false },
+      { showGenerated: true },
+    ]);
   });
 });
 
@@ -704,7 +717,11 @@ function stubServices(
       getImpactForRenderer: async () => notWired,
       observeHead: noop,
     },
-    files: { getTree: async () => notWired, getFilePair: async () => notWired },
+    files: {
+      getTree: async () => notWired,
+      getFilePair: async () => notWired,
+      getFileAttributes: async () => notWired,
+    },
     lsp: { callHierarchy: async () => notWired },
     flow: { getGraph: async () => notWired },
     editor: {

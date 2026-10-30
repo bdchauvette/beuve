@@ -65,6 +65,11 @@ export class BeuveRadarTree extends LitElement {
   @property({ attribute: false }) accessor files: readonly DiffFileView[] = [];
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property() accessor mode: RadarTreeMode = 'neighborhood';
+  /**
+   * Generated review files (ADR 0052): their rows take the library's dimmed `ignored` lane
+   * instead of their change status; they stay selectable.
+   */
+  @property({ attribute: false }) accessor generatedPaths: ReadonlySet<string> = new Set();
 
   /** `@pierre/trees`, a lazy chunk loaded when the first tree connects. */
   @state() accessor library: typeof Trees | undefined;
@@ -146,8 +151,8 @@ export class BeuveRadarTree extends LitElement {
 
   protected override updated(changed: PropertyValues<this>): void {
     const { library } = this;
-    const isRelevant = ['tree', 'files', 'mode', 'impact', 'library'].some((key) =>
-      changed.has(key as keyof BeuveRadarTree),
+    const isRelevant = ['tree', 'files', 'mode', 'impact', 'library', 'generatedPaths'].some(
+      (key) => changed.has(key as keyof BeuveRadarTree),
     );
     if (library === undefined || !isRelevant) {
       return;
@@ -161,20 +166,27 @@ export class BeuveRadarTree extends LitElement {
       this.mode,
     );
     this.decorations = planTreeDecorations(this.impact, plan.packageOf);
+    const gitStatus = plan.gitStatus.map((entry) =>
+      this.generatedPaths.has(entry.path) ? { ...entry, status: 'ignored' as const } : entry,
+    );
     this.reviewed.clear();
     for (const file of this.files) {
       this.reviewed.add(file.path);
     }
     const isNewListing =
-      this.plan === undefined || changed.has('tree') || changed.has('files') || changed.has('mode');
+      this.plan === undefined ||
+      changed.has('tree') ||
+      changed.has('files') ||
+      changed.has('mode') ||
+      changed.has('generatedPaths');
     this.plan = plan;
     if (this.fileTree === undefined) {
-      this.mountTree(library, plan);
+      this.mountTree(library, { ...plan, gitStatus });
       return;
     }
     if (isNewListing) {
       this.fileTree.resetPaths(plan.paths, { initialExpandedPaths: plan.expandedPaths });
-      this.fileTree.setGitStatus(plan.gitStatus);
+      this.fileTree.setGitStatus(gitStatus);
     }
     if (changed.has('impact')) {
       // Re-renders the rows, so they ask `renderRowDecoration` again.

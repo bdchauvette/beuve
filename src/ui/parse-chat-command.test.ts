@@ -21,6 +21,16 @@ describe('parseChatCommand', () => {
     expect(parseChatCommand('/whitespace ignore show')).toMatchObject({ kind: 'invalid' });
   });
 
+  it('parses /generated with and without a choice', () => {
+    expect(parseChatCommand('/generated')).toEqual({ kind: 'generated' });
+    expect(parseChatCommand('/generated Show')).toEqual({ kind: 'generated', showGenerated: true });
+    expect(parseChatCommand('/generated hide')).toEqual({
+      kind: 'generated',
+      showGenerated: false,
+    });
+    expect(parseChatCommand('/generated maybe')).toMatchObject({ kind: 'invalid' });
+  });
+
   it('parses /editor with and without a choice', () => {
     expect(parseChatCommand('/editor')).toEqual({ kind: 'editor' });
     expect(parseChatCommand('/editor Zed')).toEqual({ kind: 'editor', editorId: 'zed' });

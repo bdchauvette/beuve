@@ -3,6 +3,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { IpcResult } from '#contract/ipc-contract.ts';
+import { isVersionAtLeast } from '#internal/git/is-version-at-least.ts';
+import { parseGitVersion } from '#internal/git/parse-git-version.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
@@ -60,6 +62,27 @@ describe('createFileServices (integration: SQLite + git)', () => {
     expect(tree.packageRoots).toEqual(['', 'packages/web', 'services/api']);
     expect(tree.headSha).toBe(repo.git('rev-parse', 'feature'));
     expect(value(await files.getTree({ sessionId }))).toEqual(tree);
+  });
+
+  it('reads the review files’ attributes from .gitattributes at the head', async () => {
+    repo.write(
+      '.gitattributes',
+      'services/** linguist-generated\npackages/** -linguist-generated\n**/gone.ts -diff\n',
+    );
+    const head = repo.commit('attributes');
+    const attributes = value(await files.getFileAttributes({ sessionId }));
+    expect(attributes.headSha).toBe(head);
+    const version = parseGitVersion(repo.git('--version'));
+    if (version === undefined || !isVersionAtLeast(version, 2, 40)) {
+      expect(attributes).toMatchObject({ generated: [], notGenerated: [], noDiff: [] });
+      return;
+    }
+    expect(attributes).toMatchObject({
+      generated: ['services/api/go.mod'],
+      notGenerated: ['packages/web/src/app.ts', 'packages/web/src/gone.ts'],
+      noDiff: ['packages/web/src/gone.ts'],
+    });
+    expect(value(await files.getFileAttributes({ sessionId }))).toEqual(attributes);
   });
 
   it('reads both sides of a reviewed file, leaving out an absent side', async () => {

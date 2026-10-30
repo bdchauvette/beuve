@@ -46,6 +46,7 @@ describe('commandRegistry', () => {
       '/editor',
       '/diff',
       '/whitespace',
+      '/generated',
       '/sidebar',
       '/trust',
       '/untrust',
@@ -85,6 +86,7 @@ describe('commandRegistry', () => {
       's',
       'w',
       'o',
+      'Space',
     ];
     const listed = commandRegistry
       .filter((command) => command.scope === 'Diff' && command.run.kind === 'zone-key')

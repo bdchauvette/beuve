@@ -2,6 +2,8 @@ import type * as Diffs from '@pierre/diffs';
 import type { FileDiff, FileDiffLoadedFiles, FileDiffMetadata } from '@pierre/diffs';
 import type * as DiffsEdit from '@pierre/diffs/edit';
 import type { Editor } from '@pierre/diffs/edit';
+import type * as DiffsWorker from '@pierre/diffs/worker';
+import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import { css, html, LitElement, nothing, svg } from 'lit';
 import type { PropertyValues, SVGTemplateResult, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -45,6 +47,7 @@ import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
 import type { MentionTarget } from './chat-draft.ts';
+import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { planChatMention } from './plan-chat-mention.ts';
 import { planStageAnchor } from './plan-stage-anchor.ts';
 import { planEditorLine } from './plan-editor-line.ts';
@@ -327,6 +330,58 @@ export class BeuveFileCard extends LitElement {
       background: var(--beuve-code-bg);
     }
 
+    .tag {
+      flex: none;
+      padding: 0 var(--beuve-space-1);
+      border-radius: 4px;
+      background: var(--beuve-surface);
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
+    :host([generated][collapsed]) .title {
+      opacity: 0.6;
+    }
+
+    :host([generated][collapsed][active]) .title {
+      opacity: 0.85;
+    }
+
+    .collapsed-body {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--beuve-space-2);
+      padding: var(--beuve-space-2) var(--beuve-space-3);
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
+    .collapsed-body .size {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .collapsed-body button {
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      border-radius: 4px;
+      background: var(--beuve-surface);
+      color: var(--beuve-text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .collapsed-body button:hover,
+    .collapsed-body button:focus-visible {
+      border-color: var(--beuve-accent);
+      outline: none;
+    }
+
+    .collapsed-body kbd {
+      font: var(--beuve-font-mono);
+      font-size: 11px;
+    }
+
     .empty {
       margin: 0;
       padding: var(--beuve-space-2) var(--beuve-space-3);
@@ -427,6 +482,18 @@ export class BeuveFileCard extends LitElement {
   private metadata: FileDiffMetadata | undefined;
   /** The diff's rendered height when it last unmounted, for an exact placeholder. */
   private measuredHeight: number | undefined;
+  /**
+   * The mounted diff's height as a `ResizeObserver` last reported it. Unmounting reads this
+   * instead of measuring, which would force a layout per card while the stream scrolls (ADR 0050).
+   */
+  private codeHeight: number | undefined;
+  private observedCode: Element | undefined;
+  private readonly codeObserver = new ResizeObserver((entries) => {
+    const entry = entries.at(-1);
+    if (entry !== undefined) {
+      this.codeHeight = entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height;
+    }
+  });
   private readonly insightElements = new Map<string, BeuveAgentInsight>();
   private composerElement: BeuveUraComposer | undefined;
   /** The step `j`/`k` last selected, to tell it apart from the reviewer's own selection. */
@@ -542,6 +609,15 @@ export class BeuveFileCard extends LitElement {
   @property() accessor diffStyle: DiffLayoutView = 'unified';
   /** ImpactGate's cognitive limit, named in the indicator's popover. */
   @property({ type: Number }) accessor cognitiveLimit: number | undefined;
+  /** Why this file starts collapsed (ADR 0052): generated, a lockfile or too large. */
+  @property({ attribute: false }) accessor deferral: DiffDeferral | undefined;
+  /**
+   * Shows the header and a "Load diff" line instead of the diff, which stays unmounted; the
+   * stream decides, from `deferral`, the generated-files preference and Space.
+   */
+  @property({ type: Boolean, reflect: true }) accessor collapsed = false;
+  /** Generated or `-diff` (ADR 0052): labelled, and dimmed while collapsed. */
+  @property({ type: Boolean, reflect: true }) accessor generated = false;
 
   /** The `e` edit in progress on this card (ADR 0043). */
   @state() accessor edit: EditSession | undefined;
@@ -560,6 +636,7 @@ export class BeuveFileCard extends LitElement {
         this.endEdit();
         this.diff?.cleanUp();
         this.diff = undefined;
+        this.unobserveCode();
         clearTimeout(this.impactHideTimer);
       },
     });
@@ -569,6 +646,21 @@ export class BeuveFileCard extends LitElement {
   private findRow(side: 'additions' | 'deletions' | 'context', line: number): Element | undefined {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
     return root?.querySelector(headRowSelector(this.diffStyle, side, line)) ?? undefined;
+  }
+
+  private observeCode(container: HTMLElement): void {
+    if (this.observedCode === container) {
+      return;
+    }
+    this.codeObserver.disconnect();
+    this.codeObserver.observe(container);
+    this.observedCode = container;
+  }
+
+  private unobserveCode(): void {
+    this.codeObserver.disconnect();
+    this.observedCode = undefined;
+    this.codeHeight = undefined;
   }
 
   private async loadLibrary(): Promise<void> {
@@ -649,37 +741,39 @@ export class BeuveFileCard extends LitElement {
   }
 
   private createDiff(library: typeof Diffs): FileDiff<CardSlot> {
-    registerThemes(library);
     this.isGutterLabelled = false;
     const loader = this.loadFilePair;
-    return new library.FileDiff<CardSlot>({
-      theme: themeNames,
-      themeType: 'system',
-      preferredHighlighter: 'shiki-js',
-      diffStyle: this.diffStyle,
-      disableFileHeader: true,
-      hunkSeparators: 'line-info',
-      lineDiffType: 'word-alt',
-      overflow: 'scroll',
-      enableLineSelection: true,
-      onLineSelected: this.onLineSelected,
-      enableGutterUtility: true,
-      onGutterUtilityClick: (range): void => {
-        this.addToChat(range);
+    return new library.FileDiff<CardSlot>(
+      {
+        theme: themeNames,
+        themeType: 'system',
+        preferredHighlighter: 'shiki-js',
+        diffStyle: this.diffStyle,
+        disableFileHeader: true,
+        hunkSeparators: 'line-info',
+        lineDiffType: 'word-alt',
+        overflow: 'scroll',
+        enableLineSelection: true,
+        onLineSelected: this.onLineSelected,
+        enableGutterUtility: true,
+        onGutterUtilityClick: (range): void => {
+          this.addToChat(range);
+        },
+        ...(loader !== undefined && {
+          loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> =>
+            loadFiles(loader, fileDiff),
+        }),
+        renderAnnotation: (annotation): HTMLElement => this.noteElement(annotation.metadata.note),
+        onPostRender: (_node, _instance, phase): void => {
+          if (phase === 'mount') {
+            this.dispatchEvent(
+              new CustomEvent('beuve-diff-rendered', { bubbles: true, composed: true }),
+            );
+          }
+        },
       },
-      ...(loader !== undefined && {
-        loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> =>
-          loadFiles(loader, fileDiff),
-      }),
-      renderAnnotation: (annotation): HTMLElement => this.noteElement(annotation.metadata.note),
-      onPostRender: (_node, _instance, phase): void => {
-        if (phase === 'mount') {
-          this.dispatchEvent(
-            new CustomEvent('beuve-diff-rendered', { bubbles: true, composed: true }),
-          );
-        }
-      },
-    });
+      shared.pool,
+    );
   }
 
   /**
@@ -973,6 +1067,9 @@ export class BeuveFileCard extends LitElement {
   }
 
   private renderCode(file: DiffFileView): TemplateResult {
+    if (this.collapsed) {
+      return this.renderCollapsed();
+    }
     if (this.isFallback) {
       return this.renderFallback(file);
     }
@@ -985,6 +1082,45 @@ export class BeuveFileCard extends LitElement {
           class="code placeholder"
           style=${styleMap({ height: `${String(this.measuredHeight ?? estimateHeight(file))}px` })}
         ></div>`;
+  }
+
+  private renderTag(): TemplateResult | typeof nothing {
+    const reason = this.deferral?.reason;
+    if (reason === undefined || (reason === 'large' && !this.collapsed)) {
+      return nothing;
+    }
+    const label = {
+      'no-diff': 'diff off',
+      generated: 'generated',
+      lockfile: 'lockfile',
+      large: 'large',
+    }[reason];
+    return html`<span class="tag" title=${this.deferral?.why ?? ''}>${label}</span>`;
+  }
+
+  /** What a collapsed card says instead of its diff: why, how big, and how to load it. */
+  private renderCollapsed(): TemplateResult {
+    const { deferral } = this;
+    const expand = (event: Event): void => {
+      event.stopPropagation();
+      this.dispatchEvent(
+        new CustomEvent('beuve-diff-toggle', {
+          detail: { path: this.file?.path, expand: true },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    };
+    const size =
+      deferral === undefined
+        ? ''
+        : `${countFormat.format(deferral.rows)} lines · ${formatSize(deferral.characters)}`;
+    return html`<div class="collapsed-body">
+      <span class="why">${deferral?.why ?? 'Collapsed.'}</span>
+      ${size === '' ? nothing : html`<span class="size">${size}</span>`}
+      <button type="button" @click=${expand}>Load diff</button>
+      <span><kbd>Space</kbd> on the card</span>
+    </div>`;
   }
 
   private renderFallback(file: DiffFileView): TemplateResult {
@@ -1271,9 +1407,17 @@ ${splitPatch(file.patch).map(
       this.codeGeneration += 1;
       this.measuredHeight = undefined;
     }
-    if (changed.has('mounted') && !this.mounted && this.diff !== undefined) {
-      const height = this.renderRoot.querySelector('.code')?.getBoundingClientRect().height;
+    if (changed.has('collapsed') && this.collapsed && this.edit !== undefined) {
+      this.collapsed = false;
+    }
+    if (
+      (changed.has('mounted') || changed.has('collapsed')) &&
+      (!this.mounted || this.collapsed) &&
+      this.diff !== undefined
+    ) {
+      const height = this.codeHeight;
       this.measuredHeight = height === undefined || height === 0 ? this.measuredHeight : height;
+      this.unobserveCode();
       this.diff.cleanUp();
       this.diff = undefined;
     }
@@ -1295,6 +1439,7 @@ ${splitPatch(file.patch).map(
       library === undefined ||
       metadata === undefined ||
       !this.mounted ||
+      this.collapsed ||
       this.isFallback ||
       this.editor !== undefined
     ) {
@@ -1304,6 +1449,7 @@ ${splitPatch(file.patch).map(
     if (container === null) {
       return;
     }
+    this.observeCode(container);
     try {
       this.syncDiff(library, changed, container, metadata);
     } catch {
@@ -1331,7 +1477,7 @@ ${splitPatch(file.patch).map(
           </span>
           <span class="additions">+${file.additions}</span>
           <span class="deletions">−${file.deletions}</span>
-          ${this.renderImpactChip()}
+          ${this.renderTag()} ${this.renderImpactChip()}
         </div>
         ${this.renderEditBar()}
       </div>
@@ -1374,15 +1520,70 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   return marker;
 }
 
-/** Shared by every card: the library is a lazy chunk, loaded once, themes registered once. */
-const shared: { library: Promise<typeof Diffs> | undefined; areThemesRegistered: boolean } = {
+/**
+ * Shared by every card: the library is a lazy chunk, loaded once, with the themes registered and
+ * the highlighting worker pool started once.
+ */
+const shared: {
+  library: Promise<typeof Diffs> | undefined;
+  areThemesRegistered: boolean;
+  pool: WorkerPoolManager | undefined;
+} = {
   library: undefined,
   areThemesRegistered: false,
+  pool: undefined,
 };
 
+/** Highlighting workers (ADR 0050); each compiles the grammars it is given on its own. */
+const workerCount = 2;
+/** Diffs this small highlight on the main thread: faster than a worker round trip, and no plain-text pass. */
+const mainThreadMaxCharacters = 12_000;
+
 async function loadDiffs(): Promise<typeof Diffs> {
-  shared.library ??= import('@pierre/diffs');
+  shared.library ??= loadDiffsOnce();
   return shared.library;
+}
+
+async function loadDiffsOnce(): Promise<typeof Diffs> {
+  const [library, workers] = await Promise.all([import('@pierre/diffs'), loadWorkerModule()]);
+  registerThemes(library);
+  shared.pool = workers === undefined ? undefined : startWorkerPool(workers);
+  return library;
+}
+
+/** The pool's module; without it, cards highlight on this thread as before. */
+async function loadWorkerModule(): Promise<typeof DiffsWorker | undefined> {
+  try {
+    return await import('@pierre/diffs/worker');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Starts the pool of `@pierre/diffs/worker` highlighters (ADR 0050) once the themes are
+ * registered, since the pool resolves them on this thread and sends them to its workers. The
+ * worker is its own bundle at `diff-worker/worker.js` next to the page, loaded under
+ * `script-src 'self'`. When it cannot start, the pool reports it and cards highlight here.
+ */
+function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
+  const url = new URL('diff-worker/worker.js', document.baseURI);
+  return new workers.WorkerPoolManager(
+    {
+      workerFactory: (): Worker => new Worker(url, { type: 'module', name: 'beuve-highlighter' }),
+      poolSize: workerCount,
+      mainThreadMaxCharacters,
+      onWorkerError: (event): void => {
+        event.preventDefault();
+      },
+    },
+    {
+      theme: themeNames,
+      preferredHighlighter: 'shiki-js',
+      lineDiffType: 'word-alt',
+      langs: [],
+    },
+  );
 }
 
 const sharedEditor: { module: Promise<typeof DiffsEdit> | undefined } = { module: undefined };
@@ -1445,12 +1646,28 @@ async function loadFiles(
       };
 }
 
-/** About the rendered height of the patch: its lines, plus a separator per hunk. */
+const estimatedHeights = new WeakMap<DiffFileView, number>();
+
+/** About the rendered height of the patch: its lines, plus a separator per hunk; once per file. */
 function estimateHeight(file: DiffFileView): number {
+  const known = estimatedHeights.get(file);
+  if (known !== undefined) {
+    return known;
+  }
   const lines = splitPatch(file.patch).filter(
     (line) => line.kind !== 'meta' && line.kind !== 'hunk',
   ).length;
-  return lines * estimatedLineHeight + file.hunks.length * estimatedSeparatorHeight;
+  const height = lines * estimatedLineHeight + file.hunks.length * estimatedSeparatorHeight;
+  estimatedHeights.set(file, height);
+  return height;
+}
+
+const countFormat = new Intl.NumberFormat('en');
+
+function formatSize(characters: number): string {
+  return characters < 1024 * 1024
+    ? `${String(Math.max(1, Math.round(characters / 1024)))} KB`
+    : `${(characters / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /** Polls a few animation frames for a value that a later render sets. */

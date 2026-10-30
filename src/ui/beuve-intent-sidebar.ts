@@ -73,6 +73,8 @@ export class BeuveIntentSidebar extends LitElement {
   @property({ attribute: false }) accessor files: readonly DiffFileView[] | undefined;
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
+  /** Generated review files, dimmed in the tree (ADR 0052). */
+  @property({ attribute: false }) accessor generatedPaths: ReadonlySet<string> = new Set();
   @property() accessor treeMode: RadarTreeMode = 'neighborhood';
 
   constructor() {
@@ -89,6 +91,7 @@ export class BeuveIntentSidebar extends LitElement {
         .tree=${this.tree}
         .files=${files}
         .impact=${this.impact}
+        .generatedPaths=${this.generatedPaths}
         .mode=${this.treeMode}
       ></beuve-radar-tree>
     </section>`;

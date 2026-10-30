@@ -20,6 +20,8 @@ export type ChatCommand =
   | { readonly kind: 'diff'; readonly layout?: DiffLayoutView }
   /** `/whitespace` shows whether whitespace is ignored; `ignore` or `show` sets it. */
   | { readonly kind: 'whitespace'; readonly ignoreWhitespace?: boolean }
+  /** `/generated` shows whether generated files are expanded; `show` or `hide` sets it (ADR 0052). */
+  | { readonly kind: 'generated'; readonly showGenerated?: boolean }
   /** Approves running the open repository's tests for trace probes (ADR 0041). */
   | { readonly kind: 'trust' }
   /** Withdraws that approval. */
@@ -44,7 +46,7 @@ const whitespace = /\s+/u;
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
  * `/compact`,
  * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, `/diff [split|inline]`,
- * `/whitespace [ignore|show]`, `/sidebar left|right`, and
+ * `/whitespace [ignore|show]`, `/generated [show|hide]`, `/sidebar left|right`, and
  * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
  * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -88,6 +90,9 @@ export function parseChatCommand(input: string): ChatCommand {
     }
     case '/whitespace': {
       return parseWhitespace(args);
+    }
+    case '/generated': {
+      return parseGenerated(args);
     }
     case '/review': {
       return parseReview(args);
@@ -143,6 +148,24 @@ const whitespaceAliases: Readonly<Record<string, boolean>> = {
   hide: true,
   show: false,
 };
+
+const generatedAliases: Readonly<Record<string, boolean>> = {
+  show: true,
+  expand: true,
+  hide: false,
+  collapse: false,
+};
+
+function parseGenerated(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'generated' };
+  }
+  const showGenerated =
+    args.length === 1 ? generatedAliases[(args[0] ?? '').toLowerCase()] : undefined;
+  return showGenerated === undefined
+    ? invalid('/generated takes show or hide, e.g. /generated show.')
+    : { kind: 'generated', showGenerated };
+}
 
 function parseWhitespace(args: readonly string[]): ChatCommand {
   if (args.length === 0) {

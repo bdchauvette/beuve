@@ -14,7 +14,9 @@ export type AppAction =
   | 'flip-sidebar'
   | 'sidebar-overview'
   | 'sidebar-review'
-  | 'sidebar-chat';
+  | 'sidebar-chat'
+  | 'find'
+  | 'toggle-generated';
 
 /** What running a command from the palette does. */
 export type CommandRun =
@@ -158,6 +160,22 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     run: app('sidebar-chat'),
   },
   {
+    id: 'find',
+    title: 'Find in review (every file’s diff, collapsed ones too)',
+    scope: 'Anywhere',
+    keys: ['⌘F'],
+    available: true,
+    run: app('find'),
+  },
+  {
+    id: 'toggle-generated',
+    title: 'Show / collapse generated files',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('toggle-generated'),
+  },
+  {
     id: 'flip-sidebar',
     title: 'Move the sidebar to the other side',
     scope: 'Anywhere',
@@ -185,11 +203,11 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
   },
   {
     id: 'expand',
-    title: 'Expand / collapse',
+    title: 'Load / collapse the file’s diff (lockfiles, generated and large diffs start collapsed)',
     scope: 'Diff',
     keys: ['Space'],
-    available: false,
-    run: none,
+    available: true,
+    run: zoneKey('diff', ' '),
   },
   {
     id: 'peek',
@@ -454,6 +472,16 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     help: 'hide or show whitespace-only changes, computed by git diff -w (w in the diff)',
     available: true,
     run: slash('/whitespace ', true),
+  },
+  {
+    id: 'generated-mode',
+    title: 'Show or collapse generated files…',
+    scope: 'Chat',
+    keys: [],
+    slash: '/generated show|hide',
+    help: 'expand or collapse files .gitattributes marks linguist-generated (and minified bundles, source maps, protobuf output); remembered in settings.json',
+    available: true,
+    run: slash('/generated ', true),
   },
   {
     id: 'trust',

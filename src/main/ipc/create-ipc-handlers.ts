@@ -17,6 +17,7 @@ import type {
   ChatListView,
   EditorOpenResponse,
   DiffDisplayView,
+  FileAttributesView,
   EditorSettingsView,
   FilePairView,
   FlowGraphResponse,
@@ -266,6 +267,7 @@ const displayRequest = z.strictObject({
   layout: z.enum(['split', 'unified']).optional(),
   ignoreWhitespace: z.boolean().optional(),
   sidebarSide: z.enum(['left', 'right']).optional(),
+  showGenerated: z.boolean().optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -355,6 +357,10 @@ export function createIpcHandlers(
     'session:get-tree': async (request): Promise<IpcResult<RepositoryTreeView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.files.getTree(parsed.data) : invalid(parsed.error);
+    },
+    'session:get-file-attributes': async (request): Promise<IpcResult<FileAttributesView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.files.getFileAttributes(parsed.data) : invalid(parsed.error);
     },
     'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
       const parsed = callHierarchyRequest.safeParse(request);
@@ -555,11 +561,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { layout, ignoreWhitespace, sidebarSide } = parsed.data;
+      const { layout, ignoreWhitespace, sidebarSide, showGenerated } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
         ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
         ...(sidebarSide !== undefined && { sidebarSide }),
+        ...(showGenerated !== undefined && { showGenerated }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
