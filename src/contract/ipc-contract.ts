@@ -1299,6 +1299,8 @@ export interface DiffDisplayView {
   readonly showGenerated: boolean;
   /** Whether `/review` findings show as insights on the diff lines (ADR 0061); on by default. */
   readonly showInsights: boolean;
+  /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
+  readonly reviewOrder?: ReviewOrderMode;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1308,6 +1310,52 @@ export interface SetDiffDisplayRequest {
   readonly sidebarSide?: SidebarSideView;
   readonly showGenerated?: boolean;
   readonly showInsights?: boolean;
+  readonly reviewOrder?: ReviewOrderMode;
+}
+
+/**
+ * How the review's files are ordered (ADR 0065): `path` alphabetical, `imports` dependencies before
+ * the files that import them, `calls` the same over the language server's outgoing calls.
+ */
+export type ReviewOrderMode = 'path' | 'imports' | 'calls';
+
+/** `session:get-order`; without `mode` the saved preference applies. */
+export interface GetReviewOrderRequest {
+  readonly sessionId: string;
+  readonly mode?: ReviewOrderMode;
+}
+
+/** Why a file sits in the config and mechanical group at the end. */
+export type MechanicalReasonView =
+  'lockfile' | 'generated' | 'formatting-only' | 'pure-rename' | 'config';
+
+/** One run of the ordered list. `reasons`, for the config group, is aligned with `paths`. */
+export interface ReviewOrderGroupView {
+  readonly id: 'changes' | 'config-and-mechanical';
+  readonly label: string;
+  readonly paths: readonly string[];
+  readonly reasons?: readonly MechanicalReasonView[];
+}
+
+/** Why the order is not the one asked for. */
+export type ReviewOrderFallbackView =
+  | { readonly kind: 'no-language-server' }
+  | { readonly kind: 'no-call-edges' }
+  | { readonly kind: 'no-source-files' };
+
+/**
+ * The review's files (head paths, as in `ReviewView.files`) in reading order: `groups` in order,
+ * `paths` their concatenation. `mode` is what was used; when it differs from `requestedMode`,
+ * `fallback` says why.
+ */
+export interface ReviewOrderView {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly requestedMode: ReviewOrderMode;
+  readonly mode: ReviewOrderMode;
+  readonly fallback?: ReviewOrderFallbackView;
+  readonly paths: readonly string[];
+  readonly groups: readonly ReviewOrderGroupView[];
 }
 
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
@@ -1554,6 +1602,10 @@ export interface InvokeChannelMap {
   'session:mark-reviewed': {
     readonly request: MarkReviewedRequest;
     readonly response: IpcResult<SessionSummary>;
+  };
+  'session:get-order': {
+    readonly request: GetReviewOrderRequest;
+    readonly response: IpcResult<ReviewOrderView>;
   };
   'review:set-file-reviewed': {
     readonly request: SetFileReviewedRequest;

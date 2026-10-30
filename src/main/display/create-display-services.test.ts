@@ -22,6 +22,7 @@ describe('createDisplayServices', () => {
         sidebarSide: 'right',
         showGenerated: false,
         showInsights: true,
+        reviewOrder: 'path',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -32,12 +33,14 @@ describe('createDisplayServices', () => {
         sidebarSide: 'right',
         showGenerated: false,
         showInsights: true,
+        reviewOrder: 'path',
       },
     });
     await display.set({ ignoreWhitespace: true });
     await display.set({ sidebarSide: 'left' });
     await display.set({ showGenerated: true });
     await display.set({ showInsights: false });
+    await display.set({ reviewOrder: 'imports' });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -45,6 +48,7 @@ describe('createDisplayServices', () => {
       sidebarSide: 'left',
       showGenerated: true,
       showInsights: false,
+      reviewOrder: 'imports',
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -54,6 +58,7 @@ describe('createDisplayServices', () => {
         sidebarSide: 'left',
         showGenerated: true,
         showInsights: false,
+        reviewOrder: 'imports',
       },
     });
   });
@@ -69,6 +74,7 @@ describe('createDisplayServices', () => {
         sidebarSide: 'right',
         showGenerated: false,
         showInsights: true,
+        reviewOrder: 'path',
       },
     });
   });

@@ -35,6 +35,7 @@ import type {
   ChatCommandRequest,
   RepositoryInspectionView,
   RepositoryTreeView,
+  ReviewOrderView,
   ReviewView,
   SessionSummary,
   SetFileReviewedResponse,
@@ -277,12 +278,15 @@ const editorOpenRequest = z.strictObject({
   column: z.number().int().min(1).max(100_000).optional(),
 });
 const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
+const reviewOrderMode = z.enum(['path', 'imports', 'calls']);
+const reviewOrderRequest = z.strictObject({ sessionId, mode: reviewOrderMode.optional() });
 const displayRequest = z.strictObject({
   layout: z.enum(['split', 'unified']).optional(),
   ignoreWhitespace: z.boolean().optional(),
   sidebarSide: z.enum(['left', 'right']).optional(),
   showGenerated: z.boolean().optional(),
   showInsights: z.boolean().optional(),
+  reviewOrder: reviewOrderMode.optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -371,6 +375,16 @@ export function createIpcHandlers(
         reviewed,
         ...(expectedHeadSha !== undefined && { expectedHeadSha }),
       });
+    },
+    'session:get-order': async (request): Promise<IpcResult<ReviewOrderView>> => {
+      const parsed = reviewOrderRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, mode } = parsed.data;
+      return services.order.getOrder(
+        mode === undefined ? { sessionId: id } : { sessionId: id, mode },
+      );
     },
     'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
@@ -580,13 +594,15 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { layout, ignoreWhitespace, sidebarSide, showGenerated, showInsights } = parsed.data;
+      const { layout, ignoreWhitespace, sidebarSide, showGenerated, showInsights, reviewOrder } =
+        parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
         ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
         ...(sidebarSide !== undefined && { sidebarSide }),
         ...(showGenerated !== undefined && { showGenerated }),
         ...(showInsights !== undefined && { showInsights }),
+        ...(reviewOrder !== undefined && { reviewOrder }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {

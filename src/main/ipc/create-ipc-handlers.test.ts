@@ -146,6 +146,30 @@ describe('createIpcHandlers for reviewed marks', () => {
   });
 });
 
+describe('createIpcHandlers for review order', () => {
+  test('validates session:get-order and the saved order in display:set', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        order: {
+          getOrder: async (request) => {
+            calls.push(request);
+            return notWired();
+          },
+        },
+      },
+      appInfo(),
+    );
+    await expectInvalid(expect, handlers['session:get-order']({ sessionId: 's1', mode: 'random' }));
+    await expectInvalid(expect, handlers['session:get-order']({ mode: 'path' }));
+    await handlers['session:get-order']({ sessionId: 's1' });
+    await handlers['session:get-order']({ sessionId: 's1', mode: 'calls' });
+    expect(calls).toStrictEqual([{ sessionId: 's1' }, { sessionId: 's1', mode: 'calls' }]);
+    await expectInvalid(expect, handlers['display:set']({ reviewOrder: 'tests-first' }));
+  });
+});
+
 describe('createIpcHandlers for impact and call hierarchy', () => {
   test('validates session:get-impact before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
@@ -779,6 +803,7 @@ function stubServices(
       getFilePair: notWired,
       getFileAttributes: notWired,
     },
+    order: { getOrder: notWired },
     lsp: { callHierarchy: notWired },
     flow: { getGraph: notWired },
     editor: {

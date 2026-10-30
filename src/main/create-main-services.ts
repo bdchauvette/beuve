@@ -32,6 +32,7 @@ import { createImpactServices } from './impact/create-impact-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import { createImpactWorker } from './impact/create-impact-worker.ts';
 import type { ImpactRunner } from './impact/create-impact-worker.ts';
+import { createOrderServices } from './order/create-order-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
@@ -207,10 +208,22 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     openSessionId: () => open.sessionId,
   });
   gh.services = github;
+  const files = createFileServices({ context });
+  const display = createDisplayServices(options.display?.settingsPath);
   return {
     sessions,
     impact,
-    files: createFileServices({ context }),
+    files,
+    order: createOrderServices({
+      context,
+      parse: parser.parse,
+      callHierarchy: lsp.callHierarchy,
+      getFileAttributes: files.getFileAttributes,
+      defaultMode: async () => {
+        const shown = await display.get();
+        return (shown.ok ? shown.value.reviewOrder : undefined) ?? 'path';
+      },
+    }),
     lsp,
     flow: createFlowServices({ context, parse: parser.parse }),
     editor: createEditorServices({
@@ -219,7 +232,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       settings: createEditorSettings(options.editor?.settingsPath),
       platform: options.editor?.platform ?? createSystemEditorPlatform(),
     }),
-    display: createDisplayServices(options.display?.settingsPath),
+    display,
     chat,
     ura,
     trace,

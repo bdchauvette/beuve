@@ -19,6 +19,7 @@ import type { FlowServices } from './flow/create-flow-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
+import type { OrderServices } from './order/create-order-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
@@ -46,6 +47,7 @@ export interface MainServices {
   readonly sessions: SessionServices;
   readonly impact: ImpactServices;
   readonly files: FileServices;
+  readonly order: OrderServices;
   readonly lsp: Pick<LspServices, 'callHierarchy'>;
   readonly flow: FlowServices;
   readonly editor: EditorServices;
