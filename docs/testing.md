@@ -13,6 +13,7 @@ How beuve's tests are written (ADR 0058 for tests, ADR 0059 for time). Every tes
 7. Prefer `toStrictEqual` and `expect(promise).resolves`. Use `test.for` (not `test.each`) for tables: it passes the context as the second argument.
 8. No `Date`, and no arithmetic on time numbers (ADR 0059): use `Temporal` values and `Temporal.Duration`.
 9. Never block the worker: no `execFileSync`, `execSync` or `spawnSync` in tests or `testing/` (lint enforces it). `repo.git(…)` and `repo.commit(…)` return promises, so `await` them; a synchronous call would make concurrent tests run back to back with every timeout ticking (ADR 0058 amendment).
+10. Forward the test's `signal` to everything that takes one (ADR 0075, `local/forward-abort-signal`), and through fixtures that start processes or servers: Vitest aborts it when the test times out, which kills what the test started.
 
 ## Fixtures
 

@@ -137,6 +137,8 @@ export default defineConfig(
       'local/no-barrel-files': 'error',
       'local/enforce-internal-utils': 'error',
       'local/enforce-top-level-function-syntax': 'error',
+      // ADR 0075.
+      'local/forward-abort-signal': 'error',
     },
   },
 
