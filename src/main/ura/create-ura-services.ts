@@ -118,6 +118,8 @@ export interface UraServices {
 /** What {@link UraServices.compileArtifact} compiles at and with. */
 export interface CompileArtifactOptions {
   readonly headSha: CommitSha;
+  /** The base tip the caller resolved for this operation, so the fork point can't move (ADR 0079). */
+  readonly baseTip?: CommitSha;
   readonly verdict?: UraVerdictView;
 }
 
@@ -309,13 +311,13 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const compile = async (
     sessionId: string,
     verdict: ExportUraRequest['verdict'],
-    pinnedHeadSha?: CommitSha,
+    pinned?: { readonly headSha: CommitSha; readonly baseTip: CommitSha | undefined },
   ): Promise<IpcResult<UraArtifact>> => {
-    const diff = await loadReviewDiff(
-      context,
-      sessionId,
-      pinnedHeadSha === undefined ? {} : { headSha: pinnedHeadSha },
-    );
+    const pinnedHeadSha = pinned?.headSha;
+    const diff = await loadReviewDiff(context, sessionId, {
+      ...(pinnedHeadSha !== undefined && { headSha: pinnedHeadSha }),
+      ...(pinned?.baseTip !== undefined && { baseTip: pinned.baseTip }),
+    });
     if (!diff.ok) {
       return diff;
     }
@@ -573,8 +575,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
     },
 
-    compileArtifact: async (sessionId, { headSha, verdict }): Promise<IpcResult<UraArtifact>> =>
-      compile(sessionId, verdict, headSha),
+    compileArtifact: async (
+      sessionId,
+      { headSha, baseTip, verdict },
+    ): Promise<IpcResult<UraArtifact>> => compile(sessionId, verdict, { headSha, baseTip }),
 
     listPostings: (sessionId): readonly UraPosting[] => listUraPostings(db, sessionId as SessionId),
 

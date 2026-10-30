@@ -37,7 +37,8 @@ export interface PreparedReview {
  * `commentableRanges` from the local `base...head` diff, which is the diff GitHub shows, so no
  * inline comment lands off it. A session whose head is no longer that one is `head-moved`;
  * otherwise the diff, the artifact, `commit_id` and the preview all use that one SHA, never a
- * second read of the head (ADR 0078).
+ * second read of the head (ADR 0078), and the one base tip resolved here, so a base fetched
+ * meanwhile can't change the fork point the artifact names (ADR 0079).
  */
 export async function prepareGithubReview(
   context: Pick<GithubContext, 'session'>,
@@ -78,6 +79,7 @@ export async function prepareGithubReview(
   }
   const artifact = await ura.compileArtifact(session.id, {
     headSha,
+    baseTip,
     ...(request.verdict !== undefined && { verdict: request.verdict }),
   });
   if (!artifact.ok) {

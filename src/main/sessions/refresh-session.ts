@@ -6,10 +6,12 @@ import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { advanceHead } from '#internal/session/advance-head.ts';
 import type { Session } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
+import { loadSession } from './load-session.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
 
@@ -28,6 +30,11 @@ export interface RefreshSessionOptions {
    * 0078): the session comes back at this head, and its head ref is not read again.
    */
   readonly headSha?: CommitSha;
+  /**
+   * The base tip this operation uses, which an earlier step of it resolved (ADR 0079): the base
+   * ref is not read again, so a base fetched meanwhile can't change the fork point mid-operation.
+   */
+  readonly baseTip?: CommitSha;
 }
 
 /**
@@ -46,7 +53,10 @@ export async function refreshSession(
   if (!repository.ok) {
     return gitFailure(logger, repository.error);
   }
-  const baseTip = await resolveRevision(repository.value, session.source.baseRef);
+  const baseTip =
+    options.baseTip === undefined
+      ? await resolveRevision(repository.value, session.source.baseRef)
+      : ok(options.baseTip);
   if (!baseTip.ok) {
     return gitFailure(logger, baseTip.error);
   }
@@ -57,17 +67,55 @@ export async function refreshSession(
   if (session.source.kind !== 'local') {
     return ok({ session, repository: repository.value, baseTip: baseTip.value });
   }
-  const head = await resolveRevision(repository.value, session.source.headRef);
-  if (!head.ok) {
-    return gitFailure(logger, head.error);
-  }
-  const advanced = advanceHead(session, head.value);
-  if (advanced !== session) {
-    const saved = updateSessionHead(context.db, advanced);
-    if (!saved.ok) {
-      return sessionFailure(logger, saved.error);
+  const advanced = await advanceLocalHead(context, repository.value, session);
+  return advanced.ok
+    ? ok({ session: advanced.value, repository: repository.value, baseTip: baseTip.value })
+    : advanced;
+}
+
+/** How often a local head write retries after losing a race to another writer. */
+const headWriteAttempts = 3;
+
+/**
+ * Resolves a local session's head ref and stores it if it moved. The write is a compare-and-swap
+ * (ADR 0079): if another refresh stored a head meanwhile, the session is reloaded and the ref read
+ * again, so two `rev-parse`s answering out of order can't leave the older head stored.
+ */
+async function advanceLocalHead(
+  context: SessionContext,
+  repository: GitRepository,
+  snapshot: Session,
+): Promise<Result<Session, IpcError>> {
+  const { logger } = context;
+  let session = snapshot;
+  for (let attempt = 1; ; attempt += 1) {
+    if (session.source.kind !== 'local') {
+      return ok(session);
     }
-    context.onHeadMoved?.(advanced.id, advanced.headSha);
+    const head = await resolveRevision(repository, session.source.headRef);
+    if (!head.ok) {
+      return gitFailure(logger, head.error);
+    }
+    const advanced = advanceHead(session, head.value);
+    if (advanced === session) {
+      return ok(session);
+    }
+    const saved = updateSessionHead(context.db, advanced, session.headSha);
+    if (saved.ok) {
+      context.onHeadMoved?.(advanced.id, advanced.headSha);
+      return ok(advanced);
+    }
+    const { error } = saved;
+    if (error.kind === 'session-not-found') {
+      return sessionFailure(logger, error);
+    }
+    if (attempt === headWriteAttempts) {
+      return err({ code: 'stale-review', message: 'The head kept moving; try again.' });
+    }
+    const reloaded = loadSession(context, session.id);
+    if (!reloaded.ok) {
+      return reloaded;
+    }
+    session = reloaded.value;
   }
-  return ok({ session: advanced, repository: repository.value, baseTip: baseTip.value });
 }

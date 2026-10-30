@@ -42,6 +42,14 @@ The worktree manager (ADR 0020) handed a path out with no record of who used it,
 - `settled()` waits for queued adds and removals; main's `dispose` awaits it.
 - **Task #28's writable review-edits worktree** is meant to be a third claim kind with its own planned path and add operation (a branch, not a detached head), keeping the same leases, holders and per-path serialisation.
 
+### Head writes are compare-and-swap, and the base is pinned like the head
+
+- **`updateSessionHead(db, session, expectedHeadSha)`** stores the head only `WHERE head_sha = expectedHeadSha`, the head the writer's observation started from, and otherwise answers `head-changed` with the stored head. A slower observation that finishes last can no longer move a head back.
+  - Local sessions: `refreshSession` reloads and reads the head ref again on a conflict (up to three times), so two `rev-parse`s that answer out of order leave the newer head.
+  - Pull requests: `moveSessionHead` passes the snapshot its caller loaded before fetching. `github:open-pr` takes that snapshot before its fetch and keeps a head another writer stored meanwhile; the poller's own losing write leaves its ETag cleared, as for any head it could not store.
+  - The poller remembers the head it last left (`headSeen`). A different stored head at the next poll means someone else wrote it, so the poll is unconditional: an ETag can no longer 304 past a head the poller didn't store.
+- **The base tip is pinned for one operation**, as ADR 0078 pins the head. `RefreshSessionOptions.baseTip`, `ReviewDiffOptions.baseTip` and `CompileArtifactOptions.baseTip` take the tip an earlier step resolved, and `prepareGithubReview` passes its own to `compileArtifact`, so a base fetched between preparing and compiling can't change the fork point the artifact names.
+
 ## Consequences
 
 A signal can now be forwarded to any git operation without asking whether it is safe to kill: the operation decides. A cancelled worktree add costs the rest of its checkout instead of a broken directory. Adding a git operation means choosing its policy, and adding a raw command outside the git domain fails `npm run deps`. A hung atomic command can only be stopped by its timeout.

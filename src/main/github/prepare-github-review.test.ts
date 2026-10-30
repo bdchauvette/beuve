@@ -63,6 +63,39 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       comments: [{ path: 'app.ts', line: 1 }],
     });
   });
+
+  test('uses the one base tip it resolved when the base is fetched while the review compiles', async ({
+    expect,
+    services,
+    opened,
+    db,
+    deps,
+    logger,
+    world,
+  }) => {
+    const { clone, firstHead, baseSha } = world;
+    const sessionId = await opened();
+    const session: SessionContext = {
+      db,
+      deps,
+      logger: logger.logger,
+      git: { logger: logger.logger },
+    };
+    const held = holdCompile(createUraServices({ context: session, impact: services.impact }));
+    const preparing = prepareGithubReview({ session }, held.ura, {
+      sessionId,
+      expectedHeadSha: firstHead,
+    });
+    await held.arrived;
+    const tree = await clone.git('show', '--no-patch', '--format=%T', baseSha);
+    const landed = await clone.git('commit-tree', tree, '-p', baseSha, '-m', 'landed on main');
+    await clone.git('update-ref', 'refs/beuve/pr/7/base', landed);
+    held.release();
+
+    const prepared = okValueFrom(await preparing);
+    expect(held.compiledFrom()).toStrictEqual([baseSha]);
+    expect(prepared.preview).toMatchObject({ headSha: firstHead });
+  });
 });
 
 /** Holds `compileArtifact` until `release`, recording the head each call asked for. */
@@ -71,10 +104,13 @@ function holdCompile(ura: UraServices): {
   readonly arrived: Promise<undefined>;
   readonly release: () => void;
   readonly compiledAt: () => readonly string[];
+  /** The base tip each call was pinned to. */
+  readonly compiledFrom: () => readonly (string | undefined)[];
 } {
   const arrived = Promise.withResolvers<undefined>();
   const gate = Promise.withResolvers<undefined>();
   const heads: string[] = [];
+  const bases: (string | undefined)[] = [];
   return {
     ura: {
       compileArtifact: async (
@@ -82,6 +118,7 @@ function holdCompile(ura: UraServices): {
         options: CompileArtifactOptions,
       ): ReturnType<UraServices['compileArtifact']> => {
         heads.push(options.headSha);
+        bases.push(options.baseTip);
         arrived.resolve(undefined);
         await gate.promise;
         return ura.compileArtifact(sessionId, options);
@@ -93,5 +130,6 @@ function holdCompile(ura: UraServices): {
       gate.resolve(undefined);
     },
     compiledAt: (): readonly string[] => heads,
+    compiledFrom: (): readonly (string | undefined)[] => bases,
   };
 }

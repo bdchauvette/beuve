@@ -3,9 +3,13 @@ import { readFileSync } from 'node:fs';
 import { describe } from 'vitest';
 
 import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
+import { advanceHead } from '#internal/session/advance-head.ts';
+import type { CommitSha } from '#internal/session/session.ts';
+import { updateSessionHead } from '#internal/session/update-session-head.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import type { MainServices } from '../main-services.ts';
+import { loadSession } from '../sessions/load-session.ts';
 import { lines } from '../testing/lines.ts';
 import { waitUntil } from '../testing/wait-until.ts';
 import { test } from './testing/test.ts';
@@ -163,6 +167,26 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       outcome: { kind: 'exact' },
     });
     expect(interdiff.files.map((file) => file.path)).toStrictEqual(['app.ts']);
+  });
+
+  test('a head written behind the poller’s back is not pinned by its ETag (ADR 0079)', async ({
+    expect,
+    services,
+    opened,
+    db,
+    deps,
+    logger,
+    world,
+  }) => {
+    const { firstHead, baseSha } = world;
+    const context = { db, deps, logger: logger.logger, git: {} };
+    const sessionId = await opened();
+    await services.github.pollNow(sessionId);
+    const polled = okValueFrom(loadSession(context, sessionId));
+    const behind = advanceHead(polled, baseSha as CommitSha);
+    okValueFrom(updateSessionHead(db, behind, polled.headSha));
+    await services.github.pollNow(sessionId);
+    expect(okValueFrom(loadSession(context, sessionId)).headSha).toBe(firstHead);
   });
 
   test('derives whose turn it is from requests, reviews and CI, and pushes it with the update', async ({

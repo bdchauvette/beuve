@@ -4,17 +4,38 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { Session, SessionError } from './session.ts';
+import type { CommitSha, Session, SessionError, SessionId } from './session.ts';
 
-/** Persists the head and `updatedAt` of a session changed by {@link advanceHead}. */
+/** Why {@link updateSessionHead} stored nothing. */
+export type HeadWriteError =
+  | Extract<SessionError, { kind: 'session-not-found' }>
+  /** Another writer moved the head after the caller read it (ADR 0079). */
+  | {
+      readonly kind: 'head-changed';
+      readonly sessionId: SessionId;
+      readonly expected: CommitSha;
+      readonly stored: string;
+    };
+
+/**
+ * Persists the head and `updatedAt` of a session changed by {@link advanceHead}, if the stored
+ * head is still `expectedHeadSha`, the head the caller's observation started from: a
+ * compare-and-swap, so a slower writer acting on an older observation can't move the head back.
+ */
 export function updateSessionHead(
   db: DatabaseSync,
   session: Session,
-): Result<void, Extract<SessionError, { kind: 'session-not-found' }>> {
+  expectedHeadSha: CommitSha,
+): Result<void, HeadWriteError> {
   const { changes } = db
-    .prepare('UPDATE sessions SET head_sha = ?, updated_at = ? WHERE id = ?;')
-    .run(session.headSha, session.updatedAt, session.id);
-  return Number(changes) === 0
-    ? err({ kind: 'session-not-found', sessionId: session.id })
-    : ok(undefined);
+    .prepare('UPDATE sessions SET head_sha = ?, updated_at = ? WHERE id = ? AND head_sha = ?;')
+    .run(session.headSha, session.updatedAt, session.id, expectedHeadSha);
+  if (Number(changes) > 0) {
+    return ok(undefined);
+  }
+  const row = db.prepare('SELECT head_sha FROM sessions WHERE id = ?;').get(session.id);
+  const stored = row?.['head_sha'];
+  return typeof stored === 'string'
+    ? err({ kind: 'head-changed', sessionId: session.id, expected: expectedHeadSha, stored })
+    : err({ kind: 'session-not-found', sessionId: session.id });
 }

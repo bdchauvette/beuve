@@ -11,6 +11,7 @@ import { findSessionBySource } from '#internal/session/find-session-by-source.ts
 import { insertSession } from '#internal/session/insert-session.ts';
 import type { Session, SessionSource } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -66,8 +67,13 @@ function upsert(
     if (advanced === existing.value) {
       return ok(advanced);
     }
-    const updated = updateSessionHead(db, advanced);
-    return updated.ok ? ok(advanced) : sessionFailure(logger, updated.error);
+    const updated = updateSessionHead(db, advanced, existing.value.headSha);
+    if (updated.ok) {
+      return ok(advanced);
+    }
+    return updated.error.kind === 'session-not-found'
+      ? sessionFailure(logger, updated.error)
+      : err({ code: 'stale-review', message: 'The session moved while it was being opened.' });
   }
   const created = createSession(source, headSha, deps);
   if (!created.ok) {

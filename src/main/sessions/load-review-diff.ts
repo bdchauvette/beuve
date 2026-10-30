@@ -44,6 +44,8 @@ export interface ReviewDiffOptions {
   readonly cache?: LruCache<string, RangeDiff>;
   /** Diff at this head, which the caller checked, instead of reading the head again (ADR 0078). */
   readonly headSha?: CommitSha;
+  /** Diff from this base tip, which the caller resolved, instead of reading the base again. */
+  readonly baseTip?: CommitSha;
 }
 
 /** The diff a review shows, still in git-domain types, with the refreshed session behind it. */
@@ -65,11 +67,10 @@ export async function loadReviewDiff(
   if (!loaded.ok) {
     return loaded;
   }
-  const refreshed = await refreshSession(
-    context,
-    loaded.value,
-    options.headSha === undefined ? {} : { headSha: options.headSha },
-  );
+  const refreshed = await refreshSession(context, loaded.value, {
+    ...(options.headSha !== undefined && { headSha: options.headSha }),
+    ...(options.baseTip !== undefined && { baseTip: options.baseTip }),
+  });
   if (!refreshed.ok) {
     return refreshed;
   }

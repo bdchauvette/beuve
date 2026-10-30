@@ -41,7 +41,10 @@ test(
     insertCheckpoint(db, first.checkpoint);
     clock.advance({ minutes: 1 });
     const pushed = advanceHead(first.session, sha('2'));
-    expect(updateSessionHead(db, pushed)).toStrictEqual({ ok: true, value: undefined });
+    expect(updateSessionHead(db, pushed, first.session.headSha)).toStrictEqual({
+      ok: true,
+      value: undefined,
+    });
     expect(computeReviewRange(reload(db, session.id))).toStrictEqual({
       kind: 'interdiff',
       baseRef: 'main',

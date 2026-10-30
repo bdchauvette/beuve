@@ -67,6 +67,11 @@ export interface PullRequestPollerOptions {
 
 interface PollState {
   prEtag?: string | undefined;
+  /**
+   * The session head as this poller last left it. A different stored head means another writer
+   * moved it, so `prEtag` no longer describes what is stored and must not 304 the next poll.
+   */
+  headSeen?: string | undefined;
   ciSha?: string;
   ciEtags?: CiEtags | undefined;
   ci?: CiStatusView;
@@ -257,6 +262,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     }
     const { host, owner, repo, number } = source;
     const ref: PullRequestRef = { host, owner, repo, number };
+    if (state.headSeen !== undefined && state.headSeen !== session.headSha) {
+      state.prEtag = undefined;
+    }
     const pulled = await context.clients.withClient(host, async (client) =>
       getPullRequest(client, ref, {
         ...(state.prEtag !== undefined && { etag: state.prEtag }),
@@ -268,6 +276,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return failed(state, pulled.error);
     }
     let headSha: string = session.headSha;
+    state.headSeen ??= headSha;
     if (pulled.value.kind === 'modified') {
       const pullRequest = pulled.value.value;
       savePullRequest(context.session.db, ref, pullRequest, Temporal.Now.instant());
@@ -285,6 +294,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       // A head that couldn't be fetched is asked for unconditionally next time, not 304'd past.
       state.prEtag = isNewHead && !hasHeadMoved ? undefined : pulled.value.etag;
       headSha = movedTo ?? headSha;
+      state.headSeen = headSha;
       isAttentionChanged(state, ref);
       emitUpdated(sessionId, ref, state, hasHeadMoved);
     }

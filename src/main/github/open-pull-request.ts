@@ -10,6 +10,7 @@ import { findStoredPullRequest } from '#internal/github/find-stored-pull-request
 import { parsePullRequestRef } from '#internal/github/parse-pull-request-ref.ts';
 import type { PullRequest, PullRequestRef } from '#internal/github/pull-request.ts';
 import { savePullRequest } from '#internal/github/save-pull-request.ts';
+import { findSessionBySource } from '#internal/session/find-session-by-source.ts';
 import type { Session } from '#internal/session/session.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -66,6 +67,15 @@ export async function openPullRequest(
       `${repository.value.root} has no remote for ${ref.host}/${ref.owner}/${ref.repo}. Enter the path of a local clone of that repository.`,
     );
   }
+  const source = {
+    kind: 'github-pull-request',
+    repoPath: repository.value.root,
+    host: ref.host,
+    owner: ref.owner,
+    repo: ref.repo,
+    number: ref.number,
+  } as const;
+  const before = findSessionBySource(context.session.db, { ...source, baseRef: '' });
   const synced = await syncPullRequestHead({
     repository: repository.value,
     remote: remote.name,
@@ -78,16 +88,9 @@ export async function openPullRequest(
   }
   const session = upsertPullRequestSession(
     context.session,
-    {
-      kind: 'github-pull-request',
-      repoPath: repository.value.root,
-      baseRef: synced.value.baseRef,
-      host: ref.host,
-      owner: ref.owner,
-      repo: ref.repo,
-      number: ref.number,
-    },
+    { ...source, baseRef: synced.value.baseRef },
     synced.value.headSha,
+    before.ok ? before.value : undefined,
   );
   if (!session.ok) {
     return githubFailure('github-failed', session.error.message);

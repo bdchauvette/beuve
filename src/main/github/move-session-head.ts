@@ -2,13 +2,19 @@ import type { IpcError } from '#contract/ipc-contract.ts';
 import { advanceHead } from '#internal/session/advance-head.ts';
 import type { CommitSha, Session } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { SessionContext } from '../sessions/session-context.ts';
 import { sessionFailure } from '../sessions/session-failure.ts';
 
-/** Stores a pull request session's new head and tells `onHeadMoved`; the same head is a no-op. */
+/**
+ * Stores a pull request session's new head and tells `onHeadMoved`; the same head is a no-op.
+ * `session` is the snapshot the caller's observation started from: if another writer moved the
+ * head since, nothing is stored and the answer is `stale-review` (ADR 0079), so an older
+ * observation that finishes last can't move the head back.
+ */
 export function moveSessionHead(
   context: SessionContext,
   session: Session,
@@ -18,9 +24,14 @@ export function moveSessionHead(
   if (advanced === session) {
     return ok(session);
   }
-  const saved = updateSessionHead(context.db, advanced);
+  const saved = updateSessionHead(context.db, advanced, session.headSha);
   if (!saved.ok) {
-    return sessionFailure(context.logger, saved.error);
+    const { error } = saved;
+    if (error.kind === 'session-not-found') {
+      return sessionFailure(context.logger, error);
+    }
+    context.logger.info('head move superseded by a newer write', { ...error, headSha });
+    return err({ code: 'stale-review', message: 'Another update moved the head first.' });
   }
   context.onHeadMoved?.(advanced.id, advanced.headSha);
   return ok(advanced);
