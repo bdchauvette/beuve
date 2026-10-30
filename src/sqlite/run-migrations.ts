@@ -2,10 +2,13 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { withTransaction } from './with-transaction.ts';
 
-/** One forward-only schema change. `id` is permanent once shipped; `up` is SQL. */
+/**
+ * One forward-only schema change. `id` is permanent once shipped; `up` is SQL, or a function for
+ * a change SQL can't say well (rewriting stored JSON), run in the migration's transaction.
+ */
 export interface Migration {
   readonly id: string;
-  readonly up: string;
+  readonly up: string | ((db: DatabaseSync) => void);
 }
 
 /**
@@ -24,7 +27,11 @@ export function runMigrations(db: DatabaseSync, migrations: readonly Migration[]
     .filter((migration) => !applied.has(migration.id))
     .map((migration) =>
       withTransaction(db, () => {
-        db.exec(migration.up);
+        if (typeof migration.up === 'string') {
+          db.exec(migration.up);
+        } else {
+          migration.up(db);
+        }
         record.run(migration.id, Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }));
         return migration.id;
       }),

@@ -55,6 +55,34 @@ describe('runMigrations', () => {
     expect(runMigrations(db, migrations)).toStrictEqual([]);
   });
 
+  test('runs a function migration in its transaction', ({ expect, db }) => {
+    const migrations = migrationList();
+    const copy: Migration = {
+      id: '0003-copy',
+      up: (inner): void => {
+        inner.exec('CREATE TABLE copies (name TEXT) STRICT;');
+        inner.prepare('INSERT INTO copies (name) VALUES (?);').run('first');
+      },
+    };
+    const failing: Migration = {
+      id: '0004-failing',
+      up: (inner): void => {
+        inner.exec('CREATE TABLE doomed (name TEXT) STRICT;');
+        throw new Error('stop');
+      },
+    };
+    expect(runMigrations(db, [...migrations, copy])).toStrictEqual([
+      '0001-parents',
+      '0002-children',
+      '0003-copy',
+    ]);
+    expect(db.prepare('SELECT name FROM copies;').all()).toMatchObject([{ name: 'first' }]);
+    expect(() => runMigrations(db, [...migrations, copy, failing])).toThrow('stop');
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'doomed';").all()).toStrictEqual(
+      [],
+    );
+  });
+
   test('rejects duplicate ids', ({ expect, db }) => {
     const first = migrationList().slice(0, 1);
     expect(() => runMigrations(db, [...first, ...first])).toThrow('Duplicate migration id');
