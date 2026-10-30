@@ -1,17 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { appendChatMessage } from './append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
 import { clearChatMessages } from './clear-chat-messages.ts';
 import { listChatMessages } from './list-chat-messages.ts';
-import { createChatTestDatabase } from './testing/create-chat-test-database.ts';
-
-const first = '11111111-1111-4111-8111-111111111111' as SessionId;
-const second = '22222222-2222-4222-8222-222222222222' as SessionId;
+import { test } from './testing/test.ts';
 
 describe('clearChatMessages', () => {
-  it("deletes one session's transcript only", () => {
-    const db = createChatTestDatabase([first, second]);
+  test("deletes one session's transcript only", ({ expect, db }) => {
+    db.prepare('INSERT INTO sessions (id) VALUES (?);').run(second());
     const message = {
       headSha: 'c'.repeat(40) as CommitSha,
       role: 'user' as const,
@@ -23,23 +20,31 @@ describe('clearChatMessages', () => {
     appendChatMessage(db, {
       ...message,
       id: '00000000-0000-4000-8000-000000000001' as ChatMessageId,
-      sessionId: first,
+      sessionId: first(),
     });
     appendChatMessage(db, {
       ...message,
       id: '00000000-0000-4000-8000-000000000002' as ChatMessageId,
-      sessionId: first,
+      sessionId: first(),
     });
     appendChatMessage(db, {
       ...message,
       id: '00000000-0000-4000-8000-000000000003' as ChatMessageId,
-      sessionId: second,
+      sessionId: second(),
     });
-    expect(clearChatMessages(db, first)).toBe(2);
-    expect(listChatMessages(db, first)).toEqual({ ok: true, value: [] });
-    expect(listChatMessages(db, second)).toMatchObject({
+    expect(clearChatMessages(db, first())).toBe(2);
+    expect(listChatMessages(db, first())).toStrictEqual({ ok: true, value: [] });
+    expect(listChatMessages(db, second())).toMatchObject({
       ok: true,
-      value: [{ sessionId: second }],
+      value: [{ sessionId: second() }],
     });
   });
 });
+
+function first(): SessionId {
+  return '11111111-1111-4111-8111-111111111111' as SessionId;
+}
+
+function second(): SessionId {
+  return '22222222-2222-4222-8222-222222222222' as SessionId;
+}

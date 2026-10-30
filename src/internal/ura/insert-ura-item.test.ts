@@ -1,30 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { editUraItem } from './edit-ura-item.ts';
 import { findUraItem } from './find-ura-item.ts';
 import { insertUraItem } from './insert-ura-item.ts';
 import { listUraItems } from './list-ura-items.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
-import { createUraTestDatabase } from './testing/create-ura-test-database.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import { transitionUraItem } from './transition-ura-item.ts';
-import type { UraItem } from './ura-item.ts';
+import type { SessionId, UraItem } from './ura-item.ts';
 import { updateUraItem } from './update-ura-item.ts';
-
-const { sessionId, itemId } = testUraIds;
-const later = Temporal.Instant.from('2026-10-29T08:00:00.000Z');
+import { test } from './testing/test.ts';
 
 /** One item of every anchor, origin and status shape, with patches where they fit. */
-function sampleItems(): UraItem[] {
+function sampleItems(): [UraItem, UraItem, UraItem, UraItem, UraItem] {
   return [
-    createTestUraItem({ id: itemId(1), suggestion: '@@ -11 +11 @@\n-a\n+b\n' }),
+    createTestUraItem({ id: testUraIds.itemId(1), suggestion: '@@ -11 +11 @@\n-a\n+b\n' }),
     createTestUraItem({
-      id: itemId(2),
+      id: testUraIds.itemId(2),
       origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 0 },
       severity: 'question',
     }),
     createTestUraItem({
-      id: itemId(3),
+      id: testUraIds.itemId(3),
       anchor: { kind: 'lines', path: 'src/p.ts', startLine: 5, endLine: 40 },
       origin: {
         kind: 'impact-finding',
@@ -36,14 +35,14 @@ function sampleItems(): UraItem[] {
       },
     }),
     createTestUraItem({
-      id: itemId(4),
+      id: testUraIds.itemId(4),
       anchor: { kind: 'change' },
       origin: { kind: 'chat-answer', messageId: 'msg-1' },
       severity: 'praise',
       status: { kind: 'withdrawn' },
     }),
     createTestUraItem({
-      id: itemId(5),
+      id: testUraIds.itemId(5),
       anchor: { kind: 'file', path: 'README.md' },
       status: { kind: 'addressed', atSha: testUraIds.laterHeadSha, by: 'agent' },
     }),
@@ -51,90 +50,79 @@ function sampleItems(): UraItem[] {
 }
 
 describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
-  it('round-trips every shape in insertion order', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('round-trips every shape in insertion order', ({ expect, db }) => {
     const items = sampleItems();
     for (const item of items) {
-      expect(insertUraItem(db, item)).toEqual({ ok: true, value: undefined });
+      expect(insertUraItem(db, item)).toStrictEqual({ ok: true, value: undefined });
     }
-    expect(listUraItems(db, sessionId)).toEqual({ ok: true, value: items });
-    expect(findUraItem(db, itemId(3))).toEqual({ ok: true, value: items[2] });
-    expect(listUraItems(db, testUraIds.otherSessionId)).toEqual({ ok: true, value: [] });
+    expect(listUraItems(db, testUraIds.sessionId)).toStrictEqual({ ok: true, value: items });
+    expect(findUraItem(db, testUraIds.itemId(3))).toStrictEqual({ ok: true, value: items[2] });
+    expect(listUraItems(db, testUraIds.otherSessionId)).toStrictEqual({ ok: true, value: [] });
   });
 
-  it('reports a missing session, a reused id and repeated staging', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('reports a missing session, a reused id and repeated staging', ({ expect, db }) => {
     const [human, reviewFinding, finding] = sampleItems();
-    if (human === undefined || reviewFinding === undefined || finding === undefined) {
-      throw new Error('fixture');
-    }
-    const orphan = createTestUraItem({ sessionId: testUraIds.otherSessionId });
-    expect(insertUraItem(db, orphan)).toEqual({
+    const unknown = '55555555-5555-4555-8555-555555555555' as SessionId;
+    const orphan = createTestUraItem({ sessionId: unknown });
+    expect(insertUraItem(db, orphan)).toStrictEqual({
       ok: false,
-      error: { kind: 'session-not-found', sessionId: testUraIds.otherSessionId },
+      error: { kind: 'session-not-found', sessionId: unknown },
     });
     insertUraItem(db, human);
-    expect(insertUraItem(db, human)).toEqual({
+    expect(insertUraItem(db, human)).toStrictEqual({
       ok: false,
       error: { kind: 'duplicate-item', id: human.id, reason: 'id-taken' },
     });
     insertUraItem(db, reviewFinding);
-    expect(insertUraItem(db, { ...reviewFinding, id: itemId(8) })).toEqual({
+    expect(insertUraItem(db, { ...reviewFinding, id: testUraIds.itemId(8) })).toStrictEqual({
       ok: false,
-      error: { kind: 'duplicate-item', id: itemId(8), reason: 'review-finding-already-staged' },
+      error: {
+        kind: 'duplicate-item',
+        id: testUraIds.itemId(8),
+        reason: 'review-finding-already-staged',
+      },
     });
     insertUraItem(db, finding);
-    expect(insertUraItem(db, { ...finding, id: itemId(9) })).toEqual({
+    expect(insertUraItem(db, { ...finding, id: testUraIds.itemId(9) })).toStrictEqual({
       ok: false,
-      error: { kind: 'duplicate-item', id: itemId(9), reason: 'finding-already-staged' },
+      error: { kind: 'duplicate-item', id: testUraIds.itemId(9), reason: 'finding-already-staged' },
     });
   });
 
-  it('persists edits and transitions, and nothing else', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('persists edits and transitions, and nothing else', ({ expect, db }) => {
     const item = createTestUraItem({ suggestion: '@@ -11 +11 @@\n-a\n+b\n' });
     insertUraItem(db, item);
-    const edited = editUraItem(
-      item,
-      { severity: 'blocker', body: 'Now urgent.', suggestion: '' },
-      later,
+    const edited = okValueFrom(
+      editUraItem(item, { severity: 'blocker', body: 'Now urgent.', suggestion: '' }, later()),
     );
-    if (!edited.ok) {
-      throw new Error('edit');
-    }
-    expect(updateUraItem(db, edited.value)).toEqual({ ok: true, value: undefined });
-    expect(findUraItem(db, item.id)).toEqual({ ok: true, value: edited.value });
+    expect(updateUraItem(db, edited)).toStrictEqual({ ok: true, value: undefined });
+    expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: edited });
     const status = { kind: 'addressed', atSha: testUraIds.laterHeadSha, by: 'reviewer' } as const;
-    const done = transitionUraItem(edited.value, status, later);
-    if (!done.ok) {
-      throw new Error('transition');
-    }
-    updateUraItem(db, done.value);
-    expect(findUraItem(db, item.id)).toEqual({ ok: true, value: done.value });
-    const moved = { ...done.value, anchor: { kind: 'change' } } as const;
+    const done = okValueFrom(transitionUraItem(edited, status, later()));
+    updateUraItem(db, done);
+    expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: done });
+    const moved = { ...done, anchor: { kind: 'change' } } as const;
     updateUraItem(db, moved);
-    expect(findUraItem(db, item.id)).toEqual({ ok: true, value: done.value });
+    expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: done });
   });
 
-  it('reports unknown items', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('reports unknown items', ({ expect, db }) => {
     const item = createTestUraItem();
-    expect(updateUraItem(db, item)).toEqual({
+    expect(updateUraItem(db, item)).toStrictEqual({
       ok: false,
       error: { kind: 'item-not-found', id: item.id },
     });
-    expect(findUraItem(db, item.id)).toEqual({
+    expect(findUraItem(db, item.id)).toStrictEqual({
       ok: false,
       error: { kind: 'item-not-found', id: item.id },
     });
   });
 
-  it('reports a corrupt row instead of returning it', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('reports a corrupt row instead of returning it', ({ expect, db }) => {
     const item = createTestUraItem();
     insertUraItem(db, item);
     db.prepare("UPDATE ura_items SET patch = '@@ -1 +1 @@\n-a\n+b\n' WHERE id = ?;").run(item.id);
-    expect(listUraItems(db, sessionId)).toEqual({
+    expect(listUraItems(db, testUraIds.sessionId)).toStrictEqual({
       ok: false,
       error: {
         kind: 'corrupt-row',
@@ -145,3 +133,7 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
     });
   });
 });
+
+function later(): Temporal.Instant {
+  return Temporal.Instant.from('2026-10-29T08:00:00.000Z');
+}

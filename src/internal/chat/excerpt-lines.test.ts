@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { excerptLines } from './excerpt-lines.ts';
+import { test } from './testing/test.ts';
 
 describe('excerptLines', () => {
   const text = 'one\ntwo\r\nthree\nfour\n';
 
-  it('cuts 1-based inclusive lines without their terminators', () => {
-    expect(excerptLines(text, 2, 3)).toEqual({
+  test('cuts 1-based inclusive lines without their terminators', ({ expect }) => {
+    expect(excerptLines(text, 2, 3)).toStrictEqual({
       ok: true,
       value: {
         startLine: 2,
@@ -18,7 +19,7 @@ describe('excerptLines', () => {
     });
   });
 
-  it('takes the whole file without lines, and clamps an end past the last line', () => {
+  test('takes the whole file without lines, and clamps an end past the last line', ({ expect }) => {
     expect(excerptLines(text)).toMatchObject({
       ok: true,
       value: {
@@ -38,8 +39,8 @@ describe('excerptLines', () => {
     });
   });
 
-  it('refuses a start past the end', () => {
-    expect(excerptLines(text, 5, 6)).toEqual({
+  test('refuses a start past the end', ({ expect }) => {
+    expect(excerptLines(text, 5, 6)).toStrictEqual({
       ok: false,
       error: { kind: 'beyond-end', totalLines: 4 },
     });

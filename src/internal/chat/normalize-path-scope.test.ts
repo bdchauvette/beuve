@@ -1,29 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { normalizePathScope } from './normalize-path-scope.ts';
+import { test } from './testing/test.ts';
 
 describe('normalizePathScope', () => {
-  it('is empty for the whole change', () => {
-    expect(normalizePathScope([])).toEqual([]);
-    expect(normalizePathScope(['', '.', '/', '../x'])).toEqual([]);
+  test('is empty for the whole change', ({ expect }) => {
+    expect(normalizePathScope([])).toStrictEqual([]);
+    expect(normalizePathScope(['', '.', '/', '../x'])).toStrictEqual([]);
   });
 
-  it('cleans, sorts and de-duplicates prefixes', () => {
-    expect(normalizePathScope(['./src//ui/', 'docs', 'src/ui', 'a.ts'])).toEqual([
+  test('cleans, sorts and de-duplicates prefixes', ({ expect }) => {
+    expect(normalizePathScope(['./src//ui/', 'docs', 'src/ui', 'a.ts'])).toStrictEqual([
       'a.ts',
       'docs',
       'src/ui',
     ]);
   });
 
-  it('drops prefixes already covered by a shorter one, but not mere string prefixes', () => {
-    expect(normalizePathScope(['src/auth.ts', 'src', 'src-extra', 'src/ui/x.ts'])).toEqual([
+  test('drops prefixes already covered by a shorter one, but not mere string prefixes', ({
+    expect,
+  }) => {
+    expect(normalizePathScope(['src/auth.ts', 'src', 'src-extra', 'src/ui/x.ts'])).toStrictEqual([
       'src',
       'src-extra',
     ]);
   });
 
-  it('is independent of the order given', () => {
-    expect(normalizePathScope(['b', 'a'])).toEqual(normalizePathScope(['a', 'b']));
+  test('is independent of the order given', ({ expect }) => {
+    expect(normalizePathScope(['b', 'a'])).toStrictEqual(normalizePathScope(['a', 'b']));
   });
 });

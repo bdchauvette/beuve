@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { formatOrdinal } from './format-ordinal.ts';
+import { test } from './testing/test.ts';
 
 describe('formatOrdinal', () => {
-  it.each([
+  test.for<[number, string]>([
     [0, '0th'],
     [1, '1st'],
     [2, '2nd'],
@@ -16,7 +17,7 @@ describe('formatOrdinal', () => {
     [97, '97th'],
     [100, '100th'],
     [111, '111th'],
-  ])('%i → %s', (value, expected) => {
+  ])('%i → %s', ([value, expected], { expect }) => {
     expect(formatOrdinal(value)).toBe(expected);
   });
 });

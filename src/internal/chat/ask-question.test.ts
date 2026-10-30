@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -7,6 +7,7 @@ import type { Result } from '#x/result/result.ts';
 import { askQuestion } from './ask-question.ts';
 import type { ChatDelta, ChatModel, ChatModelOutput, ChatModelRequest } from './chat-model.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import { test } from './testing/test.ts';
 
 interface FakeError {
   readonly kind: 'timeout' | 'cancelled';
@@ -43,7 +44,9 @@ function fakeModel(
 }
 
 describe('askQuestion', () => {
-  it('asks in the head worktree and returns the answer with validated citations', async () => {
+  test('asks in the head worktree and returns the answer with validated citations', async ({
+    expect,
+  }) => {
     const seen: ChatModelRequest[] = [];
     const answer =
       'It trims because of [[src/a.ts:12-13]]; see also [[src/c.ts:1]] and [[docs/x.md:2-4]].\n';
@@ -71,7 +74,7 @@ describe('askQuestion', () => {
     });
   });
 
-  it('never accepts a citation of a deleted file', async () => {
+  test('never accepts a citation of a deleted file', async ({ expect }) => {
     const question = createChatQuestion({
       files: [{ path: 'old.ts', status: 'deleted', binary: false, patch: '' }],
     });
@@ -82,7 +85,7 @@ describe('askQuestion', () => {
     });
   });
 
-  it('passes streamed deltas through', async () => {
+  test('passes streamed deltas through', async ({ expect }) => {
     const deltas: ChatDelta[] = [
       { kind: 'append', text: 'Let me look.' },
       { kind: 'reset' },
@@ -95,33 +98,33 @@ describe('askQuestion', () => {
         received.push(delta);
       },
     });
-    expect(received).toEqual(deltas);
+    expect(received).toStrictEqual(deltas);
   });
 
-  it('wraps model failures and cancellation', async () => {
+  test('wraps model failures and cancellation', async ({ expect }) => {
     const timedOut = fakeModel(err({ kind: 'timeout' }));
-    expect(await askQuestion(createChatQuestion(), { model: timedOut })).toEqual({
+    await expect(askQuestion(createChatQuestion(), { model: timedOut })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'model', error: { kind: 'timeout' } },
     });
     const controller = new AbortController();
     controller.abort();
     const never = fakeModel(ok('never'));
-    expect(
-      await askQuestion(createChatQuestion(), { model: never, signal: controller.signal }),
-    ).toEqual({ ok: false, error: { kind: 'model', error: { kind: 'cancelled' } } });
+    await expect(
+      askQuestion(createChatQuestion(), { model: never, signal: controller.signal }),
+    ).resolves.toStrictEqual({ ok: false, error: { kind: 'model', error: { kind: 'cancelled' } } });
   });
 
-  it('refuses empty and oversized questions without calling the model', async () => {
+  test('refuses empty and oversized questions without calling the model', async ({ expect }) => {
     const seen: ChatModelRequest[] = [];
     const model = fakeModel(ok('x'), seen);
     const blank = createChatQuestion({ question: ' \n' });
-    expect(await askQuestion(blank, { model })).toEqual({
+    await expect(askQuestion(blank, { model })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'empty-question' },
     });
     const long = createChatQuestion({ question: 'x'.repeat(8001) });
-    expect(await askQuestion(long, { model })).toEqual({
+    await expect(askQuestion(long, { model })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'question-too-long', maxChars: 8000 },
     });

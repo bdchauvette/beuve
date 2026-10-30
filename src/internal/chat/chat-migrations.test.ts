@@ -1,17 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
 
-import { createChatTestDatabase } from './testing/create-chat-test-database.ts';
+import { describe } from 'vitest';
 
-const sessionId = '11111111-1111-4111-8111-111111111111';
-const head = 'c'.repeat(40);
-const at = '2026-10-28T12:00:00.000Z';
+import { test } from './testing/test.ts';
 
-function insert(fields: Record<string, string>): () => void {
-  const db = createChatTestDatabase([sessionId]);
+function insert(db: DatabaseSync, fields: Record<string, string>): () => void {
   const row = {
-    id: '00000000-0000-4000-8000-000000000001',
-    session_id: sessionId,
-    head_sha: head,
+    id: randomUUID(),
+    session_id: sessionId(),
+    head_sha: head(),
     role: 'assistant',
     content: 'answer',
     citations: '[]',
@@ -20,7 +18,7 @@ function insert(fields: Record<string, string>): () => void {
     error_code: '',
     kind: 'answer',
     review: '',
-    created_at: at,
+    created_at: at(),
     ...fields,
   };
   return (): void => {
@@ -34,19 +32,19 @@ function insert(fields: Record<string, string>): () => void {
 }
 
 describe('chatMigrations', () => {
-  it('accepts a well-formed row', () => {
-    expect(insert({})).not.toThrow();
-    expect(insert({ status: 'failed', error_code: 'timeout' })).not.toThrow();
-    expect(insert({ role: 'summary', content: '**Asked**' })).not.toThrow();
+  test('accepts a well-formed row', ({ expect, db }) => {
+    expect(insert(db, {})).not.toThrow();
+    expect(insert(db, { status: 'failed', error_code: 'timeout' })).not.toThrow();
+    expect(insert(db, { role: 'summary', content: '**Asked**' })).not.toThrow();
     expect(
-      insert({ role: 'user', mentions: '[{"path":"a.ts","side":"head","sha":"x"}]' }),
+      insert(db, { role: 'user', mentions: '[{"path":"a.ts","side":"head","sha":"x"}]' }),
     ).not.toThrow();
-    expect(insert({ status: 'queued' })).not.toThrow();
-    expect(insert({ kind: 'review', review: '{"findings":[]}' })).not.toThrow();
-    expect(insert({ kind: 'abstract', status: 'streaming' })).not.toThrow();
+    expect(insert(db, { status: 'queued' })).not.toThrow();
+    expect(insert(db, { kind: 'review', review: '{"findings":[]}' })).not.toThrow();
+    expect(insert(db, { kind: 'abstract', status: 'streaming' })).not.toThrow();
   });
 
-  it.each([
+  test.for<[string, Record<string, string>]>([
     ['an unknown role', { role: 'tool' }],
     ['an unknown status', { status: 'done' }],
     ['a streaming user message', { role: 'user', status: 'streaming' }],
@@ -67,17 +65,28 @@ describe('chatMigrations', () => {
     ['findings on a plain answer', { review: '{"findings":[]}' }],
     ['findings on a streaming review', { kind: 'review', status: 'streaming', review: '{}' }],
     ['findings that are not an object', { kind: 'review', review: '[]' }],
-  ])('rejects %s', (_, fields) => {
-    expect(insert(fields)).toThrow();
+  ])('rejects %s', ([, fields], { expect, db }) => {
+    expect(insert(db, fields)).toThrow(/constraint failed/u);
   });
 
-  it('deletes a session’s messages with the session', () => {
-    const db = createChatTestDatabase([sessionId]);
+  test('deletes a session’s messages with the session', ({ expect, db }) => {
     db.prepare(
       `INSERT INTO chat_messages (id, session_id, head_sha, role, content, created_at)
        VALUES ('00000000-0000-4000-8000-000000000001', ?, ?, 'user', 'q', ?);`,
-    ).run(sessionId, head, at);
-    db.prepare('DELETE FROM sessions WHERE id = ?;').run(sessionId);
-    expect(db.prepare('SELECT count(*) AS n FROM chat_messages;').get()).toEqual({ n: 0 });
+    ).run(sessionId(), head(), at());
+    db.prepare('DELETE FROM sessions WHERE id = ?;').run(sessionId());
+    expect(db.prepare('SELECT count(*) AS n FROM chat_messages;').get()?.['n']).toBe(0);
   });
 });
+
+function sessionId(): string {
+  return '11111111-1111-4111-8111-111111111111';
+}
+
+function head(): string {
+  return 'c'.repeat(40);
+}
+
+function at(): string {
+  return '2026-10-28T12:00:00.000Z';
+}

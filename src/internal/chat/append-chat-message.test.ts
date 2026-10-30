@@ -1,22 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { appendChatMessage } from './append-chat-message.ts';
 import type { ChatMessage, ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
 import { listChatMessages } from './list-chat-messages.ts';
-import { createChatTestDatabase } from './testing/create-chat-test-database.ts';
-
-const sessionId = '11111111-1111-4111-8111-111111111111' as SessionId;
-const headSha = 'c'.repeat(40) as CommitSha;
+import { test } from './testing/test.ts';
 
 function id(index: number): ChatMessageId {
   return `00000000-0000-4000-8000-${String(index).padStart(12, '0')}` as ChatMessageId;
 }
 
 describe('appendChatMessage', () => {
-  it('round-trips every role and status, in transcript order', () => {
-    const db = createChatTestDatabase([sessionId]);
+  test('round-trips every role and status, in transcript order', ({ expect, db }) => {
     const at = '2026-10-28T12:00:00.000Z';
-    const base = { sessionId, headSha, citations: [], mentions: [], createdAt: at };
+    const base = {
+      sessionId: sessionId(),
+      headSha: headSha(),
+      citations: [],
+      mentions: [],
+      createdAt: at,
+    };
     const messages: ChatMessage[] = [
       { ...base, id: id(1), role: 'user', content: 'Why?' },
       {
@@ -88,7 +90,7 @@ describe('appendChatMessage', () => {
         role: 'user',
         content: 'Why [[@1]] and [[@2]]?',
         mentions: [
-          { path: 'src/a.ts', side: 'head', startLine: 27, endLine: 33, sha: headSha },
+          { path: 'src/a.ts', side: 'head', startLine: 27, endLine: 33, sha: headSha() },
           { path: 'src/old.ts', side: 'base', sha: 'b'.repeat(40) as CommitSha },
         ],
       },
@@ -101,17 +103,16 @@ describe('appendChatMessage', () => {
       },
     ];
     for (const message of messages) {
-      expect(appendChatMessage(db, message)).toEqual({ ok: true, value: undefined });
+      expect(appendChatMessage(db, message)).toStrictEqual({ ok: true, value: undefined });
     }
-    expect(listChatMessages(db, sessionId)).toEqual({ ok: true, value: messages });
+    expect(listChatMessages(db, sessionId())).toStrictEqual({ ok: true, value: messages });
   });
 
-  it('reports an unknown session and a reused id', () => {
-    const db = createChatTestDatabase([sessionId]);
+  test('reports an unknown session and a reused id', ({ expect, db }) => {
     const message: ChatMessage = {
       id: id(1),
-      sessionId,
-      headSha,
+      sessionId: sessionId(),
+      headSha: headSha(),
       role: 'user',
       content: 'Why?',
       citations: [],
@@ -119,14 +120,22 @@ describe('appendChatMessage', () => {
       createdAt: '2026-10-28T12:00:00.000Z',
     };
     const other = '22222222-2222-4222-8222-222222222222' as SessionId;
-    expect(appendChatMessage(db, { ...message, sessionId: other })).toEqual({
+    expect(appendChatMessage(db, { ...message, sessionId: other })).toStrictEqual({
       ok: false,
       error: { kind: 'session-not-found', sessionId: other },
     });
     appendChatMessage(db, message);
-    expect(appendChatMessage(db, message)).toEqual({
+    expect(appendChatMessage(db, message)).toStrictEqual({
       ok: false,
       error: { kind: 'duplicate-message', id: id(1) },
     });
   });
 });
+
+function sessionId(): SessionId {
+  return '11111111-1111-4111-8111-111111111111' as SessionId;
+}
+
+function headSha(): CommitSha {
+  return 'c'.repeat(40) as CommitSha;
+}

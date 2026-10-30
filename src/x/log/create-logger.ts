@@ -19,6 +19,8 @@ export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Where lines go. Defaults to stderr. */
   readonly sink?: LogSink;
+  /** The environment `BEUVE_LOG_LEVEL` is read from. Defaults to `process.env`. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -27,7 +29,9 @@ export interface LoggerOptions {
  * serialized with name, message and stack. Logging never throws.
  */
 export function createLogger(namespace: string, options: LoggerOptions = {}): Logger {
-  const threshold = rank(options.level ?? parseLevel(process.env['BEUVE_LOG_LEVEL']) ?? 'info');
+  const threshold = rank(
+    options.level ?? parseLevel((options.env ?? process.env)['BEUVE_LOG_LEVEL']) ?? 'info',
+  );
   const sink = options.sink ?? writeToStderr;
 
   const emit = (level: LogLevel, message: string, fields: LogFields = {}): void => {

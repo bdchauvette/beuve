@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -6,8 +6,11 @@ import type { Result } from '#x/result/result.ts';
 
 import type { ChatCompaction } from './build-compaction-prompt.ts';
 import type { ChatModel, ChatModelOutput, ChatModelRequest } from './chat-model.ts';
+import type { CommitSha } from './chat-message.ts';
+import type { ChatQuestion } from './chat-question.ts';
 import { compactConversation } from './compact-conversation.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import { test } from './testing/test.ts';
 
 function fakeModel(
   answer: Result<string, 'boom'>,
@@ -31,21 +34,18 @@ function fakeModel(
   };
 }
 
-const question = createChatQuestion();
-const head = question.headSha;
-
 function compaction(overrides: Partial<ChatCompaction> = {}): ChatCompaction {
   return {
-    baseSha: question.baseSha,
-    headSha: head,
+    baseSha: question().baseSha,
+    headSha: head(),
     worktreePath: '/work/repo',
-    files: question.files,
+    files: question().files,
     worktreePaths: new Set(['docs/x.md']),
     turns: [
       {
         role: 'user',
         content: 'Why does [[@1]] trim?',
-        mentions: [{ path: 'src/a.ts', side: 'head', startLine: 12, endLine: 13, sha: head }],
+        mentions: [{ path: 'src/a.ts', side: 'head', startLine: 12, endLine: 13, sha: head() }],
       },
       { role: 'assistant', content: 'Because of [[src/a.ts:12-13]].' },
     ],
@@ -54,7 +54,9 @@ function compaction(overrides: Partial<ChatCompaction> = {}): ChatCompaction {
 }
 
 describe('compactConversation', () => {
-  it('asks for a note over the turns and the earlier summary, and validates its citations', async () => {
+  test('asks for a note over the turns and the earlier summary, and validates its citations', async ({
+    expect,
+  }) => {
     const seen: ChatModelRequest[] = [];
     const note =
       '**Asked**\n- why parse trims\n\n**Places**\n- [[src/a.ts:12-13]]\n- [[/work/repo/docs/x.md:2]]\n- [[ghost.ts:1]]\n- [[nope]]';
@@ -83,7 +85,7 @@ describe('compactConversation', () => {
     expect(request?.prompt).toContain('- modified src/a.ts');
   });
 
-  it('drops the oldest turns past the budget and says so', async () => {
+  test('drops the oldest turns past the budget and says so', async ({ expect }) => {
     const seen: ChatModelRequest[] = [];
     const turns = Array.from({ length: 6 }, (_, index) => ({
       role: 'user' as const,
@@ -100,14 +102,22 @@ describe('compactConversation', () => {
     expect(seen[0]?.prompt).toContain('[beuve: 1 more files]');
   });
 
-  it('refuses with nothing to compact and passes model failures through', async () => {
+  test('refuses with nothing to compact and passes model failures through', async ({ expect }) => {
     const seen: ChatModelRequest[] = [];
     const empty = compaction({ turns: [] });
     const nothing = await compactConversation(empty, { model: fakeModel(ok('x'), seen) });
-    expect(nothing).toEqual({ ok: false, error: { kind: 'nothing-to-compact' } });
-    expect(seen).toEqual([]);
+    expect(nothing).toStrictEqual({ ok: false, error: { kind: 'nothing-to-compact' } });
+    expect(seen).toStrictEqual([]);
     const failing = fakeModel(err('boom'));
     const failed = await compactConversation(compaction(), { model: failing });
-    expect(failed).toEqual({ ok: false, error: { kind: 'model', error: 'boom' } });
+    expect(failed).toStrictEqual({ ok: false, error: { kind: 'model', error: 'boom' } });
   });
 });
+
+function question(): ChatQuestion {
+  return createChatQuestion();
+}
+
+function head(): CommitSha {
+  return question().headSha;
+}

@@ -1,62 +1,61 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createLogger } from './create-logger.ts';
 
 describe('createLogger', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({
-      toFake: ['Date', 'Temporal'],
-      now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
-    });
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllEnvs();
-  });
+  test(
+    'writes one JSON record per call with namespace and fields',
+    { concurrent: false },
+    ({ expect, clock }) => {
+      clock.set('2026-10-28T12:00:00Z');
+      const { records, sink } = capture();
+      createLogger('git', { sink }).info('checked out', { sha: 'abc' });
+      expect(records).toStrictEqual([
+        {
+          time: '2026-10-28T12:00:00.000Z',
+          level: 'info',
+          namespace: 'git',
+          message: 'checked out',
+          sha: 'abc',
+        },
+      ]);
+    },
+  );
 
-  it('writes one JSON record per call with namespace and fields', () => {
-    const { records, sink } = capture();
-    createLogger('git', { sink }).info('checked out', { sha: 'abc' });
-    expect(records).toEqual([
-      {
-        time: '2026-10-28T12:00:00.000Z',
-        level: 'info',
-        namespace: 'git',
-        message: 'checked out',
-        sha: 'abc',
-      },
-    ]);
-  });
-
-  it('does not let fields overwrite the core keys', () => {
+  test('does not let fields overwrite the core keys', ({ expect }) => {
     const { records, sink } = capture();
     createLogger('git', { sink }).warn('real', { message: 'fake', level: 'x' });
     expect(records[0]).toMatchObject({ level: 'warn', message: 'real' });
   });
 
-  it('drops records below the configured level', () => {
+  test('drops records below the configured level', ({ expect }) => {
     const { records, sink } = capture();
     const logger = createLogger('x', { sink, level: 'warn' });
     logger.debug('a');
     logger.info('b');
     logger.warn('c');
     logger.error('d');
-    expect(records.map((record) => record['message'])).toEqual(['c', 'd']);
+    expect(records.map((record) => record['message'])).toStrictEqual(['c', 'd']);
   });
 
-  it('reads the level from BEUVE_LOG_LEVEL and defaults to info', () => {
-    const verbose = capture();
-    vi.stubEnv('BEUVE_LOG_LEVEL', 'DEBUG');
-    createLogger('x', { sink: verbose.sink }).debug('shown');
-    expect(verbose.records).toHaveLength(1);
-
-    const fallback = capture();
-    vi.stubEnv('BEUVE_LOG_LEVEL', 'nonsense');
-    createLogger('x', { sink: fallback.sink }).debug('hidden');
-    expect(fallback.records).toHaveLength(0);
+  test('reads the level from BEUVE_LOG_LEVEL', ({ expect }) => {
+    const { records, sink } = capture();
+    const env = { BEUVE_LOG_LEVEL: 'DEBUG' };
+    createLogger('x', { sink, env }).debug('shown');
+    expect(records).toHaveLength(1);
   });
 
-  it('serializes errors and bigints, and survives circular fields', () => {
+  test('defaults to info when BEUVE_LOG_LEVEL is unset or unknown', ({ expect }) => {
+    const { records, sink } = capture();
+    createLogger('x', { sink, env: { BEUVE_LOG_LEVEL: 'nonsense' } }).debug('hidden');
+    createLogger('x', { sink, env: {} }).debug('hidden');
+    createLogger('x', { sink, env: {} }).info('shown');
+    expect(records.map((record) => record['message'])).toStrictEqual(['shown']);
+  });
+
+  test('serializes errors and bigints, and survives circular fields', ({ expect }) => {
     const { records, sink } = capture();
     const logger = createLogger('x', { sink });
     const circular: Record<string, unknown> = {};

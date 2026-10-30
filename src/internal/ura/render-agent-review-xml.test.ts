@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { renderAgentReviewXml } from './render-agent-review-xml.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
+import { test } from './testing/test.ts';
 
 describe('renderAgentReviewXml', () => {
-  it('matches the snapshot', () => {
+  test('matches the snapshot', ({ expect }) => {
     expect(renderAgentReviewXml(createSampleArtifact())).toMatchInlineSnapshot(`
       "<?xml version="1.0" encoding="UTF-8"?>
       <beuve-review schema="beuve.ura/1" verdict="request-changes" verdict-source="derived">
@@ -65,13 +66,15 @@ describe('renderAgentReviewXml', () => {
     `);
   });
 
-  it('is deterministic', () => {
+  test('is deterministic', ({ expect }) => {
     expect(renderAgentReviewXml(createSampleArtifact())).toBe(
       renderAgentReviewXml(createSampleArtifact()),
     );
   });
 
-  it('keeps CDATA terminators, markup and characters XML cannot carry out of the structure', () => {
+  test('keeps CDATA terminators, markup and characters XML cannot carry out of the structure', ({
+    expect,
+  }) => {
     const item = createTestUraItem({
       headSha: testUraIds.laterHeadSha,
       title: 'a & b <c>',
@@ -88,10 +91,10 @@ describe('renderAgentReviewXml', () => {
       '<body><![CDATA[x ]]]]><![CDATA[> y \u{FFFD} z \u{FFFD} w <tag/>]]></body>',
     );
     expect(xml).toContain('path="src/&quot;quoted&quot;.ts"');
-    expect(xml.split('<![CDATA[').length).toBe(3);
+    expect(xml.split('<![CDATA[')).toHaveLength(3);
   });
 
-  it('renders an empty review', () => {
+  test('renders an empty review', ({ expect }) => {
     const artifact = {
       ...createSampleArtifact({ value: 'approve', source: 'derived' }),
       entries: [],

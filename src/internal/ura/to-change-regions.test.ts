@@ -1,27 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { toChangeRegions } from './to-change-regions.ts';
+import { test } from './testing/test.ts';
 
 describe('toChangeRegions', () => {
-  it('treats a hunk without lines as one region', () => {
-    expect(toChangeRegions({ oldStart: 5, oldCount: 2, newStart: 5, newCount: 3 })).toEqual([
+  test('treats a hunk without lines as one region', ({ expect }) => {
+    expect(toChangeRegions({ oldStart: 5, oldCount: 2, newStart: 5, newCount: 3 })).toStrictEqual([
       { before: 4, removed: 2, added: 3 },
     ]);
   });
 
-  it('reads -a,0 as an insertion after line a', () => {
-    expect(toChangeRegions({ oldStart: 7, oldCount: 0, newStart: 8, newCount: 2 })).toEqual([
+  test('reads -a,0 as an insertion after line a', ({ expect }) => {
+    expect(toChangeRegions({ oldStart: 7, oldCount: 0, newStart: 8, newCount: 2 })).toStrictEqual([
       { before: 7, removed: 0, added: 2 },
     ]);
   });
 
-  it('reads +c,0 as a pure deletion', () => {
-    expect(toChangeRegions({ oldStart: 3, oldCount: 2, newStart: 2, newCount: 0 })).toEqual([
+  test('reads +c,0 as a pure deletion', ({ expect }) => {
+    expect(toChangeRegions({ oldStart: 3, oldCount: 2, newStart: 2, newCount: 0 })).toStrictEqual([
       { before: 2, removed: 2, added: 0 },
     ]);
   });
 
-  it('splits a hunk with context lines into its changed runs', () => {
+  test('splits a hunk with context lines into its changed runs', ({ expect }) => {
     const hunk = {
       oldStart: 10,
       oldCount: 7,
@@ -39,13 +40,13 @@ describe('toChangeRegions', () => {
         { kind: 'context' },
       ],
     } as const;
-    expect(toChangeRegions(hunk)).toEqual([
+    expect(toChangeRegions(hunk)).toStrictEqual([
       { before: 10, removed: 1, added: 2 },
       { before: 13, removed: 1, added: 0 },
     ]);
   });
 
-  it('handles an insertion-only hunk with lines', () => {
+  test('handles an insertion-only hunk with lines', ({ expect }) => {
     const hunk = {
       oldStart: 4,
       oldCount: 0,
@@ -53,10 +54,12 @@ describe('toChangeRegions', () => {
       newCount: 1,
       lines: [{ kind: 'added' }],
     } as const;
-    expect(toChangeRegions(hunk)).toEqual([{ before: 4, removed: 0, added: 1 }]);
+    expect(toChangeRegions(hunk)).toStrictEqual([{ before: 4, removed: 0, added: 1 }]);
   });
 
-  it('returns nothing for an empty hunk', () => {
-    expect(toChangeRegions({ oldStart: 0, oldCount: 0, newStart: 0, newCount: 0 })).toEqual([]);
+  test('returns nothing for an empty hunk', ({ expect }) => {
+    expect(toChangeRegions({ oldStart: 0, oldCount: 0, newStart: 0, newCount: 0 })).toStrictEqual(
+      [],
+    );
   });
 });

@@ -1,28 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import type { UraAnchor } from './ura-item.ts';
+import { test } from './testing/test.ts';
 
-const anchor: UraAnchor = { kind: 'lines', path: 'src/a.ts', startLine: 10, endLine: 12 };
-const hunk = ['@@ -10,3 +10,3 @@', ' one', '-two', '+TWO', ' three'];
+function withHunk(...header: string[]): string {
+  return patch(...header, ...hunk());
+}
 
 function patch(...lines: string[]): string {
   return `${lines.join('\n')}\n`;
 }
 
-function reason(text: string, target: UraAnchor = anchor): string | undefined {
+function reason(text: string, target: UraAnchor = anchor()): string | undefined {
   const result = parseSuggestedPatch(text, target);
   return result.ok ? undefined : result.error.reason;
 }
 
 describe('parseSuggestedPatch', () => {
-  it('adds headers to bare hunks and parses them', () => {
-    const result = parseSuggestedPatch(patch(...hunk), anchor);
-    expect(result).toEqual({
+  test('adds headers to bare hunks and parses them', ({ expect }) => {
+    const result = parseSuggestedPatch(withHunk(), anchor());
+    expect(result).toStrictEqual({
       ok: true,
       value: {
         path: 'src/a.ts',
-        text: patch('--- a/src/a.ts', '+++ b/src/a.ts', ...hunk),
+        text: withHunk('--- a/src/a.ts', '+++ b/src/a.ts'),
         hunks: [
           {
             oldStart: 10,
@@ -41,28 +43,28 @@ describe('parseSuggestedPatch', () => {
     });
   });
 
-  it('accepts git headers for the anchored path and normalizes them', () => {
+  test('accepts git headers for the anchored path and normalizes them', ({ expect }) => {
     const text = patch(
       'diff --git a/src/a.ts b/src/a.ts',
       'index 1234567..89abcde 100644',
       '--- a/src/a.ts',
       '+++ b/src/a.ts',
-      ...hunk,
+      ...hunk(),
     );
-    const result = parseSuggestedPatch(text, anchor);
-    expect(result.ok && result.value.text).toBe(patch('--- a/src/a.ts', '+++ b/src/a.ts', ...hunk));
-    expect(parseSuggestedPatch(patch('--- src/a.ts', '+++ src/a.ts', ...hunk), anchor).ok).toBe(
-      true,
-    );
+    const result = parseSuggestedPatch(text, anchor());
+    expect(result.ok && result.value.text).toBe(withHunk('--- a/src/a.ts', '+++ b/src/a.ts'));
+    expect(parseSuggestedPatch(withHunk('--- src/a.ts', '+++ src/a.ts'), anchor()).ok).toBe(true);
   });
 
-  it('round-trips its own normalized text', () => {
-    const first = parseSuggestedPatch(patch(...hunk), anchor);
-    const second = first.ok ? parseSuggestedPatch(first.value.text, anchor) : first;
-    expect(second).toEqual(first);
+  test('round-trips its own normalized text', ({ expect }) => {
+    const first = parseSuggestedPatch(withHunk(), anchor());
+    const second = first.ok ? parseSuggestedPatch(first.value.text, anchor()) : first;
+    expect(second).toStrictEqual(first);
   });
 
-  it('accepts a missing trailing newline, stripped empty context lines and no-newline markers', () => {
+  test('accepts a missing trailing newline, stripped empty context lines and no-newline markers', ({
+    expect,
+  }) => {
     const text = [
       '@@ -10,3 +10,3 @@',
       ' one',
@@ -72,8 +74,8 @@ describe('parseSuggestedPatch', () => {
       '+3',
       '\\ No newline at end of file',
     ].join('\n');
-    const result = parseSuggestedPatch(text, anchor);
-    expect(result.ok && result.value.hunks[0]?.lines).toEqual([
+    const result = parseSuggestedPatch(text, anchor());
+    expect(result.ok && result.value.hunks[0]?.lines).toStrictEqual([
       { kind: 'context', content: 'one' },
       { kind: 'context', content: '' },
       { kind: 'removed', content: 'three' },
@@ -81,26 +83,27 @@ describe('parseSuggestedPatch', () => {
     ]);
   });
 
-  it('reads a bare count as one line and -a,0 as an insertion', () => {
+  test('reads a bare count as one line and -a,0 as an insertion', ({ expect }) => {
     expect(reason(patch('@@ -11 +11 @@', '-x', '+y'))).toBeUndefined();
     expect(reason(patch('@@ -12,0 +13,1 @@', '+after the last line'))).toBeUndefined();
     expect(reason(patch('@@ -9,0 +10,1 @@', '+before the first line'))).toBeUndefined();
   });
 
-  it('refuses other files, several files and whole-change anchors', () => {
-    expect(reason(patch('--- a/src/b.ts', '+++ b/src/b.ts', ...hunk))).toBe(
+  test('refuses other files, several files and whole-change anchors', ({ expect }) => {
+    expect(reason(withHunk('--- a/src/b.ts', '+++ b/src/b.ts'))).toBe(
       'the patch must change only src/a.ts',
     );
-    expect(reason(patch('--- /dev/null', '+++ b/src/a.ts', ...hunk))).toBe(
+    expect(reason(withHunk('--- /dev/null', '+++ b/src/a.ts'))).toBe(
       'the patch must change only src/a.ts',
     );
-    expect(reason(patch(...hunk, '--- a/src/b.ts', '+++ b/src/b.ts', ...hunk))).toBe(
-      'the patch must change only one file',
-    );
-    expect(reason(patch(...hunk), { kind: 'change' })).toBe('a patch needs a file or line anchor');
+    const twoFiles = withHunk(...hunk(), '--- a/src/b.ts', '+++ b/src/b.ts');
+    expect(reason(twoFiles)).toBe('the patch must change only one file');
+    expect(reason(withHunk(), { kind: 'change' })).toBe('a patch needs a file or line anchor');
   });
 
-  it('refuses changes outside the anchored lines, but allows context around them', () => {
+  test('refuses changes outside the anchored lines, but allows context around them', ({
+    expect,
+  }) => {
     expect(reason(patch('@@ -9,3 +9,3 @@', '-zero', '+ZERO', ' one', ' two'))).toBe(
       'the patch changes lines outside 10–12',
     );
@@ -117,13 +120,13 @@ describe('parseSuggestedPatch', () => {
     ).toBeUndefined();
   });
 
-  it('allows changes anywhere in the file for a file anchor', () => {
+  test('allows changes anywhere in the file for a file anchor', ({ expect }) => {
     expect(
       reason(patch('@@ -1,1 +1,1 @@', '-a', '+b'), { kind: 'file', path: 'src/a.ts' }),
     ).toBeUndefined();
   });
 
-  it('refuses malformed hunks', () => {
+  test('refuses malformed hunks', ({ expect }) => {
     expect(reason('')).toBe('the patch has no hunks');
     expect(reason(patch('--- a/src/a.ts', '+++ b/src/a.ts'))).toBe('the patch has no hunks');
     expect(reason(patch('hello'))).toBe('line 1 is not a hunk header');
@@ -145,7 +148,7 @@ describe('parseSuggestedPatch', () => {
     );
   });
 
-  it('refuses hunks out of order, overlapping or changing nothing', () => {
+  test('refuses hunks out of order, overlapping or changing nothing', ({ expect }) => {
     expect(reason(patch('@@ -12 +12 @@', '-c', '+C', '@@ -10 +10 @@', '-a', '+A'))).toBe(
       'hunks must be in order and must not overlap',
     );
@@ -155,3 +158,11 @@ describe('parseSuggestedPatch', () => {
     expect(reason(patch('@@ -10,2 +10,2 @@', ' a', ' b'))).toBe('the patch changes nothing');
   });
 });
+
+function anchor(): UraAnchor {
+  return { kind: 'lines', path: 'src/a.ts', startLine: 10, endLine: 12 };
+}
+
+function hunk(): string[] {
+  return ['@@ -10,3 +10,3 @@', ' one', '-two', '+TWO', ' three'];
+}

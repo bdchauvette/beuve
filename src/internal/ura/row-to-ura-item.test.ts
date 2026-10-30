@@ -1,12 +1,12 @@
 import type { SQLOutputValue } from 'node:sqlite';
 
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { rowToUraItem } from './row-to-ura-item.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { toUraItemRow } from './to-ura-item-row.ts';
-
-const item = createTestUraItem();
+import type { UraItem } from './ura-item.ts';
+import { test } from './testing/test.ts';
 
 /** The row SQLite would return for the fixture item, with NULLs for unset columns. */
 function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQLOutputValue> {
@@ -27,7 +27,7 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
   return {
     ...nulls,
     position: 0,
-    ...(toUraItemRow(item) as Record<string, SQLOutputValue>),
+    ...(toUraItemRow(item()) as Record<string, SQLOutputValue>),
     ...overrides,
   };
 }
@@ -38,15 +38,15 @@ function reasonOf(overrides: Record<string, SQLOutputValue>): string | undefined
 }
 
 describe('rowToUraItem', () => {
-  it('maps a valid row, with integers as numbers or bigints', () => {
-    expect(rowToUraItem(row())).toEqual({ ok: true, value: item });
-    expect(rowToUraItem(row({ line_start: 10n, line_end: 12n }))).toEqual({
+  test('maps a valid row, with integers as numbers or bigints', ({ expect }) => {
+    expect(rowToUraItem(row())).toStrictEqual({ ok: true, value: item() });
+    expect(rowToUraItem(row({ line_start: 10n, line_end: 12n }))).toStrictEqual({
       ok: true,
-      value: item,
+      value: item(),
     });
   });
 
-  it.each([
+  test.for<[string, SQLOutputValue, string]>([
     ['id', 'x', 'id or session_id is not a UUID'],
     ['head_sha', 'ABC', 'head_sha is not a commit id'],
     ['severity', 'major', 'severity is unknown'],
@@ -58,11 +58,11 @@ describe('rowToUraItem', () => {
     ['origin_kind', 'bot', 'origin_kind is unknown'],
     ['status', 'pending', 'status is unknown'],
     ['line_start', 20, 'invalid-anchor: the end line comes before the start line'],
-  ])('reports a bad %s', (column, value, reason) => {
+  ])('reports a bad %s', ([column, value, reason], { expect }) => {
     expect(reasonOf({ [column]: value })).toBe(reason);
   });
 
-  it('reports incomplete origins and statuses', () => {
+  test('reports incomplete origins and statuses', ({ expect }) => {
     expect(reasonOf({ origin_kind: 'chat-answer' })).toBe('chat_message_id is not text');
     expect(reasonOf({ origin_kind: 'chat-answer', chat_message_id: 'm', chat_finding: -1 })).toBe(
       'chat_finding is not a finding index',
@@ -75,3 +75,7 @@ describe('rowToUraItem', () => {
     );
   });
 });
+
+function item(): UraItem {
+  return createTestUraItem();
+}

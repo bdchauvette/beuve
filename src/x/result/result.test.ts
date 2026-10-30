@@ -1,27 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { andThen } from './and-then.ts';
 import { err } from './err.ts';
 import { fromPromise } from './from-promise.ts';
 import { ok } from './ok.ts';
 import type { Result } from './result.ts';
+import { test } from '#testing/test.ts';
 
 describe('result', () => {
-  it('constructs and narrows both branches', () => {
-    expect(ok(1)).toEqual({ ok: true, value: 1 });
-    expect(err('boom')).toEqual({ ok: false, error: 'boom' });
+  test('constructs and narrows both branches', ({ expect }) => {
+    expect(ok(1)).toStrictEqual({ ok: true, value: 1 });
+    expect(err('boom')).toStrictEqual({ ok: false, error: 'boom' });
   });
 
-  it('chains fallible steps and short-circuits on the first failure', () => {
-    expect(andThen(parse('5'), positive)).toEqual(ok(5));
-    expect(andThen(parse('-5'), positive)).toEqual(err('not positive'));
-    expect(andThen(parse('x'), positive)).toEqual(err('not a number: x'));
+  test('chains fallible steps and short-circuits on the first failure', ({ expect }) => {
+    expect(andThen(parse('5'), positive)).toStrictEqual(ok(5));
+    expect(andThen(parse('-5'), positive)).toStrictEqual(err('not positive'));
+    expect(andThen(parse('x'), positive)).toStrictEqual(err('not a number: x'));
   });
 
-  it('settles promises into results', async () => {
+  test('settles promises into results', async ({ expect }) => {
     const rejected = Promise.reject(new Error('nope'));
-    await expect(fromPromise(Promise.resolve(1), String)).resolves.toEqual(ok(1));
-    await expect(fromPromise(rejected, String)).resolves.toEqual(err('Error: nope'));
+    await expect(fromPromise(Promise.resolve(1), String)).resolves.toStrictEqual(ok(1));
+    await expect(fromPromise(rejected, String)).resolves.toStrictEqual(err('Error: nope'));
   });
 });
 

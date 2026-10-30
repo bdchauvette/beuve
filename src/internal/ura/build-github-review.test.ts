@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { buildGithubReview } from './build-github-review.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
@@ -6,6 +6,7 @@ import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import type { UraArtifact } from './ura-artifact.ts';
 import type { UraItemCandidate } from './validate-ura-item.ts';
+import { test } from './testing/test.ts';
 
 function withItem(overrides: Partial<UraItemCandidate>): UraArtifact {
   const item = createTestUraItem({ headSha: testUraIds.laterHeadSha, ...overrides });
@@ -20,7 +21,7 @@ function event(value: 'approve' | 'comment' | 'request-changes'): string {
 }
 
 describe('buildGithubReview', () => {
-  it('matches the snapshot', () => {
+  test('matches the snapshot', ({ expect }) => {
     expect(buildGithubReview(createSampleArtifact())).toMatchInlineSnapshot(`
       {
         "body": "**beuve review: changes requested**
@@ -86,29 +87,33 @@ describe('buildGithubReview', () => {
     `);
   });
 
-  it('maps verdicts to events', () => {
-    expect([event('approve'), event('comment'), event('request-changes')]).toEqual([
+  test('maps verdicts to events', ({ expect }) => {
+    expect([event('approve'), event('comment'), event('request-changes')]).toStrictEqual([
       'APPROVE',
       'COMMENT',
       'REQUEST_CHANGES',
     ]);
   });
 
-  it('turns a patch inside a larger hunk into a suggestion for just the anchored lines', () => {
+  test('turns a patch inside a larger hunk into a suggestion for just the anchored lines', ({
+    expect,
+  }) => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 11, endLine: 11 },
         suggestion: '@@ -10,3 +10,4 @@\n a\n-b\n+B\n+B2\n c\n',
       }),
     );
-    expect(review.comments).toEqual([
+    expect(review.comments).toStrictEqual([
       expect.objectContaining({ path: 'src/app.ts', line: 11, side: 'RIGHT' }),
     ]);
     expect(review.comments[0]?.body).toContain('```suggestion\nB\nB2\n```');
     expect(review.comments[0]).not.toHaveProperty('start_line');
   });
 
-  it('posts an inline edit (every anchored line replaced, context around) as a ranged suggestion', () => {
+  test('posts an inline edit (every anchored line replaced, context around) as a ranged suggestion', ({
+    expect,
+  }) => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 12 },
@@ -116,13 +121,13 @@ describe('buildGithubReview', () => {
           '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -9,5 +9,4 @@\n z\n-a\n-b\n-c\n+a\n+B\n y\n',
       }),
     );
-    expect(review.comments).toEqual([
+    expect(review.comments).toStrictEqual([
       expect.objectContaining({ line: 12, start_line: 10, side: 'RIGHT', start_side: 'RIGHT' }),
     ]);
     expect(review.comments[0]?.body).toContain('```suggestion\na\nB\n```');
   });
 
-  it('suggests a deletion as an empty block, and insertions at the edges', () => {
+  test('suggests a deletion as an empty block, and insertions at the edges', ({ expect }) => {
     const deletion = buildGithubReview(withItem({ suggestion: '@@ -10,3 +9,0 @@\n-a\n-b\n-c\n' }));
     expect(deletion.comments[0]?.body).toContain('```suggestion\n```');
     const inserted = buildGithubReview(
@@ -131,7 +136,9 @@ describe('buildGithubReview', () => {
     expect(inserted.comments[0]?.body).toContain('```suggestion\ntop\na\nb\nc\n```');
   });
 
-  it('falls back to a diff block when the patch does not show every anchored line', () => {
+  test('falls back to a diff block when the patch does not show every anchored line', ({
+    expect,
+  }) => {
     const review = buildGithubReview(withItem({ suggestion: '@@ -11 +11 @@\n-b\n+B\n' }));
     expect(review.comments[0]?.body).toContain(
       '```diff\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -11 +11 @@\n-b\n+B\n```',
@@ -139,7 +146,7 @@ describe('buildGithubReview', () => {
     expect(review.comments[0]?.body).not.toContain('suggestion');
   });
 
-  it('uses a longer fence when the replacement contains backticks', () => {
+  test('uses a longer fence when the replacement contains backticks', ({ expect }) => {
     const review = buildGithubReview(
       withItem({
         anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 10 },
@@ -149,7 +156,7 @@ describe('buildGithubReview', () => {
     expect(review.comments[0]?.body).toContain('````suggestion\nconst s = ```;\n````');
   });
 
-  it('moves lines outside the pull request diff into the body', () => {
+  test('moves lines outside the pull request diff into the body', ({ expect }) => {
     const artifact = withItem({});
     const inside = buildGithubReview(artifact, {
       commentableRanges: new Map([['src/app.ts', [{ start: 5, end: 20 }]]]),
@@ -158,11 +165,11 @@ describe('buildGithubReview', () => {
     const outside = buildGithubReview(artifact, {
       commentableRanges: new Map([['src/app.ts', [{ start: 5, end: 11 }]]]),
     });
-    expect(outside.comments).toEqual([]);
+    expect(outside.comments).toStrictEqual([]);
     expect(outside.body).toContain("On `src/app.ts:10-12` (outside the pull request's diff).");
   });
 
-  it('notes a chosen verdict and always has a body', () => {
+  test('notes a chosen verdict and always has a body', ({ expect }) => {
     const artifact = {
       ...createSampleArtifact({ value: 'comment', source: 'chosen', derived: 'approve' }),
       entries: [],

@@ -1,27 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { stageImpactFinding } from './stage-impact-finding.ts';
-import type { StageableFinding } from './stage-impact-finding.ts';
-import { fixedUraDeps } from './testing/fixed-ura-deps.ts';
+import type { FindingContext, StageableFinding } from './stage-impact-finding.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
-
-const finding: StageableFinding = {
-  kind: 'cognitive-complexity',
-  path: 'src/parse.ts',
-  functionName: 'Parser.parseAll',
-  startLine: 20,
-  endLine: 80,
-  value: 22,
-  limit: 15,
-  baseValue: 9,
-  trend: 'introduced',
-  percentile: 97.4,
-};
-const context = { sessionId: testUraIds.sessionId, headSha: testUraIds.headSha };
+import { test } from './testing/test.ts';
 
 describe('stageImpactFinding', () => {
-  it('stages the finding on its function with its metrics', () => {
-    expect(stageImpactFinding(finding, context, fixedUraDeps())).toMatchObject({
+  test('stages the finding on its function with its metrics', ({ expect, deps }) => {
+    expect(stageImpactFinding(finding(), context(), deps)).toMatchObject({
       ok: true,
       value: {
         anchor: { kind: 'lines', path: 'src/parse.ts', startLine: 20, endLine: 80 },
@@ -42,23 +28,42 @@ describe('stageImpactFinding', () => {
     });
   });
 
-  it('is a nit when the change did not make it worse', () => {
+  test('is a nit when the change did not make it worse', ({ expect, deps }) => {
     for (const trend of ['unchanged', 'improved'] as const) {
-      const result = stageImpactFinding({ ...finding, trend }, context, fixedUraDeps());
+      const result = stageImpactFinding({ ...finding(), trend }, context(), deps);
       expect(result.ok && result.value.severity).toBe('nit');
     }
-    const worsened = stageImpactFinding({ ...finding, trend: 'worsened' }, context, fixedUraDeps());
+    const worsened = stageImpactFinding({ ...finding(), trend: 'worsened' }, context(), deps);
     expect(worsened.ok && worsened.value.severity).toBe('issue');
   });
 
-  it('describes new functions and keeps long titles within the limit', () => {
+  test('describes new functions and keeps long titles within the limit', ({ expect, deps }) => {
     const result = stageImpactFinding(
-      { ...finding, baseValue: undefined, functionName: 'f'.repeat(300), percentile: 1 },
-      context,
-      fixedUraDeps(),
+      { ...finding(), baseValue: undefined, functionName: 'f'.repeat(300), percentile: 1 },
+      context(),
+      deps,
     );
     expect(result.ok ? result.value.title : '').toHaveLength(200);
     expect(result.ok && result.value.body).toContain('The function is new.');
     expect(result.ok && result.value.body).toContain('1st percentile');
   });
 });
+
+function finding(): StageableFinding {
+  return {
+    kind: 'cognitive-complexity',
+    path: 'src/parse.ts',
+    functionName: 'Parser.parseAll',
+    startLine: 20,
+    endLine: 80,
+    value: 22,
+    limit: 15,
+    baseValue: 9,
+    trend: 'introduced',
+    percentile: 97.4,
+  };
+}
+
+function context(): FindingContext {
+  return { sessionId: testUraIds.sessionId, headSha: testUraIds.headSha };
+}

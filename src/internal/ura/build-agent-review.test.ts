@@ -1,17 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { buildAgentReview } from './build-agent-review.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
+import { test } from './testing/test.ts';
 
 describe('buildAgentReview', () => {
-  it('is plain JSON data that survives a round trip', () => {
+  test('is plain JSON data that survives a round trip', ({ expect }) => {
     const review = buildAgentReview(createSampleArtifact());
     const json: unknown = JSON.parse(JSON.stringify(review, undefined, 2));
-    expect(json).toEqual(review);
-    expect(structuredClone(review)).toEqual(review);
+    expect(json).toStrictEqual(review);
+    expect(structuredClone(review)).toStrictEqual(review);
   });
 
-  it('matches the snapshot', () => {
+  test('matches the snapshot', ({ expect }) => {
     expect(buildAgentReview(createSampleArtifact())).toMatchInlineSnapshot(`
       {
         "change": {
@@ -141,7 +142,7 @@ describe('buildAgentReview', () => {
     `);
   });
 
-  it('describes a local change and a chosen verdict', () => {
+  test('describes a local change and a chosen verdict', ({ expect }) => {
     const artifact = createSampleArtifact({
       value: 'comment',
       source: 'chosen',

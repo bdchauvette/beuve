@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import type { ModelFinding } from './finding-output-schema.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import type { FindingLimits } from './validate-findings.ts';
 import { validateFindings } from './validate-findings.ts';
-
-const limits = { maxFindings: 10, minConfidence: 0.3 };
+import { test } from './testing/test.ts';
 
 function finding(overrides: Partial<ModelFinding>): ModelFinding {
   return {
@@ -21,7 +21,9 @@ function finding(overrides: Partial<ModelFinding>): ModelFinding {
 }
 
 describe('validateFindings', () => {
-  it('keeps findings on diff lines and drops those outside the diff or its files', () => {
+  test('keeps findings on diff lines and drops those outside the diff or its files', ({
+    expect,
+  }) => {
     const input = createChatQuestion({
       files: [
         ...createChatQuestion().files,
@@ -44,14 +46,14 @@ describe('validateFindings', () => {
         finding({ path: '/work/repo/src/b.ts', startLine: 3, endLine: 3, title: 'Absolute' }),
       ],
       input,
-      limits,
+      limits(),
     );
-    expect(result.findings.map((kept) => [kept.path, kept.startLine, kept.title])).toEqual([
+    expect(result.findings.map((kept) => [kept.path, kept.startLine, kept.title])).toStrictEqual([
       ['src/a.ts', 12, 'Empty input'],
       ['src/b.ts', 2, 'Dot slash'],
       ['src/b.ts', 3, 'Absolute'],
     ]);
-    expect(result.dropped).toEqual({
+    expect(result.dropped).toStrictEqual({
       unknownFile: 3,
       outsideDiff: 1,
       lowConfidence: 0,
@@ -60,17 +62,17 @@ describe('validateFindings', () => {
     });
   });
 
-  it('narrows ranges to the touched hunks and orders reversed ranges', () => {
+  test('narrows ranges to the touched hunks and orders reversed ranges', ({ expect }) => {
     const result = validateFindings(
       [finding({ startLine: 30, endLine: 8 })],
       createChatQuestion(),
-      limits,
+      limits(),
     );
     expect(result.findings[0]).toMatchObject({ startLine: 10, endLine: 14 });
     expect(result.clamped).toBe(1);
   });
 
-  it('normalizes text and drops duplicates and low-confidence findings', () => {
+  test('normalizes text and drops duplicates and low-confidence findings', ({ expect }) => {
     const result = validateFindings(
       [
         finding({ title: '  Empty\n input ', body: '  body  ' }),
@@ -78,13 +80,15 @@ describe('validateFindings', () => {
         finding({ title: 'Unsure', confidence: 0.1 }),
       ],
       createChatQuestion(),
-      limits,
+      limits(),
     );
-    expect(result.findings).toEqual([finding({ title: 'Empty input', body: 'body' })]);
+    expect(result.findings).toStrictEqual([finding({ title: 'Empty input', body: 'body' })]);
     expect(result.dropped).toMatchObject({ duplicate: 1, lowConfidence: 1 });
   });
 
-  it('keeps the most severe and confident findings within the limit, in diff order', () => {
+  test('keeps the most severe and confident findings within the limit, in diff order', ({
+    expect,
+  }) => {
     const result = validateFindings(
       [
         finding({ path: 'src/b.ts', startLine: 1, endLine: 1, title: 'B info', severity: 'info' }),
@@ -95,7 +99,11 @@ describe('validateFindings', () => {
       createChatQuestion(),
       { maxFindings: 2, minConfidence: 0 },
     );
-    expect(result.findings.map((kept) => kept.title)).toEqual(['A warning sure', 'B risk']);
+    expect(result.findings.map((kept) => kept.title)).toStrictEqual(['A warning sure', 'B risk']);
     expect(result.dropped.overLimit).toBe(2);
   });
 });
+
+function limits(): FindingLimits {
+  return { maxFindings: 10, minConfidence: 0.3 };
+}

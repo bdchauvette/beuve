@@ -1,51 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import type { DatabaseSync } from 'node:sqlite';
 
+import { describe } from 'vitest';
+
+import type { UraItemId } from './ura-item.ts';
 import { insertUraItem } from './insert-ura-item.ts';
 import { listUraItems } from './list-ura-items.ts';
 import { reorderUraItems } from './reorder-ura-items.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
-import { createUraTestDatabase } from './testing/create-ura-test-database.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
+import { test } from './testing/test.ts';
 
-const { sessionId, itemId } = testUraIds;
-
-function setup(): ReturnType<typeof createUraTestDatabase> {
-  const db = createUraTestDatabase([sessionId, testUraIds.otherSessionId]);
+function seed(db: DatabaseSync): void {
   for (const n of [1, 2, 3]) {
-    insertUraItem(db, createTestUraItem({ id: itemId(n), title: `Item ${String(n)}` }));
+    insertUraItem(db, createTestUraItem({ id: testUraIds.itemId(n), title: `Item ${String(n)}` }));
   }
-  insertUraItem(db, createTestUraItem({ id: itemId(9), sessionId: testUraIds.otherSessionId }));
-  return db;
+  insertUraItem(
+    db,
+    createTestUraItem({ id: testUraIds.itemId(9), sessionId: testUraIds.otherSessionId }),
+  );
 }
 
-function titles(db: ReturnType<typeof createUraTestDatabase>): string[] {
-  const items = listUraItems(db, sessionId);
+function titles(db: DatabaseSync): string[] {
+  const items = listUraItems(db, testUraIds.sessionId);
   return items.ok ? items.value.map((item) => item.title) : [];
 }
 
 describe('reorderUraItems', () => {
-  it('puts the items in the given order, and new items go last', () => {
-    const db = setup();
-    expect(reorderUraItems(db, sessionId, [itemId(3), itemId(1), itemId(2)])).toEqual({
+  test('puts the items in the given order, and new items go last', ({ expect, db }) => {
+    seed(db);
+    expect(
+      reorderUraItems(db, testUraIds.sessionId, [
+        testUraIds.itemId(3),
+        testUraIds.itemId(1),
+        testUraIds.itemId(2),
+      ]),
+    ).toStrictEqual({
       ok: true,
       value: undefined,
     });
-    expect(titles(db)).toEqual(['Item 3', 'Item 1', 'Item 2']);
-    insertUraItem(db, createTestUraItem({ id: itemId(4), title: 'Item 4' }));
-    expect(titles(db)).toEqual(['Item 3', 'Item 1', 'Item 2', 'Item 4']);
+    expect(titles(db)).toStrictEqual(['Item 3', 'Item 1', 'Item 2']);
+    insertUraItem(db, createTestUraItem({ id: testUraIds.itemId(4), title: 'Item 4' }));
+    expect(titles(db)).toStrictEqual(['Item 3', 'Item 1', 'Item 2', 'Item 4']);
   });
 
-  it.each([
-    ['an item is missing', [itemId(3), itemId(1)]],
-    ['an item repeats', [itemId(3), itemId(1), itemId(1)]],
-    ['an item is unknown', [itemId(3), itemId(1), itemId(2), itemId(7)]],
-    ["another session's item is named", [itemId(3), itemId(1), itemId(9)]],
-  ])('changes nothing when %s', (_name, ids) => {
-    const db = setup();
-    expect(reorderUraItems(db, sessionId, ids)).toEqual({
+  test.for<[string, UraItemId[]]>([
+    ['an item is missing', [testUraIds.itemId(3), testUraIds.itemId(1)]],
+    ['an item repeats', [testUraIds.itemId(3), testUraIds.itemId(1), testUraIds.itemId(1)]],
+    [
+      'an item is unknown',
+      [testUraIds.itemId(3), testUraIds.itemId(1), testUraIds.itemId(2), testUraIds.itemId(7)],
+    ],
+    [
+      "another session's item is named",
+      [testUraIds.itemId(3), testUraIds.itemId(1), testUraIds.itemId(9)],
+    ],
+  ])('changes nothing when %s', ([, ids], { expect, db }) => {
+    seed(db);
+    expect(reorderUraItems(db, testUraIds.sessionId, ids)).toStrictEqual({
       ok: false,
-      error: { kind: 'order-mismatch', sessionId },
+      error: { kind: 'order-mismatch', sessionId: testUraIds.sessionId },
     });
-    expect(titles(db)).toEqual(['Item 1', 'Item 2', 'Item 3']);
+    expect(titles(db)).toStrictEqual(['Item 1', 'Item 2', 'Item 3']);
   });
 });

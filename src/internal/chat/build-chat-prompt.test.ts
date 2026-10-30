@@ -1,15 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { buildChatPrompt } from './build-chat-prompt.ts';
 import type { ChatPromptBudget } from './build-chat-prompt.ts';
 import type { ChatFile, ChatTurn } from './chat-question.ts';
 import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
-
-const budget: ChatPromptBudget = defaultChatPromptBudget;
-const truncationNote =
-  /\[beuve: selection 1 truncated for size: lines 1-\d+ of 1-300 shown; Read src\/huge\.ts for the rest\]/u;
-const hunkNote = /\[beuve: hunks \d+-10 of 10 .* Read src\/huge\.ts for the rest\]/u;
+import { test } from './testing/test.ts';
 
 function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
   const body = Array.from({ length: hunks }, (_, hunk) =>
@@ -27,13 +23,13 @@ function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
 }
 
 describe('buildChatPrompt', () => {
-  it('puts a command task in place of the question, with its own instructions', () => {
+  test('puts a command task in place of the question, with its own instructions', ({ expect }) => {
     const review = buildChatPrompt(
       createChatQuestion({
         question: 'ignored',
         task: { kind: 'review', pathScope: ['src'], maxFindings: 5 },
       }),
-      budget,
+      budget(),
     );
     expect(review.prompt).toContain('## Task');
     expect(review.prompt).toContain('only the files at or under src');
@@ -42,7 +38,7 @@ describe('buildChatPrompt', () => {
     expect(review.system).toContain('at most 5');
     expect(review.system).toContain('structured output');
 
-    const abstract = buildChatPrompt(createChatQuestion({ task: { kind: 'abstract' } }), budget);
+    const abstract = buildChatPrompt(createChatQuestion({ task: { kind: 'abstract' } }), budget());
     expect(abstract.prompt).toContain("Write beuve's own summary of this change");
     expect(abstract.prompt).not.toContain("## The reviewer's question");
     expect(abstract.system).toContain('**What changed**');
@@ -50,7 +46,7 @@ describe('buildChatPrompt', () => {
     expect(abstract.system).toContain('[[path:start-end]]');
   });
 
-  it('is deterministic and holds the diff, the focus and the question, last', () => {
+  test('is deterministic and holds the diff, the focus and the question, last', ({ expect }) => {
     const question = createChatQuestion({
       focus: { path: 'src/a.ts', startLine: 12, endLine: 13, excerpt: '+  return first.trim();\n' },
       impactFindings: [
@@ -65,8 +61,8 @@ describe('buildChatPrompt', () => {
         },
       ],
     });
-    const built = buildChatPrompt(question, budget);
-    expect(buildChatPrompt(question, budget)).toEqual(built);
+    const built = buildChatPrompt(question, budget());
+    expect(buildChatPrompt(question, budget())).toStrictEqual(built);
     expect(built.prompt).toContain('### modified src/a.ts');
     expect(built.prompt).toContain('### added src/b.ts');
     expect(built.prompt).toContain('`parse`: cognitive complexity 18 (limit 15, worsened)');
@@ -84,9 +80,11 @@ describe('buildChatPrompt', () => {
     });
   });
 
-  it('puts the stated intent after the head line, fenced as untrusted, and bounds it', () => {
+  test('puts the stated intent after the head line, fenced as untrusted, and bounds it', ({
+    expect,
+  }) => {
     const question = createChatQuestion({ intent: 'Fix the parser\n\nIt dropped the last part.' });
-    const built = buildChatPrompt(question, budget);
+    const built = buildChatPrompt(question, budget());
     const intentAt = built.prompt.indexOf("## The author's stated intent");
     expect(intentAt).toBeGreaterThan(built.prompt.indexOf('# Change under review'));
     expect(intentAt).toBeLessThan(built.prompt.indexOf('## Diff'));
@@ -95,7 +93,7 @@ describe('buildChatPrompt', () => {
     expect(built.system).toContain("author's stated intent");
 
     const long = buildChatPrompt(createChatQuestion({ intent: `${'x'.repeat(50)}\`\`\`tail` }), {
-      ...budget,
+      ...budget(),
       maxIntentChars: 20,
     });
     expect(long.report.intentTruncated).toBe(true);
@@ -103,15 +101,15 @@ describe('buildChatPrompt', () => {
     expect(long.prompt).not.toContain('tail');
   });
 
-  it('omits the intent section when there is no intent or it is blank', () => {
-    expect(buildChatPrompt(createChatQuestion(), budget).prompt).not.toContain('stated intent');
-    expect(buildChatPrompt(createChatQuestion({ intent: '  \n ' }), budget).prompt).not.toContain(
+  test('omits the intent section when there is no intent or it is blank', ({ expect }) => {
+    expect(buildChatPrompt(createChatQuestion(), budget()).prompt).not.toContain('stated intent');
+    expect(buildChatPrompt(createChatQuestion({ intent: '  \n ' }), budget()).prompt).not.toContain(
       'stated intent',
     );
   });
 
-  it('states the read-only, authoring-resistant rules and the citation grammar', () => {
-    const { system } = buildChatPrompt(createChatQuestion(), budget);
+  test('states the read-only, authoring-resistant rules and the citation grammar', ({ expect }) => {
+    const { system } = buildChatPrompt(createChatQuestion(), budget());
     expect(system).toContain('Read, Grep and Glob');
     expect(system).toContain('never offer to make a change');
     expect(system).toContain('```diff');
@@ -119,8 +117,10 @@ describe('buildChatPrompt', () => {
     expect(system).toContain('untrusted');
   });
 
-  it('keeps leading hunks of a file over its budget and omits files past the total, saying so', () => {
-    const small: ChatPromptBudget = { ...budget, maxChars: 6000, maxFileChars: 2500 };
+  test('keeps leading hunks of a file over its budget and omits files past the total, saying so', ({
+    expect,
+  }) => {
+    const small: ChatPromptBudget = { ...budget(), maxChars: 6000, maxFileChars: 2500 };
     const question = createChatQuestion({
       files: [
         bigFile('src/huge.ts', 10, 30),
@@ -131,11 +131,13 @@ describe('buildChatPrompt', () => {
     });
     const built = buildChatPrompt(question, small);
     expect(built.prompt.length).toBeLessThanOrEqual(small.maxChars);
-    expect(built.report.truncatedFiles).toEqual([
+    expect(built.report.truncatedFiles).toStrictEqual([
       { path: 'src/huge.ts', includedHunks: expect.any(Number) as number, totalHunks: 10 },
     ]);
-    expect(built.prompt).toMatch(hunkNote);
-    expect(built.report.omittedFiles).toEqual(
+    expect(built.prompt).toMatch(
+      /\[beuve: hunks \d+-10 of 10 .* Read src\/huge\.ts for the rest\]/u,
+    );
+    expect(built.report.omittedFiles).toStrictEqual(
       expect.arrayContaining([
         { path: 'src/last.ts', reason: 'budget' },
         { path: 'logo.png', reason: 'binary' },
@@ -145,12 +147,14 @@ describe('buildChatPrompt', () => {
     expect(built.prompt).toContain('- logo.png (binary)');
   });
 
-  it('drops the oldest turns first, with a notice, and truncates an oversized turn', () => {
+  test('drops the oldest turns first, with a notice, and truncates an oversized turn', ({
+    expect,
+  }) => {
     const turns: ChatTurn[] = Array.from({ length: 30 }, (_, index) => ({
       role: index % 2 === 0 ? 'user' : 'assistant',
       content: `turn ${String(index)}`,
     }));
-    const limited = buildChatPrompt(createChatQuestion({ history: turns }), budget);
+    const limited = buildChatPrompt(createChatQuestion({ history: turns }), budget());
     expect(limited.report.omittedTurns).toBe(10);
     expect(limited.prompt).toContain(
       '[beuve: 10 earlier turns omitted; the oldest are dropped first]',
@@ -159,7 +163,7 @@ describe('buildChatPrompt', () => {
     expect(limited.prompt).toContain('turn 10\n');
     expect(limited.prompt).toContain('turn 29\n');
 
-    const tight: ChatPromptBudget = { ...budget, maxHistoryChars: 400 };
+    const tight: ChatPromptBudget = { ...budget(), maxHistoryChars: 400 };
     const long: ChatTurn[] = [
       { role: 'user', content: 'o'.repeat(90) },
       { role: 'user', content: 'q'.repeat(90) },
@@ -174,8 +178,10 @@ describe('buildChatPrompt', () => {
     expect(truncated.prompt).not.toContain('o'.repeat(90));
   });
 
-  it('fences untrusted text so it cannot close its fence, and truncates the focus excerpt', () => {
-    const tight: ChatPromptBudget = { ...budget, maxFocusChars: 10 };
+  test('fences untrusted text so it cannot close its fence, and truncates the focus excerpt', ({
+    expect,
+  }) => {
+    const tight: ChatPromptBudget = { ...budget(), maxFocusChars: 10 };
     const built = buildChatPrompt(
       createChatQuestion({
         question: 'What is ```this```?',
@@ -193,7 +199,9 @@ describe('buildChatPrompt', () => {
 describe('buildChatPrompt with selections and a summary', () => {
   const head = createChatQuestion().headSha;
 
-  it('puts the selections first, numbered as in the file, and names them in the question', () => {
+  test('puts the selections first, numbered as in the file, and names them in the question', ({
+    expect,
+  }) => {
     const built = buildChatPrompt(
       createChatQuestion({
         question: 'Why does [[@1]] differ from [[@2]]?',
@@ -223,7 +231,7 @@ describe('buildChatPrompt with selections and a summary', () => {
           { kind: 'unreadable', path: 'logo.png', side: 'head', sha: head, reason: 'binary' },
         ],
       }),
-      budget,
+      budget(),
     );
     const { prompt } = built;
     const selected = prompt.indexOf('## Selected by the reviewer');
@@ -243,9 +251,11 @@ describe('buildChatPrompt with selections and a summary', () => {
     expect(built.report.truncatedSelections).toBe(0);
   });
 
-  it('gives selections the budget before the diff and truncates a large one, saying so', () => {
+  test('gives selections the budget before the diff and truncates a large one, saying so', ({
+    expect,
+  }) => {
     const tight: ChatPromptBudget = {
-      ...budget,
+      ...budget(),
       maxChars: 9000,
       maxSelectionChars: 3000,
       maxSelectionFileChars: 1500,
@@ -281,14 +291,18 @@ describe('buildChatPrompt with selections and a summary', () => {
       tight,
     );
     expect(built.report.truncatedSelections).toBe(1);
-    expect(built.prompt).toMatch(truncationNote);
+    expect(built.prompt).toMatch(
+      /\[beuve: selection 1 truncated for size: lines 1-\d+ of 1-300 shown; Read src\/huge\.ts for the rest\]/u,
+    );
     expect(built.prompt).toContain('### Selection 2: src/b.ts:1-2');
     expect(built.prompt).toContain('const v2 = 1;');
     expect(built.report.chars).toBeLessThanOrEqual(tight.maxChars);
     expect(built.report.truncatedFiles.length + built.report.omittedFiles.length).toBe(1);
   });
 
-  it('sends the summary instead of the compacted turns, and the turns after it with their mentions', () => {
+  test('sends the summary instead of the compacted turns, and the turns after it with their mentions', ({
+    expect,
+  }) => {
     const history: ChatTurn[] = [
       {
         role: 'user',
@@ -299,7 +313,7 @@ describe('buildChatPrompt with selections and a summary', () => {
     ];
     const { prompt } = buildChatPrompt(
       createChatQuestion({ summary: '**Asked**\n- why parse trims', history }),
-      budget,
+      budget(),
     );
     const summaryAt = prompt.indexOf('## Summary of the conversation so far');
     expect(summaryAt).toBeGreaterThan(-1);
@@ -315,4 +329,8 @@ function lines(from: number, count: number): string[] {
     { length: count },
     (_, index) => `const v${String(from + index)} = ${String(index)};`,
   );
+}
+
+function budget(): ChatPromptBudget {
+  return defaultChatPromptBudget;
 }

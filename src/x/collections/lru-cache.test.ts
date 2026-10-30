@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { LruCache } from './lru-cache.ts';
+import { test } from '#testing/test.ts';
 
 describe('LruCache', () => {
-  it('evicts the least recently used entry when over capacity', () => {
+  test('evicts the least recently used entry when over capacity', ({ expect }) => {
     const cache = new LruCache<string, number>(2);
     cache.set('a', 1).set('b', 2);
     expect(cache.get('a')).toBe(1);
@@ -14,21 +15,21 @@ describe('LruCache', () => {
     expect(cache.size).toBe(2);
   });
 
-  it('treats overwriting a key as a use', () => {
+  test('treats overwriting a key as a use', ({ expect }) => {
     const cache = new LruCache<string, number>(2);
     cache.set('a', 1).set('b', 2).set('a', 10).set('c', 3);
     expect(cache.get('a')).toBe(10);
     expect(cache.has('b')).toBe(false);
   });
 
-  it('stores undefined values distinctly from missing keys', () => {
+  test('stores undefined values distinctly from missing keys', ({ expect }) => {
     const cache = new LruCache<string, number | undefined>(1);
     cache.set('a', undefined);
     expect(cache.has('a')).toBe(true);
     expect(cache.get('a')).toBeUndefined();
   });
 
-  it('deletes and clears', () => {
+  test('deletes and clears', ({ expect }) => {
     const cache = new LruCache<string, number>(3);
     cache.set('a', 1).set('b', 2);
     expect(cache.delete('a')).toBe(true);
@@ -37,7 +38,7 @@ describe('LruCache', () => {
     expect(cache.size).toBe(0);
   });
 
-  it.each([0, -1, 1.5, NaN])('rejects capacity %s', (capacity) => {
+  test.for([0, -1, 1.5, NaN])('rejects capacity %s', (capacity, { expect }) => {
     expect(() => new LruCache(capacity)).toThrow(RangeError);
   });
 });

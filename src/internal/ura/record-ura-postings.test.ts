@@ -1,30 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { insertUraItem } from './insert-ura-item.ts';
 import { listUraPostings } from './list-ura-postings.ts';
 import { recordUraPostings } from './record-ura-postings.ts';
 import { createTestUraItem } from './testing/create-test-ura-item.ts';
-import { createUraTestDatabase } from './testing/create-ura-test-database.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import type { UraPosting } from './ura-posting.ts';
-
-const { sessionId, headSha, laterHeadSha } = testUraIds;
+import { test } from './testing/test.ts';
 
 describe('recordUraPostings', () => {
-  it('records, replaces and lists postings, which cascade with their item', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('records, replaces and lists postings, which cascade with their item', ({ expect, db }) => {
     const first = createTestUraItem({ id: testUraIds.itemId(1) });
     const second = createTestUraItem({ id: testUraIds.itemId(2) });
     insertUraItem(db, first);
     insertUraItem(db, second);
-    expect(listUraPostings(db, sessionId)).toEqual([]);
+    expect(listUraPostings(db, testUraIds.sessionId)).toStrictEqual([]);
 
     const posting = (itemId: UraPosting['itemId'], at: string): UraPosting => ({
       itemId,
-      sessionId,
+      sessionId: testUraIds.sessionId,
       target: 'github',
       url: 'https://github.com/o/r/pull/1#pullrequestreview-1',
-      headSha,
+      headSha: testUraIds.headSha,
       placement: 'inline',
       postedAt: at,
     });
@@ -35,33 +32,34 @@ describe('recordUraPostings', () => {
     recordUraPostings(db, [
       {
         ...posting(first.id, '2026-10-28T13:00:00.000Z'),
-        headSha: laterHeadSha,
+        headSha: testUraIds.laterHeadSha,
         placement: 'body',
       },
     ]);
-    expect(listUraPostings(db, sessionId)).toEqual([
+    expect(listUraPostings(db, testUraIds.sessionId)).toStrictEqual([
       posting(second.id, '2026-10-28T12:00:00.000Z'),
       {
         ...posting(first.id, '2026-10-28T13:00:00.000Z'),
-        headSha: laterHeadSha,
+        headSha: testUraIds.laterHeadSha,
         placement: 'body',
       },
     ]);
 
     db.prepare('DELETE FROM ura_items WHERE id = ?;').run(second.id);
-    expect(listUraPostings(db, sessionId).map((entry) => entry.itemId)).toEqual([first.id]);
+    expect(listUraPostings(db, testUraIds.sessionId).map((entry) => entry.itemId)).toStrictEqual([
+      first.id,
+    ]);
   });
 
-  it('rejects an unknown item', () => {
-    const db = createUraTestDatabase([sessionId]);
+  test('rejects an unknown item', ({ expect, db }) => {
     expect(() => {
       recordUraPostings(db, [
         {
           itemId: testUraIds.itemId(9),
-          sessionId,
+          sessionId: testUraIds.sessionId,
           target: 'github',
           url: 'https://github.com/o/r/pull/1',
-          headSha,
+          headSha: testUraIds.headSha,
           placement: 'inline',
           postedAt: '2026-10-28T12:00:00.000Z',
         },

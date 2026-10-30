@@ -1,18 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseCitations } from './parse-citations.ts';
 import { validateCitations } from './validate-citations.ts';
-import type { ValidatedAnswer } from './validate-citations.ts';
-
-const scope = { knownPaths: new Set(['src/a.ts', 'src/b.ts']), worktreePath: '/work/repo' };
+import type { CitationScope, ValidatedAnswer } from './validate-citations.ts';
+import { test } from './testing/test.ts';
 
 function validate(answer: string): ValidatedAnswer {
-  return validateCitations(answer, parseCitations(answer), scope);
+  return validateCitations(answer, parseCitations(answer), scope());
 }
 
 describe('validateCitations', () => {
-  it('keeps known paths as canonical markers and dedupes citations', () => {
-    expect(validate('See [[src/a.ts:12]], [[./src/a.ts:12-12]] and [[src/b.ts:1-3]].')).toEqual({
+  test('keeps known paths as canonical markers and dedupes citations', ({ expect }) => {
+    expect(
+      validate('See [[src/a.ts:12]], [[./src/a.ts:12-12]] and [[src/b.ts:1-3]].'),
+    ).toStrictEqual({
       content: 'See [[src/a.ts:12-12]], [[src/a.ts:12-12]] and [[src/b.ts:1-3]].',
       citations: [
         { path: 'src/a.ts', startLine: 12, endLine: 12, side: 'head' },
@@ -23,15 +24,17 @@ describe('validateCitations', () => {
     });
   });
 
-  it('makes absolute paths inside the worktree relative', () => {
+  test('makes absolute paths inside the worktree relative', ({ expect }) => {
     expect(validate('[[/work/repo/src/b.ts:2-3]]')).toMatchObject({
       content: '[[src/b.ts:2-3]]',
       citations: [{ path: 'src/b.ts', startLine: 2, endLine: 3 }],
     });
   });
 
-  it('drops unknown paths, leaving them as code, and reports malformed markers', () => {
-    expect(validate('Not [[src/c.ts:4-5]] or [[/etc/passwd:1]]; [[src/a.ts:0]] stays.')).toEqual({
+  test('drops unknown paths, leaving them as code, and reports malformed markers', ({ expect }) => {
+    expect(
+      validate('Not [[src/c.ts:4-5]] or [[/etc/passwd:1]]; [[src/a.ts:0]] stays.'),
+    ).toStrictEqual({
       content: 'Not `src/c.ts:4-5` or `/etc/passwd:1-1`; [[src/a.ts:0]] stays.',
       citations: [],
       dropped: [
@@ -42,8 +45,8 @@ describe('validateCitations', () => {
     });
   });
 
-  it('leaves an answer without markers unchanged', () => {
-    expect(validate('No citations here.')).toEqual({
+  test('leaves an answer without markers unchanged', ({ expect }) => {
+    expect(validate('No citations here.')).toStrictEqual({
       content: 'No citations here.',
       citations: [],
       dropped: [],
@@ -51,3 +54,7 @@ describe('validateCitations', () => {
     });
   });
 });
+
+function scope(): CitationScope {
+  return { knownPaths: new Set(['src/a.ts', 'src/b.ts']), worktreePath: '/work/repo' };
+}

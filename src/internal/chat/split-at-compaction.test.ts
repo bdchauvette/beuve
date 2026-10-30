@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import type { ChatMessage, ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
 import { splitAtCompaction } from './split-at-compaction.ts';
+import { test } from './testing/test.ts';
 
 function message(id: number, role: 'user' | 'summary'): ChatMessage {
   return {
@@ -17,16 +18,16 @@ function message(id: number, role: 'user' | 'summary'): ChatMessage {
 }
 
 describe('splitAtCompaction', () => {
-  it('compacts nothing without a summary', () => {
+  test('compacts nothing without a summary', ({ expect }) => {
     const messages = [message(1, 'user'), message(2, 'user')];
-    expect(splitAtCompaction(messages)).toEqual({
+    expect(splitAtCompaction(messages)).toStrictEqual({
       summary: undefined,
       before: [],
       after: messages,
     });
   });
 
-  it('splits at the latest summary, which replaces everything before it', () => {
+  test('splits at the latest summary, which replaces everything before it', ({ expect }) => {
     const messages = [
       message(1, 'user'),
       message(2, 'summary'),
@@ -36,13 +37,13 @@ describe('splitAtCompaction', () => {
     ];
     const split = splitAtCompaction(messages);
     expect(split.summary?.content).toBe('m4');
-    expect(split.before.map(({ content }) => content)).toEqual(['m1', 'm2', 'm3']);
-    expect(split.after.map(({ content }) => content)).toEqual(['m5']);
+    expect(split.before.map(({ content }) => content)).toStrictEqual(['m1', 'm2', 'm3']);
+    expect(split.after.map(({ content }) => content)).toStrictEqual(['m5']);
   });
 
-  it('has nothing after a summary that is last', () => {
+  test('has nothing after a summary that is last', ({ expect }) => {
     const split = splitAtCompaction([message(1, 'user'), message(2, 'summary')]);
-    expect(split.after).toEqual([]);
+    expect(split.after).toStrictEqual([]);
     expect(split.before).toHaveLength(1);
   });
 });
