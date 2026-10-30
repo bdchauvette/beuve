@@ -42,11 +42,17 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 
 ## Tests
 
-- Vitest, colocated: `foo-bar.ts` is tested by `foo-bar.test.ts` in the same directory.
-- `node:sqlite` works in tests directly; use `openDatabase(':memory:')`.
-- Helpers shared between test files live in a `testing/` directory (ADR 0013), e.g. `#internal/git/testing/create-test-repository.ts`; only tests may import them.
+Conventions and examples: `docs/testing.md` (ADR 0058; time: ADR 0059). Directories in `converted-test-dirs.ts` must follow them; convert a directory whole and add it there.
+
+- Vitest, colocated: `foo-bar.ts` is tested by `foo-bar.test.ts` in the same directory. Dev, tests and CI run on Node 26 (`.node-version`, ADR 0060); shipped code runs on Electron's Node 24.
+- Import `test` from the nearest `testing/test.ts` (`#testing/test.ts` for domain-free fixtures: `tempDir`, `db`, `logger`, `clock`; `#internal/git/testing/test.ts` adds `repo`, `repository`, `repositories` with worker-built templates). Take `expect` and every fixture from the context: `test('…', async ({ expect, repo }) => …)`.
+- No hooks, no module-root `const`/`let` in test files (top-level `function` helpers are fine), no `if` in tests (`okValueFrom` from `#testing/ok-value-from.ts`), no module mocking (`vi.mock`, `vi.hoisted`, `vi.spyOn` on imports): inject dependencies.
+- Tests run concurrently. A test that fakes time (`clock` fixture, `vi.useFakeTimers`) or touches `process.env` is declared `test('…', { concurrent: false }, …)`.
+- Never inject clocks: code reads `Temporal.Now`; tests use the `clock` fixture. No `Date` and no arithmetic on time numbers anywhere (`local/no-date`, `local/no-time-number-arithmetic`).
+- `node:sqlite` works in tests directly; the `db` fixture is `openDatabase(':memory:')`.
+- Helpers shared between test files live in a `testing/` directory (ADR 0013, 0058); only tests may import them. Domain-free fixtures live in `src/testing/`.
 - Main-process integration tests run in plain Node against `openAppDatabase(':memory:')` and a temp repository (`src/main/create-main-services.test.ts`).
-- Local lint rules live in `eslint-local-rules/` with RuleTester tests beside them.
+- Local lint rules live in `eslint-local-rules/` with RuleTester tests beside them (`testing/create-typed-rule-tester.ts` for type-aware rules).
 
 ## Gotchas
 
