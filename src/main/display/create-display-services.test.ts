@@ -21,6 +21,7 @@ describe('createDisplayServices', () => {
         ignoreWhitespace: false,
         sidebarSide: 'right',
         showGenerated: false,
+        showInsights: true,
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -30,17 +31,20 @@ describe('createDisplayServices', () => {
         ignoreWhitespace: false,
         sidebarSide: 'right',
         showGenerated: false,
+        showInsights: true,
       },
     });
     await display.set({ ignoreWhitespace: true });
     await display.set({ sidebarSide: 'left' });
     await display.set({ showGenerated: true });
+    await display.set({ showInsights: false });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
       ignoreWhitespace: true,
       sidebarSide: 'left',
       showGenerated: true,
+      showInsights: false,
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -49,6 +53,7 @@ describe('createDisplayServices', () => {
         ignoreWhitespace: true,
         sidebarSide: 'left',
         showGenerated: true,
+        showInsights: false,
       },
     });
   });
@@ -63,6 +68,7 @@ describe('createDisplayServices', () => {
         ignoreWhitespace: true,
         sidebarSide: 'right',
         showGenerated: false,
+        showInsights: true,
       },
     });
   });

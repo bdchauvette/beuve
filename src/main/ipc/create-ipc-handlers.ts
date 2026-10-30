@@ -271,6 +271,7 @@ const displayRequest = z.strictObject({
   ignoreWhitespace: z.boolean().optional(),
   sidebarSide: z.enum(['left', 'right']).optional(),
   showGenerated: z.boolean().optional(),
+  showInsights: z.boolean().optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -555,12 +556,13 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { layout, ignoreWhitespace, sidebarSide, showGenerated } = parsed.data;
+      const { layout, ignoreWhitespace, sidebarSide, showGenerated, showInsights } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
         ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
         ...(sidebarSide !== undefined && { sidebarSide }),
         ...(showGenerated !== undefined && { showGenerated }),
+        ...(showInsights !== undefined && { showInsights }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {

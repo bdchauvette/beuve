@@ -236,6 +236,13 @@ export class BeuveChatDrawer extends LitElement {
         border-top: 1px solid var(--beuve-border);
       }
 
+      .finding.revealed {
+        margin: 0 calc(-1 * var(--beuve-space-2));
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-accent-soft);
+      }
+
       .finding:first-child {
         padding-top: 0;
         border-top: none;
@@ -1172,7 +1179,7 @@ export class BeuveChatDrawer extends LitElement {
     const isStaged = this.stagedFindings.has(`${messageId}:${String(index)}`);
     const title = parseAnswerMarkdown(finding.title, [], 'final');
     const body = parseAnswerMarkdown(finding.body, [], 'final');
-    return html`<li class="finding">
+    return html`<li class="finding" data-finding=${`${messageId}:${String(index)}`}>
       <div class="finding-head">
         <span class="severity ${finding.severity}">${labels?.severity}</span>
         <span>${labels?.category}</span>
@@ -1257,6 +1264,23 @@ export class BeuveChatDrawer extends LitElement {
         Clear queue
       </button>
     </div>`;
+  }
+
+  /** Scrolls to a `/review` finding of the transcript and marks it for a moment (ADR 0061). */
+  async revealFinding(messageId: string, finding: number): Promise<void> {
+    await this.updateComplete;
+    const key = `${messageId}:${String(finding)}`;
+    const item = [...this.renderRoot.querySelectorAll<HTMLElement>('[data-finding]')].find(
+      (element) => element.dataset['finding'] === key,
+    );
+    if (item === undefined) {
+      return;
+    }
+    item.scrollIntoView({ block: 'center' });
+    item.classList.add('revealed');
+    setTimeout(() => {
+      item.classList.remove('revealed');
+    }, 1800);
   }
 
   /** Types `text` into the input for the reviewer to finish (the palette's commands with arguments). */

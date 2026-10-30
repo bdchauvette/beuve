@@ -54,8 +54,13 @@ import { toHeadSideAnnotations } from './to-head-side-annotations.ts';
 import { toTextmateTheme } from './to-textmate-theme.ts';
 import type { TextmateTheme } from './to-textmate-theme.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
-import type { InlineSpan } from './parse-markdown-subset.ts';
 import { toUraMarkers } from './to-ura-markers.ts';
+import { createInlineNode } from './create-inline-node.ts';
+import { createInsightElement } from './create-insight-element.ts';
+import { describeInsightCount } from './describe-insight-count.ts';
+import type { ReviewInsight } from './merge-review-insights.ts';
+import { planInsightMarks } from './plan-insight-marks.ts';
+import { toInsightMarkCss } from './to-insight-mark-css.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -89,7 +94,9 @@ export interface SuggestionSaveDetail {
 
 /** What a card annotates under a head line (or above the diff, at line 0). */
 type CardNote =
-  { readonly kind: 'ura'; readonly item: UraItemView } | { readonly kind: 'composer' };
+  | { readonly kind: 'ura'; readonly item: UraItemView }
+  | { readonly kind: 'insight'; readonly insight: ReviewInsight }
+  | { readonly kind: 'composer' };
 
 /** A note with the head lines it is about; one interface, so the library's metadata type stays whole. */
 interface CardSlot {
@@ -97,6 +104,8 @@ interface CardSlot {
   readonly lineEnd: number;
   readonly note: CardNote;
 }
+
+const noInsights: readonly ReviewInsight[] = [];
 
 const themeNames = { light: 'beuve-light', dark: 'beuve-dark' } as const;
 const estimatedLineHeight = 20;
@@ -448,6 +457,126 @@ export class BeuveFileCard extends LitElement {
       font: var(--beuve-font-mono);
     }
 
+    .insight-badge {
+      color: var(--beuve-text-muted);
+    }
+
+    .insight {
+      --insight-color: var(--beuve-text-muted);
+      margin: 2px var(--beuve-space-3);
+      padding: 0 var(--beuve-space-2);
+      border-left: 2px solid var(--insight-color);
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
+    .insight.risk {
+      --insight-color: var(--beuve-danger);
+    }
+
+    .insight.warning {
+      --insight-color: var(--beuve-warn);
+    }
+
+    .insight.unconfirmed {
+      opacity: 0.65;
+    }
+
+    .insight.unconfirmed.open,
+    .insight.unconfirmed:hover {
+      opacity: 1;
+    }
+
+    .insight-line {
+      display: flex;
+      align-items: baseline;
+      gap: var(--beuve-space-2);
+      min-width: 0;
+      white-space: nowrap;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .insight-line:focus-visible {
+      outline: 1px solid var(--beuve-accent);
+      outline-offset: 1px;
+    }
+
+    .insight-category {
+      flex: none;
+      color: var(--insight-color);
+    }
+
+    .insight-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--beuve-text);
+    }
+
+    .insight.open .insight-title {
+      overflow: visible;
+      white-space: normal;
+    }
+
+    .insight-flag {
+      flex: none;
+      font-style: italic;
+    }
+
+    .insight code {
+      padding: 0 2px;
+      border-radius: 3px;
+      background: var(--beuve-surface-sunken);
+      font: var(--beuve-font-mono);
+    }
+
+    .insight-body {
+      padding: var(--beuve-space-1) 0 var(--beuve-space-2);
+      color: var(--beuve-text);
+      white-space: normal;
+    }
+
+    .insight-text p,
+    .insight-text ul {
+      margin: 0 0 var(--beuve-space-1);
+    }
+
+    .insight-text ul {
+      padding-left: var(--beuve-space-4);
+    }
+
+    .insight-text pre {
+      margin: 0 0 var(--beuve-space-1);
+      padding: var(--beuve-space-1) var(--beuve-space-2);
+      border-radius: 3px;
+      background: var(--beuve-surface-sunken);
+      overflow-x: auto;
+    }
+
+    .insight-actions {
+      display: flex;
+      align-items: baseline;
+      gap: var(--beuve-space-2);
+      color: var(--beuve-text-muted);
+    }
+
+    .insight-actions button {
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      border-radius: 4px;
+      background: var(--beuve-surface);
+      color: var(--beuve-text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .insight-actions button:hover,
+    .insight-actions button:focus-visible {
+      border-color: var(--beuve-accent);
+      outline: none;
+    }
+
     pre {
       margin: 0;
       padding: var(--beuve-space-1) 0;
@@ -500,6 +629,10 @@ export class BeuveFileCard extends LitElement {
   /** The `e` editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', CardSlot> | undefined;
   private editHead: string | undefined;
+  /** Insight notes the reviewer expanded, by insight key. */
+  private readonly openInsights = new Set<string>();
+  /** The gutter marks' style sheet in this diff's shadow root. */
+  private markSheet: CSSStyleSheet | undefined;
   /** Whether this diff's gutter button already shows the chat icon. */
   private isGutterLabelled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
@@ -597,6 +730,8 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
   /** The session's URA items; staged ones placed on this file get markers. */
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
+  /** `/review` findings on this file's lines, not yet staged (ADR 0061); empty when hidden. */
+  @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
   /** The `m` composer, when it is open on this file. */
   @property({ attribute: false }) accessor composer: ComposerState | undefined;
   /** How the diff is laid out ({@link planDiffLayout} in the stream, ADR 0042). */
@@ -674,8 +809,8 @@ export class BeuveFileCard extends LitElement {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
     const annotations = toHeadSideAnnotations(this.file?.hunks ?? [], this.notes());
-    const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'composer'].some((key) =>
-      changed.has(key as keyof BeuveFileCard),
+    const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'insights', 'composer'].some(
+      (key) => changed.has(key as keyof BeuveFileCard),
     );
     if (isNew || isNewInput) {
       this.diff.render({
@@ -716,6 +851,11 @@ export class BeuveFileCard extends LitElement {
         lineEnd,
         note: { kind: 'ura', item },
       })),
+      ...this.insights.map((insight): CardSlot => ({
+        lineStart: insight.finding.startLine,
+        lineEnd: insight.finding.endLine,
+        note: { kind: 'insight', insight },
+      })),
       ...(composer === undefined
         ? []
         : [{ ...composerLines, note: { kind: 'composer' } } as const]),
@@ -747,11 +887,13 @@ export class BeuveFileCard extends LitElement {
         }),
         renderAnnotation: (annotation): HTMLElement => this.noteElement(annotation.metadata.note),
         onPostRender: (_node, _instance, phase): void => {
-          if (phase === 'mount') {
-            this.dispatchEvent(
-              new CustomEvent('beuve-diff-rendered', { bubbles: true, composed: true }),
-            );
+          if (phase !== 'mount') {
+            return;
           }
+          this.syncInsightMarks();
+          this.dispatchEvent(
+            new CustomEvent('beuve-diff-rendered', { bubbles: true, composed: true }),
+          );
         },
       },
       shared.pool,
@@ -804,9 +946,57 @@ export class BeuveFileCard extends LitElement {
       case 'ura': {
         return uraMarkerElement(note.item);
       }
+      case 'insight': {
+        return this.insightNode(note.insight);
+      }
       case 'composer': {
         return this.composerNode();
       }
+    }
+  }
+
+  /** A `/review` finding's note; it stays expanded across re-renders until the reviewer collapses it. */
+  private insightNode(insight: ReviewInsight): HTMLElement {
+    const detail = { messageId: insight.messageId, finding: insight.index };
+    const emit = (name: string): void => {
+      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+    };
+    return createInsightElement(insight, {
+      isOpen: this.openInsights.has(insight.key),
+      onToggle: (isOpen): void => {
+        if (isOpen) {
+          this.openInsights.add(insight.key);
+        } else {
+          this.openInsights.delete(insight.key);
+        }
+      },
+      onStage: (): void => {
+        emit('beuve-insight-stage');
+      },
+      onShowInChat: (): void => {
+        emit('beuve-insight-show-in-chat');
+      },
+    });
+  }
+
+  /** Gutter marks for the insights: one adopted style sheet in the diff's shadow root (ADR 0061). */
+  private syncInsightMarks(): void {
+    const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
+    if (root === undefined || root === null) {
+      return;
+    }
+    const css = toInsightMarkCss(
+      this.diffStyle,
+      planInsightMarks(this.file?.hunks ?? [], this.insights),
+    );
+    if (css === '' && this.markSheet === undefined) {
+      return;
+    }
+    const sheet = this.markSheet ?? new CSSStyleSheet();
+    this.markSheet = sheet;
+    sheet.replaceSync(css);
+    if (!root.adoptedStyleSheets.includes(sheet)) {
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
     }
   }
 
@@ -1058,6 +1248,17 @@ export class BeuveFileCard extends LitElement {
     return html`<span class="tag" title=${this.deferral?.why ?? ''}>${label}</span>`;
   }
 
+  /** "2 insights" on a collapsed card: its findings are on lines the reviewer cannot see yet (ADR 0061). */
+  private renderInsightBadge(): TemplateResult | typeof nothing {
+    return this.collapsed && this.insights.length > 0
+      ? html`<span
+          class="tag insight-badge"
+          title="/review findings on this file's lines; load the diff to read them"
+          >${describeInsightCount(this.insights.length)}</span
+        >`
+      : nothing;
+  }
+
   /** What a collapsed card says instead of its diff: why, how big, and how to load it. */
   private renderCollapsed(): TemplateResult {
     const { deferral } = this;
@@ -1086,6 +1287,7 @@ export class BeuveFileCard extends LitElement {
   private renderFallback(file: DiffFileView): TemplateResult {
     const path = file.path;
     return html`${toUraMarkers(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
+      ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
 ${splitPatch(file.patch).map(
@@ -1390,6 +1592,7 @@ ${splitPatch(file.patch).map(
     this.observeCode(container);
     try {
       this.syncDiff(library, changed, container, metadata);
+      this.syncInsightMarks();
     } catch {
       this.diff?.cleanUp();
       this.diff = undefined;
@@ -1415,7 +1618,7 @@ ${splitPatch(file.patch).map(
           </span>
           <span class="additions">+${file.additions}</span>
           <span class="deletions">−${file.deletions}</span>
-          ${this.renderTag()} ${this.renderImpactChip()}
+          ${this.renderTag()} ${this.renderInsightBadge()} ${this.renderImpactChip()}
         </div>
         ${this.renderEditBar()}
       </div>
@@ -1453,32 +1656,9 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   kind.textContent = `Staged · ${labels.severity}${item.suggestedPatch === undefined ? '' : ' · suggestion'}`;
   const title = document.createElement('span');
   title.className = 'ura-title';
-  title.append(...parseInlineTitle(item.title).map((span) => inlineNode(span)));
+  title.append(...parseInlineTitle(item.title).map((span) => createInlineNode(span)));
   marker.append(kind, title);
   return marker;
-}
-
-function inlineNode(span: InlineSpan): Node {
-  switch (span.kind) {
-    case 'text': {
-      return document.createTextNode(span.text);
-    }
-    case 'code': {
-      return inlineElement('code', span.text);
-    }
-    case 'strong': {
-      return inlineElement('strong', span.text);
-    }
-    case 'emphasis': {
-      return inlineElement('em', span.text);
-    }
-  }
-}
-
-function inlineElement(tag: 'code' | 'strong' | 'em', text: string): HTMLElement {
-  const element = document.createElement(tag);
-  element.textContent = text;
-  return element;
 }
 
 /**

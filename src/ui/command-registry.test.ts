@@ -63,6 +63,7 @@ describe('commandRegistry', () => {
       '/diff',
       '/whitespace',
       '/generated',
+      '/insights',
       '/sidebar',
       '/trust',
       '/untrust',

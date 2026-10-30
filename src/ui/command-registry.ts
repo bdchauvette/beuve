@@ -16,7 +16,8 @@ export type AppAction =
   | 'sidebar-review'
   | 'sidebar-chat'
   | 'find'
-  | 'toggle-generated';
+  | 'toggle-generated'
+  | 'toggle-insights';
 
 /** What running a command from the palette does. */
 export type CommandRun =
@@ -174,6 +175,14 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     keys: [],
     available: true,
     run: app('toggle-generated'),
+  },
+  {
+    id: 'toggle-insights',
+    title: 'Show / hide review insights on the diff',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('toggle-insights'),
   },
   {
     id: 'flip-sidebar',
@@ -480,6 +489,16 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     help: 'expand or collapse files .gitattributes marks linguist-generated (and minified bundles, source maps, protobuf output); remembered in settings.json',
     available: true,
     run: slash('/generated ', true),
+  },
+  {
+    id: 'insights-mode',
+    title: 'Show or hide review insights…',
+    scope: 'Chat',
+    keys: [],
+    slash: '/insights show|hide',
+    help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
+    available: true,
+    run: slash('/insights ', true),
   },
   {
     id: 'trust',

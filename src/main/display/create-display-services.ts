@@ -24,13 +24,14 @@ const defaults: DiffDisplayView = {
   ignoreWhitespace: false,
   sidebarSide: 'right',
   showGenerated: false,
+  showInsights: true,
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed. Without a path, in
+ * `showGenerated` and `showInsights` (ADR 0061), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -49,6 +50,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
           ignoreWhitespace: next.ignoreWhitespace,
           sidebarSide: next.sidebarSide,
           showGenerated: next.showGenerated,
+          showInsights: next.showInsights,
         }));
       }
       return ok(next);
@@ -61,12 +63,14 @@ function toDisplay(settings: Readonly<Record<string, unknown>>): DiffDisplayView
   const ignoreWhitespace = settings['ignoreWhitespace'];
   const sidebarSide = settings['sidebarSide'];
   const showGenerated = settings['showGenerated'];
+  const showInsights = settings['showInsights'];
   return {
     layout: isLayout(layout) ? layout : defaults.layout,
     ignoreWhitespace:
       typeof ignoreWhitespace === 'boolean' ? ignoreWhitespace : defaults.ignoreWhitespace,
     sidebarSide: isSidebarSide(sidebarSide) ? sidebarSide : defaults.sidebarSide,
     showGenerated: typeof showGenerated === 'boolean' ? showGenerated : defaults.showGenerated,
+    showInsights: typeof showInsights === 'boolean' ? showInsights : defaults.showInsights,
   };
 }
 

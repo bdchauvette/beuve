@@ -1260,6 +1260,8 @@ export interface DiffDisplayView {
   readonly sidebarSide: SidebarSideView;
   /** Whether generated files (`linguist-generated`, ADR 0052) render expanded; collapsed by default. */
   readonly showGenerated: boolean;
+  /** Whether `/review` findings show as insights on the diff lines (ADR 0061); on by default. */
+  readonly showInsights: boolean;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1268,6 +1270,7 @@ export interface SetDiffDisplayRequest {
   readonly ignoreWhitespace?: boolean;
   readonly sidebarSide?: SidebarSideView;
   readonly showGenerated?: boolean;
+  readonly showInsights?: boolean;
 }
 
 /** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */

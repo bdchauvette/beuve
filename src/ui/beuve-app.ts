@@ -9,6 +9,7 @@ import type {
   ChatCommandRequest,
   ChatDeltaView,
   ChatMentionView,
+  ChatMessageView,
   CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
@@ -77,9 +78,12 @@ import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { cycleZone } from './cycle-zone.ts';
+import { mergeReviewInsights } from './merge-review-insights.ts';
+import type { ReviewInsight } from './merge-review-insights.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 import { emptyChatTranscript } from './empty-chat-transcript.ts';
+import { withoutStagedInsights } from './without-staged-insights.ts';
 import { reduceChatTranscript } from './reduce-chat-transcript.ts';
 import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
 import type { FlowState } from './flow-state.ts';
@@ -396,6 +400,8 @@ export class BeuveApp extends LitElement {
     void this.trustAndRunTrace();
   };
 
+  private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
+
   private readonly onChatSubmit = (
     event: CustomEvent<{ text: string; mentions?: readonly ChatMentionView[] }>,
   ): void => {
@@ -440,6 +446,25 @@ export class BeuveApp extends LitElement {
     event: CustomEvent<{ messageId: string; finding: number }>,
   ): void => {
     void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
+  };
+
+  private readonly onInsightStage = (
+    event: CustomEvent<{ messageId: string; finding: number }>,
+  ): void => {
+    event.stopPropagation();
+    void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
+  };
+
+  /** "Show in chat" on a diff note: the chat tab opens at that finding; the diff keeps the focus. */
+  private readonly onInsightShowInChat = (
+    event: CustomEvent<{ messageId: string; finding: number }>,
+  ): void => {
+    event.stopPropagation();
+    this.sidebarHidden = false;
+    this.sidebarTab = 'chat';
+    void this.updateComplete.then(async () =>
+      this.chatDrawer()?.revealFinding(event.detail.messageId, event.detail.finding),
+    );
   };
 
   private readonly onChatClearQueue = (): void => {
@@ -632,6 +657,7 @@ export class BeuveApp extends LitElement {
     ignoreWhitespace: false,
     sidebarSide: 'right',
     showGenerated: false,
+    showInsights: true,
   };
   /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
   @state() accessor fileAttributes: FileAttributesView | undefined;
@@ -963,6 +989,9 @@ export class BeuveApp extends LitElement {
     this.applyDisplay(result.value);
     if (change.showGenerated !== undefined) {
       this.showNotice({ tone: 'info', text: describeGenerated(result.value.showGenerated) });
+    }
+    if (change.showInsights !== undefined) {
+      this.showNotice({ tone: 'info', text: describeInsights(result.value.showInsights) });
     }
     if (change.layout !== undefined || change.ignoreWhitespace !== undefined) {
       this.showNotice({
@@ -1480,6 +1509,17 @@ export class BeuveApp extends LitElement {
         });
         return;
       }
+      case 'insights': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.setDisplay(
+          command.showInsights === undefined ? {} : { showInsights: command.showInsights },
+        ).then((display) => {
+          if (display !== undefined) {
+            this.note('info', `${describeInsights(display.showInsights)}.`);
+          }
+        });
+        return;
+      }
       case 'whitespace': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runDisplayCommand(
@@ -1879,6 +1919,34 @@ export class BeuveApp extends LitElement {
     );
   }
 
+  /**
+   * The `/review` findings to show on the diff (ADR 0061): the head's completed review answers
+   * merged, minus the staged ones. Recomputed only when its inputs change, so the cards keep the
+   * same objects while chat text streams (ADR 0050).
+   */
+  private reviewInsights(): readonly ReviewInsight[] {
+    const { review } = this;
+    if (review === undefined || !this.display.showInsights) {
+      return noInsights;
+    }
+    const messages = this.chat.entries.flatMap((entry): ChatMessageView[] =>
+      entry.kind === 'message' && entry.message.review !== undefined ? [entry.message] : [],
+    );
+    const staged = this.stagedFindings();
+    const signature = [
+      review.headSha,
+      messages.map(({ id }) => id).join(','),
+      [...staged].toSorted((x, y) => x.localeCompare(y)).join(','),
+    ].join('|');
+    if (this.insightCache?.signature !== signature) {
+      this.insightCache = {
+        signature,
+        insights: withoutStagedInsights(mergeReviewInsights(messages, review.headSha), staged),
+      };
+    }
+    return this.insightCache.insights;
+  }
+
   /** `/review` findings staged and still staged, as `messageId:index`. */
   private stagedFindings(): ReadonlySet<string> {
     return new Set(
@@ -2121,6 +2189,10 @@ export class BeuveApp extends LitElement {
       }
       case 'toggle-generated': {
         void this.setDisplay({ showGenerated: !this.display.showGenerated });
+        return;
+      }
+      case 'toggle-insights': {
+        void this.setDisplay({ showInsights: !this.display.showInsights });
       }
     }
   }
@@ -2404,6 +2476,7 @@ export class BeuveApp extends LitElement {
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.uraItems}
+      .insights=${this.reviewInsights()}
       .display=${this.display}
       .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
@@ -2425,6 +2498,8 @@ export class BeuveApp extends LitElement {
       @beuve-open-editor=${this.onOpenEditor}
       @beuve-ura-stage-finding=${this.onStageFinding}
       @beuve-chat-add=${this.onChatAdd}
+      @beuve-insight-stage=${this.onInsightStage}
+      @beuve-insight-show-in-chat=${this.onInsightShowInChat}
     ></beuve-diff-stream>`;
   }
 
@@ -2623,6 +2698,14 @@ function describeGenerated(isShown: boolean): string {
   return isShown
     ? 'Generated files: shown (/generated hide collapses them)'
     : 'Generated files: collapsed (/generated show expands them)';
+}
+
+const noInsights: readonly ReviewInsight[] = [];
+
+function describeInsights(isShown: boolean): string {
+  return isShown
+    ? 'Review insights: shown on the diff (/insights hide removes them)'
+    : 'Review insights: hidden (/insights show brings them back)';
 }
 
 const plainKeyActions: Readonly<Record<string, AppAction>> = {

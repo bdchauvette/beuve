@@ -16,6 +16,7 @@ import type {
 
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
+import type { ReviewInsight } from './merge-review-insights.ts';
 import type { BeuveFindBar, FindQueryDetail } from './beuve-find-bar.ts';
 import type {
   BeuveFileCard,
@@ -81,9 +82,11 @@ const defaultDisplay: DiffDisplayView = {
   ignoreWhitespace: false,
   sidebarSide: 'right',
   showGenerated: false,
+  showInsights: true,
 };
 
 const noUraItems: readonly UraItemView[] = [];
+const noInsights: readonly ReviewInsight[] = [];
 const noFindings: readonly ImpactFindingView[] = [];
 const noPaths: ReadonlySet<string> = new Set();
 /** {@link findInReview}'s default cap. */
@@ -431,11 +434,15 @@ export class BeuveDiffStream extends LitElement {
   private slices: {
     readonly uraItems: readonly UraItemView[];
     readonly uraItemsByPath: ReadonlyMap<string, readonly UraItemView[]>;
+    readonly insights: readonly ReviewInsight[];
+    readonly insightsByPath: ReadonlyMap<string, readonly ReviewInsight[]>;
     readonly impact: ImpactView | undefined;
     readonly impactByPath: ReadonlyMap<string, FileImpactView>;
   } = {
     uraItems: noUraItems,
     uraItemsByPath: new Map(),
+    insights: noInsights,
+    insightsByPath: new Map(),
     impact: undefined,
     impactByPath: new Map(),
   };
@@ -467,6 +474,8 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
   /** The session's URA items, which the cards mark under their lines. */
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
+  /** `/review` findings to show as notes under their lines, not yet staged (ADR 0061). */
+  @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
   /** The reviewer's diff layout and whitespace preference (ADR 0042). */
   @property({ attribute: false }) accessor display: DiffDisplayView = defaultDisplay;
   @property({ attribute: false }) accessor suggestionJump: SuggestionJump | undefined;
@@ -891,8 +900,13 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private refreshSlices(): void {
-    const { slices, uraItems, impact } = this;
+    const { slices, uraItems, impact, insights } = this;
     this.slices = {
+      insights,
+      insightsByPath:
+        slices.insights === insights
+          ? slices.insightsByPath
+          : groupStable(insights, insightPaths, slices.insightsByPath),
       uraItems,
       uraItemsByPath:
         slices.uraItems === uraItems
@@ -908,7 +922,7 @@ export class BeuveDiffStream extends LitElement {
 
   private renderReview(review: ReviewView): TemplateResult {
     this.refreshSlices();
-    const { uraItemsByPath, impactByPath } = this.slices;
+    const { uraItemsByPath, insightsByPath, impactByPath } = this.slices;
     const additions = review.files.reduce((sum, file) => sum + file.additions, 0);
     const deletions = review.files.reduce((sum, file) => sum + file.deletions, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
@@ -964,6 +978,7 @@ export class BeuveDiffStream extends LitElement {
                       .flow=${this.flow?.path === file.path ? this.flow : undefined}
                       .trace=${this.trace?.path === file.path ? this.trace : undefined}
                       .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
+                      .insights=${insightsByPath.get(file.path) ?? noInsights}
                       .composer=${this.composer?.path === file.path ? this.composer : undefined}
                       .deferral=${this.deferrals.get(file.path)}
                       ?collapsed=${this.isCollapsed(file)}
@@ -1087,6 +1102,10 @@ function uraItemPaths(item: UraItemView): string[] {
     }
   }
   return paths;
+}
+
+function insightPaths(insight: ReviewInsight): string[] {
+  return [insight.finding.path];
 }
 
 /** Polls a few frames for the composer the card renders through the library's annotations. */

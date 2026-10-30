@@ -24,6 +24,8 @@ export type ChatCommand =
   | { readonly kind: 'whitespace'; readonly ignoreWhitespace?: boolean }
   /** `/generated` shows whether generated files are expanded; `show` or `hide` sets it (ADR 0052). */
   | { readonly kind: 'generated'; readonly showGenerated?: boolean }
+  /** `/insights` shows whether `/review` findings annotate the diff; `show` or `hide` sets it (ADR 0061). */
+  | { readonly kind: 'insights'; readonly showInsights?: boolean }
   /** Approves running the open repository's tests for trace probes (ADR 0041). */
   | { readonly kind: 'trust' }
   /** Withdraws that approval. */
@@ -50,7 +52,7 @@ const whitespace = /\s+/u;
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`),
  * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), `/trust`, `/untrust`,
  * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
- * `/generated [show|hide]`, `/sidebar left|right`, and
+ * `/generated [show|hide]`, `/insights [show|hide]`, `/sidebar left|right`, and
  * `/review [--fresh] [--no-verify] [--effort=low|medium|high] [path-prefix…]`, options and
  * prefixes in any order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -106,6 +108,9 @@ export function parseChatCommand(input: string): ChatCommand {
     }
     case '/generated': {
       return parseGenerated(args);
+    }
+    case '/insights': {
+      return parseInsights(args);
     }
     case '/review': {
       return parseReview(args);
@@ -178,6 +183,16 @@ function parseGenerated(args: readonly string[]): ChatCommand {
   return showGenerated === undefined
     ? invalid('/generated takes show or hide, e.g. /generated show.')
     : { kind: 'generated', showGenerated };
+}
+
+function parseInsights(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'insights' };
+  }
+  const choice = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
+  return choice === 'show' || choice === 'hide'
+    ? { kind: 'insights', showInsights: choice === 'show' }
+    : invalid('/insights takes show or hide, e.g. /insights hide.');
 }
 
 function parseWhitespace(args: readonly string[]): ChatCommand {

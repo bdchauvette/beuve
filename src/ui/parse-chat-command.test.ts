@@ -36,6 +36,19 @@ describe('parseChatCommand', () => {
     expect(parseChatCommand('/generated maybe')).toMatchObject({ kind: 'invalid' });
   });
 
+  test('parses /insights with and without a choice', ({ expect }) => {
+    expect(parseChatCommand('/insights')).toStrictEqual({ kind: 'insights' });
+    expect(parseChatCommand('/insights HIDE')).toStrictEqual({
+      kind: 'insights',
+      showInsights: false,
+    });
+    expect(parseChatCommand('/insights show')).toStrictEqual({
+      kind: 'insights',
+      showInsights: true,
+    });
+    expect(parseChatCommand('/insights maybe')).toMatchObject({ kind: 'invalid' });
+  });
+
   test('parses /editor with and without a choice', ({ expect }) => {
     expect(parseChatCommand('/editor')).toStrictEqual({ kind: 'editor' });
     expect(parseChatCommand('/editor Zed')).toStrictEqual({ kind: 'editor', editorId: 'zed' });
