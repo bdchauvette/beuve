@@ -266,7 +266,8 @@ describe(
       fakeClaude,
       startChat,
     }) => {
-      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 300 });
+      // The running answer must outlast the asks below on a slow runner; /clear stops it.
+      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 5000 });
       const { chat, sessionId, updates } = await startChat(claude.settings);
       const running = okValueFrom(await chat.ask({ sessionId, question: 'Running?' }));
       const queued = [];
