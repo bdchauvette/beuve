@@ -35,19 +35,17 @@ import { highlightedLanguages } from './highlighted-languages.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
-import { planEditTarget } from './plan-edit-target.ts';
-import type { EditTarget } from './plan-edit-target.ts';
+import { editTargetFrom } from './edit-target-from.ts';
+import type { EditTarget } from './edit-target-from.ts';
 import { planImpactChip } from './plan-impact-chip.ts';
 import type { ImpactChip } from './plan-impact-chip.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
-import type { MentionTarget } from './chat-draft.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
-import { planChatMention } from './plan-chat-mention.ts';
-import { planStageAnchor } from './plan-stage-anchor.ts';
-import { planEditorLine } from './plan-editor-line.ts';
-import type { SelectedLines } from './plan-stage-anchor.ts';
+import { mentionFromTarget } from './mention-from-target.ts';
+import { targetFrom } from './target-from.ts';
+import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
 import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
@@ -626,6 +624,8 @@ export class BeuveFileCard extends LitElement {
   private programmaticStep: HunkStep | undefined;
   /** Lines the reviewer selected in the gutter, until `j`/`k` moves on. */
   private lineSelection: SelectedLines | undefined;
+  /** The head line a jump (citation, flow node, trace line) landed on, until `j`/`k` moves on. */
+  private focusedLine: number | undefined;
   /** The `e` editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', CardSlot> | undefined;
   private editHead: string | undefined;
@@ -691,12 +691,12 @@ export class BeuveFileCard extends LitElement {
 
   private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
     event.stopPropagation();
-    void this.revealLine(event.detail.startLine);
+    void this.focusLine(event.detail.startLine);
   };
 
   private readonly onTraceLineActivate = (event: CustomEvent<TraceLineActivateDetail>): void => {
     event.stopPropagation();
-    void this.revealLine(event.detail.line);
+    void this.focusLine(event.detail.line);
   };
 
   private readonly onLineSelected = (range: SelectedLines | null): void => {
@@ -710,6 +710,9 @@ export class BeuveFileCard extends LitElement {
       range.end === step.end &&
       (range.side ?? 'additions') === step.side;
     this.lineSelection = isStep ? undefined : range;
+    if (!isStep) {
+      this.focusedLine = undefined;
+    }
   };
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
@@ -935,7 +938,12 @@ export class BeuveFileCard extends LitElement {
     if (file === undefined) {
       return;
     }
-    const target = planChatMention(file, undefined, range);
+    const target = mentionFromTarget(
+      targetFrom({ file, hunk: -1, selection: range, line: undefined, collapsed: false }),
+    );
+    if (target === undefined) {
+      return;
+    }
     this.dispatchEvent(
       new CustomEvent('beuve-chat-add', { detail: { target }, bubbles: true, composed: true }),
     );
@@ -1399,23 +1407,18 @@ ${splitPatch(file.patch).map(
     return chip !== undefined;
   }
 
-  /** Where `m` stages a note on this card: the selected lines, else the active hunk, else the file. */
-  stageAnchor(): UraAnchorView | undefined {
-    const { file } = this;
-    return file === undefined
-      ? undefined
-      : planStageAnchor(file.path, file.hunks[this.activeHunk], this.lineSelection);
-  }
-
   /**
-   * What ⌘> adds to the chat from this card (ADR 0046): the line selection (base side when it is
-   * on the left), else the focused hunk, else the whole file.
+   * What the reviewer points at on this card (ADR 0063): the selection, else the line a jump
+   * landed on, else the focused hunk, else the file. Every line-taking action starts here.
    */
-  chatMention(): MentionTarget | undefined {
-    const { file } = this;
-    return file === undefined
-      ? undefined
-      : planChatMention(file, file.hunks[this.activeHunk], this.lineSelection);
+  target(): ReviewTarget {
+    return targetFrom({
+      file: this.file,
+      hunk: this.activeHunk,
+      selection: this.lineSelection,
+      line: this.focusedLine,
+      collapsed: this.collapsed,
+    });
   }
 
   /**
@@ -1435,23 +1438,13 @@ ${splitPatch(file.patch).map(
     this.programmaticStep = undefined;
     this.diff?.setSelectedLines(range);
     this.lineSelection = range;
+    this.focusedLine = undefined;
     this.scrollToRow(row);
   }
 
-  /** The head line `o` opens in the editor: the selected lines, else the active hunk or file. */
-  editorLine(): number | undefined {
-    const { file } = this;
-    return file === undefined
-      ? undefined
-      : planEditorLine(file, this.activeHunk, this.lineSelection);
-  }
-
-  /** What `e` would edit here: the selected lines or the hunk, or the staged note under them. */
+  /** What `e` would edit here: the target's lines, or the staged note under them. */
   editTarget(items: readonly UraItemView[], headSha: string): EditTarget | undefined {
-    const { file } = this;
-    return file === undefined
-      ? undefined
-      : planEditTarget(file, this.activeHunk, this.lineSelection, items, headSha);
+    return editTargetFrom(this.target(), items, headSha);
   }
 
   /**
@@ -1505,6 +1498,15 @@ ${splitPatch(file.patch).map(
     }
   }
 
+  /** Scrolls to head line `line` and makes it the card's target (a citation, flow or trace jump). */
+  async focusLine(line: number): Promise<void> {
+    await this.revealLine(line);
+    // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
+    this.diff?.setSelectedLines(null);
+    this.lineSelection = undefined;
+    this.focusedLine = line;
+  }
+
   /** Scrolls head line `line` into view (or the card's header without one), mounting the diff. */
   async revealLine(line: number | undefined): Promise<void> {
     this.mounted = true;
@@ -1531,6 +1533,9 @@ ${splitPatch(file.patch).map(
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has('activeHunk')) {
+      this.focusedLine = undefined;
+    }
     if (changed.has('composer')) {
       this.syncComposer();
     }

@@ -4,7 +4,10 @@ import { test } from './testing/test.ts';
 
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
-import { planEditTarget } from './plan-edit-target.ts';
+import { editTargetFrom } from './edit-target-from.ts';
+import type { EditTarget } from './edit-target-from.ts';
+import { targetFrom } from './target-from.ts';
+import type { SelectedLines } from './target-from.ts';
 import { createUraItemView } from './testing/create-ura-item-view.ts';
 
 function head(): string {
@@ -36,16 +39,30 @@ function file(): DiffFileView {
   };
 }
 
-describe('planEditTarget', () => {
+function planned(
+  activeHunk: number,
+  selection: SelectedLines | undefined,
+  items: Parameters<typeof editTargetFrom>[1],
+  overrides: Partial<DiffFileView> = {},
+): EditTarget | undefined {
+  const target = targetFrom({
+    file: { ...file(), ...overrides },
+    hunk: activeHunk,
+    selection,
+    line: undefined,
+    collapsed: false,
+  });
+  return editTargetFrom(target, items, head());
+}
+
+describe('editTargetFrom', () => {
   test('edits the focused hunk, or the head-side selection, as a new suggestion', ({ expect }) => {
-    expect(planEditTarget(file(), 0, undefined, [], head())).toStrictEqual({
+    expect(planned(0, undefined, [])).toStrictEqual({
       path: 'src/a.ts',
       startLine: 1,
       endLine: 6,
     });
-    expect(
-      planEditTarget(file(), 0, { start: 5, end: 6, side: 'additions' }, [], head()),
-    ).toStrictEqual({
+    expect(planned(0, { start: 5, end: 6, side: 'additions' }, [])).toStrictEqual({
       path: 'src/a.ts',
       startLine: 5,
       endLine: 6,
@@ -59,7 +76,7 @@ describe('planEditTarget', () => {
       anchor,
       suggestedPatch: '@@ -2 +2 @@\n-two\n+2\n',
     });
-    expect(planEditTarget(file(), 0, undefined, [item], head())).toStrictEqual({
+    expect(planned(0, undefined, [item])).toStrictEqual({
       path: 'src/a.ts',
       startLine: 2,
       endLine: 4,
@@ -79,13 +96,12 @@ describe('planEditTarget', () => {
         anchor: { kind: 'lines', path: 'src/a.ts', startLine: 5, endLine: 6 },
       }),
     ];
-    expect(planEditTarget(file(), 0, undefined, items, head())?.itemId).toBeUndefined();
+    expect(planned(0, undefined, items)?.itemId).toBeUndefined();
   });
 
   test('has nothing to edit without a hunk, or on a deleted file', ({ expect }) => {
-    expect(planEditTarget(file(), -1, undefined, [], head())).toBeUndefined();
-    expect(
-      planEditTarget({ ...file(), status: 'deleted' }, 0, undefined, [], head()),
-    ).toBeUndefined();
+    expect(planned(-1, undefined, [])).toBeUndefined();
+    expect(planned(0, undefined, [], { status: 'deleted' })).toBeUndefined();
+    expect(planned(0, undefined, [], { binary: true })).toBeUndefined();
   });
 });

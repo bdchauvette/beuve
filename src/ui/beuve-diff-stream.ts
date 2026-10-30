@@ -29,7 +29,10 @@ import type { MentionTarget } from './chat-draft.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
-import { findFirstChangedLine } from './find-first-changed-line.ts';
+import { anchorFromTarget } from './anchor-from-target.ts';
+import { lineFromTarget } from './line-from-target.ts';
+import { mentionFromTarget } from './mention-from-target.ts';
+import type { ReviewTarget } from './target-from.ts';
 import { findInReview } from './find-in-review.ts';
 import type { ReviewMatch } from './find-in-review.ts';
 import { groupStable } from './group-stable.ts';
@@ -37,7 +40,8 @@ import type { FlowState } from './flow-state.ts';
 import { minimumSplitWidth } from './minimum-split-width.ts';
 import { planDiffLayout } from './plan-diff-layout.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
-import type { EditTarget } from './plan-edit-target.ts';
+import { editTargetFrom } from './edit-target-from.ts';
+import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
@@ -103,8 +107,9 @@ const unmountMargin = '6000px 0px';
  * header naming the review kind and ImpactGate banners once they arrive. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, `j`/`k` step
  * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
- * it), `r` runs the tests covering the focused hunk with tracing (ADR 0041), and `m` opens a composer that stages the selected lines, the active hunk or the file
- * into the review dock (ADR 0027). `s` and `w` toggle side-by-side/inline diffs and hiding
+ * it), `r` runs the tests covering the target with tracing (ADR 0041), and `m` opens a composer
+ * that stages the target into the review dock (ADR 0027). Every line-taking action reads one
+ * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). `s` and `w` toggle side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), `i` opens the focused card's ImpactGate details, and `e` edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
  * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
@@ -653,19 +658,18 @@ export class BeuveDiffStream extends LitElement {
 
   private async revealLine(index: number, line: number): Promise<void> {
     const card = await this.loadedCard(index);
-    await card?.revealLine(line);
+    await card?.focusLine(line);
   }
 
   /** `o`: asks the shell to open the active card's file in the editor at the cursor line. */
   private openInEditor(): void {
-    const file = this.review?.files[this.activeIndex];
-    const line = this.cards()[this.activeIndex]?.editorLine();
-    if (file === undefined || line === undefined) {
+    const target = this.target();
+    if (target.kind === 'change') {
       return;
     }
     this.dispatchEvent(
       new CustomEvent('beuve-open-editor', {
-        detail: { path: file.path, line },
+        detail: { path: target.file.path, line: lineFromTarget(target) ?? 1 },
         bubbles: true,
         composed: true,
       }),
@@ -682,13 +686,14 @@ export class BeuveDiffStream extends LitElement {
     );
   }
 
-  /** `e`: edits what {@link BeuveFileCard.editTarget} names on the active card. */
+  /** `e`: edits the target's lines, or the staged note under them, on the active card. */
   private editActive(): void {
     const { review } = this;
-    const card = this.cards()[this.activeIndex];
     const target =
-      review === undefined ? undefined : card?.editTarget(this.uraItems, review.headSha);
-    if (card === undefined || target === undefined) {
+      review === undefined
+        ? undefined
+        : editTargetFrom(this.target(), this.uraItems, review.headSha);
+    if (target === undefined) {
       this.notify('info', 'Pick a hunk with j/k, or select head lines, to suggest an edit.');
       return;
     }
@@ -725,17 +730,16 @@ export class BeuveDiffStream extends LitElement {
   }
 
   /**
-   * `m`: a composer on the active card, staging what {@link BeuveFileCard.stageAnchor} names, or
-   * `anchor` with the suggestion an `e` edit produced.
+   * `m`: a composer on the active card, staging the target's head lines (ADR 0063), or `anchor`
+   * with the suggestion an `e` edit produced.
    */
   private openComposer(given?: UraAnchorView, suggestedPatch?: string): void {
     const { review } = this;
     const file = review?.files[this.activeIndex];
-    const card = this.cards()[this.activeIndex];
-    const anchor = given ?? card?.stageAnchor();
-    if (review === undefined || file === undefined || anchor === undefined) {
+    if (review === undefined || file === undefined) {
       return;
     }
+    const anchor = given ?? anchorFromTarget(this.target());
     const where = describeUraItem({
       id: '',
       sessionId: review.session.id,
@@ -813,7 +817,7 @@ export class BeuveDiffStream extends LitElement {
     }
     this.dispatchEvent(
       new CustomEvent('beuve-peek-request', {
-        detail: { path: file.path, line: this.targetLine(file) },
+        detail: { path: file.path, line: this.targetLine() },
         bubbles: true,
         composed: true,
       }),
@@ -830,7 +834,7 @@ export class BeuveDiffStream extends LitElement {
     }
     this.dispatchEvent(
       new CustomEvent('beuve-flow-request', {
-        detail: { path: file.path, line: this.targetLine(file) },
+        detail: { path: file.path, line: this.targetLine() },
         bubbles: true,
         composed: true,
       }),
@@ -839,15 +843,14 @@ export class BeuveDiffStream extends LitElement {
   }
 
   /**
-   * `r` runs the tests covering the focused hunk (else the file's first change) with tracing and
-   * opens the timeline portal; pressing it while the same probe runs does nothing.
+   * `r` runs the tests covering the target's head line (ADR 0063) with tracing and opens the timeline portal; pressing it while the same probe runs does nothing.
    */
   private requestTrace(): void {
     const file = this.review?.files[this.activeIndex];
     if (file === undefined) {
       return;
     }
-    const line = this.targetLine(file);
+    const line = this.targetLine();
     if (
       this.trace?.status === 'loading' &&
       this.trace.path === file.path &&
@@ -865,12 +868,9 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   }
 
-  /** The first changed head line of the focused hunk, else of the file. */
-  private targetLine(file: DiffFileView): number | undefined {
-    return (
-      (this.activeHunk === -1 ? undefined : findFirstChangedLine(file.patch, this.activeHunk)) ??
-      findFirstChangedLine(file.patch)
-    );
+  /** The head line `p`, `Shift+p` and `r` find the enclosing function of. */
+  private targetLine(): number | undefined {
+    return lineFromTarget(this.target());
   }
 
   private closePortals(): void {
@@ -1025,9 +1025,14 @@ export class BeuveDiffStream extends LitElement {
     this.renderRoot.querySelector<BeuveFindBar>('beuve-find-bar')?.focusInput();
   }
 
-  /** What ⌘> adds to the chat (ADR 0046): the active card's selection, hunk or file. */
+  /** What the reviewer points at (ADR 0063): the active card's target, else the whole change. */
+  target(): ReviewTarget {
+    return this.cards()[this.activeIndex]?.target() ?? { kind: 'change' };
+  }
+
+  /** What ⌘> adds to the chat (ADR 0046): the target's lines, or its file. */
   chatMention(): MentionTarget | undefined {
-    return this.cards()[this.activeIndex]?.chatMention();
+    return mentionFromTarget(this.target());
   }
 
   override render(): TemplateResult {
