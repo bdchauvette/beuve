@@ -1,4 +1,5 @@
 import { enforceInternalUtils } from './enforce-internal-utils.ts';
+import { forwardAbortSignal } from './forward-abort-signal.ts';
 import { expectFromTestContext } from './expect-from-test-context.ts';
 import { enforceSingleNamedExport } from './enforce-single-named-export.ts';
 import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-syntax.ts';
@@ -27,6 +28,7 @@ const plugin = {
     'enforce-top-level-function-syntax': enforceTopLevelFunctionSyntax,
     'expect-from-test-context': expectFromTestContext,
     'export-name-matches-filename': exportNameMatchesFilename,
+    'forward-abort-signal': forwardAbortSignal,
     'no-barrel-files': noBarrelFiles,
     'no-date': noDate,
     'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
