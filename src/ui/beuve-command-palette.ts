@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 import { ActionDelegation } from './action-delegation.ts';
+import { isOwnClick } from './is-own-click.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { planPalette } from './plan-palette.ts';
@@ -215,7 +216,7 @@ export class BeuveCommandPalette extends LitElement {
   };
 
   private readonly onScrimClick = (event: MouseEvent): void => {
-    if (event.target === this) {
+    if (isOwnClick(event, this)) {
       this.emit('beuve-palette-close', {});
     }
   };
