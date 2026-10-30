@@ -14,6 +14,7 @@ import type {
   DiffFileView,
   DiffLayoutView,
   FileImpactView,
+  FileReviewStateView,
   FilePairView,
   ImpactFindingView,
   UraAnchorView,
@@ -347,6 +348,41 @@ export class BeuveFileCard extends LitElement {
 
     :host([generated][collapsed][active]) .title {
       opacity: 0.85;
+    }
+
+    .reviewed-mark {
+      display: inline-flex;
+      flex: none;
+      width: 14px;
+      height: 14px;
+      color: var(--beuve-ok);
+    }
+
+    .reviewed-mark svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    :host([reviewed='yes'][collapsed]) .title {
+      cursor: pointer;
+    }
+
+    .changed-since {
+      flex: none;
+      padding: 0 var(--beuve-space-1);
+      border: 1px dashed var(--beuve-border);
+      border-radius: 4px;
+      font: var(--beuve-font-small);
+      color: var(--beuve-text-muted);
+    }
+
+    :host([reviewed='yes'][collapsed]) .title {
+      border-bottom-color: transparent;
+    }
+
+    :host([reviewed='yes'][collapsed]:not([active])) .path,
+    :host([reviewed='yes'][collapsed]:not([active])) .status {
+      color: var(--beuve-text-muted);
     }
 
     .collapsed-body {
@@ -715,6 +751,13 @@ export class BeuveFileCard extends LitElement {
     }
   };
 
+  /** A reviewed card is only its header (ADR 0064); a click on it shows the diff again. */
+  private readonly onTitleClick = (event: Event): void => {
+    if (this.collapsed && this.reviewed === 'yes') {
+      this.expand(event);
+    }
+  };
+
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
   @property({ type: Boolean, reflect: true }) accessor active = false;
   /** Set by the diff stream when the card nears the viewport; the diff renders from then on. */
@@ -750,6 +793,11 @@ export class BeuveFileCard extends LitElement {
   @property({ type: Boolean, reflect: true }) accessor collapsed = false;
   /** Generated or `-diff` (ADR 0052): labelled, and dimmed while collapsed. */
   @property({ type: Boolean, reflect: true }) accessor generated = false;
+  /**
+   * The file's reviewed mark (ADR 0064): a check when `yes` (the stream collapses the card), a
+   * quiet "changed since reviewed" tag when its diff moved on since the mark.
+   */
+  @property({ reflect: true }) accessor reviewed: FileReviewStateView = 'no';
 
   /** The `e` edit in progress on this card (ADR 0043). */
   @state() accessor edit: EditSession | undefined;
@@ -764,6 +812,14 @@ export class BeuveFileCard extends LitElement {
     this.addEventListener('keydown', this.onEditKeyBubble);
     this.addEventListener('pointermove', this.onPointerMove);
     this.addController({
+      hostConnected: (): void => {
+        // A card moved in the stream (a new file order) was disconnected, which dropped its diff.
+        if (!this.hasUpdated || !this.mounted || this.diff !== undefined) {
+          return;
+        }
+        this.codeGeneration += 1;
+        this.requestUpdate();
+      },
       hostDisconnected: (): void => {
         this.endEdit();
         this.diff?.cleanUp();
@@ -1224,7 +1280,10 @@ export class BeuveFileCard extends LitElement {
     );
   }
 
-  private renderCode(file: DiffFileView): TemplateResult {
+  private renderCode(file: DiffFileView): TemplateResult | typeof nothing {
+    if (this.collapsed && this.reviewed === 'yes' && this.deferral === undefined) {
+      return nothing;
+    }
     if (this.collapsed) {
       return this.renderCollapsed();
     }
@@ -1256,6 +1315,26 @@ export class BeuveFileCard extends LitElement {
     return html`<span class="tag" title=${this.deferral?.why ?? ''}>${label}</span>`;
   }
 
+  /** A check before the status of a file marked reviewed (ADR 0064). */
+  private renderReviewedMark(): TemplateResult | typeof nothing {
+    return this.reviewed === 'yes'
+      ? html`<span class="reviewed-mark" title="Reviewed (v unmarks)" aria-label="Reviewed"
+          >${checkIcon}</span
+        >`
+      : nothing;
+  }
+
+  /** Marked reviewed, but the file's diff is not the one that was reviewed any more. */
+  private renderChangedSince(): TemplateResult | typeof nothing {
+    return this.reviewed === 'changed-since'
+      ? html`<span
+          class="changed-since"
+          title="You marked this file reviewed, and its changes moved on since (v marks it again)"
+          >changed since reviewed</span
+        >`
+      : nothing;
+  }
+
   /** "2 insights" on a collapsed card: its findings are on lines the reviewer cannot see yet (ADR 0061). */
   private renderInsightBadge(): TemplateResult | typeof nothing {
     return this.collapsed && this.insights.length > 0
@@ -1267,18 +1346,22 @@ export class BeuveFileCard extends LitElement {
       : nothing;
   }
 
+  private expand(event: Event): void {
+    event.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent('beuve-diff-toggle', {
+        detail: { path: this.file?.path, expand: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   /** What a collapsed card says instead of its diff: why, how big, and how to load it. */
   private renderCollapsed(): TemplateResult {
     const { deferral } = this;
     const expand = (event: Event): void => {
-      event.stopPropagation();
-      this.dispatchEvent(
-        new CustomEvent('beuve-diff-toggle', {
-          detail: { path: this.file?.path, expand: true },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.expand(event);
     };
     const size =
       deferral === undefined
@@ -1612,7 +1695,12 @@ ${splitPatch(file.patch).map(
     }
     return html`
       <div class="header">
-        <div class="title">
+        <div
+          class="title"
+          title=${this.collapsed && this.reviewed === 'yes' ? 'Reviewed: click or Space shows the diff' : ''}
+          @click=${this.onTitleClick}
+        >
+          ${this.renderReviewedMark()}
           <span class="status">${file.status}</span>
           <span class="path" title=${file.path}>
             ${
@@ -1623,7 +1711,8 @@ ${splitPatch(file.patch).map(
           </span>
           <span class="additions">+${file.additions}</span>
           <span class="deletions">−${file.deletions}</span>
-          ${this.renderTag()} ${this.renderInsightBadge()} ${this.renderImpactChip()}
+          ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
+          ${this.renderImpactChip()}
         </div>
         ${this.renderEditBar()}
       </div>
@@ -1739,6 +1828,8 @@ async function loadEditor(): Promise<typeof DiffsEdit> {
   sharedEditor.module ??= import('@pierre/diffs/edit');
   return sharedEditor.module;
 }
+
+const checkIcon: SVGTemplateResult = svg`<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 7.2 6 9.6l4.6-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const warningIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10.5H1Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 5v2.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>`;
 

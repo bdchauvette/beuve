@@ -7,13 +7,19 @@ import type {
   DiffDisplayView,
   DiffFileView,
   FileImpactView,
+  FileReviewProgressView,
+  FileReviewStateView,
   ImpactFindingView,
   ImpactView,
+  ReviewOrderMode,
+  ReviewOrderView,
   ReviewView,
   UraAnchorView,
   UraItemView,
 } from '#contract/ipc-contract.ts';
 
+import './beuve-commit-pairing.ts';
+import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
@@ -27,6 +33,8 @@ import type {
 import type { UraDraft } from './beuve-ura-composer.ts';
 import type { MentionTarget } from './chat-draft.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
+import { describeOrderFallback } from './describe-order-fallback.ts';
+import { describeReviewProgress } from './describe-review-progress.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
@@ -39,12 +47,14 @@ import { groupStable } from './group-stable.ts';
 import type { FlowState } from './flow-state.ts';
 import { minimumSplitWidth } from './minimum-split-width.ts';
 import { planDiffLayout } from './plan-diff-layout.ts';
+import { planReviewStream } from './plan-review-stream.ts';
+import type { ReviewStreamPlan } from './plan-review-stream.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { editTargetFrom } from './edit-target-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
-import { stepReviewPosition } from './step-review-position.ts';
+import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import { formatDuration } from './format-duration.ts';
 import { zoneStyles } from './zone-styles.ts';
 
@@ -96,6 +106,13 @@ const noPaths: ReadonlySet<string> = new Set();
 /** {@link findInReview}'s default cap. */
 const findLimit = 5000;
 const noDeferrals: ReadonlyMap<string, DiffDeferral> = new Map();
+const noMarks: ReadonlyMap<string, FileReviewStateView> = new Map();
+const emptyPlan: ReviewStreamPlan = { files: [], groupLabels: new Map() };
+const orderModes: readonly { readonly mode: ReviewOrderMode; readonly label: string }[] = [
+  { mode: 'path', label: 'Path' },
+  { mode: 'imports', label: 'Imports' },
+  { mode: 'calls', label: 'Calls' },
+];
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
 const mountMargin = '1200px 0px';
@@ -112,8 +129,12 @@ const unmountMargin = '6000px 0px';
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). `s` and `w` toggle side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), `i` opens the focused card's ImpactGate details, and `e` edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
+ * `v` marks the active file reviewed or not (ADR 0064): reviewed cards collapse to their header,
+ * and `j`/`k` can skip them. Files show in the order main computed (ADR 0065), with a divider
+ * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
+ * to what one commit produced (ADR 0054).
  * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
- * `beuve-peek-close`, `beuve-ura-create` and `beuve-active-file` (the
+ * `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
@@ -227,6 +248,105 @@ export class BeuveDiffStream extends LitElement {
         flex-direction: column;
         gap: var(--beuve-space-3);
       }
+
+      .progress {
+        font: var(--beuve-font-small);
+        font-variant-numeric: tabular-nums;
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
+
+      .order {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 2px;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
+
+      .order button {
+        padding: 0 var(--beuve-space-1);
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: inherit;
+      }
+
+      .order button:hover {
+        color: var(--beuve-text);
+      }
+
+      .order button[aria-checked='true'] {
+        border-color: var(--beuve-border);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+      }
+
+      .order .fallback {
+        margin-left: var(--beuve-space-1);
+        font-style: italic;
+      }
+
+      .group {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        margin-top: var(--beuve-space-3);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .group::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--beuve-border);
+      }
+
+      .pairs {
+        margin-bottom: var(--beuve-space-3);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .pairs summary {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: 2px 0;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .pairs summary::before {
+        content: '▸';
+        font-size: 10px;
+      }
+
+      .pairs[open] summary::before {
+        content: '▾';
+      }
+
+      .pairs .filtered {
+        color: var(--beuve-text);
+      }
+
+      .pairs summary button {
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--beuve-accent);
+        font: inherit;
+      }
+
+      .pairs beuve-commit-pairing {
+        margin-top: var(--beuve-space-1);
+        padding: var(--beuve-space-2) 0;
+        border-top: 1px solid var(--beuve-border);
+        border-bottom: 1px solid var(--beuve-border);
+      }
     `,
   ];
 
@@ -242,6 +362,22 @@ export class BeuveDiffStream extends LitElement {
     if (event.key === 'r') {
       event.preventDefault();
       this.requestTrace();
+      return;
+    }
+    if (event.key === 'v') {
+      event.preventDefault();
+      this.toggleReviewed();
+      return;
+    }
+    if (
+      event.key === 'Escape' &&
+      this.peek === undefined &&
+      this.flow === undefined &&
+      this.trace === undefined &&
+      this.pairFilter !== undefined
+    ) {
+      event.preventDefault();
+      this.pairFilter = undefined;
       return;
     }
     if (
@@ -292,20 +428,31 @@ export class BeuveDiffStream extends LitElement {
       return;
     }
     const step = ({ j: 1, k: -1 } as const)[event.key];
-    const files = this.review?.files ?? [];
+    const files = this.shownFiles();
     if (step === undefined || files.length === 0) {
       return;
     }
     event.preventDefault();
     // A collapsed card is one stop at its header, so j/k never walk through an unloaded body.
-    const next = stepReviewPosition(
+    const isSkipping = this.display.skipReviewed === true;
+    const next = stepReviewPositionSkipping(
       files.map((file) => (this.isCollapsed(file) ? 0 : file.hunks.length)),
+      files.map((file) => isSkipping && this.reviewMarks.get(file.path) === 'yes'),
       { file: this.activeIndex, hunk: this.activeHunk },
       step,
     );
     this.activeIndex = next.file;
     this.activeHunk = next.hunk;
     void this.revealPosition();
+  };
+
+  private readonly onPairFilter = (event: CustomEvent<CommitPairFilterDetail>): void => {
+    event.stopPropagation();
+    this.pairFilter = event.detail.pairId;
+  };
+
+  private readonly onPairsToggle = (event: Event): void => {
+    this.isPairsOpen = (event.currentTarget as HTMLDetailsElement).open;
   };
 
   private readonly onMarkClick = (): void => {
@@ -399,7 +546,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** "Load diff" on a collapsed card. */
   private readonly onDiffToggle = (event: CustomEvent<{ path: string; expand: boolean }>): void => {
-    const index = this.review?.files.findIndex((file) => file.path === event.detail.path) ?? -1;
+    const index = this.shownFiles().findIndex((file) => file.path === event.detail.path);
     if (index === -1) {
       return;
     }
@@ -452,6 +599,15 @@ export class BeuveDiffStream extends LitElement {
     impactByPath: new Map(),
   };
 
+  private planCache:
+    | {
+        readonly review: ReviewView;
+        readonly order: ReviewOrderView | undefined;
+        readonly pairId: string | undefined;
+        readonly plan: ReviewStreamPlan;
+      }
+    | undefined;
+
   private observers:
     | {
         readonly root: Element;
@@ -487,6 +643,15 @@ export class BeuveDiffStream extends LitElement {
   /** Files that start collapsed and why (ADR 0052), from {@link planDiffDeferrals}. */
   @property({ attribute: false }) accessor deferrals: ReadonlyMap<string, DiffDeferral> =
     noDeferrals;
+  /** Each file's reviewed mark (ADR 0064), by head path; reviewed files collapse. */
+  @property({ attribute: false }) accessor reviewMarks: ReadonlyMap<string, FileReviewStateView> =
+    noMarks;
+  @property({ attribute: false }) accessor reviewProgress: FileReviewProgressView | undefined;
+  /** `session:get-order` for the review (ADR 0065); path order until it answers. */
+  @property({ attribute: false }) accessor order: ReviewOrderView | undefined;
+  /** The commit pair the stream is narrowed to (ADR 0054), from `beuve-commit-pairing`. */
+  @state() accessor pairFilter: string | undefined;
+  @state() accessor isPairsOpen = false;
   /** Deferred files the reviewer loaded, and other files they collapsed with Space. */
   @state() accessor expandedPaths: ReadonlySet<string> = noPaths;
   @state() accessor collapsedPaths: ReadonlySet<string> = noPaths;
@@ -539,12 +704,78 @@ export class BeuveDiffStream extends LitElement {
     if (this.collapsedPaths.has(file.path)) {
       return true;
     }
+    if (this.expandedPaths.has(file.path)) {
+      return false;
+    }
     const deferral = this.deferrals.get(file.path);
-    return (
-      deferral !== undefined &&
-      !this.expandedPaths.has(file.path) &&
-      !(deferral.isGeneratedOnly && this.display.showGenerated)
+    const isDeferred =
+      deferral !== undefined && !(deferral.isGeneratedOnly && this.display.showGenerated);
+    return isDeferred || this.reviewMarks.get(file.path) === 'yes';
+  }
+
+  /** The files the stream shows, in order, narrowed to the chosen commit pair; cached. */
+  private plan(): ReviewStreamPlan {
+    const { review, order, pairFilter } = this;
+    if (review === undefined) {
+      return emptyPlan;
+    }
+    const cached = this.planCache;
+    if (cached?.review === review && cached.order === order && cached.pairId === pairFilter) {
+      return cached.plan;
+    }
+    const plan = planReviewStream(review, order, pairFilter);
+    this.planCache = { review, order, pairId: pairFilter, plan };
+    return plan;
+  }
+
+  private shownFiles(): readonly DiffFileView[] {
+    return this.plan().files;
+  }
+
+  /** `v`: asks the shell to mark the active file reviewed, or to take the mark back. */
+  private toggleReviewed(): void {
+    const file = this.shownFiles()[this.activeIndex];
+    if (file === undefined || this.review?.reviewProgress === undefined) {
+      return;
+    }
+    const isReviewed = this.reviewMarks.get(file.path) === 'yes';
+    this.dispatchEvent(
+      new CustomEvent('beuve-file-reviewed', {
+        detail: { path: file.path, reviewed: !isReviewed },
+        bubbles: true,
+        composed: true,
+      }),
     );
+  }
+
+  /**
+   * A mark that changed drops the reviewer's own expand or collapse of that file, so a reviewed
+   * file collapses and an unmarked one opens; the cursor goes to a newly collapsed card's header.
+   */
+  private applyMarkChanges(previous: ReadonlyMap<string, FileReviewStateView>): void {
+    const changed = new Set(
+      [...new Set([...previous.keys(), ...this.reviewMarks.keys()])].filter(
+        (path) => previous.get(path) !== this.reviewMarks.get(path),
+      ),
+    );
+    if (changed.size === 0 || previous.size === 0) {
+      return;
+    }
+    const without = (paths: ReadonlySet<string>): ReadonlySet<string> => {
+      const kept = new Set(paths);
+      for (const path of changed) {
+        kept.delete(path);
+      }
+      return kept;
+    };
+    this.expandedPaths = without(this.expandedPaths);
+    this.collapsedPaths = without(this.collapsedPaths);
+    const active = this.shownFiles()[this.activeIndex]?.path;
+    if (active === undefined || !changed.has(active) || this.reviewMarks.get(active) !== 'yes') {
+      return;
+    }
+    this.activeHunk = -1;
+    void this.revealPosition();
   }
 
   private setCollapsed(path: string, isCollapsed: boolean): void {
@@ -559,7 +790,7 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private runFind(): void {
-    this.findMatches = findInReview(this.review?.files ?? [], this.findQuery, {
+    this.findMatches = findInReview(this.shownFiles(), this.findQuery, {
       isCaseSensitive: this.isFindCaseSensitive,
     });
     this.findIndex = -1;
@@ -579,7 +810,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** Space: loads a collapsed card's diff, or collapses an open one, and shows its header. */
   private toggleCollapsed(index: number): void {
-    const file = this.review?.files[index];
+    const file = this.shownFiles()[index];
     if (file === undefined || file.hunks.length === 0) {
       return;
     }
@@ -593,7 +824,7 @@ export class BeuveDiffStream extends LitElement {
    * (citations, the dock, the palette, find) goes through here.
    */
   private async loadedCard(index: number): Promise<BeuveFileCard | undefined> {
-    const file = this.review?.files[index];
+    const file = this.shownFiles()[index];
     if (file !== undefined && this.isCollapsed(file)) {
       this.setCollapsed(file.path, false);
     }
@@ -629,7 +860,7 @@ export class BeuveDiffStream extends LitElement {
 
   private focusFile(jump: FileJump): void {
     const { path, line } = jump;
-    const index = this.review?.files.findIndex((file) => file.path === path) ?? -1;
+    const index = this.shownFiles().findIndex((file) => file.path === path);
     if (index === -1) {
       return;
     }
@@ -706,7 +937,7 @@ export class BeuveDiffStream extends LitElement {
     const anchor = item?.placement.kind === 'current' ? item.placement.anchor : undefined;
     const index =
       anchor?.kind === 'lines'
-        ? (this.review?.files.findIndex((file) => file.path === anchor.path) ?? -1)
+        ? this.shownFiles().findIndex((file) => file.path === anchor.path)
         : -1;
     if (index === -1 || item === undefined || anchor?.kind !== 'lines') {
       this.notify('error', 'That note is not on a line of this diff, so it cannot be edited here.');
@@ -735,7 +966,7 @@ export class BeuveDiffStream extends LitElement {
    */
   private openComposer(given?: UraAnchorView, suggestedPatch?: string): void {
     const { review } = this;
-    const file = review?.files[this.activeIndex];
+    const file = this.shownFiles()[this.activeIndex];
     if (review === undefined || file === undefined) {
       return;
     }
@@ -810,7 +1041,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** `p` toggles the call-stack peek of the active card; Escape closes whichever portal is open. */
   private togglePeek(isClosing: boolean): void {
-    const file = this.review?.files[this.activeIndex];
+    const file = this.shownFiles()[this.activeIndex];
     if (isClosing || file === undefined || this.peek?.path === file.path) {
       this.closePortals();
       return;
@@ -827,7 +1058,7 @@ export class BeuveDiffStream extends LitElement {
 
   /** `Shift+p` toggles the control-flow graph of the function around the same line `p` targets. */
   private toggleFlow(): void {
-    const file = this.review?.files[this.activeIndex];
+    const file = this.shownFiles()[this.activeIndex];
     if (file === undefined || this.flow?.path === file.path) {
       this.closePortals();
       return;
@@ -846,7 +1077,7 @@ export class BeuveDiffStream extends LitElement {
    * `r` runs the tests covering the target's head line (ADR 0063) with tracing and opens the timeline portal; pressing it while the same probe runs does nothing.
    */
   private requestTrace(): void {
-    const file = this.review?.files[this.activeIndex];
+    const file = this.shownFiles()[this.activeIndex];
     if (file === undefined) {
       return;
     }
@@ -923,6 +1154,7 @@ export class BeuveDiffStream extends LitElement {
   private renderReview(review: ReviewView): TemplateResult {
     this.refreshSlices();
     const { uraItemsByPath, insightsByPath, impactByPath } = this.slices;
+    const plan = this.plan();
     const additions = review.files.reduce((sum, file) => sum + file.additions, 0);
     const deletions = review.files.reduce((sum, file) => sum + file.deletions, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
@@ -934,9 +1166,9 @@ export class BeuveDiffStream extends LitElement {
           >${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} +${additions}
           −${deletions}</span
         >
-        ${this.renderImpactTotals()}
+        ${this.renderProgress()} ${this.renderImpactTotals()}
         <span class="spacer"></span>
-        ${this.renderDisplay()}
+        ${this.renderOrder()} ${this.renderDisplay()}
         ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
         <button
           type="button"
@@ -961,38 +1193,128 @@ export class BeuveDiffStream extends LitElement {
         ${
           isUpToDate
             ? html`<p class="empty">Everything up to the head has been reviewed.</p>`
-            : html`<div class="cards">
-                ${repeat(
-                  review.files,
-                  (file) => file.path,
-                  (file, index) =>
-                    html`<beuve-file-card
-                      .file=${file}
-                      .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
-                      .cognitiveLimit=${this.impact?.cognitiveMax}
-                      .loadFilePair=${this.loadFilePair}
-                      .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
-                      .impact=${impactByPath.get(file.path)}
-                      .findings=${this.impact?.findings ?? noFindings}
-                      .peek=${this.peek?.path === file.path ? this.peek : undefined}
-                      .flow=${this.flow?.path === file.path ? this.flow : undefined}
-                      .trace=${this.trace?.path === file.path ? this.trace : undefined}
-                      .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
-                      .insights=${insightsByPath.get(file.path) ?? noInsights}
-                      .composer=${this.composer?.path === file.path ? this.composer : undefined}
-                      .deferral=${this.deferrals.get(file.path)}
-                      ?collapsed=${this.isCollapsed(file)}
-                      ?generated=${isGenerated(this.deferrals.get(file.path))}
-                      ?active=${index === this.activeIndex}
-                      @click=${(): void => {
-                        this.activate(index);
-                      }}
-                    ></beuve-file-card>`,
-                )}
-              </div>`
+            : html`${this.renderPairs(review)}
+                <div class="cards">
+                  ${repeat(
+                    plan.files,
+                    (file) => file.path,
+                    (file, index) =>
+                      html`${this.renderGroupLabel(plan, index)}<beuve-file-card
+                          .file=${file}
+                          .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
+                          .cognitiveLimit=${this.impact?.cognitiveMax}
+                          .loadFilePair=${this.loadFilePair}
+                          .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
+                          .impact=${impactByPath.get(file.path)}
+                          .findings=${this.impact?.findings ?? noFindings}
+                          .peek=${this.peek?.path === file.path ? this.peek : undefined}
+                          .flow=${this.flow?.path === file.path ? this.flow : undefined}
+                          .trace=${this.trace?.path === file.path ? this.trace : undefined}
+                          .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
+                          .insights=${insightsByPath.get(file.path) ?? noInsights}
+                          .composer=${this.composer?.path === file.path ? this.composer : undefined}
+                          .deferral=${this.deferrals.get(file.path)}
+                          ?collapsed=${this.isCollapsed(file)}
+                          .reviewed=${this.reviewMarks.get(file.path) ?? 'no'}
+                          ?generated=${isGenerated(this.deferrals.get(file.path))}
+                          ?active=${index === this.activeIndex}
+                          @click=${(): void => {
+                            this.activate(index);
+                          }}
+                        ></beuve-file-card>`,
+                  )}
+                </div>`
         }
       </div>
     `;
+  }
+
+  private renderProgress(): TemplateResult | typeof nothing {
+    const line = describeReviewProgress(this.reviewProgress);
+    return line === undefined
+      ? nothing
+      : html`<span class="progress" title=${line.title}>${line.text}</span>`;
+  }
+
+  /** Path / Imports / Calls (ADR 0065); a quiet note says when the order fell back. */
+  private renderOrder(): TemplateResult {
+    const requested = this.display.reviewOrder ?? 'path';
+    const fallback = describeOrderFallback(
+      this.order?.headSha === this.review?.headSha ? this.order : undefined,
+    );
+    const choose = (mode: ReviewOrderMode): void => {
+      if (mode !== requested) {
+        this.dispatchEvent(
+          new CustomEvent('beuve-display-change', {
+            detail: { reviewOrder: mode },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
+    };
+    return html`<span
+      class="order"
+      role="radiogroup"
+      aria-label="File order"
+      title="The order files are listed in; config and mechanical files go last (/order)"
+    >
+      ${orderModes.map(
+        ({ mode, label }) =>
+          html`<button
+            type="button"
+            role="radio"
+            tabindex="-1"
+            aria-checked=${mode === requested ? 'true' : 'false'}
+            @click=${(): void => {
+              choose(mode);
+            }}
+          >
+            ${label}
+          </button>`,
+      )}
+      ${fallback === undefined ? nothing : html`<span class="fallback">${fallback}</span>`}
+    </span>`;
+  }
+
+  private renderGroupLabel(plan: ReviewStreamPlan, index: number): TemplateResult | typeof nothing {
+    const label = plan.groupLabels.get(index);
+    return label === undefined ? nothing : html`<div class="group">${label}</div>`;
+  }
+
+  /** An interdiff's commits paired with the reviewed ones (ADR 0054), folded until asked for. */
+  private renderPairs(review: ReviewView): TemplateResult | typeof nothing {
+    const pairs = review.commitPairs ?? [];
+    if (pairs.length === 0) {
+      return nothing;
+    }
+    const changed = pairs.filter((pair) => pair.kind !== 'unchanged').length;
+    const filtered = pairs.find((pair) => pair.id === this.pairFilter);
+    return html`<details class="pairs" ?open=${this.isPairsOpen} @toggle=${this.onPairsToggle}>
+      <summary>
+        <span>Commits since the last review: ${changed} of ${pairs.length} changed</span>
+        ${
+          filtered === undefined
+            ? nothing
+            : html`<span class="filtered">showing “${filtered.subject}”</span>
+                <button
+                  type="button"
+                  @click=${(event: Event): void => {
+                    event.preventDefault();
+                    this.pairFilter = undefined;
+                  }}
+                >
+                  Show all
+                </button>`
+        }
+      </summary>
+      <beuve-commit-pairing
+        headless
+        .pairs=${pairs}
+        .selectedId=${this.pairFilter}
+        @beuve-commit-pair-filter=${this.onPairFilter}
+      ></beuve-commit-pairing>
+    </details>`;
   }
 
   private renderDisplay(): TemplateResult {
@@ -1013,6 +1335,38 @@ export class BeuveDiffStream extends LitElement {
       >ImpactGate:
       ${count === 0 ? 'no findings' : `${String(count)} ${count === 1 ? 'finding' : 'findings'}`}</span
     >`;
+  }
+
+  /**
+   * Keeps the cursor on its file when the list changes under it: the same head again (whitespace
+   * toggled), a new order, or a commit pair filter. A new head starts at the top.
+   */
+  private keepCursor(changed: PropertyValues<this>): void {
+    const activePath = this.planCache?.plan.files[this.activeIndex]?.path;
+    const previous = changed.get('review');
+    const isSameHead = !changed.has('review') || previous?.headSha === this.review?.headSha;
+    const files = this.shownFiles();
+    // A cursor still at the top (nothing stepped to yet) stays at the top of the new order.
+    const isAtTop = this.activeIndex === 0 && this.activeHunk === -1;
+    const kept = isSameHead && !isAtTop ? files.findIndex((file) => file.path === activePath) : -1;
+    if (kept === this.activeIndex && !changed.has('review') && !changed.has('pairFilter')) {
+      return;
+    }
+    this.activeIndex = Math.max(0, kept);
+    this.activeHunk = -1;
+  }
+
+  /** Opens the commit pairs and focuses their list (the palette's command). */
+  async openCommitPairs(): Promise<boolean> {
+    if ((this.review?.commitPairs ?? []).length === 0) {
+      return false;
+    }
+    this.isPairsOpen = true;
+    await this.updateComplete;
+    const pairing = this.renderRoot.querySelector('beuve-commit-pairing');
+    await pairing?.updateComplete;
+    pairing?.renderRoot.querySelector<HTMLElement>('ol')?.focus();
+    return true;
   }
 
   /** ⌘F / Ctrl+F: opens the find bar (or focuses it again) over this review. */
@@ -1042,18 +1396,23 @@ export class BeuveDiffStream extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (!changed.has('review')) {
+    const isReviewChanged = changed.has('review');
+    const pairs = this.review?.commitPairs ?? [];
+    if (isReviewChanged && pairs.every((pair) => pair.id !== this.pairFilter)) {
+      this.pairFilter = undefined;
+    }
+    const isListChanged = isReviewChanged || changed.has('order') || changed.has('pairFilter');
+    if (isListChanged) {
+      this.keepCursor(changed);
+    }
+    const previousMarks = changed.get('reviewMarks');
+    if (previousMarks !== undefined) {
+      this.applyMarkChanges(previousMarks);
+    }
+    if (!isReviewChanged) {
       return;
     }
-    // The same head again (e.g. whitespace toggled) keeps the cursor on its file.
     const previous = changed.get('review');
-    const activePath = previous?.files[this.activeIndex]?.path;
-    const kept =
-      previous?.headSha === this.review?.headSha
-        ? (this.review?.files.findIndex((file) => file.path === activePath) ?? -1)
-        : -1;
-    this.activeIndex = Math.max(0, kept);
-    this.activeHunk = -1;
     if (previous?.session.id !== this.review?.session.id) {
       this.expandedPaths = noPaths;
       this.collapsedPaths = noPaths;
@@ -1062,18 +1421,23 @@ export class BeuveDiffStream extends LitElement {
       this.runFind();
     }
     const path = this.composer?.path;
-    const isShown = this.review?.files.some((file) => file.path === path) === true;
+    const isShown = this.shownFiles().some((file) => file.path === path);
     this.composer = isShown ? this.composer : undefined;
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('review')) {
+    if (changed.has('review') || changed.has('order') || changed.has('pairFilter')) {
       void this.observeCards();
     }
-    if (changed.has('review') || changed.has('activeIndex')) {
+    if (
+      changed.has('review') ||
+      changed.has('activeIndex') ||
+      changed.has('order') ||
+      changed.has('pairFilter')
+    ) {
       this.dispatchEvent(
         new CustomEvent('beuve-active-file', {
-          detail: { path: this.review?.files[this.activeIndex]?.path },
+          detail: { path: this.shownFiles()[this.activeIndex]?.path },
           bubbles: true,
           composed: true,
         }),

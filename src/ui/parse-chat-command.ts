@@ -2,6 +2,7 @@ import type {
   DiffLayoutView,
   EditorId,
   ReviewEffort,
+  ReviewOrderMode,
   SidebarSideView,
 } from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
@@ -26,6 +27,8 @@ export type ChatCommand =
   | { readonly kind: 'generated'; readonly showGenerated?: boolean }
   /** `/insights` shows whether `/review` findings annotate the diff; `show` or `hide` sets it (ADR 0061). */
   | { readonly kind: 'insights'; readonly showInsights?: boolean }
+  /** `/order` shows the file order; `/order path|imports|calls` sets it (ADR 0065). */
+  | { readonly kind: 'order'; readonly mode?: ReviewOrderMode }
   /** Approves running the open repository's tests for trace probes (ADR 0041). */
   | { readonly kind: 'trust' }
   /** Withdraws that approval. */
@@ -52,7 +55,8 @@ const whitespace = /\s+/u;
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`),
  * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), `/trust`, `/untrust`,
  * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
- * `/generated [show|hide]`, `/insights [show|hide]`, `/sidebar left|right`, and
+ * `/generated [show|hide]`, `/insights [show|hide]`, `/order [path|imports|calls]`,
+ * `/sidebar left|right`, and
  * `/review [--fresh] [--no-verify] [--effort=low|medium|high] [path-prefix…]`, options and
  * prefixes in any order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -111,6 +115,9 @@ export function parseChatCommand(input: string): ChatCommand {
     }
     case '/insights': {
       return parseInsights(args);
+    }
+    case '/order': {
+      return parseOrder(args);
     }
     case '/review': {
       return parseReview(args);
@@ -193,6 +200,22 @@ function parseInsights(args: readonly string[]): ChatCommand {
   return choice === 'show' || choice === 'hide'
     ? { kind: 'insights', showInsights: choice === 'show' }
     : invalid('/insights takes show or hide, e.g. /insights hide.');
+}
+
+const orderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls']);
+
+function parseOrder(args: readonly string[]): ChatCommand {
+  if (args.length === 0) {
+    return { kind: 'order' };
+  }
+  const mode = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
+  return isOrderMode(mode)
+    ? { kind: 'order', mode }
+    : invalid('/order takes path, imports or calls, e.g. /order imports.');
+}
+
+function isOrderMode(value: string): value is ReviewOrderMode {
+  return orderModes.has(value);
 }
 
 function parseWhitespace(args: readonly string[]): ChatCommand {

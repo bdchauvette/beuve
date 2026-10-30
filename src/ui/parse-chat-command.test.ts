@@ -49,6 +49,14 @@ describe('parseChatCommand', () => {
     expect(parseChatCommand('/insights maybe')).toMatchObject({ kind: 'invalid' });
   });
 
+  test('parses /order with and without a mode', ({ expect }) => {
+    expect(parseChatCommand('/order')).toStrictEqual({ kind: 'order' });
+    expect(parseChatCommand('/order Imports')).toStrictEqual({ kind: 'order', mode: 'imports' });
+    expect(parseChatCommand('/order calls')).toStrictEqual({ kind: 'order', mode: 'calls' });
+    expect(parseChatCommand('/order tests-first')).toMatchObject({ kind: 'invalid' });
+    expect(parseChatCommand('/order path imports')).toMatchObject({ kind: 'invalid' });
+  });
+
   test('parses /editor with and without a choice', ({ expect }) => {
     expect(parseChatCommand('/editor')).toStrictEqual({ kind: 'editor' });
     expect(parseChatCommand('/editor Zed')).toStrictEqual({ kind: 'editor', editorId: 'zed' });

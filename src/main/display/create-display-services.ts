@@ -29,13 +29,14 @@ const defaults: Required<DiffDisplayView> = {
   showGenerated: false,
   showInsights: true,
   reviewOrder: 'path',
+  skipReviewed: false,
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061) and `reviewOrder` (ADR 0065), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `reviewOrder` (ADR 0065) and `skipReviewed` (ADR 0064), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -56,6 +57,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
           showGenerated: next.showGenerated,
           showInsights: next.showInsights,
           reviewOrder: next.reviewOrder,
+          skipReviewed: next.skipReviewed,
         }));
       }
       return ok(next);
@@ -70,6 +72,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
   const showGenerated = settings['showGenerated'];
   const showInsights = settings['showInsights'];
   const reviewOrder = settings['reviewOrder'];
+  const skipReviewed = settings['skipReviewed'];
   return {
     layout: isLayout(layout) ? layout : defaults.layout,
     ignoreWhitespace:
@@ -78,6 +81,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     showGenerated: typeof showGenerated === 'boolean' ? showGenerated : defaults.showGenerated,
     showInsights: typeof showInsights === 'boolean' ? showInsights : defaults.showInsights,
     reviewOrder: isReviewOrder(reviewOrder) ? reviewOrder : defaults.reviewOrder,
+    skipReviewed: typeof skipReviewed === 'boolean' ? skipReviewed : defaults.skipReviewed,
   };
 }
 

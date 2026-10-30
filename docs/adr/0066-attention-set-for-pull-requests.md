@@ -1,6 +1,6 @@
 # 0066. An attention set for pull request sessions
 
-- Status: Accepted
+- Status: Accepted; UI decided below (2026-10-30)
 - Date: 2026-10-30
 
 ## Context
@@ -19,6 +19,8 @@ Critique and Gerrit tell each participant whose turn a change is, with a reason 
 - **Data.** Beside the pull request the poller already fetches, it reads `GET …/pulls/{n}/reviews` (paged) and `GET …/pulls/{n}/requested_reviewers` whenever the pull request changed, and the signed-in login from the credential provider's `describe` once. CI comes from the status the poller already holds, used only while it is about the current head. No new polling: a review, a request or a push changes the pull request's `updated_at`, which its ETag already watches.
 - **Unresolved review threads are not read.** Their resolved state exists only in GraphQL, which beuve's REST client (ADR 0035) does not speak; the rules will take them as one more author reason if that changes.
 - **Contract.** `github:pr-updated` gains an optional `attention`, and so does `github:get-pr`'s `PullRequestSessionView`. `github:pr-updated` is also pushed (with `headMoved: false`) when CI finishing changes the attention. `attention` is absent until the reviews were read once; a failed read keeps the last answer and is logged.
+
+- **UI.** The status bar, beside CI, shows "Your turn" (accent), "Author’s turn" or "Reviewers’ turn" (muted), with the reasons in its tooltip. Nothing shows for local sessions, `unknown`, or before the reviews were read; a `github:pr-updated` without `attention` keeps the last one.
 
 ## Consequences
 

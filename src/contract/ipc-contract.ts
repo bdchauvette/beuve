@@ -1301,6 +1301,8 @@ export interface DiffDisplayView {
   readonly showInsights: boolean;
   /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
   readonly reviewOrder?: ReviewOrderMode;
+  /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
+  readonly skipReviewed?: boolean;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1311,6 +1313,7 @@ export interface SetDiffDisplayRequest {
   readonly showGenerated?: boolean;
   readonly showInsights?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
+  readonly skipReviewed?: boolean;
 }
 
 /**

@@ -1,6 +1,6 @@
 # 0065. Review file order: path, imports or calls, config and mechanical last
 
-- Status: Accepted
+- Status: Accepted; UI decided below (2026-10-30)
 - Date: 2026-10-30
 
 ## Context
@@ -15,6 +15,8 @@ The diff lists files in path order. A reviewer who meets `app.ts` before the hel
 - **Import extraction and resolution.** The syntax domain reads `import … from`, `import 'x'`, `import x = require()`, `export … from`, `import()` and `require()` with a string literal from TypeScript, TSX and JavaScript trees (`extractModuleReferences`, ADR 0014). `createModuleResolver` resolves, over the head's tree listing and the `package.json` / `tsconfig.json` blobs read from git (never the working tree): relative specifiers with extension, emitted-extension (`.js` for `.ts`) and `index` probing; `#alias` through the nearest enclosing `package.json` `imports` (patterns, and `types`/`import`/`node`/`default` conditions); and `tsconfig.json` `paths` with `baseUrl` from the nearest tsconfig that has them. `extends` chains and bare packages are not followed.
 - **Calls.** For each changed TypeScript or JavaScript file (at most 40) main asks the language server for the outgoing calls of the function around the first added line of each of its first three hunks, four requests at a time, and keeps calls into other changed files. This is a dependency order like imports, over what the code calls instead of what it imports. When no server answers (`unsupported`), or no call reaches another changed file, the order falls back to `imports` and `fallback` says `no-language-server` or `no-call-edges`; with no TypeScript or JavaScript file to read, either mode falls back to `path` with `no-source-files`.
 - **Config and mechanical files go last, in their own group, in every mode.** `classifyReviewFile` is pure and its rules are data (`mechanicalRules`), first match wins: lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `go.sum`, …); generated (`linguist-generated` per `.gitattributes`, `*.min.js`, `*.map`, `*.pb.go`); pure renames (100% similar); formatting-only (the file's diff is empty under `git diff --ignore-all-space`); config (`package.json`, `tsconfig*.json`, `*.config.{js,ts,mjs,cjs,mts,cts,json,yaml}`, `.github/`, eslint, prettier, stylelint, dependency-cruiser, `.editorconfig`, `.gitignore`, `.gitattributes`, `.nvmrc`, `.node-version`, `.npmrc`, and `*.yml`/`*.yaml`/`*.toml` at the repository root). The group is sorted config, pure rename, formatting-only, generated, lockfile, then path, so the noisiest sit last.
+
+- **UI.** The review header has a quiet Path / Imports / Calls selector; `/order path|imports|calls` (bare `/order` says which) and three palette commands set the same `reviewOrder`. The stream shows path order until `session:get-order` answers for the head, then the returned order, with a thin labelled divider above every group but the plain changes. When the order fell back, a muted note beside the selector says why and what was used (`calls: no language server answered, so imports`). A cursor still at the top stays at the top of the new order; one the reviewer moved stays on its file. The radar tree keeps path order.
 
 ## Consequences
 

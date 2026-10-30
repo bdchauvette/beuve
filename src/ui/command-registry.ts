@@ -17,7 +17,12 @@ export type AppAction =
   | 'sidebar-chat'
   | 'find'
   | 'toggle-generated'
-  | 'toggle-insights';
+  | 'toggle-insights'
+  | 'toggle-skip-reviewed'
+  | 'order-path'
+  | 'order-imports'
+  | 'order-calls'
+  | 'commit-pairs';
 
 /** What running a command from the palette does. */
 export type CommandRun =
@@ -185,6 +190,46 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     run: app('toggle-insights'),
   },
   {
+    id: 'toggle-skip-reviewed',
+    title: 'Skip / stop skipping reviewed files with j and k',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('toggle-skip-reviewed'),
+  },
+  {
+    id: 'order-path',
+    title: 'Order files by path',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('order-path'),
+  },
+  {
+    id: 'order-imports',
+    title: 'Order files by imports (what a file uses comes first)',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('order-imports'),
+  },
+  {
+    id: 'order-calls',
+    title: 'Order files by calls (asks the language server)',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('order-calls'),
+  },
+  {
+    id: 'commit-pairs',
+    title: 'Commits since the last review: filter the diff to one',
+    scope: 'Anywhere',
+    keys: [],
+    available: true,
+    run: app('commit-pairs'),
+  },
+  {
     id: 'flip-sidebar',
     title: 'Move the sidebar to the other side',
     scope: 'Anywhere',
@@ -298,6 +343,14 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     keys: ['o'],
     available: true,
     run: zoneKey('diff', 'o'),
+  },
+  {
+    id: 'toggle-reviewed',
+    title: 'Mark the file reviewed / not reviewed (reviewed files collapse)',
+    scope: 'Diff',
+    keys: ['v'],
+    available: true,
+    run: zoneKey('diff', 'v'),
   },
   {
     id: 'dock-move',
@@ -499,6 +552,16 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
     available: true,
     run: slash('/insights ', true),
+  },
+  {
+    id: 'review-order',
+    title: 'Order the files by path, imports or calls…',
+    scope: 'Chat',
+    keys: [],
+    slash: '/order path|imports|calls',
+    help: 'the order the diff lists files in: path, imports (what a file uses comes first) or calls (asks the language server); config and mechanical files always go last. Remembered in settings.json; just /order shows the current one',
+    available: true,
+    run: slash('/order ', true),
   },
   {
     id: 'trust',

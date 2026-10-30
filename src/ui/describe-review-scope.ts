@@ -16,7 +16,10 @@ export function describeReviewScope(scope: ReviewScope): string {
           return 'Interdiff · exact';
         }
         case 'rebased': {
-          return 'Interdiff · rebased';
+          // ADR 0054: the range replay conflicted, so the reviewed commits were replayed one by one.
+          return outcome.replay === 'commit-pairs'
+            ? 'Interdiff · rebased · replayed commit by commit'
+            : 'Interdiff · rebased';
         }
         case 'fallback': {
           return `Full review · interdiff unavailable: ${fallbackReason(outcome.reason)}`;

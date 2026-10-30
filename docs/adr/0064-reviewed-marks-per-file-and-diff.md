@@ -1,6 +1,6 @@
 # 0064. Reviewed marks per file, carried over by diff identity
 
-- Status: Accepted
+- Status: Accepted; UI decided below (2026-10-30)
 - Date: 2026-10-30
 
 ## Context
@@ -14,6 +14,8 @@ A checkpoint (ADR 0009, 0012) signs off on a whole head. Reviewers also read fil
 - **Carry-over (`carryOverFileMarks`, pure).** For each file of the diff now shown: the mark at its path, else at its other-side path (a rename), else an unclaimed mark under a path that left the diff with the identical diff (a move git did not pair). Equal identity: `yes`. Different: `changed-since`. No mark: `no`. A mark serves one file. Marks of files that left the diff stay stored and are reported as orphaned, so a file that returns keeps its mark and a reviewer's work is never lost.
 - **Interdiff versus full.** The identity is of the diff that was displayed. Marked on the full diff (base to head 1), a file in the later interdiff (head 1 to head 2) has a different diff, so it reads `changed-since`, which is true. Marked in an interdiff, it reads `yes` while the same interdiff is shown. A rebase that leaves a file's changed lines alone keeps `yes` in the full view. The ignore-whitespace variant (ADR 0042) is displayed from the plain diff's identities, so toggling it never changes a mark.
 - **Contract.** `review:set-file-reviewed { sessionId, path, reviewed, expectedHeadSha? }` answers `{ path, reviewed, progress }`; `expectedHeadSha` guards like `session:mark-reviewed`. `DiffFileView.reviewed` is `'yes' | 'no' | 'changed-since'` on every file of a `ReviewView`, and `ReviewView.reviewProgress` carries `{ total, reviewed, changedSince, unreviewed }`. Both are optional in the type (commit interdiffs have no marks) but always set by `session:get-review`. Setting a renamed file's mark moves it from the old path. Chat can later read "files you have not reviewed" from the same view.
+
+- **UI.** `v` in the diff toggles the active file's mark (palette: "Mark the file reviewed / not reviewed"); marking `changed-since` marks it again. A reviewed card collapses to its header with a small check (a click or Space shows the diff; a deferred file keeps its own collapsed line), a `changed-since` card stays open with a quiet dashed "changed since reviewed" tag, the review header reads `12/30 reviewed` (changed and unmarked counts on hover), and the radar tree puts `✓` or `◦` before a row's ImpactGate text. Changing a mark drops the reviewer's own expand or collapse of that file. `j`/`k` can skip reviewed files: `skipReviewed` in `settings.json` beside the display preferences, default off, toggled from the palette; the file the cursor is on is never skipped, and when only reviewed files lie ahead the cursor stays. The marks live in the shell apart from `ReviewView`, so a mark never rebuilds the stream or resets the tree.
 
 ## Consequences
 

@@ -4,17 +4,20 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type {
   AppInfo,
+  AttentionView,
   CiStatusView,
   GithubAuthStatusView,
   McpStatus,
 } from '#contract/ipc-contract.ts';
 
+import { describeAttention } from './describe-attention.ts';
 import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 
 /**
- * Bottom bar: the focused region and its main keys, a transient notice, the open pull request's CI rollup, GitHub
+ * Bottom bar: the focused region and its main keys, a transient notice, whose turn the open pull
+ * request is (ADR 0066, reasons on hover), its CI rollup, GitHub
  * sign-in, MCP server state and app version.
  */
 @customElement('beuve-status-bar')
@@ -80,6 +83,15 @@ export class BeuveStatusBar extends LitElement {
       color: var(--beuve-danger);
     }
 
+    .attention {
+      cursor: default;
+    }
+
+    .attention.yours {
+      color: var(--beuve-accent);
+      font-weight: 600;
+    }
+
     kbd {
       font: var(--beuve-font-mono);
       font-size: 11px;
@@ -95,6 +107,17 @@ export class BeuveStatusBar extends LitElement {
   /** CI for the open pull request session's head; absent for local sessions. */
   @property({ attribute: false }) accessor ci: CiStatusView | undefined;
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
+  /** Whose turn the open pull request is; absent for local sessions and until it is known. */
+  @property({ attribute: false }) accessor attention: AttentionView | undefined;
+
+  private renderAttention(): TemplateResult | typeof nothing {
+    const chip = describeAttention(this.attention);
+    return chip === undefined
+      ? nothing
+      : html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
+          >${chip.text}</span
+        >`;
+  }
 
   private renderCi(ci: CiStatusView): TemplateResult {
     const line = describeCiStatus(ci);
@@ -147,7 +170,7 @@ export class BeuveStatusBar extends LitElement {
           : html`<span class="notice ${this.notice.tone}" role="status">${this.notice.text}</span>`
       }
       <span class="spacer"></span>
-      ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
+      ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.renderMcp()}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}

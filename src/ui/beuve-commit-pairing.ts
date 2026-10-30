@@ -170,6 +170,8 @@ export class BeuveCommitPairing extends LitElement {
   @property({ attribute: false }) accessor pairs: readonly CommitPairView[] = [];
   /** The pair the diff stream is filtered to, if any. */
   @property({ attribute: false }) accessor selectedId: string | undefined = undefined;
+  /** Leaves out the count and "Show all" line, for a host that shows them itself. */
+  @property({ type: Boolean }) accessor headless = false;
 
   private renderRow(row: CommitPairRow, index: number): TemplateResult {
     const isCursor = index === this.clampedCursor(this.pairs.length);
@@ -212,21 +214,25 @@ export class BeuveCommitPairing extends LitElement {
     );
   }
 
+  private renderHeader(rows: readonly CommitPairRow[]): TemplateResult {
+    const changed = rows.filter((row) => row.kind !== 'unchanged').length;
+    return html`<header>
+      <span>
+        ${rows.length} ${rows.length === 1 ? 'commit' : 'commits'}
+        ${changed === 0 ? '· none changed' : `· ${String(changed)} changed`}
+      </span>
+      ${
+        this.selectedId === undefined
+          ? nothing
+          : html`<button type="button" @click=${this.clear}>Show all</button>`
+      }
+    </header>`;
+  }
+
   override render(): TemplateResult {
     const rows = this.pairs.map((pair) => describeCommitPair(pair));
-    const changed = rows.filter((row) => row.kind !== 'unchanged').length;
     return html`
-      <header>
-        <span>
-          ${rows.length} ${rows.length === 1 ? 'commit' : 'commits'}
-          ${changed === 0 ? '· none changed' : `· ${String(changed)} changed`}
-        </span>
-        ${
-          this.selectedId === undefined
-            ? nothing
-            : html`<button type="button" @click=${this.clear}>Show all</button>`
-        }
-      </header>
+      ${this.headless ? nothing : this.renderHeader(rows)}
       ${
         rows.length === 0
           ? html`<p class="empty">No commits to pair.</p>`

@@ -64,6 +64,7 @@ describe('commandRegistry', () => {
       '/whitespace',
       '/generated',
       '/insights',
+      '/order',
       '/sidebar',
       '/trust',
       '/untrust',
@@ -84,7 +85,22 @@ describe('commandRegistry', () => {
   });
 
   test('has a runnable entry for every diff stream key', ({ expect }) => {
-    const diffKeys = ['j', 'k', 'p', 'Shift+p', 'r', 'Esc', 'm', 'e', 'i', 's', 'w', 'o', 'Space'];
+    const diffKeys = [
+      'j',
+      'k',
+      'p',
+      'Shift+p',
+      'r',
+      'Esc',
+      'm',
+      'e',
+      'i',
+      's',
+      'w',
+      'o',
+      'v',
+      'Space',
+    ];
     const listed = commandRegistry
       .filter((command) => command.scope === 'Diff' && command.run.kind === 'zone-key')
       .flatMap((command) => command.keys);

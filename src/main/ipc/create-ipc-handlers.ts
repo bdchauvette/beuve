@@ -287,6 +287,7 @@ const displayRequest = z.strictObject({
   showGenerated: z.boolean().optional(),
   showInsights: z.boolean().optional(),
   reviewOrder: reviewOrderMode.optional(),
+  skipReviewed: z.boolean().optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -594,8 +595,15 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { layout, ignoreWhitespace, sidebarSide, showGenerated, showInsights, reviewOrder } =
-        parsed.data;
+      const {
+        layout,
+        ignoreWhitespace,
+        sidebarSide,
+        showGenerated,
+        showInsights,
+        reviewOrder,
+        skipReviewed,
+      } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
         ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
@@ -603,6 +611,7 @@ export function createIpcHandlers(
         ...(showGenerated !== undefined && { showGenerated }),
         ...(showInsights !== undefined && { showInsights }),
         ...(reviewOrder !== undefined && { reviewOrder }),
+        ...(skipReviewed !== undefined && { skipReviewed }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {

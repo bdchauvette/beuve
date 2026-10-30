@@ -20,6 +20,13 @@ describe('describeReviewScope', () => {
     expect(
       describeReviewScope({ kind: 'interdiff', ...from(), outcome: { kind: 'rebased' } }),
     ).toBe('Interdiff · rebased');
+    expect(
+      describeReviewScope({
+        kind: 'interdiff',
+        ...from(),
+        outcome: { kind: 'rebased', replay: 'commit-pairs' },
+      }),
+    ).toBe('Interdiff · rebased · replayed commit by commit');
   });
 
   test('explains why an interdiff fell back to a full review', ({ expect }) => {

@@ -23,6 +23,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         reviewOrder: 'path',
+        skipReviewed: false,
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -34,6 +35,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         reviewOrder: 'path',
+        skipReviewed: false,
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -41,6 +43,7 @@ describe('createDisplayServices', () => {
     await display.set({ showGenerated: true });
     await display.set({ showInsights: false });
     await display.set({ reviewOrder: 'imports' });
+    await display.set({ skipReviewed: true });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -49,6 +52,7 @@ describe('createDisplayServices', () => {
       showGenerated: true,
       showInsights: false,
       reviewOrder: 'imports',
+      skipReviewed: true,
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -59,6 +63,7 @@ describe('createDisplayServices', () => {
         showGenerated: true,
         showInsights: false,
         reviewOrder: 'imports',
+        skipReviewed: true,
       },
     });
   });
@@ -75,6 +80,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         reviewOrder: 'path',
+        skipReviewed: false,
       },
     });
   });

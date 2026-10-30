@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type {
   DiffFileView,
+  FileReviewStateView,
   ImpactView,
   PullRequestSessionView,
   RepositoryTreeView,
@@ -76,6 +77,9 @@ export class BeuveIntentSidebar extends LitElement {
   /** Generated review files, dimmed in the tree (ADR 0052). */
   @property({ attribute: false }) accessor generatedPaths: ReadonlySet<string> = new Set();
   @property() accessor treeMode: RadarTreeMode = 'neighborhood';
+  /** Reviewed marks by path (ADR 0064), shown on the tree's rows. */
+  @property({ attribute: false }) accessor reviewMarks: ReadonlyMap<string, FileReviewStateView> =
+    new Map();
 
   constructor() {
     super();
@@ -92,6 +96,7 @@ export class BeuveIntentSidebar extends LitElement {
         .files=${files}
         .impact=${this.impact}
         .generatedPaths=${this.generatedPaths}
+        .reviewMarks=${this.reviewMarks}
         .mode=${this.treeMode}
       ></beuve-radar-tree>
     </section>`;
