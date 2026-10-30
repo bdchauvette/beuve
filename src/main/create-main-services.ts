@@ -13,7 +13,7 @@ import type { SessionDeps } from '#internal/session/session.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
 import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
+import type { Logger } from '#x/log/create-logger.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';

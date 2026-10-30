@@ -11,9 +11,9 @@ import { parsePullRequestRef } from '#internal/github/parse-pull-request-ref.ts'
 import type { PullRequest, PullRequestRef } from '#internal/github/pull-request.ts';
 import { savePullRequest } from '#internal/github/save-pull-request.ts';
 import type { Session } from '#internal/session/session.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitErrorToIpcError } from '../sessions/git-error-to-ipc-error.ts';
 import { toSessionSummary } from '../sessions/to-session-summary.ts';

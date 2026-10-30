@@ -3,7 +3,7 @@ import process from 'node:process';
 
 import { app, BrowserWindow, shell } from 'electron';
 
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';

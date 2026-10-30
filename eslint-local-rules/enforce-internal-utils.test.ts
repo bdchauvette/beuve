@@ -3,7 +3,7 @@ import { enforceInternalUtils } from './enforce-internal-utils.ts';
 
 createRuleTester().run('enforce-internal-utils', enforceInternalUtils, {
   valid: [
-    "import { createLogger } from '#pkg/logger/create-logger.ts';",
+    "import { createLogger } from '#x/log/create-logger.ts';",
     "import path from 'node:path';",
     "import { html } from 'lit';",
     "import lodashy from 'lodashy';",

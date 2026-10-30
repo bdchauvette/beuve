@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { fromPromise } from '#pkg/result/from-promise.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { fromPromise } from '#x/result/from-promise.ts';
+import type { Result } from '#x/result/result.ts';
 
 const fileName = 'mcp-token';
 const tokenPattern = /^[\w-]{43,}$/u;

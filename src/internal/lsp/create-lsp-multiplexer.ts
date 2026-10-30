@@ -4,11 +4,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { convertCharacter } from './convert-character.ts';
 import { createServerEnvironment } from './create-server-environment.ts';

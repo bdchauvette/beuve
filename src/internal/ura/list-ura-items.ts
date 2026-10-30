@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { rowToUraItem } from './row-to-ura-item.ts';
 import type { SessionId, UraItem, UraStoreError } from './ura-item.ts';

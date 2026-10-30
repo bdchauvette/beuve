@@ -1,4 +1,4 @@
-import type { Brand } from '#pkg/brand/brand.ts';
+import type { Brand } from '#x/brand/brand.ts';
 
 import type { UraSeverity } from './ura-severities.ts';
 

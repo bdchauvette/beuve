@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 /** Diagnostics for one file, as the LSP multiplexer reports them. */
 export interface LspDiagnosticsInput {

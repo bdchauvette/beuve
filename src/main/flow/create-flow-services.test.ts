@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FlowGraphResponse, FlowGraphView, IpcResult } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';

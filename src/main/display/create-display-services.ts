@@ -5,7 +5,7 @@ import type {
   SetDiffDisplayRequest,
   SidebarSideView,
 } from '#contract/ipc-contract.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { readSettingsFile } from '../settings/read-settings-file.ts';
 import { updateSettingsFile } from '../settings/update-settings-file.ts';

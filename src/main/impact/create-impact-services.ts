@@ -1,8 +1,8 @@
 import type { GetImpactRequest, IpcError, IpcResult, ImpactView } from '#contract/ipc-contract.ts';
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

@@ -58,11 +58,11 @@ import type {
 } from '#internal/ura/ura-item.ts';
 import type { UraPosting } from '#internal/ura/ura-posting.ts';
 import type { UraVerdictChoice } from '#internal/ura/ura-verdict-choice.ts';
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
-import { withTransaction } from '#pkg/sqlite/with-transaction.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
+import { withTransaction } from '#x/sqlite/with-transaction.ts';
 
 import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

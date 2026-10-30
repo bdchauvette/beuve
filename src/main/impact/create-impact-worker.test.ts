@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ImpactSourceFile } from '#internal/impact/impact-input.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createImpactWorker } from './create-impact-worker.ts';
 import type { ImpactRunner } from './create-impact-worker.ts';

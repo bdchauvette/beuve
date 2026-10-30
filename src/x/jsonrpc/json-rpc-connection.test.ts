@@ -2,8 +2,8 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { ContentLengthDecoder } from './content-length-decoder.ts';
 import { encodeMessage } from './encode-message.ts';

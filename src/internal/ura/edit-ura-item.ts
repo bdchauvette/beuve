@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { UraItem, UraItemError } from './ura-item.ts';
 import type { UraSeverity } from './ura-severities.ts';

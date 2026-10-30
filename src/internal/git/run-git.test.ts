@@ -4,7 +4,7 @@ import process from 'node:process';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createTestRepository } from './testing/create-test-repository.ts';
 import type { TestRepository } from './testing/create-test-repository.ts';

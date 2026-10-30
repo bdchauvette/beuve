@@ -1,7 +1,7 @@
 import type { GithubAuthStatusView } from '#contract/ipc-contract.ts';
 import type { AuthError } from '#internal/auth/auth-error.ts';
 import type { CredentialDescription } from '#internal/auth/github-credential-provider.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { describeAuthError } from './describe-auth-error.ts';
 

@@ -104,12 +104,12 @@ export default defineConfig(
     rules: {
       'promise/prefer-await-to-then': 'error',
       'promise/prefer-await-to-callbacks': 'off',
-      // TypeScript resolves every import, including `#pkg/*` aliases, more precisely.
+      // TypeScript resolves every import, including `#x/*` aliases, more precisely.
       'n/no-missing-import': 'off',
       // Electron is a devDependency by convention but is provided at runtime.
       'n/no-unpublished-import': ['error', { allowModules: ['electron'] }],
       'n/no-extraneous-import': ['error', { allowModules: ['electron'] }],
-      // node:sqlite is release-candidate and wrapped by #pkg/sqlite (ADR 0004).
+      // node:sqlite is release-candidate and wrapped by #x/sqlite (ADR 0004).
       'n/no-unsupported-features/node-builtins': [
         'error',
         { ignores: ['sqlite', 'sqlite.DatabaseSync', 'import.meta.dirname'] },

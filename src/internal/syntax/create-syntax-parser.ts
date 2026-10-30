@@ -3,9 +3,9 @@ import path from 'node:path';
 
 import { Language, Parser } from 'web-tree-sitter';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { detectLanguage } from './detect-language.ts';
 import { grammars } from './grammars.ts';

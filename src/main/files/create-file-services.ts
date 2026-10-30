@@ -13,9 +13,9 @@ import { readBlobs } from '#internal/git/read-blobs.ts';
 import { readDiffAttributes } from '#internal/git/read-diff-attributes.ts';
 import type { DiffAttributes } from '#internal/git/parse-check-attr.ts';
 import type { BlobContent } from '#internal/git/read-blobs.ts';
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

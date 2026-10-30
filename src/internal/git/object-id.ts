@@ -1,4 +1,4 @@
-import type { Brand } from '#pkg/brand/brand.ts';
+import type { Brand } from '#x/brand/brand.ts';
 
 /** A full, lowercase hex commit object name (SHA-1 or SHA-256), as resolved by git. */
 export type CommitSha = Brand<string, 'CommitSha'>;

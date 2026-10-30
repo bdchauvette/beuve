@@ -7,9 +7,9 @@ import type { BlobContent, BlobRequest } from '#internal/git/read-blobs.ts';
 import type { ImpactSourceFile } from '#internal/impact/impact-input.ts';
 import { rulesByLanguage } from '#internal/impact/rules-by-language.ts';
 import { detectLanguage } from '#internal/syntax/detect-language.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { toChangedLines } from './to-changed-lines.ts';
 

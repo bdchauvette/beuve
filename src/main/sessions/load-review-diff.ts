@@ -13,9 +13,9 @@ import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { computeReviewRange } from '#internal/session/compute-review-range.ts';
 import type { ReviewRange } from '#internal/session/session.ts';
-import type { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { LruCache } from '#x/collections/lru-cache.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
 import { loadSession } from './load-session.ts';

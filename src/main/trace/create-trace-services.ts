@@ -24,9 +24,9 @@ import { planInstrumentation } from '#internal/trace/plan-instrumentation.ts';
 import { runTraceProbe } from '#internal/trace/run-trace-probe.ts';
 import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { traceRulesByLanguage } from '#internal/trace/trace-rules-by-language.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

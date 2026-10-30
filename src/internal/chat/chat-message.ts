@@ -1,4 +1,4 @@
-import type { Brand } from '#pkg/brand/brand.ts';
+import type { Brand } from '#x/brand/brand.ts';
 
 /** A chat message's id (a UUID). */
 export type ChatMessageId = Brand<string, 'ChatMessageId'>;

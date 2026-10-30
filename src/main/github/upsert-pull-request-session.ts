@@ -3,8 +3,8 @@ import { createSession } from '#internal/session/create-session.ts';
 import { findSessionBySource } from '#internal/session/find-session-by-source.ts';
 import { insertSession } from '#internal/session/insert-session.ts';
 import type { CommitSha, Session, SessionSource } from '#internal/session/session.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { SessionContext } from '../sessions/session-context.ts';
 import { sessionFailure } from '../sessions/session-failure.ts';

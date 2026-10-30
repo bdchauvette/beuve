@@ -1,8 +1,8 @@
 import { accessSync, appendFileSync, constants, statSync } from 'node:fs';
 import process from 'node:process';
 
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { EditorPlatform } from './editor-platform.ts';
 import { spawnDetached } from './spawn-detached.ts';

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { ChatCompaction } from './build-compaction-prompt.ts';
 import type { ChatModel, ChatModelOutput, ChatModelRequest } from './chat-model.ts';

@@ -10,9 +10,9 @@ import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { ok } from '#x/result/ok.ts';
 
 import type { SessionServices } from '../main-services.ts';
 

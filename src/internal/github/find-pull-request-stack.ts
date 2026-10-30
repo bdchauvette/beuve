@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { decodeWith } from './decode-with.ts';
 import { fetchAllPages } from './fetch-all-pages.ts';

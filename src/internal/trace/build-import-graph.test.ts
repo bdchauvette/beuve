@@ -13,7 +13,7 @@ describe('buildImportGraph', () => {
       "const f = await import('./f');",
       "vi.mock('./b.ts');",
       "import { lit } from 'lit';",
-      "import x from '#pkg/x.ts';",
+      "import x from '#x/x.ts';",
       "import missing from './missing';",
     ].join('\n');
     expect(buildImportGraph(new Map([['src/a.ts', source]]), files)).toEqual(

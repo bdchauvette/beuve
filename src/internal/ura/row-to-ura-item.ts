@@ -1,7 +1,7 @@
 import type { SQLOutputValue } from 'node:sqlite';
 
-import { err } from '#pkg/result/err.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { isCommitSha } from './is-commit-sha.ts';
 import { isIsoTimestamp } from './is-iso-timestamp.ts';

@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 /**
  * The chat domain's port to a language model, declared structurally (ADR 0030): the llm domain's

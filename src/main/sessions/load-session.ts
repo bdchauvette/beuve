@@ -2,9 +2,9 @@ import type { IpcError } from '#contract/ipc-contract.ts';
 import { findSession } from '#internal/session/find-session.ts';
 import { parseSessionId } from '#internal/session/parse-session-id.ts';
 import type { Session } from '#internal/session/session.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';

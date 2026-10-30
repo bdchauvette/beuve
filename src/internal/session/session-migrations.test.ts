@@ -2,8 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { describe, expect, it } from 'vitest';
 
-import { openDatabase } from '#pkg/sqlite/open-database.ts';
-import { runMigrations } from '#pkg/sqlite/run-migrations.ts';
+import { openDatabase } from '#x/sqlite/open-database.ts';
+import { runMigrations } from '#x/sqlite/run-migrations.ts';
 
 import { sessionMigrations } from './session-migrations.ts';
 

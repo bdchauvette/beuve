@@ -6,9 +6,9 @@ import { formatMention } from '#internal/chat/format-mention.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import { listTreeBlobs } from '#internal/git/list-tree-blobs.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';

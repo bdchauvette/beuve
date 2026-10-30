@@ -6,7 +6,7 @@ import process from 'node:process';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { createLspMultiplexer } from './create-lsp-multiplexer.ts';
 import type { LspMultiplexer } from './create-lsp-multiplexer.ts';

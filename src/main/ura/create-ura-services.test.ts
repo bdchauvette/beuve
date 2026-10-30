@@ -15,7 +15,7 @@ import type {
 } from '#internal/review/agent-insight.ts';
 import { insertReviewRun } from '#internal/review/insert-review-run.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';

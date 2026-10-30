@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 /**
  * The typed IPC contract between main, preload and ui (ADR 0011). Plain serializable data

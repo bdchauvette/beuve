@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Err } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Err } from '#x/result/result.ts';
 
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 import type {

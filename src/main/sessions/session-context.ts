@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
+import type { Logger } from '#x/log/create-logger.ts';
 
 /** What the session service operations share: the open database, effects and git settings. */
 export interface SessionContext {

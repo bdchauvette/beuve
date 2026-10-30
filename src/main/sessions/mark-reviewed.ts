@@ -2,9 +2,9 @@ import type { IpcError, MarkReviewedRequest, SessionSummary } from '#contract/ip
 import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import { insertCheckpoint } from '#internal/session/insert-checkpoint.ts';
 import { recordCheckpoint } from '#internal/session/record-checkpoint.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
 import { loadSession } from './load-session.ts';

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { ImpactSourceFile } from './impact-input.ts';
 import type { ImpactNode } from './impact-node.ts';

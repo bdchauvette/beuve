@@ -1,8 +1,8 @@
 import type { IpcError } from '#contract/ipc-contract.ts';
 import type { SessionError } from '#internal/session/session.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import type { Err } from '#pkg/result/result.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import type { Err } from '#x/result/result.ts';
 
 import { sessionErrorToIpcError } from './session-error-to-ipc-error.ts';
 

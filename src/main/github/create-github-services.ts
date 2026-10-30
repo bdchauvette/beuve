@@ -21,8 +21,8 @@ import { normalizeGithubHost } from '#internal/github/normalize-github-host.ts';
 import type { StoredPullRequest } from '#internal/github/stored-pull-request.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { Session } from '#internal/session/session.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';

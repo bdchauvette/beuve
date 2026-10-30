@@ -22,9 +22,9 @@ import { replaceReviewRun } from '#internal/review/replace-review-run.ts';
 import type { ModelProgress } from '#internal/review/review-model.ts';
 import { runPreliminaryReview } from '#internal/review/run-preliminary-review.ts';
 import { setAgentInsightStatus } from '#internal/review/set-agent-insight-status.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { gitFailure } from '../sessions/git-failure.ts';

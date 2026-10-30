@@ -1,6 +1,6 @@
-import { andThen } from '#pkg/result/and-then.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { andThen } from '#x/result/and-then.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { parseSessionSource } from './parse-session-source.ts';
 import type {

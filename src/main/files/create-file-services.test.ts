@@ -8,7 +8,7 @@ import { parseGitVersion } from '#internal/git/parse-git-version.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { openAppDatabase } from '../database/open-app-database.ts';
 import { createSessionServices } from '../sessions/create-session-services.ts';

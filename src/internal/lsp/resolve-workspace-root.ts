@@ -1,10 +1,10 @@
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { Brand } from '#pkg/brand/brand.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { Brand } from '#x/brand/brand.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { LspError } from './lsp-error.ts';
 

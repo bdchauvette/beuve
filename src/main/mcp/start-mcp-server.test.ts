@@ -4,9 +4,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createLogger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { createLogger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import type { McpToolServices } from './mcp-tool-services.ts';
 import { startMcpServer } from './start-mcp-server.ts';

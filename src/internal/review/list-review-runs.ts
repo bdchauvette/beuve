@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { CommitSha, ReviewRun, ReviewStoreError, SessionId } from './agent-insight.ts';
 import { rowToReviewRun } from './row-to-review-run.ts';

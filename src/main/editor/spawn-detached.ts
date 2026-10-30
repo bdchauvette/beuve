@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 /**
  * Starts `command` with `args` directly (no shell), detached from beuve and with no stdio, and

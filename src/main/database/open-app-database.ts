@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { openDatabase } from '#pkg/sqlite/open-database.ts';
-import { runMigrations } from '#pkg/sqlite/run-migrations.ts';
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import { openDatabase } from '#x/sqlite/open-database.ts';
+import { runMigrations } from '#x/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 import { appMigrations } from './app-migrations.ts';
 

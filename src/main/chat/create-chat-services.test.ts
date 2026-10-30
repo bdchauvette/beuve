@@ -18,7 +18,7 @@ import { createTestRepository } from '#internal/git/testing/create-test-reposito
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';

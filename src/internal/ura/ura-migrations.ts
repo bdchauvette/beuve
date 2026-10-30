@@ -1,4 +1,4 @@
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 import { uraSeverities } from './ura-severities.ts';
 

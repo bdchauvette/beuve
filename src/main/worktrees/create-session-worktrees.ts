@@ -10,9 +10,9 @@ import type { GitRepository, OpenRepositoryOptions } from '#internal/git/open-re
 import { planWorktreePath } from '#internal/git/plan-worktree-path.ts';
 import { pruneWorktrees } from '#internal/git/prune-worktrees.ts';
 import { removeWorktree } from '#internal/git/remove-worktree.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 export interface SessionWorktreesOptions {
   /** Directory beuve owns for checkouts, `<userData>/worktrees`. Created on first use. */

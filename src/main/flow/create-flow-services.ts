@@ -12,9 +12,9 @@ import { findFunctionAt } from '#internal/flow/find-function-at.ts';
 import { flowRulesByLanguage } from '#internal/flow/flow-rules-by-language.ts';
 import type { ParseSyntax } from '#internal/syntax/create-syntax-parser.ts';
 import { detectLanguage } from '#internal/syntax/detect-language.ts';
-import { LruCache } from '#pkg/datastructures/lru-cache.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

@@ -3,8 +3,8 @@ import type { FileAttribution } from '#internal/git/attribute-hunks.ts';
 import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import type { StackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { loadReviewDiff } from './load-review-diff.ts';
 import type { ReviewDiffOptions } from './load-review-diff.ts';

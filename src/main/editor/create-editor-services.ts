@@ -14,8 +14,8 @@ import type {
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';

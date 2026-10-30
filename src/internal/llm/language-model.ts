@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 /**
  * beuve's port to a language model (ADR 0019, 0030). Vendor-neutral: an adapter turns one request

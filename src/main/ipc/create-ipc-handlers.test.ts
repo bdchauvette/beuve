@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AppInfo, IpcError, SessionSummary } from '#contract/ipc-contract.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Err } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Err } from '#x/result/result.ts';
 
 import type { MainServices, SessionServices } from '../main-services.ts';
 import { unimplementedMcpTools } from '../mcp/unimplemented-mcp-tools.ts';

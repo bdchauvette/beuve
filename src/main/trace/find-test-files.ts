@@ -6,8 +6,8 @@ import type { GitRepository } from '#internal/git/open-repository.ts';
 import { buildImportGraph } from '#internal/trace/build-import-graph.ts';
 import { selectTests } from '#internal/trace/select-tests.ts';
 import type { TestSelection } from '#internal/trace/select-tests.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 const scriptPattern = /\.[cm]?[jt]sx?$/u;
 const maxScripts = 4000;

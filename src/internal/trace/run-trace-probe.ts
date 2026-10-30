@@ -1,5 +1,5 @@
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { applyEdits } from './apply-edits.ts';
 import { buildTraceTimelines } from './build-trace-timelines.ts';

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { BrowserWindow, clipboard, dialog, ipcMain, session } from 'electron';
 import type { App } from 'electron';
 
-import type { Logger } from '#pkg/logger/create-logger.ts';
+import type { Logger } from '#x/log/create-logger.ts';
 
 import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
 

@@ -1,6 +1,6 @@
-import type { JsonRpcHandlerOutcome } from '#pkg/jsonrpc/json-rpc-connection.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import type { JsonRpcHandlerOutcome } from '#x/jsonrpc/json-rpc-connection.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 export interface ServerRequestContext {
   readonly settings: Readonly<Record<string, unknown>>;

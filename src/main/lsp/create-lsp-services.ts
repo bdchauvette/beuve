@@ -24,9 +24,9 @@ import type {
   DocumentSymbolView,
   Position,
 } from '#internal/lsp/lsp-model.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Err, Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Err, Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';

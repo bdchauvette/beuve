@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 /** Why a byte stream can't be split into `Content-Length` frames. The stream is unusable after one. */
 export type FramingError =

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { describeAuthStatus } from './describe-auth-status.ts';
 

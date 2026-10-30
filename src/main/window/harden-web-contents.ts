@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron';
 
-import type { Logger } from '#pkg/logger/create-logger.ts';
+import type { Logger } from '#x/log/create-logger.ts';
 
 /**
  * Denies navigation, redirects, `window.open` and `<webview>` for a web contents (ADR 0005).

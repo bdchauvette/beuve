@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { SourceMeasurement } from './function-measurement.ts';
 import type { ImpactNode } from './impact-node.ts';

@@ -1,5 +1,5 @@
-import { err } from '#pkg/result/err.ts';
-import type { Err } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import type { Err } from '#x/result/result.ts';
 
 import type { McpToolServices } from './mcp-tool-services.ts';
 

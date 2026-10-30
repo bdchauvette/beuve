@@ -1,4 +1,4 @@
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 import { insightCategories } from './insight-categories.ts';
 import { insightSeverities } from './insight-severities.ts';

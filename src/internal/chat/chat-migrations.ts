@@ -1,4 +1,4 @@
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 /**
  * The chat domain's schema (ADR 0006, 0031). `chat_messages` references `sessions`, so main must

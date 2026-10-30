@@ -1,7 +1,7 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
 
 import { invokeChannels } from '#contract/invoke-channels.ts';
 import type { IpcResult } from '#contract/ipc-contract.ts';

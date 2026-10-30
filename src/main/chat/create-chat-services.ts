@@ -35,9 +35,9 @@ import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
 import type { ImpactFindingView } from '#contract/ipc-contract.ts';
 import type { ModelError } from '#internal/llm/language-model.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { ImpactServices } from '../impact/create-impact-services.ts';
 import type { ClaudeCodeSettings } from '../review/claude-code-settings.ts';

@@ -3,9 +3,9 @@ import type { GithubCredentialProvider } from '#internal/auth/github-credential-
 import type { GithubToken } from '#internal/auth/github-token.ts';
 import { createGithubClient } from '#internal/github/create-github-client.ts';
 import type { FetchLike, GithubClient } from '#internal/github/github-client.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import type { Result } from '#x/result/result.ts';
 
 /** GitHub REST clients, one per host, sharing one cached credential provider (ADR 0034, 0035). */
 export interface GithubClients {

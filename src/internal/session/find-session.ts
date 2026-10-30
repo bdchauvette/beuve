@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { selectSessions } from './select-sessions.ts';
 import type { Session, SessionError, SessionId } from './session.ts';

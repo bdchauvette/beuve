@@ -1,6 +1,6 @@
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { buildCompactionPrompt } from './build-compaction-prompt.ts';
 import type { ChatCompaction, CompactionBudget } from './build-compaction-prompt.ts';

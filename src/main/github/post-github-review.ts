@@ -6,8 +6,8 @@ import type {
 import { postPullRequestReview } from '#internal/github/post-pull-request-review.ts';
 import type { CommitSha, SessionId } from '#internal/ura/ura-item.ts';
 import type { UraPosting } from '#internal/ura/ura-posting.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
 
 import type { UraServices } from '../ura/create-ura-services.ts';
 

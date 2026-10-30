@@ -1,6 +1,6 @@
 import process from 'node:process';
 
-import type { Logger } from '#pkg/logger/create-logger.ts';
+import type { Logger } from '#x/log/create-logger.ts';
 
 import type { McpStatus } from '#contract/ipc-contract.ts';
 

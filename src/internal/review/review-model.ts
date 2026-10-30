@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 /**
  * The review domain's port to a language model (ADR 0019), declared structurally (ADR 0030): the

@@ -13,10 +13,10 @@ import {
 import path from 'node:path';
 import process from 'node:process';
 
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { createTraceEnvironment } from './create-trace-environment.ts';
 import { findVitestEntry } from './find-vitest-entry.ts';

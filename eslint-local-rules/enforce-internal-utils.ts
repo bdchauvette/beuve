@@ -17,13 +17,13 @@ const defaultBanned = [
 ];
 
 /**
- * Steers contributors away from utility grab-bags towards built-ins and `#pkg/*` (spec 2.D).
+ * Steers contributors away from utility grab-bags towards built-ins and `#x/*` (spec 2.D).
  * Entries in `banned` are package names; a trailing `*` matches any suffix (`lodash.*`).
  */
 export const enforceInternalUtils = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
   meta: {
     type: 'suggestion',
-    docs: { description: 'Forbid utility grab-bag packages in favour of built-ins and #pkg/*' },
+    docs: { description: 'Forbid utility grab-bag packages in favour of built-ins and #x/*' },
     schema: [
       {
         type: 'object',
@@ -34,7 +34,7 @@ export const enforceInternalUtils = ESLintUtils.RuleCreator.withoutDocs<Options,
     defaultOptions: [{ banned: defaultBanned }],
     messages: {
       useInternalUtils:
-        '"{{name}}" is a utility grab-bag; use a built-in or a small helper in #pkg/* instead.',
+        '"{{name}}" is a utility grab-bag; use a built-in or a small helper in #x/* instead.',
     },
   },
   create(context, [{ banned = defaultBanned }]) {

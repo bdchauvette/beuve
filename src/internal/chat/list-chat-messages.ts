@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { ChatMessage, ChatStoreError, SessionId } from './chat-message.ts';
 import { rowToChatMessage } from './row-to-chat-message.ts';

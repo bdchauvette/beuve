@@ -8,10 +8,10 @@ import type { EditorOpenResponse, IpcResult } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
-import type { Result } from '#pkg/result/result.ts';
-import { ok } from '#pkg/result/ok.ts';
-import { err } from '#pkg/result/err.ts';
+import { createLogger } from '#x/log/create-logger.ts';
+import type { Result } from '#x/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import { err } from '#x/result/err.ts';
 
 import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';

@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { AuthError } from './auth-error.ts';
 import type { GithubToken } from './github-token.ts';

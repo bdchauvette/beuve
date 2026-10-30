@@ -21,7 +21,7 @@ import type { TestRepository } from '#internal/git/testing/create-test-repositor
 import { createFakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
 import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
-import { createLogger } from '#pkg/logger/create-logger.ts';
+import { createLogger } from '#x/log/create-logger.ts';
 
 import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';

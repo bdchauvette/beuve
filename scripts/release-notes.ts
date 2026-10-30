@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 
-import { formatReleaseNotes } from '../src/pkg/release/format-release-notes.ts';
-import type { ReleaseCommit } from '../src/pkg/release/format-release-notes.ts';
+import { formatReleaseNotes } from '../src/x/release/format-release-notes.ts';
+import type { ReleaseCommit } from '../src/x/release/format-release-notes.ts';
 
 writeReleaseNotes();
 

@@ -9,9 +9,9 @@ import type { PullRequestRef } from '#internal/github/pull-request.ts';
 import { buildGithubReview } from '#internal/ura/build-github-review.ts';
 import type { GithubReviewPayload } from '#internal/ura/build-github-review.ts';
 import type { UraArtifact, UraEntry } from '#internal/ura/ura-artifact.ts';
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadSession } from '../sessions/load-session.ts';

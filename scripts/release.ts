@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 
-import { nextCalverVersion } from '../src/pkg/release/next-calver-version.ts';
+import { nextCalverVersion } from '../src/x/release/next-calver-version.ts';
 
 release();
 

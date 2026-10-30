@@ -1,6 +1,6 @@
 import type { IpcError } from '#contract/ipc-contract.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { loadSession } from './load-session.ts';
 import { refreshSession } from './refresh-session.ts';

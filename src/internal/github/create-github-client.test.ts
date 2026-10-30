@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { LogFields } from '#pkg/logger/create-logger.ts';
-import { ok } from '#pkg/result/ok.ts';
+import type { LogFields } from '#x/log/create-logger.ts';
+import { ok } from '#x/result/ok.ts';
 
 import { createGithubClient } from './create-github-client.ts';
 import { createFakeGithub } from './testing/create-fake-github.ts';

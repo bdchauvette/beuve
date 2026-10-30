@@ -1,9 +1,9 @@
 import type { IpcError } from '#contract/ipc-contract.ts';
 import type { UraArtifactError } from '#internal/ura/ura-artifact.ts';
 import type { UraItemError, UraStoreError } from '#internal/ura/ura-item.ts';
-import type { Logger } from '#pkg/logger/create-logger.ts';
-import { err } from '#pkg/result/err.ts';
-import type { Err } from '#pkg/result/result.ts';
+import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
+import type { Err } from '#x/result/result.ts';
 
 /**
  * Maps a URA domain failure to an IPC error the reviewer can act on: invalid input is

@@ -1,4 +1,4 @@
-import type { Result } from '#pkg/result/result.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { createUraItem } from './create-ura-item.ts';
 import { formatOrdinal } from './format-ordinal.ts';

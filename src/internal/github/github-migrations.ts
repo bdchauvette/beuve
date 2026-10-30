@@ -1,4 +1,4 @@
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 /**
  * The github domain's schema (ADR 0006, 0037): the last pull request metadata GitHub reported,

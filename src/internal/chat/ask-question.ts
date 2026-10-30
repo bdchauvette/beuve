@@ -1,6 +1,6 @@
-import { err } from '#pkg/result/err.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { buildChatPrompt } from './build-chat-prompt.ts';
 import type { ChatPromptBudget, ChatPromptReport } from './build-chat-prompt.ts';

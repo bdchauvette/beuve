@@ -1,5 +1,5 @@
-import { err } from '#pkg/result/err.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { err } from '#x/result/err.ts';
+import type { Result } from '#x/result/result.ts';
 
 import type { UraItem, UraItemError, UraStatus } from './ura-item.ts';
 import { validateUraItem } from './validate-ura-item.ts';

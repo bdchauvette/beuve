@@ -5,8 +5,8 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { inspectBranches } from '#internal/git/inspect-branches.ts';
 import { openRepository } from '#internal/git/open-repository.ts';
-import { ok } from '#pkg/result/ok.ts';
-import type { Result } from '#pkg/result/result.ts';
+import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from './git-failure.ts';
 import type { SessionContext } from './session-context.ts';

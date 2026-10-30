@@ -1,4 +1,4 @@
-import type { Migration } from '#pkg/sqlite/run-migrations.ts';
+import type { Migration } from '#x/sqlite/run-migrations.ts';
 
 /**
  * The session domain's schema (ADR 0006, 0009, 0012, 0037); squashed until the first release. The review state is derived from
