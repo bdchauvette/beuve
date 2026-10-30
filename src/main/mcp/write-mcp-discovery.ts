@@ -41,5 +41,5 @@ async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDi
 }
 
 function errorFrom(cause: unknown): Error {
-  return cause instanceof Error ? cause : new Error(String(cause));
+  return Error.isError(cause) ? cause : new Error(String(cause));
 }

@@ -574,7 +574,7 @@ function unreachable(baseUrl: string, error: unknown, signal: AbortSignal): Mode
     return { kind: 'cancelled' };
   }
   const cause =
-    error instanceof Error && error.cause instanceof Error ? error.cause.message : String(error);
+    Error.isError(error) && Error.isError(error.cause) ? error.cause.message : String(error);
   let origin = baseUrl;
   try {
     origin = new URL(baseUrl).origin;

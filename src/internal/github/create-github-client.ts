@@ -153,7 +153,7 @@ async function exchange(
     }
     return err({
       kind: 'network',
-      message: error instanceof Error ? error.message : String(error),
+      message: Error.isError(error) ? error.message : String(error),
     });
   }
 }

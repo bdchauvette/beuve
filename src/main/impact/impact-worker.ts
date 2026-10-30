@@ -41,7 +41,7 @@ async function handle(request: ImpactWorkerRequest): Promise<ImpactWorkerRespons
     return {
       id: request.id,
       ok: false,
-      message: error instanceof Error ? error.message : String(error),
+      message: Error.isError(error) ? error.message : String(error),
     };
   }
 }

@@ -1,3 +1,5 @@
+import { runInNewContext } from 'node:vm';
+
 import { describe } from 'vitest';
 
 import { test } from '#testing/test.ts';
@@ -67,6 +69,24 @@ describe('createLogger', () => {
     expect(records[0]).toMatchObject({ error: { name: 'TypeError', message: 'bad' }, count: '10' });
     expect(records[1]).toMatchObject({ message: 'loop' });
     expect(typeof records[1]?.['serializationError']).toBe('string');
+  });
+
+  test('serializes errors from another realm with their message', ({ expect }) => {
+    const { records, sink } = capture();
+    const foreign: unknown = runInNewContext(
+      'new RangeError("from another realm", { cause: new TypeError("root") })',
+    );
+
+    createLogger('x', { sink }).error('failed', { error: foreign });
+
+    expect(foreign instanceof RangeError).toBe(false);
+    expect(records[0]).toMatchObject({
+      error: {
+        name: 'RangeError',
+        message: 'from another realm',
+        cause: { name: 'TypeError', message: 'root' },
+      },
+    });
   });
 });
 

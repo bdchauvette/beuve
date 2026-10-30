@@ -205,7 +205,7 @@ async function launch(
     await platform.openExternal(plan.url);
     return undefined;
   } catch (error: unknown) {
-    return error instanceof Error ? error.message : String(error);
+    return Error.isError(error) ? error.message : String(error);
   }
 }
 

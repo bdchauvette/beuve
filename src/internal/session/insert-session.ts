@@ -40,5 +40,5 @@ export function insertSession(
 }
 
 function isSourceConflict(error: unknown): boolean {
-  return error instanceof Error && !error.message.includes('sessions.id');
+  return Error.isError(error) && !error.message.includes('sessions.id');
 }

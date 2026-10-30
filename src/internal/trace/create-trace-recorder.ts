@@ -194,7 +194,7 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       ['isSet', 'set', (): boolean => value instanceof Set],
       ['isDate', 'date', (): boolean => value instanceof Date],
       ['isRegExp', 'regexp', (): boolean => value instanceof RegExp],
-      ['isNativeError', 'error', (): boolean => value instanceof Error],
+      ['isNativeError', 'error', (): boolean => Error.isError(value)],
       ['isPromise', 'promise', (): boolean => value instanceof Promise],
       ['isTypedArray', 'binary', (): boolean => ArrayBuffer.isView(value)],
       ['isAnyArrayBuffer', 'binary', (): boolean => value instanceof ArrayBuffer],

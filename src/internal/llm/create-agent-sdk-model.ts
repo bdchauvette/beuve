@@ -376,7 +376,7 @@ function sdkOptions(
 
 /** The SDK threw before a result: Claude Code is missing, failed to start or died. */
 function failedToRun(failure: unknown, stderr: string, options: AgentSdkModelOptions): ModelError {
-  const message = failure instanceof Error ? failure.message : String(failure);
+  const message = Error.isError(failure) ? failure.message : String(failure);
   if (isMissingExecutable(message)) {
     return { kind: 'not-installed', command: options.pathToClaudeCodeExecutable ?? 'claude' };
   }

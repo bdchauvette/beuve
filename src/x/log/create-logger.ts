@@ -119,7 +119,7 @@ function serialize(record: Readonly<Record<string, unknown>>): string {
 }
 
 function replaceErrors(_key: string, value: unknown): unknown {
-  if (value instanceof Error) {
+  if (Error.isError(value)) {
     return { name: value.name, message: value.message, stack: value.stack, cause: value.cause };
   }
   if (typeof value === 'bigint') {

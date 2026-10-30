@@ -117,6 +117,7 @@ export default defineConfig(
     rules: {
       // Iterator.zip is missing on Node 26, where tests run (ADR 0079).
       'unicorn/prefer-iterator-zip': 'off',
+      'unicorn/prefer-error-is-error': 'error',
     },
   },
 

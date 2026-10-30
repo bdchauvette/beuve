@@ -43,7 +43,7 @@ export async function listOpenAiCompatibleModels(
       redirect: 'error',
     });
   } catch (error: unknown) {
-    if (error instanceof Error && error.name === 'TimeoutError') {
+    if (Error.isError(error) && error.name === 'TimeoutError') {
       return err({ kind: 'timeout', timeout: options.timeout });
     }
     return err({

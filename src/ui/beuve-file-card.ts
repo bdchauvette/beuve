@@ -1762,7 +1762,7 @@ ${splitPatch(file.patch).map(
       this.edit = {
         target,
         phase: 'failed',
-        error: error instanceof Error ? error.message : 'The editor could not start.',
+        error: Error.isError(error) ? error.message : 'The editor could not start.',
       };
     }
   }

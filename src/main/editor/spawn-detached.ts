@@ -23,7 +23,7 @@ export async function spawnDetached(
         resolve(ok(undefined));
       });
     } catch (error: unknown) {
-      resolve(err(error instanceof Error ? error.message : String(error)));
+      resolve(err(Error.isError(error) ? error.message : String(error)));
     }
   });
 }

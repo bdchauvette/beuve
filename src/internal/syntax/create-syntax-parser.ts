@@ -124,7 +124,7 @@ async function loadGrammar(
     return err({
       kind: 'load-failed',
       language,
-      message: error instanceof Error ? error.message : String(error),
+      message: Error.isError(error) ? error.message : String(error),
     });
   }
 }

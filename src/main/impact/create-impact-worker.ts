@@ -179,5 +179,5 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
 }
 
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return Error.isError(error) ? error.message : String(error);
 }
