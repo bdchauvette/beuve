@@ -74,11 +74,12 @@ function itemElement(item: AgentReviewItem): string[] {
       : [`<suggested-patch format="unified-diff">${cdata(item.suggestedPatch)}</suggested-patch>`]),
   ];
   const provenance =
-    origin.kind === 'agent-insight'
-      ? { 'insight-id': origin.insightId }
-      : origin.kind === 'chat-answer'
-        ? { 'message-id': origin.messageId }
-        : {};
+    origin.kind === 'chat-answer'
+      ? {
+          'message-id': origin.messageId,
+          ...(origin.finding !== undefined && { finding: origin.finding }),
+        }
+      : {};
   return [
     `<item${attributes({ id: item.id, severity: item.severity, origin: origin.kind, ...provenance })}>`,
     ...children.map((line) => indent + line),

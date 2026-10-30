@@ -2,11 +2,19 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { ChatCitationView, ChatMentionView, ChatMessageView } from '#contract/ipc-contract.ts';
+import type {
+  ChatCitationView,
+  ChatFindingView,
+  ChatMentionView,
+  ChatMessageView,
+  ChatReviewView,
+} from '#contract/ipc-contract.ts';
 
 import type { DraftPart, DraftState } from './chat-draft.ts';
-import type { ChatCitation, ChatEntry, ReviewChatEntry } from './chat-entry.ts';
+import type { ChatEntry, MessageChatEntry } from './chat-entry.ts';
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
+import { describeChatReview } from './describe-chat-review.ts';
+import type { FindingLabels } from './describe-chat-review.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeMention } from './describe-mention.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
@@ -14,7 +22,6 @@ import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
 import { removeDraftMention } from './remove-draft-mention.ts';
 import { serializeChatDraft } from './serialize-chat-draft.ts';
 import { toDraftParts } from './to-draft-parts.ts';
-import { describeReviewSummary } from './describe-review-summary.ts';
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
 import type { AnswerBlock, AnswerSpan } from './parse-answer-markdown.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -24,18 +31,21 @@ const maxMentions = 8;
 
 /**
  * Zone 4: the read-only chat drawer. Plain text is a question about the change (ADR 0031); the
- * commands `/review`, `/compact`, `/clear` and `/help` (ADR 0022, 0047) share the input. The
+ * commands `/review`, `/summarize`, `/compact`, `/clear` and `/help` (ADR 0047, 0055, 0056) share
+ * the input. What is sent while an answer runs waits its turn in main's queue and shows as
+ * "queued" until it starts (ADR 0057); a line under the transcript offers to clear the queue. The
  * input is a one-line editable box that also holds context chips (ADR 0046): `addMention` puts
  * one at the caret; it is atomic (Backspace removes it whole; ←/→ select it and Enter shows its
  * lines). The box's DOM is a projection of a {@link DraftPart} model, read back with
  * `textContent` only, never `innerHTML`. The transcript shows the questions with their chips, the
  * answers (streamed live, then rendered as a safe Markdown subset with a pill for each citation),
- * `/compact` summaries with everything before the latest folded under a divider, and the
- * commands' results. Nothing typed here can change the worktree. Presentational: emits
+ * `/review` answers as a list of findings (severity, category, confidence, whether a second pass
+ * confirmed it, a pill and a Stage button each), `/summarize` answers as a calm block, `/compact`
+ * summaries with everything before the latest folded under a divider, and the commands' results. Nothing typed here can change the worktree. Presentational: emits
  * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`, `beuve-chat-cycle` (Tab),
- * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-stage`, `beuve-chat-cite`,
- * `beuve-chat-mention` (a chip), `beuve-citation` (an insight) and `beuve-open-editor` (`o` on a
- * pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
+ * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-clear-queue`,
+ * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-cite`, `beuve-chat-mention` (a chip)
+ * and `beuve-open-editor` (`o` on a pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
  * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
  */
 @customElement('beuve-chat-drawer')
@@ -191,50 +201,123 @@ export class BeuveChatDrawer extends LitElement {
         outline-offset: 1px;
       }
 
-      .run {
-        padding: var(--beuve-space-1) var(--beuve-space-2);
-        border-left: 3px solid var(--beuve-insight);
-        background: color-mix(in srgb, var(--beuve-insight) 5%, transparent);
-      }
-
-      .run .label {
-        font-weight: 600;
-        color: var(--beuve-insight);
-      }
-
       .muted {
         color: var(--beuve-text-muted);
       }
 
-      .pills {
+      .you .queued {
+        margin-left: var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        white-space: nowrap;
+      }
+
+      .you .queued button.action {
+        margin-left: var(--beuve-space-1);
+        font-size: 10px;
+      }
+
+      .review-head,
+      .abstract .label {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .findings {
+        display: flex;
+        flex-direction: column;
+        gap: var(--beuve-space-2);
+        margin: var(--beuve-space-2) 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .finding {
+        padding-top: var(--beuve-space-2);
+        border-top: 1px solid var(--beuve-border);
+      }
+
+      .finding:first-child {
+        padding-top: 0;
+        border-top: none;
+      }
+
+      .finding-head {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--beuve-space-1);
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .severity {
+        font-weight: 600;
+      }
+
+      .severity.risk {
+        color: var(--beuve-danger);
+      }
+
+      .severity.warning {
+        color: var(--beuve-warn);
+      }
+
+      .check.confirmed {
+        color: var(--beuve-ok);
+      }
+
+      .finding-title {
+        margin-top: 2px;
+        font-weight: 600;
+      }
+
+      .finding .text p,
+      .finding .text ul {
+        margin: 2px 0 0;
+      }
+
+      .finding .status {
         margin-top: var(--beuve-space-1);
       }
 
-      .pill {
-        max-width: 320px;
-        overflow: hidden;
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid color-mix(in srgb, var(--beuve-insight) 45%, transparent);
-        border-radius: 999px;
+      .abstract {
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        cursor: pointer;
+        overflow-wrap: anywhere;
       }
 
-      .pill.dismissed {
-        opacity: 0.55;
+      .abstract .label {
+        margin-bottom: var(--beuve-space-1);
       }
 
-      .pill .where {
+      .abstract p,
+      .abstract ul {
+        margin: var(--beuve-space-1) 0 0;
+      }
+
+      .abstract .text > :first-child {
+        margin-top: 0;
+      }
+
+      .abstract ul {
+        padding-left: var(--beuve-space-4);
+      }
+
+      .abstract code {
+        padding: 0 2px;
+        border-radius: 3px;
+        background: var(--beuve-surface-sunken);
         font: var(--beuve-font-mono);
-        font-size: 11px;
-        color: var(--beuve-insight);
+      }
+
+      .queue {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
       }
 
       form {
@@ -504,6 +587,8 @@ export class BeuveChatDrawer extends LitElement {
   /** The caret when the box last had it, so a chip added from elsewhere lands there. */
   private savedCaret: number | undefined;
   private selectedChip: HTMLElement | undefined;
+  /** Questions whose answers wait in the queue, to those answers' ids; kept with the transcript. */
+  private queued: ReadonlyMap<string, string> = new Map();
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   @property({ attribute: false }) accessor transcript: readonly ChatEntry[] = [];
@@ -513,6 +598,8 @@ export class BeuveChatDrawer extends LitElement {
   @property({ attribute: false }) accessor diffPaths: ReadonlySet<string> = new Set();
   /** Ids of answers already staged in the review dock. */
   @property({ attribute: false }) accessor stagedMessageIds: ReadonlySet<string> = new Set();
+  /** `/review` findings already staged, as `messageId:index`. */
+  @property({ attribute: false }) accessor stagedFindings: ReadonlySet<string> = new Set();
 
   @state() accessor isDraftEmpty = true;
   /** Whether the messages a summary replaced are unfolded. */
@@ -758,21 +845,26 @@ export class BeuveChatDrawer extends LitElement {
       (entry) =>
         (entry.kind === 'message' &&
           entry.message.role === 'assistant' &&
-          entry.message.status === 'streaming') ||
+          (entry.message.status === 'streaming' || entry.message.status === 'queued')) ||
         (entry.kind === 'compaction' && entry.status === 'running'),
     );
   }
 
-  private cite(citation: ChatCitation): () => void {
-    return (): void => {
-      this.dispatchEvent(
-        new CustomEvent('beuve-citation', {
-          detail: { insightId: citation.insightId },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    };
+  /** Questions whose answer still waits in the queue, to the answer's id. */
+  private queuedQuestions(): ReadonlyMap<string, string> {
+    const queued = new Map<string, string>();
+    for (const [index, entry] of this.transcript.entries()) {
+      const next = this.transcript[index + 1];
+      if (
+        entry.kind === 'message' &&
+        entry.message.role === 'user' &&
+        next?.kind === 'message' &&
+        next.message.status === 'queued'
+      ) {
+        queued.set(entry.id, next.id);
+      }
+    }
+    return queued;
   }
 
   private renderEntry(entry: ChatEntry): TemplateResult {
@@ -785,11 +877,8 @@ export class BeuveChatDrawer extends LitElement {
           ${entry.lines.map((line) => html`<p>${line}</p>`)}
         </div>`;
       }
-      case 'review': {
-        return this.renderReview(entry);
-      }
       case 'message': {
-        return this.renderMessage(entry.message);
+        return this.renderMessage(entry);
       }
       case 'compaction': {
         return entry.status === 'running'
@@ -849,7 +938,8 @@ export class BeuveChatDrawer extends LitElement {
     `;
   }
 
-  private renderMessage(message: ChatMessageView): TemplateResult {
+  private renderMessage(entry: MessageChatEntry): TemplateResult {
+    const { message } = entry;
     if (message.role === 'summary') {
       return this.renderSummary(message);
     }
@@ -858,7 +948,19 @@ export class BeuveChatDrawer extends LitElement {
       const parts = toDraftParts(message.content, message.mentions).map((part) =>
         part.kind === 'text' ? part.text : this.renderChip(part.mention),
       );
-      return html`<p class="entry you">${parts}</p>`;
+      const answerId = this.queued.get(message.id);
+      const shown = answerId === undefined ? parts : [...parts, this.renderQueuedTag(answerId)];
+      return html`<p class="entry you">${shown}</p>`;
+    }
+    if (message.status === 'queued') {
+      // Its question says it waits; the answer appears when it starts.
+      return html``;
+    }
+    if (message.status === 'complete' && message.review !== undefined) {
+      return this.renderReviewAnswer(message, message.review);
+    }
+    if (message.answerKind === 'abstract' && message.status === 'complete') {
+      return this.renderAbstract(message);
     }
     const isStreaming = message.status === 'streaming';
     const blocks = parseAnswerMarkdown(
@@ -872,15 +974,20 @@ export class BeuveChatDrawer extends LitElement {
           ? nothing
           : html`<div class="text">${blocks.map((block) => this.renderBlock(block))}</div>`
       }
-      ${this.renderMessageStatus(message)}
+      ${this.renderMessageStatus(message, entry.progress)}
     </div>`;
   }
 
-  private renderMessageStatus(message: ChatMessageView): TemplateResult {
+  private renderMessageStatus(message: ChatMessageView, progress?: string): TemplateResult {
     switch (message.status) {
+      case 'queued': {
+        return html``;
+      }
       case 'streaming': {
         return html`<div class="status" role="status">
-          <span>${message.content === '' ? 'Asking Claude Code…' : 'Answering…'}</span>
+          <span
+            >${progress ?? (message.content === '' ? startedLabel(message) : 'Answering…')}</span
+          >
           <button
             type="button"
             class="action"
@@ -900,7 +1007,9 @@ export class BeuveChatDrawer extends LitElement {
         </div>`;
       }
       case 'cancelled': {
-        return html`<div class="status">Stopped.</div>`;
+        return html`<div class="status">
+          ${message.content === '' ? 'Not asked.' : 'Stopped.'}
+        </div>`;
       }
       case 'complete': {
         if (message.content.trim() === '') {
@@ -1011,71 +1120,143 @@ export class BeuveChatDrawer extends LitElement {
     </button>`;
   }
 
-  private renderReview(entry: ReviewChatEntry): TemplateResult {
-    return html`<div class="entry run" role="status">
-      <span class="label">Preliminary review</span>
-      ${this.renderReviewState(entry)}
+  /** "queued" after a question that waits its turn, and a small Cancel that takes it out. */
+  private renderQueuedTag(answerId: string): TemplateResult {
+    return html`<span class="queued muted"
+      >queued<button
+        type="button"
+        class="action"
+        data-nav
+        title="Take it out of the queue"
+        @click=${(): void => {
+          this.emit('beuve-chat-cancel', { messageId: answerId });
+        }}
+      >
+        Cancel
+      </button></span
+    >`;
+  }
+
+  /** A `/review` answer (ADR 0055): one summary line, then each finding with its own actions. */
+  private renderReviewAnswer(message: ChatMessageView, review: ChatReviewView): TemplateResult {
+    const labels = describeChatReview(review);
+    return html`<div class="entry answer complete" role="group" aria-label="Review">
+      <div class="review-head">Review · ${labels.summary}</div>
       ${
-        entry.citations.length === 0
-          ? nothing
-          : html`<div class="pills">
-              ${entry.citations.map(
-                (citation) =>
-                  html`<button
-                    type="button"
-                    class="pill ${citation.status}"
-                    data-path=${citation.path}
-                    data-line=${citation.line}
-                    title="${citation.severity}: ${citation.title} (jump to it)"
-                    @click=${this.cite(citation)}
-                  >
-                    <span class="where">${shortPath(citation.path)}:${citation.line}</span>
-                    ${citation.title}
-                  </button>`,
+        review.findings.length === 0
+          ? html`<p class="muted">
+              Nothing worth your attention was found. That is no proof of correctness: the review
+              doesn’t build or run the code.
+            </p>`
+          : html`<ol class="findings">
+              ${review.findings.map((finding, index) =>
+                this.renderFinding(message.id, index, finding, labels.findings[index]),
               )}
-            </div>`
+            </ol>`
       }
+      ${labels.note === undefined ? nothing : html`<div class="status">${labels.note}</div>`}
     </div>`;
   }
 
-  private renderReviewState(entry: ReviewChatEntry): TemplateResult {
-    switch (entry.status) {
-      case 'requesting': {
-        return html`<span class="muted">· starting…</span>`;
+  private renderFinding(
+    messageId: string,
+    index: number,
+    finding: ChatFindingView,
+    labels: FindingLabels | undefined,
+  ): TemplateResult {
+    const citation = {
+      path: finding.path,
+      startLine: finding.startLine,
+      endLine: finding.endLine,
+    };
+    const isStaged = this.stagedFindings.has(`${messageId}:${String(index)}`);
+    const title = parseAnswerMarkdown(finding.title, [], 'final');
+    const body = parseAnswerMarkdown(finding.body, [], 'final');
+    return html`<li class="finding">
+      <div class="finding-head">
+        <span class="severity ${finding.severity}">${labels?.severity}</span>
+        <span>${labels?.category}</span>
+        <span title="The model’s own confidence">${labels?.confidence}</span>
+        <span class="check ${finding.check}" title=${labels?.checkTitle ?? ''}>
+          ${finding.check === 'confirmed' ? '✓ confirmed' : labels?.check}
+        </span>
+      </div>
+      <div class="finding-title">
+        ${title.flatMap((block) => (block.kind === 'paragraph' ? block.spans : [])).map((span) => this.renderSpan(span))}
+      </div>
+      ${
+        body.length === 0
+          ? nothing
+          : html`<div class="text">${body.map((block) => this.renderBlock(block))}</div>`
       }
-      case 'running': {
-        const joined = entry.joined === 'attached' ? 'already running; following it. ' : '';
-        return html`<span class="muted">· ${joined}${entry.progress ?? 'started'}…</span>`;
-      }
-      case 'completed': {
-        const { summary } = entry;
-        if (summary === undefined) {
-          return html``;
-        }
-        const scope =
-          summary.pathPrefixes === undefined ? '' : ` under ${summary.pathPrefixes.join(', ')}`;
-        const files =
-          summary.fileCount === undefined
-            ? ''
-            : ` · ${String(summary.fileCount)} ${summary.fileCount === 1 ? 'file' : 'files'}${scope}`;
-        const joined =
-          entry.joined === undefined
-            ? nothing
-            : html`<span class="muted"
-                >${
-                  entry.joined === 'reused'
-                    ? `· Stored result for ${summary.headSha.slice(0, 8)}; /review --fresh reruns it.`
-                    : '· Joined the run already in flight.'
-                }</span
-              >`;
-        return html`<span>· ${describeReviewSummary(summary)}</span>
-          <span class="muted">· ${summary.model}${files}${duration(summary.durationMs)}</span>
-          ${joined}`;
-      }
-      case 'failed': {
-        return html`<span class="failed">· ${entry.error?.message ?? 'failed'}</span>`;
-      }
+      <div class="status">
+        ${this.renderPill(citation)}
+        <button
+          type="button"
+          class="action"
+          data-nav
+          aria-disabled=${isStaged ? 'true' : 'false'}
+          title="Stage this finding on its lines in the review dock"
+          @click=${(): void => {
+            this.emit('beuve-chat-stage-finding', { messageId, finding: index });
+          }}
+        >
+          ${isStaged ? 'Staged' : 'Stage'}
+        </button>
+      </div>
+    </li>`;
+  }
+
+  /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
+  private renderAbstract(message: ChatMessageView): TemplateResult {
+    const blocks = parseAnswerMarkdown(message.content, message.citations, 'final');
+    const isStaged = this.stagedMessageIds.has(message.id);
+    return html`<div class="entry abstract" role="group" aria-label="Summary of the change">
+      <div
+        class="label"
+        title="Written from the diff and the code; the pull request description is not used"
+      >
+        Summary of the change · from the diff
+      </div>
+      <div class="text">${blocks.map((block) => this.renderBlock(block))}</div>
+      <div class="status">
+        <button
+          type="button"
+          class="action"
+          data-nav
+          aria-disabled=${isStaged ? 'true' : 'false'}
+          title="Stage this summary as a comment in the review dock"
+          @click=${(): void => {
+            this.emit('beuve-chat-stage', { messageId: message.id });
+          }}
+        >
+          ${isStaged ? 'Staged in the dock' : 'Stage as URA comment'}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  private renderQueue(): TemplateResult | typeof nothing {
+    const waiting = this.transcript.filter(
+      (entry) => entry.kind === 'message' && entry.message.status === 'queued',
+    ).length;
+    if (waiting === 0) {
+      return nothing;
     }
+    return html`<div class="queue">
+      <span>${waiting === 1 ? '1 waiting' : `${String(waiting)} waiting`}</span>
+      <button
+        type="button"
+        class="action"
+        data-nav
+        title="Drop the questions still waiting; the running answer goes on (/clear queue)"
+        @click=${(): void => {
+          this.emit('beuve-chat-clear-queue');
+        }}
+      >
+        Clear queue
+      </button>
+    </div>`;
   }
 
   /** Types `text` into the input for the reviewer to finish (the palette's commands with arguments). */
@@ -1155,14 +1336,16 @@ export class BeuveChatDrawer extends LitElement {
             ? html`<p class="empty">
                 ${
                   this.hasSession
-                    ? 'Ask a question about this change, or type /review for a preliminary review.'
+                    ? 'Ask a question about this change, /summarize for beuve’s own summary of it, or /review for findings checked against the code.'
                     : 'Open a review session, then ask a question about it.'
                 }
                 Claude Code only runs when you ask, with your own login: the question, the diff and
                 the files it reads leave this machine. It never edits anything. /help lists the
                 commands. <kbd>Esc</kbd> returns to the diff.
               </p>`
-            : html`<div class="transcript" aria-live="polite">${this.renderTranscript()}</div>`
+            : html`<div class="transcript" aria-live="polite">
+                ${this.renderTranscript()} ${this.renderQueue()}
+              </div>`
         }
       </div>
       <form @submit=${this.onSubmit}>
@@ -1189,6 +1372,7 @@ export class BeuveChatDrawer extends LitElement {
     if (!changed.has('transcript')) {
       return;
     }
+    this.queued = this.queuedQuestions();
     if (summaryOf(changed.get('transcript')) !== summaryOf(this.transcript)) {
       this.showsCompacted = false;
     }
@@ -1219,12 +1403,19 @@ function summaryOf(entries: readonly ChatEntry[] | undefined): string | undefine
   return entries?.[boundary]?.id.toString();
 }
 
-function shortPath(path: string): string {
-  return path.split('/').at(-1) ?? path;
-}
-
-function duration(ms: number | undefined): string {
-  return ms === undefined || ms === 0 ? '' : ` · ${(ms / 1000).toFixed(1)} s`;
+/** What a just-started answer says before any text: a review reads the code first. */
+function startedLabel(message: ChatMessageView): string {
+  switch (message.answerKind) {
+    case 'review': {
+      return 'Reviewing…';
+    }
+    case 'abstract': {
+      return 'Summarizing the change…';
+    }
+    default: {
+      return 'Asking Claude Code…';
+    }
+  }
 }
 
 declare global {

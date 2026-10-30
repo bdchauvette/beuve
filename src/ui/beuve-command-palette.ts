@@ -23,13 +23,13 @@ const placeholders: Readonly<Record<string, string>> = {
   '>': 'Run a command',
   '@': 'Go to a file in this review',
   '#': 'Open a recent review, or paste a pull request link or folder',
-  '!': 'Find a staged note or an agent insight',
+  '!': 'Find a staged note',
 };
 
 /**
  * The command palette (⌘K, ⌘⇧P; ⌘P starts in files). One input over every command in the
  * registry with its shortcut, recent sessions and open actions, the review's files and its
- * staged notes and insights; `>`, `@`, `#` and `!` narrow it to one group (`planPalette`). Arrow
+ * staged notes; `>`, `@`, `#` and `!` narrow it to one group (`planPalette`). Arrow
  * keys or Ctrl+N/P move, Enter runs, Escape closes. Emits `beuve-palette-run { action }` and
  * `beuve-palette-close`; `beuve-app` runs the action.
  */

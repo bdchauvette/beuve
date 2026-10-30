@@ -13,7 +13,7 @@ const primaryKeyViolation = 1555;
 const uniqueViolation = 2067;
 
 /**
- * Appends an item to the end of its session's dock. An insight can be staged once, and an
+ * Appends an item to the end of its session's dock. A `/review` finding can be staged once, and an
  * ImpactGate finding once per (session, head, path, function); a repeat is `duplicate-item`, so
  * main can find and restore the existing item instead.
  */
@@ -24,14 +24,14 @@ export function insertUraItem(
   try {
     db.prepare(
       `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
-                              line_end, severity, origin_kind, insight_id, chat_message_id,
+                              line_end, severity, origin_kind, chat_message_id, chat_finding,
                               impact_metric, impact_function, impact_value, impact_threshold,
                               impact_percentile, title, body, patch, status, addressed_sha,
                               addressed_by, created_at, updated_at)
        VALUES (:id, :session_id,
                (SELECT coalesce(max(position) + 1, 0) FROM ura_items WHERE session_id = :session_id),
                :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :origin_kind,
-               :insight_id, :chat_message_id, :impact_metric, :impact_function, :impact_value,
+               :chat_message_id, :chat_finding, :impact_metric, :impact_function, :impact_value,
                :impact_threshold, :impact_percentile, :title, :body, :patch, :status,
                :addressed_sha, :addressed_by, :created_at, :updated_at);`,
     ).run(toUraItemRow(item));
@@ -45,8 +45,8 @@ export function insertUraItem(
       }
       case uniqueViolation: {
         const reason =
-          item.origin.kind === 'agent-insight'
-            ? 'insight-already-staged'
+          item.origin.kind === 'chat-answer'
+            ? 'review-finding-already-staged'
             : 'finding-already-staged';
         return err({ kind: 'duplicate-item', id: item.id, reason });
       }

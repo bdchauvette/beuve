@@ -55,6 +55,18 @@ describe('planChatStage', () => {
     expect(planChatStage([ask('q')], 'zzz', diff)).toBeUndefined();
   });
 
+  it('titles a /summarize answer as the summary, and leaves /review answers to their findings', () => {
+    const summary = planChatStage(
+      [ask('/summarize'), reply({ answerKind: 'abstract' })],
+      'a',
+      diff,
+    );
+    expect(summary?.title).toBe('Summary of the change (beuve, from the diff)');
+    expect(planChatStage([ask('/review'), reply({ answerKind: 'review' })], 'a', diff)).toBe(
+      undefined,
+    );
+  });
+
   it('falls back to a generic title when the question is not listed', () => {
     expect(planChatStage([reply({})], 'a', diff)?.title).toBe('Question from the chat');
   });

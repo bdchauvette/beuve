@@ -137,7 +137,7 @@ export class BeuveOpenPanel extends LitElement {
     }
 
     .state.merged {
-      color: var(--beuve-insight);
+      color: var(--beuve-violet);
     }
 
     .state.danger {

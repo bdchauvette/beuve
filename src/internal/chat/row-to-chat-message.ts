@@ -1,10 +1,13 @@
 import type { SQLOutputValue } from 'node:sqlite';
 
+import { z } from 'zod';
+
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type {
+  AnswerKind,
   ChatMessage,
   ChatMessageBase,
   ChatMention,
@@ -14,6 +17,9 @@ import type {
   CommitSha,
   SessionId,
 } from './chat-message.ts';
+import type { ChatReview } from './chat-review.ts';
+import { findingCategories } from './finding-categories.ts';
+import { findingSeverities } from './finding-severities.ts';
 
 type CorruptRow = Extract<ChatStoreError, { kind: 'corrupt-row' }>;
 
@@ -33,6 +39,8 @@ export function rowToChatMessage(
     mentions,
     status,
     error_code,
+    kind,
+    review,
     created_at,
   } = row;
 
@@ -71,17 +79,99 @@ export function rowToChatMessage(
   if (role !== 'assistant') {
     return corrupt('role is not user, assistant, system-notice or summary');
   }
+  if (!isAnswerKind(kind)) {
+    return corrupt('kind is not answer, review or abstract');
+  }
+  const parsedReview = parseReview(review);
+  if (parsedReview === 'corrupt') {
+    return corrupt('review is not a stored review');
+  }
+  const answer = {
+    ...base,
+    role: 'assistant' as const,
+    kind,
+    ...(parsedReview !== undefined && { review: parsedReview }),
+  };
   if (status === 'failed') {
     return typeof error_code === 'string' && error_code.trim() !== ''
-      ? ok({ ...base, role, status, errorCode: error_code })
+      ? ok({ ...answer, status, errorCode: error_code })
       : corrupt('a failed answer has no error code');
   }
-  if (status === 'streaming' || status === 'complete' || status === 'cancelled') {
-    return error_code === null
-      ? ok({ ...base, role, status })
-      : corrupt('error_code without failure');
+  if (
+    status === 'queued' ||
+    status === 'streaming' ||
+    status === 'complete' ||
+    status === 'cancelled'
+  ) {
+    return error_code === null ? ok({ ...answer, status }) : corrupt('error_code without failure');
   }
-  return corrupt('status is not streaming, complete, failed or cancelled');
+  return corrupt('status is not queued, streaming, complete, failed or cancelled');
+}
+
+const line = z.int().min(1);
+const count = z.int().min(0);
+const text = z.string().min(1);
+const confidence = z.number().min(0).max(1);
+const severity = z.enum(findingSeverities);
+const category = z.enum(findingCategories);
+const check = z.enum(['confirmed', 'unconfirmed', 'unchecked']);
+const verification = z.enum(['verified', 'skipped', 'failed']);
+
+const storedFinding = z.object({
+  path: text,
+  startLine: line,
+  endLine: line,
+  severity,
+  category,
+  title: text,
+  body: z.string(),
+  confidence,
+  check,
+});
+
+const storedDrops = z.object({
+  unknownFile: count,
+  outsideDiff: count,
+  lowConfidence: count,
+  duplicate: count,
+  overLimit: count,
+  unconfirmed: count,
+});
+
+const storedReview = z.object({
+  findings: z.array(storedFinding),
+  dropped: storedDrops,
+  pathScope: z.array(z.string()),
+  fileCount: count,
+  verification,
+  reusedFrom: z.string().optional(),
+});
+
+const answerKinds: readonly unknown[] = ['answer', 'review', 'abstract'] satisfies AnswerKind[];
+
+function isAnswerKind(value: unknown): value is AnswerKind {
+  return answerKinds.includes(value);
+}
+
+function parseReview(value: unknown): ChatReview | undefined | 'corrupt' {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    return 'corrupt';
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(value);
+  } catch {
+    return 'corrupt';
+  }
+  const parsed = storedReview.safeParse(json);
+  if (!parsed.success) {
+    return 'corrupt';
+  }
+  const { reusedFrom, ...rest } = parsed.data;
+  return { ...rest, ...(reusedFrom !== undefined && { reusedFrom }) };
 }
 
 const uuid = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u;

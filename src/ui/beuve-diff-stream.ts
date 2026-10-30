@@ -4,13 +4,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type {
-  AgentInsightView,
   DiffDisplayView,
   DiffFileView,
   FileImpactView,
   ImpactFindingView,
   ImpactView,
-  InsightStatusView,
   ReviewView,
   UraAnchorView,
   UraItemView,
@@ -43,12 +41,6 @@ import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
 import { zoneStyles } from './zone-styles.ts';
-
-/** A request to focus an insight from outside (a chat citation); `nonce` repeats a jump. */
-export interface InsightJump {
-  readonly insightId: string;
-  readonly nonce: number;
-}
 
 /**
  * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
@@ -90,7 +82,6 @@ const defaultDisplay: DiffDisplayView = {
   showGenerated: false,
 };
 
-const noInsights: readonly AgentInsightView[] = [];
 const noUraItems: readonly UraItemView[] = [];
 const noFindings: readonly ImpactFindingView[] = [];
 const noPaths: ReadonlySet<string> = new Set();
@@ -105,16 +96,15 @@ const unmountMargin = '6000px 0px';
 
 /**
  * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
- * header naming the review kind, ImpactGate banners and agent insights once they arrive. Cards
+ * header naming the review kind and ImpactGate banners once they arrive. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, `j`/`k` step
  * through every hunk of every file, `p` toggles the active card's call-stack peek (Escape closes
- * it), `r` runs the tests covering the focused hunk with tracing (ADR 0041), `]`/`[` move between agent insights, `y`/`d` promote or dismiss the focused one (again
- * to undo), and `m` opens a composer that stages the selected lines, the active hunk or the file
+ * it), `r` runs the tests covering the focused hunk with tracing (ADR 0041), and `m` opens a composer that stages the selected lines, the active hunk or the file
  * into the review dock (ADR 0027). `s` and `w` toggle side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), `i` opens the focused card's ImpactGate details, and `e` edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
  * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
- * `beuve-peek-close`, `beuve-insight-status`, `beuve-ura-create` and `beuve-active-file` (the
+ * `beuve-peek-close`, `beuve-ura-create` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
@@ -177,7 +167,7 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .scope.interdiff {
-        color: var(--beuve-insight);
+        color: var(--beuve-violet);
       }
 
       .range,
@@ -254,17 +244,6 @@ export class BeuveDiffStream extends LitElement {
       this.togglePeek(event.key === 'Escape');
       return;
     }
-    const insightStep = { ']': 1, '[': -1 }[event.key];
-    if (insightStep !== undefined) {
-      event.preventDefault();
-      this.stepInsight(insightStep);
-      return;
-    }
-    if (event.key === 'y' || event.key === 'd') {
-      event.preventDefault();
-      this.toggleFocusedInsight(event.key === 'y' ? 'promoted' : 'dismissed');
-      return;
-    }
     if (event.key === 'o') {
       event.preventDefault();
       this.openInEditor();
@@ -322,10 +301,6 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onMarkClick = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-mark-reviewed', { bubbles: true, composed: true }));
-  };
-
-  private readonly onInsightFocus = (event: CustomEvent<{ insightId: string }>): void => {
-    this.focusInsight(event.detail.insightId);
   };
 
   private readonly onComposeSubmit = (event: CustomEvent<UraDraft>): void => {
@@ -453,15 +428,11 @@ export class BeuveDiffStream extends LitElement {
    * when its own data does and `j`/`k` update one or two cards, not all of them (ADR 0050).
    */
   private slices: {
-    readonly insights: readonly AgentInsightView[];
-    readonly insightsByPath: ReadonlyMap<string, readonly AgentInsightView[]>;
     readonly uraItems: readonly UraItemView[];
     readonly uraItemsByPath: ReadonlyMap<string, readonly UraItemView[]>;
     readonly impact: ImpactView | undefined;
     readonly impactByPath: ReadonlyMap<string, FileImpactView>;
   } = {
-    insights: noInsights,
-    insightsByPath: new Map(),
     uraItems: noUraItems,
     uraItemsByPath: new Map(),
     impact: undefined,
@@ -490,9 +461,6 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor flow: FlowState | undefined;
   @property({ attribute: false }) accessor trace: TraceState | undefined;
 
-  /** Agent insights for `review`'s head, every status. */
-  @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
-  @property({ attribute: false }) accessor insightJump: InsightJump | undefined;
   @property({ attribute: false }) accessor fileJump: FileJump | undefined;
   /** Backs hunk expansion in the cards. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
@@ -519,13 +487,11 @@ export class BeuveDiffStream extends LitElement {
   @state() accessor activeIndex = 0;
   /** The active card's hunk `j`/`k` stopped at; `-1` for its header. */
   @state() accessor activeHunk = -1;
-  @state() accessor focusedInsightId: string | undefined;
   @state() accessor composer: ComposerState | undefined;
 
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
-    this.addEventListener('beuve-insight-focus', this.onInsightFocus as EventListener);
     this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
     this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
@@ -608,8 +574,8 @@ export class BeuveDiffStream extends LitElement {
   }
 
   /**
-   * The card at `index`, its diff loaded first when it is collapsed: every jump to a line, hunk
-   * or insight (citations, the dock, the palette, find) goes through here.
+   * The card at `index`, its diff loaded first when it is collapsed: every jump to a line or hunk
+   * (citations, the dock, the palette, find) goes through here.
    */
   private async loadedCard(index: number): Promise<BeuveFileCard | undefined> {
     const file = this.review?.files[index];
@@ -828,73 +794,6 @@ export class BeuveDiffStream extends LitElement {
     this.observers = undefined;
   }
 
-  /** The insights shown in the stream, in file order and then by line. */
-  private orderedInsights(): AgentInsightView[] {
-    const files = this.review?.files ?? [];
-    return files.flatMap((file) =>
-      this.insights
-        .filter((insight) => insight.path === file.path)
-        .toSorted((a, b) => a.lineStart - b.lineStart || a.lineEnd - b.lineEnd),
-    );
-  }
-
-  private stepInsight(step: number): void {
-    const ordered = this.orderedInsights();
-    if (ordered.length === 0) {
-      return;
-    }
-    const current = ordered.findIndex((insight) => insight.id === this.focusedInsightId);
-    const next =
-      current === -1
-        ? this.firstInsightFromActiveFile(ordered, step)
-        : Math.min(ordered.length - 1, Math.max(0, current + step));
-    const target = ordered[next];
-    if (target !== undefined) {
-      this.focusInsight(target.id);
-    }
-  }
-
-  private firstInsightFromActiveFile(ordered: readonly AgentInsightView[], step: number): number {
-    const files = this.review?.files ?? [];
-    const order = new Map(files.map((file, index) => [file.path, index]));
-    const index =
-      step > 0
-        ? ordered.findIndex((insight) => (order.get(insight.path) ?? 0) >= this.activeIndex)
-        : ordered.findLastIndex((insight) => (order.get(insight.path) ?? 0) <= this.activeIndex);
-    return index === -1 ? (step > 0 ? ordered.length - 1 : 0) : index;
-  }
-
-  private focusInsight(insightId: string): void {
-    const insight = this.insights.find((candidate) => candidate.id === insightId);
-    const fileIndex = this.review?.files.findIndex((file) => file.path === insight?.path) ?? -1;
-    if (insight === undefined || fileIndex === -1) {
-      return;
-    }
-    this.focusedInsightId = insight.id;
-    this.activeIndex = fileIndex;
-    this.activeHunk = -1;
-    void this.revealInsight(fileIndex, insight.id);
-  }
-
-  private async revealInsight(fileIndex: number, insightId: string): Promise<void> {
-    const card = await this.loadedCard(fileIndex);
-    await card?.revealInsight(insightId);
-  }
-
-  private toggleFocusedInsight(status: Exclude<InsightStatusView, 'pending'>): void {
-    const insight = this.insights.find((candidate) => candidate.id === this.focusedInsightId);
-    if (insight === undefined) {
-      return;
-    }
-    this.dispatchEvent(
-      new CustomEvent('beuve-insight-status', {
-        detail: { insightId: insight.id, status: insight.status === status ? 'pending' : status },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
   /** `p` toggles the call-stack peek of the active card; Escape closes whichever portal is open. */
   private togglePeek(isClosing: boolean): void {
     const file = this.review?.files[this.activeIndex];
@@ -991,13 +890,8 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private refreshSlices(): void {
-    const { slices, insights, uraItems, impact } = this;
+    const { slices, uraItems, impact } = this;
     this.slices = {
-      insights,
-      insightsByPath:
-        slices.insights === insights
-          ? slices.insightsByPath
-          : groupStable(insights, (insight) => [insight.path], slices.insightsByPath),
       uraItems,
       uraItemsByPath:
         slices.uraItems === uraItems
@@ -1013,7 +907,7 @@ export class BeuveDiffStream extends LitElement {
 
   private renderReview(review: ReviewView): TemplateResult {
     this.refreshSlices();
-    const { insightsByPath, uraItemsByPath, impactByPath } = this.slices;
+    const { uraItemsByPath, impactByPath } = this.slices;
     const additions = review.files.reduce((sum, file) => sum + file.additions, 0);
     const deletions = review.files.reduce((sum, file) => sum + file.deletions, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
@@ -1068,10 +962,8 @@ export class BeuveDiffStream extends LitElement {
                       .peek=${this.peek?.path === file.path ? this.peek : undefined}
                       .flow=${this.flow?.path === file.path ? this.flow : undefined}
                       .trace=${this.trace?.path === file.path ? this.trace : undefined}
-                      .insights=${insightsByPath.get(file.path) ?? noInsights}
                       .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
                       .composer=${this.composer?.path === file.path ? this.composer : undefined}
-                      .focusedInsightId=${this.focusedInsightId}
                       .deferral=${this.deferrals.get(file.path)}
                       ?collapsed=${this.isCollapsed(file)}
                       ?generated=${isGenerated(this.deferrals.get(file.path))}
@@ -1129,32 +1021,28 @@ export class BeuveDiffStream extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('review')) {
-      // The same head again (e.g. whitespace toggled) keeps the cursor on its file.
-      const previous = changed.get('review');
-      const activePath = previous?.files[this.activeIndex]?.path;
-      const kept =
-        previous?.headSha === this.review?.headSha
-          ? (this.review?.files.findIndex((file) => file.path === activePath) ?? -1)
-          : -1;
-      this.activeIndex = Math.max(0, kept);
-      this.activeHunk = -1;
-      if (previous?.session.id !== this.review?.session.id) {
-        this.expandedPaths = noPaths;
-        this.collapsedPaths = noPaths;
-      }
-      if (this.isFindOpen) {
-        this.runFind();
-      }
-      const path = this.composer?.path;
-      const isShown = this.review?.files.some((file) => file.path === path) === true;
-      this.composer = isShown ? this.composer : undefined;
-    }
-    if (!changed.has('review') && !changed.has('insights')) {
+    if (!changed.has('review')) {
       return;
     }
-    const isShown = this.insights.some((insight) => insight.id === this.focusedInsightId);
-    this.focusedInsightId = isShown ? this.focusedInsightId : undefined;
+    // The same head again (e.g. whitespace toggled) keeps the cursor on its file.
+    const previous = changed.get('review');
+    const activePath = previous?.files[this.activeIndex]?.path;
+    const kept =
+      previous?.headSha === this.review?.headSha
+        ? (this.review?.files.findIndex((file) => file.path === activePath) ?? -1)
+        : -1;
+    this.activeIndex = Math.max(0, kept);
+    this.activeHunk = -1;
+    if (previous?.session.id !== this.review?.session.id) {
+      this.expandedPaths = noPaths;
+      this.collapsedPaths = noPaths;
+    }
+    if (this.isFindOpen) {
+      this.runFind();
+    }
+    const path = this.composer?.path;
+    const isShown = this.review?.files.some((file) => file.path === path) === true;
+    this.composer = isShown ? this.composer : undefined;
   }
 
   protected override updated(changed: PropertyValues<this>): void {
@@ -1169,11 +1057,6 @@ export class BeuveDiffStream extends LitElement {
           composed: true,
         }),
       );
-    }
-    const jump = this.insightJump;
-    if (jump !== undefined && changed.has('insightJump')) {
-      this.focusInsight(jump.insightId);
-      return;
     }
     const fileJump = this.fileJump;
     if (fileJump !== undefined && changed.has('fileJump')) {

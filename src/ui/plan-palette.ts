@@ -1,9 +1,4 @@
-import type {
-  AgentInsightView,
-  DiffFileView,
-  SessionSummary,
-  UraItemView,
-} from '#contract/ipc-contract.ts';
+import type { DiffFileView, SessionSummary, UraItemView } from '#contract/ipc-contract.ts';
 
 import type { CommandDefinition } from './command-registry.ts';
 import { findKnownClone } from './find-known-clone.ts';
@@ -22,7 +17,6 @@ export interface PaletteSources {
   /** Every tracked path at the head (`session:get-tree`). */
   readonly trackedPaths?: readonly string[];
   readonly uraItems: readonly UraItemView[];
-  readonly insights: readonly AgentInsightView[];
 }
 
 export type PaletteAction =
@@ -32,8 +26,7 @@ export type PaletteAction =
   | { readonly kind: 'open-pull'; readonly ref: string; readonly repoPath?: string }
   | { readonly kind: 'open-step'; readonly step: 'pull' | 'local'; readonly path?: string }
   | { readonly kind: 'file'; readonly path: string; readonly isChanged: boolean }
-  | { readonly kind: 'ura-item'; readonly itemId: string }
-  | { readonly kind: 'insight'; readonly insightId: string };
+  | { readonly kind: 'ura-item'; readonly itemId: string };
 
 export interface PaletteEntry {
   readonly id: string;
@@ -53,8 +46,7 @@ const groupOrder: readonly PaletteGroup[] = ['open', 'files', 'review', 'command
 
 /**
  * Ranks the palette's entries for `input`. `>` lists commands, `@` files (changed ones first,
- * then the rest of the tree), `#` recent sessions and open actions, `!` staged review items and
- * agent insights; no prefix mixes the four groups, a few of each. A pasted pull request link
+ * then the rest of the tree), `#` recent sessions and open actions, `!` staged review items; no prefix mixes the four groups, a few of each. A pasted pull request link
  * or folder path comes first in either `#` or mixed mode. Fuzzy-matched on titles (files on their
  * paths); ties keep each source's own order. Pure.
  */
@@ -111,7 +103,7 @@ function candidates(group: PaletteGroup, text: string, sources: PaletteSources):
       return fileCandidates(sources.files ?? [], sources.trackedPaths ?? []);
     }
     case 'review': {
-      return reviewCandidates(sources.uraItems, sources.insights);
+      return reviewCandidates(sources.uraItems);
     }
   }
 }
@@ -247,11 +239,8 @@ function fileCandidates(
   return [...changedCandidates, ...others];
 }
 
-function reviewCandidates(
-  items: readonly UraItemView[],
-  insights: readonly AgentInsightView[],
-): Candidate[] {
-  const staged = items
+function reviewCandidates(items: readonly UraItemView[]): Candidate[] {
+  return items
     .filter((item) => item.status.kind === 'staged')
     .map((item): Candidate => ({
       entry: {
@@ -262,16 +251,4 @@ function reviewCandidates(
         action: { kind: 'ura-item', itemId: item.id },
       },
     }));
-  const pending = insights
-    .filter((insight) => insight.status !== 'dismissed')
-    .map((insight): Candidate => ({
-      entry: {
-        id: `insight:${insight.id}`,
-        group: 'review',
-        title: insight.title,
-        detail: `insight · ${insight.path}:${String(insight.lineStart)}`,
-        action: { kind: 'insight', insightId: insight.id },
-      },
-    }));
-  return [...staged, ...pending];
 }

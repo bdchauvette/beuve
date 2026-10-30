@@ -11,7 +11,6 @@ import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 import type {
-  AgentInsightView,
   DiffFileView,
   DiffLayoutView,
   FileImpactView,
@@ -21,8 +20,6 @@ import type {
   UraItemView,
 } from '#contract/ipc-contract.ts';
 
-import './beuve-agent-insight.ts';
-import type { BeuveAgentInsight } from './beuve-agent-insight.ts';
 import './beuve-flow-portal.ts';
 import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
@@ -38,7 +35,6 @@ import { highlightedLanguages } from './highlighted-languages.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
-import { placeInsights } from './place-insights.ts';
 import { planEditTarget } from './plan-edit-target.ts';
 import type { EditTarget } from './plan-edit-target.ts';
 import { planImpactChip } from './plan-impact-chip.ts';
@@ -54,7 +50,7 @@ import { planEditorLine } from './plan-editor-line.ts';
 import type { SelectedLines } from './plan-stage-anchor.ts';
 import { splitPatch } from './split-patch.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
-import { toInsightAnnotations } from './to-insight-annotations.ts';
+import { toHeadSideAnnotations } from './to-head-side-annotations.ts';
 import { toTextmateTheme } from './to-textmate-theme.ts';
 import type { TextmateTheme } from './to-textmate-theme.ts';
 import { toUraMarkers } from './to-ura-markers.ts';
@@ -91,9 +87,7 @@ export interface SuggestionSaveDetail {
 
 /** What a card annotates under a head line (or above the diff, at line 0). */
 type CardNote =
-  | { readonly kind: 'insight'; readonly insight: AgentInsightView }
-  | { readonly kind: 'ura'; readonly item: UraItemView }
-  | { readonly kind: 'composer' };
+  { readonly kind: 'ura'; readonly item: UraItemView } | { readonly kind: 'composer' };
 
 /** A note with the head lines it is about; one interface, so the library's metadata type stays whole. */
 interface CardSlot {
@@ -109,8 +103,7 @@ const estimatedSeparatorHeight = 32;
 /**
  * One file of the review diff (ADR 0018, 0025): a header with its status, path and line counts,
  * the ImpactGate banner once the impact check has run, the call-stack peek portal while it is
- * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting and agent
- * insights as line annotations. The diff mounts while the stream sets `mounted` (the card is near
+ * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting. The diff mounts while the stream sets `mounted` (the card is near
  * the viewport); otherwise a placeholder of the diff's last or estimated height stands in. If the
  * library fails to render, the card falls back to a plain `<pre>` of the patch. Staged URA items
  * show as subtle markers under their lines, the `m` composer opens under the lines it stages,
@@ -413,10 +406,6 @@ export class BeuveFileCard extends LitElement {
       --diffs-bg-hover-override: var(--beuve-surface-sunken);
     }
 
-    beuve-agent-insight {
-      margin: var(--beuve-space-1) var(--beuve-space-3) var(--beuve-space-2);
-    }
-
     .ura-marker {
       display: flex;
       align-items: baseline;
@@ -494,7 +483,6 @@ export class BeuveFileCard extends LitElement {
       this.codeHeight = entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height;
     }
   });
-  private readonly insightElements = new Map<string, BeuveAgentInsight>();
   private composerElement: BeuveUraComposer | undefined;
   /** The step `j`/`k` last selected, to tell it apart from the reviewer's own selection. */
   private programmaticStep: HunkStep | undefined;
@@ -594,9 +582,6 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor flow: FlowState | undefined;
   /** The trace timeline portal; it shares the place of the peek and flow portals too. */
   @property({ attribute: false }) accessor trace: TraceState | undefined;
-  /** This file's agent insights for the reviewed head. */
-  @property({ attribute: false }) accessor insights: readonly AgentInsightView[] = [];
-  @property() accessor focusedInsightId: string | undefined;
   /** The hunk `j`/`k` stopped at, selected in the diff; `-1` for none. */
   @property({ type: Number }) accessor activeHunk = -1;
   /** Enables hunk expansion; absent outside Electron. */
@@ -679,9 +664,9 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = toInsightAnnotations(this.file?.hunks ?? [], this.notes());
-    const isNewInput = ['file', 'mounted', 'library', 'insights', 'uraItems', 'composer'].some(
-      (key) => changed.has(key as keyof BeuveFileCard),
+    const annotations = toHeadSideAnnotations(this.file?.hunks ?? [], this.notes());
+    const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'composer'].some((key) =>
+      changed.has(key as keyof BeuveFileCard),
     );
     if (isNew || isNewInput) {
       this.diff.render({
@@ -689,11 +674,6 @@ export class BeuveFileCard extends LitElement {
         containerWrapper: container,
         lineAnnotations: annotations,
       });
-    }
-    if (changed.has('focusedInsightId') || changed.has('insights')) {
-      for (const [id, element] of this.insightElements) {
-        element.focused = id === this.focusedInsightId;
-      }
     }
     if (!isNew && !changed.has('activeHunk') && !changed.has('active')) {
       return;
@@ -713,7 +693,7 @@ export class BeuveFileCard extends LitElement {
     this.diff.setSelectedLines(step ?? null, planStepHighlight(this.diffStyle, step));
   }
 
-  /** Staged URA markers first, then insights, then the composer, each under its last line. */
+  /** Staged URA markers first, then the composer, each under its last line. */
   private notes(): CardSlot[] {
     const path = this.file?.path ?? '';
     const composer = this.composer?.path === path ? this.composer : undefined;
@@ -722,17 +702,10 @@ export class BeuveFileCard extends LitElement {
         ? { lineStart: composer.anchor.startLine, lineEnd: composer.anchor.endLine }
         : { lineStart: 0, lineEnd: 0 };
     return [
-      ...toUraMarkers(path, this.uraItems)
-        .filter(({ item }) => !this.showsInsight(item))
-        .map(({ lineStart, lineEnd, item }): CardSlot => ({
-          lineStart,
-          lineEnd,
-          note: { kind: 'ura', item },
-        })),
-      ...this.insights.map((insight): CardSlot => ({
-        lineStart: insight.lineStart,
-        lineEnd: insight.lineEnd,
-        note: { kind: 'insight', insight },
+      ...toUraMarkers(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => ({
+        lineStart,
+        lineEnd,
+        note: { kind: 'ura', item },
       })),
       ...(composer === undefined
         ? []
@@ -819,9 +792,6 @@ export class BeuveFileCard extends LitElement {
 
   private noteElement(note: CardNote): HTMLElement {
     switch (note.kind) {
-      case 'insight': {
-        return this.insightElement(note.insight);
-      }
       case 'ura': {
         return uraMarkerElement(note.item);
       }
@@ -852,16 +822,6 @@ export class BeuveFileCard extends LitElement {
     composerElement.patch = composer.suggestedPatch ?? '';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
-  }
-
-  private insightElement(insight: AgentInsightView): HTMLElement {
-    const element =
-      this.insightElements.get(insight.id) ?? document.createElement('beuve-agent-insight');
-    element.dataset['insightId'] = insight.id;
-    element.insight = insight;
-    element.focused = insight.id === this.focusedInsightId;
-    this.insightElements.set(insight.id, element);
-    return element;
   }
 
   /**
@@ -1046,15 +1006,6 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  /** A promoted insight's own block already says it is staged, so it gets no second marker. */
-  private showsInsight(item: UraItemView): boolean {
-    const { origin } = item;
-    return (
-      origin.kind === 'agent-insight' &&
-      this.insights.some((insight) => insight.id === origin.insightId)
-    );
-  }
-
   private isStaged(finding: ImpactFindingView): boolean {
     return this.uraItems.some(
       ({ origin, status, anchor }) =>
@@ -1124,23 +1075,13 @@ export class BeuveFileCard extends LitElement {
   }
 
   private renderFallback(file: DiffFileView): TemplateResult {
-    const placement = placeInsights(file.patch, this.insights);
-    const insight = (shown: AgentInsightView): TemplateResult =>
-      html`<beuve-agent-insight
-        data-insight-id=${shown.id}
-        .insight=${shown}
-        ?focused=${shown.id === this.focusedInsightId}
-      ></beuve-agent-insight>`;
     const path = file.path;
     return html`${toUraMarkers(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
-      ${placement.unplaced.map((shown) => insight(shown))}
       <pre>
 ${splitPatch(file.patch).map(
-          (line, index) =>
-            html`<span class="line ${line.kind}">${line.text === '' ? ' ' : line.text}</span>${(
-                placement.afterLine.get(index) ?? []
-              ).map((shown) => insight(shown))}`,
+          (line) =>
+            html`<span class="line ${line.kind}">${line.text === '' ? ' ' : line.text}</span>`,
         )}</pre>`;
   }
 
@@ -1245,18 +1186,6 @@ ${splitPatch(file.patch).map(
     const chip = this.impactParts()?.chip;
     chip?.focus();
     return chip !== undefined;
-  }
-
-  /** Scrolls an insight of this card into view, mounting the diff first if needed. */
-  async revealInsight(insightId: string): Promise<void> {
-    this.mounted = true;
-    await this.updateComplete;
-    const element =
-      this.insightElements.get(insightId) ??
-      this.renderRoot.querySelector(
-        `beuve-agent-insight[data-insight-id='${CSS.escape(insightId)}']`,
-      );
-    element?.scrollIntoView({ block: 'center' });
   }
 
   /** Where `m` stages a note on this card: the selected lines, else the active hunk, else the file. */

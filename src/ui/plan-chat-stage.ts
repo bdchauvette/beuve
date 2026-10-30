@@ -19,10 +19,11 @@ const whitespace = /\s+/gu;
 
 /**
  * Plans staging a completed answer: the first citation inside the reviewed diff anchors it (the
- * whole change when none is), the title is the question, and the body is the answer with its
- * markers written as `path:start-end` in code. Citations outside the diff stay in the body but
- * can't anchor a note the exporters place on diff lines. `undefined` for anything but a
- * completed, non-empty answer.
+ * whole change when none is), the title is the question (a `/summarize` answer is titled as the
+ * summary it is, ADR 0056), and the body is the answer with its markers written as
+ * `path:start-end` in code. Citations outside the diff stay in the body but can't anchor a note
+ * the exporters place on diff lines. `undefined` for anything but a completed, non-empty answer,
+ * and for `/review` answers, whose findings stage one by one (ADR 0055).
  */
 export function planChatStage(
   entries: readonly ChatEntry[],
@@ -38,6 +39,7 @@ export function planChatStage(
   if (
     message.role !== 'assistant' ||
     message.status !== 'complete' ||
+    message.answerKind === 'review' ||
     message.content.trim() === ''
   ) {
     return undefined;
@@ -61,7 +63,10 @@ export function planChatStage(
             endLine: anchored.endLine,
           },
     severity: 'question',
-    title: titleOf(precedingQuestion(entries.slice(0, index))),
+    title:
+      message.answerKind === 'abstract'
+        ? 'Summary of the change (beuve, from the diff)'
+        : titleOf(precedingQuestion(entries.slice(0, index))),
     body,
   };
 }

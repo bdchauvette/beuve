@@ -19,7 +19,6 @@ import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
-import type { ReviewServices } from './review/create-review-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
@@ -46,7 +45,6 @@ export interface MainServices {
   readonly flow: FlowServices;
   readonly editor: EditorServices;
   readonly display: DisplayServices;
-  readonly review: Pick<ReviewServices, 'run' | 'listInsights' | 'setInsightStatus' | 'onProgress'>;
   readonly chat: Omit<ChatServices, 'observeHead'>;
   readonly ura: Omit<
     UraServices,
@@ -58,7 +56,7 @@ export interface MainServices {
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;
   /**
-   * Aborts preliminary reviews and chat answers, stops polling GitHub and the language servers.
+   * Aborts chat requests (answers, reviews, summaries), stops polling GitHub and the language servers.
    * Call once, on quit.
    */
   readonly dispose: () => Promise<void>;

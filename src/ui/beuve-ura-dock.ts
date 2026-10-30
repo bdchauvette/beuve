@@ -166,10 +166,6 @@ export class BeuveUraDock extends LitElement {
         flex: none;
       }
 
-      .origin.agent-insight {
-        color: var(--beuve-insight);
-      }
-
       .origin.impact-finding {
         color: var(--beuve-warn);
       }
@@ -876,7 +872,8 @@ export class BeuveUraDock extends LitElement {
                   ${
                     this.hasSession
                       ? html`Nothing staged. <kbd>m</kbd> in the diff stream stages the focused hunk
-                          or selected lines; <kbd>y</kbd> promotes an agent insight.`
+                          or selected lines; a chat answer or a /review finding stages with its
+                          Stage button.`
                       : 'Open a review session to stage notes.'
                   }
                 </p>`

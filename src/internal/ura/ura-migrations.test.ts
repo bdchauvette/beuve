@@ -55,11 +55,7 @@ describe('uraMigrations', () => {
       valid,
       { ...valid, anchor_kind: "'file'", line_start: 'NULL', line_end: 'NULL', patch: "'p'" },
       { ...valid, anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL' },
-      {
-        ...valid,
-        origin_kind: "'agent-insight'",
-        insight_id: "'33333333-3333-4333-8333-333333333333'",
-      },
+      { ...valid, origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
       { ...valid, origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
       { ...valid, ...finding },
       { ...valid, status: "'withdrawn'" },
@@ -101,8 +97,22 @@ describe('uraMigrations', () => {
       'a patch on the whole change',
       { anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL', patch: "'p'" },
     ],
-    ['a human note with an insight id', { insight_id: "'33333333-3333-4333-8333-333333333333'" }],
-    ['an insight without its id', { origin_kind: "'agent-insight'" }],
+    ['a human note with a finding index', { chat_finding: '0' }],
+    [
+      'a negative finding index',
+      { origin_kind: "'chat-answer'", chat_message_id: "'m'", chat_finding: '-1' },
+    ],
+    [
+      'a review finding on a whole file',
+      {
+        origin_kind: "'chat-answer'",
+        chat_message_id: "'m'",
+        chat_finding: '0',
+        anchor_kind: "'file'",
+        line_start: 'NULL',
+        line_end: 'NULL',
+      },
+    ],
     ['a line anchor without lines', { line_start: 'NULL', line_end: 'NULL' }],
     ['a chat answer without its message id', { origin_kind: "'chat-answer'" }],
     ['a finding without a function', { ...finding, impact_function: 'NULL' }],
@@ -138,17 +148,16 @@ describe('uraMigrations', () => {
     expect(db.prepare('SELECT count(*) AS n FROM ura_items;').get()).toEqual({ n: 0 });
   });
 
-  it('stages an insight once, and a finding once per head and function', () => {
+  it('stages a review finding once, and an ImpactGate finding once per head and function', () => {
     const db = createUraTestDatabase([session]);
-    const insight = {
-      ...valid,
-      origin_kind: "'agent-insight'",
-      insight_id: "'33333333-3333-4333-8333-333333333333'",
-    };
-    db.exec(insertSql(withId(insight, 1)));
+    const answer = { ...valid, origin_kind: "'chat-answer'", chat_message_id: "'m1'" };
+    db.exec(insertSql(withId({ ...answer, chat_finding: '0' }, 1)));
     expect(() => {
-      db.exec(insertSql(withId(insight, 2)));
+      db.exec(insertSql(withId({ ...answer, chat_finding: '0' }, 2)));
     }).toThrow(uniqueFailed);
+    db.exec(insertSql(withId({ ...answer, chat_finding: '1' }, 7)));
+    db.exec(insertSql(withId(answer, 8)));
+    db.exec(insertSql(withId(answer, 9)));
     db.exec(insertSql(withId({ ...valid, ...finding }, 3)));
     expect(() => {
       db.exec(insertSql(withId({ ...valid, ...finding }, 4)));

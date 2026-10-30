@@ -10,8 +10,10 @@ import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 export type ChatCommand =
   | { readonly kind: 'empty' }
   | { readonly kind: 'help' }
-  /** Deletes the open session's transcript (ADR 0031). */
-  | { readonly kind: 'clear' }
+  /** Deletes the open session's transcript (ADR 0031), or with `queue` only what waits (ADR 0057). */
+  | { readonly kind: 'clear'; readonly queuedOnly: boolean }
+  /** beuve's own summary of the change, from the diff alone (ADR 0056). */
+  | { readonly kind: 'summarize' }
   /** Condenses the conversation so far into a summary later prompts send instead (ADR 0047). */
   | { readonly kind: 'compact' }
   /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
@@ -26,10 +28,12 @@ export type ChatCommand =
   | { readonly kind: 'trust' }
   /** Withdraws that approval. */
   | { readonly kind: 'untrust' }
+  /** Findings as a chat answer, verified by a second pass unless `--no-verify` (ADR 0055). */
   | {
       readonly kind: 'review';
       readonly pathPrefixes: readonly string[];
       readonly fresh: boolean;
+      readonly verify: boolean;
       readonly effort?: ReviewEffort;
     }
   /** Puts the sidebar on one side (ADR 0044). */
@@ -43,12 +47,12 @@ const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 const whitespace = /\s+/u;
 
 /**
- * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`), `/clear`,
- * `/compact`,
- * `/trust`, `/untrust`, `/editor [zed|vscode|cursor]`, `/diff [split|inline]`,
- * `/whitespace [ignore|show]`, `/generated [show|hide]`, `/sidebar left|right`, and
- * `/review [--fresh] [--effort=low|medium|high] [path-prefix…]`, options and prefixes in any
- * order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
+ * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`),
+ * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), `/trust`, `/untrust`,
+ * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
+ * `/generated [show|hide]`, `/sidebar left|right`, and
+ * `/review [--fresh] [--no-verify] [--effort=low|medium|high] [path-prefix…]`, options and
+ * prefixes in any order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
  */
 export function parseChatCommand(input: string): ChatCommand {
@@ -66,9 +70,18 @@ export function parseChatCommand(input: string): ChatCommand {
       return { kind: 'help' };
     }
     case '/clear': {
+      if (args.length === 0) {
+        return { kind: 'clear', queuedOnly: false };
+      }
+      return args.length === 1 && args[0]?.toLowerCase() === 'queue'
+        ? { kind: 'clear', queuedOnly: true }
+        : invalid('/clear takes nothing, or queue to drop only the waiting questions.');
+    }
+    case '/summarize':
+    case '/abstract': {
       return args.length === 0
-        ? { kind: 'clear' }
-        : invalid('/clear takes no arguments. Type /help for the commands.');
+        ? { kind: 'summarize' }
+        : invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
     }
     case '/compact': {
       return args.length === 0
@@ -180,6 +193,7 @@ function parseWhitespace(args: readonly string[]): ChatCommand {
 function parseReview(args: readonly string[]): ChatCommand {
   const prefixes: string[] = [];
   let isFresh = false;
+  let shouldVerify = true;
   let effort: ReviewEffort | undefined;
   let hasOptionsEnded = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -187,17 +201,21 @@ function parseReview(args: readonly string[]): ChatCommand {
     if (!hasOptionsEnded && arg.startsWith('-')) {
       if (arg === '--') {
         hasOptionsEnded = true;
-      } else if (arg === '--fresh') {
-        isFresh = true;
-      } else if (arg === '--effort' || arg.startsWith('--effort=')) {
-        const value = arg === '--effort' ? args[(index += 1)] : arg.slice('--effort='.length);
-        if (value === undefined || !isEffort(value)) {
-          return invalid('--effort takes low, medium or high, e.g. /review --effort=high.');
-        }
-        effort = value;
-      } else {
+        continue;
+      }
+      if (arg === '--fresh' || arg === '--no-verify') {
+        isFresh ||= arg === '--fresh';
+        shouldVerify &&= arg !== '--no-verify';
+        continue;
+      }
+      if (arg !== '--effort' && !arg.startsWith('--effort=')) {
         return invalid(`/review has no option ${arg}. Type /help for its options.`);
       }
+      const value = arg === '--effort' ? args[(index += 1)] : arg.slice('--effort='.length);
+      if (value === undefined || !isEffort(value)) {
+        return invalid('--effort takes low, medium or high, e.g. /review --effort=high.');
+      }
+      effort = value;
       continue;
     }
     const prefix = normalizePathPrefix(arg);
@@ -212,6 +230,7 @@ function parseReview(args: readonly string[]): ChatCommand {
     kind: 'review',
     pathPrefixes: prefixes,
     fresh: isFresh,
+    verify: shouldVerify,
     ...(effort !== undefined && { effort }),
   };
 }

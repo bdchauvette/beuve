@@ -20,10 +20,8 @@ function sampleItems(): UraItem[] {
     createTestUraItem({ id: itemId(1), suggestion: '@@ -11 +11 @@\n-a\n+b\n' }),
     createTestUraItem({
       id: itemId(2),
-      anchor: { kind: 'file', path: 'README.md' },
-      origin: { kind: 'agent-insight', insightId: testUraIds.insightId },
+      origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 0 },
       severity: 'question',
-      suggestion: '@@ -1 +1 @@\n-# x\n+# y\n',
     }),
     createTestUraItem({
       id: itemId(3),
@@ -46,6 +44,7 @@ function sampleItems(): UraItem[] {
     }),
     createTestUraItem({
       id: itemId(5),
+      anchor: { kind: 'file', path: 'README.md' },
       status: { kind: 'addressed', atSha: testUraIds.laterHeadSha, by: 'agent' },
     }),
   ];
@@ -65,8 +64,8 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
 
   it('reports a missing session, a reused id and repeated staging', () => {
     const db = createUraTestDatabase([sessionId]);
-    const [human, insight, finding] = sampleItems();
-    if (human === undefined || insight === undefined || finding === undefined) {
+    const [human, reviewFinding, finding] = sampleItems();
+    if (human === undefined || reviewFinding === undefined || finding === undefined) {
       throw new Error('fixture');
     }
     const orphan = createTestUraItem({ sessionId: testUraIds.otherSessionId });
@@ -79,10 +78,10 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
       ok: false,
       error: { kind: 'duplicate-item', id: human.id, reason: 'id-taken' },
     });
-    insertUraItem(db, insight);
-    expect(insertUraItem(db, { ...insight, id: itemId(8) })).toEqual({
+    insertUraItem(db, reviewFinding);
+    expect(insertUraItem(db, { ...reviewFinding, id: itemId(8) })).toEqual({
       ok: false,
-      error: { kind: 'duplicate-item', id: itemId(8), reason: 'insight-already-staged' },
+      error: { kind: 'duplicate-item', id: itemId(8), reason: 'review-finding-already-staged' },
     });
     insertUraItem(db, finding);
     expect(insertUraItem(db, { ...finding, id: itemId(9) })).toEqual({

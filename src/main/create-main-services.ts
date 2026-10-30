@@ -35,9 +35,7 @@ import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
-import { createReviewServices } from './review/create-review-services.ts';
-import type { ClaudeCodeSettings } from './review/claude-code-settings.ts';
-import type { ReviewServices } from './review/create-review-services.ts';
+import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createTraceServices } from './trace/create-trace-services.ts';
@@ -65,7 +63,7 @@ export interface MainServicesOptions {
   readonly impactWorkerUrl?: URL | string;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
-  /** How the review and the chat find and run Claude Code (ADR 0022, 0031); tests pass the fake. */
+  /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
   /**
    * The editor launcher (ADR 0033): `settingsPath` is the JSON file holding the preferred editor
@@ -112,14 +110,12 @@ export interface MainServicesOptions {
 export function createMainServices(options: MainServicesOptions): MainServices {
   const { logger } = options;
   const heads: {
-    review: ReviewServices | undefined;
     ura: UraServices | undefined;
     chat: ChatServices | undefined;
     trace: TraceServices | undefined;
     impact: ImpactServices | undefined;
-  } = { review: undefined, ura: undefined, chat: undefined, trace: undefined, impact: undefined };
+  } = { ura: undefined, chat: undefined, trace: undefined, impact: undefined };
   const onHeadMoved = (sessionId: string, headSha: string): void => {
-    heads.review?.observeHead(sessionId, headSha);
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
     heads.trace?.observeHead(sessionId, headSha);
@@ -164,14 +160,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     git: context.git,
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
-  const review = createReviewServices({
-    context,
-    impact,
-    worktrees,
-    ...(options.claude !== undefined && { claude: options.claude }),
-    intentFor: (sessionId) => gh.services?.intentFor(sessionId),
-  });
-  heads.review = review;
   const chat = createChatServices({
     context,
     impact,
@@ -227,7 +215,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       platform: options.editor?.platform ?? createSystemEditorPlatform(),
     }),
     display: createDisplayServices(options.display?.settingsPath),
-    review,
     chat,
     ura,
     trace,
@@ -254,7 +241,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
     dispose: async (): Promise<void> => {
       github.dispose();
-      await Promise.all([review.dispose(), chat.dispose(), trace.dispose()]);
+      await Promise.all([chat.dispose(), trace.dispose()]);
       impactRunner.dispose();
       await multiplexer.dispose();
     },

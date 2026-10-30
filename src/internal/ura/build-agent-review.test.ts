@@ -116,8 +116,9 @@ describe('buildAgentReview', () => {
       A CDATA terminator: ]]> stays text.",
             "id": "00000000-0000-4000-8000-000000000005",
             "origin": {
-              "insightId": "33333333-3333-4333-8333-333333333333",
-              "kind": "agent-insight",
+              "finding": 0,
+              "kind": "chat-answer",
+              "messageId": "33333333-3333-4333-8333-333333333333",
             },
             "outdated": {
               "originalAnchor": {

@@ -1,5 +1,7 @@
 import type { Brand } from '#x/brand/brand.ts';
 
+import type { ChatReview } from './chat-review.ts';
+
 /** A chat message's id (a UUID). */
 export type ChatMessageId = Brand<string, 'ChatMessageId'>;
 
@@ -45,7 +47,18 @@ export interface ChatMention {
  */
 export type ChatMessage =
   | (ChatMessageBase & { readonly role: 'user' | 'system-notice' | 'summary' })
-  | (ChatMessageBase & { readonly role: 'assistant' } & AssistantState);
+  | (ChatMessageBase & {
+      readonly role: 'assistant';
+      readonly kind: AnswerKind;
+      /** The structured result of a completed `/review` (ADR 0055); absent otherwise. */
+      readonly review?: ChatReview;
+    } & AssistantState);
+
+/**
+ * What an assistant message answers: a question, `/review` (findings, ADR 0055) or `/summarize`
+ * (beuve's own summary of the change, ADR 0056).
+ */
+export type AnswerKind = 'answer' | 'review' | 'abstract';
 
 export interface ChatMessageBase {
   readonly id: ChatMessageId;
@@ -63,9 +76,12 @@ export interface ChatMessageBase {
   readonly createdAt: string;
 }
 
-/** Where an assistant answer stands. Only `failed` carries a code (main's error code, e.g. `timeout`). */
+/**
+ * Where an assistant answer stands: `queued` behind another request of its session (ADR 0057),
+ * then `streaming`, then final. Only `failed` carries a code (main's error code, e.g. `timeout`).
+ */
 export type AssistantState =
-  | { readonly status: 'streaming' | 'complete' | 'cancelled' }
+  | { readonly status: 'queued' | 'streaming' | 'complete' | 'cancelled' }
   | { readonly status: 'failed'; readonly errorCode: string };
 
 /** Expected failures of the chat repository. */

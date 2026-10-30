@@ -26,7 +26,6 @@ const severities: Readonly<Record<UraSeverityView, string>> = {
 
 const origins: Readonly<Record<UraOriginView['kind'], string>> = {
   human: 'human',
-  'agent-insight': 'agent insight',
   'impact-finding': 'ImpactGate',
   'chat-answer': 'chat',
 };
@@ -43,7 +42,10 @@ export function describeUraItem(item: UraItemView): UraItemLabels {
   return {
     severity: severities[item.severity],
     anchor: formatAnchor(placement.kind === 'current' ? placement.anchor : item.anchor),
-    origin: origins[item.origin.kind],
+    origin:
+      item.origin.kind === 'chat-answer' && item.origin.finding !== undefined
+        ? 'review finding'
+        : origins[item.origin.kind],
     ...(placement.kind === 'outdated' && { outdated: outdatedReasons[placement.reason] }),
   };
 }

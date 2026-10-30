@@ -9,8 +9,8 @@ describe('describeChatPlaceholder', () => {
     }
   });
 
-  it('hints at commands while idle and says why sending waits while answering', () => {
+  it('hints at commands while idle and says that what is sent queues while answering', () => {
     expect(describeChatPlaceholder(false)).toBe('Ask, or / for commands');
-    expect(describeChatPlaceholder(true)).toContain('Answering');
+    expect(describeChatPlaceholder(true)).toContain('waits its turn');
   });
 });

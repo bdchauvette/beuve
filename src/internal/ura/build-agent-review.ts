@@ -19,7 +19,6 @@ export type AgentReviewAnchor =
 
 export type AgentReviewOrigin =
   | { readonly kind: 'human' }
-  | { readonly kind: 'agent-insight'; readonly insightId: string }
   | {
       readonly kind: 'impact-finding';
       readonly metric: string;
@@ -28,7 +27,7 @@ export type AgentReviewOrigin =
       readonly threshold: number;
       readonly percentile: number;
     }
-  | { readonly kind: 'chat-answer'; readonly messageId: string };
+  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
 export interface AgentReviewItem {
   readonly id: string;
@@ -159,15 +158,16 @@ function toOrigin(origin: UraOrigin): AgentReviewOrigin {
     case 'human': {
       return { kind: 'human' };
     }
-    case 'agent-insight': {
-      return { kind: 'agent-insight', insightId: origin.insightId };
-    }
     case 'impact-finding': {
       const { metric, functionName, value, threshold, percentile } = origin;
       return { kind: 'impact-finding', metric, functionName, value, threshold, percentile };
     }
     case 'chat-answer': {
-      return { kind: 'chat-answer', messageId: origin.messageId };
+      return {
+        kind: 'chat-answer',
+        messageId: origin.messageId,
+        ...(origin.finding !== undefined && { finding: origin.finding }),
+      };
     }
   }
 }

@@ -16,12 +16,19 @@ describe('toChatHistory', () => {
   it('keeps questions and completed answers, in order', () => {
     const messages: ChatMessage[] = [
       { ...base, role: 'user', content: 'q1' },
-      { ...base, role: 'assistant', status: 'complete', content: 'a1' },
+      { ...base, role: 'assistant', kind: 'answer', status: 'complete', content: 'a1' },
       { ...base, role: 'system-notice', content: 'Head moved.' },
       { ...base, role: 'user', content: 'q2' },
-      { ...base, role: 'assistant', status: 'failed', errorCode: 'timeout', content: '' },
-      { ...base, role: 'assistant', status: 'cancelled', content: 'partial' },
-      { ...base, role: 'assistant', status: 'streaming', content: 'live' },
+      {
+        ...base,
+        role: 'assistant',
+        kind: 'answer',
+        status: 'failed',
+        errorCode: 'timeout',
+        content: '',
+      },
+      { ...base, role: 'assistant', kind: 'answer', status: 'cancelled', content: 'partial' },
+      { ...base, role: 'assistant', kind: 'answer', status: 'streaming', content: 'live' },
     ];
     expect(toChatHistory(messages)).toEqual([
       { role: 'user', content: 'q1' },
@@ -44,7 +51,7 @@ describe('toChatHistory', () => {
       { ...base, role: 'user', content: 'older' },
       { ...base, role: 'summary', content: 'second summary' },
       { ...base, role: 'user', content: 'Why [[@1]]?', mentions: [mention] },
-      { ...base, role: 'assistant', status: 'complete', content: 'Because.' },
+      { ...base, role: 'assistant', kind: 'answer', status: 'complete', content: 'Because.' },
     ];
     expect(toChatHistory(messages)).toEqual([
       { role: 'user', content: 'Why [[@1]]?', mentions: [mention] },

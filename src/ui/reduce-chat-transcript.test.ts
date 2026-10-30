@@ -113,6 +113,45 @@ describe('reduceChatTranscript', () => {
     expect(contents(loaded)).toEqual(['Why?', 'Fresh text']);
   });
 
+  it('starts a queued answer when main says so, then streams into it', () => {
+    const queued: ChatMessageView = { ...answer, status: 'queued' };
+    const state = run([
+      { kind: 'asked', question, answer: queued },
+      delta('append', 'ignored while queued'),
+      { kind: 'updated', message: { ...queued, status: 'streaming' } },
+      delta('append', 'Now.'),
+    ]);
+    expect(state.entries[1]).toMatchObject({ message: { status: 'streaming', content: 'Now.' } });
+
+    const early = run([
+      { kind: 'updated', message: { ...queued, status: 'streaming' } },
+      delta('append', 'Fast'),
+      { kind: 'asked', question, answer: queued },
+    ]);
+    expect(early.entries[1]).toMatchObject({ message: { status: 'streaming', content: 'Fast' } });
+  });
+
+  it('shows the latest progress line of a review until it settles, without touching its text', () => {
+    const review: ChatMessageView = { ...answer, answerKind: 'review' };
+    const state = run([
+      { kind: 'asked', question, answer: review },
+      delta('progress', 'Claude Code is reviewing 2 files'),
+      delta('progress', 'Checking 2 findings against the code'),
+    ]);
+    expect(state.entries[1]).toMatchObject({
+      progress: 'Checking 2 findings against the code',
+      message: { content: '' },
+    });
+    const kept = run([{ kind: 'updated', message: review }], state);
+    expect(kept.entries[1]).toMatchObject({ progress: 'Checking 2 findings against the code' });
+    const done = run([{ kind: 'updated', message: { ...review, status: 'complete' } }], state);
+    expect(done.entries[1]).toEqual({
+      id: 'a1',
+      kind: 'message',
+      message: { ...review, status: 'complete' },
+    });
+  });
+
   it('ignores a second ask response for the same answer and clears everything', () => {
     const once = run([{ kind: 'asked', question, answer }]);
     expect(reduceChatTranscript(once, { kind: 'asked', question, answer })).toBe(once);
@@ -133,7 +172,7 @@ function run(
   return state;
 }
 
-function delta(kind: 'append' | 'reset', text = ''): ChatTranscriptAction {
+function delta(kind: 'append' | 'reset' | 'progress', text = ''): ChatTranscriptAction {
   return { kind: 'delta', delta: { sessionId: 's1', messageId: 'a1', kind, text } };
 }
 

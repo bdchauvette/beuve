@@ -52,11 +52,12 @@ function originColumns(origin: UraItem['origin']): Record<string, SQLInputValue>
     case 'human': {
       return { origin_kind: origin.kind };
     }
-    case 'agent-insight': {
-      return { origin_kind: origin.kind, insight_id: origin.insightId };
-    }
     case 'chat-answer': {
-      return { origin_kind: origin.kind, chat_message_id: origin.messageId };
+      return {
+        origin_kind: origin.kind,
+        chat_message_id: origin.messageId,
+        ...(origin.finding !== undefined && { chat_finding: origin.finding }),
+      };
     }
     case 'impact-finding': {
       return {

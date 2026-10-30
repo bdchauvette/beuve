@@ -51,7 +51,7 @@ describe('renderAgentReviewXml', () => {
             <title>Clear commit history</title>
             <body/>
           </item>
-          <item id="00000000-0000-4000-8000-000000000005" severity="nit" origin="agent-insight" insight-id="33333333-3333-4333-8333-333333333333">
+          <item id="00000000-0000-4000-8000-000000000005" severity="nit" origin="chat-answer" message-id="33333333-3333-4333-8333-333333333333" finding="0">
             <outdated reason="lines-changed" written-against-sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
               <original-anchor kind="lines" path="src/app.ts" start-line="10" end-line="12"/>
             </outdated>

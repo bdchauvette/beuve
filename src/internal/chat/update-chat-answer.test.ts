@@ -24,6 +24,7 @@ function seeded(): ReturnType<typeof createChatTestDatabase> {
     ...base,
     id: answerId,
     role: 'assistant',
+    kind: 'answer',
     status: 'streaming',
     content: '',
   });
@@ -53,6 +54,7 @@ describe('updateChatAnswer', () => {
       ...base,
       id: answerId,
       role: 'assistant',
+      kind: 'answer',
       status: 'complete',
       content: 'Because [[src/a.ts:1-2]].',
       citations,

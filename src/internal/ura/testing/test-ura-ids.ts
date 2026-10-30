@@ -1,4 +1,4 @@
-import type { AgentInsightId, CommitSha, SessionId, UraItemId } from '../ura-item.ts';
+import type { CommitSha, SessionId, UraItemId } from '../ura-item.ts';
 
 /** Fixed ids for tests. `itemId(n)` matches what `fixedUraDeps` hands out n-th. */
 export const testUraIds = {
@@ -7,7 +7,7 @@ export const testUraIds = {
   headSha: 'a'.repeat(40) as CommitSha,
   laterHeadSha: 'b'.repeat(40) as CommitSha,
   baseSha: 'c'.repeat(40) as CommitSha,
-  insightId: '33333333-3333-4333-8333-333333333333' as AgentInsightId,
+  messageId: '33333333-3333-4333-8333-333333333333',
   itemId: (n: number): UraItemId =>
     `00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as UraItemId,
 } as const;

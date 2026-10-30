@@ -1,7 +1,7 @@
-import { parseInsightMarkdown } from './parse-insight-markdown.ts';
-import type { InlineSpan, MarkdownBlock } from './parse-insight-markdown.ts';
+import { parseMarkdownSubset } from './parse-markdown-subset.ts';
+import type { InlineSpan, MarkdownBlock } from './parse-markdown-subset.ts';
 
-/** An inline run of a pull request body: the insight subset's spans, plus links. */
+/** An inline run of a pull request body: the Markdown subset's spans, plus links. */
 export type BodySpan =
   InlineSpan | { readonly kind: 'link'; readonly text: string; readonly href: string };
 
@@ -20,7 +20,7 @@ const trailingPunctuation = /[.,;:!?'"]+$/u;
 
 /**
  * Parses a pull request body (untrusted Markdown written on GitHub) into blocks the intent
- * section renders as text nodes: the insight subset (ADR 0022) plus `https://` links, both
+ * section renders as text nodes: the Markdown subset (ADR 0022) plus `https://` links, both
  * `[text](https://…)` and bare URLs, as `link` spans. Other link schemes stay text. Links are
  * swapped for placeholders before the subset parses, so URLs with underscores aren't emphasis,
  * and links inside code stay literal. The UI asks main to open a link, which opens only GitHub
@@ -52,7 +52,7 @@ export function parsePullRequestMarkdown(body: string): BodyBlock[] {
     spans.flatMap((span) =>
       span.kind === 'text' ? splitLinks(span.text, links) : { ...span, text: restore(span.text) },
     );
-  return parseInsightMarkdown(source).map((block) => toBlock(block, toSpans, restore));
+  return parseMarkdownSubset(source).map((block) => toBlock(block, toSpans, restore));
 }
 
 function toBlock(

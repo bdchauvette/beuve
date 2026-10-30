@@ -7,14 +7,14 @@ import path from 'node:path';
  * `claude-code-stream-fixture.ts`. Its first argument picks the behaviour, the second is an
  * optional file for its own and a child's pid; Claude Code's argv follows.
  * - `echo`: succeeds with `{ args, stdin, cwd, envKeys }` as structured output.
- * - `review`: the second argument names a JSON file `{ insights, delayMs? }`; after `delayMs` it
- *   succeeds with `{ insights }` as structured output, and appends `{ args, cwd }` as one line to
- *   `<file>.calls` so tests can count runs and check the working directory and flags.
- * - `chat`: the second argument names a JSON file `{ preamble?, chunks, delayMs? }`. It writes
- *   `preamble` (text before a Grep call), then the answer as `chunks`, each a text delta when the
- *   argv has `--include-partial-messages` (as the real CLI does), waiting `delayMs` before each
- *   chunk; it succeeds with the joined chunks as `result`, and appends `{ args, cwd, stdin }` as
- *   one line to `<file>.calls`.
+ * - `chat`: the second argument names a JSON file `{ preamble?, chunks, delayMs?, findings?,
+ *   verdicts? }`, read afresh on every run, and every run appends `{ args, cwd, stdin }` as one
+ *   line to `<file>.calls`. A text run writes `preamble` (text before a Grep call), then the
+ *   answer as `chunks`, each a text delta when the argv has `--include-partial-messages` (as the
+ *   real CLI does), waiting `delayMs` before each chunk, and succeeds with the joined chunks as
+ *   `result`. A structured run (`--json-schema`) reads with Grep and Read, waits `delayMs` and
+ *   succeeds with `{ verdicts }` when the schema asks for verdicts (the `/review` verification
+ *   pass), else `{ findings }`.
  * - `text-result`: succeeds with the JSON only in `result`, no `structured_output`.
  * - `garbage`: prints lines that aren't JSON and exits 0.
  * - `mismatch`: succeeds with structured output that matches no schema.
@@ -60,21 +60,22 @@ process.stdin.on('end', () => {
         permission_denials: [{ tool_name: 'Bash' }] });
       break;
     }
-    case 'review': {
-      const script = JSON.parse(readFileSync(pidFile, 'utf8'));
-      appendFileSync(pidFile + '.calls', JSON.stringify({ args, cwd: process.cwd() }) + '\n');
-      init();
-      emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: {} }] } });
-      setTimeout(() => {
-        emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
-        const value = { insights: script.insights };
-        result({ result: JSON.stringify(value), structured_output: value });
-      }, script.delayMs ?? 0);
-      break;
-    }
     case 'chat': {
       const script = JSON.parse(readFileSync(pidFile, 'utf8'));
       appendFileSync(pidFile + '.calls', JSON.stringify({ args, cwd: process.cwd(), stdin }) + '\n');
+      const schema = args.find((arg) => arg.startsWith('--json-schema='));
+      if (schema !== undefined) {
+        init();
+        emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: {} }] } });
+        setTimeout(() => {
+          emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } });
+          const value = schema.includes('"verdicts"')
+            ? { verdicts: script.verdicts ?? [] }
+            : { findings: script.findings ?? [] };
+          result({ result: JSON.stringify(value), structured_output: value });
+        }, script.delayMs ?? 0);
+        break;
+      }
       const isStreaming = args.includes('--include-partial-messages');
       const start = () => isStreaming && emit({ type: 'stream_event', parent_tool_use_id: null,
         event: { type: 'message_start', message: { content: [] } } });

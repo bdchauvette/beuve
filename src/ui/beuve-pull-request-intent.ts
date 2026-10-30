@@ -56,7 +56,7 @@ export class BeuvePullRequestIntent extends LitElement {
     }
 
     .badge.merged {
-      color: var(--beuve-insight);
+      color: var(--beuve-violet);
     }
 
     .badge.danger {

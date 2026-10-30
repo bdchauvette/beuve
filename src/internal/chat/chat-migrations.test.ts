@@ -18,15 +18,17 @@ function insert(fields: Record<string, string>): () => void {
     mentions: '[]',
     status: 'complete',
     error_code: '',
+    kind: 'answer',
+    review: '',
     created_at: at,
     ...fields,
   };
   return (): void => {
     db.prepare(
       `INSERT INTO chat_messages (id, session_id, head_sha, role, content, citations, mentions,
-                                  status, error_code, created_at)
+                                  status, error_code, kind, review, created_at)
        VALUES (:id, :session_id, :head_sha, :role, :content, :citations, :mentions, :status,
-               NULLIF(:error_code, ''), :created_at);`,
+               NULLIF(:error_code, ''), :kind, NULLIF(:review, ''), :created_at);`,
     ).run(row);
   };
 }
@@ -39,6 +41,9 @@ describe('chatMigrations', () => {
     expect(
       insert({ role: 'user', mentions: '[{"path":"a.ts","side":"head","sha":"x"}]' }),
     ).not.toThrow();
+    expect(insert({ status: 'queued' })).not.toThrow();
+    expect(insert({ kind: 'review', review: '{"findings":[]}' })).not.toThrow();
+    expect(insert({ kind: 'abstract', status: 'streaming' })).not.toThrow();
   });
 
   it.each([
@@ -56,6 +61,12 @@ describe('chatMigrations', () => {
     ['a streaming summary', { role: 'summary', status: 'streaming' }],
     ['mentions on an answer', { mentions: '[{"path":"a"}]' }],
     ['mentions that are not an array', { role: 'user', mentions: '{}' }],
+    ['a queued question', { role: 'user', status: 'queued' }],
+    ['an unknown kind', { kind: 'essay' }],
+    ['a kind on a question', { role: 'user', kind: 'review' }],
+    ['findings on a plain answer', { review: '{"findings":[]}' }],
+    ['findings on a streaming review', { kind: 'review', status: 'streaming', review: '{}' }],
+    ['findings that are not an object', { kind: 'review', review: '[]' }],
   ])('rejects %s', (_, fields) => {
     expect(insert(fields)).toThrow();
   });

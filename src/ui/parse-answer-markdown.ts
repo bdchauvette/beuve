@@ -1,10 +1,10 @@
 import type { ChatCitationView } from '#contract/ipc-contract.ts';
 
 import { citationMarker } from './citation-marker.ts';
-import { parseInsightMarkdown } from './parse-insight-markdown.ts';
-import type { InlineSpan, MarkdownBlock } from './parse-insight-markdown.ts';
+import { parseMarkdownSubset } from './parse-markdown-subset.ts';
+import type { InlineSpan, MarkdownBlock } from './parse-markdown-subset.ts';
 
-/** An inline run of an answer: the insight subset's spans, plus citations and raw markers. */
+/** An inline run of an answer: the Markdown subset's spans, plus citations and raw markers. */
 export type AnswerSpan =
   | InlineSpan
   /** A `[[path:start-end]]` listed in the message's citations: rendered as a pill. */
@@ -61,7 +61,7 @@ export function parseAnswerMarkdown(
     spans.flatMap((span) =>
       span.kind === 'text' ? splitTokens(span.text, tokens) : { ...span, text: restore(span.text) },
     );
-  return parseInsightMarkdown(source).map((block): AnswerBlock => toBlock(block, toSpans, restore));
+  return parseMarkdownSubset(source).map((block): AnswerBlock => toBlock(block, toSpans, restore));
 }
 
 function toBlock(

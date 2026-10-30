@@ -25,8 +25,6 @@ import type {
   GithubFailureView,
   GithubReviewPreviewView,
   ImpactView,
-  InsightListView,
-  InsightStatusChangeView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
@@ -34,8 +32,7 @@ import type {
   OpenPullRequestResponse,
   PostGithubReviewResponse,
   PullRequestSessionView,
-  ReviewRunHandleView,
-  ReviewRunRequest,
+  ChatCommandRequest,
   RepositoryInspectionView,
   RepositoryTreeView,
   ReviewView,
@@ -141,20 +138,19 @@ const pathPrefix = z
     return normalized;
   });
 
-const reviewRunRequest = z.strictObject({
-  sessionId,
-  pathPrefixes: z.array(pathPrefix).max(64).optional(),
-  fresh: z.boolean().optional(),
-  effort: z.enum(['low', 'medium', 'high']).optional(),
-});
+const chatCommand = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('review'),
+    pathPrefixes: z.array(pathPrefix).max(64).optional(),
+    fresh: z.boolean().optional(),
+    effort: z.enum(['low', 'medium', 'high']).optional(),
+    verify: z.boolean().optional(),
+  }),
+  z.strictObject({ kind: z.literal('summarize') }),
+]);
 
 const uuid = z.string().regex(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/u);
 const commitSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
-
-const insightStatusRequest = z.strictObject({
-  insightId: uuid,
-  status: z.enum(['pending', 'promoted', 'dismissed']),
-});
 
 const repositoryPath = z.string().min(1).max(4096);
 const line = z.number().int().min(1).max(10_000_000);
@@ -206,7 +202,11 @@ const uraReorderRequest = z.strictObject({
   itemIds: z.array(uuid).max(10_000),
 });
 
-const promoteInsightRequest = z.strictObject({ insightId: uuid, severity: uraSeverity.optional() });
+const stageReviewFindingRequest = z.strictObject({
+  messageId: uuid,
+  finding: z.number().int().min(0).max(1000),
+  severity: uraSeverity.optional(),
+});
 
 const stageFindingRequest = z.strictObject({
   sessionId,
@@ -249,7 +249,10 @@ const chatAskRequest = z.strictObject({
   question: z.string().trim().min(1).max(8000),
   focus: z.strictObject({ path: repositoryPath, line: line.optional() }).optional(),
   mentions: z.array(chatMention).max(8).optional(),
+  command: chatCommand.optional(),
 });
+
+const chatClearRequest = z.strictObject({ sessionId, queuedOnly: z.boolean().optional() });
 
 const chatCancelRequest = z.union([
   z.strictObject({ messageId: uuid }),
@@ -395,20 +398,6 @@ export function createIpcHandlers(
       const parsed = traceTrustRequest.safeParse(request);
       return parsed.success ? services.trace.setTrust(parsed.data) : invalid(parsed.error);
     },
-    'review:run': async (request): Promise<IpcResult<ReviewRunHandleView>> => {
-      const parsed = reviewRunRequest.safeParse(request);
-      return parsed.success
-        ? services.review.run(toRunRequest(parsed.data))
-        : invalid(parsed.error);
-    },
-    'review:list-insights': async (request): Promise<IpcResult<InsightListView>> => {
-      const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.review.listInsights(parsed.data) : invalid(parsed.error);
-    },
-    'review:set-insight-status': (request): IpcResult<InsightStatusChangeView> => {
-      const parsed = insightStatusRequest.safeParse(request);
-      return parsed.success ? services.review.setInsightStatus(parsed.data) : invalid(parsed.error);
-    },
     'ura:list': async (request): Promise<IpcResult<UraListView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.ura.list(parsed.data) : invalid(parsed.error);
@@ -448,14 +437,14 @@ export function createIpcHandlers(
       const parsed = uraReorderRequest.safeParse(request);
       return parsed.success ? services.ura.reorder(parsed.data) : invalid(parsed.error);
     },
-    'ura:promote-insight': async (request): Promise<IpcResult<UraStagedView>> => {
-      const parsed = promoteInsightRequest.safeParse(request);
+    'ura:stage-review-finding': async (request): Promise<IpcResult<UraStagedView>> => {
+      const parsed = stageReviewFindingRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { insightId, severity } = parsed.data;
-      return services.ura.promoteInsight({
-        insightId,
+      const { severity, ...required } = parsed.data;
+      return services.ura.stageReviewFinding({
+        ...required,
         ...(severity !== undefined && { severity }),
       });
     },
@@ -484,9 +473,10 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { focus, mentions, ...required } = parsed.data;
+      const { focus, mentions, command, ...required } = parsed.data;
       return services.chat.ask({
         ...required,
+        ...(command !== undefined && { command: toChatCommand(command) }),
         ...(focus !== undefined && {
           focus: { path: focus.path, ...(focus.line !== undefined && { line: focus.line }) },
         }),
@@ -514,8 +504,12 @@ export function createIpcHandlers(
       return parsed.success ? services.chat.compact(parsed.data) : invalid(parsed.error);
     },
     'chat:clear': (request): IpcResult<ChatClearedView> => {
-      const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.chat.clear(parsed.data) : invalid(parsed.error);
+      const parsed = chatClearRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { queuedOnly, ...required } = parsed.data;
+      return services.chat.clear({ ...required, ...(queuedOnly === true && { queuedOnly }) });
     },
     'editor:open': async (request): Promise<IpcResult<EditorOpenResponse>> => {
       const parsed = editorOpenRequest.safeParse(request);
@@ -626,14 +620,18 @@ function withoutUndefined(request: z.infer<typeof callHierarchyRequest>): CallHi
   };
 }
 
-function toRunRequest(request: z.infer<typeof reviewRunRequest>): ReviewRunRequest {
-  const { pathPrefixes, fresh, effort, ...required } = request;
+function toChatCommand(command: z.infer<typeof chatCommand>): ChatCommandRequest {
+  if (command.kind === 'summarize') {
+    return command;
+  }
+  const { pathPrefixes, fresh, effort, verify } = command;
   const prefixes = [...new Set(pathPrefixes)];
   return {
-    ...required,
+    kind: 'review',
     ...(prefixes.length > 0 && { pathPrefixes: prefixes }),
     ...(fresh === true && { fresh }),
     ...(effort !== undefined && { effort }),
+    ...(verify !== undefined && { verify }),
   };
 }
 

@@ -6,6 +6,15 @@ import { keybindings } from './keybindings.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('commandRegistry', () => {
+  it('has no agent-insight keys any more', () => {
+    const keys = commandRegistry
+      .filter((command) => command.scope === 'Diff')
+      .flatMap((command) => command.keys);
+    for (const key of [']', '[', 'y', 'd']) {
+      expect(keys).not.toContain(key);
+    }
+  });
+
   it('has unique ids', () => {
     const ids = commandRegistry.map((command) => command.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -43,6 +52,8 @@ describe('commandRegistry', () => {
   it('has an entry for every chat command the parser knows', () => {
     const parsed = [
       '/review',
+      '/summarize',
+      '/abstract',
       '/editor',
       '/diff',
       '/whitespace',
@@ -69,25 +80,7 @@ describe('commandRegistry', () => {
   });
 
   it('has a runnable entry for every diff stream key', () => {
-    const diffKeys = [
-      'j',
-      'k',
-      'p',
-      'Shift+p',
-      'r',
-      'Esc',
-      ']',
-      '[',
-      'y',
-      'd',
-      'm',
-      'e',
-      'i',
-      's',
-      'w',
-      'o',
-      'Space',
-    ];
+    const diffKeys = ['j', 'k', 'p', 'Shift+p', 'r', 'Esc', 'm', 'e', 'i', 's', 'w', 'o', 'Space'];
     const listed = commandRegistry
       .filter((command) => command.scope === 'Diff' && command.run.kind === 'zone-key')
       .flatMap((command) => command.keys);

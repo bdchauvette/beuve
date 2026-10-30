@@ -732,106 +732,8 @@ export type TraceStatusView = {
     }
 );
 
-/** How hard Claude Code thinks during a preliminary review (`--effort`, ADR 0019). */
+/** How hard Claude Code thinks during `/review` (`--effort`, ADR 0019). */
 export type ReviewEffort = 'low' | 'medium' | 'high';
-
-/**
- * Start the opt-in preliminary agentic review of a session's current head (spec 5B, ADR 0022).
- * `pathPrefixes` limits the review to files at or under these repository-relative paths; `fresh`
- * reruns even when a stored run exists for the head (replacing it); `effort` is passed to Claude
- * Code. Answers at once; progress arrives as `review:progress` events.
- */
-export interface ReviewRunRequest {
-  readonly sessionId: string;
-  readonly pathPrefixes?: readonly string[];
-  readonly fresh?: boolean;
-  readonly effort?: ReviewEffort;
-}
-
-/** Insights validation dropped, by reason (ADR 0019). */
-export interface ReviewDropsView {
-  /** Not a head-side text file of the reviewed diff. */
-  readonly unknownFile: number;
-  /** In a diff file but outside every hunk. */
-  readonly outsideDiff: number;
-  readonly lowConfidence: number;
-  readonly duplicate: number;
-  readonly overLimit: number;
-}
-
-/** A completed preliminary review run of one (session, head). */
-export interface ReviewRunSummaryView {
-  readonly reviewRunId: string;
-  readonly sessionId: string;
-  readonly headSha: string;
-  readonly scope: 'full' | 'interdiff';
-  readonly model: string;
-  readonly insightCount: number;
-  readonly droppedCount: number;
-  /** Per reason, for a run that just finished; stored runs keep only the total. */
-  readonly dropped?: ReviewDropsView;
-  /** Files sent to the model, for a run that just finished. */
-  readonly fileCount?: number;
-  readonly pathPrefixes?: readonly string[];
-  readonly durationMs?: number;
-  /** Claude Code's estimate; notional on subscription logins. */
-  readonly costUsd?: number;
-  readonly createdAt: string;
-}
-
-/**
- * The answer to `review:run`. `started`: a new background run; `attached`: a run for this head was
- * already in flight and the request joined it; `reused`: a stored run exists for the head (pass
- * `fresh` to rerun), and `summary` describes it. `runId` keys the `review:progress` events.
- */
-export type ReviewRunHandleView =
-  | {
-      readonly status: 'started' | 'attached';
-      readonly runId: string;
-      readonly sessionId: string;
-      readonly headSha: string;
-    }
-  | {
-      readonly status: 'reused';
-      readonly runId: string;
-      readonly sessionId: string;
-      readonly headSha: string;
-      readonly summary: ReviewRunSummaryView;
-    };
-
-/**
- * Why a preliminary review produced nothing. `not-installed`: no `claude` executable was found;
- * `not-authenticated`: Claude Code is logged out; `cancelled`: the head moved, a fresh run replaced
- * it, or beuve quit; `nothing-to-review`: no reviewable change (up to date, or no file under the
- * prefixes); `review-unavailable`: the diff or checkout failed; `model-failed`: Claude Code ran but
- * gave no usable answer.
- */
-export type ReviewRunErrorView =
-  | { readonly code: 'not-installed'; readonly message: string }
-  | { readonly code: 'not-authenticated'; readonly message: string }
-  | { readonly code: 'rate-limited'; readonly message: string; readonly resetsAt?: string }
-  | { readonly code: 'timeout'; readonly message: string }
-  | {
-      readonly code: 'cancelled';
-      readonly reason: 'head-changed' | 'superseded' | 'app-quit';
-      readonly message: string;
-    }
-  | { readonly code: 'nothing-to-review'; readonly message: string }
-  | { readonly code: 'review-unavailable'; readonly message: string }
-  | { readonly code: 'model-failed'; readonly message: string };
-
-/** One step of a background review run, pushed on `review:progress`. */
-export type ReviewProgressView = {
-  readonly runId: string;
-  readonly sessionId: string;
-  readonly headSha: string;
-} & (
-  | { readonly kind: 'started' }
-  /** Coarse status text; never prompt or file content. */
-  | { readonly kind: 'progress'; readonly message: string }
-  | { readonly kind: 'completed'; readonly summary: ReviewRunSummaryView }
-  | { readonly kind: 'failed'; readonly error: ReviewRunErrorView }
-);
 
 /** The head-side lines an answer cites (ADR 0031); 1-based and inclusive. */
 export interface ChatCitationView {
@@ -843,7 +745,8 @@ export interface ChatCitationView {
 /**
  * Why an answer failed: `not-installed`, `not-authenticated`, `rate-limited`, `timeout`,
  * `model-failed` (Claude Code ran but gave no usable answer), `chat-unavailable` (the diff or
- * checkout failed) or `internal`.
+ * checkout failed), `nothing-to-review` (`/review` found no changed text file in scope) or
+ * `internal`.
  */
 export type ChatErrorCode =
   | 'not-installed'
@@ -852,7 +755,63 @@ export type ChatErrorCode =
   | 'timeout'
   | 'model-failed'
   | 'chat-unavailable'
+  | 'nothing-to-review'
   | 'internal';
+
+/** What an assistant message answers: a question, `/review` (ADR 0055) or `/summarize` (ADR 0056). */
+export type AnswerKindView = 'answer' | 'review' | 'abstract';
+
+/**
+ * One `/review` finding (ADR 0055). Lines are 1-based and inclusive on the head side, and touch a
+ * hunk of the reviewed diff. `title` and `body` are untrusted Markdown from the model: render
+ * them as text. `check` is what the verification pass said (refuted findings are dropped).
+ */
+export interface ChatFindingView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly severity: 'info' | 'warning' | 'risk';
+  readonly category:
+    | 'edge-case'
+    | 'security'
+    | 'type-mismatch'
+    | 'error-handling'
+    | 'concurrency'
+    | 'scope-creep'
+    | 'complexity'
+    | 'other';
+  readonly title: string;
+  readonly body: string;
+  /** 0–1. */
+  readonly confidence: number;
+  readonly check: 'confirmed' | 'unconfirmed' | 'unchecked';
+}
+
+/** Findings a `/review` answer left out, by reason. */
+export interface ChatReviewDropsView {
+  /** Not a head-side text file of the reviewed diff. */
+  readonly unknownFile: number;
+  /** In a diff file but outside every hunk. */
+  readonly outsideDiff: number;
+  readonly lowConfidence: number;
+  readonly duplicate: number;
+  readonly overLimit: number;
+  /** Refuted by the verification pass. */
+  readonly unconfirmed: number;
+}
+
+/** The structured part of a completed `/review` answer. */
+export interface ChatReviewView {
+  readonly findings: readonly ChatFindingView[];
+  readonly dropped: ChatReviewDropsView;
+  /** The path prefixes it was limited to; empty for the whole change. */
+  readonly pathScope: readonly string[];
+  readonly fileCount: number;
+  /** Whether the verification pass ran (`skipped` for `--no-verify` or no findings). */
+  readonly verification: 'verified' | 'skipped' | 'failed';
+  /** The earlier answer at the same head and scope this one repeats; `--fresh` reruns. */
+  readonly reusedFrom?: string;
+}
 
 /**
  * One entry of a session's Q&A transcript (Zone 4). `content` is Markdown: while an assistant
@@ -871,7 +830,15 @@ export interface ChatMessageView {
   readonly citations: readonly ChatCitationView[];
   /** What a question was about; empty for every other role. */
   readonly mentions: readonly ChatMentionView[];
-  readonly status: 'streaming' | 'complete' | 'failed' | 'cancelled';
+  /**
+   * `queued`: waiting behind the session's running request (ADR 0057); only answers are ever
+   * anything but `complete`.
+   */
+  readonly status: 'queued' | 'streaming' | 'complete' | 'failed' | 'cancelled';
+  /** Set on assistant messages. */
+  readonly answerKind?: AnswerKindView;
+  /** A completed `/review` answer's findings. */
+  readonly review?: ChatReviewView;
   readonly errorCode?: ChatErrorCode;
   readonly errorMessage?: string;
   readonly createdAt: string;
@@ -897,15 +864,33 @@ export interface ChatFocusRequest {
 }
 
 /**
- * Asks a read-only question about the session's current change (ADR 0031). Answers at once with
- * the stored question and the `streaming` answer; the text arrives as `chat:delta` events and the
- * final state as `chat:message-updated`. One question can be in flight per session: asking while
- * another streams is refused (`refused`).
+ * A chat command that runs as a request, in place of a question: `/review` (findings, verified by
+ * a second pass unless `verify` is false, ADR 0055) or `/summarize` (ADR 0056).
+ */
+export type ChatCommandRequest =
+  | {
+      readonly kind: 'review';
+      readonly pathPrefixes?: readonly string[];
+      /** Rerun even when an earlier answer reviewed the same head and scope. */
+      readonly fresh?: boolean;
+      readonly effort?: ReviewEffort;
+      /** Defaults to true. */
+      readonly verify?: boolean;
+    }
+  | { readonly kind: 'summarize' };
+
+/**
+ * Asks a read-only question about the session's current change (ADR 0031), or runs a chat
+ * `command`. Answers at once with the stored question and the answer, `streaming` or, while the
+ * session runs another request, `queued` (ADR 0057): requests run one at a time, in order, at most
+ * 10 waiting (more is `refused`). The text arrives as `chat:delta` events and each state change
+ * (queued to streaming, then final) as `chat:message-updated`.
  */
 export interface ChatAskRequest {
   readonly sessionId: string;
-  /** May name `mentions` as `[[@1]]`, `[[@2]]`…, in order. */
+  /** May name `mentions` as `[[@1]]`, `[[@2]]`…, in order. For a command, what was typed. */
   readonly question: string;
+  readonly command?: ChatCommandRequest;
   readonly focus?: ChatFocusRequest;
   /**
    * At most 8, about 20 000 lines together. Main reads each at its commit and puts the exact
@@ -929,7 +914,10 @@ export interface ChatListView {
   readonly messages: readonly ChatMessageView[];
 }
 
-/** Stops one streaming answer, or (`sessionId`) whatever the session runs: an answer or `/compact`. */
+/**
+ * Stops one answer, streaming or queued (ADR 0057; the rest of the queue goes on), or with
+ * `sessionId` the session's `/compact`.
+ */
 export type ChatCancelRequest = { readonly messageId: string } | { readonly sessionId: string };
 
 /** `cancelled` is false when nothing of that was running. */
@@ -937,9 +925,13 @@ export interface ChatCancelledView {
   readonly cancelled: boolean;
 }
 
-/** Deletes the session's transcript, stopping an answer in flight. */
+/**
+ * Deletes the session's transcript, stopping the request in flight and emptying the queue; with
+ * `queuedOnly`, deletes only the questions still queued and their answers (ADR 0057).
+ */
 export interface ChatClearRequest {
   readonly sessionId: string;
+  readonly queuedOnly?: boolean;
 }
 
 export interface ChatClearedView {
@@ -948,17 +940,18 @@ export interface ChatClearedView {
 
 /**
  * Pushed on `chat:delta` while an answer streams. `append` adds text; `reset` drops what was
- * streamed (the model wrote it before a tool call). The text is a raw preview.
+ * streamed (the model wrote it before a tool call). The text is a raw preview. `progress` is a
+ * coarse status line for answers that don't stream text (`/review`), never content.
  */
 export interface ChatDeltaView {
   readonly sessionId: string;
   readonly messageId: string;
-  readonly kind: 'append' | 'reset';
+  readonly kind: 'append' | 'reset' | 'progress';
   /** Empty for `reset`. */
   readonly text: string;
 }
 
-/** Pushed on `chat:message-updated` when an answer completes, fails or is cancelled. */
+/** Pushed on `chat:message-updated` when an answer starts, completes, fails or is cancelled. */
 export interface ChatMessageUpdatedView {
   readonly message: ChatMessageView;
   /** Earlier turns the prompt had to drop for size, so the drawer can suggest `/compact`. */
@@ -972,7 +965,7 @@ export interface ChatCompactRequest {
 
 /**
  * How `/compact` ended. `compacted` carries the stored summary; `failed` says why, as answers do.
- * Asking while it runs is refused; `chat:cancel { sessionId }` stops it.
+ * It waits its turn in the session's queue (ADR 0057); `chat:cancel { sessionId }` stops it.
  */
 export type ChatCompactedView =
   | { readonly outcome: 'compacted'; readonly summary: ChatMessageView }
@@ -982,63 +975,6 @@ export type ChatCompactedView =
       readonly errorCode: ChatErrorCode;
       readonly errorMessage: string;
     };
-
-/** `pending` until the reviewer promotes (`y`) or dismisses (`d`) the insight. */
-export type InsightStatusView = 'pending' | 'promoted' | 'dismissed';
-
-/**
- * One agent insight (spec 5B). Lines are 1-based and inclusive on the head side, and touch a hunk
- * of the diff the run reviewed. `body` is untrusted Markdown from the model: render it as text.
- */
-export interface AgentInsightView {
-  readonly id: string;
-  readonly runId: string;
-  readonly path: string;
-  readonly lineStart: number;
-  readonly lineEnd: number;
-  readonly severity: 'info' | 'warning' | 'risk';
-  readonly category:
-    | 'edge-case'
-    | 'security'
-    | 'type-mismatch'
-    | 'error-handling'
-    | 'concurrency'
-    | 'scope-creep'
-    | 'complexity'
-    | 'other';
-  readonly title: string;
-  readonly body: string;
-  /** 0–1. */
-  readonly confidence: number;
-  readonly status: InsightStatusView;
-  readonly model: string;
-  readonly createdAt: string;
-}
-
-export interface ListInsightsRequest {
-  readonly sessionId: string;
-}
-
-/** The insights of a session's current head, every status, by path and line. */
-export interface InsightListView {
-  readonly sessionId: string;
-  readonly headSha: string;
-  /** The stored run for the head, if any. */
-  readonly run?: ReviewRunSummaryView;
-  /** A run for this head in flight now, so a reloaded renderer can follow it. */
-  readonly activeRunId?: string;
-  readonly insights: readonly AgentInsightView[];
-}
-
-export interface SetInsightStatusRequest {
-  readonly insightId: string;
-  readonly status: InsightStatusView;
-}
-
-export interface InsightStatusChangeView {
-  readonly insightId: string;
-  readonly status: InsightStatusView;
-}
 
 /** How much a URA item matters, most urgent first (ADR 0023). */
 export type UraSeverityView = 'blocker' | 'issue' | 'question' | 'nit' | 'praise';
@@ -1057,7 +993,6 @@ export type UraAnchorView =
 /** Who or what raised a URA item. */
 export type UraOriginView =
   | { readonly kind: 'human' }
-  | { readonly kind: 'agent-insight'; readonly insightId: string }
   | {
       readonly kind: 'impact-finding';
       readonly metric: 'cognitive-complexity';
@@ -1066,7 +1001,8 @@ export type UraOriginView =
       readonly threshold: number;
       readonly percentile: number;
     }
-  | { readonly kind: 'chat-answer'; readonly messageId: string };
+  /** A chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer. */
+  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
 /** `staged` items are exported; `addressed` records the head at which the issue was fixed. */
 export type UraStatusView =
@@ -1180,8 +1116,7 @@ export interface UpdateUraItemRequest {
 
 /**
  * Withdraws an item, marks it addressed (by the reviewer, at the session's current head), or
- * restages it. Withdrawing or restaging a promoted insight's item also sets the insight back to
- * `pending` or `promoted`.
+ * restages it.
  */
 export interface TransitionUraItemRequest {
   readonly itemId: string;
@@ -1200,11 +1135,13 @@ export interface UraOrderView {
 }
 
 /**
- * Stages an agent insight (`y`) and marks it `promoted`, in one transaction. Promoting it again
- * returns the item it already has, restaged if it was withdrawn.
+ * Stages the n-th (0-based) finding of a completed `/review` answer (ADR 0055) on its lines; main
+ * reads the finding from the stored answer. Staging it again returns the item it already has,
+ * restaged if it was withdrawn.
  */
-export interface PromoteInsightRequest {
-  readonly insightId: string;
+export interface StageReviewFindingRequest {
+  readonly messageId: string;
+  readonly finding: number;
   readonly severity?: UraSeverityView;
 }
 
@@ -1613,18 +1550,6 @@ export interface InvokeChannelMap {
     readonly request: TraceSetTrustRequest;
     readonly response: IpcResult<TraceTrustView>;
   };
-  'review:run': {
-    readonly request: ReviewRunRequest;
-    readonly response: IpcResult<ReviewRunHandleView>;
-  };
-  'review:list-insights': {
-    readonly request: ListInsightsRequest;
-    readonly response: IpcResult<InsightListView>;
-  };
-  'review:set-insight-status': {
-    readonly request: SetInsightStatusRequest;
-    readonly response: IpcResult<InsightStatusChangeView>;
-  };
   'ura:list': { readonly request: ListUraItemsRequest; readonly response: IpcResult<UraListView> };
   'ura:create': {
     readonly request: CreateUraItemRequest;
@@ -1642,8 +1567,8 @@ export interface InvokeChannelMap {
     readonly request: ReorderUraItemsRequest;
     readonly response: IpcResult<UraOrderView>;
   };
-  'ura:promote-insight': {
-    readonly request: PromoteInsightRequest;
+  'ura:stage-review-finding': {
+    readonly request: StageReviewFindingRequest;
     readonly response: IpcResult<UraStagedView>;
   };
   'ura:stage-impact-finding': {
@@ -1736,7 +1661,6 @@ export type McpStatus =
 /** Payloads main pushes to the renderer with `webContents.send`. */
 export interface EventChannelMap {
   'mcp:status': McpStatus;
-  'review:progress': ReviewProgressView;
   'chat:delta': ChatDeltaView;
   'chat:message-updated': ChatMessageUpdatedView;
   'ura:changed': UraChangedView;

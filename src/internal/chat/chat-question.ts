@@ -11,8 +11,13 @@ export interface ChatQuestion {
   readonly headSha: CommitSha;
   /** Absolute path of the session worktree, checked out at `headSha`. The model may read it. */
   readonly worktreePath: string;
-  /** The reviewer's question, as typed. */
+  /** The reviewer's question, as typed; unused for a {@link ChatTask}. */
   readonly question: string;
+  /**
+   * A command's fixed task instead of a question: `/review` (findings through the structured
+   * output, ADR 0055) or `/summarize` (beuve's own summary of the change, ADR 0056).
+   */
+  readonly task?: ChatTask;
   /**
    * What the change's author says it is for (a pull request's title and body). Untrusted text,
    * shown to the model as context and bounded by the prompt budget.
@@ -39,6 +44,16 @@ export interface ChatQuestion {
    */
   readonly worktreePaths?: ReadonlySet<string>;
 }
+
+/** What a chat command asks the model to do instead of answering a question. */
+export type ChatTask =
+  | {
+      readonly kind: 'review';
+      /** The normalized path prefixes the diff was limited to; `[]` is the whole change. */
+      readonly pathScope: readonly string[];
+      readonly maxFindings: number;
+    }
+  | { readonly kind: 'abstract' };
 
 /** One file of the reviewed diff. `path` is the head-side path (the old path for deletions). */
 export interface ChatFile {

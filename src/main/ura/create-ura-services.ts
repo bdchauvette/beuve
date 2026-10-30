@@ -3,10 +3,10 @@ import type {
   ExportUraRequest,
   IpcResult,
   ListUraItemsRequest,
-  PromoteInsightRequest,
   ReorderUraItemsRequest,
   SetUraVerdictRequest,
   StageImpactFindingRequest,
+  StageReviewFindingRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
   UraExportView,
@@ -20,8 +20,8 @@ import type {
 } from '#contract/ipc-contract.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
-import { findAgentInsight } from '#internal/review/find-agent-insight.ts';
-import { setAgentInsightStatus } from '#internal/review/set-agent-insight-status.ts';
+import type { ChatMessageId } from '#internal/chat/chat-message.ts';
+import { findChatMessage } from '#internal/chat/find-chat-message.ts';
 import { buildAgentReview } from '#internal/ura/build-agent-review.ts';
 import type { AgentReview } from '#internal/ura/build-agent-review.ts';
 import { compileUraArtifact } from '#internal/ura/compile-ura-artifact.ts';
@@ -34,19 +34,18 @@ import { insertUraItem } from '#internal/ura/insert-ura-item.ts';
 import type { LineMapping } from '#internal/ura/line-mapping.ts';
 import { listUraItems } from '#internal/ura/list-ura-items.ts';
 import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
-import { promoteAgentInsight } from '#internal/ura/promote-agent-insight.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
 import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
 import { stageImpactFinding } from '#internal/ura/stage-impact-finding.ts';
+import { stageReviewFinding } from '#internal/ura/stage-review-finding.ts';
 import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
 import { writeVerdictChoice } from '#internal/ura/write-verdict-choice.ts';
 import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
 import type {
-  AgentInsightId,
   CommitSha,
   SessionId,
   UraDeps,
@@ -62,7 +61,6 @@ import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
-import { withTransaction } from '#x/sqlite/with-transaction.ts';
 
 import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
@@ -84,7 +82,10 @@ export interface UraServices {
   readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
-  readonly promoteInsight: (request: PromoteInsightRequest) => Promise<IpcResult<UraStagedView>>;
+  /** Stages a `/review` finding from its stored answer (ADR 0055); again returns its item. */
+  readonly stageReviewFinding: (
+    request: StageReviewFindingRequest,
+  ) => Promise<IpcResult<UraStagedView>>;
   readonly stageImpactFinding: (
     request: StageImpactFindingRequest,
   ) => Promise<IpcResult<UraStagedView>>;
@@ -126,7 +127,7 @@ interface Head {
 }
 
 /**
- * Composes the URA domain with sessions, git, the review domain's insights and ImpactGate. Items
+ * Composes the URA domain with sessions, git, the chat's `/review` answers and ImpactGate. Items
  * written against an older head are re-anchored on every read from the git diff between the two
  * heads (cached, since commits never change); nothing about placement is stored. Every change is
  * announced through `onChanged`, whoever made it.
@@ -426,15 +427,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       if (!moved.ok) {
         return uraFailure(logger, moved.error);
       }
-      const { origin } = moved.value;
-      const saved = withTransaction(db, (): StoreResult<void> => {
-        const updated = updateUraItem(db, moved.value);
-        if (to !== 'addressed' && updated.ok && origin.kind === 'agent-insight') {
-          // A fresh review run may have replaced the insight; the item outlives it (ADR 0023).
-          setAgentInsightStatus(db, origin.insightId, to === 'staged' ? 'promoted' : 'pending');
-        }
-        return updated;
-      });
+      const saved = updateUraItem(db, moved.value);
       if (!saved.ok) {
         return uraFailure(logger, saved.error);
       }
@@ -451,26 +444,29 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return ok({ sessionId, itemIds });
     },
 
-    promoteInsight: async ({ insightId, severity }): Promise<IpcResult<UraStagedView>> => {
-      const promoted = withTransaction(db, (): IpcResult<{ item: UraItem; created: boolean }> => {
-        const insight = findAgentInsight(db, insightId as AgentInsightId);
-        if (!insight.ok) {
-          return insight.error.kind === 'insight-not-found'
-            ? err({ code: 'not-found', message: 'no such insight' })
-            : err({ code: 'internal', message: 'stored review data is corrupt' });
-        }
-        const item = promoteAgentInsight(insight.value, deps, severity);
-        if (!item.ok) {
-          return uraFailure(logger, item.error);
-        }
-        // Staging writes nothing when it fails, so the insight's status changes only with it.
-        const result = stored(stageOnce(item.value));
-        if (result.ok) {
-          setAgentInsightStatus(db, insight.value.id, 'promoted');
-        }
-        return result;
-      });
-      return staged(promoted);
+    stageReviewFinding: async ({
+      messageId,
+      finding,
+      severity,
+    }): Promise<IpcResult<UraStagedView>> => {
+      const message = findChatMessage(db, messageId as ChatMessageId);
+      if (!message.ok) {
+        return message.error.kind === 'message-not-found'
+          ? err({ code: 'not-found', message: 'no such answer' })
+          : err({ code: 'internal', message: 'stored chat data is corrupt' });
+      }
+      const answer = message.value;
+      const found = answer.role === 'assistant' ? answer.review?.findings[finding] : undefined;
+      if (found === undefined) {
+        return err({ code: 'not-found', message: 'that answer has no such review finding' });
+      }
+      const item = stageReviewFinding(
+        found,
+        { sessionId: answer.sessionId, headSha: answer.headSha, messageId, finding },
+        deps,
+        severity,
+      );
+      return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
     },
 
     stageImpactFinding: async ({

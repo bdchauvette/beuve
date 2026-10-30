@@ -55,11 +55,6 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     });
   };
 
-  services.review.onProgress((event) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      sendEvent(window.webContents, 'review:progress', event);
-    }
-  });
   services.chat.onDelta((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'chat:delta', event);

@@ -254,79 +254,6 @@ describe('createIpcHandlers for trace probes', () => {
   });
 });
 
-describe('createIpcHandlers for the preliminary review', () => {
-  it('validates review:run and normalizes path prefixes', async () => {
-    const calls: unknown[] = [];
-    const handlers = createIpcHandlers(
-      {
-        ...stubServices({}),
-        review: {
-          ...stubServices({}).review,
-          run: async (request) => {
-            calls.push(request);
-            return notWired;
-          },
-        },
-      },
-      appInfo,
-    );
-    for (const bad of [
-      { sessionId: '' },
-      { sessionId: 's1', pathPrefixes: ['/etc'] },
-      { sessionId: 's1', pathPrefixes: ['../x'] },
-      { sessionId: 's1', pathPrefixes: 'src' },
-      { sessionId: 's1', effort: 'max' },
-      { sessionId: 's1', fresh: 'yes' },
-      { sessionId: 's1', extra: true },
-    ]) {
-      await expectInvalid(handlers['review:run'](bad));
-    }
-    await handlers['review:run']({ sessionId: 's1' });
-    await handlers['review:run']({
-      sessionId: 's1',
-      pathPrefixes: ['./src/ui/', 'src/ui', 'docs'],
-      fresh: true,
-      effort: 'low',
-    });
-    await handlers['review:run']({ sessionId: 's1', pathPrefixes: [], fresh: false });
-    expect(calls).toEqual([
-      { sessionId: 's1' },
-      { sessionId: 's1', pathPrefixes: ['src/ui', 'docs'], fresh: true, effort: 'low' },
-      { sessionId: 's1' },
-    ]);
-  });
-
-  it('validates review:list-insights and review:set-insight-status', async () => {
-    const calls: unknown[] = [];
-    const handlers = createIpcHandlers(
-      {
-        ...stubServices({}),
-        review: {
-          ...stubServices({}).review,
-          listInsights: async (request) => {
-            calls.push(request);
-            return notWired;
-          },
-          setInsightStatus: (request) => {
-            calls.push(request);
-            return notWiredError;
-          },
-        },
-      },
-      appInfo,
-    );
-    const id = '00000000-0000-4000-8000-000000000001';
-    await expectInvalid(handlers['review:list-insights']({}));
-    await expectInvalid(
-      handlers['review:set-insight-status']({ insightId: 'x', status: 'pending' }),
-    );
-    await expectInvalid(handlers['review:set-insight-status']({ insightId: id, status: 'done' }));
-    await handlers['review:list-insights']({ sessionId: 's1' });
-    await handlers['review:set-insight-status']({ insightId: id, status: 'promoted' });
-    expect(calls).toEqual([{ sessionId: 's1' }, { insightId: id, status: 'promoted' }]);
-  });
-});
-
 describe('createIpcHandlers for the chat', () => {
   const mention = {
     path: 'src/discounts.ts',
@@ -371,6 +298,13 @@ describe('createIpcHandlers for the chat', () => {
         question: 'why?',
         mentions: Array.from({ length: 9 }, (_, index) => ({ ...mention, startLine: index + 1 })),
       },
+      { sessionId: 's1', question: '/review', command: { kind: 'review', pathPrefixes: ['/etc'] } },
+      { sessionId: 's1', question: '/review', command: { kind: 'review', pathPrefixes: ['../x'] } },
+      { sessionId: 's1', question: '/review', command: { kind: 'review', effort: 'max' } },
+      { sessionId: 's1', question: '/review', command: { kind: 'review', fresh: 'yes' } },
+      { sessionId: 's1', question: '/review', command: { kind: 'review', extra: true } },
+      { sessionId: 's1', question: '/x', command: { kind: 'essay' } },
+      { sessionId: 's1', question: '/summarize', command: { kind: 'summarize', paths: [] } },
     ]) {
       await expectInvalid(handlers['chat:ask'](bad));
     }
@@ -391,6 +325,27 @@ describe('createIpcHandlers for the chat', () => {
       mentions: [mention, { path: './docs/a.md', side: 'base', sha: mention.sha }],
     });
     await handlers['chat:ask']({ sessionId: 's1', question: 'why?', mentions: [] });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: '/review ./src/ui/ docs',
+      command: {
+        kind: 'review',
+        pathPrefixes: ['./src/ui/', 'src/ui', 'docs'],
+        fresh: true,
+        effort: 'low',
+        verify: false,
+      },
+    });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: '/review',
+      command: { kind: 'review', pathPrefixes: [], fresh: false },
+    });
+    await handlers['chat:ask']({
+      sessionId: 's1',
+      question: '/summarize',
+      command: { kind: 'summarize' },
+    });
     expect(calls).toEqual([
       { sessionId: 's1', question: 'why?' },
       { sessionId: 's1', question: 'why?', focus: { path: 'src/a.ts' } },
@@ -401,6 +356,19 @@ describe('createIpcHandlers for the chat', () => {
         mentions: [mention, { path: 'docs/a.md', side: 'base', sha: mention.sha }],
       },
       { sessionId: 's1', question: 'why?' },
+      {
+        sessionId: 's1',
+        question: '/review ./src/ui/ docs',
+        command: {
+          kind: 'review',
+          pathPrefixes: ['src/ui', 'docs'],
+          fresh: true,
+          effort: 'low',
+          verify: false,
+        },
+      },
+      { sessionId: 's1', question: '/review', command: { kind: 'review' } },
+      { sessionId: 's1', question: '/summarize', command: { kind: 'summarize' } },
     ]);
   });
 
@@ -408,6 +376,7 @@ describe('createIpcHandlers for the chat', () => {
     const handlers = createIpcHandlers(stubServices({}), appInfo);
     await expectInvalid(handlers['chat:list']({}));
     await expectInvalid(handlers['chat:clear']({ sessionId: '' }));
+    await expectInvalid(handlers['chat:clear']({ sessionId: 's1', queuedOnly: 'yes' }));
     await expectInvalid(handlers['chat:cancel']({ messageId: 'not-a-uuid' }));
     await expectInvalid(handlers['chat:cancel']({ sessionId: '' }));
     await expectInvalid(handlers['chat:compact']({ sessionId: 's1', extra: 1 }));
@@ -444,7 +413,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           create: record,
           update: record,
           transition: record,
-          promoteInsight: record,
+          stageReviewFinding: record,
           stageImpactFinding: record,
           export: record,
           setVerdict: (request) => {
@@ -481,7 +450,11 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(handlers['ura:update']({ itemId: 'x' }));
     await expectInvalid(handlers['ura:transition']({ itemId: id, to: 'deleted' }));
     await expectInvalid(handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
-    await expectInvalid(handlers['ura:promote-insight']({ insightId: id, severity: 'meh' }));
+    await expectInvalid(handlers['ura:stage-review-finding']({ messageId: id, finding: -1 }));
+    await expectInvalid(handlers['ura:stage-review-finding']({ messageId: 'm', finding: 0 }));
+    await expectInvalid(
+      handlers['ura:stage-review-finding']({ messageId: id, finding: 0, severity: 'meh' }),
+    );
     await expectInvalid(handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }));
     await expectInvalid(handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
     await expectInvalid(handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
@@ -492,7 +465,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:update']({ itemId: id, title: 'New' });
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
-    await handlers['ura:promote-insight']({ insightId: id });
+    await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
     await handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a', functionName: 'f' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
     await handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'comment' });
@@ -503,7 +476,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { itemId: id, title: 'New' },
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
-      { insightId: id },
+      { messageId: id, finding: 2 },
       { sessionId: 's1', path: 'a', functionName: 'f' },
       { sessionId: 's1', target: 'agent-xml' },
       { sessionId: 's1', verdict: 'comment' },
@@ -730,12 +703,6 @@ function stubServices(
       setPreferred: async () => notWired,
     },
     display: { get: async () => notWired, set: async () => notWired },
-    review: {
-      run: async () => notWired,
-      listInsights: async () => notWired,
-      setInsightStatus: () => notWiredError,
-      onProgress: () => doNothingSync,
-    },
     chat: {
       ask: async () => notWired,
       list: () => notWiredError,
@@ -752,7 +719,7 @@ function stubServices(
       update: async () => notWired,
       transition: async () => notWired,
       reorder: () => notWiredError,
-      promoteInsight: async () => notWired,
+      stageReviewFinding: async () => notWired,
       stageImpactFinding: async () => notWired,
       setVerdict: () => notWiredError,
       export: async () => notWired,

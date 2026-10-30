@@ -7,8 +7,8 @@ import { rowToUraItem } from './row-to-ura-item.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
- * The stored item a `duplicate-item` insert collided with: the one staged from the same agent
- * insight, or from the same ImpactGate finding (session, head, path, metric and function), in
+ * The stored item a `duplicate-item` insert collided with: the one staged from the same `/review`
+ * finding (answer and index, ADR 0055), or from the same ImpactGate finding (session, head, path, metric and function), in
  * whatever status. `undefined` for other origins or when there is none.
  */
 export function findUraItemByOrigin(
@@ -17,8 +17,10 @@ export function findUraItemByOrigin(
 ): Result<UraItem | undefined, Extract<UraStoreError, { kind: 'corrupt-row' }>> {
   const { origin } = item;
   let row: Record<string, SQLOutputValue> | undefined;
-  if (origin.kind === 'agent-insight') {
-    row = db.prepare('SELECT * FROM ura_items WHERE insight_id = ?;').get(origin.insightId);
+  if (origin.kind === 'chat-answer' && origin.finding !== undefined) {
+    row = db
+      .prepare('SELECT * FROM ura_items WHERE chat_message_id = ? AND chat_finding = ?;')
+      .get(origin.messageId, origin.finding);
   } else if (origin.kind === 'impact-finding' && item.anchor.kind === 'lines') {
     row = db
       .prepare(

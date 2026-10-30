@@ -57,6 +57,7 @@ describe('parseChatCommand', () => {
       kind: 'review',
       pathPrefixes: [],
       fresh: false,
+      verify: true,
     });
     expect(parseChatCommand('/REVIEW')).toMatchObject({ kind: 'review' });
   });
@@ -66,6 +67,7 @@ describe('parseChatCommand', () => {
       kind: 'review',
       pathPrefixes: ['src/ui', 'docs'],
       fresh: false,
+      verify: true,
     });
   });
 
@@ -74,19 +76,42 @@ describe('parseChatCommand', () => {
       kind: 'review',
       pathPrefixes: ['src'],
       fresh: true,
+      verify: true,
       effort: 'high',
     });
     expect(parseChatCommand('/review --effort low')).toEqual({
       kind: 'review',
       pathPrefixes: [],
       fresh: false,
+      verify: true,
       effort: 'low',
     });
     expect(parseChatCommand('/review -- --fresh')).toEqual({
       kind: 'review',
       pathPrefixes: ['--fresh'],
       fresh: false,
+      verify: true,
     });
+  });
+
+  it('parses --no-verify, which skips the verification pass', () => {
+    expect(parseChatCommand('/review --no-verify src')).toEqual({
+      kind: 'review',
+      pathPrefixes: ['src'],
+      fresh: false,
+      verify: false,
+    });
+  });
+
+  it('parses /summarize and its alias /abstract', () => {
+    expect(parseChatCommand('/summarize')).toEqual({ kind: 'summarize' });
+    expect(parseChatCommand(' /Abstract ')).toEqual({ kind: 'summarize' });
+    expect(parseChatCommand('/summarize src')).toEqual({
+      kind: 'invalid',
+      message: '/summarize takes no arguments. Type /help for the commands.',
+    });
+    expect(chatHelp.some((line) => line.startsWith('/summarize'))).toBe(true);
+    expect(chatHelp.some((line) => line.startsWith('/abstract'))).toBe(true);
   });
 
   it('explains malformed /review commands instead of failing', () => {
@@ -113,10 +138,11 @@ describe('parseChatCommand', () => {
       kind: 'question',
       text: 'why does run_fast skip checks?',
     });
-    expect(parseChatCommand(' /CLEAR ')).toEqual({ kind: 'clear' });
+    expect(parseChatCommand(' /CLEAR ')).toEqual({ kind: 'clear', queuedOnly: false });
+    expect(parseChatCommand('/clear Queue')).toEqual({ kind: 'clear', queuedOnly: true });
     expect(parseChatCommand('/clear now')).toEqual({
       kind: 'invalid',
-      message: '/clear takes no arguments. Type /help for the commands.',
+      message: '/clear takes nothing, or queue to drop only the waiting questions.',
     });
     expect(parseChatCommand('/Compact')).toEqual({ kind: 'compact' });
     expect(parseChatCommand('/compact all')).toEqual({

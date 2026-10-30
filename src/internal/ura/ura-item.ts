@@ -14,9 +14,6 @@ export type SessionId = Brand<string, 'SessionId'>;
 /** A full, lowercase commit id; structurally identical to the git and session domains' brand. */
 export type CommitSha = Brand<string, 'CommitSha'>;
 
-/** An agent insight's id; structurally identical to the review domain's brand. */
-export type AgentInsightId = Brand<string, 'AgentInsightId'>;
-
 /**
  * Where an item points, on the head side of the head it was written against. Lines are 1-based
  * and inclusive. Paths are repository-relative with `/` separators.
@@ -34,10 +31,13 @@ export type UraAnchor =
 /** The ImpactGate metrics an item can carry (ADR 0015). */
 export type ImpactMetric = 'cognitive-complexity';
 
-/** Who or what raised an item. Agent and ImpactGate items keep the facts they came from. */
+/**
+ * Who or what raised an item. ImpactGate items keep the facts they came from. A `chat-answer` item
+ * stages a chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer
+ * (ADR 0055).
+ */
 export type UraOrigin =
   | { readonly kind: 'human' }
-  | { readonly kind: 'agent-insight'; readonly insightId: AgentInsightId }
   | {
       readonly kind: 'impact-finding';
       readonly metric: ImpactMetric;
@@ -47,7 +47,7 @@ export type UraOrigin =
       /** 0–100, as ImpactGate ranked the function in its review. */
       readonly percentile: number;
     }
-  | { readonly kind: 'chat-answer'; readonly messageId: string };
+  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
 /**
  * `staged` items are exported. `addressed` records the later head at which a reviewer or an agent
@@ -135,7 +135,7 @@ export type UraStoreError =
   | {
       readonly kind: 'duplicate-item';
       readonly id: UraItemId;
-      readonly reason: 'id-taken' | 'insight-already-staged' | 'finding-already-staged';
+      readonly reason: 'id-taken' | 'review-finding-already-staged' | 'finding-already-staged';
     }
   | { readonly kind: 'order-mismatch'; readonly sessionId: SessionId }
   | {

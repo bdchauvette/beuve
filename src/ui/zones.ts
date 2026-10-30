@@ -12,7 +12,7 @@ export interface Zone {
 /** Zones in Tab order. */
 export const zones: readonly Zone[] = Object.freeze([
   { id: 'intent', label: 'Intent & files', hints: '↑↓ move · ⏎ show file · f changed only' },
-  { id: 'diff', label: 'Diff', hints: 'j k hunks · m stage · e suggest · s split · ] insight' },
+  { id: 'diff', label: 'Diff', hints: 'j k hunks · m stage · e suggest · s split · p peek' },
   { id: 'ura', label: 'Review', hints: 'j k move · ⏎ show · Space edit · x withdraw' },
   { id: 'chat', label: 'Chat', hints: '⏎ ask · ↑ answers · Esc back' },
 ]);

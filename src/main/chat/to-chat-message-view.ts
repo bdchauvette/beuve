@@ -10,6 +10,7 @@ const errorCodes: ReadonlySet<string> = new Set<ChatErrorCode>([
   'timeout',
   'model-failed',
   'chat-unavailable',
+  'nothing-to-review',
   'internal',
 ]);
 
@@ -37,11 +38,16 @@ export function toChatMessageView(message: ChatMessage): ChatMessageView {
   if (message.role !== 'assistant') {
     return { ...base, status: 'complete' };
   }
+  const answer = {
+    ...base,
+    answerKind: message.kind,
+    ...(message.review !== undefined && { review: message.review }),
+  };
   if (message.status !== 'failed') {
-    return { ...base, status: message.status };
+    return { ...answer, status: message.status };
   }
   const errorCode = isErrorCode(message.errorCode) ? message.errorCode : 'internal';
-  return { ...base, status: 'failed', errorCode, errorMessage: describeChatError(errorCode) };
+  return { ...answer, status: 'failed', errorCode, errorMessage: describeChatError(errorCode) };
 }
 
 function isErrorCode(code: string): code is ChatErrorCode {

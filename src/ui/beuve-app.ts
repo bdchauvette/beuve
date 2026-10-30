@@ -3,10 +3,10 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import type {
-  AgentInsightView,
   AppInfo,
   CallHierarchyView,
   ChatCitationView,
+  ChatCommandRequest,
   ChatDeltaView,
   ChatMentionView,
   CiStatusView,
@@ -20,7 +20,6 @@ import type {
   GithubAuthStatusView,
   TraceStatusView,
   ImpactView,
-  InsightStatusView,
   IpcResult,
   McpStatus,
   OpenPullRequestRequest,
@@ -29,7 +28,6 @@ import type {
   RepositoryTreeView,
   DiffFileView,
   FileAttributesView,
-  ReviewProgressView,
   ReviewView,
   SessionSummary,
   SetDiffDisplayRequest,
@@ -48,7 +46,6 @@ import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
-import { advanceReviewEntry } from './advance-review-entry.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -67,21 +64,10 @@ import type {
 import { commandRegistry } from './command-registry.ts';
 import type { AppAction, CommandDefinition } from './command-registry.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
-import type {
-  FileJump,
-  InsightJump,
-  SuggestionJump,
-  UraCreateRequest,
-} from './beuve-diff-stream.ts';
+import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
-import type {
-  ChatCitation,
-  ChatEntry,
-  ChatTranscript,
-  LocalChatEntry,
-  ReviewChatEntry,
-} from './chat-entry.ts';
+import type { ChatEntry, ChatTranscript, LocalChatEntry } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
 import { currentEditorName } from './current-editor-name.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
@@ -96,7 +82,6 @@ import { planChatStage } from './plan-chat-stage.ts';
 import { emptyChatTranscript } from './empty-chat-transcript.ts';
 import { reduceChatTranscript } from './reduce-chat-transcript.ts';
 import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
-import type { ChatCommand } from './parse-chat-command.ts';
 import type { FlowState } from './flow-state.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
@@ -316,8 +301,6 @@ export class BeuveApp extends LitElement {
   private activePath: string | undefined;
   private jumpNonce = 0;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The latest `review:progress` event per run, for runs whose handle hasn't arrived yet. */
-  private readonly runEvents = new Map<string, ReviewProgressView>();
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     this.handleKey(event);
@@ -453,6 +436,16 @@ export class BeuveApp extends LitElement {
     void this.stageChatAnswer(event.detail.messageId);
   };
 
+  private readonly onChatStageFinding = (
+    event: CustomEvent<{ messageId: string; finding: number }>,
+  ): void => {
+    void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
+  };
+
+  private readonly onChatClearQueue = (): void => {
+    void this.clearChat(true);
+  };
+
   private readonly onChatCite = (event: CustomEvent<{ citation: ChatCitationView }>): void => {
     this.openCitation(event.detail.citation);
   };
@@ -463,12 +456,6 @@ export class BeuveApp extends LitElement {
 
   private readonly onActiveFile = (event: CustomEvent<{ path: string | undefined }>): void => {
     this.activePath = event.detail.path;
-  };
-
-  private readonly onCitation = (event: CustomEvent<{ insightId: string }>): void => {
-    this.jumpNonce += 1;
-    this.insightJump = { insightId: event.detail.insightId, nonce: this.jumpNonce };
-    this.focusedZone = 'diff';
   };
 
   /** Sessions whose chat already suggested /compact in this window. */
@@ -607,12 +594,6 @@ export class BeuveApp extends LitElement {
     );
   };
 
-  private readonly onInsightStatus = (
-    event: CustomEvent<{ insightId: string; status: InsightStatusView }>,
-  ): void => {
-    void this.setInsightStatus(event.detail.insightId, event.detail.status);
-  };
-
   private readonly onPaletteRun = (event: CustomEvent<{ action: PaletteAction }>): void => {
     this.paletteText = undefined;
     void this.runPaletteAction(event.detail.action);
@@ -673,9 +654,6 @@ export class BeuveApp extends LitElement {
   @state() accessor opening = false;
   @state() accessor localFailure: OpenFailure | undefined;
   @state() accessor chat: ChatTranscript = emptyChatTranscript;
-  /** Agent insights for the open review's head. */
-  @state() accessor insights: readonly AgentInsightView[] = [];
-  @state() accessor insightJump: InsightJump | undefined;
   @state() accessor fileJump: FileJump | undefined;
   /** The open session head's tracked paths, for the radar tree. */
   @state() accessor tree: RepositoryTreeView | undefined;
@@ -726,9 +704,6 @@ export class BeuveApp extends LitElement {
     this.unsubscribes = [
       bridge.on('mcp:status', (status) => {
         this.mcpStatus = status;
-      }),
-      bridge.on('review:progress', (event) => {
-        this.applyReviewProgress(event);
       }),
       bridge.on('chat:delta', (delta) => {
         this.applyChatDelta(delta);
@@ -1069,7 +1044,6 @@ export class BeuveApp extends LitElement {
     this.openDialog = false;
     if (sessionId !== this.selectedId) {
       this.review = undefined;
-      this.insights = [];
       this.tree = undefined;
       this.fileAttributes = undefined;
       this.uraItems = [];
@@ -1096,9 +1070,6 @@ export class BeuveApp extends LitElement {
     this.flow = undefined;
     this.closeTrace();
     if (review.ok) {
-      if (this.review?.headSha !== review.value.headSha) {
-        this.insights = [];
-      }
       this.review = review.value;
       this.focusedZone = 'diff';
       if (this.sessions.every(({ id }) => id !== sessionId)) {
@@ -1107,7 +1078,6 @@ export class BeuveApp extends LitElement {
       void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
       void this.loadFileAttributes(review.value);
-      void this.refreshInsights(review.value.session.id);
       void this.refreshUra(review.value.session.id);
       void this.loadChat(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
@@ -1468,7 +1438,11 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'clear': {
-        void this.clearChat();
+        void this.clearChat(command.queuedOnly);
+        return;
+      }
+      case 'summarize': {
+        void this.runChatCommand(text.trim(), { kind: 'summarize' });
         return;
       }
       case 'compact': {
@@ -1522,8 +1496,13 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'review': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.startReview(command);
+        void this.runChatCommand(text.trim(), {
+          kind: 'review',
+          ...(command.pathPrefixes.length > 0 && { pathPrefixes: command.pathPrefixes }),
+          ...(command.fresh && { fresh: true }),
+          ...(!command.verify && { verify: false }),
+          ...(command.effort !== undefined && { effort: command.effort }),
+        });
         return;
       }
       case 'sidebar': {
@@ -1545,14 +1524,6 @@ export class BeuveApp extends LitElement {
 
   private note(tone: 'info' | 'error', ...lines: string[]): void {
     this.addEntry({ id: 0, kind: 'note', tone, lines });
-  }
-
-  private updateEntry(id: number, update: (entry: ReviewChatEntry) => ReviewChatEntry): void {
-    this.setEntries(
-      this.chat.entries.map((entry) =>
-        entry.id === id && entry.kind === 'review' ? update(entry) : entry,
-      ),
-    );
   }
 
   private setEntries(entries: readonly ChatEntry[]): void {
@@ -1650,18 +1621,54 @@ export class BeuveApp extends LitElement {
     );
   }
 
-  private async clearChat(): Promise<void> {
+  /**
+   * `/review` and `/summarize` (ADR 0055, 0056): chat requests like a question, so they queue
+   * behind a running answer and land in the transcript as structured or calm answers.
+   */
+  private async runChatCommand(typed: string, command: ChatCommandRequest): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
     if (bridge === undefined || review === undefined) {
-      this.chat = emptyChatTranscript;
+      this.addEntry({ id: 0, kind: 'input', text: typed });
+      this.note('error', `Open a review session first, then type ${typed.split(' ', 1)[0] ?? ''}.`);
       return;
     }
-    const cleared = await bridge.invoke('chat:clear', { sessionId: review.session.id });
-    if (cleared.ok) {
-      this.dispatchChat({ kind: 'cleared' });
-    } else {
+    const asked = await bridge.invoke('chat:ask', {
+      sessionId: review.session.id,
+      question: typed,
+      command,
+    });
+    if (!asked.ok) {
+      this.addEntry({ id: 0, kind: 'input', text: typed });
+      this.note('error', asked.error.message);
+      return;
+    }
+    if (this.review?.session.id === review.session.id) {
+      this.dispatchChat({ kind: 'asked', ...asked.value });
+    }
+  }
+
+  /** `/clear` deletes the transcript; `/clear queue` and the queue's button only what waits. */
+  private async clearChat(isQueueOnly = false): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      if (!isQueueOnly) {
+        this.chat = emptyChatTranscript;
+      }
+      return;
+    }
+    const sessionId = review.session.id;
+    const cleared = await bridge.invoke('chat:clear', {
+      sessionId,
+      ...(isQueueOnly && { queuedOnly: true }),
+    });
+    if (!cleared.ok) {
       this.note('error', cleared.error.message);
+    } else if (isQueueOnly) {
+      await this.loadChat(sessionId);
+    } else {
+      this.dispatchChat({ kind: 'cleared' });
     }
   }
 
@@ -1686,6 +1693,25 @@ export class BeuveApp extends LitElement {
         this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
       }
       return created;
+    });
+  }
+
+  /** Stages one `/review` finding on its lines; main reads it from the stored answer. */
+  private async stageReviewFinding(messageId: string, finding: number): Promise<void> {
+    if (this.stagedFindings().has(`${messageId}:${String(finding)}`)) {
+      return;
+    }
+    await this.uraCall(async (bridge) => {
+      const staged = await bridge.invoke('ura:stage-review-finding', { messageId, finding });
+      if (staged.ok) {
+        this.dockNotice = {
+          tone: 'info',
+          text: staged.value.created
+            ? `Staged “${staged.value.item.title}”.`
+            : `“${staged.value.item.title}” is already staged.`,
+        };
+      }
+      return staged;
     });
   }
 
@@ -1844,142 +1870,26 @@ export class BeuveApp extends LitElement {
   private stagedMessageIds(): ReadonlySet<string> {
     return new Set(
       this.uraItems.flatMap((item) =>
-        item.origin.kind === 'chat-answer' && item.status.kind === 'staged'
+        item.origin.kind === 'chat-answer' &&
+        item.origin.finding === undefined &&
+        item.status.kind === 'staged'
           ? item.origin.messageId
           : [],
       ),
     );
   }
 
-  private async startReview(command: Extract<ChatCommand, { kind: 'review' }>): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.addEntry({
-        id: 0,
-        kind: 'note',
-        tone: 'error',
-        lines: ['Open a review session first, then type /review.'],
-      });
-      return;
-    }
-    const sessionId = review.session.id;
-    const id = this.addEntry({
-      id: 0,
-      kind: 'review',
-      sessionId,
-      status: 'requesting',
-      citations: [],
-    });
-    const handle = await bridge.invoke('review:run', {
-      sessionId,
-      ...(command.pathPrefixes.length > 0 && { pathPrefixes: command.pathPrefixes }),
-      ...(command.fresh && { fresh: true }),
-      ...(command.effort !== undefined && { effort: command.effort }),
-    });
-    if (!handle.ok) {
-      this.updateEntry(id, (entry) => ({
-        ...entry,
-        status: 'failed',
-        error: { code: 'request-failed', message: handle.error.message },
-      }));
-      return;
-    }
-    const { value } = handle;
-    if (value.status === 'reused') {
-      this.updateEntry(id, (entry) => ({
-        ...entry,
-        runId: value.runId,
-        status: 'completed',
-        joined: 'reused',
-        summary: value.summary,
-      }));
-      await this.refreshInsights(sessionId);
-      return;
-    }
-    this.updateEntry(id, (entry) => ({
-      ...entry,
-      runId: value.runId,
-      status: 'running',
-      ...(value.status === 'attached' && { joined: 'attached' as const }),
-    }));
-    const latest = this.runEvents.get(value.runId);
-    if (latest !== undefined) {
-      this.applyReviewProgress(latest);
-    }
-  }
-
-  private applyReviewProgress(event: ReviewProgressView): void {
-    this.runEvents.set(event.runId, event);
-    this.setEntries(
-      this.chat.entries.map((entry) =>
-        entry.kind === 'review' ? advanceReviewEntry(entry, event) : entry,
+  /** `/review` findings staged and still staged, as `messageId:index`. */
+  private stagedFindings(): ReadonlySet<string> {
+    return new Set(
+      this.uraItems.flatMap((item) =>
+        item.origin.kind === 'chat-answer' &&
+        item.origin.finding !== undefined &&
+        item.status.kind === 'staged'
+          ? `${item.origin.messageId}:${String(item.origin.finding)}`
+          : [],
       ),
     );
-    if (event.kind === 'completed' || event.kind === 'failed') {
-      void this.refreshInsights(event.sessionId);
-    }
-  }
-
-  /** Reloads the open head's insights and the citations of every finished review entry. */
-  private async refreshInsights(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const listed = await bridge.invoke('review:list-insights', { sessionId });
-    if (!listed.ok) {
-      return;
-    }
-    const { review } = this;
-    if (review?.session.id === sessionId && review.headSha === listed.value.headSha) {
-      this.insights = listed.value.insights;
-    }
-    this.setEntries(withCitations(this.chat.entries, listed.value.insights));
-  }
-
-  /**
-   * `y`/`d` and the insight's buttons. Promoting stages the insight in the dock (main marks it
-   * promoted in the same transaction); undoing a promotion, or dismissing a promoted insight,
-   * withdraws its item first, which sets the insight back to pending.
-   */
-  private async setInsightStatus(insightId: string, status: InsightStatusView): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const restatus = (insights: readonly AgentInsightView[]): AgentInsightView[] =>
-      insights.map((insight) => (insight.id === insightId ? { ...insight, status } : insight));
-    this.insights = restatus(this.insights);
-    this.setEntries(withCitations(this.chat.entries, this.insights));
-    let isDone = true;
-    if (status === 'promoted') {
-      const promoted = await bridge.invoke('ura:promote-insight', { insightId });
-      isDone = promoted.ok;
-      this.noteFailure(promoted);
-    } else {
-      const staged = this.uraItems.find(
-        (item) =>
-          item.origin.kind === 'agent-insight' &&
-          item.origin.insightId === insightId &&
-          item.status.kind === 'staged',
-      );
-      if (staged !== undefined) {
-        const withdrawn = await bridge.invoke('ura:transition', {
-          itemId: staged.id,
-          to: 'withdrawn',
-        });
-        this.noteFailure(withdrawn);
-      }
-      if (staged === undefined || status === 'dismissed') {
-        const changed = await bridge.invoke('review:set-insight-status', { insightId, status });
-        isDone = changed.ok;
-      }
-    }
-    if (!isDone || status !== 'dismissed') {
-      await this.refreshInsights(review.session.id);
-    }
   }
 
   private async refreshUra(sessionId: string): Promise<void> {
@@ -2024,10 +1934,6 @@ export class BeuveApp extends LitElement {
     to: 'staged' | 'withdrawn' | 'addressed',
   ): Promise<void> {
     await this.uraCall(async (bridge) => bridge.invoke('ura:transition', { itemId, to }));
-    const item = this.uraItems.find((entry) => entry.id === itemId);
-    if (item?.origin.kind === 'agent-insight' && this.review !== undefined) {
-      await this.refreshInsights(this.review.session.id);
-    }
   }
 
   /** Runs a dock call; `ura:changed` refreshes the list, and failures show in the dock. */
@@ -2318,12 +2224,6 @@ export class BeuveApp extends LitElement {
         if (item !== undefined) {
           this.onUraJump(new CustomEvent('beuve-ura-jump', { detail: { item } }));
         }
-        return;
-      }
-      case 'insight': {
-        this.onCitation(
-          new CustomEvent('beuve-citation', { detail: { insightId: action.insightId } }),
-        );
       }
     }
   }
@@ -2432,7 +2332,6 @@ export class BeuveApp extends LitElement {
       ...(this.review !== undefined && { files: this.review.files }),
       ...(this.tree !== undefined && { trackedPaths: this.tree.paths }),
       uraItems: this.uraItems,
-      insights: this.insights,
     };
   }
 
@@ -2502,8 +2401,6 @@ export class BeuveApp extends LitElement {
       .peek=${this.peek}
       .flow=${this.flow}
       .trace=${this.trace}
-      .insights=${this.insights}
-      .insightJump=${this.insightJump}
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.uraItems}
@@ -2514,7 +2411,6 @@ export class BeuveApp extends LitElement {
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-mark-reviewed=${this.onMarkReviewed}
-      @beuve-insight-status=${this.onInsightStatus}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
@@ -2589,17 +2485,19 @@ export class BeuveApp extends LitElement {
       .transcript=${this.chat.entries}
       .diffPaths=${this.diffPaths()}
       .stagedMessageIds=${this.stagedMessageIds()}
+      .stagedFindings=${this.stagedFindings()}
       ?hasSession=${this.review !== undefined}
       @beuve-chat-submit=${this.onChatSubmit}
       @beuve-chat-escape=${this.onChatEscape}
       @beuve-chat-cycle=${this.onChatCycle}
       @beuve-chat-cancel=${this.onChatCancel}
       @beuve-chat-stage=${this.onChatStage}
+      @beuve-chat-stage-finding=${this.onChatStageFinding}
+      @beuve-chat-clear-queue=${this.onChatClearQueue}
       @beuve-chat-cite=${this.onChatCite}
       @beuve-chat-mention=${this.onChatMention}
       @beuve-chat-cancel-compaction=${this.onChatCancelCompaction}
       @beuve-open-editor=${this.onOpenEditor}
-      @beuve-citation=${this.onCitation}
     ></beuve-chat-drawer>`;
   }
 
@@ -2777,32 +2675,6 @@ const flowFailureText: Readonly<Record<FlowFailureKind, string>> = {
   'too-large': 'This function is too large to draw as a chart.',
   'file-unavailable': 'The head version of this file is not readable source.',
 };
-
-/** Gives every finished review entry pills for its run's insights, with their current status. */
-function withCitations(
-  transcript: readonly ChatEntry[],
-  insights: readonly AgentInsightView[],
-): ChatEntry[] {
-  return transcript.map((entry) => {
-    const runId = entry.kind === 'review' ? entry.summary?.reviewRunId : undefined;
-    if (runId === undefined || entry.kind !== 'review') {
-      return entry;
-    }
-    const cited = insights.filter((insight) => insight.runId === runId);
-    if (cited.length === 0) {
-      return entry;
-    }
-    const citations = cited.map((insight): ChatCitation => ({
-      insightId: insight.id,
-      path: insight.path,
-      line: insight.lineStart,
-      title: insight.title,
-      severity: insight.severity,
-      status: insight.status,
-    }));
-    return { ...entry, citations };
-  });
-}
 
 const exportLabels: Readonly<Record<UraExportTarget, string>> = {
   'agent-xml': 'the review for Claude Code as XML',

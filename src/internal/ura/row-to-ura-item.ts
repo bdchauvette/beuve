@@ -7,7 +7,6 @@ import { isCommitSha } from '#x/git/is-commit-sha.ts';
 import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
 import { isUuid } from '#x/text/is-uuid.ts';
 import type {
-  AgentInsightId,
   SessionId,
   UraAnchor,
   UraItem,
@@ -94,21 +93,22 @@ function toAnchor(row: Row): UraAnchor | string {
 }
 
 function toOrigin(row: Row): UraOrigin | string {
-  const { origin_kind, insight_id, chat_message_id, impact_metric, impact_function } = row;
+  const { origin_kind, chat_message_id, chat_finding, impact_metric, impact_function } = row;
   const { impact_value, impact_threshold, impact_percentile } = row;
   switch (origin_kind) {
     case 'human': {
       return { kind: 'human' };
     }
-    case 'agent-insight': {
-      return isUuid(insight_id)
-        ? { kind: 'agent-insight', insightId: insight_id as AgentInsightId }
-        : 'insight_id is not a UUID';
-    }
     case 'chat-answer': {
-      return typeof chat_message_id === 'string'
-        ? { kind: 'chat-answer', messageId: chat_message_id }
-        : 'chat_message_id is not text';
+      if (typeof chat_message_id !== 'string') {
+        return 'chat_message_id is not text';
+      }
+      if (chat_finding === null) {
+        return { kind: 'chat-answer', messageId: chat_message_id };
+      }
+      return Number.isSafeInteger(chat_finding) && Number(chat_finding) >= 0
+        ? { kind: 'chat-answer', messageId: chat_message_id, finding: Number(chat_finding) }
+        : 'chat_finding is not a finding index';
     }
     case 'impact-finding': {
       return impact_metric === 'cognitive-complexity' &&

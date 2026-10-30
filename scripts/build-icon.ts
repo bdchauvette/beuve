@@ -15,11 +15,11 @@ interface Layer {
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'build');
 const canvas = 1024;
-/** Alabaster light: the app background and border, ink, and the insight purple (ADR 0025). */
+/** Alabaster light: the app background and border, ink, and the accent violet (ADR 0025). */
 const paper = [0xf7, 0xf7, 0xf8] as const;
 const border = [0xdc, 0xdc, 0xe0] as const;
 const ink = [0x1b, 0x1c, 0x20] as const;
-const insight = [0x7a, 0x4f, 0xd6] as const;
+const violet = [0x7a, 0x4f, 0xd6] as const;
 const icnsTypes: readonly (readonly [string, number])[] = [
   ['icp4', 16],
   ['icp5', 32],
@@ -36,7 +36,7 @@ const icnsTypes: readonly (readonly [string, number])[] = [
 await buildIcon();
 
 /**
- * Draws the placeholder app icon (a lowercase "b" with an insight dot on an Alabaster squircle,
+ * Draws the placeholder app icon (a lowercase "b" with a violet dot on an Alabaster squircle,
  * on Apple's 1024 grid with an 824 body) analytically at every size, so no rasterizer or image
  * dependency is needed, and writes `build/icon.icns` (macOS) and `build/icon.png` (1024, Linux and
  * the source of truth to eyeball). Rerun after changing the shapes: `node scripts/build-icon.ts`.
@@ -82,7 +82,7 @@ function iconLayers(): readonly Layer[] {
             (bowl.outer - bowl.inner) / 2,
         ),
     },
-    { color: insight, distance: (x, y): number => Math.hypot(x - 690, y - 300) - 48 },
+    { color: violet, distance: (x, y): number => Math.hypot(x - 690, y - 300) - 48 },
   ];
 }
 

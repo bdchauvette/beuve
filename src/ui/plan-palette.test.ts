@@ -48,7 +48,6 @@ const sources: PaletteSources = {
   files: [file('src/total.ts'), file('src/checkout.ts')],
   trackedPaths: ['README.md', 'src/checkout.ts', 'src/total.ts', 'src/util/tax-table.ts'],
   uraItems: [item],
-  insights: [],
 };
 
 describe('planPalette', () => {

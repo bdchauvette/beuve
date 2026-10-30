@@ -9,6 +9,8 @@ const messages: Readonly<Record<ChatErrorCode, string>> = {
   timeout: 'Claude Code did not answer in time. Ask something narrower, or retry.',
   'model-failed': 'Claude Code gave no usable answer. Ask again.',
   'chat-unavailable': 'The change could not be read, so there is nothing to ask about. Try again.',
+  'nothing-to-review':
+    'Nothing to review: no changed text file is in scope, or everything up to the head is marked reviewed.',
   internal: 'Something went wrong inside beuve. The question was not answered.',
 };
 

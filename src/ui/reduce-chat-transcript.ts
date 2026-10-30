@@ -14,7 +14,7 @@ export type ChatTranscriptAction =
       readonly answer: ChatMessageView;
     }
   | { readonly kind: 'delta'; readonly delta: ChatDeltaView }
-  /** `chat:message-updated`: the answer completed, failed or was cancelled. */
+  /** `chat:message-updated`: the answer started (it was queued), completed, failed or stopped. */
   | { readonly kind: 'updated'; readonly message: ChatMessageView }
   /** `/compact` stored its summary: it joins the transcript where the compaction entry was. */
   | { readonly kind: 'compacted'; readonly summary: ChatMessageView }
@@ -36,15 +36,16 @@ export function reduceChatTranscript(
       const live = new Map(
         state.entries.flatMap((entry) =>
           entry.kind === 'message' && entry.message.status === 'streaming'
-            ? [[entry.id, entry.message] as const]
+            ? [[entry.id, entry] as const]
             : [],
         ),
       );
       // A streaming answer here is newer than the stored preview, which lags by up to a second.
-      const messages = action.messages.map((message) =>
-        message.status === 'streaming' ? (live.get(message.id) ?? message) : message,
+      const entries = action.messages.map(
+        (message): MessageChatEntry =>
+          (message.status === 'streaming' ? live.get(message.id) : undefined) ?? toEntry(message),
       );
-      return { entries: [...messages.map((message) => toEntry(message)), ...local], pending: {} };
+      return { entries: [...entries, ...local], pending: {} };
     }
     case 'asked': {
       if (hasMessage(state.entries, action.answer.id)) {
@@ -98,7 +99,19 @@ export function reduceChatTranscript(
 }
 
 function applyDelta(state: ChatTranscript, delta: ChatDeltaView): ChatTranscript {
-  const grow = (text: string): string => (delta.kind === 'reset' ? '' : text + delta.text);
+  const grow = (text: string): string => {
+    switch (delta.kind) {
+      case 'reset': {
+        return '';
+      }
+      case 'append': {
+        return text + delta.text;
+      }
+      case 'progress': {
+        return text;
+      }
+    }
+  };
   const listed = state.entries.find(
     (entry): entry is MessageChatEntry =>
       entry.kind === 'message' && entry.message.id === delta.messageId,
@@ -114,6 +127,14 @@ function applyDelta(state: ChatTranscript, delta: ChatDeltaView): ChatTranscript
   if (listed.message.status !== 'streaming') {
     return state;
   }
+  if (delta.kind === 'progress') {
+    return {
+      ...state,
+      entries: state.entries.map((entry) =>
+        entry === listed ? { ...listed, progress: delta.text } : entry,
+      ),
+    };
+  }
   return {
     ...state,
     entries: replaceMessage(state.entries, {
@@ -124,7 +145,13 @@ function applyDelta(state: ChatTranscript, delta: ChatDeltaView): ChatTranscript
 }
 
 function replay(answer: ChatMessageView, early: PendingAnswer | undefined): ChatMessageView {
-  return early === undefined ? answer : (early.settled ?? { ...answer, content: early.text });
+  if (early === undefined) {
+    return answer;
+  }
+  const { settled } = early;
+  return settled === undefined || settled.status === 'streaming'
+    ? { ...(settled ?? answer), content: early.text }
+    : settled;
 }
 
 function toEntry(message: ChatMessageView): MessageChatEntry {
@@ -135,8 +162,14 @@ function hasMessage(entries: readonly ChatEntry[], id: string): boolean {
   return entries.some((entry) => entry.kind === 'message' && entry.message.id === id);
 }
 
+/** Replaces a message; a streaming answer keeps its status line until it settles. */
 function replaceMessage(entries: readonly ChatEntry[], message: ChatMessageView): ChatEntry[] {
-  return entries.map((entry) =>
-    entry.kind === 'message' && entry.message.id === message.id ? toEntry(message) : entry,
-  );
+  return entries.map((entry) => {
+    if (entry.kind !== 'message' || entry.message.id !== message.id) {
+      return entry;
+    }
+    return message.status === 'streaming' && entry.progress !== undefined
+      ? { ...toEntry(message), progress: entry.progress }
+      : toEntry(message);
+  });
 }

@@ -11,8 +11,8 @@ const item = createTestUraItem();
 /** The row SQLite would return for the fixture item, with NULLs for unset columns. */
 function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQLOutputValue> {
   const nullable = [
-    'insight_id',
     'chat_message_id',
+    'chat_finding',
     'impact_metric',
     'impact_function',
     'impact_value',
@@ -63,7 +63,10 @@ describe('rowToUraItem', () => {
   });
 
   it('reports incomplete origins and statuses', () => {
-    expect(reasonOf({ origin_kind: 'agent-insight' })).toBe('insight_id is not a UUID');
+    expect(reasonOf({ origin_kind: 'chat-answer' })).toBe('chat_message_id is not text');
+    expect(reasonOf({ origin_kind: 'chat-answer', chat_message_id: 'm', chat_finding: -1 })).toBe(
+      'chat_finding is not a finding index',
+    );
     expect(reasonOf({ origin_kind: 'impact-finding', impact_metric: 'cognitive-complexity' })).toBe(
       'the ImpactGate columns are incomplete',
     );

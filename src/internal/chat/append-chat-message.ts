@@ -18,11 +18,16 @@ export function appendChatMessage(
   const status = message.role === 'assistant' ? message.status : 'complete';
   const errorCode =
     message.role === 'assistant' && message.status === 'failed' ? message.errorCode : '';
+  const kind = message.role === 'assistant' ? message.kind : 'answer';
+  const review =
+    message.role === 'assistant' && message.review !== undefined
+      ? JSON.stringify(message.review)
+      : '';
   try {
     db.prepare(
       `INSERT INTO chat_messages (id, session_id, head_sha, role, content, citations, mentions,
-                                  status, error_code, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?);`,
+                                  status, error_code, kind, review, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), ?);`,
     ).run(
       message.id,
       message.sessionId,
@@ -33,6 +38,8 @@ export function appendChatMessage(
       JSON.stringify(message.mentions),
       status,
       errorCode,
+      kind,
+      review,
       message.createdAt,
     );
   } catch (error: unknown) {

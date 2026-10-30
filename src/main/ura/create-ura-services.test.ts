@@ -6,14 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IpcResult, UraItemView } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type {
-  AgentInsight,
-  AgentInsightId,
-  CommitSha,
-  ReviewRunId,
-  SessionId,
-} from '#internal/review/agent-insight.ts';
-import { insertReviewRun } from '#internal/review/insert-review-run.ts';
+import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
+import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
+import type { ChatFinding } from '#internal/chat/chat-review.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { createLogger } from '#x/log/create-logger.ts';
 
@@ -21,7 +16,7 @@ import { createMainServices } from '../create-main-services.ts';
 import { openAppDatabase } from '../database/open-app-database.ts';
 import type { MainServices } from '../main-services.ts';
 
-const insightId = '33333333-3333-4333-8333-333333333333';
+const messageId = '33333333-3333-4333-8333-333333333333';
 
 describe('URA services (integration: SQLite + git, no Electron)', () => {
   let repo: TestRepository;
@@ -165,7 +160,7 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
     ]);
     expect(changes.length).toBeGreaterThanOrEqual(7);
     expect(new Set(changes)).toEqual(new Set([sessionId]));
-    expect(await services.ura.update({ itemId: insightId, title: 'x' })).toMatchObject({
+    expect(await services.ura.update({ itemId: messageId, title: 'x' })).toMatchObject({
       ok: false,
       error: { code: 'not-found' },
     });
@@ -221,45 +216,48 @@ describe('URA services (integration: SQLite + git, no Electron)', () => {
     });
   });
 
-  it('promotes an insight atomically and idempotently, mirroring withdraw and restage', async () => {
+  it('stages a /review finding from its stored answer, once, restaging a withdrawn one', async () => {
     const head = repo.git('rev-parse', 'feature');
-    storeInsights(db, sessionId, head, [
-      insight(insightId, 'Unchecked answer'),
-      insight('44444444-4444-4444-8444-444444444444', 'Tab\tin the title'),
-    ]);
+    storeReview(db, sessionId, head, [finding('Unchecked answer'), finding('Tab\tin the title')]);
 
-    const promoted = value(await services.ura.promoteInsight({ insightId }));
-    expect(promoted.created).toBe(true);
-    expect(promoted.item).toMatchObject({
+    const staged = value(await services.ura.stageReviewFinding({ messageId, finding: 0 }));
+    expect(staged.created).toBe(true);
+    expect(staged.item).toMatchObject({
+      headSha: head,
       severity: 'issue',
-      origin: { kind: 'agent-insight', insightId },
+      origin: { kind: 'chat-answer', messageId, finding: 0 },
       anchor: { kind: 'lines', path: 'src/app.ts', startLine: 2, endLine: 2 },
       title: 'Unchecked answer',
+      body: 'Check it.',
     });
-    expect(await insightStatus(services, sessionId, insightId)).toBe('promoted');
-    const again = value(await services.ura.promoteInsight({ insightId }));
-    expect(again).toEqual({ item: promoted.item, created: false });
+    const again = value(await services.ura.stageReviewFinding({ messageId, finding: 0 }));
+    expect(again).toEqual({ item: staged.item, created: false });
     expect(value(await services.ura.list({ sessionId })).items).toHaveLength(1);
 
-    value(await services.ura.transition({ itemId: promoted.item.id, to: 'withdrawn' }));
-    expect(await insightStatus(services, sessionId, insightId)).toBe('pending');
-    const restaged = value(await services.ura.promoteInsight({ insightId, severity: 'blocker' }));
+    value(await services.ura.transition({ itemId: staged.item.id, to: 'withdrawn' }));
+    const restaged = value(
+      await services.ura.stageReviewFinding({ messageId, finding: 0, severity: 'blocker' }),
+    );
     expect(restaged).toMatchObject({
       created: false,
-      item: { id: promoted.item.id, status: { kind: 'staged' }, severity: 'issue' },
+      item: { id: staged.item.id, status: { kind: 'staged' }, severity: 'issue' },
     });
-    expect(await insightStatus(services, sessionId, insightId)).toBe('promoted');
 
-    const invalid = '44444444-4444-4444-8444-444444444444';
-    expect(await services.ura.promoteInsight({ insightId: invalid })).toMatchObject({
+    expect(await services.ura.stageReviewFinding({ messageId, finding: 1 })).toMatchObject({
       ok: false,
       error: { code: 'invalid-request' },
     });
-    expect(await insightStatus(services, sessionId, invalid)).toBe('pending');
-    expect(value(await services.ura.list({ sessionId })).items).toHaveLength(1);
+    expect(await services.ura.stageReviewFinding({ messageId, finding: 2 })).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
     expect(
-      await services.ura.promoteInsight({ insightId: '55555555-5555-4555-8555-555555555555' }),
+      await services.ura.stageReviewFinding({
+        messageId: '55555555-5555-4555-8555-555555555555',
+        finding: 0,
+      }),
     ).toMatchObject({ ok: false, error: { code: 'not-found' } });
+    expect(value(await services.ura.list({ sessionId })).items).toHaveLength(1);
   });
 
   it('stages an ImpactGate finding once, looked up from its own report', async () => {
@@ -514,67 +512,65 @@ function featureBranch(repo: TestRepository): void {
   repo.git('switch', '--quiet', 'main');
 }
 
-function insight(id: string, title: string): AgentInsight {
+function finding(title: string): ChatFinding {
   return {
-    id: id as AgentInsightId,
-    runId: '22222222-2222-4222-8222-222222222222' as ReviewRunId,
-    sessionId: '' as SessionId,
-    headSha: '' as CommitSha,
     path: 'src/app.ts',
-    side: 'head',
-    lineStart: 2,
-    lineEnd: 2,
+    startLine: 2,
+    endLine: 2,
     severity: 'warning',
     category: 'edge-case',
     title,
     body: 'Check it.',
     confidence: 0.8,
-    status: 'pending',
-    model: 'fake-model-1',
-    createdAt: '2026-10-28T12:00:00.000Z',
+    check: 'confirmed',
   };
 }
 
-function storeInsights(
+/** Stores a completed `/review` answer with these findings, as the chat would. */
+function storeReview(
   db: DatabaseSync,
   sessionId: string,
   head: string,
-  insights: readonly AgentInsight[],
+  findings: readonly ChatFinding[],
 ): void {
-  const owned = insights.map((entry) => ({
-    ...entry,
+  const common = {
     sessionId: sessionId as SessionId,
     headSha: head as CommitSha,
-  }));
-  const stored = insertReviewRun(
-    db,
-    {
-      id: '22222222-2222-4222-8222-222222222222' as ReviewRunId,
-      sessionId: sessionId as SessionId,
-      scope: 'full',
+    citations: [],
+    mentions: [],
+    createdAt: '2026-10-28T12:00:00.000Z',
+  };
+  appendChatMessage(db, {
+    ...common,
+    id: '22222222-2222-4222-8222-222222222222' as ChatMessageId,
+    role: 'user',
+    content: '/review',
+  });
+  const stored = appendChatMessage(db, {
+    ...common,
+    id: messageId as ChatMessageId,
+    role: 'assistant',
+    kind: 'review',
+    status: 'complete',
+    content: '**Review**',
+    review: {
+      findings,
+      dropped: {
+        unknownFile: 0,
+        outsideDiff: 0,
+        lowConfidence: 0,
+        duplicate: 0,
+        overLimit: 0,
+        unconfirmed: 0,
+      },
       pathScope: [],
-      baseSha: head as CommitSha,
-      headSha: head as CommitSha,
-      fromHeadSha: undefined,
-      model: 'fake-model-1',
-      insightCount: owned.length,
-      droppedCount: 0,
-      createdAt: '2026-10-28T12:00:00.000Z',
+      fileCount: 2,
+      verification: 'verified',
     },
-    owned,
-  );
+  });
   if (!stored.ok) {
     throw new Error(stored.error.kind);
   }
-}
-
-async function insightStatus(
-  services: MainServices,
-  sessionId: string,
-  id: string,
-): Promise<string | undefined> {
-  const listed = value(await services.review.listInsights({ sessionId }));
-  return listed.insights.find((entry) => entry.id === id)?.status;
 }
 
 function value<T>(result: IpcResult<T>): T {

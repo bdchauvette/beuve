@@ -48,7 +48,8 @@ export type ChatError<E> =
   | { readonly kind: 'model'; readonly error: E };
 
 /**
- * Answers one read-only question about a reviewed change (Zone 4, ADR 0031): builds the bounded
+ * Answers one read-only question about a reviewed change (Zone 4, ADR 0031), or runs `/summarize`
+ * (a `task` of kind `abstract`, ADR 0056, which needs no question): builds the bounded
  * prompt, asks the model in the head worktree, and validates the answer's citations against the
  * diff's and the worktree's files. Pure apart from the model port. Persisting the transcript,
  * one question in flight per session and cancellation are main's job.
@@ -59,10 +60,10 @@ export async function askQuestion<E>(
 ): Promise<Result<ChatAnswer, ChatError<E>>> {
   const budget = deps.budget ?? defaultChatPromptBudget;
   const question = input.question.trim();
-  if (question === '') {
+  if (question === '' && input.task === undefined) {
     return err({ kind: 'empty-question' });
   }
-  if (question.length > budget.maxQuestionChars) {
+  if (input.task === undefined && question.length > budget.maxQuestionChars) {
     return err({ kind: 'question-too-long', maxChars: budget.maxQuestionChars });
   }
   const built = buildChatPrompt(input, budget);

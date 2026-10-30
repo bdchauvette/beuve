@@ -50,7 +50,15 @@ describe('validateUraItem', () => {
   });
 
   it.each<[string, UraOrigin, UraAnchor?]>([
-    ['bad insight id', { kind: 'agent-insight', insightId: 'nope' as never }],
+    ['negative finding index', { kind: 'chat-answer', messageId: 'm1', finding: -1 }],
+    [
+      'review finding on a file',
+      { kind: 'chat-answer', messageId: 'm1', finding: 0 },
+      {
+        kind: 'file',
+        path: 'a',
+      },
+    ],
     ['empty chat message id', { kind: 'chat-answer', messageId: ' ' }],
     ['finding on a file', finding, { kind: 'file', path: 'a' }],
     ['finding without a function', { ...finding, functionName: '' }],
@@ -63,7 +71,7 @@ describe('validateUraItem', () => {
   it('accepts valid origins', () => {
     expect(errorOf({ origin: finding })).toBeUndefined();
     expect(
-      errorOf({ origin: { kind: 'agent-insight', insightId: testUraIds.insightId } }),
+      errorOf({ origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 3 } }),
     ).toBeUndefined();
     expect(errorOf({ origin: { kind: 'chat-answer', messageId: 'm1' } })).toBeUndefined();
   });

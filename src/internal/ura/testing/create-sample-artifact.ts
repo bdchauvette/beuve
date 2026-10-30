@@ -36,7 +36,7 @@ export function createSampleArtifact(verdict?: UraArtifactVerdict): UraArtifact 
 /**
  * One entry of each interesting shape: a multi-line blocker with a pure-replacement patch, a
  * single-line ImpactGate finding, a file-level question with a non-replacement patch, a
- * whole-change praise, and an outdated agent insight with text that needs escaping.
+ * whole-change praise, and an outdated review finding with text that needs escaping.
  */
 function sampleEntries(): UraEntry[] {
   const blocker = createTestUraItem({
@@ -90,7 +90,7 @@ function sampleEntries(): UraEntry[] {
   const outdated = createTestUraItem({
     id: id(5),
     severity: 'nit',
-    origin: { kind: 'agent-insight', insightId: testUraIds.insightId },
+    origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 0 },
     title: 'Prefer <const> & "readonly"',
     body: 'Use `as const` here.\nA CDATA terminator: ]]> stays text.',
   });

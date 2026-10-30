@@ -2,7 +2,6 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { isUuid } from '#x/text/is-uuid.ts';
 import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import type { UraAnchor, UraItem, UraItemError, UraOrigin } from './ura-item.ts';
 
@@ -79,11 +78,17 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
     case 'human': {
       return undefined;
     }
-    case 'agent-insight': {
-      return isUuid(origin.insightId) ? undefined : 'the insight id is not a UUID';
-    }
     case 'chat-answer': {
-      return origin.messageId.trim() === '' ? 'the chat message id is empty' : undefined;
+      if (origin.messageId.trim() === '') {
+        return 'the chat message id is empty';
+      }
+      if (origin.finding === undefined) {
+        return undefined;
+      }
+      if (!Number.isSafeInteger(origin.finding) || origin.finding < 0) {
+        return 'the finding index is not a non-negative integer';
+      }
+      return anchor.kind === 'lines' ? undefined : 'a review finding is anchored to lines';
     }
     case 'impact-finding': {
       return checkFinding(origin, anchor);

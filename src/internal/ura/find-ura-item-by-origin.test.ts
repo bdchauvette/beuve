@@ -7,7 +7,7 @@ import { createUraTestDatabase } from './testing/create-ura-test-database.ts';
 import { testUraIds } from './testing/test-ura-ids.ts';
 import type { UraOrigin } from './ura-item.ts';
 
-const { sessionId, itemId, insightId, laterHeadSha } = testUraIds;
+const { sessionId, itemId, messageId, laterHeadSha } = testUraIds;
 
 const finding: UraOrigin = {
   kind: 'impact-finding',
@@ -19,11 +19,11 @@ const finding: UraOrigin = {
 };
 
 describe('findUraItemByOrigin', () => {
-  it('finds the item a repeated insight or finding collides with', () => {
+  it('finds the item a repeated review finding or ImpactGate finding collides with', () => {
     const db = createUraTestDatabase([sessionId]);
     const promoted = createTestUraItem({
       id: itemId(1),
-      origin: { kind: 'agent-insight', insightId },
+      origin: { kind: 'chat-answer', messageId, finding: 1 },
     });
     const staged = createTestUraItem({ id: itemId(2), origin: finding });
     insertUraItem(db, promoted);
@@ -31,7 +31,7 @@ describe('findUraItemByOrigin', () => {
 
     const again = createTestUraItem({
       id: itemId(3),
-      origin: { kind: 'agent-insight', insightId },
+      origin: { kind: 'chat-answer', messageId, finding: 1 },
     });
     expect(insertUraItem(db, again)).toMatchObject({
       ok: false,

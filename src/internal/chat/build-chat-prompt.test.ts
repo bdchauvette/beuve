@@ -27,6 +27,29 @@ function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
 }
 
 describe('buildChatPrompt', () => {
+  it('puts a command task in place of the question, with its own instructions', () => {
+    const review = buildChatPrompt(
+      createChatQuestion({
+        question: 'ignored',
+        task: { kind: 'review', pathScope: ['src'], maxFindings: 5 },
+      }),
+      budget,
+    );
+    expect(review.prompt).toContain('## Task');
+    expect(review.prompt).toContain('only the files at or under src');
+    expect(review.prompt).toContain('at most\n5 findings');
+    expect(review.prompt).not.toContain('ignored');
+    expect(review.system).toContain('at most 5');
+    expect(review.system).toContain('structured output');
+
+    const abstract = buildChatPrompt(createChatQuestion({ task: { kind: 'abstract' } }), budget);
+    expect(abstract.prompt).toContain("Write beuve's own summary of this change");
+    expect(abstract.prompt).not.toContain("## The reviewer's question");
+    expect(abstract.system).toContain('**What changed**');
+    expect(abstract.system).toContain('"Inferred:"');
+    expect(abstract.system).toContain('[[path:start-end]]');
+  });
+
   it('is deterministic and holds the diff, the focus and the question, last', () => {
     const question = createChatQuestion({
       focus: { path: 'src/a.ts', startLine: 12, endLine: 13, excerpt: '+  return first.trim();\n' },
