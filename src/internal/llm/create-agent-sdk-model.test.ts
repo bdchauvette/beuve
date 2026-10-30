@@ -186,12 +186,12 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       { kind: 'reset' },
       { kind: 'append', text: 'It says hello world.' },
     ]);
-    expect(tools.filter((entry) => !entry.startsWith('text-'))).toStrictEqual([
-      'started',
-      'read src/greet.ts',
-      'grep hello',
-      'Read ok',
+    const steps = tools.filter((entry) => !entry.startsWith('text-'));
+    expect(steps.slice(0, 3)).toStrictEqual(['started', 'read src/greet.ts', 'grep hello']);
+    // Claude Code runs both reads at once, so they may finish in either order.
+    expect(steps.slice(3).toSorted((left, right) => left.localeCompare(right))).toStrictEqual([
       'Grep ok',
+      'Read ok',
     ]);
     const results = JSON.stringify(lastToolResults(api));
     expect(results).toContain('hello world');
