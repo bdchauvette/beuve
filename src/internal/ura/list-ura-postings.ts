@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { isCommitSha } from './is-commit-sha.ts';
-import { isIsoTimestamp } from './is-iso-timestamp.ts';
-import { isUuid } from './is-uuid.ts';
+import { isCommitSha } from '#x/git/is-commit-sha.ts';
+import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 import type { SessionId, UraItemId } from './ura-item.ts';
 import type { UraPosting } from './ura-posting.ts';
 

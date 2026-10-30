@@ -2,7 +2,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { normalizeGithubHost } from './normalize-github-host.ts';
+import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import type { PullRequestRef } from './pull-request.ts';
 
 const ownerPattern = /^[a-z\d](?:[a-z\d-]{0,38})$/i;
@@ -26,7 +26,7 @@ export function parsePullRequestRef(
   if (typeof parts === 'string') {
     return err(parts);
   }
-  const host = normalizeGithubHost(parts.host);
+  const host = normalizeHostname(parts.host);
   if (host === undefined) {
     return err(`not a GitHub host: ${parts.host}`);
   }

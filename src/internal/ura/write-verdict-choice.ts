@@ -4,7 +4,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { sqliteErrorCode } from './sqlite-error-code.ts';
+import { sqliteErrorCode } from '#x/sqlite/sqlite-error-code.ts';
 import type { SessionId, UraStoreError } from './ura-item.ts';
 import type { UraVerdictChoice } from './ura-verdict-choice.ts';
 

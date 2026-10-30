@@ -1,4 +1,4 @@
-import { normalizeGithubHost } from './normalize-github-host.ts';
+import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 
 /** The GitHub repository a git remote URL points at. `host` is lowercase. */
 export interface GithubRemote {
@@ -26,7 +26,7 @@ export function parseGithubRemoteUrl(url: string): GithubRemote | undefined {
   if (parts === undefined) {
     return undefined;
   }
-  const host = normalizeGithubHost(parts.host);
+  const host = normalizeHostname(parts.host);
   const [owner = '', repoWithSuffix = '', ...rest] = parts.path
     .replace(trailingSlashes, '')
     .split('/');

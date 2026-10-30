@@ -14,7 +14,7 @@ import type {
   TokenSource,
 } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
-import { normalizeGithubHost } from './normalize-github-host.ts';
+import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import { resolveGithubApiBase } from './resolve-github-api-base.ts';
 
 const invalidJson = Symbol('invalid-json');
@@ -50,7 +50,7 @@ export interface GithubClientOptions<E> {
 export function createGithubClient<E>(
   options: GithubClientOptions<E>,
 ): Result<GithubClient<E>, string> {
-  const host = normalizeGithubHost(options.host);
+  const host = normalizeHostname(options.host);
   if (host === undefined) {
     return err(`not a GitHub hostname: ${options.host}`);
   }

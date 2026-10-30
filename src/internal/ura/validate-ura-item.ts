@@ -2,7 +2,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { isUuid } from './is-uuid.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import type { UraAnchor, UraItem, UraItemError, UraOrigin } from './ura-item.ts';
 

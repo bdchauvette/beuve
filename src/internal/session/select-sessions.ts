@@ -4,8 +4,8 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { isIsoTimestamp } from './is-iso-timestamp.ts';
-import { isUuid } from './is-uuid.ts';
+import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
 import { parseSessionSource } from './parse-session-source.ts';
 import { rowToCheckpoint } from './row-to-checkpoint.ts';

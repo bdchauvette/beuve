@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSession } from './create-session.ts';
-import { isUuid } from './is-uuid.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 import type { CommitSha, SessionDeps } from './session.ts';
 
 const head = 'a'.repeat(40) as CommitSha;

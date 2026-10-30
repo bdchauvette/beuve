@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeGithubHost } from './normalize-github-host.ts';
+import { normalizeHostname } from './normalize-hostname.ts';
 
-describe('normalizeGithubHost', () => {
+describe('normalizeHostname', () => {
   it('accepts and lowercases hostnames', () => {
-    expect(normalizeGithubHost('GitHub.com')).toBe('github.com');
-    expect(normalizeGithubHost('ghe-01.corp.example')).toBe('ghe-01.corp.example');
+    expect(normalizeHostname('GitHub.com')).toBe('github.com');
+    expect(normalizeHostname('ghe-01.corp.example')).toBe('ghe-01.corp.example');
   });
 
   it('rejects anything that is not a bare hostname', () => {
@@ -18,7 +18,7 @@ describe('normalizeGithubHost', () => {
       'a_b.com',
       'a b',
     ]) {
-      expect(normalizeGithubHost(host)).toBeUndefined();
+      expect(normalizeHostname(host)).toBeUndefined();
     }
   });
 });

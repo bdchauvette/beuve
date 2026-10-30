@@ -17,9 +17,9 @@ import { insightSeverities } from './insight-severities.ts';
 import type { InsightSeverity } from './insight-severities.ts';
 import { insightStatuses } from './insight-statuses.ts';
 import type { InsightStatus } from './insight-statuses.ts';
-import { isCommitSha } from './is-commit-sha.ts';
-import { isIsoTimestamp } from './is-iso-timestamp.ts';
-import { isUuid } from './is-uuid.ts';
+import { isCommitSha } from '#x/git/is-commit-sha.ts';
+import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 
 type CorruptRow = Extract<ReviewStoreError, { kind: 'corrupt-row' }>;
 

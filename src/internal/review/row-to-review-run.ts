@@ -5,9 +5,9 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { ReviewRun, ReviewRunId, ReviewStoreError, SessionId } from './agent-insight.ts';
-import { isCommitSha } from './is-commit-sha.ts';
-import { isIsoTimestamp } from './is-iso-timestamp.ts';
-import { isUuid } from './is-uuid.ts';
+import { isCommitSha } from '#x/git/is-commit-sha.ts';
+import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
+import { isUuid } from '#x/text/is-uuid.ts';
 import { parsePathScope } from './parse-path-scope.ts';
 
 type CorruptRow = Extract<ReviewStoreError, { kind: 'corrupt-row' }>;

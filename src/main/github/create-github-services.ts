@@ -17,7 +17,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { findPullRequestStack } from '#internal/github/find-pull-request-stack.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
-import { normalizeGithubHost } from '#internal/github/normalize-github-host.ts';
+import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import type { StoredPullRequest } from '#internal/github/stored-pull-request.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { Session } from '#internal/session/session.ts';
@@ -145,7 +145,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
 
   return {
     authStatus: async ({ host }): Promise<IpcResult<GithubAuthStatusView>> => {
-      const target = host === undefined ? defaultHost() : normalizeGithubHost(host);
+      const target = host === undefined ? defaultHost() : normalizeHostname(host);
       if (target === undefined) {
         return err({ code: 'invalid-request', message: `not a GitHub hostname: ${host ?? ''}` });
       }

@@ -6,7 +6,7 @@ import type { Result } from '#x/result/result.ts';
 import { withTransaction } from '#x/sqlite/with-transaction.ts';
 
 import type { Checkpoint, SessionError } from './session.ts';
-import { sqliteErrorCode } from './sqlite-error-code.ts';
+import { sqliteErrorCode } from '#x/sqlite/sqlite-error-code.ts';
 
 const foreignKeyViolation = 787;
 

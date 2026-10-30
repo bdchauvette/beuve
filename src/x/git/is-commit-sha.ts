@@ -1,4 +1,7 @@
-import type { CommitSha } from './agent-insight.ts';
+import type { Brand } from '#x/brand/brand.ts';
+
+/** A full, lowercase commit id (SHA-1 or SHA-256). */
+export type CommitSha = Brand<string, 'CommitSha'>;
 
 const commitSha = /^(?:[\da-f]{40}|[\da-f]{64})$/u;
 

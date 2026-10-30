@@ -15,7 +15,7 @@ import type {
   GithubCredentialProvider,
 } from './github-credential-provider.ts';
 import { GithubToken } from './github-token.ts';
-import { normalizeGithubHost } from './normalize-github-host.ts';
+import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import { parseGhAuthStatus } from './parse-gh-auth-status.ts';
 import { resolveGhCommand } from './resolve-gh-command.ts';
 import type { ResolveGhCommandOptions } from './resolve-gh-command.ts';
@@ -100,7 +100,7 @@ export function createGhCliCredentialProvider(
   };
 
   const getToken = async ({ host }: CredentialRequest): Promise<Result<GithubToken, AuthError>> => {
-    const normalized = normalizeGithubHost(host);
+    const normalized = normalizeHostname(host);
     if (normalized === undefined) {
       return err({ kind: 'invalid-host', host });
     }
@@ -124,7 +124,7 @@ export function createGhCliCredentialProvider(
   const describe = async ({
     host,
   }: CredentialRequest): Promise<Result<CredentialDescription, AuthError>> => {
-    const normalized = normalizeGithubHost(host);
+    const normalized = normalizeHostname(host);
     if (normalized === undefined) {
       return err({ kind: 'invalid-host', host });
     }

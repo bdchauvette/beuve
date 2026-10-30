@@ -8,7 +8,7 @@ import { withTransaction } from '#x/sqlite/with-transaction.ts';
 import type { AgentInsight, ReviewRun, ReviewStoreError } from './agent-insight.ts';
 import { carryOverStoredStatuses } from './carry-over-stored-statuses.ts';
 import { serializePathScope } from './serialize-path-scope.ts';
-import { sqliteErrorCode } from './sqlite-error-code.ts';
+import { sqliteErrorCode } from '#x/sqlite/sqlite-error-code.ts';
 
 const foreignKeyViolation = 787;
 const uniqueViolation = 2067;
