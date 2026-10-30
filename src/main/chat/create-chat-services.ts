@@ -61,13 +61,13 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { ImpactServices } from '../impact/create-impact-services.ts';
-import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSessionHead } from '../sessions/refresh-session-head.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import type { ClaudeCodeSettings } from './claude-code-settings.ts';
 import { describeChatActivity } from './describe-chat-activity.ts';
@@ -114,7 +114,7 @@ export interface ChatServices {
 export interface ChatServicesOptions {
   readonly context: SessionContext;
   readonly impact: Pick<ImpactServices, 'getImpact'>;
-  readonly worktrees: Pick<SessionWorktrees, 'ensure'>;
+  readonly worktrees: Pick<SessionWorktrees, 'acquire'>;
   /** Request timeouts; how the CLI entry runs is in `models.claude`. */
   readonly claude?: ClaudeCodeSettings;
   /** The model registry each role resolves through (ADR 0070). */
@@ -181,8 +181,8 @@ type Outcome =
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly code: ChatErrorCode };
 
-/** What a request runs against: the diff, its checkout and its files. */
-interface Prepared {
+/** What a request runs against: the diff, its checkout and its files. Disposing releases the checkout. */
+interface Prepared extends Disposable {
   readonly diff: ReviewDiff;
   readonly worktreePath: string;
   readonly worktreePaths: ReadonlySet<string> | undefined;
@@ -311,24 +311,34 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           ? impactView.value.findings
           : undefined;
     }
-    const worktree = await worktrees.ensure(
-      refreshed.repository,
-      job.sessionId,
-      refreshed.session.headSha,
-    );
     if (isAborted()) {
       return err({ status: 'cancelled' });
     }
-    if (!worktree.ok) {
-      gitFailure(logger, worktree.error);
+    const leased = await worktrees.acquire(
+      refreshed.repository,
+      { kind: 'session-head', sessionId: job.sessionId, headSha: refreshed.session.headSha },
+      { signal: job.controller.signal },
+    );
+    if (isAborted()) {
+      if (leased.ok) {
+        leased.value[Symbol.dispose]();
+      }
+      return err({ status: 'cancelled' });
+    }
+    if (!leased.ok) {
+      worktreeFailure(logger, leased.error);
       return unavailable();
     }
+    const worktree = leased.value;
     const tree = await listTreePaths(refreshed.repository, refreshed.session.headSha);
     return ok({
       diff: diff.value,
-      worktreePath: worktree.value,
+      worktreePath: worktree.path,
       worktreePaths: tree.ok ? new Set(tree.value) : undefined,
       findings,
+      [Symbol.dispose]: (): void => {
+        worktree[Symbol.dispose]();
+      },
     });
   };
 
@@ -387,6 +397,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return prepared.error;
     }
+    using _checkout = prepared.value;
     const input = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
@@ -399,7 +410,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
-    return askModel(job, input, 'chat');
+    return await askModel(job, input, 'chat');
   };
 
   /** `/summarize` (ADR 0056): from the diff and the code only, never the stated intent. */
@@ -408,6 +419,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return prepared.error;
     }
+    using _checkout = prepared.value;
     const input = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
@@ -418,7 +430,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
-    return askModel(job, input, 'summarize');
+    return await askModel(job, input, 'summarize');
   };
 
   const askModel = async (
@@ -487,6 +499,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return prepared.error;
     }
+    using _checkout = prepared.value;
     if (prepared.value.diff.scope.kind === 'up-to-date') {
       return { status: 'failed', code: 'nothing-to-review' };
     }
@@ -670,6 +683,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return failed(prepared.error);
     }
+    using _checkout = prepared.value;
     const model = await resolve('compact');
     if (!model.ok) {
       return failed(model.error);

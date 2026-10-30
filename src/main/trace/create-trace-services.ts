@@ -36,6 +36,7 @@ import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import { describeTraceError } from './describe-trace-error.ts';
 import { findTestFiles } from './find-test-files.ts';
@@ -271,19 +272,30 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         `No test file is named after ${filePath} or imports it. Name one beside it, like ${suggestTestName(filePath)}.`,
       );
     }
-    const worktree = await worktrees.ensure(repository, session.id, headSha);
     if (hasStopped(job)) {
       return aborted();
     }
-    if (!worktree.ok) {
-      gitFailure(logger, worktree.error);
+    const leased = await worktrees.acquire(
+      repository,
+      { kind: 'session-head', sessionId: session.id, headSha },
+      { signal: job.controller.signal },
+    );
+    if (hasStopped(job)) {
+      if (leased.ok) {
+        leased.value[Symbol.dispose]();
+      }
+      return aborted();
+    }
+    if (!leased.ok) {
+      worktreeFailure(logger, leased.error);
       return failed('runner-failed', 'The head checkout could not be made.');
     }
+    using worktree = leased.value;
     onRunning(testFiles);
     const probed = await runTraceProbe(
       {
         trusted: true,
-        worktree: worktree.value,
+        worktree: worktree.path,
         dependencyRoot: repository.root,
         testFiles,
         timeout,

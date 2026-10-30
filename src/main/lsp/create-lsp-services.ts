@@ -35,7 +35,6 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err, Result } from '#x/result/result.ts';
 
-import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -43,6 +42,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { readSheetSource } from '../sheets/read-sheet-source.ts';
 import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
 import { headSpansFrom } from './head-spans-from.ts';
@@ -90,7 +90,7 @@ export interface LspServicesOptions {
   readonly worktrees: SessionWorktrees;
 }
 
-interface Workspace {
+interface Workspace extends Disposable {
   readonly root: string;
   readonly repository: GitRepository;
 }
@@ -110,8 +110,20 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     repository: GitRepository,
     headSha: CommitSha,
   ): Promise<Result<Workspace, IpcError>> => {
-    const root = await worktrees.ensure(repository, sessionId, headSha);
-    return root.ok ? ok({ root: root.value, repository }) : gitFailure(logger, root.error);
+    const lease = await worktrees.acquire(repository, {
+      kind: 'session-head',
+      sessionId,
+      headSha,
+    });
+    return lease.ok
+      ? ok({
+          root: lease.value.path,
+          repository,
+          [Symbol.dispose]: (): void => {
+            lease.value[Symbol.dispose]();
+          },
+        })
+      : worktreeFailure(logger, lease.error);
   };
 
   const fail = (error: LspError): Err<IpcError> => {
@@ -240,11 +252,16 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     }
     const { sha } = commit.value;
     const { session, repository } = commit.value.refreshed;
-    const holder = sha === session.headSha ? session.id : `sheet\0${session.id}\0${sha}`;
-    const root = await worktrees.ensure(repository, holder, sha);
-    if (!root.ok) {
-      return gitFailure(logger, root.error);
+    const leased = await worktrees.acquire(
+      repository,
+      sha === session.headSha
+        ? { kind: 'session-head', sessionId: session.id, headSha: sha }
+        : { kind: 'pinned-commit', sessionId: session.id, commit: sha },
+    );
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
     }
+    using lease = leased.value;
     const text = await readSheetSource(context, commit.value, request.path);
     if (!text.ok) {
       return text;
@@ -261,7 +278,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     let first: { token: ProbeToken; targets: readonly LocationView[] } | undefined;
     for (const token of probes) {
       const found = await multiplexer.definition({
-        root: root.value,
+        root: lease.path,
         path: request.path,
         position: { line, character: token.start },
         ...(request.kind !== undefined && { kind: request.kind }),
@@ -269,7 +286,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       if (!found.ok) {
         return fail(found.error);
       }
-      const resolved = await throughImports(root.value, request.path, text.value, found.value);
+      const resolved = await throughImports(lease.path, request.path, text.value, found.value);
       if (!resolved.ok) {
         return fail(resolved.error);
       }
@@ -290,7 +307,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         targets: first.targets.map((target) => targetViewFrom(target)),
       });
     }
-    const symbols = await multiplexer.documentSymbols({ root: root.value, path: request.path });
+    const symbols = await multiplexer.documentSymbols({ root: lease.path, path: request.path });
     if (!symbols.ok) {
       return fail(symbols.error);
     }
@@ -330,17 +347,18 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         const calls = await expand(request.nodeId, request.direction, spans);
         return calls.ok ? ok({ direction: request.direction, calls: calls.value }) : calls;
       }
-      const workspace = await checkout(session.id, repository, session.headSha);
-      if (!workspace.ok) {
-        return workspace;
+      const checkedOut = await checkout(session.id, repository, session.headSha);
+      if (!checkedOut.ok) {
+        return checkedOut;
       }
+      using workspace = checkedOut.value;
       const file = relativeFrom(repository, request.path);
-      const position = await locate(workspace.value, request, file, spans);
+      const position = await locate(workspace, request, file, spans);
       if (!position.ok) {
         return position;
       }
       const roots = await multiplexer.prepareCallHierarchy({
-        root: workspace.value.root,
+        root: workspace.root,
         path: file,
         position: position.value,
       });
@@ -379,12 +397,13 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         return refreshed;
       }
       const { session, repository } = refreshed.value;
-      const workspace = await checkout(session.id, repository, session.headSha);
-      if (!workspace.ok) {
-        return workspace;
+      const checkedOut = await checkout(session.id, repository, session.headSha);
+      if (!checkedOut.ok) {
+        return checkedOut;
       }
+      using workspace = checkedOut.value;
       const file = relativeFrom(repository, requested);
-      const report = await multiplexer.getDiagnostics({ root: workspace.value.root, path: file });
+      const report = await multiplexer.getDiagnostics({ root: workspace.root, path: file });
       if (!report.ok) {
         return fail(report.error);
       }

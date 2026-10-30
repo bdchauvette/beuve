@@ -1772,6 +1772,11 @@ export type IpcErrorCode =
   | 'unsupported'
   | 'lsp-failed'
   | 'refused'
+  /**
+   * The request was cancelled: superseded by a newer one of its kind, cancelled by id, or its
+   * window closed (ADR 0079). The renderer drops it without a notice.
+   */
+  | 'cancelled'
   | 'internal';
 
 export interface IpcError {

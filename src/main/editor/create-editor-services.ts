@@ -21,7 +21,7 @@ import { ok } from '#x/result/ok.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
-import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import type { SessionWorktrees, WorktreeLease } from '../worktrees/create-session-worktrees.ts';
 
 import { chooseEditorRoot } from './choose-editor-root.ts';
 import type { WorkingFileState } from './choose-editor-root.ts';
@@ -53,6 +53,8 @@ export interface EditorServicesOptions {
 interface Located {
   readonly file: string;
   readonly location: 'working-tree' | 'beuve-checkout';
+  /** Keeps beuve's checkout on disk until the editor has started. */
+  readonly checkout?: WorktreeLease;
 }
 
 /**
@@ -102,15 +104,21 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         ? { file: working, location: root }
         : 'file-unavailable';
     }
-    const checkout = await worktrees.ensure(repository, sessionId, headSha);
+    const checkout = await worktrees.acquire(repository, {
+      kind: 'session-head',
+      sessionId,
+      headSha,
+    });
     if (!checkout.ok) {
       context.logger.warn('editor: could not check out the head', { error: checkout.error });
       return 'file-unavailable';
     }
-    const file = path.join(checkout.value, relative);
-    return (await isInsideRoot(checkout.value, file))
-      ? { file, location: root }
-      : 'file-unavailable';
+    const file = path.join(checkout.value.path, relative);
+    if (!(await isInsideRoot(checkout.value.path, file))) {
+      checkout.value[Symbol.dispose]();
+      return 'file-unavailable';
+    }
+    return { file, location: root, checkout: checkout.value };
   };
 
   return {
@@ -145,6 +153,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
           `${request.path} is not available at the session head.`,
         );
       }
+      using _checkout = located.checkout;
       const { definition } = chosen;
       const plan = planEditorLaunch(definition, found, {
         file: located.file,

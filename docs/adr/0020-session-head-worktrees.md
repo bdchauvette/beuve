@@ -18,3 +18,7 @@ Language servers read files from disk, so LSP diagnostics and the call-stack pee
 ## Consequences
 
 Agents and the peek portal see exactly the reviewed commit, and the user's checkout is never touched. Each new head costs one checkout (no `node_modules`, so tsserver uses beuve's TypeScript and project typings that live in `node_modules` are missing), and the disk use is one tree per live head. A head change restarts the language server's project load in the new directory instead of updating files in place, which is slower but cannot leave a server with stale files. Worktrees of a repository with no remaining session are deleted from disk but stay registered in that repository until its own `git worktree prune` (git's gc runs it).
+
+## Amendment (2026-10-30, ADR 0079)
+
+`ensure` became `acquire`, which returns a lease released with `using`, and checks a `session-head` claim against the session's stored head. A checkout is removed when no lease holds it and it is no session's current checkout (or a sheet's pinned one), in the background rather than by the request that moved the head; adds and removals of one path are serialised, so a lease never gets a checkout that is being removed. Worktree add, remove and prune are `atomic`: an abort lets them finish.

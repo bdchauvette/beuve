@@ -62,6 +62,7 @@ import { createTraceTrust } from './trace/create-trace-trust.ts';
 import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
+import { loadSession } from './sessions/load-session.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
 
 export interface MainServicesOptions {
@@ -197,6 +198,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     root: options.worktreeRoot,
     logger,
     git: context.git,
+    storedHead: (sessionId) => {
+      const stored = loadSession(context, sessionId);
+      return stored.ok ? stored.value.headSha : undefined;
+    },
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
   const registry = createModelRegistryStore(options.models?.settingsPath);
@@ -334,6 +339,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       await Promise.all([chat.dispose(), trace.dispose()]);
       impactRunner.dispose();
       await multiplexer.dispose();
+      await worktrees.settled();
     },
   };
 }
