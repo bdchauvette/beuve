@@ -25,11 +25,12 @@ const parallelism = 4;
  * server's outgoing calls. For each changed TypeScript or JavaScript file (up to {@link maxFiles})
  * it asks for the outgoing calls of the function around the first added line of each of its first
  * {@link maxHunksPerFile} hunks, and keeps calls into other changed files. A file whose changes
- * touch no function adds no edge.
+ * touch no function adds no edge. Every query is pinned to `headSha`, the head the diff is of.
  */
 export async function buildCallEdges(
   callHierarchy: (request: CallHierarchyRequest) => Promise<IpcResult<CallHierarchyView>>,
   sessionId: string,
+  headSha: string,
   files: readonly DiffFile[],
   paths: ReadonlySet<string>,
 ): Promise<CallEdges> {
@@ -47,6 +48,7 @@ export async function buildCallEdges(
     for (let query = queue.shift(); query !== undefined; query = queue.shift()) {
       const result = await callHierarchy({
         sessionId,
+        expectedHeadSha: headSha,
         path: query.path,
         line: query.line,
         direction: 'outgoing',

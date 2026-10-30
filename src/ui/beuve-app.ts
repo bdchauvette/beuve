@@ -1470,6 +1470,7 @@ export class BeuveApp extends LitElement {
     this.peek = pending;
     const answer = await bridge.invoke('lsp:call-hierarchy', {
       sessionId: review.session.id,
+      expectedHeadSha: review.headSha,
       path,
       line,
       direction: 'incoming',
@@ -1661,6 +1662,7 @@ export class BeuveApp extends LitElement {
     this.peek = withChildren(peek, { status: 'loading' });
     const answer = await bridge.invoke('lsp:call-hierarchy', {
       sessionId: review.session.id,
+      expectedHeadSha: review.headSha,
       path: peek.path,
       line: peek.line ?? 1,
       direction: 'incoming',

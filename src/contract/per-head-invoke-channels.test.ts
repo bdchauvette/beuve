@@ -55,7 +55,6 @@ function headFreeSessionChannels(): Readonly<
     'session:get-file-pair': read,
     'session:get-tree': read,
     'session:get-file-attributes': read,
-    'lsp:call-hierarchy': 'a read of the stored head; it stores nothing',
     'lsp:definition': 'a read pinned to its own `sha`',
     'sheet:open': 'opens a window pinned to its own `sha`',
     'sheet:get-file': 'a read pinned to its own `sha`',

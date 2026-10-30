@@ -114,7 +114,13 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
     if (mode === 'imports') {
       return { mode, edges: (await importEdges(review, primary)) ?? [] };
     }
-    const calls = await buildCallEdges(options.callHierarchy, sessionId, review.files, primary);
+    const calls = await buildCallEdges(
+      options.callHierarchy,
+      sessionId,
+      review.refreshed.session.headSha,
+      review.files,
+      primary,
+    );
     if (calls.edges.length > 0) {
       return { mode, edges: calls.edges };
     }

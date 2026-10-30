@@ -31,6 +31,7 @@ import type {
   Position,
   Range,
 } from '#internal/lsp/lsp-model.ts';
+import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err, Result } from '#x/result/result.ts';
@@ -103,7 +104,8 @@ interface Workspace extends Disposable {
 export function createLspServices(options: LspServicesOptions): LspServices {
   const { context, multiplexer, worktrees } = options;
   const { logger } = context;
-  const spansBySession = new Map<string, ChangedLines>();
+  /** Head-side changed lines per session and head: badges describe the head that was asked. */
+  const spansByHead = new LruCache<string, ChangedLines>(32);
 
   const checkout = async (
     sessionId: string,
@@ -331,21 +333,35 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     definition: define,
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
       const stopwatch = new Stopwatch();
-      const cachedSpans = spansBySession.get(request.sessionId);
-      if (cachedSpans !== undefined && request.nodeId !== undefined) {
-        const calls = await expand(request.nodeId, request.direction, cachedSpans);
-        return calls.ok ? ok({ direction: request.direction, calls: calls.value }) : calls;
+      const loaded = loadSession(context, request.sessionId);
+      if (!loaded.ok) {
+        return loaded;
       }
-      const diff = await loadReviewDiff(context, request.sessionId);
+      if (loaded.value.headSha !== request.expectedHeadSha) {
+        return err({
+          code: 'stale-review',
+          message: 'new commits arrived since this review was loaded; reload it first',
+        });
+      }
+      const headSha = loaded.value.headSha;
+      const key = `${request.sessionId}\0${headSha}`;
+      const answer = (
+        calls: Result<readonly CallHierarchyCallView[], IpcError>,
+      ): IpcResult<CallHierarchyView> =>
+        calls.ok ? ok({ headSha, direction: request.direction, calls: calls.value }) : calls;
+      const cachedSpans = spansByHead.get(key);
+      if (cachedSpans !== undefined && request.nodeId !== undefined) {
+        return answer(await expand(request.nodeId, request.direction, cachedSpans));
+      }
+      const diff = await loadReviewDiff(context, request.sessionId, { headSha });
       if (!diff.ok) {
         return diff;
       }
       const { session, repository } = diff.value.refreshed;
       const spans = headSpansFrom(diff.value.files);
-      spansBySession.set(request.sessionId, spans);
+      spansByHead.set(key, spans);
       if (request.nodeId !== undefined) {
-        const calls = await expand(request.nodeId, request.direction, spans);
-        return calls.ok ? ok({ direction: request.direction, calls: calls.value }) : calls;
+        return answer(await expand(request.nodeId, request.direction, spans));
       }
       const checkedOut = await checkout(session.id, repository, session.headSha);
       if (!checkedOut.ok) {
@@ -379,7 +395,12 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         duration: stopwatch.elapsed(),
       });
       return calls.ok
-        ? ok({ direction: request.direction, root: nodeViewFrom(root, spans), calls: calls.value })
+        ? ok({
+            headSha,
+            direction: request.direction,
+            root: nodeViewFrom(root, spans),
+            calls: calls.value,
+          })
         : calls;
     },
 

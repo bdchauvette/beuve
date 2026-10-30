@@ -43,6 +43,7 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'ura:set-verdict': { sessionId: 's1', verdict: 'approve' },
     'github:preview-review': { sessionId: 's1' },
     'github:post-review': { sessionId: 's1' },
+    'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
   };
   return requests[channel];
 }
@@ -291,7 +292,13 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
       },
       appInfo(),
     );
-    const good = { sessionId: 's1', path: 'src/a.ts', line: 3, direction: 'incoming' };
+    const good = {
+      sessionId: 's1',
+      expectedHeadSha: sha(),
+      path: 'src/a.ts',
+      line: 3,
+      direction: 'incoming',
+    };
     for (const bad of [
       { ...good, line: 0 },
       { ...good, line: 1.5 },

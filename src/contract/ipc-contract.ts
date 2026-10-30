@@ -489,13 +489,16 @@ export interface FileAttributesView {
 }
 
 /**
- * Call hierarchy for the peek portal, run by the language server against a checkout of the
- * session head. Without `nodeId`, the hierarchy is rooted at the callable at `line` (1-based) and
- * `character` (0-based UTF-16), or, without `character`, at the innermost function, method or
- * constructor enclosing `line`. With `nodeId` (from an earlier answer), that node is expanded.
+ * Call hierarchy for the peek portal, run by the language server against a checkout of
+ * `expectedHeadSha`, the head the reviewer was shown (ADR 0078): when the session's head is no
+ * longer that one, the call fails with `stale-review`. Without `nodeId`, the hierarchy is rooted
+ * at the callable at `line` (1-based) and `character` (0-based UTF-16), or, without `character`,
+ * at the innermost function, method or constructor enclosing `line`. With `nodeId` (from an
+ * earlier answer at the same head), that node is expanded.
  */
 export interface CallHierarchyRequest {
   readonly sessionId: string;
+  readonly expectedHeadSha: string;
   /** Repository-relative path with `/` separators. */
   readonly path: string;
   readonly line: number;
@@ -535,8 +538,12 @@ export interface CallHierarchyCallView {
   readonly callSiteLines: readonly number[];
 }
 
-/** `root` is the node the hierarchy starts at; absent when an existing node was expanded. */
+/**
+ * `root` is the node the hierarchy starts at; absent when an existing node was expanded. `headSha`
+ * is the commit the answer and its badges describe.
+ */
 export interface CallHierarchyView {
+  readonly headSha: string;
   readonly direction: 'incoming' | 'outgoing';
   readonly root?: CallHierarchyNodeView;
   readonly calls: readonly CallHierarchyCallView[];

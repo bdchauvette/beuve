@@ -176,6 +176,7 @@ const filePairRequest = z.strictObject({ sessionId, path: z.string().min(1).max(
 
 const callHierarchyRequest = z.strictObject({
   sessionId,
+  expectedHeadSha,
   path: z.string().min(1).max(4096),
   line: z.number().int().min(1).max(10_000_000),
   character: z.number().int().min(0).max(10_000_000).optional(),

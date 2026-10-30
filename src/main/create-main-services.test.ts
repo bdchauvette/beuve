@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { describe } from 'vitest';
 
-import type { ReviewView } from '#contract/ipc-contract.ts';
+import type { CallHierarchyRequest, ReviewView } from '#contract/ipc-contract.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
@@ -351,10 +351,18 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
     'lists the callers of a modified callee, badged against the review diff',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories }) => {
-      const { sessionId } = await openTypescriptSession(services, repositories);
+      const { sessionId, headSha } = await openTypescriptSession(services, repositories);
+      const request = (): CallHierarchyRequest => ({
+        sessionId,
+        expectedHeadSha: headSha,
+        path: 'src/handler.ts',
+        line: 1,
+        direction: 'incoming',
+      });
       const hierarchy = okValueFrom(
         await services.lsp.callHierarchy({
           sessionId,
+          expectedHeadSha: headSha,
           path: 'src/auth.ts',
           line: 2,
           direction: 'incoming',
@@ -377,6 +385,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       const outer = okValueFrom(
         await services.lsp.callHierarchy({
           sessionId,
+          expectedHeadSha: headSha,
           path: 'src/handler.ts',
           line: 1,
           direction: 'incoming',
@@ -389,6 +398,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       await expect(
         services.lsp.callHierarchy({
           sessionId,
+          expectedHeadSha: headSha,
           path: 'src/auth.ts',
           line: 5,
           direction: 'incoming',
@@ -397,12 +407,22 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       const added = okValueFrom(
         await services.lsp.callHierarchy({
           sessionId,
+          expectedHeadSha: headSha,
           path: 'src/complex.ts',
           line: 1,
           direction: 'incoming',
         }),
       );
       expect(added).toMatchObject({ root: { name: 'handleAuth', badge: 'modified' }, calls: [] });
+      expect(hierarchy.headSha).toBe(headSha);
+      const stale = { ...request(), expectedHeadSha: 'f'.repeat(40) };
+      await expect(services.lsp.callHierarchy(stale)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'stale-review' },
+      });
+      await expect(
+        services.lsp.callHierarchy({ ...stale, nodeId: handler?.node.id ?? '' }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
     },
   );
 
@@ -626,6 +646,7 @@ function checkouts(root: string): string[] {
 interface TypescriptSession {
   readonly repo: TestRepository;
   readonly sessionId: string;
+  readonly headSha: string;
 }
 
 /** A session reviewing {@link typescriptBranch}, with the services around it. */
@@ -639,7 +660,8 @@ async function openTypescriptSession(
     baseRef: 'main',
     headRef: 'feature',
   });
-  return { repo, sessionId: okValueFrom(created).id };
+  const { id, headSha } = okValueFrom(created);
+  return { repo, sessionId: id, headSha };
 }
 
 function typescriptBranchTemplate(): RepositoryTemplate<undefined> {

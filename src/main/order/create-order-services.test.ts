@@ -1,6 +1,10 @@
 import { describe } from 'vitest';
 
-import type { CallHierarchyCallView, IpcResult } from '#contract/ipc-contract.ts';
+import type {
+  CallHierarchyCallView,
+  CallHierarchyView,
+  IpcResult,
+} from '#contract/ipc-contract.ts';
 import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
@@ -102,6 +106,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
   }) => {
     const sessionId = await startReview(repo, services);
     const queried: string[] = [];
+    const heads = new Set<string>();
     const orderWith = (callHierarchy: OrderServicesOptions['callHierarchy']): OrderServices =>
       createOrderServices({
         context: {
@@ -119,8 +124,12 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
 
     const answering = orderWith(async (request) => {
       queried.push(`${request.path}:${String(request.line)}`);
+      heads.add(request.expectedHeadSha);
       return later(
-        okCalls(request.path === 'src/shared.ts' ? [workspaceCall('src/x/helper.ts')] : []),
+        okCalls(
+          request.expectedHeadSha,
+          request.path === 'src/shared.ts' ? [workspaceCall('src/x/helper.ts')] : [],
+        ),
       );
     });
     const calls = okValueFrom(await answering.getOrder({ sessionId, mode: 'calls' }, { signal }));
@@ -134,6 +143,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
       'src/shared.ts',
     ]);
     expect(queried).toContain('src/shared.ts:1');
+    expect([...heads]).toStrictEqual([await repo.git('rev-parse', 'feature')]);
 
     const noServer = orderWith(async () =>
       later({
@@ -149,7 +159,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     });
     expect(fallen.paths.indexOf('src/shared.ts')).toBeLessThan(fallen.paths.indexOf('src/app.ts'));
 
-    const quiet = orderWith(async () => later(okCalls([])));
+    const quiet = orderWith(async (request) => later(okCalls(request.expectedHeadSha, [])));
     expect(
       okValueFrom(await quiet.getOrder({ sessionId, mode: 'calls' }, { signal })),
     ).toMatchObject({
@@ -197,11 +207,11 @@ async function later<T>(value: T): Promise<T> {
   return value;
 }
 
-function okCalls(calls: readonly CallHierarchyCallView[]): IpcResult<{
-  readonly direction: 'outgoing';
-  readonly calls: readonly CallHierarchyCallView[];
-}> {
-  return { ok: true, value: { direction: 'outgoing', calls } };
+function okCalls(
+  headSha: string,
+  calls: readonly CallHierarchyCallView[],
+): IpcResult<CallHierarchyView> {
+  return { ok: true, value: { headSha, direction: 'outgoing', calls } };
 }
 
 function workspaceCall(path: string): CallHierarchyCallView {
