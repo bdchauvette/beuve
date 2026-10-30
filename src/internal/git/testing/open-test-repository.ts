@@ -10,7 +10,9 @@ import type { TestRepository } from './test-repository.ts';
 /**
  * Drives the existing repository at `<home>/repo`. `home` is also its `HOME` and
  * `XDG_CONFIG_HOME`, isolating git from the caller's `GIT_*` environment, global and system
- * config, and holds `scratch` directories. `cleanup` removes `home`.
+ * config, and holds `scratch` directories. `cleanup` removes `home`. Auto-maintenance is off: after
+ * `git commit` it would otherwise keep a background `git maintenance` running, which creates and
+ * removes `.git/objects/maintenance.lock` while a template is being copied (ENOENT in `fs.cp`).
  */
 export function openTestRepository(home: string): TestRepository {
   const directory = path.join(home, 'repo');
@@ -62,6 +64,11 @@ function testEnvironment(home: string): NodeJS.ProcessEnv {
     XDG_CONFIG_HOME: home,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'maintenance.auto',
+    GIT_CONFIG_VALUE_0: 'false',
+    GIT_CONFIG_KEY_1: 'gc.auto',
+    GIT_CONFIG_VALUE_1: '0',
     LC_ALL: 'C',
   };
 }

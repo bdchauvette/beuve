@@ -22,7 +22,8 @@ interface Built {
 /**
  * Templates live under `root` (one directory per name). A copy is a recursive `fs.cpSync` with
  * `COPYFILE_FICLONE`: a copy-on-write clone where the file system supports it (APFS, Btrfs, XFS)
- * and a plain copy elsewhere, both far cheaper than `git init` plus commits (ADR 0058).
+ * and a plain copy elsewhere, both far cheaper than `git init` plus commits (ADR 0058). Git's lock files
+ * are not copied: they are transient, and one that vanishes mid-copy fails the whole `cp`.
  */
 export function createRepositoryTemplates(root: string): RepositoryTemplates {
   const built = new Map<string, Promise<Built>>();
@@ -54,8 +55,13 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
       cpSync(source.directory, path.join(home, 'repo'), {
         recursive: true,
         mode: constants.COPYFILE_FICLONE,
+        filter: (entry): boolean => !isGitLockFile(entry),
       });
       return { repo: openTestRepository(home), value: source.value as T };
     },
   };
+}
+
+function isGitLockFile(entry: string): boolean {
+  return entry.endsWith('.lock') && entry.includes(`${path.sep}.git${path.sep}`);
 }
