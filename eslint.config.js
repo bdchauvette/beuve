@@ -67,6 +67,33 @@ const conversionNamingSelectors = [
   },
 ];
 
+/** HTML string sinks the renderer never uses (ADR 0077); `Element.setHTML` is the sanctioned path. */
+const htmlSinkMessage =
+  'No HTML string sinks in the renderer: build nodes (Lit templates, `textContent`, `createElement`). To render an HTML string, use `element.setHTML(html, { sanitizer })`, the Sanitizer API (ADR 0077).';
+const htmlSinkSelectors = [
+  {
+    selector:
+      'AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML|srcdoc)$/]',
+    message: htmlSinkMessage,
+  },
+  {
+    selector:
+      'CallExpression > MemberExpression.callee[property.name=/^(insertAdjacentHTML|createContextualFragment|setHTMLUnsafe|parseHTMLUnsafe)$/]',
+    message: htmlSinkMessage,
+  },
+  {
+    selector:
+      "CallExpression > MemberExpression.callee[object.name='document'][property.name=/^(write|writeln)$/]",
+    message: htmlSinkMessage,
+  },
+];
+const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) =>
+  ['unsafe-html', 'unsafe-svg', 'unsafe-mathml'].map((directive) => ({
+    name: `${root}/directives/${directive}.js`,
+    message: htmlSinkMessage,
+  })),
+);
+
 export default defineConfig(
   globalIgnores(['dist/', 'out/', 'coverage/']),
 
@@ -191,6 +218,16 @@ export default defineConfig(
     extends: [wcConfigs['flat/best-practice'], litConfigs['flat/recommended']],
     languageOptions: { globals: globals.browser },
     settings: { wc: { elementBaseClasses: ['LitElement'] } },
+  },
+
+  {
+    name: 'beuve/ui-html-sinks',
+    // ADR 0077: no HTML string sinks in our renderer code, so a Trusted Types policy has nothing of ours to admit.
+    files: uiFiles,
+    rules: {
+      'no-restricted-syntax': ['error', ...conversionNamingSelectors, ...htmlSinkSelectors],
+      'no-restricted-imports': ['error', { paths: htmlSinkImports }],
+    },
   },
 
   {
