@@ -29,6 +29,8 @@ export interface SyncPullRequestInput {
   readonly pullRequest: PullRequest;
   /** Asks GitHub for the pull request again, after a fetch found a head GitHub didn't report. */
   readonly refetch: () => Promise<Result<PullRequest, GithubFailureView>>;
+  /** Kills a fetch still running when it aborts. */
+  readonly signal?: AbortSignal | undefined;
   readonly logger: Logger;
 }
 
@@ -80,7 +82,9 @@ async function fetchAndVerify(
   }
   const { args, headRef, baseRef } = plan.value;
   const refspecs = args.slice(args.indexOf('--end-of-options') + 2);
-  const fetched = await fetchRefs(input.repository, input.remote, refspecs);
+  const fetched = await fetchRefs(input.repository, input.remote, refspecs, {
+    signal: input.signal,
+  });
   if (!fetched.ok) {
     input.logger.warn('github: fetch failed', { error: fetched.error });
     return err(githubFailure('fetch-failed', describeFetchError(input.remote, fetched.error)));

@@ -92,7 +92,7 @@ const combinedStatusSchema = z
 export async function getCiStatus<E>(
   client: GithubClient<E>,
   commit: { readonly owner: string; readonly repo: string; readonly sha: string },
-  options: { readonly etags?: CiEtags; readonly signal?: AbortSignal } = {},
+  options: { readonly etags?: CiEtags; readonly signal?: AbortSignal | undefined } = {},
 ): Promise<Result<CiStatusResult, GithubError<E>>> {
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   const statusesRequest: GithubRequest = {

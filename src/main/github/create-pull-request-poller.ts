@@ -99,6 +99,8 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   let isForeground = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let isDisposed = false;
+  /** Aborts the requests and fetches still running when the poller is disposed. */
+  const disposal = new AbortController();
 
   const stateOf = (sessionId: string): PollState => {
     const existing = states.get(sessionId);
@@ -148,8 +150,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   /** Reads the reviews and review requests; keeps the old ones when GitHub does not answer. */
   const readReviews = async (state: PollState, ref: PullRequestRef): Promise<void> => {
     const [reviews, requests] = await Promise.all([
-      context.clients.withClient(ref.host, async (client) => getPullRequestReviews(client, ref)),
-      context.clients.withClient(ref.host, async (client) => getReviewRequests(client, ref)),
+      context.clients.withClient(ref.host, async (client) =>
+        getPullRequestReviews(client, ref, { signal: disposal.signal }),
+      ),
+      context.clients.withClient(ref.host, async (client) =>
+        getReviewRequests(client, ref, { signal: disposal.signal }),
+      ),
     ]);
     if (reviews.ok && requests.ok) {
       state.reviews = reviews.value;
@@ -201,8 +207,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       repository: repository.value,
       remote: remote.name,
       pullRequest,
-      refetch: async () => fetchPullRequest(context.clients, ref),
+      refetch: async () => fetchPullRequest(context.clients, ref, disposal.signal),
       logger,
+      signal: disposal.signal,
     });
     if (!synced.ok) {
       logger.warn('github poll: new head not fetched', { failure: synced.error });
@@ -248,7 +255,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     const { host, owner, repo, number } = source;
     const ref: PullRequestRef = { host, owner, repo, number };
     const pulled = await context.clients.withClient(host, async (client) =>
-      getPullRequest(client, ref, state.prEtag === undefined ? {} : { etag: state.prEtag }),
+      getPullRequest(client, ref, {
+        ...(state.prEtag !== undefined && { etag: state.prEtag }),
+        signal: disposal.signal,
+      }),
     );
     if (!pulled.ok) {
       logger.info('github poll: pull request unavailable', { kind: pulled.error.kind });
@@ -259,7 +269,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       const pullRequest = pulled.value.value;
       savePullRequest(context.session.db, ref, pullRequest, Temporal.Now.instant());
       const stack = await context.clients.withClient(host, async (client) =>
-        findPullRequestStack(client, pullRequest),
+        findPullRequestStack(client, pullRequest, disposal.signal),
       );
       if (stack.ok) {
         state.stack = stackViewFrom(host, stack.value);
@@ -283,7 +293,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       getCiStatus(
         client,
         { owner, repo, sha: headSha },
-        state.ciEtags === undefined ? {} : { etags: state.ciEtags },
+        { ...(state.ciEtags !== undefined && { etags: state.ciEtags }), signal: disposal.signal },
       ),
     );
     if (!ci.ok) {
@@ -387,6 +397,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     dispose: (): void => {
       isDisposed = true;
       clearTimeout(timer);
+      disposal.abort();
     },
   };
 }

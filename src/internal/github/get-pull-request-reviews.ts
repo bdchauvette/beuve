@@ -46,7 +46,7 @@ const pageSchema = z.array(reviewSchema);
 export async function getPullRequestReviews<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly signal?: AbortSignal } = {},
+  options: { readonly signal?: AbortSignal | undefined } = {},
 ): Promise<Result<readonly PullRequestReview[], GithubError<E>>> {
   const pages = await fetchAllPages(
     client,

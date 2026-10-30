@@ -50,7 +50,7 @@ export interface PostReviewOptions {
    * nothing was created. Defaults to `fail`.
    */
   readonly onRejectedComments?: 'fail' | 'move-to-body';
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 const reviewSchema = z.object({ id: z.number(), html_url: z.string(), state: z.string() });

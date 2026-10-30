@@ -12,6 +12,7 @@ describe('getPullRequestReviews', () => {
   test('decodes submitted reviews and drops pending and unknown states', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 200,
@@ -38,7 +39,7 @@ describe('getPullRequestReviews', () => {
         },
       ]),
     }));
-    const result = await getPullRequestReviews(client, ref());
+    const result = await getPullRequestReviews(client, ref(), { signal });
     expect(requests[0]?.url).toBe(
       'https://api.github.com/repos/octo-org/hello-world/pulls/7/reviews?per_page=100',
     );
@@ -67,9 +68,9 @@ describe('getPullRequestReviews', () => {
     });
   });
 
-  test('reports a body of the wrong shape', async ({ expect, fakeGithub }) => {
+  test('reports a body of the wrong shape', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => ({ status: 200, body: { not: 'a list' } }));
-    await expect(getPullRequestReviews(client, ref())).resolves.toMatchObject({
+    await expect(getPullRequestReviews(client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
     });
@@ -77,12 +78,12 @@ describe('getPullRequestReviews', () => {
 });
 
 describe('getReviewRequests', () => {
-  test('lists requested users and teams', async ({ expect, fakeGithub }) => {
+  test('lists requested users and teams', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 200,
       body: { users: [{ login: 'vic' }], teams: [{ slug: 'platform' }] },
     }));
-    await expect(getReviewRequests(client, ref())).resolves.toStrictEqual({
+    await expect(getReviewRequests(client, ref(), { signal })).resolves.toStrictEqual({
       ok: true,
       value: { users: ['vic'], teams: ['platform'] },
     });
@@ -94,14 +95,15 @@ describe('getReviewRequests', () => {
   test('reports a body of the wrong shape and a missing pull request', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const wrong = fakeGithub(() => ({ status: 200, body: [] }));
-    await expect(getReviewRequests(wrong.client, ref())).resolves.toMatchObject({
+    await expect(getReviewRequests(wrong.client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
     });
     const missing = fakeGithub(() => ({ status: 404, body: { message: 'Not Found' } }));
-    await expect(getReviewRequests(missing.client, ref())).resolves.toMatchObject({
+    await expect(getReviewRequests(missing.client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-found' },
     });

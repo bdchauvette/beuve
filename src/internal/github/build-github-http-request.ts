@@ -23,10 +23,10 @@ export interface HttpRequestContext {
  * The URL, headers and body for one API request: `Accept: application/vnd.github+json`, a bearer
  * token, `X-GitHub-Api-Version`, `If-None-Match` for conditional requests. Refuses a path that
  * resolves outside the API root (another origin, or `..` above `/api/v3`), so the token only ever
- * goes to the host it was issued for. Pure.
+ * goes to the host it was issued for. Pure: it never reads the request's `signal`.
  */
 export function buildGithubHttpRequest(
-  request: GithubRequest,
+  request: Omit<GithubRequest, 'signal'>,
   context: HttpRequestContext,
 ): Result<HttpRequest, string> {
   const url = resolveUrl(request, context.base);

@@ -21,7 +21,7 @@ export type Conditional<T> =
 export async function getPullRequest<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly etag?: string; readonly signal?: AbortSignal } = {},
+  options: { readonly etag?: string; readonly signal?: AbortSignal | undefined } = {},
 ): Promise<Result<Conditional<PullRequest>, GithubError<E>>> {
   const response = await client.send({
     method: 'GET',

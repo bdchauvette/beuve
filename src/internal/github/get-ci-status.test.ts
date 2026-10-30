@@ -18,9 +18,9 @@ function ci(request: RecordedRequest): FakeResponse {
 }
 
 describe('getCiStatus', () => {
-  test('merges check runs and statuses into one rollup', async ({ expect, fakeGithub }) => {
+  test('merges check runs and statuses into one rollup', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(ci);
-    const result = await getCiStatus(client, commit());
+    const result = await getCiStatus(client, commit(), { signal });
     expect(
       requests.map((request) => request.url).toSorted((a, b) => a.localeCompare(b)),
     ).toStrictEqual([
@@ -70,10 +70,11 @@ describe('getCiStatus', () => {
     });
   });
 
-  test('is not-modified when both endpoints answer 304', async ({ expect, fakeGithub }) => {
+  test('is not-modified when both endpoints answer 304', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({ status: 304 }));
     const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-1"' },
+      signal,
     });
     expect(result).toStrictEqual({ ok: true, value: { kind: 'not-modified' } });
     expect(
@@ -83,18 +84,19 @@ describe('getCiStatus', () => {
     ).toStrictEqual(['"checks-1"', '"status-1"']);
   });
 
-  test('refetches both when one of them changed', async ({ expect, fakeGithub }) => {
+  test('refetches both when one of them changed', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub((request, index) =>
       index < 2 && request.url.includes('/status') ? { status: 304 } : ci(request),
     );
     const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-0"' },
+      signal,
     });
     expect(result).toMatchObject({ ok: true, value: { kind: 'modified' } });
     expect(requests).toHaveLength(4);
   });
 
-  test('drops the check-runs ETag when they span pages', async ({ expect, fakeGithub }) => {
+  test('drops the check-runs ETag when they span pages', async ({ expect, fakeGithub, signal }) => {
     const page2 = `https://api.github.com/repositories/1/commits/${githubFixtures.headSha}/check-runs?page=2`;
     const { client } = fakeGithub((request) =>
       request.url === page2
@@ -110,7 +112,7 @@ describe('getCiStatus', () => {
             }
           : ci(request),
     );
-    const result = await getCiStatus(client, commit());
+    const result = await getCiStatus(client, commit(), { signal });
     expect(
       result.ok && result.value.kind === 'modified' && result.value.etags.checkRuns,
     ).toBeUndefined();

@@ -43,12 +43,12 @@ function offDiff(): { status: number; body: unknown } {
 }
 
 describe('postPullRequestReview', () => {
-  test('posts the payload() as one submitted review', async ({ expect, fakeGithub }) => {
+  test('posts the payload() as one submitted review', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 200,
       body: githubFixtures.review,
     }));
-    const result = await postPullRequestReview(client, ref(), payload());
+    const result = await postPullRequestReview(client, ref(), payload(), { signal });
     expect(requests[0]).toMatchObject({
       method: 'POST',
       url: 'https://api.github.com/repos/octo-org/hello-world/pulls/1347/reviews',
@@ -68,6 +68,7 @@ describe('postPullRequestReview', () => {
   test("types the refusal to approve or request changes on one's own pull request", async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client } = fakeGithub(() => ({
       status: 422,
@@ -76,7 +77,9 @@ describe('postPullRequestReview', () => {
         errors: ['Can not request changes on your own pull request'],
       },
     }));
-    await expect(postPullRequestReview(client, ref(), payload())).resolves.toStrictEqual({
+    await expect(
+      postPullRequestReview(client, ref(), payload(), { signal }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'cannot-review-own-pull-request',
@@ -86,9 +89,15 @@ describe('postPullRequestReview', () => {
     });
   });
 
-  test('reports rejected comments, without retrying by default', async ({ expect, fakeGithub }) => {
+  test('reports rejected comments, without retrying by default', async ({
+    expect,
+    fakeGithub,
+    signal,
+  }) => {
     const { client, requests } = fakeGithub(() => offDiff());
-    await expect(postPullRequestReview(client, ref(), payload())).resolves.toStrictEqual({
+    await expect(
+      postPullRequestReview(client, ref(), payload(), { signal }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'comments-rejected',
@@ -105,18 +114,20 @@ describe('postPullRequestReview', () => {
   test('falls back to moving every comment into the body when GitHub does not say which failed', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client, requests } = fakeGithub((_request, index) =>
       index === 0 ? offDiff() : { status: 200, body: githubFixtures.review },
     );
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',
+      signal,
     });
     expect(result).toMatchObject({ ok: true, value: { id: 80, movedToBody: 2 } });
     expect(requests[1]?.body).toStrictEqual(moveCommentsToBody(payload()));
   });
 
-  test('moves only the comments GitHub names', async ({ expect, fakeGithub }) => {
+  test('moves only the comments GitHub names', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub((_request, index) =>
       index === 0
         ? {
@@ -137,6 +148,7 @@ describe('postPullRequestReview', () => {
     );
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',
+      signal,
     });
     expect(result).toMatchObject({ ok: true, value: { movedToBody: 1 } });
     expect(
@@ -144,7 +156,11 @@ describe('postPullRequestReview', () => {
     ).toStrictEqual(['src/a.ts']);
   });
 
-  test('types a commit_id that is not part of the pull request', async ({ expect, fakeGithub }) => {
+  test('types a commit_id that is not part of the pull request', async ({
+    expect,
+    fakeGithub,
+    signal,
+  }) => {
     const { client } = fakeGithub(() => ({
       status: 422,
       body: {
@@ -153,19 +169,21 @@ describe('postPullRequestReview', () => {
       },
     }));
     await expect(
-      postPullRequestReview(client, ref(), { ...payload(), comments: [] }),
+      postPullRequestReview(client, ref(), { ...payload(), comments: [] }, { signal }),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'stale-commit', commitId: githubFixtures.headSha },
     });
   });
 
-  test('passes other errors through', async ({ expect, fakeGithub }) => {
+  test('passes other errors through', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => ({
       status: 403,
       body: { message: 'Resource not accessible by integration' },
     }));
-    await expect(postPullRequestReview(client, ref(), payload())).resolves.toMatchObject({
+    await expect(
+      postPullRequestReview(client, ref(), payload(), { signal }),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'forbidden' },
     });

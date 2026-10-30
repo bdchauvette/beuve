@@ -28,7 +28,7 @@ const requestsSchema = z
 export async function getReviewRequests<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly signal?: AbortSignal } = {},
+  options: { readonly signal?: AbortSignal | undefined } = {},
 ): Promise<Result<ReviewRequests, GithubError<E>>> {
   const response = await client.send({
     method: 'GET',

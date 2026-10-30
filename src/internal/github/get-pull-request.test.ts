@@ -10,13 +10,13 @@ function ref(): { owner: string; repo: string; number: number } {
 }
 
 describe('getPullRequest', () => {
-  test('decodes a pull request from a fork', async ({ expect, fakeGithub }) => {
+  test('decodes a pull request from a fork', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 200,
       body: githubFixtures.pullRequest,
       headers: { etag: 'W/"pr-1"' },
     }));
-    const result = await getPullRequest(client, ref());
+    const result = await getPullRequest(client, ref(), { signal });
     expect(requests[0]?.url).toBe('https://api.github.com/repos/octo-org/hello-world/pulls/1347');
     expect(result).toStrictEqual({
       ok: true,
@@ -64,12 +64,13 @@ describe('getPullRequest', () => {
   test('folds merged, deleted forks, ghosts, empty bodies and pending mergeability', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client } = fakeGithub(() => ({
       status: 200,
       body: { ...githubFixtures.pullRequest, ...githubFixtures.mergedFromDeletedFork },
     }));
-    const result = await getPullRequest(client, ref());
+    const result = await getPullRequest(client, ref(), { signal });
     expect(result).toMatchObject({
       ok: true,
       value: {
@@ -86,16 +87,18 @@ describe('getPullRequest', () => {
     });
   });
 
-  test('polls with the ETag and reports not-modified', async ({ expect, fakeGithub }) => {
+  test('polls with the ETag and reports not-modified', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({ status: 304 }));
-    await expect(getPullRequest(client, ref(), { etag: 'W/"pr-1"' })).resolves.toStrictEqual({
+    await expect(
+      getPullRequest(client, ref(), { etag: 'W/"pr-1"', signal }),
+    ).resolves.toStrictEqual({
       ok: true,
       value: { kind: 'not-modified' },
     });
     expect(requests[0]?.headers['If-None-Match']).toBe('W/"pr-1"');
   });
 
-  test('rejects a response without valid SHAs', async ({ expect, fakeGithub }) => {
+  test('rejects a response without valid SHAs', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => ({
       status: 200,
       body: {
@@ -103,15 +106,15 @@ describe('getPullRequest', () => {
         head: { ...githubFixtures.pullRequest.head, sha: 'main' },
       },
     }));
-    await expect(getPullRequest(client, ref())).resolves.toMatchObject({
+    await expect(getPullRequest(client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
     });
   });
 
-  test('passes not-found through', async ({ expect, fakeGithub }) => {
+  test('passes not-found through', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => ({ status: 404, body: { message: 'Not Found' } }));
-    await expect(getPullRequest(client, ref())).resolves.toStrictEqual({
+    await expect(getPullRequest(client, ref(), { signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'not-found', message: 'Not Found' },
     });

@@ -20,13 +20,14 @@ describe('createGithubClient', () => {
   test('sends the token only as a bearer header and returns body, ETag and Link', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 200,
       body: { a: 1 },
       headers: { etag: '"e1"', link: '<https://api.github.com/x?page=2>; rel="next"' },
     }));
-    const response = await client.send({ method: 'GET', path: '/x' });
+    const response = await client.send({ method: 'GET', path: '/x', signal });
     expect(response).toStrictEqual(
       ok({
         status: 200,
@@ -42,51 +43,56 @@ describe('createGithubClient', () => {
   test('passes credential failures through untouched, without a request', async ({
     expect,
     fakeGithub,
+    signal,
   }) => {
     const { client, requests } = fakeGithub(() => ({ status: 200 }), { token: undefined });
-    await expect(client.send({ method: 'GET', path: '/x' })).resolves.toStrictEqual({
+    await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'credentials', error: 'no-token' },
     });
     expect(requests).toStrictEqual([]);
   });
 
-  test('returns 304 as a success without a body', async ({ expect, fakeGithub }) => {
+  test('returns 304 as a success without a body', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub(() => ({
       status: 304,
       headers: { etag: '"e1"' },
     }));
-    const response = await client.send({ method: 'GET', path: '/x', etag: '"e1"' });
+    const response = await client.send({ method: 'GET', path: '/x', etag: '"e1"', signal });
     expect(response).toStrictEqual(
       ok({ status: 304, body: undefined, etag: '"e1"', link: undefined }),
     );
     expect(requests[0]?.headers['If-None-Match']).toBe('"e1"');
   });
 
-  test('classifies error statuses', async ({ expect, fakeGithub }) => {
+  test('classifies error statuses', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => ({
       status: 401,
       body: { message: 'Bad credentials' },
     }));
-    await expect(client.send({ method: 'GET', path: '/x' })).resolves.toStrictEqual({
+    await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'unauthorized', message: 'Bad credentials' },
     });
   });
 
-  test('reports a 200 that is not JSON as unexpected-shape', async ({ expect, fakeGithub }) => {
+  test('reports a 200 that is not JSON as unexpected-shape', async ({
+    expect,
+    fakeGithub,
+    signal,
+  }) => {
     const { client } = fakeGithub(() => ({ status: 200, body: '<html>proxy login</html>' }));
-    await expect(client.send({ method: 'GET', path: '/x' })).resolves.toMatchObject({
+    await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
     });
   });
 
-  test('reports network failures and timeouts', async ({ expect, fakeGithub }) => {
+  test('reports network failures and timeouts', async ({ expect, fakeGithub, signal }) => {
     const { client } = fakeGithub(() => {
       throw new TypeError('fetch failed');
     });
-    await expect(client.send({ method: 'GET', path: '/x' })).resolves.toStrictEqual({
+    await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'network', message: 'fetch failed' },
     });
@@ -102,13 +108,15 @@ describe('createGithubClient', () => {
           });
         }),
     });
-    await expect(okValueFrom(slow).send({ method: 'GET', path: '/x' })).resolves.toStrictEqual({
+    await expect(
+      okValueFrom(slow).send({ method: 'GET', path: '/x', signal }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 50 }) },
     });
   });
 
-  test('never logs the token or the query', async ({ expect }) => {
+  test('never logs the token or the query', async ({ expect, signal }) => {
     const logged: LogFields[] = [];
     const created = createGithubClient({
       host: 'github.com',
@@ -123,7 +131,12 @@ describe('createGithubClient', () => {
         error: ignore,
       },
     });
-    await okValueFrom(created).send({ method: 'GET', path: '/search', query: { q: 'private' } });
+    await okValueFrom(created).send({
+      method: 'GET',
+      path: '/search',
+      query: { q: 'private' },
+      signal,
+    });
     expect(JSON.stringify(logged)).not.toMatch(/gho_secretvalue|private/);
     expect(logged[0]).toMatchObject({ method: 'GET', path: '/search', status: 200 });
   });

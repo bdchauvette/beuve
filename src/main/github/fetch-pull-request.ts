@@ -13,8 +13,11 @@ import { githubFailure } from './github-failure.ts';
 export async function fetchPullRequest(
   clients: GithubClients,
   ref: PullRequestRef,
+  signal?: AbortSignal,
 ): Promise<Result<PullRequest, GithubFailureView>> {
-  const fetched = await clients.withClient(ref.host, async (client) => getPullRequest(client, ref));
+  const fetched = await clients.withClient(ref.host, async (client) =>
+    getPullRequest(client, ref, { signal }),
+  );
   if (!fetched.ok) {
     return err(
       failureFromGithubError(fetched.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),

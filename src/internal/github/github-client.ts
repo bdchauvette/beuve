@@ -28,7 +28,7 @@ export interface GithubRequest {
   readonly body?: unknown;
   /** Sent as `If-None-Match`; a 304 then comes back as `status: 304` with no body. */
   readonly etag?: string;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
 }
 
 export interface GithubResponse {
