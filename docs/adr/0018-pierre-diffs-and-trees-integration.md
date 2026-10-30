@@ -1,6 +1,6 @@
 # 0018. Integrating `@pierre/diffs` and `@pierre/trees` into the renderer
 
-- Status: Accepted
+- Status: Accepted; workers and the CSP amended by [0050](0050-stable-card-props-cached-heights-and-worker-highlighting.md)
 - Date: 2026-10-28
 
 ## Context
