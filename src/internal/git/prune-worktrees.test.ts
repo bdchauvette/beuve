@@ -15,7 +15,7 @@ describe('pruneWorktrees', () => {
     repo,
     repository: git,
   }) => {
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     const added = okValueFrom(await addWorktree(git, { root: repo.scratch(), commit }));
     rmSync(added.path, { recursive: true, force: true });
     const before = await listWorktrees(git);

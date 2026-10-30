@@ -26,6 +26,12 @@ const entrypointFiles = [
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
 const convertedTestFiles = convertedTestDirs.map((directory) => `${directory}/*.test.ts`);
+const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => ({
+  name,
+  importNames: ['execFileSync', 'execSync', 'spawnSync'],
+  message:
+    'Synchronous child processes block the worker, so concurrent tests cannot overlap and every test timeout covers the whole file. Use `execFile` from `node:child_process` through `promisify` (ADR 0058).',
+}));
 const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
 
 export default defineConfig(
@@ -256,9 +262,18 @@ export default defineConfig(
               importNames: ['test', 'it'],
               message: "Import `test` from the nearest `testing/test.ts` (or '#testing/test.ts').",
             },
+            ...blockingProcessImports,
           ],
         },
       ],
+    },
+  },
+
+  {
+    name: 'beuve/testing-helpers-do-not-block',
+    files: ['src/**/testing/**/*.ts', 'src/testing/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: blockingProcessImports }],
     },
   },
 

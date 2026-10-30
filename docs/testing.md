@@ -12,6 +12,7 @@ How beuve's tests are written (ADR 0058 for tests, ADR 0059 for time). Directori
 6. No `if` in tests. Assert a `Result` directly, or unwrap one with `okValueFrom(result)` (`#testing/ok-value-from.ts`) when the test needs its value to go on.
 7. Prefer `toStrictEqual` and `expect(promise).resolves`. Use `test.for` (not `test.each`) for tables: it passes the context as the second argument.
 8. No `Date`, and no arithmetic on time numbers (ADR 0059): use `Temporal` values and `Temporal.Duration`.
+9. Never block the worker: no `execFileSync`, `execSync` or `spawnSync` in tests or `testing/` (lint enforces it). `repo.git(…)` and `repo.commit(…)` return promises, so `await` them; a synchronous call would make concurrent tests run back to back with every timeout ticking (ADR 0058 amendment).
 
 ## Fixtures
 
@@ -45,7 +46,7 @@ A repository with history that several tests start from is a template. It is bui
 function reworkedSeries(): RepositoryTemplate<{ readonly previous: Range; readonly next: Range }> {
   return {
     name: 'compute-commit-pairs: reworked series',
-    build: (repo): { readonly previous: Range; readonly next: Range } => {
+    build: async (repo): Promise<{ readonly previous: Range; readonly next: Range }> => {
       // … commits, rebases …
       return { previous: { base, head: oldHead }, next: { base: newBase, head: newHead } };
     },
@@ -53,7 +54,7 @@ function reworkedSeries(): RepositoryTemplate<{ readonly previous: Range; readon
 }
 
 test('caps the per-pair interdiffs', async ({ expect, repositories }) => {
-  const { repo, value: series } = repositories.fromTemplate(reworkedSeries());
+  const { repo, value: series } = await repositories.fromTemplate(reworkedSeries());
   // …
 });
 ```

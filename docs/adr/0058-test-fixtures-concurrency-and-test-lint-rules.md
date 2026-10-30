@@ -41,6 +41,14 @@ Node 24 has no virtual file system; Node 26 has `node:vfs` behind `--experimenta
 - **Migration.** `converted-test-dirs.ts` lists the converted directories (the `*.test.ts` directly inside each). `eslint.config.js` applies the rules above, and `vitest.config.ts` the `concurrent` project, to exactly those files; the rest run in the `legacy` project as before. A directory joins the list in the commit that converts it. When the list covers everything, the `legacy` project and the list go away.
 - `src/testing/` is a shared leaf like `src/x` (`shared-testing-is-leaf`: Node built-ins, vitest, `src/x`, `src/sqlite` and itself). It may use vitest, a devDependency; `testing-only-in-tests` keeps it, like every `testing/` directory, out of bundles.
 
+## Amendment: test helpers never block the worker
+
+A test's timeout starts when its test starts. Tests in a file run concurrently in one worker thread, so a synchronous call (`execFileSync`, `execSync`, `spawnSync`) blocks every other test in that file: the tests run one after another while all their timers tick, and each test's 5 s limit ends up covering the whole file's work. On the 3-vCPU macOS runner, three tests of `find-stack-fork-point.test.ts` timed out at 5.0 s (the others finished at 1.7–3.7 s, the file at 6.9 s), though each takes about 0.4–1.4 s alone. Pinning the worker to 3 CPUs next to 3 CPU-burners reproduced it in 3 of 4 runs.
+
+- `TestRepository.git` and `commit` are async (`execFile`, no shell) and resolve to the same values; `RepositoryTemplate.build`, `repositories.create`, `repositories.fromTemplate` and the `repo` fixture return promises. The template cache stores the build promise, so concurrent tests share one build.
+- `no-restricted-imports` bans `execFileSync`, `execSync` and `spawnSync` in converted test files and in `testing/` directories.
+- Raising `testTimeout` or capping `maxConcurrency` would hide this; neither is used.
+
 ## Consequences
 
 Each test lists its dependencies in its signature, and shared fixtures replace copy-pasted `beforeEach` blocks. The converted directories (`eslint-local-rules`, `src/internal/git`, `src/internal/session`: 327 tests) went from 9.3–10.5 s to 4.9–5.5 s wall time, mostly from `isolate: false`; within-file concurrency alone gained little on 4 cores, because files already run in parallel workers and git is CPU-bound (`maxConcurrency` 1, 5 and 10 all measured 7.2–7.7 s for git and session). The whole suite went from 45.6–46.5 s to 39.5–43.1 s with 82 more tests. Templates make repositories with history nearly free, so tests can afford realistic histories. Tests that fake time or set `process.env` run one at a time. Two partly converted layouts coexist until every directory is in `converted-test-dirs.ts`. A VFS is not an option while tests spawn processes.

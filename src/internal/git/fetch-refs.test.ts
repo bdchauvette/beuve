@@ -18,10 +18,10 @@ describe('fetchRefs', () => {
     repositories,
   }) => {
     const { upstream, clone, git, bare } = await withRemote(repositories);
-    upstream.git('switch', '--quiet', '-c', 'topic');
+    await upstream.git('switch', '--quiet', '-c', 'topic');
     upstream.write('b.txt', 'b\n');
-    const first = upstream.commit('topic');
-    upstream.git('push', '--quiet', bare, 'topic:refs/pull/7/head');
+    const first = await upstream.commit('topic');
+    await upstream.git('push', '--quiet', bare, 'topic:refs/pull/7/head');
 
     const spec = [
       '+refs/pull/7/head:refs/beuve/pr/7/head',
@@ -36,9 +36,9 @@ describe('fetchRefs', () => {
       value: first,
     });
 
-    upstream.git('commit', '--quiet', '--amend', '--message', 'rewritten');
-    const second = upstream.git('rev-parse', 'HEAD');
-    upstream.git('push', '--quiet', '--force', bare, 'topic:refs/pull/7/head');
+    await upstream.git('commit', '--quiet', '--amend', '--message', 'rewritten');
+    const second = await upstream.git('rev-parse', 'HEAD');
+    await upstream.git('push', '--quiet', '--force', bare, 'topic:refs/pull/7/head');
     await expect(fetchRefs(git, 'origin', spec)).resolves.toStrictEqual({
       ok: true,
       value: undefined,
@@ -47,8 +47,10 @@ describe('fetchRefs', () => {
       ok: true,
       value: second,
     });
-    expect(clone.git('tag', '--list')).toBe('');
-    expect(clone.git('for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes')).toBe('');
+    await expect(clone.git('tag', '--list')).resolves.toBe('');
+    await expect(
+      clone.git('for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'),
+    ).resolves.toBe('');
   });
 
   test('refuses destinations outside refs/beuve/, option-like remotes and unsafe refs', async ({
@@ -85,14 +87,14 @@ interface WithRemote {
 
 /** `upstream` pushes `main` to the bare repository `bare`; `clone` has it as `origin`, unfetched. */
 async function withRemote(repositories: TestRepositories): Promise<WithRemote> {
-  const upstream = repositories.create();
+  const upstream = await repositories.create();
   upstream.write('a.txt', 'a\n');
-  upstream.commit('first');
+  await upstream.commit('first');
   const bare = path.join(upstream.scratch(), 'remote.git');
-  upstream.git('init', '--quiet', '--bare', bare);
-  upstream.git('push', '--quiet', bare, 'main:refs/heads/main');
-  const clone = repositories.create();
-  clone.git('remote', 'add', 'origin', bare);
+  await upstream.git('init', '--quiet', '--bare', bare);
+  await upstream.git('push', '--quiet', bare, 'main:refs/heads/main');
+  const clone = await repositories.create();
+  await clone.git('remote', 'add', 'origin', bare);
   const git = okValueFrom(await openRepository(clone.directory));
   return { upstream, clone, git, bare };
 }

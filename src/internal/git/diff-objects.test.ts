@@ -16,10 +16,10 @@ describe('diffObjects', () => {
   }) => {
     repo.write('kept.txt', 'one\ntwo\n');
     repo.write('space name.txt', 'x\n');
-    const from = repo.commit('from');
+    const from = await repo.commit('from');
     repo.write('kept.txt', 'one\nTWO\n');
     repo.write('space name.txt', 'y\n');
-    const to = repo.commit('to');
+    const to = await repo.commit('to');
     const result = await diffObjects(git, from, to);
     expect(result).toMatchObject({
       ok: true,
@@ -39,10 +39,10 @@ describe('diffObjects', () => {
   }) => {
     repo.write('code.py', 'a\nif x:\n  y=1\nz\n');
     repo.write('spaces.txt', 'one\n');
-    const from = repo.commit('from');
+    const from = await repo.commit('from');
     repo.write('code.py', 'a\nif x:\n    y = 1\nz\nnew\n');
     repo.write('spaces.txt', 'one   \n');
-    const to = repo.commit('to');
+    const to = await repo.commit('to');
     const shown = await diffObjects(git, from, to);
     expect(shown).toMatchObject({ ok: true, value: [{ path: 'code.py' }, { path: 'spaces.txt' }] });
     const ignored = await diffObjects(git, from, to, { ignoreWhitespace: true });
@@ -65,10 +65,10 @@ describe('diffObjects', () => {
   }) => {
     repo.write('a.txt', '1\n2\n3\n4\n5\n');
     repo.write('*.txt', 'star\n');
-    const from = repo.commit('from');
+    const from = await repo.commit('from');
     repo.write('a.txt', '1\n2\nthree\n4\n5\n');
     repo.write('*.txt', 'STAR\n');
-    const to = repo.commit('to');
+    const to = await repo.commit('to');
     const result = await diffObjects(git, from, to, { paths: ['*.txt'], contextLines: 0 });
     expect(result).toMatchObject({ ok: true, value: [{ path: '*.txt' }] });
     const narrow = await diffObjects(git, from, to, { paths: ['a.txt'], contextLines: 0 });
@@ -90,11 +90,11 @@ describe('diffObjects', () => {
     chmodSync(program, 0o755);
     repo.write('.gitattributes', '*.txt diff=evil\n');
     repo.write('a.txt', 'before\n');
-    const from = repo.commit('from');
+    const from = await repo.commit('from');
     repo.write('a.txt', 'after\n');
-    const to = repo.commit('to');
-    repo.git('config', 'diff.evil.textconv', program);
-    repo.git('config', 'diff.external', program);
+    const to = await repo.commit('to');
+    await repo.git('config', 'diff.evil.textconv', program);
+    await repo.git('config', 'diff.external', program);
     const result = await diffObjects(git, from, to);
     expect(result).toMatchObject({
       ok: true,

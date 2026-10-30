@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import process from 'node:process';
 
 import { describe } from 'vitest';
@@ -206,13 +207,14 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
   }) => {
     okValueFrom(await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }));
     const pid = requirePid(lsp.status()[0]?.pid);
-    const tree = descendantsOf(pid);
+    const tree = await descendantsOf(pid);
     expect(tree.length).toBeGreaterThan(0);
     await lsp.dispose();
     expect(lsp.status()).toStrictEqual([]);
-    await waitUntil('the server processes to exit', () =>
-      [pid, ...tree].every((member) => !isAlive(member)),
-    );
+    await waitUntil('the server processes to exit', async () => {
+      const alive = await Promise.all([pid, ...tree].map(async (member) => isAlive(member)));
+      return alive.every((member) => !member);
+    });
     await expect(
       lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }),
     ).resolves.toStrictEqual({
@@ -269,7 +271,10 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
       const request = { root: project.root, path: 'src/a.ts' };
       okValueFrom(await lsp.getDiagnostics(request));
       const pid = requirePid(lsp.status()[0]?.pid);
-      await waitUntil('the idle server to stop', () => lsp.status().length === 0 && !isAlive(pid));
+      await waitUntil(
+        'the idle server to stop',
+        async () => lsp.status().length === 0 && !(await isAlive(pid)),
+      );
       okValueFrom(await lsp.getDiagnostics(request));
       expect(lsp.status()).toMatchObject([{ state: 'running', restarts: 0 }]);
     } finally {
@@ -352,8 +357,11 @@ function requirePid(pid: number | undefined): number {
   return pid;
 }
 
-function descendantsOf(pid: number): number[] {
-  const table = execFileSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' })
+async function descendantsOf(pid: number): Promise<number[]> {
+  const { stdout } = await promisify(execFile)('ps', ['-A', '-o', 'pid=,ppid='], {
+    encoding: 'utf8',
+  });
+  const table = stdout
     .trim()
     .split('\n')
     .map((row) => row.trim().split(/\s+/u).map(Number));
@@ -374,15 +382,20 @@ function descendantsOf(pid: number): number[] {
 }
 
 /** Running or stopped, but not a zombie awaiting a reaper (containers often lack one). */
-function isAlive(pid: number): boolean {
+async function isAlive(pid: number): Promise<boolean> {
   try {
-    const state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
-    return !state.trimStart().startsWith('Z');
+    const { stdout } = await promisify(execFile)('ps', ['-o', 'stat=', '-p', String(pid)], {
+      encoding: 'utf8',
+    });
+    return !stdout.trimStart().startsWith('Z');
   } catch {
     return false;
   }
 }
 
-async function waitUntil(description: string, isSatisfied: () => boolean): Promise<void> {
-  await pollUntil(description, () => (isSatisfied() ? true : undefined));
+async function waitUntil(
+  description: string,
+  isSatisfied: () => boolean | Promise<boolean>,
+): Promise<void> {
+  await pollUntil(description, async () => ((await isSatisfied()) ? true : undefined));
 }

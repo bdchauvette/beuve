@@ -12,7 +12,7 @@ import { test } from './testing/test.ts';
 describe('runGit', () => {
   test('returns stdout with quotepath off', async ({ expect, repo }) => {
     repo.write('ünï code.txt', 'x');
-    repo.commit('first');
+    await repo.commit('first');
     const result = await runGit({ cwd: repo.directory, args: ['ls-files'] });
     expect(result).toStrictEqual({ ok: true, value: 'ünï code.txt\n' });
   });
@@ -66,7 +66,7 @@ describe('runGit', () => {
     });
 
     repo.write('big.txt', 'x'.repeat(10_000));
-    repo.commit('big');
+    await repo.commit('big');
     await expect(
       runGit({ cwd: repo.directory, args: ['show', 'HEAD:big.txt'], maxBufferBytes: 100 }),
     ).resolves.toMatchObject({
@@ -91,7 +91,7 @@ describe('runGit', () => {
     'ignores inherited GIT_* variables that would redirect git',
     { concurrent: false },
     async ({ expect, repo, repositories }) => {
-      const other = repositories.create();
+      const other = await repositories.create();
       const saved = process.env['GIT_DIR'];
       try {
         process.env['GIT_DIR'] = path.join(other.directory, '.git');
@@ -116,8 +116,8 @@ describe('runGit', () => {
     writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`);
     chmodSync(hook, 0o755);
     repo.write('a.txt', 'a');
-    repo.commit('a');
-    repo.git('config', 'core.fsmonitor', hook);
+    await repo.commit('a');
+    await repo.git('config', 'core.fsmonitor', hook);
     await runGit({ cwd: repo.directory, args: ['status', '--porcelain'] });
     expect(existsSync(marker)).toBe(false);
   });

@@ -13,8 +13,8 @@ export interface PullRequestStackCommits {
 /** {@link buildPullRequestStack} as a template: built once per worker, `pr3` checked out. */
 export const pullRequestStackTemplate: RepositoryTemplate<PullRequestStackCommits> = {
   name: 'pull-request-stack',
-  build: (repo) => {
-    const { root, pr1, pr2, pr3 } = buildPullRequestStack(repo);
+  build: async (repo) => {
+    const { root, pr1, pr2, pr3 } = await buildPullRequestStack(repo);
     return { root, pr1, pr2, pr3 };
   },
 };

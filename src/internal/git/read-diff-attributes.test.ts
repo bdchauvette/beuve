@@ -20,7 +20,7 @@ describe('readDiffAttributes', () => {
     repo.write('gen/keep.ts', 'b\n');
     repo.write('src/a b.snap', 'c\n');
     repo.write('src/main.ts', 'd\n');
-    const head = repo.commit('attributes');
+    const head = await repo.commit('attributes');
     repo.write('.gitattributes', 'src/main.ts linguist-generated\n');
 
     const read = await readDiffAttributes(git, head, [
@@ -47,7 +47,7 @@ describe('readDiffAttributes', () => {
   });
 
   test('answers an empty map for no paths', async ({ expect, repo, repository: git }) => {
-    const head = repo.commit('empty');
+    const head = await repo.commit('empty');
     const read = await readDiffAttributes(git, head, []);
     expect(read.ok ? read.value.size : read.error.kind).toBe(
       isVersionAtLeast(git.version, 2, 40) ? 0 : 'unsupported-git-version',

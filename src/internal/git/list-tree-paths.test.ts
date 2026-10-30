@@ -12,9 +12,9 @@ describe('listTreePaths', () => {
     repo.write('README.md', 'hi\n');
     repo.write('src/a b/ü.ts', 'x\n');
     repo.write('src/main.ts', 'y\n');
-    const first = repo.commit('first');
+    const first = await repo.commit('first');
     repo.write('later.txt', 'z\n');
-    repo.commit('second');
+    await repo.commit('second');
 
     await expect(listTreePaths(git, first)).resolves.toStrictEqual({
       ok: true,
@@ -24,7 +24,7 @@ describe('listTreePaths', () => {
 
   test('fails for a commit the repository lacks', async ({ expect, repo, repository: git }) => {
     repo.write('a.txt', 'a\n');
-    repo.commit('first');
+    await repo.commit('first');
     const missing = await listTreePaths(git, 'f'.repeat(40) as never);
     expect(missing.ok).toBe(false);
   });

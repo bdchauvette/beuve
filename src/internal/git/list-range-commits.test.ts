@@ -10,12 +10,12 @@ describe('listRangeCommits', () => {
     repository: git,
   }) => {
     repo.write('a.txt', '1\n2\n3\n');
-    const base = repo.commit('base');
+    const base = await repo.commit('base');
     repo.write('a.txt', '1\ntwo\n3\n');
-    const first = repo.commit('diff --git looks like a header: 1:  abc = 2: def');
-    const empty = repo.commit('nothing');
+    const first = await repo.commit('diff --git looks like a header: 1:  abc = 2: def');
+    const empty = await repo.commit('nothing');
     repo.write('b.txt', 'new\n');
-    const second = repo.commit('add b');
+    const second = await repo.commit('add b');
 
     const listed = await listRangeCommits(git, { base, head: second });
     expect(listed).toMatchObject({ ok: true, value: { truncated: false } });
@@ -38,10 +38,10 @@ describe('listRangeCommits', () => {
     repo,
     repository: git,
   }) => {
-    const base = repo.commit('base');
-    repo.commit('one');
-    const two = repo.commit('two');
-    const three = repo.commit('three');
+    const base = await repo.commit('base');
+    await repo.commit('one');
+    const two = await repo.commit('two');
+    const three = await repo.commit('three');
     const listed = await listRangeCommits(git, { base, head: three }, { maxCommits: 2 });
     expect(listed.ok && listed.value.commits.map(({ sha }) => sha)).toStrictEqual([two, three]);
     expect(listed.ok && listed.value.truncated).toBe(true);

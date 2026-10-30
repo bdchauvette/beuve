@@ -14,7 +14,7 @@ describe('listTreeBlobs', () => {
   }) => {
     repo.write('src/a b/ü.ts', 'export const a = 1;\n');
     repo.write('main.ts', 'export const b = 2;\n');
-    const head = repo.commit('first');
+    const head = await repo.commit('first');
 
     const listed = await listTreeBlobs(git, head);
     expect(listed.ok).toBe(true);

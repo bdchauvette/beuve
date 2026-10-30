@@ -11,14 +11,14 @@ import type { TestRepository } from './test-repository.ts';
  * a given one must exist and be symlink-free. Tests get one from the `repo` fixture instead
  * (`./test.ts`), which copies a template rather than running `git init` each time.
  */
-export function createTestRepository(home = createHome()): TestRepository {
+export async function createTestRepository(home = createHome()): Promise<TestRepository> {
   mkdirSync(path.join(home, 'repo'));
   const repo = openTestRepository(home);
-  repo.git('init', '--quiet', '--initial-branch=main');
-  repo.git('config', 'user.name', 'Beuve Test');
-  repo.git('config', 'user.email', 'test@beuve.invalid');
-  repo.git('config', 'commit.gpgsign', 'false');
-  repo.git('config', 'tag.gpgsign', 'false');
+  await repo.git('init', '--quiet', '--initial-branch=main');
+  await repo.git('config', 'user.name', 'Beuve Test');
+  await repo.git('config', 'user.email', 'test@beuve.invalid');
+  await repo.git('config', 'commit.gpgsign', 'false');
+  await repo.git('config', 'tag.gpgsign', 'false');
   return repo;
 }
 

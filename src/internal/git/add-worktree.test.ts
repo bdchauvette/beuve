@@ -15,9 +15,9 @@ describe('addWorktree', () => {
     repository: git,
   }) => {
     repo.write('a.txt', 'one\n');
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     repo.write('a.txt', 'two\n');
-    repo.commit('two');
+    await repo.commit('two');
     const root = path.join(repo.scratch(), 'worktrees', 'nested');
 
     const added = await addWorktree(git, { root, commit });
@@ -34,7 +34,7 @@ describe('addWorktree', () => {
   });
 
   test('does not run repository hooks', async ({ expect, repo, repository: git }) => {
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     const marker = path.join(repo.scratch(), 'hook-ran');
     repo.write('.git/hooks/post-checkout', `#!/bin/sh\ntouch '${marker}'\n`);
     chmodSync(path.join(repo.directory, '.git/hooks/post-checkout'), 0o755);
@@ -49,11 +49,11 @@ describe('addWorktree', () => {
     repo,
     repository: git,
   }) => {
-    const first = repo.commit('one');
-    const second = repo.commit('two');
+    const first = await repo.commit('one');
+    const second = await repo.commit('two');
     const root = repo.scratch();
     const added = okValueFrom(await addWorktree(git, { root, commit: first }));
-    repo.git('-C', added.path, 'checkout', '--quiet', '--detach', second);
+    await repo.git('-C', added.path, 'checkout', '--quiet', '--detach', second);
     await expect(addWorktree(git, { root, commit: first })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'worktree-conflict', path: added.path },
@@ -66,7 +66,7 @@ describe('addWorktree', () => {
     repository: git,
   }) => {
     repo.write('a.txt', 'one\n');
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     const root = repo.scratch();
     const added = okValueFrom(await addWorktree(git, { root, commit }));
     rmSync(added.path, { recursive: true, force: true });
@@ -78,7 +78,7 @@ describe('addWorktree', () => {
   });
 
   test('requires an absolute root', async ({ expect, repo, repository: git }) => {
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     await expect(addWorktree(git, { root: 'relative', commit })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },

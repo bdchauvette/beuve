@@ -14,12 +14,12 @@ describe('computeCommitPairs', () => {
     expect,
     repositories,
   }) => {
-    const { repo, value: series } = repositories.fromTemplate(reworkedSeries());
+    const { repo, value: series } = await repositories.fromTemplate(reworkedSeries());
     const git = okValueFrom(await openRepository(repo.directory));
     const result = okValueFrom(await computeCommitPairs(git, series.previous, series.next));
     const ours = result.pairs.map((pair) => describePair(pair));
     expect(ours).toStrictEqual(['=change a ten', '!change b twenty (and 21)', '<add c', '>add d']);
-    expect(ours).toStrictEqual(rangeDiff(repo, series.previous, series.next));
+    expect(ours).toStrictEqual(await rangeDiff(repo, series.previous, series.next));
 
     expect(result.pairs[1]).toMatchObject({
       kind: 'modified',
@@ -36,7 +36,7 @@ describe('computeCommitPairs', () => {
   });
 
   test('caps the per-pair interdiffs', async ({ expect, repositories }) => {
-    const { repo, value: series } = repositories.fromTemplate(reworkedSeries());
+    const { repo, value: series } = await repositories.fromTemplate(reworkedSeries());
     const git = okValueFrom(await openRepository(repo.directory));
     const result = await computeCommitPairs(git, series.previous, series.next, {
       maxInterdiffs: 0,
@@ -57,32 +57,40 @@ interface Range {
 function reworkedSeries(): RepositoryTemplate<{ readonly previous: Range; readonly next: Range }> {
   return {
     name: 'compute-commit-pairs: reworked series',
-    build: (repo): { readonly previous: Range; readonly next: Range } => {
+    build: async (repo): Promise<{ readonly previous: Range; readonly next: Range }> => {
       const fiftyLines = `${Array.from({ length: 50 }, (_, index) => String(index + 1)).join('\n')}\n`;
-      const replaceLine = (file: string, line: number, content: string): void => {
-        const lines = repo.git('show', `HEAD:${file}`).split('\n');
+      const replaceLine = async (file: string, line: number, content: string): Promise<void> => {
+        const shown = await repo.git('show', `HEAD:${file}`);
+        const lines = shown.split('\n');
         repo.write(file, `${lines.with(line - 1, content).join('\n')}\n`);
       };
       repo.write('a.txt', fiftyLines);
       repo.write('b.txt', fiftyLines);
-      const base = repo.commit('base');
-      repo.git('switch', '--quiet', '--create', 'topic');
-      replaceLine('a.txt', 10, 'ten');
-      repo.commit('change a ten');
-      replaceLine('b.txt', 20, 'twenty');
-      repo.commit('change b twenty');
+      const base = await repo.commit('base');
+      await repo.git('switch', '--quiet', '--create', 'topic');
+      await replaceLine('a.txt', 10, 'ten');
+      await repo.commit('change a ten');
+      await replaceLine('b.txt', 20, 'twenty');
+      await repo.commit('change b twenty');
       repo.write('c.txt', 'new\n');
-      const oldHead = repo.commit('add c');
-      repo.git('switch', '--quiet', 'main');
-      replaceLine('a.txt', 40, 'forty');
-      const newBase = repo.commit('upstream');
-      repo.git('switch', '--quiet', 'topic');
-      repo.git('rebase', '--quiet', 'main');
-      repo.git('reset', '--quiet', '--hard', 'HEAD~1');
-      replaceLine('b.txt', 21, 'twentyone');
-      repo.git('commit', '--quiet', '--amend', '--all', '--message', 'change b twenty (and 21)');
+      const oldHead = await repo.commit('add c');
+      await repo.git('switch', '--quiet', 'main');
+      await replaceLine('a.txt', 40, 'forty');
+      const newBase = await repo.commit('upstream');
+      await repo.git('switch', '--quiet', 'topic');
+      await repo.git('rebase', '--quiet', 'main');
+      await repo.git('reset', '--quiet', '--hard', 'HEAD~1');
+      await replaceLine('b.txt', 21, 'twentyone');
+      await repo.git(
+        'commit',
+        '--quiet',
+        '--amend',
+        '--all',
+        '--message',
+        'change b twenty (and 21)',
+      );
       repo.write('d.txt', 'd\n');
-      const newHead = repo.commit('add d');
+      const newHead = await repo.commit('add d');
       return { previous: { base, head: oldHead }, next: { base: newBase, head: newHead } };
     },
   };
@@ -107,21 +115,21 @@ function describePair(pair: CommitPair): string {
 }
 
 /** `git range-diff`'s own pairing, for agreement on the same ranges. */
-function rangeDiff(
+async function rangeDiff(
   repo: TestRepository,
   previous: { base: string; head: string },
   next: { base: string; head: string },
-): string[] {
-  const output = repo.git(
+): Promise<string[]> {
+  const output = await repo.git(
     'range-diff',
     '--no-color',
     '--no-patch',
     `${previous.base}..${previous.head}`,
     `${next.base}..${next.head}`,
   );
+  const log = await repo.git('log', '--format=%h %s', `${next.base}..${next.head}`);
   const subjects = new Map(
-    repo
-      .git('log', '--format=%h %s', `${next.base}..${next.head}`)
+    log
       .split('\n')
       .map((line) => [line.slice(0, line.indexOf(' ')), line.slice(line.indexOf(' ') + 1)]),
   );

@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { promisify } from 'node:util';
 
 import type { CommitSha } from '../object-id.ts';
 import type { TestRepository } from './test-repository.ts';
@@ -15,9 +16,16 @@ export function openTestRepository(home: string): TestRepository {
   const directory = path.join(home, 'repo');
   let scratchCount = 0;
   const environment = testEnvironment(home);
+  const execFileAsync = promisify(execFile);
 
-  const git = (...args: string[]): string =>
-    execFileSync('git', args, { cwd: directory, env: environment, encoding: 'utf8' }).trim();
+  const git = async (...args: string[]): Promise<string> => {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd: directory,
+      env: environment,
+      encoding: 'utf8',
+    });
+    return stdout.trim();
+  };
 
   return {
     directory,
@@ -27,10 +35,10 @@ export function openTestRepository(home: string): TestRepository {
       mkdirSync(path.dirname(target), { recursive: true });
       writeFileSync(target, content);
     },
-    commit: (message): CommitSha => {
-      git('add', '--all');
-      git('commit', '--quiet', '--allow-empty', '--message', message);
-      return git('rev-parse', 'HEAD') as CommitSha;
+    commit: async (message): Promise<CommitSha> => {
+      await git('add', '--all');
+      await git('commit', '--quiet', '--allow-empty', '--message', message);
+      return (await git('rev-parse', 'HEAD')) as CommitSha;
     },
     scratch: (): string => {
       scratchCount += 1;

@@ -11,22 +11,22 @@ describe('replayChanges', () => {
     repo,
     repository: git,
   }) => {
-    const { from, to } = fork(repo);
+    const { from, to } = await fork(repo);
     repo.write('b.txt', 'upstream\n');
-    const onto = repo.commit('upstream');
+    const onto = await repo.commit('upstream');
     const result = await replayChanges(git, { from, to, onto });
     expect(result).toMatchObject({ ok: true, value: { kind: 'clean' } });
     const { tree } = cleanReplay(result);
-    expect(repo.git('ls-tree', '--name-only', tree)).toBe('a.txt\nb.txt');
-    expect(repo.git('show', `${tree}:a.txt`)).toBe('1\ntopic\n3');
-    expect(repo.git('rev-parse', 'HEAD')).toBe(onto);
-    expect(repo.git('status', '--porcelain')).toBe('');
+    await expect(repo.git('ls-tree', '--name-only', tree)).resolves.toBe('a.txt\nb.txt');
+    await expect(repo.git('show', `${tree}:a.txt`)).resolves.toBe('1\ntopic\n3');
+    await expect(repo.git('rev-parse', 'HEAD')).resolves.toBe(onto);
+    await expect(repo.git('status', '--porcelain')).resolves.toBe('');
   });
 
   test('reports conflicted paths', async ({ expect, repo, repository: git }) => {
-    const { from, to } = fork(repo);
+    const { from, to } = await fork(repo);
     repo.write('a.txt', '1\nupstream\n3\n');
-    const onto = repo.commit('upstream');
+    const onto = await repo.commit('upstream');
     await expect(replayChanges(git, { from, to, onto })).resolves.toMatchObject({
       ok: true,
       value: { kind: 'conflicted', paths: ['a.txt'] },
@@ -38,8 +38,8 @@ describe('replayChanges', () => {
     repo,
     repository: git,
   }) => {
-    const { from, to } = fork(repo);
-    const onto = repo.commit('upstream');
+    const { from, to } = await fork(repo);
+    const onto = await repo.commit('upstream');
     const old = { ...git, version: { major: 2, minor: 37, patch: 1, raw: '' } };
     await expect(replayChanges(old, { from, to, onto })).resolves.toMatchObject({
       ok: true,
@@ -52,8 +52,8 @@ describe('replayChanges', () => {
     repo,
     repository: git,
   }) => {
-    const { to } = fork(repo);
-    const onto = repo.commit('upstream');
+    const { to } = await fork(repo);
+    const onto = await repo.commit('upstream');
     const old = { ...git, version: { major: 2, minor: 39, patch: 0, raw: '' } };
     await expect(replayChanges(old, { from: onto, to, onto })).resolves.toMatchObject({
       ok: true,
@@ -62,13 +62,15 @@ describe('replayChanges', () => {
   });
 });
 
-function fork(repo: TestRepository): { readonly from: CommitSha; readonly to: CommitSha } {
+async function fork(
+  repo: TestRepository,
+): Promise<{ readonly from: CommitSha; readonly to: CommitSha }> {
   repo.write('a.txt', '1\n2\n3\n');
-  const from = repo.commit('base');
-  repo.git('switch', '--quiet', '--create', 'topic');
+  const from = await repo.commit('base');
+  await repo.git('switch', '--quiet', '--create', 'topic');
   repo.write('a.txt', '1\ntopic\n3\n');
-  const to = repo.commit('topic');
-  repo.git('switch', '--quiet', 'main');
+  const to = await repo.commit('topic');
+  await repo.git('switch', '--quiet', 'main');
   return { from, to };
 }
 

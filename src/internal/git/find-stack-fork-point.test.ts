@@ -27,12 +27,12 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     repositories,
   }) => {
     const { repo, sha, commitLine, reviewedPr2, review } = await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'pr1');
-    const parentTip = commitLine('a.txt', 25, 'pr1-a25', 'pr1: a25');
-    repo.git('switch', '--quiet', 'pr2');
-    repo.git('rebase', '--quiet', 'pr1');
+    await repo.git('switch', '--quiet', 'pr1');
+    const parentTip = await commitLine('a.txt', 25, 'pr1-a25', 'pr1: a25');
+    await repo.git('switch', '--quiet', 'pr2');
+    await repo.git('rebase', '--quiet', 'pr1');
 
-    const result = await review(reviewedPr2(), parentTip, sha('pr2'));
+    const result = await review(reviewedPr2(), parentTip, await sha('pr2'));
     expect(result.fork).toMatchObject({ forkPoint: parentTip, reason: 'merge-base' });
     expect(result.interdiff).toMatchObject({ kind: 'rebased', replay: 'range', files: [] });
     expect(result.kinds).toStrictEqual(['unchanged', 'unchanged']);
@@ -44,14 +44,14 @@ describe('findStackForkPoint (stacked pull requests)', () => {
   }) => {
     const { repo, stack, sha, setLine, commitLine, reviewedPr2, review } =
       await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'pr1');
-    const parentTip = commitLine('a.txt', 25, 'pr1-a25', 'pr1: a25');
-    repo.git('switch', '--quiet', 'pr2');
-    repo.git('rebase', '--quiet', 'pr1');
+    await repo.git('switch', '--quiet', 'pr1');
+    const parentTip = await commitLine('a.txt', 25, 'pr1-a25', 'pr1: a25');
+    await repo.git('switch', '--quiet', 'pr2');
+    await repo.git('rebase', '--quiet', 'pr1');
     setLine('b.txt', 20, 'pr2-b20-v2');
-    repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
+    await repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
 
-    const result = await review(reviewedPr2(), parentTip, sha('pr2'));
+    const result = await review(reviewedPr2(), parentTip, await sha('pr2'));
     expect(result.files).toStrictEqual([['b.txt', ['-pr2-b20', '+pr2-b20-v2']]]);
     expect(result.kinds).toStrictEqual(['unchanged', 'modified']);
     const modified = result.pairs.pairs[1];
@@ -67,10 +67,10 @@ describe('findStackForkPoint (stacked pull requests)', () => {
   }) => {
     const { repo, git, stack, sha, setLine, commitLine, reviewedPr2, review } =
       await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'pr1');
+    await repo.git('switch', '--quiet', 'pr1');
     setLine('a.txt', 15, 'pr1-a15-v2');
-    repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
-    const parentTip = sha('pr1');
+    await repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
+    const parentTip = await sha('pr1');
 
     const unaware = value(
       await findStackForkPoint(git, { base: parentTip, head: at(stack.pr2, 1) }),
@@ -79,8 +79,8 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     const unawareFiles = value(await diffObjects(git, unaware.forkPoint, at(stack.pr2, 1)));
     expect(summary(unawareFiles).map(([path]) => path)).toStrictEqual(['a.txt', 'b.txt']);
 
-    repo.git('switch', '--quiet', 'pr2');
-    const fixup = commitLine('b.txt', 25, 'pr2-b25', 'pr2: b25');
+    await repo.git('switch', '--quiet', 'pr2');
+    const fixup = await commitLine('b.txt', 25, 'pr2-b25', 'pr2: b25');
     const stale = await review(reviewedPr2(), parentTip, fixup);
     expect(stale.fork).toStrictEqual({
       forkPoint: at(stack.pr1, 1),
@@ -92,8 +92,8 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     expect(stale.files).toStrictEqual([['b.txt', ['-25', '+pr2-b25']]]);
     expect(stale.kinds).toStrictEqual(['unchanged', 'unchanged', 'added']);
 
-    repo.git('rebase', '--quiet', '--onto', 'pr1', at(stack.pr1, 1), 'pr2');
-    const restacked = await review(reviewedPr2(), parentTip, sha('pr2'));
+    await repo.git('rebase', '--quiet', '--onto', 'pr1', at(stack.pr1, 1), 'pr2');
+    const restacked = await review(reviewedPr2(), parentTip, await sha('pr2'));
     expect(restacked.fork).toMatchObject({ forkPoint: parentTip, reason: 'merge-base' });
     expect(restacked.interdiff).toMatchObject({ kind: 'rebased', replay: 'range' });
     expect(restacked.files).toStrictEqual([['b.txt', ['-25', '+pr2-b25']]]);
@@ -105,7 +105,7 @@ describe('findStackForkPoint (stacked pull requests)', () => {
   }) => {
     const { repo, git, stack, sha, commitLine, reviewedPr2, squashMergePr1, review } =
       await stackScenario(repositories);
-    const mainTip = squashMergePr1();
+    const mainTip = await squashMergePr1();
 
     const full = value(await findStackForkPoint(git, { base: mainTip, head: at(stack.pr2, 1) }));
     expect(full).toStrictEqual({
@@ -117,15 +117,15 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     const fullFiles = value(await diffObjects(git, full.forkPoint, at(stack.pr2, 1)));
     expect(summary(fullFiles)).toStrictEqual([['b.txt', ['-5', '+pr2-b5', '-20', '+pr2-b20']]]);
 
-    repo.git('switch', '--quiet', 'pr2');
-    const fixup = commitLine('b.txt', 25, 'pr2-b25', 'pr2: b25');
+    await repo.git('switch', '--quiet', 'pr2');
+    const fixup = await commitLine('b.txt', 25, 'pr2-b25', 'pr2: b25');
     const retargeted = await review(reviewedPr2(), mainTip, fixup);
     expect(retargeted.fork.forkPoint).toBe(at(stack.pr1, 1));
     expect(retargeted.interdiff.kind).toBe('exact');
     expect(retargeted.files).toStrictEqual([['b.txt', ['-25', '+pr2-b25']]]);
 
-    repo.git('rebase', '--quiet', '--onto', 'main', at(stack.pr1, 1), 'pr2');
-    const rebased = await review(reviewedPr2(), mainTip, sha('pr2'));
+    await repo.git('rebase', '--quiet', '--onto', 'main', at(stack.pr1, 1), 'pr2');
+    const rebased = await review(reviewedPr2(), mainTip, await sha('pr2'));
     expect(rebased.fork).toMatchObject({ forkPoint: mainTip, reason: 'merge-base' });
     expect(rebased.interdiff).toMatchObject({ kind: 'rebased', replay: 'range' });
     expect(rebased.files).toStrictEqual([['b.txt', ['-25', '+pr2-b25']]]);
@@ -138,10 +138,10 @@ describe('findStackForkPoint (stacked pull requests)', () => {
   }) => {
     const { repo, git, stack, sha, commitLine, reviewedPr2, review } =
       await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'main');
-    const unrelated = commitLine('d.txt', 3, 'main-d3', 'main: d3');
-    repo.git('cherry-pick', at(stack.pr1, 0), at(stack.pr1, 1));
-    const mainTip = sha('main');
+    await repo.git('switch', '--quiet', 'main');
+    const unrelated = await commitLine('d.txt', 3, 'main-d3', 'main: d3');
+    await repo.git('cherry-pick', at(stack.pr1, 0), at(stack.pr1, 1));
+    const mainTip = await sha('main');
     const parentOnMain = value(await listRangeCommits(git, { base: unrelated, head: mainTip }));
     const parentOnBranch = value(
       await listRangeCommits(git, { base: stack.root, head: at(stack.pr1, 1) }),
@@ -156,9 +156,9 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     );
     expect(retargeted).toMatchObject({ forkPoint: at(stack.pr1, 1), reason: 'already-upstream' });
 
-    repo.git('switch', '--quiet', 'pr2');
-    repo.git('rebase', '--quiet', 'main');
-    const result = await review(reviewedPr2(), mainTip, sha('pr2'));
+    await repo.git('switch', '--quiet', 'pr2');
+    await repo.git('rebase', '--quiet', 'main');
+    const result = await review(reviewedPr2(), mainTip, await sha('pr2'));
     expect(result.fork.forkPoint).toBe(mainTip);
     expect(result.interdiff).toMatchObject({ kind: 'rebased', files: [] });
     expect(result.kinds).toStrictEqual(['unchanged', 'unchanged']);
@@ -171,9 +171,9 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     const { repo, git, stack, sha, reviewedPr2, squashMergePr1, review } =
       await stackScenario(repositories);
     const reviewedPr3 = { base: at(stack.pr2, 1), head: at(stack.pr3, 0) };
-    const mainTip = squashMergePr1();
-    repo.git('rebase', '--quiet', '--onto', 'main', at(stack.pr1, 1), 'pr2');
-    const pr2Tip = sha('pr2');
+    const mainTip = await squashMergePr1();
+    await repo.git('rebase', '--quiet', '--onto', 'main', at(stack.pr1, 1), 'pr2');
+    const pr2Tip = await sha('pr2');
 
     const pr3Stale = value(
       await findStackForkPoint(
@@ -186,11 +186,11 @@ describe('findStackForkPoint (stacked pull requests)', () => {
     const staleFiles = value(await diffObjects(git, pr3Stale.forkPoint, at(stack.pr3, 0)));
     expect(summary(staleFiles)).toStrictEqual([['c.txt', ['-10', '+pr3-c10']]]);
 
-    repo.git('rebase', '--quiet', '--onto', 'pr2', at(stack.pr2, 1), 'pr3');
+    await repo.git('rebase', '--quiet', '--onto', 'pr2', at(stack.pr2, 1), 'pr3');
     const pr2 = await review(reviewedPr2(), mainTip, pr2Tip);
     expect(pr2.interdiff).toMatchObject({ kind: 'rebased', files: [] });
     expect(pr2.kinds).toStrictEqual(['unchanged', 'unchanged']);
-    const pr3 = await review(reviewedPr3, pr2Tip, sha('pr3'));
+    const pr3 = await review(reviewedPr3, pr2Tip, await sha('pr3'));
     expect(pr3.fork).toMatchObject({ forkPoint: pr2Tip, reason: 'merge-base' });
     expect(pr3.interdiff).toMatchObject({ kind: 'rebased', files: [] });
     expect(pr3.kinds).toStrictEqual(['unchanged']);
@@ -202,11 +202,11 @@ describe('findStackForkPoint (stacked pull requests)', () => {
   }) => {
     const { repo, git, stack, sha, commitLine, reviewedPr2, review } =
       await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'pr1');
-    const parentTip = commitLine('b.txt', 5, 'moved-b5', 'pr1: b5 (moved from pr2)');
-    repo.git('switch', '--quiet', '--force-create', 'pr2', 'pr1');
-    repo.git('cherry-pick', at(stack.pr2, 1));
-    const head = sha('pr2');
+    await repo.git('switch', '--quiet', 'pr1');
+    const parentTip = await commitLine('b.txt', 5, 'moved-b5', 'pr1: b5 (moved from pr2)');
+    await repo.git('switch', '--quiet', '--force-create', 'pr2', 'pr1');
+    await repo.git('cherry-pick', at(stack.pr2, 1));
+    const head = await sha('pr2');
 
     const result = await review(reviewedPr2(), parentTip, head);
     expect(result.kinds).toStrictEqual(['dropped', 'unchanged']);
@@ -221,12 +221,12 @@ describe('findStackForkPoint (stacked pull requests)', () => {
 
   test('falls back when the paired replay conflicts too', async ({ expect, repositories }) => {
     const { repo, sha, commitLine, reviewedPr2, review } = await stackScenario(repositories);
-    repo.git('switch', '--quiet', 'pr1');
-    const parentTip = commitLine('b.txt', 20, 'parent-b20', 'pr1: b20');
-    repo.git('switch', '--quiet', 'pr2');
-    repo.git('rebase', '--quiet', '--strategy-option=theirs', 'pr1');
+    await repo.git('switch', '--quiet', 'pr1');
+    const parentTip = await commitLine('b.txt', 20, 'parent-b20', 'pr1: b20');
+    await repo.git('switch', '--quiet', 'pr2');
+    await repo.git('rebase', '--quiet', '--strategy-option=theirs', 'pr1');
 
-    const result = await review(reviewedPr2(), parentTip, sha('pr2'));
+    const result = await review(reviewedPr2(), parentTip, await sha('pr2'));
     expect(result.interdiff).toMatchObject({
       kind: 'fallback',
       reason: { kind: 'conflicts', paths: ['b.txt'] },
@@ -242,11 +242,16 @@ interface StackScenario {
   readonly repo: TestRepository;
   readonly git: GitRepository;
   readonly stack: PullRequestStackCommits;
-  readonly sha: (revision: string) => CommitSha;
+  readonly sha: (revision: string) => Promise<CommitSha>;
   readonly setLine: (file: string, line: number, content: string) => void;
-  readonly commitLine: (file: string, line: number, content: string, message: string) => CommitSha;
+  readonly commitLine: (
+    file: string,
+    line: number,
+    content: string,
+    message: string,
+  ) => Promise<CommitSha>;
   readonly reviewedPr2: () => ReviewRange;
-  readonly squashMergePr1: () => CommitSha;
+  readonly squashMergePr1: () => Promise<CommitSha>;
   readonly review: (
     previous: ReviewRange,
     baseTip: CommitSha,
@@ -262,24 +267,30 @@ interface StackScenario {
 
 /** A copy of the three-PR stack, and the steps the scenarios share. */
 async function stackScenario(repositories: TestRepositories): Promise<StackScenario> {
-  const { repo, value: stack } = repositories.fromTemplate(pullRequestStackTemplate);
+  const { repo, value: stack } = await repositories.fromTemplate(pullRequestStackTemplate);
   const git = value(await openRepository(repo.directory));
   const setLineHere = (file: string, line: number, content: string): void => {
     setLine(repo, file, line, content);
   };
-  const commitLine = (file: string, line: number, content: string, message: string): CommitSha => {
+  const commitLine = async (
+    file: string,
+    line: number,
+    content: string,
+    message: string,
+  ): Promise<CommitSha> => {
     setLine(repo, file, line, content);
-    return repo.commit(message);
+    return await repo.commit(message);
   };
-  const sha = (revision: string): CommitSha => repo.git('rev-parse', revision) as CommitSha;
+  const sha = async (revision: string): Promise<CommitSha> =>
+    (await repo.git('rev-parse', revision)) as CommitSha;
   const reviewedPr2 = (): ReviewRange => ({ base: at(stack.pr1, 1), head: at(stack.pr2, 1) });
 
   /** Squash-merges pr1 into main, adds an unrelated main commit, and returns main's tip. */
-  const squashMergePr1 = (): CommitSha => {
-    repo.git('switch', '--quiet', 'main');
-    repo.git('merge', '--quiet', '--squash', 'pr1');
-    repo.commit('pr1 (#1)');
-    return commitLine('d.txt', 3, 'main-d3', 'main: d3');
+  const squashMergePr1 = async (): Promise<CommitSha> => {
+    await repo.git('switch', '--quiet', 'main');
+    await repo.git('merge', '--quiet', '--squash', 'pr1');
+    await repo.commit('pr1 (#1)');
+    return await commitLine('d.txt', 3, 'main-d3', 'main: d3');
   };
 
   const review = async (

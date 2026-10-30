@@ -13,9 +13,9 @@ describe('listRemoteUrls', () => {
     repo,
     repository: git,
   }) => {
-    repo.git('remote', 'add', 'origin', 'git@github.com:octo-org/hello-world.git');
-    repo.git('remote', 'add', 'fork.me', 'https://ghe.example.com/me/hello-world');
-    repo.git('config', 'url./elsewhere.insteadOf', 'git@github.com:');
+    await repo.git('remote', 'add', 'origin', 'git@github.com:octo-org/hello-world.git');
+    await repo.git('remote', 'add', 'fork.me', 'https://ghe.example.com/me/hello-world');
+    await repo.git('config', 'url./elsewhere.insteadOf', 'git@github.com:');
     await expect(listRemoteUrls(git)).resolves.toStrictEqual({
       ok: true,
       value: [

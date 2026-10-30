@@ -10,16 +10,16 @@ describe('replayCommits', () => {
     repository: git,
   }) => {
     repo.write('a.txt', '1\n2\n3\n4\n5\n6\n7\n8\n9\n');
-    const base = repo.commit('base');
-    repo.git('switch', '--quiet', '--create', 'topic');
+    const base = await repo.commit('base');
+    await repo.git('switch', '--quiet', '--create', 'topic');
     repo.write('a.txt', '1\none\n3\n4\n5\n6\n7\n8\n9\n');
-    const first = repo.commit('first');
+    const first = await repo.commit('first');
     repo.write('a.txt', '1\none\n3\n4\n5\n6\n7\neight\n9\n');
-    const second = repo.commit('second');
-    repo.git('switch', '--quiet', 'main');
+    const second = await repo.commit('second');
+    await repo.git('switch', '--quiet', 'main');
     repo.write('a.txt', '1\n2\n3\n4\nfive\n6\n7\n8\n9\n');
-    const onto = repo.commit('upstream');
-    const refs = repo.git('for-each-ref');
+    const onto = await repo.commit('upstream');
+    const refs = await repo.git('for-each-ref');
 
     const replayed = await replayCommits(git, onto, [
       { parent: base, commit: first },
@@ -27,23 +27,25 @@ describe('replayCommits', () => {
     ]);
     expect(replayed).toMatchObject({ ok: true, value: { kind: 'clean' } });
     const tree = replayed.ok && replayed.value.kind === 'clean' ? replayed.value.tree : '';
-    expect(repo.git('show', `${tree}:a.txt`)).toBe('1\none\n3\n4\nfive\n6\n7\neight\n9');
-    expect(repo.git('for-each-ref')).toBe(refs);
+    await expect(repo.git('show', `${tree}:a.txt`)).resolves.toBe(
+      '1\none\n3\n4\nfive\n6\n7\neight\n9',
+    );
+    await expect(repo.git('for-each-ref')).resolves.toBe(refs);
 
     await expect(replayCommits(git, onto, [])).resolves.toStrictEqual({
       ok: true,
-      value: { kind: 'clean', tree: repo.git('rev-parse', onto + '^{tree}') },
+      value: { kind: 'clean', tree: await repo.git('rev-parse', onto + '^{tree}') },
     });
   });
 
   test('stops at the first conflicting commit', async ({ expect, repo, repository: git }) => {
     repo.write('a.txt', 'x\n');
-    const base = repo.commit('base');
+    const base = await repo.commit('base');
     repo.write('a.txt', 'mine\n');
-    const mine = repo.commit('mine');
-    repo.git('switch', '--quiet', '--create', 'other', base);
+    const mine = await repo.commit('mine');
+    await repo.git('switch', '--quiet', '--create', 'other', base);
     repo.write('a.txt', 'theirs\n');
-    const theirs = repo.commit('theirs');
+    const theirs = await repo.commit('theirs');
 
     await expect(
       replayCommits(git, theirs, [{ parent: base, commit: mine }]),

@@ -13,12 +13,12 @@ import type { RepositoryTemplate, TestRepository } from './test-repository.ts';
 /** Hands out repositories for one test, each in its own directory under the test's `tempDir`. */
 export interface TestRepositories {
   /** An empty repository on `main`. */
-  readonly create: () => TestRepository;
+  readonly create: () => Promise<TestRepository>;
   /** A copy of `template`, built once per worker, and the data its build returned. */
-  readonly fromTemplate: <T>(template: RepositoryTemplate<T>) => {
+  readonly fromTemplate: <T>(template: RepositoryTemplate<T>) => Promise<{
     readonly repo: TestRepository;
     readonly value: T;
-  };
+  }>;
 }
 
 /**
@@ -35,20 +35,23 @@ export const test = baseTest
   })
   .extend('repositories', ({ tempDir, repositoryTemplates }): TestRepositories => {
     let count = 0;
-    const fromTemplate = <T>(
+    const fromTemplate = async <T>(
       template: RepositoryTemplate<T>,
-    ): { readonly repo: TestRepository; readonly value: T } => {
+    ): Promise<{ readonly repo: TestRepository; readonly value: T }> => {
       count += 1;
       const home = path.join(tempDir, `repository-${String(count)}`);
       mkdirSync(home);
       return repositoryTemplates.copy(template, home);
     };
     return {
-      create: (): TestRepository => fromTemplate(emptyRepository).repo,
+      create: async (): Promise<TestRepository> => {
+        const { repo } = await fromTemplate(emptyRepository);
+        return repo;
+      },
       fromTemplate,
     };
   })
-  .extend('repo', ({ repositories }): TestRepository => repositories.create())
+  .extend('repo', async ({ repositories }): Promise<TestRepository> => repositories.create())
   .extend('repository', async ({ repo }): Promise<GitRepository> =>
     okValueFrom(await openRepository(repo.directory)),
   );

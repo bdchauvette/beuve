@@ -16,9 +16,9 @@ describe('computeInterdiff', () => {
     repo,
     repository: git,
   }) => {
-    const previous = reviewedBranch(repo);
+    const previous = await reviewedBranch(repo);
     repo.write('feature.rs', lines(['pub fn feature() -> u8 {', '  2', '}']));
-    const head = repo.commit('fixup');
+    const head = await repo.commit('fixup');
     const result = await computeInterdiff(git, previous, { base: previous.base, head });
     expect(result).toMatchObject({
       ok: true,
@@ -37,11 +37,11 @@ describe('computeInterdiff', () => {
     repo,
     repository: git,
   }) => {
-    const previous = reviewedBranch(repo);
-    const newBase = upstreamAdvances(repo);
-    repo.git('switch', '--quiet', 'topic');
-    repo.git('rebase', '--quiet', 'main');
-    const head = amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
+    const previous = await reviewedBranch(repo);
+    const newBase = await upstreamAdvances(repo);
+    await repo.git('switch', '--quiet', 'topic');
+    await repo.git('rebase', '--quiet', 'main');
+    const head = await amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
     const next = { base: newBase, head };
 
     const result = await computeInterdiff(git, previous, next);
@@ -60,11 +60,11 @@ describe('computeInterdiff', () => {
   });
 
   test('reports no changes for a pure rebase', async ({ expect, repo, repository: git }) => {
-    const previous = reviewedBranch(repo);
-    const newBase = upstreamAdvances(repo);
-    repo.git('switch', '--quiet', 'topic');
-    repo.git('rebase', '--quiet', 'main');
-    const head = repo.git('rev-parse', 'HEAD') as CommitSha;
+    const previous = await reviewedBranch(repo);
+    const newBase = await upstreamAdvances(repo);
+    await repo.git('switch', '--quiet', 'topic');
+    await repo.git('rebase', '--quiet', 'main');
+    const head = (await repo.git('rev-parse', 'HEAD')) as CommitSha;
     await expect(computeInterdiff(git, previous, { base: newBase, head })).resolves.toMatchObject({
       ok: true,
       value: { kind: 'rebased', files: [] },
@@ -76,11 +76,11 @@ describe('computeInterdiff', () => {
     repo,
     repository: git,
   }) => {
-    const previous = reviewedBranch(repo);
-    const newBase = upstreamAdvances(repo);
-    repo.git('switch', '--quiet', 'topic');
-    repo.git('rebase', '--quiet', 'main');
-    const head = amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
+    const previous = await reviewedBranch(repo);
+    const newBase = await upstreamAdvances(repo);
+    await repo.git('switch', '--quiet', 'topic');
+    await repo.git('rebase', '--quiet', 'main');
+    const head = await amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
     const older = { ...git, version: { major: 2, minor: 39, patch: 3, raw: 'git version 2.39.3' } };
     const result = await computeInterdiff(older, previous, { base: newBase, head });
     expect(result).toMatchObject({ ok: true, value: { kind: 'rebased' } });
@@ -92,13 +92,13 @@ describe('computeInterdiff', () => {
     repo,
     repository: git,
   }) => {
-    const previous = reviewedBranch(repo);
-    repo.git('switch', '--quiet', 'main');
+    const previous = await reviewedBranch(repo);
+    await repo.git('switch', '--quiet', 'main');
     repo.write('app.rs', lines(appLines().with(2, '  run_upstream();')));
-    const newBase = repo.commit('upstream touches the same line');
-    repo.git('switch', '--quiet', 'topic');
-    repo.git('rebase', '--quiet', '--strategy-option=theirs', 'main');
-    const head = repo.git('rev-parse', 'HEAD') as CommitSha;
+    const newBase = await repo.commit('upstream touches the same line');
+    await repo.git('switch', '--quiet', 'topic');
+    await repo.git('rebase', '--quiet', '--strategy-option=theirs', 'main');
+    const head = (await repo.git('rev-parse', 'HEAD')) as CommitSha;
 
     const result = await computeInterdiff(git, previous, { base: newBase, head });
     expect(result).toMatchObject({
@@ -116,11 +116,11 @@ describe('computeInterdiff', () => {
     repo,
     repository: git,
   }) => {
-    const previous = reviewedBranch(repo);
-    const newBase = upstreamAdvances(repo);
-    repo.git('switch', '--quiet', 'topic');
-    repo.git('rebase', '--quiet', 'main');
-    const head = repo.git('rev-parse', 'HEAD') as CommitSha;
+    const previous = await reviewedBranch(repo);
+    const newBase = await upstreamAdvances(repo);
+    await repo.git('switch', '--quiet', 'topic');
+    await repo.git('rebase', '--quiet', 'main');
+    const head = (await repo.git('rev-parse', 'HEAD')) as CommitSha;
     const ancient = {
       ...git,
       version: { major: 2, minor: 37, patch: 0, raw: 'git version 2.37.0' },
@@ -155,28 +155,28 @@ function appLines(): readonly string[] {
 }
 
 /** main: app + lib; topic: edits app, adds feature. Returns the reviewed range. */
-function reviewedBranch(repo: TestRepository): ReviewRange {
+async function reviewedBranch(repo: TestRepository): Promise<ReviewRange> {
   repo.write('app.rs', lines(appLines()));
   repo.write('lib.rs', lines(['pub fn lib() {}']));
-  const base = repo.commit('base');
-  repo.git('switch', '--quiet', '--create', 'topic');
+  const base = await repo.commit('base');
+  await repo.git('switch', '--quiet', '--create', 'topic');
   repo.write('app.rs', lines(appLines().with(2, '  run_fast();')));
-  repo.commit('speed up');
+  await repo.commit('speed up');
   repo.write('feature.rs', lines(['pub fn feature() -> u8 {', '  1', '}']));
-  const head = repo.commit('add feature');
+  const head = await repo.commit('add feature');
   return { base, head };
 }
 
-function upstreamAdvances(repo: TestRepository): CommitSha {
-  repo.git('switch', '--quiet', 'main');
+async function upstreamAdvances(repo: TestRepository): Promise<CommitSha> {
+  await repo.git('switch', '--quiet', 'main');
   repo.write('lib.rs', lines(['pub fn lib() {}', 'pub fn more() {}']));
-  repo.commit('upstream lib');
+  await repo.commit('upstream lib');
   repo.write('upstream.rs', lines(['// unrelated']));
-  return repo.commit('upstream file');
+  return await repo.commit('upstream file');
 }
 
-function amendFeature(repo: TestRepository, content: string): CommitSha {
+async function amendFeature(repo: TestRepository, content: string): Promise<CommitSha> {
   repo.write('feature.rs', content);
-  repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
-  return repo.git('rev-parse', 'HEAD') as CommitSha;
+  await repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
+  return (await repo.git('rev-parse', 'HEAD')) as CommitSha;
 }

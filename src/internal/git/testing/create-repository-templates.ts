@@ -11,7 +11,7 @@ export interface RepositoryTemplates {
   readonly copy: <T>(
     template: RepositoryTemplate<T>,
     home: string,
-  ) => { readonly repo: TestRepository; readonly value: T };
+  ) => Promise<{ readonly repo: TestRepository; readonly value: T }>;
 }
 
 interface Built {
@@ -25,27 +25,32 @@ interface Built {
  * and a plain copy elsewhere, both far cheaper than `git init` plus commits (ADR 0058).
  */
 export function createRepositoryTemplates(root: string): RepositoryTemplates {
-  const built = new Map<string, Built>();
+  const built = new Map<string, Promise<Built>>();
 
-  const build = <T>(template: RepositoryTemplate<T>): Built => {
+  const buildOnce = async <T>(template: RepositoryTemplate<T>, home: string): Promise<Built> => {
+    const repo = await createTestRepository(home);
+    return { directory: repo.directory, value: await template.build(repo) };
+  };
+
+  // The promise is cached, so concurrent tests asking for one template share a single build.
+  const build = async <T>(template: RepositoryTemplate<T>): Promise<Built> => {
     const cached = built.get(template.name);
     if (cached !== undefined) {
       return cached;
     }
     const home = path.join(root, `template-${String(built.size + 1)}`);
     mkdirSync(home);
-    const repo = createTestRepository(home);
-    const entry = { directory: repo.directory, value: template.build(repo) };
+    const entry = buildOnce(template, home);
     built.set(template.name, entry);
     return entry;
   };
 
   return {
-    copy: <T>(
+    copy: async <T>(
       template: RepositoryTemplate<T>,
       home: string,
-    ): { readonly repo: TestRepository; readonly value: T } => {
-      const source = build(template);
+    ): Promise<{ readonly repo: TestRepository; readonly value: T }> => {
+      const source = await build(template);
       cpSync(source.directory, path.join(home, 'repo'), {
         recursive: true,
         mode: constants.COPYFILE_FICLONE,

@@ -12,13 +12,13 @@ describe('diffRange', () => {
     repository: git,
   }) => {
     repo.write('shared.txt', 'base\n');
-    const fork = repo.commit('base');
-    repo.git('switch', '--quiet', '--create', 'topic');
+    const fork = await repo.commit('base');
+    await repo.git('switch', '--quiet', '--create', 'topic');
     repo.write('feature.txt', 'feature\n');
-    const head = repo.commit('feature');
-    repo.git('switch', '--quiet', 'main');
+    const head = await repo.commit('feature');
+    await repo.git('switch', '--quiet', 'main');
     repo.write('upstream.txt', 'upstream\n');
-    const base = repo.commit('upstream');
+    const base = await repo.commit('upstream');
 
     const result = await diffRange(git, { base, head });
     expect(result).toMatchObject({

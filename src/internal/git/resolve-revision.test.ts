@@ -10,10 +10,10 @@ describe('resolveRevision', () => {
     repository: git,
   }) => {
     repo.write('a.txt', '1');
-    const first = repo.commit('first');
+    const first = await repo.commit('first');
     repo.write('a.txt', '2');
-    const second = repo.commit('second');
-    repo.git('tag', '--annotate', 'v1', '--message', 'tag', first);
+    const second = await repo.commit('second');
+    await repo.git('tag', '--annotate', 'v1', '--message', 'tag', first);
     await expect(resolveRevision(git, 'main')).resolves.toStrictEqual({ ok: true, value: second });
     await expect(resolveRevision(git, 'HEAD~1')).resolves.toStrictEqual({ ok: true, value: first });
     await expect(resolveRevision(git, first.slice(0, 10))).resolves.toStrictEqual({
@@ -24,7 +24,7 @@ describe('resolveRevision', () => {
   });
 
   test('reports unknown revisions and non-commits', async ({ expect, repo, repository: git }) => {
-    repo.commit('only');
+    await repo.commit('only');
     await expect(resolveRevision(git, 'no-such-branch')).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'unknown-revision', revision: 'no-such-branch' },
@@ -40,7 +40,7 @@ describe('resolveRevision', () => {
     repo,
     repository: git,
   }) => {
-    repo.commit('only');
+    await repo.commit('only');
     for (const revision of ['--output=/tmp/x', '-p', '', 'main\nHEAD', 'a\u{7F}b']) {
       await expect(resolveRevision(git, revision)).resolves.toMatchObject({
         ok: false,

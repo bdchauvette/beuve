@@ -17,7 +17,7 @@ describe('removeWorktree', () => {
     repository: git,
   }) => {
     repo.write('a.txt', 'a\n');
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     const added = okValueFrom(await addWorktree(git, { root: repo.scratch(), commit }));
     writeFileSync(path.join(added.path, 'a.txt'), 'dirty\n');
 
@@ -40,7 +40,7 @@ describe('removeWorktree', () => {
     repo,
     repository: git,
   }) => {
-    repo.commit('one');
+    await repo.commit('one');
     await expect(removeWorktree(git, 'relative')).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },

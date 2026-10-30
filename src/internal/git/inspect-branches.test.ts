@@ -15,9 +15,9 @@ describe('inspectBranches', () => {
     repositories,
   }) => {
     const { repo, git } = await datedBase(repositories);
-    repo.git('switch', '--quiet', '--create', 'feature');
+    await repo.git('switch', '--quiet', '--create', 'feature');
     repo.write('b.txt', 'b\n');
-    repo.commit('feature');
+    await repo.commit('feature');
     const inspected = await inspectBranches(git);
     expect(inspected.ok).toBe(true);
     const inspectedValue = okValueFrom(inspected);
@@ -32,9 +32,9 @@ describe('inspectBranches', () => {
     repositories,
   }) => {
     const { repo, git } = await datedBase(repositories);
-    const head = repo.git('rev-parse', 'HEAD');
-    repo.git('update-ref', 'refs/remotes/origin/trunk', head);
-    repo.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
+    const head = await repo.git('rev-parse', 'HEAD');
+    await repo.git('update-ref', 'refs/remotes/origin/trunk', head);
+    await repo.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
     const inspected = await inspectBranches(git);
     expect(inspected.ok && inspected.value.defaultBase).toBe('origin/trunk');
     expect(
@@ -47,7 +47,7 @@ describe('inspectBranches', () => {
 
   test('has no current branch on a detached head', async ({ expect, repositories }) => {
     const { repo, git } = await datedBase(repositories);
-    repo.git('switch', '--quiet', '--detach');
+    await repo.git('switch', '--quiet', '--detach');
     const inspected = await inspectBranches(git);
     expect(inspected.ok && inspected.value.current).toBeUndefined();
   });
@@ -57,12 +57,19 @@ describe('inspectBranches', () => {
 async function datedBase(
   repositories: TestRepositories,
 ): Promise<{ readonly repo: TestRepository; readonly git: GitRepository }> {
-  const { repo } = repositories.fromTemplate({
+  const { repo } = await repositories.fromTemplate({
     name: 'inspect-branches: dated base',
-    build: (template): void => {
+    build: async (template): Promise<void> => {
       template.write('a.txt', 'a\n');
-      template.git('add', '--all');
-      template.git('commit', '--quiet', '--message', 'base', '--date', '2026-01-01T00:00:00Z');
+      await template.git('add', '--all');
+      await template.git(
+        'commit',
+        '--quiet',
+        '--message',
+        'base',
+        '--date',
+        '2026-01-01T00:00:00Z',
+      );
     },
   });
   return { repo, git: okValueFrom(await openRepository(repo.directory)) };

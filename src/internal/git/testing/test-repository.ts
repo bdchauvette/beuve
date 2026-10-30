@@ -1,15 +1,15 @@
 import type { CommitSha } from '../object-id.ts';
 
-/** A throwaway repository for integration tests, driven synchronously. */
+/** A throwaway repository for integration tests, driven through async git; file writes are synchronous. */
 export interface TestRepository {
   /** Real (symlink-free) path of the repository's top level. */
   readonly directory: string;
-  /** Runs git in the repository and returns trimmed stdout; throws on failure. */
-  readonly git: (...args: string[]) => string;
+  /** Runs git in the repository and resolves to trimmed stdout; rejects on failure. */
+  readonly git: (...args: string[]) => Promise<string>;
   /** Writes a file relative to the repository, creating parent directories. */
   readonly write: (file: string, content: string | Uint8Array) => void;
   /** Stages everything and commits, returning the new commit's sha. */
-  readonly commit: (message: string) => CommitSha;
+  readonly commit: (message: string) => Promise<CommitSha>;
   /** A fresh empty temporary directory, removed by `cleanup`. */
   readonly scratch: () => string;
   readonly cleanup: () => void;
@@ -22,5 +22,5 @@ export interface TestRepository {
  */
 export interface RepositoryTemplate<T> {
   readonly name: string;
-  readonly build: (repo: TestRepository) => T;
+  readonly build: (repo: TestRepository) => T | Promise<T>;
 }

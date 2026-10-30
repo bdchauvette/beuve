@@ -11,9 +11,9 @@ describe('listWorktrees', () => {
     repo,
     repository: git,
   }) => {
-    const commit = repo.commit('one');
+    const commit = await repo.commit('one');
     const linked = path.join(repo.scratch(), 'with space ü');
-    repo.git('worktree', 'add', '--quiet', '--detach', linked, commit);
+    await repo.git('worktree', 'add', '--quiet', '--detach', linked, commit);
     await expect(listWorktrees(git)).resolves.toStrictEqual({
       ok: true,
       value: [

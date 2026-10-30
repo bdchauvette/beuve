@@ -16,11 +16,11 @@ describe('attributeHunks', () => {
     repo,
     repository,
   }) => {
-    const { edit, attribute } = appFile(repo, repository);
-    const bottom = edit((lines) => lines.with(29, 'bottom edit'), 'edit the bottom');
-    const top = edit((lines) => ['new 1', 'new 2', 'new 3', ...lines], 'insert at the top');
-    const rewrite = edit((lines) => lines.with(32, 'bottom rewritten'), 'rewrite the bottom');
-    const removal = edit((lines) => lines.toSpliced(15, 2), 'remove two lines');
+    const { edit, attribute } = await appFile(repo, repository);
+    const bottom = await edit((lines) => lines.with(29, 'bottom edit'), 'edit the bottom');
+    const top = await edit((lines) => ['new 1', 'new 2', 'new 3', ...lines], 'insert at the top');
+    const rewrite = await edit((lines) => lines.with(32, 'bottom rewritten'), 'rewrite the bottom');
+    const removal = await edit((lines) => lines.toSpliced(15, 2), 'remove two lines');
 
     const [file] = await attribute(removal);
     expect(file?.commits).toStrictEqual([bottom, top, rewrite, removal]);
@@ -32,20 +32,20 @@ describe('attributeHunks', () => {
     repo,
     repository,
   }) => {
-    const { edit, attribute } = appFile(repo, repository);
-    const first = edit((lines) => lines.with(4, 'first'), 'first');
-    edit((lines) => lines.with(19, 'second'), 'second');
-    const fixup = edit((lines) => lines.with(19, 'second, fixed'), 'fixup');
+    const { edit, attribute } = await appFile(repo, repository);
+    const first = await edit((lines) => lines.with(4, 'first'), 'first');
+    await edit((lines) => lines.with(19, 'second'), 'second');
+    const fixup = await edit((lines) => lines.with(19, 'second, fixed'), 'fixup');
 
     const [file] = await attribute(fixup, first);
     expect(file?.hunks).toStrictEqual([[fixup]]);
   });
 
   test('follows a rename', async ({ expect, repo, repository }) => {
-    const { base, edit } = appFile(repo, repository);
-    const edited = edit((lines) => lines.with(9, 'edited'), 'edit');
-    repo.git('mv', 'app.txt', 'main.txt');
-    const renamed = repo.commit('rename');
+    const { base, edit } = await appFile(repo, repository);
+    const edited = await edit((lines) => lines.with(9, 'edited'), 'edit');
+    await repo.git('mv', 'app.txt', 'main.txt');
+    const renamed = await repo.commit('rename');
 
     const files = okValueFrom(await diffObjects(repository, base, renamed));
     const { commits } = okValueFrom(await listRangeCommits(repository, { base, head: renamed }));
@@ -59,7 +59,7 @@ interface AppFile {
   /** The commit adding `app.txt` with lines `line 1` … `line 40`. */
   readonly base: CommitSha;
   /** Rewrites `app.txt`'s lines with `change` and commits. */
-  readonly edit: (change: (lines: string[]) => string[], message: string) => CommitSha;
+  readonly edit: (change: (lines: string[]) => string[], message: string) => Promise<CommitSha>;
   /** `attributeHunks` for `from..head` (context 1) over the commits `base..head`. */
   readonly attribute: (
     head: CommitSha,
@@ -67,16 +67,16 @@ interface AppFile {
   ) => Promise<ReturnType<typeof attributeHunks>>;
 }
 
-function appFile(repo: TestRepository, git: GitRepository): AppFile {
+async function appFile(repo: TestRepository, git: GitRepository): Promise<AppFile> {
   let content = Array.from({ length: 40 }, (_, index) => `line ${String(index + 1)}`);
   repo.write('app.txt', text(content));
-  const base = repo.commit('base');
+  const base = await repo.commit('base');
   return {
     base,
-    edit: (change, message): CommitSha => {
+    edit: async (change, message): Promise<CommitSha> => {
       content = change(content);
       repo.write('app.txt', text(content));
-      return repo.commit(message);
+      return await repo.commit(message);
     },
     attribute: async (head, from = base): Promise<ReturnType<typeof attributeHunks>> => {
       const { commits } = okValueFrom(await listRangeCommits(git, { base, head }));
