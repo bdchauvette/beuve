@@ -39,7 +39,14 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
       reviewed: 'yes',
       progress: { total: 2, reviewed: 1, unreviewed: 1 },
     });
-    okValueFrom(await sessions.setFileReviewed({ sessionId: id, path: 'b.txt', reviewed: true }));
+    okValueFrom(
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'b.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
 
     await repo.git('switch', '--quiet', 'feature');
     repo.write('b.txt', lines(['b1', 'b2 changed again']));
@@ -66,7 +73,14 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     repo,
   }) => {
     const id = await startReview(repo, sessions);
-    okValueFrom(await sessions.setFileReviewed({ sessionId: id, path: 'a.txt', reviewed: true }));
+    okValueFrom(
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'a.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     await repo.git('switch', '--quiet', 'main');
     repo.write('upstream.txt', lines(['new upstream']));
     await repo.commit('upstream');
@@ -85,7 +99,14 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     repo,
   }) => {
     const id = await startReview(repo, sessions);
-    okValueFrom(await sessions.setFileReviewed({ sessionId: id, path: 'a.txt', reviewed: true }));
+    okValueFrom(
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'a.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     await repo.git('switch', '--quiet', 'feature');
     await repo.git('mv', 'a.txt', 'renamed.txt');
     await repo.commit('rename a');
@@ -95,10 +116,17 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
       ['renamed.txt', 'yes'],
     ]);
     okValueFrom(
-      await sessions.setFileReviewed({ sessionId: id, path: 'renamed.txt', reviewed: true }),
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'renamed.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
     );
 
-    okValueFrom(await sessions.markReviewed({ sessionId: id }));
+    okValueFrom(
+      await sessions.markReviewed({ sessionId: id, expectedHeadSha: await featureHead(repo) }),
+    );
     repo.write('renamed.txt', lines(['a1', 'a2', 'a3']));
     await repo.commit('extend');
     const interdiff = okValueFrom(await sessions.getReview({ sessionId: id }));
@@ -112,9 +140,21 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     repo,
   }) => {
     const id = await startReview(repo, sessions);
-    okValueFrom(await sessions.setFileReviewed({ sessionId: id, path: 'a.txt', reviewed: true }));
+    okValueFrom(
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'a.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     const cleared = okValueFrom(
-      await sessions.setFileReviewed({ sessionId: id, path: 'a.txt', reviewed: false }),
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'a.txt',
+        reviewed: false,
+        expectedHeadSha: await featureHead(repo),
+      }),
     );
     expect(cleared).toMatchObject({ reviewed: 'no', progress: { reviewed: 0, unreviewed: 2 } });
     await expect(
@@ -126,7 +166,12 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
     await expect(
-      sessions.setFileReviewed({ sessionId: id, path: 'nope.txt', reviewed: true }),
+      sessions.setFileReviewed({
+        sessionId: id,
+        path: 'nope.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
   });
 
@@ -136,7 +181,14 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     repo,
   }) => {
     const id = await startReview(repo, sessions);
-    okValueFrom(await sessions.setFileReviewed({ sessionId: id, path: 'a.txt', reviewed: true }));
+    okValueFrom(
+      await sessions.setFileReviewed({
+        sessionId: id,
+        path: 'a.txt',
+        reviewed: true,
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     const ignoring = okValueFrom(
       await sessions.getReview({ sessionId: id, ignoreWhitespace: true }),
     );
@@ -163,6 +215,10 @@ async function startReview(
     await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
   );
   return created.id;
+}
+
+async function featureHead(repo: TestRepository): Promise<string> {
+  return repo.git('rev-parse', 'feature');
 }
 
 function states(review: ReviewView): [string, string | undefined][] {

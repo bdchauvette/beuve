@@ -32,7 +32,7 @@ export async function setFileReviewed(
     return diff;
   }
   const { session } = diff.value.refreshed;
-  if (request.expectedHeadSha !== undefined && request.expectedHeadSha !== session.headSha) {
+  if (request.expectedHeadSha !== session.headSha) {
     return err({
       code: 'stale-review',
       message: 'new commits arrived since this review was loaded; reload it first',

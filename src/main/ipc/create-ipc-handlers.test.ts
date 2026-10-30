@@ -2,6 +2,8 @@ import { describe } from 'vitest';
 import type { ExpectStatic } from 'vitest';
 
 import type { AppInfo, IpcError, IpcResult, SessionSummary } from '#contract/ipc-contract.ts';
+import { perHeadInvokeChannels } from '#contract/per-head-invoke-channels.ts';
+import type { PerHeadInvokeChannel } from '#contract/per-head-invoke-channels.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err, Ok } from '#x/result/result.ts';
@@ -31,6 +33,22 @@ function sessionSummary(): SessionSummary {
     createdAt: '2026-10-28T00:00:00.000Z',
     updatedAt: '2026-10-28T00:00:00.000Z',
   };
+}
+
+/** A valid request for each per-head channel, minus its `expectedHeadSha`. */
+function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
+  const requests: Record<PerHeadInvokeChannel, object> = {
+    'session:mark-reviewed': { sessionId: 's1' },
+    'review:set-file-reviewed': { sessionId: 's1', path: 'a.ts', reviewed: true },
+    'ura:set-verdict': { sessionId: 's1', verdict: 'approve' },
+    'github:preview-review': { sessionId: 's1' },
+    'github:post-review': { sessionId: 's1' },
+  };
+  return requests[channel];
+}
+
+function sha(): string {
+  return 'c'.repeat(40);
 }
 
 function notWiredError(): Err<IpcError> {
@@ -108,7 +126,7 @@ describe('createIpcHandlers', () => {
     expect(calls).toStrictEqual([{ sessionId: 's1' }, { sessionId: 's1', ignoreWhitespace: true }]);
   });
 
-  test('validates session:mark-reviewed, including the optional expected head', async ({
+  test('validates session:mark-reviewed, including the required expected head', async ({
     expect,
   }) => {
     const { calls, services } = recording('markReviewed');
@@ -121,13 +139,24 @@ describe('createIpcHandlers', () => {
       expect,
       handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'A'.repeat(40) }),
     );
-    await handlers['session:mark-reviewed']({ sessionId: 's1' });
+    await expectInvalid(expect, handlers['session:mark-reviewed']({ sessionId: 's1' }));
     await handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'b'.repeat(40) });
-    expect(calls).toStrictEqual([
-      { sessionId: 's1' },
-      { sessionId: 's1', expectedHeadSha: 'b'.repeat(40) },
-    ]);
+    expect(calls).toStrictEqual([{ sessionId: 's1', expectedHeadSha: 'b'.repeat(40) }]);
   });
+});
+
+describe('createIpcHandlers for per-head channels (ADR 0078)', () => {
+  test.for(perHeadInvokeChannels)(
+    '%s refuses a request without the head the reviewer was shown',
+    async (channel, { expect }) => {
+      const handlers = createIpcHandlers(stubServices({}), appInfo());
+      const headless = perHeadRequestWithoutHead(channel);
+      await expectInvalid(expect, handlers[channel](headless));
+      await expectInvalid(expect, handlers[channel]({ ...headless, expectedHeadSha: 'HEAD' }));
+      const answered = await handlers[channel]({ ...headless, expectedHeadSha: sha() });
+      expect(answered).not.toMatchObject({ error: { code: 'invalid-request' } });
+    },
+  );
 });
 
 describe('createIpcHandlers for reviewed marks', () => {
@@ -151,8 +180,13 @@ describe('createIpcHandlers for reviewed marks', () => {
         expectedHeadSha: 'HEAD',
       }),
     );
-    await handlers['review:set-file-reviewed']({ sessionId: 's1', path: 'a.ts', reviewed: false });
-    expect(calls).toStrictEqual([{ sessionId: 's1', path: 'a.ts', reviewed: false }]);
+    await expectInvalid(
+      expect,
+      handlers['review:set-file-reviewed']({ sessionId: 's1', path: 'a.ts', reviewed: false }),
+    );
+    const request = { sessionId: 's1', path: 'a.ts', reviewed: false, expectedHeadSha: sha() };
+    await handlers['review:set-file-reviewed'](request);
+    expect(calls).toStrictEqual([request]);
   });
 });
 
@@ -816,8 +850,16 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
     await handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a', functionName: 'f' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
-    await handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'comment' });
-    await handlers['ura:set-verdict']({ sessionId: 's1' });
+    await expectInvalid(
+      expect,
+      handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'comment' }),
+    );
+    await handlers['ura:set-verdict']({
+      sessionId: 's1',
+      verdict: 'comment',
+      expectedHeadSha: sha(),
+    });
+    await handlers['ura:set-verdict']({ sessionId: 's1', expectedHeadSha: sha() });
     expect(calls).toStrictEqual([
       note,
       { ...note, origin: { kind: 'chat-answer', messageId: id } },
@@ -827,8 +869,8 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { messageId: id, finding: 2 },
       { sessionId: 's1', path: 'a', functionName: 'f' },
       { sessionId: 's1', target: 'agent-xml' },
-      { sessionId: 's1', verdict: 'comment' },
-      { sessionId: 's1' },
+      { sessionId: 's1', expectedHeadSha: sha(), verdict: 'comment' },
+      { sessionId: 's1', expectedHeadSha: sha() },
     ]);
   });
 
@@ -1023,13 +1065,21 @@ describe('github channels', () => {
     await handlers['github:auth-status'](undefined);
     await handlers['github:open-pr']({ ref: ' o/r#1 ', repoPath: '/clone' });
     await handlers['github:open-pr']({ ref: 'o/r#2' });
-    await handlers['github:post-review']({ sessionId: 's1', verdict: 'comment' });
+    await expectInvalid(
+      expect,
+      handlers['github:post-review']({ sessionId: 's1', verdict: 'comment' }),
+    );
+    await handlers['github:post-review']({
+      sessionId: 's1',
+      verdict: 'comment',
+      expectedHeadSha: sha(),
+    });
     await handlers['github:get-pr']({ sessionId: 's1' });
     expect(calls).toStrictEqual([
       {},
       { ref: 'o/r#1', repoPath: '/clone' },
       { ref: 'o/r#2' },
-      { sessionId: 's1', verdict: 'comment' },
+      { sessionId: 's1', expectedHeadSha: sha(), verdict: 'comment' },
       's1',
     ]);
   });

@@ -2,7 +2,7 @@ import type {
   GithubFailureView,
   GithubReviewPreviewView,
   IpcError,
-  UraVerdictView,
+  PostGithubReviewRequest,
 } from '#contract/ipc-contract.ts';
 import { diffRange } from '#internal/git/diff-range.ts';
 import type { PullRequestRef } from '#internal/github/pull-request.ts';
@@ -31,15 +31,18 @@ export interface PreparedReview {
 }
 
 /**
- * Compiles the session's staged items into a GitHub review (ADR 0039): the artifact on the current
- * head (items written on older heads re-anchored, outdated ones in the body), minus items an
- * earlier posted review carried, with `commentableRanges` from the local `base...head` diff, which
- * is the diff GitHub shows, so no inline comment lands off it.
+ * Compiles the session's staged items into a GitHub review (ADR 0039) on `expectedHeadSha`, the
+ * head the reviewer was shown: the artifact on it (items written on older heads re-anchored,
+ * outdated ones in the body), minus items an earlier posted review carried, with
+ * `commentableRanges` from the local `base...head` diff, which is the diff GitHub shows, so no
+ * inline comment lands off it. A session whose head is no longer that one is `head-moved`;
+ * otherwise the diff, the artifact, `commit_id` and the preview all use that one SHA, never a
+ * second read of the head (ADR 0078).
  */
 export async function prepareGithubReview(
-  context: GithubContext,
+  context: Pick<GithubContext, 'session'>,
   ura: Pick<UraServices, 'compileArtifact' | 'listPostings'>,
-  request: { readonly sessionId: string; readonly verdict?: UraVerdictView },
+  request: PostGithubReviewRequest,
 ): Promise<Result<PreparedReview, IpcError | GithubFailureView>> {
   const loaded = loadSession(context.session, request.sessionId);
   if (!loaded.ok) {
@@ -51,18 +54,37 @@ export async function prepareGithubReview(
       githubFailure('not-a-pull-request', 'Only pull request sessions can be posted to GitHub.'),
     );
   }
-  const refreshed = await refreshSession(context.session, loaded.value);
+  if (loaded.value.headSha !== request.expectedHeadSha) {
+    context.session.logger.info('github: review not posted, the head moved', {
+      expected: request.expectedHeadSha,
+      head: loaded.value.headSha,
+    });
+    return err(
+      githubFailure(
+        'head-moved',
+        'The pull request changed since you opened this; review the new commits first.',
+      ),
+    );
+  }
+  const headSha = loaded.value.headSha;
+  const refreshed = await refreshSession(context.session, loaded.value, { headSha });
   if (!refreshed.ok) {
     return refreshed;
   }
   const { repository, baseTip, session } = refreshed.value;
-  const diff = await diffRange(repository, { base: baseTip, head: session.headSha });
+  const diff = await diffRange(repository, { base: baseTip, head: headSha });
   if (!diff.ok) {
     return gitFailure(context.session.logger, diff.error);
   }
-  const artifact = await ura.compileArtifact(session.id, request.verdict);
+  const artifact = await ura.compileArtifact(session.id, {
+    headSha,
+    ...(request.verdict !== undefined && { verdict: request.verdict }),
+  });
   if (!artifact.ok) {
     return artifact;
+  }
+  if (artifact.value.summary.headSha !== headSha) {
+    return err({ code: 'internal', message: 'the review was compiled at another head' });
   }
   const posted = new Set(ura.listPostings(session.id).map((posting) => posting.itemId as string));
   const fresh = artifact.value.entries.filter((entry) => !posted.has(entry.item.id));
@@ -79,7 +101,7 @@ export async function prepareGithubReview(
     entries,
     preview: {
       sessionId: session.id,
-      headSha: session.headSha,
+      headSha,
       verdict: artifact.value.verdict.value,
       inlineCount: payload.comments.length,
       bodyCount: fresh.length - payload.comments.length,

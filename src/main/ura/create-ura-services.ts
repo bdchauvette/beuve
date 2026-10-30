@@ -37,6 +37,7 @@ import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
 import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
+import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
 import { stageImpactFinding } from '#internal/ura/stage-impact-finding.ts';
@@ -92,12 +93,13 @@ export interface UraServices {
   readonly setVerdict: (request: SetUraVerdictRequest) => IpcResult<UraVerdictStateView>;
   readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
   /**
-   * The artifact on the current head with the chosen verdict (or `verdict`), for exporters main
-   * runs itself, such as posting to GitHub (ADR 0039).
+   * The artifact with the chosen verdict (or `verdict`), for exporters main runs itself, such as
+   * posting to GitHub (ADR 0039). `headSha` is the head the caller checked (ADR 0078): the
+   * artifact is compiled at it, without reading the session's head again.
    */
   readonly compileArtifact: (
     sessionId: string,
-    verdict?: UraVerdictView,
+    options: CompileArtifactOptions,
   ) => Promise<IpcResult<UraArtifact>>;
   /** The session's postings, so a review isn't posted twice. */
   readonly listPostings: (sessionId: string) => readonly UraPosting[];
@@ -111,6 +113,12 @@ export interface UraServices {
   readonly observeHead: (sessionId: string) => void;
   /** Subscribes to `ura:changed`; returns the unsubscribe function. */
   readonly onChanged: (listener: (sessionId: string) => void) => () => void;
+}
+
+/** What {@link UraServices.compileArtifact} compiles at and with. */
+export interface CompileArtifactOptions {
+  readonly headSha: CommitSha;
+  readonly verdict?: UraVerdictView;
 }
 
 export interface UraServicesOptions {
@@ -282,11 +290,32 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return view.ok ? ok({ item: view.value, created: result.value.created }) : view;
   };
 
+  /**
+   * A choice made at `headSha`, read without settling it: a head pinned by the caller may already
+   * be an older one, and settling against it would drop a choice made at the newer head.
+   */
+  const choiceAt = (
+    sessionId: string,
+    headSha: string,
+    items: readonly UraItem[],
+  ): UraVerdictView | undefined => {
+    const { chosen, headSha: chosenAt } = readVerdictChoice(db, sessionId);
+    const isBlocked =
+      chosen === 'approve' &&
+      items.some((item) => item.status.kind === 'staged' && item.severity === 'blocker');
+    return chosenAt === headSha && !isBlocked ? chosen : undefined;
+  };
+
   const compile = async (
     sessionId: string,
     verdict: ExportUraRequest['verdict'],
+    pinnedHeadSha?: CommitSha,
   ): Promise<IpcResult<UraArtifact>> => {
-    const diff = await loadReviewDiff(context, sessionId);
+    const diff = await loadReviewDiff(
+      context,
+      sessionId,
+      pinnedHeadSha === undefined ? {} : { headSha: pinnedHeadSha },
+    );
     if (!diff.ok) {
       return diff;
     }
@@ -302,7 +331,11 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       repository: refreshed.repository,
     };
     const live = items.value.filter((item) => item.status.kind === 'staged');
-    const chosen = verdict ?? settledChoice(summary.sessionId, summary.headSha, items.value).chosen;
+    const chosen =
+      verdict ??
+      (pinnedHeadSha === undefined
+        ? settledChoice(summary.sessionId, summary.headSha, items.value).chosen
+        : choiceAt(summary.sessionId, pinnedHeadSha, items.value));
     const artifact = compileUraArtifact({
       summary,
       items: items.value,
@@ -498,10 +531,16 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
     },
 
-    setVerdict: ({ sessionId, verdict }): IpcResult<UraVerdictStateView> => {
+    setVerdict: ({ sessionId, verdict, expectedHeadSha }): IpcResult<UraVerdictStateView> => {
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
         return loaded;
+      }
+      if (loaded.value.headSha !== expectedHeadSha) {
+        return err({
+          code: 'stale-review',
+          message: 'new commits arrived since this review was loaded; review them first',
+        });
       }
       const items = listUraItems(db, loaded.value.id);
       if (!items.ok) {
@@ -519,14 +558,14 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         loaded.value.id,
         verdict === undefined || verdict === derived
           ? {}
-          : { chosen: verdict, headSha: loaded.value.headSha },
+          : { chosen: verdict, headSha: expectedHeadSha },
         Temporal.Now.instant(),
       );
       if (!written.ok) {
         return uraFailure(logger, written.error);
       }
       changed(sessionId);
-      return ok({ sessionId, ...verdictState(sessionId, loaded.value.headSha, items.value) });
+      return ok({ sessionId, ...verdictState(sessionId, expectedHeadSha, items.value) });
     },
 
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
@@ -534,8 +573,8 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
     },
 
-    compileArtifact: async (sessionId, verdict): Promise<IpcResult<UraArtifact>> =>
-      compile(sessionId, verdict),
+    compileArtifact: async (sessionId, { headSha, verdict }): Promise<IpcResult<UraArtifact>> =>
+      compile(sessionId, verdict, headSha),
 
     listPostings: (sessionId): readonly UraPosting[] => listUraPostings(db, sessionId as SessionId),
 

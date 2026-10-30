@@ -1,6 +1,6 @@
 # 0064. Reviewed marks per file, carried over by diff identity
 
-- Status: Accepted; UI decided below (2026-10-30); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
+- Status: Accepted; UI decided below (2026-10-30); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md), [0078](0078-per-head-requests-carry-their-head.md)
 - Date: 2026-10-30
 
 ## Context
@@ -24,3 +24,7 @@ The mark follows the change, so most pushes reopen few files. A coincidence (the
 ## Amendment 2026-10-30: keys (ADR 0068)
 
 File Reviewed is ⌘D / Ctrl+D (Review ▸ File Reviewed, the file header's and tree row's context menu, or the check on a reviewed card's header); it toggles and never moves on. Skip Reviewed Files is in Go and the Settings window, and applies to Next/Previous Change and Next/Previous File.
+
+## Amendment 2026-10-30: the head is required (ADR 0078)
+
+`expectedHeadSha` is required on `review:set-file-reviewed` and `session:mark-reviewed`; a request without it is `invalid-request`.

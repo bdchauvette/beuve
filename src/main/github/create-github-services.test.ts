@@ -5,9 +5,11 @@ import { describe } from 'vitest';
 import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import type { MainServices } from '../main-services.ts';
 import { lines } from '../testing/lines.ts';
 import { waitUntil } from '../testing/wait-until.ts';
 import { test } from './testing/test.ts';
+import type { GithubWorld } from './testing/test.ts';
 
 describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local bare remote)', () => {
   test('opens a pull request into a local clone, idempotently, and remembers the clone', async ({
@@ -246,7 +248,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       }),
     );
 
-    expect(okValueFrom(await services.github.previewReview({ sessionId }))).toStrictEqual({
+    expect(
+      okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toStrictEqual({
       sessionId,
       headSha: firstHead,
       verdict: 'comment',
@@ -257,14 +261,22 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
 
     api.viewer = 'octocat';
     expect(
-      okValueFrom(await services.github.postReview({ sessionId, verdict: 'request-changes' })),
+      okValueFrom(
+        await services.github.postReview({
+          sessionId,
+          verdict: 'request-changes',
+          expectedHeadSha: firstHead,
+        }),
+      ),
     ).toMatchObject({
       kind: 'failed',
       failure: 'own-pull-request',
     });
     api.viewer = 'reviewer';
 
-    const posted = okValueFrom(await services.github.postReview({ sessionId }));
+    const posted = okValueFrom(
+      await services.github.postReview({ sessionId, expectedHeadSha: firstHead }),
+    );
     expect(posted).toMatchObject({
       kind: 'posted',
       url: 'https://github.com/octo-org/hello-world/pull/7#pullrequestreview-1',
@@ -282,7 +294,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     const listed = okValueFrom(await ura.list({ sessionId }));
     expect(listed.items.map((item) => item.posted?.placement)).toStrictEqual(['inline', 'body']);
 
-    expect(okValueFrom(await services.github.previewReview({ sessionId }))).toMatchObject({
+    expect(
+      okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toMatchObject({
       inlineCount: 0,
       bodyCount: 0,
       alreadyPostedCount: 2,
@@ -298,7 +312,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       }),
     );
     api.rejectCommentPaths.add('app.ts');
-    const fallback = okValueFrom(await services.github.postReview({ sessionId }));
+    const fallback = okValueFrom(
+      await services.github.postReview({ sessionId, expectedHeadSha: firstHead }),
+    );
     expect(fallback).toMatchObject({
       kind: 'posted',
       inlineCount: 0,
@@ -308,6 +324,102 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect(api.reviews).toHaveLength(2);
     expect(api.reviews[1]?.body.comments).toStrictEqual([]);
     expect(api.reviews[1]?.body.body).toContain('Comments GitHub could not attach to the diff');
+  });
+
+  test('posts nothing when the head moved after the reviewer opened the confirmation', async ({
+    expect,
+    services,
+    opened,
+    world,
+  }) => {
+    const { firstHead, api } = world;
+    const sessionId = await opened();
+    await stageNote(services, sessionId);
+    expect(
+      okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toMatchObject({ headSha: firstHead, verdict: 'comment' });
+
+    const secondHead = await pushHead(world, 'the author pushes while the dialog is open');
+    await services.github.pollNow(sessionId);
+    expect(okValueFrom(await services.sessions.getReview({ sessionId })).headSha).toBe(secondHead);
+
+    const refused = okValueFrom(
+      await services.github.postReview({ sessionId, expectedHeadSha: firstHead }),
+    );
+    expect(refused).toStrictEqual({
+      kind: 'failed',
+      failure: 'head-moved',
+      message: 'The pull request changed since you opened this; review the new commits first.',
+    });
+    expect(
+      okValueFrom(await services.github.previewReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toMatchObject({ kind: 'failed', failure: 'head-moved' });
+    expect(api.reviews).toStrictEqual([]);
+    expect(api.log.filter((entry) => entry.startsWith('POST'))).toStrictEqual([]);
+    expect(okValueFrom(await services.ura.list({ sessionId })).items[0]?.posted).toBeUndefined();
+
+    const posted = okValueFrom(
+      await services.github.postReview({ sessionId, expectedHeadSha: secondHead }),
+    );
+    expect(posted).toMatchObject({ kind: 'posted', headSha: secondHead });
+    expect(api.reviews.map((review) => review.body.commit_id)).toStrictEqual([secondHead]);
+  });
+
+  test('posts one review when two posts overlap', async ({
+    expect,
+    services,
+    opened,
+    recreate,
+    world,
+  }) => {
+    const { firstHead, api } = world;
+    const sessionId = await opened();
+    await stageNote(services, sessionId);
+    const held = holdReviewPosts(api);
+    Object.assign(api, { fetch: held.fetch });
+    const restarted = recreate(services);
+
+    const first = restarted.github.postReview({ sessionId, expectedHeadSha: firstHead });
+    await held.arrived;
+    await expect(
+      restarted.github.postReview({ sessionId, expectedHeadSha: firstHead }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
+    held.release();
+    expect(okValueFrom(await first)).toMatchObject({ kind: 'posted', headSha: firstHead });
+    expect(api.reviews).toHaveLength(1);
+    expect(api.reviews[0]?.body.commit_id).toBe(firstHead);
+    expect(
+      okValueFrom(await restarted.github.postReview({ sessionId, expectedHeadSha: firstHead })),
+    ).toMatchObject({ kind: 'posted', inlineCount: 0, alreadyPostedCount: 1 });
+  });
+
+  test('asks for the CI of the head it synced to, not the one GitHub first answered', async ({
+    expect,
+    opened,
+    recreate,
+    services,
+    ciEvents,
+    world,
+  }) => {
+    const { upstream, bare, api } = world;
+    const sessionId = await opened();
+    upstream.write('app.ts', lines(['export const answer = 42;', 'export const other = 3;']));
+    const answered = await upstream.commit('pushed, then amended');
+    await upstream.git('commit', '--quiet', '--amend', '--message', 'amended');
+    const synced = await upstream.git('rev-parse', 'HEAD');
+    await upstream.git('push', '--quiet', '--force', bare, 'feature:refs/pull/7/head');
+    Object.assign(api.pullRequests.get(7) ?? {}, { updatedAt: '2026-10-28T11:00:00Z' });
+    api.checks.set(answered, [{ kind: 'check-run', name: 'test', result: 'success' }]);
+    api.checks.set(synced, [{ kind: 'check-run', name: 'test', result: 'failure' }]);
+    const racing = racingFetch(api, answered, synced);
+    Object.assign(api, { fetch: racing.fetch });
+    const restarted = recreate(services);
+
+    await restarted.github.pollNow(sessionId);
+    expect(racing.pullGets()).toBe(2);
+    expect(okValueFrom(await restarted.sessions.getReview({ sessionId })).headSha).toBe(synced);
+    expect(ciEvents.at(-1)).toMatchObject({ sessionId, ci: { sha: synced, overall: 'failure' } });
+    expect(api.log.filter((entry) => entry.includes(answered))).toStrictEqual([]);
   });
 
   test('invalidates a rejected token and retries once with the one gh gives now', async ({
@@ -427,6 +539,56 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
 });
 
 /** A `fetch` that answers the first read of pull request 7 with `first` and later reads with `later`. */
+/** Stages an inline issue on `app.ts` line 1, which the pull request's diff covers. */
+async function stageNote(services: MainServices, sessionId: string): Promise<void> {
+  okValueFrom(
+    await services.ura.create({
+      sessionId,
+      anchor: { kind: 'lines', path: 'app.ts', startLine: 1, endLine: 1 },
+      severity: 'issue',
+      title: 'Name the constant',
+      body: '42 needs a name.',
+    }),
+  );
+}
+
+/** The author pushes a new commit to the pull request, and GitHub reports it. */
+async function pushHead(world: GithubWorld, message: string): Promise<string> {
+  const { upstream, bare, api } = world;
+  upstream.write('app.ts', lines(['export const answer = 42;', `// ${message}`]));
+  const head = await upstream.commit(message);
+  await upstream.git('push', '--quiet', bare, 'feature:refs/pull/7/head');
+  Object.assign(api.pullRequests.get(7) ?? {}, {
+    headSha: head,
+    updatedAt: '2026-10-28T11:00:00Z',
+  });
+  return head;
+}
+
+/** Holds every review POST until `release`; `arrived` settles when the first one reaches GitHub. */
+function holdReviewPosts(api: FakeGithubApi): {
+  readonly fetch: FakeGithubApi['fetch'];
+  readonly arrived: Promise<undefined>;
+  readonly release: () => void;
+} {
+  const arrived = Promise.withResolvers<undefined>();
+  const gate = Promise.withResolvers<undefined>();
+  const fetch = api.fetch;
+  return {
+    fetch: async (url, init): Promise<Response> => {
+      if (init.method === 'POST' && url.endsWith('/reviews')) {
+        arrived.resolve(undefined);
+        await gate.promise;
+      }
+      return fetch(url, init);
+    },
+    arrived: arrived.promise,
+    release: (): void => {
+      gate.resolve(undefined);
+    },
+  };
+}
+
 function racingFetch(
   api: FakeGithubApi,
   first: string,

@@ -156,22 +156,15 @@ const chooseFolderRequest = z.strictObject({
   title: z.string().max(200).optional(),
   defaultPath: z.string().min(1).max(4096).optional(),
 });
-const markReviewedRequest = z.strictObject({
-  sessionId,
-  expectedHeadSha: z
-    .string()
-    .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
-    .optional(),
-});
+/** The head the reviewer was shown, which every per-head request carries (ADR 0078). */
+const expectedHeadSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
+const markReviewedRequest = z.strictObject({ sessionId, expectedHeadSha });
 
 const fileReviewedRequest = z.strictObject({
   sessionId,
   path: z.string().min(1).max(4096),
   reviewed: z.boolean(),
-  expectedHeadSha: z
-    .string()
-    .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
-    .optional(),
+  expectedHeadSha,
 });
 
 const filePairRequest = z.strictObject({ sessionId, path: z.string().min(1).max(4096) });
@@ -345,7 +338,11 @@ const uraExportRequest = z.strictObject({
   verdict: uraVerdict.optional(),
 });
 
-const verdictChoiceRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
+const verdictChoiceRequest = z.strictObject({
+  sessionId,
+  verdict: uraVerdict.optional(),
+  expectedHeadSha,
+});
 
 const maxMentionSpan = 5000;
 const chatMention = z
@@ -429,7 +426,11 @@ const openPullRequestRequest = z.strictObject({
   ref: z.string().trim().min(1).max(2048),
   repoPath: z.string().trim().min(1).max(4096).optional(),
 });
-const githubReviewRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
+const githubReviewRequest = z.strictObject({
+  sessionId,
+  verdict: uraVerdict.optional(),
+  expectedHeadSha,
+});
 const githubLinkRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 const openUrlRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 
@@ -489,26 +490,13 @@ export function createIpcHandlers(
     },
     'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = markReviewedRequest.safeParse(request);
-      if (!parsed.success) {
-        return invalid(parsed.error);
-      }
-      const { sessionId: id, expectedHeadSha } = parsed.data;
-      return services.sessions.markReviewed(
-        expectedHeadSha === undefined ? { sessionId: id } : { sessionId: id, expectedHeadSha },
-      );
+      return parsed.success ? services.sessions.markReviewed(parsed.data) : invalid(parsed.error);
     },
     'review:set-file-reviewed': async (request): Promise<IpcResult<SetFileReviewedResponse>> => {
       const parsed = fileReviewedRequest.safeParse(request);
-      if (!parsed.success) {
-        return invalid(parsed.error);
-      }
-      const { sessionId: id, path, reviewed, expectedHeadSha } = parsed.data;
-      return services.sessions.setFileReviewed({
-        sessionId: id,
-        path,
-        reviewed,
-        ...(expectedHeadSha !== undefined && { expectedHeadSha }),
-      });
+      return parsed.success
+        ? services.sessions.setFileReviewed(parsed.data)
+        : invalid(parsed.error);
     },
     'session:get-order': async (request): Promise<IpcResult<ReviewOrderView>> => {
       const parsed = reviewOrderRequest.safeParse(request);
@@ -683,8 +671,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { sessionId: id, verdict } = parsed.data;
-      return services.ura.setVerdict({ sessionId: id, ...(verdict !== undefined && { verdict }) });
+      const { sessionId: id, verdict, expectedHeadSha: head } = parsed.data;
+      return services.ura.setVerdict({
+        sessionId: id,
+        expectedHeadSha: head,
+        ...(verdict !== undefined && { verdict }),
+      });
     },
     'ura:export': async (request): Promise<IpcResult<UraExportView>> => {
       const parsed = uraExportRequest.safeParse(request);
@@ -815,9 +807,10 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { sessionId: id, verdict } = parsed.data;
+      const { sessionId: id, verdict, expectedHeadSha: head } = parsed.data;
       return services.github.previewReview({
         sessionId: id,
+        expectedHeadSha: head,
         ...(verdict !== undefined && { verdict }),
       });
     },
@@ -826,9 +819,10 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { sessionId: id, verdict } = parsed.data;
+      const { sessionId: id, verdict, expectedHeadSha: head } = parsed.data;
       return services.github.postReview({
         sessionId: id,
+        expectedHeadSha: head,
         ...(verdict !== undefined && { verdict }),
       });
     },

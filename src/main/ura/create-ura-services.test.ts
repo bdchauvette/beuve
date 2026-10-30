@@ -5,6 +5,7 @@ import { describe } from 'vitest';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import type { ChatFinding } from '#internal/chat/chat-review.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { lines } from '../testing/lines.ts';
@@ -361,6 +362,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
   test('persists the reviewer-chosen verdict for exports and beuve_read_human_review', async ({
     expect,
     services,
+    repo,
     sessionId,
     changes,
     note,
@@ -377,7 +379,15 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     const initial = await read();
     expect(initial.verdict).toBe('comment');
 
-    expect(okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'approve' }))).toStrictEqual({
+    const approvedChoice = services.ura.setVerdict({
+      sessionId,
+
+      verdict: 'approve',
+
+      expectedHeadSha: await featureHead(repo),
+    });
+
+    expect(okValueFrom(approvedChoice)).toStrictEqual({
       sessionId,
       derivedVerdict: 'comment',
       chosenVerdict: 'approve',
@@ -405,7 +415,15 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     const stored = db.prepare('SELECT verdict FROM ura_verdict_choices;').all();
     expect(stored).toMatchObject([{ verdict: 'approve' }]);
 
-    expect(okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'comment' }))).toStrictEqual({
+    const followedChoice = services.ura.setVerdict({
+      sessionId,
+
+      verdict: 'comment',
+
+      expectedHeadSha: await featureHead(repo),
+    });
+
+    expect(okValueFrom(followedChoice)).toStrictEqual({
       sessionId,
       derivedVerdict: 'comment',
     });
@@ -418,6 +436,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       services.ura.setVerdict({
         sessionId: '99999999-9999-4999-8999-999999999999',
         verdict: 'comment',
+        expectedHeadSha: await featureHead(repo),
       }),
     ).toMatchObject({
       ok: false,
@@ -433,7 +452,13 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     note,
   }) => {
     await note(2, 2, 'Prefer const');
-    okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    okValueFrom(
+      services.ura.setVerdict({
+        sessionId,
+        verdict: 'approve',
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     expect(okValueFrom(await services.ura.list({ sessionId })).chosenVerdict).toBe('approve');
 
     await repo.git('switch', '--quiet', 'feature');
@@ -447,21 +472,69 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     const read = await services.mcpTools.readHumanReview({});
     expect(read.ok && read.value.structured['verdict']).toBe('comment');
 
-    okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'request-changes' }));
+    okValueFrom(
+      services.ura.setVerdict({
+        sessionId,
+        verdict: 'request-changes',
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     expect(okValueFrom(await services.ura.list({ sessionId }))).toMatchObject({
       chosenVerdict: 'request-changes',
     });
     expect(okValueFrom(await services.ura.list({ sessionId })).verdictNotice).toBeUndefined();
   });
 
+  test('refuses an explicit Approve stamped with a head the session has moved past', async ({
+    expect,
+    services,
+    repo,
+    sessionId,
+    note,
+    db,
+  }) => {
+    await note(2, 2, 'Prefer const');
+    const shown = await featureHead(repo);
+    await repo.git('switch', '--quiet', 'feature');
+    repo.write('src/more.ts', 'export const more = 1;\n');
+    await repo.commit('author pushes more');
+    await repo.git('switch', '--quiet', 'main');
+    const listed = okValueFrom(await services.ura.list({ sessionId }));
+    expect(listed.headSha).not.toBe(shown);
+
+    expect(
+      services.ura.setVerdict({ sessionId, verdict: 'approve', expectedHeadSha: shown }),
+    ).toMatchObject({ ok: false, error: { code: 'stale-review' } });
+    expect(db.prepare('SELECT count(*) AS n FROM ura_verdict_choices;').get()).toMatchObject({
+      n: 0,
+    });
+    expect(okValueFrom(await services.ura.list({ sessionId })).chosenVerdict).toBeUndefined();
+
+    expect(
+      okValueFrom(
+        services.ura.setVerdict({ sessionId, verdict: 'approve', expectedHeadSha: listed.headSha }),
+      ),
+    ).toMatchObject({ chosenVerdict: 'approve' });
+    expect(db.prepare('SELECT head_sha FROM ura_verdict_choices;').get()).toMatchObject({
+      head_sha: listed.headSha,
+    });
+  });
+
   test('clears an approval when a blocker is staged, says so, and refuses a new one', async ({
     expect,
     services,
+    repo,
     sessionId,
     note,
   }) => {
     await note(2, 2, 'Prefer const');
-    okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    okValueFrom(
+      services.ura.setVerdict({
+        sessionId,
+        verdict: 'approve',
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     const blocker = okValueFrom(
       await services.ura.create({
         sessionId,
@@ -478,20 +551,36 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(listed.verdictNotice).toContain('Approve verdict was cleared');
     const read = await services.mcpTools.readHumanReview({});
     expect(read.ok && read.value.structured['verdict']).toBe('request-changes');
-    expect(services.ura.setVerdict({ sessionId, verdict: 'approve' })).toMatchObject({
+    expect(
+      services.ura.setVerdict({
+        sessionId,
+        verdict: 'approve',
+        expectedHeadSha: await featureHead(repo),
+      }),
+    ).toMatchObject({
       ok: false,
       error: { code: 'refused' },
     });
 
     okValueFrom(await services.ura.transition({ itemId: blocker.id, to: 'withdrawn' }));
     expect(okValueFrom(await services.ura.list({ sessionId })).verdictNotice).toContain('cleared');
-    okValueFrom(services.ura.setVerdict({ sessionId, verdict: 'approve' }));
+    okValueFrom(
+      services.ura.setVerdict({
+        sessionId,
+        verdict: 'approve',
+        expectedHeadSha: await featureHead(repo),
+      }),
+    );
     expect(okValueFrom(await services.ura.list({ sessionId }))).toMatchObject({
       chosenVerdict: 'approve',
     });
     expect(okValueFrom(await services.ura.list({ sessionId })).verdictNotice).toBeUndefined();
   });
 });
+
+async function featureHead(repo: TestRepository): Promise<string> {
+  return repo.git('rev-parse', 'feature');
+}
 
 function reviewMessageId(): string {
   return '33333333-3333-4333-8333-333333333333';

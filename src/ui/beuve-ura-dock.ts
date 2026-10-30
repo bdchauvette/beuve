@@ -757,7 +757,8 @@ export class BeuveUraDock extends LitElement {
     const { post } = github;
     switch (post.kind) {
       case 'idle':
-      case 'failed': {
+      case 'failed':
+      case 'head-moved': {
         return html`<div class="github">
           <button
             type="button"
@@ -771,6 +772,13 @@ export class BeuveUraDock extends LitElement {
             Post review to GitHub…
           </button>
           ${post.kind === 'failed' ? html`<p class="note error" role="alert">${post.text}</p>` : nothing}
+          ${
+            post.kind === 'head-moved'
+              ? html`<p class="note" role="status">
+                  The PR changed since you opened this; review the new commits first.
+                </p>`
+              : nothing
+          }
         </div>`;
       }
       case 'busy': {

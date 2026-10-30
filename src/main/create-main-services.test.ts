@@ -105,7 +105,12 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     const { id } = okValueFrom(
       await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
     );
-    okValueFrom(await sessions.markReviewed({ sessionId: id }));
+    okValueFrom(
+      await sessions.markReviewed({
+        sessionId: id,
+        expectedHeadSha: await repo.git('rev-parse', 'feature'),
+      }),
+    );
     await repo.git('switch', '--quiet', 'feature');
     repo.write('notes.md', 'follow-up\n');
     await repo.commit('follow-up');

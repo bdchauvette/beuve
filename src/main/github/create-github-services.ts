@@ -108,6 +108,9 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     ...options.polling,
   });
 
+  /** Sessions with a post in flight: a second overlapping post would create a second review. */
+  const posting = new Set<string>();
+
   const storedFor = (
     source: Session['source'] | SessionSourceView,
   ): StoredPullRequest | undefined => {
@@ -210,11 +213,26 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     },
 
     postReview: async (request): Promise<IpcResult<PostGithubReviewResponse>> => {
-      const posted = await postGithubReview(github, options.ura, request);
-      if (posted.ok && posted.value.kind === 'failed' && posted.value.failure === 'stale-commit') {
-        void poller.pollNow(request.sessionId);
+      if (posting.has(request.sessionId)) {
+        return err({
+          code: 'refused',
+          message: 'A review is already being posted for this pull request.',
+        });
       }
-      return posted;
+      posting.add(request.sessionId);
+      try {
+        const posted = await postGithubReview(github, options.ura, request);
+        if (
+          posted.ok &&
+          posted.value.kind === 'failed' &&
+          posted.value.failure === 'stale-commit'
+        ) {
+          void poller.pollNow(request.sessionId);
+        }
+        return posted;
+      } finally {
+        posting.delete(request.sessionId);
+      }
     },
 
     openLink: async ({ url }): Promise<IpcResult<{ opened: true }>> => {

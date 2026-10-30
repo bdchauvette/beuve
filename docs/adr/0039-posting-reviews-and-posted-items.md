@@ -1,6 +1,6 @@
 # 0039. Posting the URA as a GitHub review, and remembering what was posted
 
-- Status: Accepted
+- Status: Accepted; amended by [0078](0078-per-head-requests-carry-their-head.md)
 - Date: 2026-10-28
 
 ## Context
@@ -22,3 +22,7 @@ A review is all or nothing and never posted twice by accident. Editing a posted 
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. `ura_item_postings` is created with the other URA tables; `ura-0003-item-postings` is retired.
+
+## Amendment 2026-10-30: the head is pinned (ADR 0078)
+
+Both channels take a required `expectedHeadSha`, the head the reviewer was shown: `{ sessionId, verdict?, expectedHeadSha }`. A session whose head is no longer that one answers the `head-moved` failure and nothing is compiled or sent. Otherwise "the current head" above means that SHA: the commentable ranges, the artifact, `commit_id` and the postings all come from it, without a second read of the head. A second post while one is in flight is `refused`, so overlapping posts can't create two reviews.

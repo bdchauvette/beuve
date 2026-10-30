@@ -1,6 +1,6 @@
 # 0045. A chosen verdict belongs to the head it was chosen at
 
-- Status: Accepted
+- Status: Accepted; amended by [0078](0078-per-head-requests-carry-their-head.md)
 - Date: 2026-10-29
 
 ## Context
@@ -21,3 +21,7 @@ An agent never reads a verdict the reviewer gave about an older head, and `ura:e
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The rebuild that turned a verdict chosen before heads were recorded into a remembered `head-moved` clear is gone: no such rows can exist. `head-moved` remains the reason when a head moves.
+
+## Amendment 2026-10-30: the choice is stamped with the head the reviewer saw (ADR 0078)
+
+`ura:set-verdict` takes a required `expectedHeadSha`. When the session's stored head is another one, nothing is stored and the call fails with `stale-review`; otherwise the choice is stamped with `expectedHeadSha`. An Approve clicked on a head the poller has already moved past can no longer count as a choice for the new head.

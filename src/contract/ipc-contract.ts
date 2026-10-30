@@ -119,25 +119,24 @@ export interface GetReviewRequest {
 }
 
 /**
- * Sign off on the session's current head. `expectedHeadSha`, when given, must equal the head the
- * reviewer was shown; if the head moved since, nothing is recorded and the call fails with
- * `stale-review`.
+ * Sign off on the session's current head. `expectedHeadSha` is the head the reviewer was shown
+ * (ADR 0078); if the head moved since, nothing is recorded and the call fails with `stale-review`.
  */
 export interface MarkReviewedRequest {
   readonly sessionId: string;
-  readonly expectedHeadSha?: string;
+  readonly expectedHeadSha: string;
 }
 
 /**
- * Marks a file reviewed or not (ADR 0064). `expectedHeadSha`, when given, must equal the head the
- * reviewer was shown, else the call fails with `stale-review`. `path` is the file's head path in
- * the review diff, else `not-found`.
+ * Marks a file reviewed or not (ADR 0064). `expectedHeadSha` is the head the reviewer was shown
+ * (ADR 0078), else the call fails with `stale-review`. `path` is the file's head path in the
+ * review diff, else `not-found`.
  */
 export interface SetFileReviewedRequest {
   readonly sessionId: string;
   readonly path: string;
   readonly reviewed: boolean;
-  readonly expectedHeadSha?: string;
+  readonly expectedHeadSha: string;
 }
 
 /**
@@ -1284,11 +1283,14 @@ export interface UraListView {
 /**
  * Stores the verdict the reviewer picks for the session (ADR 0029); exports and
  * `beuve_read_human_review` use it. Omitting `verdict` (or passing the derived one) goes back to
- * following the derived verdict. Approving while a blocker is staged is `refused`.
+ * following the derived verdict. Approving while a blocker is staged is `refused`. The choice
+ * belongs to `expectedHeadSha`, the head the reviewer was shown (ADR 0045, 0078); if the head
+ * moved since, nothing is stored and the call fails with `stale-review`.
  */
 export interface SetUraVerdictRequest {
   readonly sessionId: string;
   readonly verdict?: UraVerdictView;
+  readonly expectedHeadSha: string;
 }
 
 /** The verdict state after a change: what exports will carry, and why. */
@@ -1631,7 +1633,10 @@ export interface OpenPullRequestRequest {
   readonly repoPath?: string;
 }
 
-/** Why a GitHub operation didn't happen; `remedy` is a command to run, when one helps. */
+/**
+ * Why a GitHub operation didn't happen; `remedy` is a command to run, when one helps. `head-moved`
+ * means the session's head is no longer the one the reviewer was shown (ADR 0078).
+ */
 export type GithubFailureKind =
   | 'invalid-ref'
   | 'not-signed-in'
@@ -1644,6 +1649,7 @@ export type GithubFailureKind =
   | 'not-a-pull-request'
   | 'own-pull-request'
   | 'stale-commit'
+  | 'head-moved'
   | 'github-failed';
 
 export interface GithubFailureView {
@@ -1676,10 +1682,16 @@ export interface PullRequestSessionView {
   readonly attention?: AttentionView;
 }
 
-/** Post (or preview) the session's staged URA items as one GitHub review on the current head. */
+/**
+ * Post (or preview) the session's staged URA items as one GitHub review on `expectedHeadSha`, the
+ * head the reviewer was shown (ADR 0078). If the session's head is no longer that one, nothing is
+ * compiled or sent and the answer is the `head-moved` failure. Otherwise main uses that one SHA for
+ * the diff, the artifact, `commit_id` and the recorded postings.
+ */
 export interface PostGithubReviewRequest {
   readonly sessionId: string;
   readonly verdict?: UraVerdictView;
+  readonly expectedHeadSha: string;
 }
 
 /**

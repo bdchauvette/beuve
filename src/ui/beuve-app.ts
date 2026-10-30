@@ -661,6 +661,7 @@ export class BeuveApp extends LitElement {
     void this.uraCall(async (bridge) =>
       bridge.invoke('ura:set-verdict', {
         sessionId: review.session.id,
+        expectedHeadSha: review.headSha,
         ...(verdict !== undefined && { verdict }),
       }),
     );
@@ -998,6 +999,7 @@ export class BeuveApp extends LitElement {
     if (!event.headMoved) {
       return;
     }
+    this.invalidateGithubPost();
     this.showNotice({
       tone: 'info',
       text: `New commits on #${String(event.pullRequest.number)}; the review now shows what changed.`,
@@ -1005,42 +1007,84 @@ export class BeuveApp extends LitElement {
     void this.selectSession(event.sessionId);
   }
 
+  /**
+   * A confirmation (or the own-PR offer) was about the head the reviewer saw; once the head moves
+   * it would post on commits they haven't read, so it gives way to a quiet note (ADR 0078).
+   */
+  private invalidateGithubPost(): void {
+    const { kind } = this.githubPost;
+    if (kind === 'confirm' || kind === 'own-pull-request') {
+      this.githubPost = { kind: 'head-moved' };
+    }
+  }
+
+  /** Main refused because the head moved: say so quietly and show the new commits. */
+  private onGithubHeadMoved(sessionId: string): void {
+    this.githubPost = { kind: 'head-moved' };
+    void this.selectSession(sessionId);
+  }
+
   /** The confirmation step: main compiles the review and says what goes inline and in the body. */
   private async previewGithubReview(): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
-    if (bridge === undefined || review === undefined) {
+    if (bridge === undefined || review === undefined || this.githubPost.kind === 'busy') {
       return;
     }
     this.githubPost = { kind: 'busy', text: 'Compiling the review…' };
-    const preview = await bridge.invoke('github:preview-review', { sessionId: review.session.id });
+    const preview = await bridge.invoke('github:preview-review', {
+      sessionId: review.session.id,
+      expectedHeadSha: review.headSha,
+    });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
     if (!preview.ok) {
       this.githubPost = { kind: 'failed', text: preview.error.message };
       return;
     }
-    this.githubPost =
-      'kind' in preview.value
-        ? { kind: 'failed', text: preview.value.message }
-        : { kind: 'confirm', preview: preview.value };
-  }
-
-  private async postGithubReview(verdict: UraVerdictView | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
+    if ('kind' in preview.value) {
+      if (preview.value.failure === 'head-moved') {
+        this.onGithubHeadMoved(review.session.id);
+        return;
+      }
+      this.githubPost = { kind: 'failed', text: preview.value.message };
       return;
     }
+    this.githubPost =
+      this.review.headSha === preview.value.headSha
+        ? { kind: 'confirm', preview: preview.value }
+        : { kind: 'head-moved' };
+  }
+
+  /** Posts on the head the confirmation showed; one post at a time (ADR 0078). */
+  private async postGithubReview(verdict: UraVerdictView | undefined): Promise<void> {
+    const bridge = beuveBridge();
+    const { review, githubPost } = this;
+    if (bridge === undefined || review === undefined || githubPost.kind === 'busy') {
+      return;
+    }
+    const expectedHeadSha =
+      githubPost.kind === 'confirm' ? githubPost.preview.headSha : review.headSha;
     this.githubPost = { kind: 'busy', text: 'Posting to GitHub…' };
     const posted = await bridge.invoke('github:post-review', {
       sessionId: review.session.id,
+      expectedHeadSha,
       ...(verdict !== undefined && { verdict }),
     });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
     if (!posted.ok) {
       this.githubPost = { kind: 'failed', text: posted.error.message };
       return;
     }
     const result = posted.value;
     if (result.kind === 'failed') {
+      if (result.failure === 'head-moved') {
+        this.onGithubHeadMoved(review.session.id);
+        return;
+      }
       this.githubPost =
         result.failure === 'own-pull-request'
           ? { kind: 'own-pull-request', message: result.message }
@@ -1197,6 +1241,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.openDialog = false;
+    const shownHead = this.review?.session.id === sessionId ? this.review.headSha : undefined;
     if (sessionId !== this.selectedId) {
       this.review = undefined;
       this.order = undefined;
@@ -1226,6 +1271,9 @@ export class BeuveApp extends LitElement {
     this.flow = undefined;
     this.closeTrace();
     if (review.ok) {
+      if (shownHead !== undefined && shownHead !== review.value.headSha) {
+        this.invalidateGithubPost();
+      }
       this.review = review.value;
       this.applyMarks(review.value);
       this.focusedZone = 'diff';
@@ -2227,10 +2275,13 @@ export class BeuveApp extends LitElement {
     }
   }
 
+  /** A moved head (`stale-review`) is expected, so it reads as a quiet note, not an error. */
   private noteFailure(result: IpcResult<unknown>): void {
-    if (!result.ok) {
-      this.dockNotice = { tone: 'error', text: result.error.message };
+    if (result.ok) {
+      return;
     }
+    const tone = result.error.code === 'stale-review' ? 'info' : 'error';
+    this.dockNotice = { tone, text: result.error.message };
   }
 
   /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */

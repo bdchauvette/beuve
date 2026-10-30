@@ -187,21 +187,22 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return previous?.turn !== next.turn || previous.reasons.join('\n') !== next.reasons.join('\n');
   };
 
-  const didMoveHead = async (
+  /** Fetches and verifies the new head and moves the session to it; answers the head it moved to. */
+  const moveHead = async (
     session: Session,
     ref: PullRequestRef,
     pullRequest: PullRequest,
-  ): Promise<boolean> => {
+  ): Promise<string | undefined> => {
     const repository = await openRepository(session.source.repoPath, context.session.git);
     if (!repository.ok) {
       logger.warn('github poll: clone unavailable', { error: repository.error });
-      return false;
+      return undefined;
     }
     const remotes = await listRemoteUrls(repository.value);
     const remote = remotes.ok ? findMatchingRemote(remotes.value, ref) : undefined;
     if (remote === undefined) {
       logger.warn('github poll: no remote for the pull request', { ref });
-      return false;
+      return undefined;
     }
     const synced = await syncPullRequestHead({
       repository: repository.value,
@@ -213,12 +214,14 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     });
     if (!synced.ok) {
       logger.warn('github poll: new head not fetched', { failure: synced.error });
-      return false;
+      return undefined;
     }
     if (synced.value.pullRequest !== pullRequest) {
       savePullRequest(context.session.db, ref, synced.value.pullRequest, Temporal.Now.instant());
     }
-    return moveSessionHead(context.session, session, synced.value.headSha).ok;
+    return moveSessionHead(context.session, session, synced.value.headSha).ok
+      ? synced.value.headSha
+      : undefined;
   };
 
   const emitUpdated = (
@@ -276,12 +279,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       }
       await readReviews(state, ref);
       const isNewHead = pullRequest.head.sha !== session.headSha;
-      const hasHeadMoved = isNewHead && (await didMoveHead(session, ref, pullRequest));
+      // The synced head, which can be newer than this answer's when GitHub was asked again.
+      const movedTo = isNewHead ? await moveHead(session, ref, pullRequest) : undefined;
+      const hasHeadMoved = movedTo !== undefined;
       // A head that couldn't be fetched is asked for unconditionally next time, not 304'd past.
       state.prEtag = isNewHead && !hasHeadMoved ? undefined : pulled.value.etag;
-      if (hasHeadMoved) {
-        headSha = pullRequest.head.sha;
-      }
+      headSha = movedTo ?? headSha;
       isAttentionChanged(state, ref);
       emitUpdated(sessionId, ref, state, hasHeadMoved);
     }
