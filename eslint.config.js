@@ -95,7 +95,7 @@ const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) =>
 );
 
 export default defineConfig(
-  globalIgnores(['dist/', 'out/', 'coverage/']),
+  globalIgnores(['dist/', 'out/', 'coverage/', '.claude/worktrees/']),
 
   {
     name: 'beuve/linter-options',

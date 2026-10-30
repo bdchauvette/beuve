@@ -7,3 +7,4 @@ out/
 *.db-wal
 *.tsbuildinfo
 .DS_Store
+.claude/worktrees/
