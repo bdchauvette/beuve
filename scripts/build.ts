@@ -13,6 +13,11 @@ const stubbedModules =
   /^(?:shiki\/(?:langs|wasm)|@pierre\/theming\/themes|@pierre\/highlights\/themes\/loader)$/;
 const anyPath = /.*/;
 const dist = path.join(root, 'dist');
+/**
+ * esbuild's table has `using` and `await using` from Node 25, but Electron 45's Node 24.22 (and the
+ * sandboxed preloads' Chromium 156) run them natively, so they pass through unlowered (ADR 0076).
+ */
+const nativeUsing = { using: true };
 
 await buildAll();
 
@@ -85,6 +90,7 @@ function mainOptions(): BuildOptions {
     outfile: path.join(dist, 'main/index.js'),
     platform: 'node',
     target: 'node24',
+    supported: nativeUsing,
     format: 'esm',
     banner: {
       js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
@@ -108,6 +114,7 @@ function preloadOptions(): BuildOptions {
     outfile: path.join(dist, 'preload/index.cjs'),
     platform: 'node',
     target: 'node24',
+    supported: nativeUsing,
     format: 'cjs',
   };
 }
@@ -145,7 +152,7 @@ function uiOptions(): BuildOptions {
     ],
     outdir: path.join(dist, 'ui'),
     platform: 'browser',
-    target: 'chrome140',
+    target: 'chrome156',
     format: 'esm',
     splitting: true,
     chunkNames: 'chunks/[name]-[hash]',

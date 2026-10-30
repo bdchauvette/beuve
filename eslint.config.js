@@ -106,6 +106,8 @@ export default defineConfig(
       '@typescript-eslint/promise-function-async': 'error',
       '@typescript-eslint/prefer-readonly': 'error',
       '@typescript-eslint/require-array-sort-compare': 'error',
+      // `using _timer = setTimeout(…)` exists to be disposed (ADR 0076); tsc wants the `_`.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreUsingDeclarations: true }],
     },
   },
 
