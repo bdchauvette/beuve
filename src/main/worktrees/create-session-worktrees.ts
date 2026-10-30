@@ -281,14 +281,13 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         return planned;
       }
       const path = planned.value;
-      const entry = entries.get(path) ?? {
+      const entry = entries.getOrInsertComputed(path, () => ({
         path,
         repository: own.value,
         leases: 0,
         steps: 0,
         tail: Promise.resolve(),
-      };
-      entries.set(path, entry);
+      }));
       entry.leases += 1;
       const lease = leaseOn(entry, commit);
       const granted = serially(entry, async () => grant(entry, root.value, claim, commit));
