@@ -83,12 +83,13 @@ export function planImpactChip(
   const changed = file.functions
     .filter((entry) => entry.inDiff && entry.change !== 'unchanged')
     .toSorted((a, b) => headValue(b) - headValue(a));
+  const hidden = Math.max(0, changed.length - maxRows) + (file.omittedFunctions ?? 0);
   const rows = changed.slice(0, maxRows).map((entry) => toRow(entry, byName.get(entry.name)));
   const count = aggregate.changedFunctions;
   const max = limit === undefined ? '' : ` (limit ${String(limit)})`;
   const summary = `Cognitive ${signed(aggregate.cognitiveDelta)} · max ${String(aggregate.maxCognitive)}${max} · ${String(count)} ${count === 1 ? 'function' : 'functions'} changed`;
   const notes = [
-    ...(changed.length > maxRows ? [`${String(changed.length - maxRows)} more not shown.`] : []),
+    ...(hidden > 0 ? [`${String(hidden)} more not shown.`] : []),
     ...(file.parseErrors ? ['Syntax errors in this file may skew the metrics.'] : []),
   ];
   const [worst] = own;

@@ -271,7 +271,13 @@ export type FileImpactView =
       readonly language: string;
       readonly parseErrors: boolean;
       readonly aggregate: FileAggregateView;
+      /**
+       * The file's changed functions. `session:get-impact` lists only the few the popover shows,
+       * worst first, and counts the rest in `omittedFunctions` (ADR 0053); the MCP tool lists all.
+       */
       readonly functions: readonly FunctionImpactView[];
+      /** Changed functions this view leaves out. Absent when it leaves none out. */
+      readonly omittedFunctions?: number;
     }
   | {
       readonly status: 'skipped';

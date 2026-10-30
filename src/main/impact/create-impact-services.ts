@@ -1,7 +1,6 @@
 import type { GetImpactRequest, IpcError, IpcResult, ImpactView } from '#contract/ipc-contract.ts';
-import { runImpactCheck } from '#internal/impact/run-impact-check.ts';
-import type { ParseSource } from '#internal/impact/impact-input.ts';
 import { LruCache } from '#pkg/datastructures/lru-cache.ts';
+import { err } from '#pkg/result/err.ts';
 import { ok } from '#pkg/result/ok.ts';
 import type { Result } from '#pkg/result/result.ts';
 
@@ -11,42 +10,62 @@ import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
 import { assembleImpactInput } from './assemble-impact-input.ts';
+import type { ImpactRunner } from './create-impact-worker.ts';
+import { slimImpactView } from './slim-impact-view.ts';
 import { toImpactView } from './to-impact-view.ts';
 
 /** ImpactGate for the renderer and the MCP tool. */
 export interface ImpactServices {
+  /** The full view: every changed function of every file. For MCP and main-side consumers. */
   readonly getImpact: (request: GetImpactRequest) => Promise<IpcResult<ImpactView>>;
+  /** The renderer's view of the same computation, without the function rows it never shows. */
+  readonly getImpactForRenderer: (request: GetImpactRequest) => Promise<IpcResult<ImpactView>>;
+  /** Cancels the session's in-flight computation if it is for a head other than `headSha`. */
+  readonly observeHead: (sessionId: string, headSha: string) => void;
 }
 
 export interface ImpactServicesOptions {
   readonly context: SessionContext;
-  /** The syntax domain's `SyntaxParser.parse`. */
-  readonly parse: ParseSource;
+  /** Runs parsing and measuring off the main thread (ADR 0053). */
+  readonly runner: ImpactRunner;
   /** Reports kept, one per (session, reviewed range, base, head). Defaults to 32. */
   readonly cacheSize?: number;
 }
 
 /**
  * Computes ImpactGate over the same diff `session:get-review` shows, separately from it so parsing
- * never delays the review. Reports are cached per diff (session, reviewed-from head, base, head);
- * concurrent requests for the same diff share one computation, and failures are not cached.
+ * never delays the review, and in a worker thread so it never blocks main (ADR 0053). Reports are
+ * cached per diff (session, reviewed-from head, base, head); concurrent requests for the same diff
+ * share one computation, failures are not cached, and a head change cancels the old computation.
  */
 export function createImpactServices(options: ImpactServicesOptions): ImpactServices {
-  const { context, parse } = options;
+  const { context, runner } = options;
+  const running = new Map<string, { readonly headSha: string; readonly abort: AbortController }>();
   const cache = new LruCache<string, Promise<Result<ImpactView, IpcError>>>(
     options.cacheSize ?? 32,
   );
 
+  const slimmed = new WeakMap<ImpactView, ImpactView>();
+
   const compute = async (
     sessionId: string,
     diff: ReviewDiff,
+    signal: AbortSignal,
   ): Promise<Result<ImpactView, IpcError>> => {
     const started = performance.now();
     const input = await assembleImpactInput(diff.refreshed.repository, diff.files);
     if (!input.ok) {
       return gitFailure(context.logger, input.error);
     }
-    const report = await runImpactCheck(input.value.sources, parse);
+    const run = await runner.run(input.value.sources, signal);
+    if (!run.ok) {
+      return err(
+        run.error.kind === 'cancelled'
+          ? { code: 'stale-review', message: 'ImpactGate was cancelled: the head moved' }
+          : { code: 'internal', message: `ImpactGate failed: ${run.error.message}` },
+      );
+    }
+    const report = run.value;
     const computeMs = Math.round(performance.now() - started);
     context.logger.debug('impact computed', {
       sessionId,
@@ -67,24 +86,47 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     );
   };
 
+  const getImpact = async ({ sessionId }: GetImpactRequest): Promise<IpcResult<ImpactView>> => {
+    const diff = await loadReviewDiff(context, sessionId);
+    if (!diff.ok) {
+      return diff;
+    }
+    const key = cacheKey(sessionId, diff.value);
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const abort = new AbortController();
+    const headSha = diff.value.refreshed.session.headSha;
+    running.set(key, { headSha, abort });
+    const computing = compute(sessionId, diff.value, abort.signal);
+    cache.set(key, computing);
+    const result = await computing;
+    running.delete(key);
+    if (!result.ok) {
+      cache.delete(key);
+    }
+    return result;
+  };
+
   return {
-    getImpact: async ({ sessionId }): Promise<IpcResult<ImpactView>> => {
-      const diff = await loadReviewDiff(context, sessionId);
-      if (!diff.ok) {
-        return diff;
+    getImpact,
+    getImpactForRenderer: async (request): Promise<IpcResult<ImpactView>> => {
+      const full = await getImpact(request);
+      if (!full.ok) {
+        return full;
       }
-      const key = cacheKey(sessionId, diff.value);
-      const cached = cache.get(key);
-      if (cached !== undefined) {
-        return cached;
+      const cached = slimmed.get(full.value) ?? slimImpactView(full.value);
+      slimmed.set(full.value, cached);
+      return ok(cached);
+    },
+    observeHead: (sessionId, headSha): void => {
+      const prefix = `${sessionId}\0`;
+      for (const [key, job] of running) {
+        if (key.startsWith(prefix) && job.headSha !== headSha) {
+          job.abort.abort();
+        }
       }
-      const computing = compute(sessionId, diff.value);
-      cache.set(key, computing);
-      const result = await computing;
-      if (!result.ok) {
-        cache.delete(key);
-      }
-      return result;
     },
   };
 }

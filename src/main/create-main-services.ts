@@ -29,6 +29,8 @@ import { createGithubClients } from './github/create-github-clients.ts';
 import { createGithubServices } from './github/create-github-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import { createImpactServices } from './impact/create-impact-services.ts';
+import type { ImpactServices } from './impact/create-impact-services.ts';
+import { createImpactWorker } from './impact/create-impact-worker.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
@@ -56,6 +58,11 @@ export interface MainServicesOptions {
   readonly git?: OpenRepositoryOptions;
   /** The packaged app passes `wasmDirectory`; tests load grammars from `node_modules`. */
   readonly syntax?: SyntaxParserOptions;
+  /**
+   * The ImpactGate worker script (ADR 0053). The bundled app passes `dist/main/impact-worker.js`;
+   * tests and `node` run the TypeScript source beside `create-impact-worker.ts`.
+   */
+  readonly impactWorkerUrl?: URL | string;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
   /** How the review and the chat find and run Claude Code (ADR 0022, 0031); tests pass the fake. */
@@ -109,12 +116,14 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ura: UraServices | undefined;
     chat: ChatServices | undefined;
     trace: TraceServices | undefined;
-  } = { review: undefined, ura: undefined, chat: undefined, trace: undefined };
+    impact: ImpactServices | undefined;
+  } = { review: undefined, ura: undefined, chat: undefined, trace: undefined, impact: undefined };
   const onHeadMoved = (sessionId: string, headSha: string): void => {
     heads.review?.observeHead(sessionId, headSha);
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
     heads.trace?.observeHead(sessionId, headSha);
+    heads.impact?.observeHead(sessionId, headSha);
   };
   const context: SessionContext = {
     db: options.db,
@@ -135,7 +144,14 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         : undefined,
   );
   const parser = createSyntaxParser(options.syntax);
-  const impact = createImpactServices({ context, parse: parser.parse });
+  const impactRunner = createImpactWorker({
+    logger,
+    workerUrl: options.impactWorkerUrl,
+    wasmDirectory: options.syntax?.wasmDirectory,
+    maxSourceLength: options.syntax?.maxSourceLength,
+  });
+  const impact = createImpactServices({ context, runner: impactRunner });
+  heads.impact = impact;
   const multiplexer = createLspMultiplexer({
     servers: [createTypescriptServer()],
     trustWorkspaceBinaries: false,
@@ -239,6 +255,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     dispose: async (): Promise<void> => {
       github.dispose();
       await Promise.all([review.dispose(), chat.dispose(), trace.dispose()]);
+      impactRunner.dispose();
       await multiplexer.dispose();
     },
   };

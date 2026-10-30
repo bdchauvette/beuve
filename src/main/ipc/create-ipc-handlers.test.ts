@@ -102,7 +102,8 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
       {
         ...stubServices({}),
         impact: {
-          getImpact: async (request) => {
+          ...stubServices({}).impact,
+          getImpactForRenderer: async (request) => {
             calls.push(request);
             return notWired;
           },
@@ -698,7 +699,11 @@ function stubServices(
       inspectRepository: async () => notWired,
       ...overrides,
     },
-    impact: { getImpact: async () => notWired },
+    impact: {
+      getImpact: async () => notWired,
+      getImpactForRenderer: async () => notWired,
+      observeHead: noop,
+    },
     files: { getTree: async () => notWired, getFilePair: async () => notWired },
     lsp: { callHierarchy: async () => notWired },
     flow: { getGraph: async () => notWired },
@@ -798,4 +803,8 @@ function doNothingSync(): void {
 
 async function doNothing(): Promise<void> {
   // Stub services own no resources.
+}
+
+function noop(): void {
+  // stands in for a callback the test never reaches
 }

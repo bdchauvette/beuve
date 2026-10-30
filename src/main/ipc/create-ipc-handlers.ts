@@ -344,7 +344,9 @@ export function createIpcHandlers(
     },
     'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.impact.getImpact(parsed.data) : invalid(parsed.error);
+      return parsed.success
+        ? services.impact.getImpactForRenderer(parsed.data)
+        : invalid(parsed.error);
     },
     'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
       const parsed = filePairRequest.safeParse(request);

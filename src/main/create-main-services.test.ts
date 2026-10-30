@@ -850,3 +850,104 @@ function steppingDeps(): SessionDeps {
     newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
   };
 }
+
+describe(
+  'createMainServices (integration: ImpactGate in a worker thread)',
+  { timeout: 60_000 },
+  () => {
+    let repo: TestRepository;
+    let db: DatabaseSync;
+    let services: MainServices;
+    let sessionId: string;
+
+    beforeAll(async () => {
+      repo = createTestRepository();
+      db = openAppDatabase(':memory:');
+      services = createMainServices({
+        db,
+        logger: silentLogger(),
+        deps: steppingDeps(),
+        worktreeRoot: path.join(repo.scratch(), 'worktrees'),
+      });
+      repo.write('README.md', '# large\n');
+      repo.commit('base');
+      repo.git('switch', '--quiet', '-c', 'feature');
+      for (let index = 0; index < 60; index++) {
+        repo.write(`src/module-${String(index)}.ts`, largeModule(index));
+      }
+      repo.commit('add sixty modules');
+      repo.git('switch', '--quiet', 'main');
+      sessionId = value(
+        await services.sessions.createLocal({
+          repoPath: repo.directory,
+          baseRef: 'main',
+          headRef: 'feature',
+        }),
+      ).id;
+      value(await services.sessions.getReview({ sessionId }));
+    });
+
+    afterAll(async () => {
+      await services.dispose();
+      db.close();
+      repo.cleanup();
+    });
+
+    it('answers other channels while a large computation runs, then ships the slim view', async () => {
+      const computing = services.impact.getImpactForRenderer({ sessionId });
+      const review = await services.sessions.getReview({ sessionId });
+      expect(review.ok).toBe(true);
+      const state = await Promise.race([computing, Promise.resolve('pending')]);
+      expect(state).toBe('pending');
+
+      const slim = value(await computing);
+      expect(slim.files).toHaveLength(60);
+      const first = slim.files[0];
+      expect(first?.status === 'analyzed' && first.functions).toHaveLength(8);
+      expect(first).toMatchObject({ omittedFunctions: 12, aggregate: { changedFunctions: 20 } });
+      const full = value(await services.impact.getImpact({ sessionId }));
+      const fullFirst = full.files[0];
+      expect(fullFirst?.status === 'analyzed' && fullFirst.functions).toHaveLength(20);
+      expect(JSON.stringify(slim).length).toBeLessThan(JSON.stringify(full).length / 2);
+    });
+
+    it('cancels the computation when the session head moves', async () => {
+      advance(repo, 'src/first.ts');
+      value(await services.sessions.getReview({ sessionId }));
+      const computing = services.impact.getImpact({ sessionId });
+      await delay(150);
+      advance(repo, 'src/second.ts');
+      value(await services.sessions.getReview({ sessionId }));
+      expect(await computing).toMatchObject({ ok: false, error: { code: 'stale-review' } });
+      const moved = value(await services.impact.getImpact({ sessionId }));
+      expect(moved.files.map((file) => file.path)).toContain('src/second.ts');
+    });
+  },
+);
+
+/** Twenty functions with branching, so a file has real work for the parser and the metrics. */
+function largeModule(seed: number): string {
+  return Array.from({ length: 20 }, (_, index) =>
+    [
+      `export function task${String(seed)}x${String(index)}(input: number[], limit: number): number {`,
+      '  let total = 0;',
+      '  for (const value of input) {',
+      '    if (value > limit && value % 2 === 0) {',
+      '      total += value;',
+      '    } else if (value < 0 || value === limit) {',
+      '      total -= value;',
+      '    }',
+      '  }',
+      '  return total;',
+      '}',
+      '',
+    ].join('\n'),
+  ).join('\n');
+}
+
+function advance(repo: TestRepository, file: string): void {
+  repo.git('switch', '--quiet', 'feature');
+  repo.write(file, `export const value = ${JSON.stringify(file)};\n`);
+  repo.commit(`add ${file}`);
+  repo.git('switch', '--quiet', 'main');
+}

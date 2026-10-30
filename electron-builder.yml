@@ -7,6 +7,7 @@ directories:
   buildResources: build
 # Main, preload and ui are esbuild bundles (ADR 0007). The only node_modules main needs at run
 # time are the two it launches by path (ADR 0021); every other dependency is inside the bundles.
+# `dist/main/impact-worker.js` (ADR 0053) is one of the dist files and loads from the archive.
 files:
   - dist/**
   - '!dist/**/*.map'

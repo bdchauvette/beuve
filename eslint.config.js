@@ -16,7 +16,12 @@ import { localRulesPlugin } from './eslint-local-rules/local-rules-plugin.ts';
 const uiFiles = ['src/ui/**/*.ts'];
 const nodeFiles = ['**/*.{js,ts}'];
 const testFiles = ['**/*.test.ts'];
-const entrypointFiles = ['src/*/index.ts', 'scripts/**/*.ts'];
+const entrypointFiles = [
+  'src/*/index.ts',
+  'scripts/**/*.ts',
+  'src/main/impact/impact-worker.ts',
+  'src/main/impact/testing/scripted-impact-worker.ts',
+];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
 
 export default defineConfig(

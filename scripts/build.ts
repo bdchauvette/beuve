@@ -18,13 +18,13 @@ await buildAll();
 
 /**
  * Bundles main (ESM), preload (CJS, sandboxed per ADR 0005) and ui (ESM, code-split per ADR 0025)
- * into dist/, and copies the Tree-sitter runtime and grammar wasm files main loads from
+ * into dist/ (plus main's ImpactGate worker as `dist/main/impact-worker.js`, ADR 0053), and copies the Tree-sitter runtime and grammar wasm files main loads from
  * `dist/main/wasm/` (ADR 0014). Prints the renderer's eager size.
  */
 async function buildAll(): Promise<void> {
   await rm(dist, { recursive: true, force: true });
   const ui = await build(uiOptions());
-  await Promise.all([build(mainOptions()), build(preloadOptions())]);
+  await Promise.all([build(mainOptions()), build(impactWorkerOptions()), build(preloadOptions())]);
   await copyFile(path.join(root, 'src/ui/index.html'), path.join(dist, 'ui/index.html'));
   await copyWasmAssets(path.join(dist, 'main/wasm'));
   if (ui.metafile !== undefined) {
@@ -78,6 +78,15 @@ function mainOptions(): BuildOptions {
     banner: {
       js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
     },
+  };
+}
+
+/** The ImpactGate worker thread's own file, which main starts by path (ADR 0053). */
+function impactWorkerOptions(): BuildOptions {
+  return {
+    ...mainOptions(),
+    entryPoints: [path.join(root, 'src/main/impact/impact-worker.ts')],
+    outfile: path.join(dist, 'main/impact-worker.js'),
   };
 }
 
