@@ -133,7 +133,20 @@ describe('createReadOnlySandbox', () => {
     });
   });
 
-  test('refuses unknown tools and rejects bad arguments', async ({ expect, tempDir }) => {
+  test('matches regex metacharacters in a glob literally', async ({ expect, tempDir }) => {
+    const root = worktree(tempDir);
+    writeFileSync(path.join(root, 'a(1)+b.txt'), 'x\n');
+    writeFileSync(path.join(root, 'a1b.txt'), 'x\n');
+    writeFileSync(path.join(root, 'a1bb.txt'), 'x\n');
+    const sandbox = createReadOnlySandbox(root);
+
+    await expect(sandbox.run('glob', '{"pattern":"a(1)+b.txt"}')).resolves.toStrictEqual({
+      output: 'a(1)+b.txt',
+      denied: false,
+    });
+  });
+
+  test('refuses unknown tools and rejects bad arguments',async ({ expect, tempDir }) => {
     const sandbox = createReadOnlySandbox(worktree(tempDir));
     await expect(sandbox.run('write_file', '{}')).resolves.toStrictEqual({
       output: 'refused: there is no tool named write_file',

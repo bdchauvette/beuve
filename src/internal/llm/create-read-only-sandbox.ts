@@ -428,7 +428,7 @@ function globMatcher(pattern: string): RegExp | null {
       default: {
         return token.startsWith('[') && token.length > 2
           ? `[${token.slice(1, -1).replaceAll('\\', '\\\\').replace(negation, '^')}]`
-          : `\\${token}`;
+          : RegExp.escape(token);
       }
     }
   });
