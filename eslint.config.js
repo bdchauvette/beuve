@@ -115,7 +115,7 @@ export default defineConfig(
   {
     name: 'beuve/modern-apis',
     rules: {
-      // Iterator.zip is missing on Node 26, where tests run (ADR 0079).
+      // Iterator.zip is missing on Node 26, where tests run (ADR 0080).
       'unicorn/prefer-iterator-zip': 'off',
       'unicorn/prefer-error-is-error': 'error',
       'e18e/prefer-get-or-insert': 'error',
@@ -183,7 +183,7 @@ export default defineConfig(
       'local/forward-abort-signal': 'error',
       // ADR 0076.
       'local/prefer-using': 'error',
-      // ADR 0079.
+      // ADR 0080.
       'local/prefer-url-parse': 'error',
       'local/no-string-tail-slice': 'error',
     },
