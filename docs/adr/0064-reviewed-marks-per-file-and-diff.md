@@ -1,0 +1,20 @@
+# 0064. Reviewed marks per file, carried over by diff identity
+
+- Status: Accepted
+- Date: 2026-10-30
+
+## Context
+
+A checkpoint (ADR 0009, 0012) signs off on a whole head. Reviewers also read file by file, and Reviewable and Gerrit both let them tick a file off. When the author pushes, a reviewer should reopen only the files that changed, not every file the push touched on the way (a rebase, a rename, a fixup on another file). The mark therefore has to be bound to what was read, not to a commit.
+
+## Decision
+
+- **Table.** `file_marks (session_id, path, diff_id, head_sha, marked_at)`, primary key `(session_id, path)`, cascading with the session, in `session-0001-initial` (ADR 0006 squashes until release). `path` is the file's head path when marked, `head_sha` the head the reviewer was looking at (kept for display and audits, not for matching).
+- **Diff identity (`fileDiffIdFrom`, git domain).** SHA-256 over the file's changed lines in order (`+`/`-`, content, missing-newline flag), plus a mode change, plus both blob names for a binary file. Path, line numbers, context lines, hunk boundaries and commits are excluded. We chose this over `git patch-id --stable` because patch-id spawns a process per file, hashes context (a rebase that changes the lines around an edit would reopen the file) and ignores whitespace (a reviewer must see an indentation change). The identity comes from the patch text `DiffFile` already holds, so it costs no git call.
+- **Carry-over (`carryOverFileMarks`, pure).** For each file of the diff now shown: the mark at its path, else at its other-side path (a rename), else an unclaimed mark under a path that left the diff with the identical diff (a move git did not pair). Equal identity: `yes`. Different: `changed-since`. No mark: `no`. A mark serves one file. Marks of files that left the diff stay stored and are reported as orphaned, so a file that returns keeps its mark and a reviewer's work is never lost.
+- **Interdiff versus full.** The identity is of the diff that was displayed. Marked on the full diff (base to head 1), a file in the later interdiff (head 1 to head 2) has a different diff, so it reads `changed-since`, which is true. Marked in an interdiff, it reads `yes` while the same interdiff is shown. A rebase that leaves a file's changed lines alone keeps `yes` in the full view. The ignore-whitespace variant (ADR 0042) is displayed from the plain diff's identities, so toggling it never changes a mark.
+- **Contract.** `review:set-file-reviewed { sessionId, path, reviewed, expectedHeadSha? }` answers `{ path, reviewed, progress }`; `expectedHeadSha` guards like `session:mark-reviewed`. `DiffFileView.reviewed` is `'yes' | 'no' | 'changed-since'` on every file of a `ReviewView`, and `ReviewView.reviewProgress` carries `{ total, reviewed, changedSince, unreviewed }`. Both are optional in the type (commit interdiffs have no marks) but always set by `session:get-review`. Setting a renamed file's mark moves it from the old path. Chat can later read "files you have not reviewed" from the same view.
+
+## Consequences
+
+The mark follows the change, so most pushes reopen few files. A coincidence (the same lines removed and added again) keeps a mark, and a change only in context lines keeps it too; both are deliberate: the reviewer judged the lines that changed. A mark made in one scope and read in another can read `changed-since` for an unchanged file when the scope's diff differs; the reviewer re-ticks it. Marks are local to this machine like the rest of the session.

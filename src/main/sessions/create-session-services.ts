@@ -5,6 +5,7 @@ import type {
   RepositoryInspectionView,
   ReviewView,
   SessionSummary,
+  SetFileReviewedResponse,
 } from '#contract/ipc-contract.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
@@ -21,6 +22,7 @@ import { inspectRepository } from './inspect-repository.ts';
 import { loadReview } from './load-review.ts';
 import type { RangeDiff } from './load-review-diff.ts';
 import { markReviewed } from './mark-reviewed.ts';
+import { setFileReviewed } from './set-file-reviewed.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
 import { sessionSummaryFrom } from './session-summary-from.ts';
@@ -60,6 +62,8 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
       loadReview(context, sessionId, { cache, ignoreWhitespace: ignoreWhitespace === true }),
     markReviewed: async (request): Promise<IpcResult<SessionSummary>> =>
       markReviewed(context, request),
+    setFileReviewed: async (request): Promise<IpcResult<SetFileReviewedResponse>> =>
+      setFileReviewed(context, request, { cache }),
     inspectRepository: async (request): Promise<IpcResult<RepositoryInspectionView>> =>
       inspectRepository(context, request),
   };

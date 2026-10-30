@@ -126,6 +126,39 @@ export interface MarkReviewedRequest {
   readonly expectedHeadSha?: string;
 }
 
+/**
+ * Marks a file reviewed or not (ADR 0064). `expectedHeadSha`, when given, must equal the head the
+ * reviewer was shown, else the call fails with `stale-review`. `path` is the file's head path in
+ * the review diff, else `not-found`.
+ */
+export interface SetFileReviewedRequest {
+  readonly sessionId: string;
+  readonly path: string;
+  readonly reviewed: boolean;
+  readonly expectedHeadSha?: string;
+}
+
+/**
+ * Whether a file is reviewed: `yes` (marked, and its diff is the one that was reviewed, even if
+ * the head moved), `no`, or `changed-since` (marked, but its diff differs now; shown, not lost).
+ */
+export type FileReviewStateView = 'yes' | 'no' | 'changed-since';
+
+/** Reviewed counts over the files of the diff shown. */
+export interface FileReviewProgressView {
+  readonly total: number;
+  readonly reviewed: number;
+  readonly changedSince: number;
+  readonly unreviewed: number;
+}
+
+export interface SetFileReviewedResponse {
+  readonly sessionId: string;
+  readonly path: string;
+  readonly reviewed: FileReviewStateView;
+  readonly progress: FileReviewProgressView;
+}
+
 /** Why an interdiff could not be trusted, so the full change is shown instead. */
 export type InterdiffFallbackView =
   | { readonly kind: 'conflicts'; readonly paths: readonly string[] }
@@ -183,6 +216,8 @@ export interface DiffFileView {
   /** Full blob names of the base and head sides (ADR 0018); absent for a side that doesn't exist. */
   readonly oldBlobSha?: string;
   readonly newBlobSha?: string;
+  /** Reviewed mark state (ADR 0064). Set on every file of a `ReviewView`; absent in commit interdiffs. */
+  readonly reviewed?: FileReviewStateView;
 }
 
 /**
@@ -215,6 +250,8 @@ export interface ReviewView {
    * then that fork point.
    */
   readonly forkPoint?: ForkPointView;
+  /** Reviewed counts over `files` (ADR 0064); always set by main. */
+  readonly reviewProgress?: FileReviewProgressView;
 }
 
 /**
@@ -1517,6 +1554,10 @@ export interface InvokeChannelMap {
   'session:mark-reviewed': {
     readonly request: MarkReviewedRequest;
     readonly response: IpcResult<SessionSummary>;
+  };
+  'review:set-file-reviewed': {
+    readonly request: SetFileReviewedRequest;
+    readonly response: IpcResult<SetFileReviewedResponse>;
   };
   'session:get-impact': {
     readonly request: GetImpactRequest;

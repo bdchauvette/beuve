@@ -1,7 +1,7 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * The session domain's schema (ADR 0006, 0009, 0012, 0037); squashed until the first release. The review state is derived from
+ * The session domain's schema (ADR 0006, 0009, 0012, 0037, 0064); squashed until the first release. The review state is derived from
  * `checkpoints`, so `sessions` has no denormalized last-checkpoint column.
  */
 export const sessionMigrations: readonly Migration[] = [
@@ -56,6 +56,15 @@ export const sessionMigrations: readonly Migration[] = [
       ) STRICT;
 
       CREATE INDEX checkpoints_by_session ON checkpoints (session_id, created_at);
+
+      CREATE TABLE file_marks (
+        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+        path TEXT NOT NULL CHECK (path <> ''),
+        diff_id TEXT NOT NULL CHECK (length(diff_id) = 64 AND diff_id NOT GLOB '*[^0-9a-f]*'),
+        head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
+        marked_at TEXT NOT NULL CHECK (${timestamp('marked_at')}),
+        PRIMARY KEY (session_id, path)
+      ) STRICT;
     `,
   },
 ];

@@ -120,6 +120,32 @@ describe('createIpcHandlers', () => {
   });
 });
 
+describe('createIpcHandlers for reviewed marks', () => {
+  test('validates review:set-file-reviewed before delegating', async ({ expect }) => {
+    const { calls, services } = recording('setFileReviewed');
+    const handlers = createIpcHandlers(services, appInfo());
+    await expectInvalid(
+      expect,
+      handlers['review:set-file-reviewed']({ sessionId: 's1', path: 'a.ts' }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['review:set-file-reviewed']({ sessionId: 's1', path: '', reviewed: true }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['review:set-file-reviewed']({
+        sessionId: 's1',
+        path: 'a.ts',
+        reviewed: true,
+        expectedHeadSha: 'HEAD',
+      }),
+    );
+    await handlers['review:set-file-reviewed']({ sessionId: 's1', path: 'a.ts', reviewed: false });
+    expect(calls).toStrictEqual([{ sessionId: 's1', path: 'a.ts', reviewed: false }]);
+  });
+});
+
 describe('createIpcHandlers for impact and call hierarchy', () => {
   test('validates session:get-impact before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
@@ -739,6 +765,7 @@ function stubServices(
       createLocal: notWired,
       getReview: notWired,
       markReviewed: notWired,
+      setFileReviewed: notWired,
       inspectRepository: notWired,
       ...overrides,
     },
@@ -824,6 +851,12 @@ function recording(name: Exclude<keyof SessionServices, 'list' | 'inspectReposit
     },
     getReview: {
       getReview: async (request) => {
+        calls.push(request);
+        return notWired();
+      },
+    },
+    setFileReviewed: {
+      setFileReviewed: async (request) => {
         calls.push(request);
         return notWired();
       },

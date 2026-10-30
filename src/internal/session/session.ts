@@ -97,7 +97,24 @@ export type SessionError =
   | { readonly kind: 'duplicate-session'; readonly source: SessionSource }
   | {
       readonly kind: 'corrupt-row';
-      readonly table: 'sessions' | 'checkpoints';
+      readonly table: 'sessions' | 'checkpoints' | 'file_marks';
       readonly id: string;
       readonly reason: string;
     };
+
+/**
+ * "This file's diff, as it looked, was reviewed" (ADR 0064). `diffId` names the file's changed
+ * lines, not its path or its commits, so the mark survives a push that leaves that diff alone.
+ * `headSha` is the head the reviewer was looking at.
+ */
+export interface FileMark {
+  readonly sessionId: SessionId;
+  /** The file's head-side path when it was marked. */
+  readonly path: string;
+  readonly diffId: string;
+  readonly headSha: CommitSha;
+  readonly markedAt: string;
+}
+
+/** `changed-since`: marked, but the file's diff is not the one that was reviewed. */
+export type FileReviewState = 'yes' | 'no' | 'changed-since';

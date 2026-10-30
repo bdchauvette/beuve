@@ -37,6 +37,7 @@ import type {
   RepositoryTreeView,
   ReviewView,
   SessionSummary,
+  SetFileReviewedResponse,
   TraceCancelledView,
   TraceRunStartedView,
   TraceTrustView,
@@ -94,6 +95,16 @@ const chooseFolderRequest = z.strictObject({
 });
 const markReviewedRequest = z.strictObject({
   sessionId,
+  expectedHeadSha: z
+    .string()
+    .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
+    .optional(),
+});
+
+const fileReviewedRequest = z.strictObject({
+  sessionId,
+  path: z.string().min(1).max(4096),
+  reviewed: z.boolean(),
   expectedHeadSha: z
     .string()
     .regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u)
@@ -347,6 +358,19 @@ export function createIpcHandlers(
       return services.sessions.markReviewed(
         expectedHeadSha === undefined ? { sessionId: id } : { sessionId: id, expectedHeadSha },
       );
+    },
+    'review:set-file-reviewed': async (request): Promise<IpcResult<SetFileReviewedResponse>> => {
+      const parsed = fileReviewedRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sessionId: id, path, reviewed, expectedHeadSha } = parsed.data;
+      return services.sessions.setFileReviewed({
+        sessionId: id,
+        path,
+        reviewed,
+        ...(expectedHeadSha !== undefined && { expectedHeadSha }),
+      });
     },
     'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
