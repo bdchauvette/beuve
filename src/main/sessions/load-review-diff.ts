@@ -1,9 +1,14 @@
 import type { InterdiffFallbackView, IpcError, ReviewScope } from '#contract/ipc-contract.ts';
+import { attributeHunks } from '#internal/git/attribute-hunks.ts';
+import type { FileAttribution } from '#internal/git/attribute-hunks.ts';
+import { computeCommitPairs } from '#internal/git/compute-commit-pairs.ts';
+import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import { computeInterdiff } from '#internal/git/compute-interdiff.ts';
 import type { Interdiff } from '#internal/git/compute-interdiff.ts';
-import { diffRange } from '#internal/git/diff-range.ts';
+import { diffObjects } from '#internal/git/diff-objects.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
-import { findMergeBase } from '#internal/git/find-merge-base.ts';
+import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
+import type { StackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { computeReviewRange } from '#internal/session/compute-review-range.ts';
@@ -23,6 +28,12 @@ export interface RangeDiff {
   readonly scope: ReviewScope;
   readonly baseSha: CommitSha;
   readonly files: readonly DiffFile[];
+  /** Where the change starts, when that isn't the merge-base (a stacked parent, ADR 0054). */
+  readonly forkPoint?: StackForkPoint;
+  /** For an interdiff whose ranges were short enough to pair (ADR 0054). */
+  readonly commitPairs?: CommitPairs;
+  /** Aligned with `files`, when `commitPairs` is set. */
+  readonly attribution?: readonly FileAttribution[];
 }
 
 /** Display variants of the diff (ADR 0042); the default is the plain diff every service uses. */
@@ -73,6 +84,7 @@ async function cachedRangeDiff(
     refreshed.baseTip,
     range.kind,
     range.kind === 'interdiff' ? `${range.fromBaseSha}:${range.fromHeadSha}` : '',
+    refreshed.session.review.kind === 'reviewed' ? refreshed.session.review.checkpoint.baseSha : '',
     range.kind === 'interdiff' ? range.toHeadSha : range.headSha,
     isIgnoringWhitespace ? 'w' : '',
   ].join('\0');
@@ -99,10 +111,20 @@ async function diffReviewRange(
       return diffFull(context, refreshed, range.headSha, { kind: 'full' }, isIgnoringWhitespace);
     }
     case 'up-to-date': {
-      const mergeBase = await findMergeBase(repository, baseTip, range.headSha);
-      return mergeBase.ok
-        ? ok({ scope: { kind: 'up-to-date' }, baseSha: mergeBase.value, files: [] })
-        : gitFailure(context.logger, mergeBase.error);
+      const { review } = refreshed.session;
+      const fork = await findStackForkPoint(
+        repository,
+        { base: baseTip, head: range.headSha },
+        { reviewedBases: review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [] },
+      );
+      return fork.ok
+        ? ok({
+            scope: { kind: 'up-to-date' },
+            baseSha: fork.value.forkPoint,
+            files: [],
+            ...stackForkPoint(fork.value),
+          })
+        : gitFailure(context.logger, fork.error);
     }
     case 'interdiff': {
       return diffInterdiff(context, refreshed, range, isIgnoringWhitespace);
@@ -117,14 +139,22 @@ async function diffFull(
   scope: ReviewScope,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
-  const diff = await diffRange(
-    refreshed.repository,
-    { base: refreshed.baseTip, head: headSha },
-    { ignoreWhitespace: isIgnoringWhitespace },
-  );
-  return diff.ok
-    ? ok({ scope, baseSha: diff.value.mergeBase, files: diff.value.files })
-    : gitFailure(context.logger, diff.error);
+  const { repository } = refreshed;
+  const fork = await findStackForkPoint(repository, { base: refreshed.baseTip, head: headSha });
+  if (!fork.ok) {
+    return gitFailure(context.logger, fork.error);
+  }
+  const files = await diffObjects(repository, fork.value.forkPoint, headSha, {
+    ignoreWhitespace: isIgnoringWhitespace,
+  });
+  return files.ok
+    ? ok({
+        scope,
+        baseSha: fork.value.forkPoint,
+        files: files.value,
+        ...stackForkPoint(fork.value),
+      })
+    : gitFailure(context.logger, files.error);
 }
 
 async function diffInterdiff(
@@ -156,27 +186,58 @@ async function diffInterdiff(
       isIgnoringWhitespace,
     );
   }
-  const interdiff = await computeInterdiff(
+  const fork = await findStackForkPoint(
     repository,
-    { base: range.fromBaseSha, head: range.fromHeadSha },
     { base: baseTip, head: range.toHeadSha },
-    { ignoreWhitespace: isIgnoringWhitespace },
+    { reviewedBases: [range.fromBaseSha] },
   );
+  if (!fork.ok) {
+    return gitFailure(context.logger, fork.error);
+  }
+  const previous = { base: range.fromBaseSha, head: range.fromHeadSha };
+  const next = { base: fork.value.forkPoint, head: range.toHeadSha };
+  const pairs = await computeCommitPairs(repository, previous, next, {
+    ignoreWhitespace: isIgnoringWhitespace,
+  });
+  if (!pairs.ok) {
+    return gitFailure(context.logger, pairs.error);
+  }
+  const usablePairs = pairs.value.truncated ? undefined : pairs.value;
+  const interdiff = await computeInterdiff(repository, previous, next, {
+    ignoreWhitespace: isIgnoringWhitespace,
+    pairedCommits: (usablePairs?.pairs ?? [])
+      .filter((pair) => pair.kind === 'unchanged' || pair.kind === 'modified')
+      .map((pair) => ({ parent: pair.previous.parent, commit: pair.previous.sha })),
+  });
   if (!interdiff.ok) {
     return gitFailure(context.logger, interdiff.error);
   }
+  const { files } = interdiff.value;
   return ok({
     scope: { kind: 'interdiff', ...from, outcome: toOutcome(interdiff.value) },
     baseSha: interdiff.value.nextMergeBase,
-    files: interdiff.value.files,
+    files,
+    ...stackForkPoint(fork.value),
+    ...(usablePairs !== undefined && {
+      commitPairs: usablePairs,
+      attribution: attributeHunks(files, usablePairs.nextCommits),
+    }),
   });
+}
+
+function stackForkPoint(fork: StackForkPoint): { readonly forkPoint?: StackForkPoint } {
+  return fork.reason === 'merge-base' ? {} : { forkPoint: fork };
 }
 
 function toOutcome(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interdiff' }>['outcome'] {
   switch (interdiff.kind) {
-    case 'exact':
+    case 'exact': {
+      return { kind: 'exact' };
+    }
     case 'rebased': {
-      return { kind: interdiff.kind };
+      return interdiff.replay === 'commit-pairs'
+        ? { kind: 'rebased', replay: 'commit-pairs' }
+        : { kind: 'rebased' };
     }
     case 'fallback': {
       const { reason } = interdiff;

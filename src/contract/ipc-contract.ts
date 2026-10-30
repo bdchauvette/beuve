@@ -148,7 +148,11 @@ export type ReviewScope =
       readonly fromHeadSha: string;
       readonly outcome:
         | { readonly kind: 'exact' }
-        | { readonly kind: 'rebased' }
+        /**
+         * `replay` is `commit-pairs` when the whole-range replay conflicted and the reviewed
+         * commits that still have a partner were replayed one by one instead (ADR 0054).
+         */
+        | { readonly kind: 'rebased'; readonly replay?: 'commit-pairs' }
         | { readonly kind: 'fallback'; readonly reason: InterdiffFallbackView };
     };
 
@@ -190,6 +194,72 @@ export interface ReviewView {
   readonly files: readonly DiffFileView[];
   /** `ignored` when the diff was computed ignoring whitespace (ADR 0042). */
   readonly whitespace: 'shown' | 'ignored';
+  /**
+   * For an interdiff: the previously reviewed commits paired with the new ones (ADR 0054), in the
+   * new range's order with dropped commits in place. Absent for other scopes, or when either range
+   * is too long to pair.
+   */
+  readonly commitPairs?: readonly CommitPairView[];
+  /**
+   * For an interdiff with `commitPairs`: which pairs produced each file, aligned with `files`.
+   */
+  readonly fileAttribution?: readonly FileAttributionView[];
+  /**
+   * Where this pull request's own changes start when that is not the merge-base with the base
+   * branch (ADR 0054): `already-upstream` when its oldest commits are already on the base under
+   * other SHAs (a squash- or rebase-merged stack parent), `reviewed-base` when they sit under a fork
+   * point already reviewed (a force-pushed parent this branch wasn't rebased onto). `baseSha` is
+   * then that fork point.
+   */
+  readonly forkPoint?: ForkPointView;
+}
+
+/**
+ * How a commit of the previously reviewed range relates to one of the new range, like
+ * `git range-diff`: `unchanged` (same patch-id, or an empty interdiff), `modified` (paired by
+ * similar changed lines), `added` (new only) or `dropped` (previous only).
+ */
+export interface CommitPairView {
+  /** Stable within one review: the new commit's sha, else the previous one's. */
+  readonly id: string;
+  readonly kind: 'unchanged' | 'modified' | 'added' | 'dropped';
+  readonly previous?: CommitSideView;
+  readonly next?: CommitSideView;
+  /** The new subject, else the previous one. */
+  readonly subject: string;
+  /** For `modified`: the Dice overlap of the two commits' changed lines, 0–1. */
+  readonly similarity?: number;
+  /** For `modified`: the previous commit replayed onto the new commit's parent, against it. */
+  readonly interdiff?: CommitInterdiffView;
+}
+
+export interface CommitSideView {
+  readonly sha: string;
+  readonly subject: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+export type CommitInterdiffView =
+  | { readonly kind: 'clean'; readonly files: readonly DiffFileView[] }
+  | { readonly kind: 'conflicts'; readonly paths: readonly string[] }
+  | { readonly kind: 'unavailable'; readonly reason: 'too-many-pairs' | 'git-too-old' };
+
+/** The commit pairs (by `CommitPairView.id`) behind one file of the review diff. */
+export interface FileAttributionView {
+  readonly path: string;
+  /** Pairs whose new commit changed this path. */
+  readonly pairIds: readonly string[];
+  /** Aligned with the file's `hunks`: pairs whose new commit produced lines of that hunk. */
+  readonly hunkPairIds: readonly (readonly string[])[];
+}
+
+export interface ForkPointView {
+  readonly reason: 'already-upstream' | 'reviewed-base';
+  /** The merge-base with the base branch, which `baseSha` replaces. */
+  readonly mergeBaseSha: string;
+  /** Commits between the merge-base and `baseSha` left out of the review. */
+  readonly skippedCommits: number;
 }
 
 export interface GetImpactRequest {

@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { IpcResult, ReviewProgressView, ReviewView } from '#contract/ipc-contract.ts';
+import { buildPullRequestStack } from '#internal/git/testing/build-pull-request-stack.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
@@ -182,6 +183,58 @@ describe('createMainServices (integration: SQLite + git, no Electron)', () => {
     expect(quiet.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
     expect(fileSummary(quiet)).toEqual([['app.py', 'modified', 1, 0]]);
     expect(quiet.files[0]?.hunks).toEqual([expect.objectContaining({ newStart: 3, newCount: 4 })]);
+  });
+
+  it('reviews a stacked child after its parent is squash-merged and it is retargeted', async () => {
+    const stack = buildPullRequestStack(repo);
+    repo.git('update-ref', 'refs/review/base', 'pr1');
+    const { id } = value(
+      await sessions.createLocal({
+        repoPath: repo.directory,
+        baseRef: 'refs/review/base',
+        headRef: 'pr2',
+      }),
+    );
+    const full = value(await sessions.getReview({ sessionId: id }));
+    expect(fileSummary(full)).toEqual([['b.txt', 'modified', 2, 2]]);
+    value(await sessions.markReviewed({ sessionId: id, expectedHeadSha: full.headSha }));
+
+    repo.git('switch', '--quiet', 'main');
+    repo.git('merge', '--quiet', '--squash', 'pr1');
+    repo.commit('pr1 (#1)');
+    repo.git('update-ref', 'refs/review/base', 'main');
+    repo.git('switch', '--quiet', 'pr2');
+    const fixup = stack.commitLine('b.txt', 25, 'pr2-b25', 'pr2: b25');
+
+    const retargeted = value(await sessions.getReview({ sessionId: id }));
+    expect(retargeted.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
+    expect(retargeted.baseSha).toBe(stack.pr1[1]);
+    expect(retargeted.forkPoint).toEqual({
+      reason: 'already-upstream',
+      mergeBaseSha: stack.root,
+      skippedCommits: 2,
+    });
+    expect(fileSummary(retargeted)).toEqual([['b.txt', 'modified', 1, 1]]);
+    expect(retargeted.commitPairs?.map(({ kind, subject }) => [kind, subject])).toEqual([
+      ['unchanged', 'pr2: b5'],
+      ['unchanged', 'pr2: b20'],
+      ['added', 'pr2: b25'],
+    ]);
+    expect(retargeted.fileAttribution).toEqual([
+      { path: 'b.txt', pairIds: [stack.pr2[0], stack.pr2[1], fixup], hunkPairIds: [[fixup]] },
+    ]);
+
+    value(await sessions.markReviewed({ sessionId: id, expectedHeadSha: fixup }));
+    repo.git('rebase', '--quiet', '--onto', 'main', stack.pr1[1] ?? '', 'pr2');
+    const rebased = value(await sessions.getReview({ sessionId: id }));
+    expect(rebased.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'rebased' } });
+    expect(rebased.files).toEqual([]);
+    expect(rebased.forkPoint).toBeUndefined();
+    expect(rebased.commitPairs?.map(({ kind }) => kind)).toEqual([
+      'unchanged',
+      'unchanged',
+      'unchanged',
+    ]);
   });
 
   it('refuses directories outside a repository and unknown refs with typed errors', async () => {

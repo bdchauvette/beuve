@@ -1,5 +1,5 @@
 import type { IpcError, MarkReviewedRequest, SessionSummary } from '#contract/ipc-contract.ts';
-import { findMergeBase } from '#internal/git/find-merge-base.ts';
+import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import { insertCheckpoint } from '#internal/session/insert-checkpoint.ts';
 import { recordCheckpoint } from '#internal/session/record-checkpoint.ts';
 import { err } from '#pkg/result/err.ts';
@@ -15,7 +15,7 @@ import { toSessionSummary } from './to-session-summary.ts';
 
 /**
  * Records a checkpoint at the session's current head and the fork point it has from the base
- * branch now, so the next review is an interdiff from here. Refuses with `stale-review` when the
+ * branch now (the stack-aware one the review showed, ADR 0054), so the next review is an interdiff from here. Refuses with `stale-review` when the
  * head is no longer `expectedHeadSha`; re-marking an already recorded range changes nothing.
  */
 export async function markReviewed(
@@ -37,23 +37,24 @@ export async function markReviewed(
       message: 'new commits arrived since this review was loaded; reload it first',
     });
   }
-  const baseSha = await findMergeBase(repository, baseTip, session.headSha);
-  if (!baseSha.ok) {
-    return gitFailure(context.logger, baseSha.error);
-  }
   const { review } = session;
+  const fork = await findStackForkPoint(
+    repository,
+    { base: baseTip, head: session.headSha },
+    { reviewedBases: review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [] },
+  );
+  if (!fork.ok) {
+    return gitFailure(context.logger, fork.error);
+  }
+  const baseSha = fork.value.forkPoint;
   if (
     review.kind === 'reviewed' &&
     review.checkpoint.headSha === session.headSha &&
-    review.checkpoint.baseSha === baseSha.value
+    review.checkpoint.baseSha === baseSha
   ) {
     return ok(toSessionSummary(session));
   }
-  const recorded = recordCheckpoint(
-    session,
-    { baseSha: baseSha.value, headSha: session.headSha },
-    context.deps,
-  );
+  const recorded = recordCheckpoint(session, { baseSha, headSha: session.headSha }, context.deps);
   const inserted = insertCheckpoint(context.db, recorded.checkpoint);
   return inserted.ok
     ? ok(toSessionSummary(recorded.session))
