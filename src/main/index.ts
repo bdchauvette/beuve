@@ -11,6 +11,7 @@ import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
+import { secureUserData } from './secure-user-data.ts';
 import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
@@ -34,6 +35,7 @@ if (app.requestSingleInstanceLock()) {
 async function launch(): Promise<void> {
   try {
     const userData = app.getPath('userData');
+    await secureUserData(userData, logger);
     const worktreeRoot = path.join(userData, 'worktrees');
     const db = openAppDatabase(path.join(userData, 'beuve.db'));
     const settingsPath = path.join(userData, 'settings.json');

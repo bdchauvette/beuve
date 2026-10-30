@@ -1,3 +1,4 @@
+import { chmodSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -32,6 +33,32 @@ describe('openDatabase', () => {
     using file = openDatabase(path.join(tempDir, 'test.db'));
     expect(file.prepare('PRAGMA journal_mode;').get()).toMatchObject({ journal_mode: 'wal' });
     expect(db.prepare('PRAGMA journal_mode;').get()).toMatchObject({ journal_mode: 'memory' });
+  });
+
+  test('creates a file database and its WAL files owner-only', ({ expect, tempDir }) => {
+    const location = path.join(tempDir, 'test.db');
+    using file = openDatabase(location);
+    file.exec('CREATE TABLE t (x INTEGER) STRICT; INSERT INTO t VALUES (1);');
+    const modes = readdirSync(tempDir)
+      .toSorted((a, b) => a.localeCompare(b))
+      .map((name) => [name, statSync(path.join(tempDir, name)).mode & 0o777]);
+    expect(modes).toStrictEqual([
+      ['test.db', 0o600],
+      ['test.db-shm', 0o600],
+      ['test.db-wal', 0o600],
+    ]);
+  });
+
+  test('keeps the contents and mode of an existing file database', ({ expect, tempDir }) => {
+    const location = path.join(tempDir, 'test.db');
+    {
+      using first = openDatabase(location);
+      first.exec('CREATE TABLE t (x INTEGER) STRICT; INSERT INTO t VALUES (7);');
+    }
+    chmodSync(location, 0o640);
+    using again = openDatabase(location);
+    expect(again.prepare('SELECT x FROM t;').get()).toMatchObject({ x: 7 });
+    expect(statSync(location).mode & 0o777).toBe(0o640);
   });
 });
 

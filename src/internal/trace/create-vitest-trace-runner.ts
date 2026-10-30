@@ -89,7 +89,7 @@ export function createVitestTraceRunner(options: VitestTraceRunnerOptions): Trac
       if (!entry.ok) {
         return entry;
       }
-      await mkdir(options.temporaryDirectory, { recursive: true });
+      await mkdir(options.temporaryDirectory, { recursive: true, mode: 0o700 });
       const parent = await realpath(options.temporaryDirectory);
       await using directory = await mkdtempDisposable(path.join(parent, 'trace-'));
       return await runIn(options, request, workspace.value, entry.value.script, directory.path);
