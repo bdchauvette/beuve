@@ -39,9 +39,11 @@ B. Wlaschin, Domain Modeling Made Functional (in TypeScript): thin models and pu
 
 C. Hickey, Simple Made Easy / Grokking Simplicity: decouple state (SQLite, git sync) from business logic; favor immutable data through explicit pipelines over mutable objects crossing IPC boundaries.
 
-D. Minimal runtime dependencies: build small transparent utilities in `src/pkg/` rather than pulling in packages for simple tasks. Local lint rules steer contributors to `#pkg/*`.
+D. Minimal runtime dependencies: build small transparent utilities in `src/x/` (grouped by general domain, see ADR 0002 amendment) rather than pulling in packages for simple tasks. Local lint rules steer contributors to `#x/*`.
 
-E. Modular monolith: `src/internal/` and `src/pkg/` with `#internal/*` and `#pkg/*` aliases, dependency-cruiser enforcing isolation and acyclicity.
+E. Modular monolith: `src/internal/` and `src/x/` with `#internal/*` and `#x/*` aliases, dependency-cruiser enforcing isolation and acyclicity.
+
+_Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec calls `src/pkg/` is now `src/x/` (alias `#x/*`), grouped by general domain, e.g. `#x/log/create-logger.ts`. Read `pkg` as `x` throughout._
 
 ## 3. Directory structure
 
@@ -60,10 +62,9 @@ E. Modular monolith: `src/internal/` and `src/pkg/` with `#internal/*` and `#pkg
     │   │   ├── review/        automated preliminary agentic reviewer
     │   │   ├── session/       review sessions and checkpoints (ADR 0006)
     │   │   └── ura/           Universal Review Artifact generation
-    │   ├── pkg/               shared utilities, zero external deps
-    │   │   ├── logger/
-    │   │   ├── result/
-    │   │   └── datastructures/
+    │   ├── x/                 shared utilities, zero external deps, grouped by general domain
+    │   │   ├── brand/  collections/  git/  image/  jsonrpc/  log/
+    │   │   └── net/  release/  result/  sqlite/  text/  time/
     │   ├── main/              Electron main process, IPC bridge, MCP server
     │   ├── preload/           context-bridge preload
     │   └── ui/                Lit renderer
@@ -108,9 +109,9 @@ The main window uses `titleBarStyle: 'hiddenInset'`, 1440×900, context isolatio
 
 ## 7. Code quality enforcement
 
-- package.json `imports`: `#internal/*` → `./src/internal/*`, `#pkg/*` → `./src/pkg/*`.
+- package.json `imports`: `#internal/*` → `./src/internal/*`, `#x/*` → `./src/x/*`.
 - dependency-cruiser: no circular deps; domain isolation; no barrel files (ADR 0002).
-- Local ESLint rules: `enforce-single-named-export` (exactly one runtime export, no default exports, types unrestricted); `enforce-internal-utils` (ban lodash/underscore and similar in favor of built-ins and `#pkg/*`); `enforce-top-level-function-syntax` (no top-level `const f = () => …` or function expressions).
+- Local ESLint rules: `enforce-single-named-export` (exactly one runtime export, no default exports, types unrestricted); `enforce-internal-utils` (ban lodash/underscore and similar in favor of built-ins and `#x/*`); `enforce-top-level-function-syntax` (no top-level `const f = () => …` or function expressions).
 - ESLint flat config: `@eslint/js` recommended, unicorn recommended, security recommended, typescript-eslint type-checked via `projectService`, `unicorn/filename-case` kebab-case, `@typescript-eslint/explicit-function-return-type`, `explicit-module-boundary-types`, n and promise for Node code (`promise/prefer-await-to-then`), `no-floating-promises`, `await-thenable`, `strict-boolean-expressions`, wc and lit for `src/ui`, @e18e recommended everywhere, eslint-config-prettier last.
 
 ## 8. Roadmap

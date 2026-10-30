@@ -9,14 +9,14 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - CI runs `npm run check` on Ubuntu and macOS, so tests must not assume Linux (symlinked `/tmp`, extra env vars, case-insensitive paths). Compare realpaths, and never skip a test to get green.
 - Release: calendar versions `YYYY.M.N` (ADR 0049). From a clean, up-to-date `main` run `npm run release` (bumps `package.json`/lockfile, commits `chore(release): <version>`, creates tag `v<version>`), then `git push --follow-tags origin main`; the `v*` tag builds, publishes the GitHub Release and bumps `Casks/beuve.rb` (docs/packaging.md). Don't use `npm version`, and don't edit the cask's `version` or `sha256` by hand.
 - `npm run dist:mac` packages an arm64 dmg+zip into `out/` (ad-hoc signed unless `CSC_*`/`APPLE_*` are set); `npm run dist:linux-dir` builds `out/linux-unpacked/` for smoke tests (ADR 0048, `docs/packaging.md`). A new file main loads by path at run time must be added to `electron-builder.yml`.
-- Don't add dependencies without an ADR. Never add lodash-style grab-bags; write a helper in `src/pkg/`.
+- Don't add dependencies without an ADR. Never add lodash-style grab-bags; write a helper in `src/x/<group>/` (groups are general domains: `log`, `result`, `sqlite`, `text`, `time`, ...).
 - Write a short ADR (`docs/adr/0000-template.md`, add it to the README table) for any decision that constrains later work.
 
 ## Layout and boundaries (ADR 0002)
 
-- `src/main` composition root, `src/preload` sandboxed bridge, `src/ui` Lit renderer, `src/internal/<domain>` domains, `src/pkg` shared utilities.
-- Domains import only themselves and `#pkg/*`; cross-domain work flows through `src/main`.
-- `src/pkg` imports only Node built-ins and other `src/pkg` modules. Zero npm dependencies.
+- `src/main` composition root, `src/preload` sandboxed bridge, `src/ui` Lit renderer, `src/internal/<domain>` domains, `src/x` shared utilities.
+- Domains import only themselves and `#x/*`; cross-domain work flows through `src/main`.
+- `src/x` imports only Node built-ins and other `src/x` modules. Zero npm dependencies.
 - `src/ui` and `src/preload` never import `src/main` or `src/internal`.
 - Nothing imports an entrypoint (`src/*/index.ts`). No other `index.ts` files exist.
 - dependency-cruiser enforces all of this (`npm run deps`); type-only imports count.
@@ -26,8 +26,8 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - File names are kebab-case.
 - Exactly one runtime export per file, named after the file: `create-logger.ts` exports `createLogger`, `lru-cache.ts` exports class `LruCache`. Types may be exported alongside it, and a file may export only types.
 - No default exports, no re-exports, no barrels.
-- Aliases (package.json `imports`): `#contract/*` → `src/contract/*`, `#internal/*` → `src/internal/*`, `#pkg/*` → `src/pkg/*`.
-- Import by exact path including the `.ts` extension (ADR 0008): `#pkg/logger/create-logger.ts`, `#internal/git/read-diff.ts`, `#contract/ipc-contract.ts`. Use relative imports only within the same directory tree of one domain or layer.
+- Aliases (package.json `imports`): `#contract/*` → `src/contract/*`, `#internal/*` → `src/internal/*`, `#x/*` → `src/x/*`.
+- Import by exact path including the `.ts` extension (ADR 0008): `#x/log/create-logger.ts`, `#internal/git/read-diff.ts`, `#contract/ipc-contract.ts`. Use relative imports only within the same directory tree of one domain or layer.
 
 ## Code style
 
@@ -35,10 +35,10 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - Top-level functions use `function`. Helpers inside functions are arrow functions. Classes use methods. Never `const f = () => …` at top level.
 - Explicit return types on every function, including arrows.
 - `import type` for type-only imports.
-- Thin data, pure functions; discriminated unions (`#pkg/result/`) and branded types (`#pkg/brand/brand.ts`) for illegal states. Expected failures are `Result`s, not exceptions.
+- Thin data, pure functions; discriminated unions (`#x/result/`) and branded types (`#x/brand/brand.ts`) for illegal states. Expected failures are `Result`s, not exceptions.
 - No enums, namespaces or parameter properties (`erasableSyntaxOnly`).
 - No comments that restate code. Brief doc comments on exported API.
-- Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#pkg/sqlite/`.
+- Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#x/sqlite/`.
 
 ## Tests
 

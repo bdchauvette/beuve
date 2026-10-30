@@ -23,3 +23,10 @@ The spec calls for a Go-inspired single-package layout (`src/internal/`, `src/pk
 ## Consequences
 
 Import lines are longer but unambiguous, and grep/rename are trivial. Cross-domain coordination must flow through `src/main`, which keeps domains independently testable and lets us split them into workspace packages later without untangling imports.
+
+## Amendment 2026-10-30: `src/pkg` becomes `src/x`, grouped by general domain
+
+- `src/pkg` is renamed `src/x` and the alias `#pkg/*` becomes `#x/*`. The name follows Go's `golang.org/x`: shared utilities that live outside any application domain, so `pkg` no longer suggests a packaging unit. The rules are unchanged: only Node built-ins and other `src/x` modules, no npm dependencies, one runtime export per file named after the file, colocated tests.
+- Utilities are grouped by general domain with short lowercase directory names (`brand`, `collections`, `git`, `image`, `jsonrpc`, `log`, `net`, `release`, `result`, `sqlite`, `text`, `time`, ...), never by application domain. Import by exact path, e.g. `#x/log/create-logger.ts`. `datastructures` became `collections` and `logger` became `log`.
+- Helpers that domains had copied to stay isolated (`sqliteErrorCode`, `isUuid`, `isIsoTimestamp`, `isCommitSha`, `normalizeHostname`) now live once in `src/x/`. Test helpers that need npm packages (the tree-sitter loaders) cannot move there and stay in each domain's `testing/` directory.
+- Older ADRs and the spec keep their historical `pkg` wording; read it as `x`.
