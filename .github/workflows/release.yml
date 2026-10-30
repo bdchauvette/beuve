@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - name: Resolve the version
         id: version
@@ -83,7 +83,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .node-version
       - uses: actions/download-artifact@v4
         with:
           name: beuve-${{ needs.build.outputs.version }}-mac-arm64

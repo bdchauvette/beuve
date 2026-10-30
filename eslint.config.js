@@ -118,6 +118,14 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/electron-node',
+    files: ['src/**/*.ts'],
+    ignores: [...uiFiles, ...testFiles, '**/testing/**'],
+    // Shipped code runs on Electron 45's Node 24; tooling and tests run on Node 26 (ADR 0060).
+    settings: { n: { version: '>=24.22.0' } },
+  },
+
+  {
     name: 'beuve/ui',
     files: uiFiles,
     extends: [wcConfigs['flat/best-practice'], litConfigs['flat/recommended']],

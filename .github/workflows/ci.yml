@@ -26,8 +26,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          # Electron 45's Node (ADR 0007, 0048).
-          node-version: 24
+          # Node 26 for native Temporal in tests and tooling (ADR 0060).
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - run: npm run check

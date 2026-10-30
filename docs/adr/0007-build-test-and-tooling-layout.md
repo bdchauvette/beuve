@@ -1,6 +1,6 @@
 # 0007. Build, test and tooling layout
 
-- Status: Accepted; test helper and integration test placement refined by [0013](0013-test-helpers-in-testing-directories.md)
+- Status: Accepted; test helper and integration test placement refined by [0013](0013-test-helpers-in-testing-directories.md); contributor Node version superseded by [0060](0060-node-26-for-tooling-and-tests.md)
 - Date: 2026-10-28
 
 ## Context
