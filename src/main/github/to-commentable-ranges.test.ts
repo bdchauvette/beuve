@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import type { DiffFile, DiffHunk, FileChange } from '#internal/git/diff-model.ts';
 
 import { toCommentableRanges } from './to-commentable-ranges.ts';
+import { test } from '../testing/test.ts';
 
 describe('toCommentableRanges', () => {
-  it('spans each hunk on the head side, under the new path, skipping deletions', () => {
+  test('spans each hunk on the head side, under the new path, skipping deletions', ({ expect }) => {
     const files: DiffFile[] = [
       file({ status: 'modified', path: 'a.ts', oldMode: '100644', newMode: '100644' }, [
         hunk(1, 3),
@@ -25,7 +26,7 @@ describe('toCommentableRanges', () => {
       ),
       file({ status: 'deleted', path: 'gone.ts', mode: '100644' }, [hunk(0, 0)]),
     ];
-    expect(toCommentableRanges(files)).toEqual(
+    expect(toCommentableRanges(files)).toStrictEqual(
       new Map([
         [
           'a.ts',

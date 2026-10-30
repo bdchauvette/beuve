@@ -2,53 +2,22 @@ import { request } from 'node:http';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { createLogger } from '#x/log/create-logger.ts';
-import { err } from '#x/result/err.ts';
-import { ok } from '#x/result/ok.ts';
-
-import type { McpToolServices } from './mcp-tool-services.ts';
-import { startMcpServer } from './start-mcp-server.ts';
 import type { McpServerHandle } from './start-mcp-server.ts';
-
-const token = 'test-token-0123456789abcdefghijklmnopqrstuvwxyz';
-const notImplemented = Promise.resolve(err('not implemented yet'));
-const passing = Promise.resolve(ok({ breaches: [] }));
-const services: McpToolServices = {
-  getLspDiagnostics: async () => notImplemented,
-  runImpactCheck: async () => passing,
-  runTraceProbe: async () => notImplemented,
-  readHumanReview: async () => notImplemented,
-};
+import { test } from './testing/test.ts';
 
 describe('startMcpServer', () => {
-  let handle: McpServerHandle;
-
-  beforeEach(async () => {
-    const started = await startMcpServer({
-      token,
-      services,
-      logger: createLogger('test', { sink: (): void => undefined }),
-      version: '0.0.0-test',
-      port: 0,
-    });
-    if (!started.ok) {
-      throw new Error(started.error.message);
-    }
-    handle = started.value;
-  });
-
-  afterEach(async () => {
-    await handle.stop();
-  });
-
-  it('binds to loopback on an ephemeral port', () => {
+  test('binds to loopback on an ephemeral port', ({ expect, mcpServer: handle }) => {
     expect(handle.url).toBe(`http://127.0.0.1:${String(handle.port)}/mcp`);
     expect(handle.port).toBeGreaterThan(0);
   });
 
-  it('lists the four spec tools and reports service failures as tool errors', async () => {
+  test('lists the four spec tools and reports service failures as tool errors', async ({
+    expect,
+    mcpServer: handle,
+    mcpToken: token,
+  }) => {
     const client = new Client({ name: 'test', version: '0.0.0' });
     await client.connect(
       new StreamableHTTPClientTransport(new URL(handle.url), {
@@ -57,7 +26,7 @@ describe('startMcpServer', () => {
     );
     try {
       const { tools } = await client.listTools();
-      expect(tools.map((tool) => tool.name).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      expect(tools.map((tool) => tool.name).toSorted((a, b) => a.localeCompare(b))).toStrictEqual([
         'beuve_get_lsp_diagnostics',
         'beuve_read_human_review',
         'beuve_run_impact_check',
@@ -86,13 +55,13 @@ describe('startMcpServer', () => {
     }
   });
 
-  it('rejects requests without the bearer token', async () => {
+  test('rejects requests without the bearer token', async ({ expect, mcpServer: handle }) => {
     const response = await post(handle, { host: `127.0.0.1:${String(handle.port)}` });
     expect(response.status).toBe(401);
     expect(response.authenticate).toContain('Bearer');
   });
 
-  it('rejects a wrong token', async () => {
+  test('rejects a wrong token', async ({ expect, mcpServer: handle }) => {
     const response = await post(handle, {
       host: `127.0.0.1:${String(handle.port)}`,
       authorization: 'Bearer nope',
@@ -100,7 +69,11 @@ describe('startMcpServer', () => {
     expect(response.status).toBe(401);
   });
 
-  it('rejects foreign Host headers even with the token (DNS rebinding)', async () => {
+  test('rejects foreign Host headers even with the token (DNS rebinding)', async ({
+    expect,
+    mcpServer: handle,
+    mcpToken: token,
+  }) => {
     const response = await post(handle, {
       host: `evil.example:${String(handle.port)}`,
       authorization: `Bearer ${token}`,
@@ -108,7 +81,11 @@ describe('startMcpServer', () => {
     expect(response.status).toBe(403);
   });
 
-  it('rejects browser requests from other origins even with the token', async () => {
+  test('rejects browser requests from other origins even with the token', async ({
+    expect,
+    mcpServer: handle,
+    mcpToken: token,
+  }) => {
     const response = await post(handle, {
       host: `localhost:${String(handle.port)}`,
       origin: 'https://evil.example',

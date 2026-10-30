@@ -1,13 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { editorDefinitions } from './editor-definitions.ts';
 import { getEditorDefinition } from './testing/get-editor-definition.ts';
 import { findEditor } from './find-editor.ts';
 import type { EditorProbe } from './find-editor.ts';
-
-const zed = getEditorDefinition('zed');
-const vscode = getEditorDefinition('vscode');
-const cursor = getEditorDefinition('cursor');
+import { test } from '../testing/test.ts';
 
 function fakeProbe(
   files: readonly string[],
@@ -23,53 +20,71 @@ function fakeProbe(
 }
 
 describe('editorDefinitions', () => {
-  it('prefers Zed, then VS Code, then Cursor', () => {
-    expect(editorDefinitions.map(({ id }) => id)).toEqual(['zed', 'vscode', 'cursor']);
+  test('prefers Zed, then VS Code, then Cursor', ({ expect }) => {
+    expect(editorDefinitions.map(({ id }) => id)).toStrictEqual(['zed', 'vscode', 'cursor']);
   });
 });
 
 describe('findEditor', () => {
-  it('finds a CLI on PATH, ignoring relative PATH entries', () => {
-    expect(findEditor(zed, fakeProbe(['/home/me/bin/zed']))).toEqual({
+  test('finds a CLI on PATH, ignoring relative PATH entries', ({ expect }) => {
+    expect(findEditor(getEditorDefinition('zed'), fakeProbe(['/home/me/bin/zed']))).toStrictEqual({
       kind: 'cli',
       command: '/home/me/bin/zed',
     });
-    expect(findEditor(zed, fakeProbe(['relative/zed']))).toBeUndefined();
+    expect(findEditor(getEditorDefinition('zed'), fakeProbe(['relative/zed']))).toBeUndefined();
   });
 
-  it('finds the distro name zeditor', () => {
-    expect(findEditor(zed, fakeProbe(['/usr/bin/zeditor']))).toEqual({
+  test('finds the distro name zeditor', ({ expect }) => {
+    expect(findEditor(getEditorDefinition('zed'), fakeProbe(['/usr/bin/zeditor']))).toStrictEqual({
       kind: 'cli',
       command: '/usr/bin/zeditor',
     });
   });
 
-  it('looks in well-known places when a GUI app has no PATH', () => {
+  test('looks in well-known places when a GUI app has no PATH', ({ expect }) => {
     const mac = { platform: 'darwin', env: { HOME: '/Users/me' } };
-    expect(findEditor(zed, fakeProbe(['/opt/homebrew/bin/zed'], mac))).toEqual({
+    expect(
+      findEditor(getEditorDefinition('zed'), fakeProbe(['/opt/homebrew/bin/zed'], mac)),
+    ).toStrictEqual({
       kind: 'cli',
       command: '/opt/homebrew/bin/zed',
     });
-    expect(findEditor(zed, fakeProbe(['/Users/me/.local/bin/zed'], mac))).toEqual({
+    expect(
+      findEditor(getEditorDefinition('zed'), fakeProbe(['/Users/me/.local/bin/zed'], mac)),
+    ).toStrictEqual({
       kind: 'cli',
       command: '/Users/me/.local/bin/zed',
     });
-    expect(findEditor(zed, fakeProbe(['/Applications/Zed.app/Contents/MacOS/cli'], mac))).toEqual({
+    expect(
+      findEditor(
+        getEditorDefinition('zed'),
+        fakeProbe(['/Applications/Zed.app/Contents/MacOS/cli'], mac),
+      ),
+    ).toStrictEqual({
       kind: 'cli',
       command: '/Applications/Zed.app/Contents/MacOS/cli',
     });
   });
 
-  it('falls back to the URL scheme when only the macOS app bundle exists', () => {
+  test('falls back to the URL scheme when only the macOS app bundle exists', ({ expect }) => {
     const mac = { platform: 'darwin', env: { HOME: '/Users/me' } };
-    expect(findEditor(cursor, fakeProbe(['/Applications/Cursor.app'], mac))).toEqual({
+    expect(
+      findEditor(getEditorDefinition('cursor'), fakeProbe(['/Applications/Cursor.app'], mac)),
+    ).toStrictEqual({
       kind: 'url',
     });
-    expect(findEditor(cursor, fakeProbe(['/Applications/Cursor.app']))).toBeUndefined();
+    expect(
+      findEditor(getEditorDefinition('cursor'), fakeProbe(['/Applications/Cursor.app'])),
+    ).toBeUndefined();
   });
 
-  it('finds nothing without the editor, and nothing on Windows', () => {
-    expect(findEditor(vscode, fakeProbe(['/usr/bin/zed']))).toBeUndefined();
-    expect(findEditor(vscode, fakeProbe(['/usr/bin/code'], { platform: 'win32' }))).toBeUndefined();
+  test('finds nothing without the editor, and nothing on Windows', ({ expect }) => {
+    expect(findEditor(getEditorDefinition('vscode'), fakeProbe(['/usr/bin/zed']))).toBeUndefined();
+    expect(
+      findEditor(
+        getEditorDefinition('vscode'),
+        fakeProbe(['/usr/bin/code'], { platform: 'win32' }),
+      ),
+    ).toBeUndefined();
   });
 });

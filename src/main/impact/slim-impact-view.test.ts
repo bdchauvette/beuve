@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import type {
   FileImpactView,
@@ -8,21 +8,18 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import { slimImpactView } from './slim-impact-view.ts';
+import { test } from '../testing/test.ts';
 
-const zero: FunctionMetricsView = {
-  cognitive: 0,
-  cyclomatic: 0,
-  lines: 0,
-  maxNesting: 0,
-  parameters: 0,
-};
+function zero(): FunctionMetricsView {
+  return { cognitive: 0, cyclomatic: 0, lines: 0, maxNesting: 0, parameters: 0 };
+}
 
 describe('slimImpactView', () => {
-  it('keeps the eight worst changed functions per file and counts the rest', () => {
+  test('keeps the eight worst changed functions per file and counts the rest', ({ expect }) => {
     const functions = Array.from({ length: 12 }, (_, index) => added(`f${String(index)}`, index));
     const rows = [...functions, unchanged(99)];
     const file = slimImpactView(view([analyzed('a.ts', rows)])).files[0];
-    expect(file?.status === 'analyzed' && file.functions.map((entry) => entry.name)).toEqual([
+    expect(file?.status === 'analyzed' && file.functions.map((entry) => entry.name)).toStrictEqual([
       'f11',
       'f10',
       'f9',
@@ -35,31 +32,33 @@ describe('slimImpactView', () => {
     expect(file).toMatchObject({ omittedFunctions: 4 });
   });
 
-  it('drops unchanged and out-of-diff rows, sorts removed ones last, and omits a zero count', () => {
+  test('drops unchanged and out-of-diff rows, sorts removed ones last, and omits a zero count', ({
+    expect,
+  }) => {
     const outside: FunctionImpactView = { ...added('outside', 50), inDiff: false };
     const removed: FunctionImpactView = {
       name: 'gone',
       change: 'removed',
       inDiff: true,
-      delta: zero,
-      base: { startLine: 1, endLine: 2, metrics: { ...zero, cognitive: 40 } },
+      delta: zero(),
+      base: { startLine: 1, endLine: 2, metrics: { ...zero(), cognitive: 40 } },
     };
     const rows = [removed, unchanged(7), outside, added('new', 1)];
     const file = slimImpactView(view([analyzed('a.ts', rows)])).files[0];
-    expect(file?.status === 'analyzed' && file.functions.map((entry) => entry.name)).toEqual([
+    expect(file?.status === 'analyzed' && file.functions.map((entry) => entry.name)).toStrictEqual([
       'new',
       'gone',
     ]);
     expect(file).not.toHaveProperty('omittedFunctions');
   });
 
-  it('leaves findings, totals and skipped files alone', () => {
+  test('leaves findings, totals and skipped files alone', ({ expect }) => {
     const skipped: FileImpactView = { status: 'skipped', path: 'b.bin', reason: 'binary' };
     const source = view([skipped]);
-    expect(slimImpactView(source)).toEqual(source);
+    expect(slimImpactView(source)).toStrictEqual(source);
   });
 
-  it('is much smaller than the full view for a large file', () => {
+  test('is much smaller than the full view for a large file', ({ expect }) => {
     const functions = Array.from({ length: 2000 }, (_, index) => added(`f${String(index)}`, index));
     const full = view([analyzed('big.ts', functions)]);
     expect(JSON.stringify(slimImpactView(full)).length).toBeLessThan(
@@ -73,19 +72,19 @@ function added(name: string, cognitive: number): FunctionImpactView {
     name,
     change: 'added',
     inDiff: true,
-    delta: { ...zero, cognitive },
-    head: { startLine: 1, endLine: 5, metrics: { ...zero, cognitive } },
+    delta: { ...zero(), cognitive },
+    head: { startLine: 1, endLine: 5, metrics: { ...zero(), cognitive } },
     percentile: 50,
   };
 }
 
 function unchanged(cognitive: number): FunctionImpactView {
-  const snapshot = { startLine: 1, endLine: 5, metrics: { ...zero, cognitive } };
+  const snapshot = { startLine: 1, endLine: 5, metrics: { ...zero(), cognitive } };
   return {
     name: 'unchanged',
     change: 'unchanged',
     inDiff: true,
-    delta: zero,
+    delta: zero(),
     base: snapshot,
     head: snapshot,
     percentile: 90,

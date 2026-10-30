@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
+import { writeFakeGh } from '#internal/auth/testing/write-fake-gh.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import { countingSessionDeps } from '#internal/session/testing/counting-session-deps.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
@@ -39,6 +40,7 @@ export interface FakeClaude {
  * - `services`: `createServices()`.
  * - `claudeScript` (worker): the fake `claude` script, written once.
  * - `fakeClaude`: {@link FakeClaude}.
+ * - `fakeGhScript` (worker): the fake `gh` script, written once.
  */
 export const test = baseTest
   .extend('db', ({ db }): DatabaseSync => {
@@ -70,6 +72,10 @@ export const test = baseTest
   .extend('claudeScript', { scope: 'worker' }, ({ tempRoot }): string => {
     const directory = mkdtempSync(path.join(tempRoot, 'fake-claude-'));
     return writeFakeClaude(directory);
+  })
+  .extend('fakeGhScript', { scope: 'worker' }, ({ tempRoot }): string => {
+    const directory = mkdtempSync(path.join(tempRoot, 'fake-gh-'));
+    return writeFakeGh(directory);
   })
   .extend('fakeClaude', ({ claudeScript, tempDir }): FakeClaude => {
     const home = path.join(tempDir, 'claude');

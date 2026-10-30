@@ -1,169 +1,105 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { DatabaseSync } from 'node:sqlite';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import type { EditorOpenResponse, IpcResult } from '#contract/ipc-contract.ts';
-import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/test-repository.ts';
-import type { SessionDeps } from '#internal/session/session.ts';
-import { createLogger } from '#x/log/create-logger.ts';
-import type { Result } from '#x/result/result.ts';
-import { ok } from '#x/result/ok.ts';
-import { err } from '#x/result/err.ts';
-
-import { createMainServices } from '../create-main-services.ts';
-import { openAppDatabase } from '../database/open-app-database.ts';
-import type { MainServices } from '../main-services.ts';
-
-import type { EditorPlatform } from './editor-platform.ts';
+import { test } from './testing/test.ts';
 
 /** `editor:open` through `createMainServices` with a fake platform: nothing is ever launched. */
-const settled = Promise.resolve();
-const checkoutLaunch = /worktrees.*src\/feature\.ts:3:1$/u;
-const zedCheckoutUrl = /^zed:\/\/file\/.*worktrees.*\/src\/feature\.ts:2:1$/u;
-
 describe('createEditorServices (integration: git + fake platform, no Electron)', () => {
-  let repo: TestRepository;
-  let db: DatabaseSync;
-  let services: MainServices;
-  let sessionId: string;
-  let spawned: { command: string; args: readonly string[] }[];
-  let opened: string[];
-  let installed: string[];
-  let spawnError: string | undefined;
-
-  const platform = (): EditorPlatform => ({
-    platform: 'darwin',
-    env: { PATH: '/bin', HOME: '/home/me' },
-    exists: (file) => installed.includes(file),
-    spawn: async (command, args): Promise<Result<void, string>> => {
-      spawned.push({ command, args });
-      await settled;
-      return spawnError === undefined ? ok(undefined) : err(spawnError);
-    },
-    openExternal: async (url): Promise<void> => {
-      opened.push(url);
-      await settled;
-    },
-  });
-
-  beforeEach(async () => {
-    spawned = [];
-    opened = [];
-    installed = ['/bin/zed'];
-    spawnError = undefined;
-    repo = await createTestRepository();
-    db = openAppDatabase(':memory:');
-    repo.write('app.ts', 'one\n');
-    await repo.commit('base');
-    await repo.git('switch', '--quiet', '--create', 'feature');
-    repo.write('src/feature.ts', 'a\nb\nc\n');
-    await repo.commit('add feature');
-    await repo.git('switch', '--quiet', 'main');
-    let id = 0;
-    const deps: SessionDeps = {
-      newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
-    };
-    services = createMainServices({
-      db,
-      logger: createLogger('test', { sink: (): void => undefined }),
-      deps,
-      worktreeRoot: path.join(repo.scratch(), 'worktrees'),
-      editor: { platform: platform() },
-    });
-    const created = await services.sessions.createLocal({
-      repoPath: repo.directory,
-      baseRef: 'main',
-      headRef: 'feature',
-    });
-    if (!created.ok) {
-      throw new Error('session');
-    }
-    sessionId = created.value.id;
-  });
-
-  afterEach(async () => {
-    await services.dispose();
-    db.close();
-    repo.cleanup();
-  });
-
-  const open = async (file: string, line = 2): Promise<EditorOpenResponse> => {
-    const result: IpcResult<EditorOpenResponse> = await services.editor.open({
-      sessionId,
-      path: file,
-      line,
-    });
-    if (!result.ok) {
-      throw new Error(result.error.message);
-    }
-    return result.value;
-  };
-
-  it("opens the user's working tree when it is at the session head", async () => {
+  test("opens the user's working tree when it is at the session head", async ({
+    expect,
+    openInEditor,
+    editorState,
+    repo,
+  }) => {
     await repo.git('switch', '--quiet', 'feature');
-    expect(await open('src/feature.ts')).toMatchObject({
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({
       kind: 'opened',
       editorId: 'zed',
       location: 'working-tree',
     });
-    expect(spawned).toEqual([
+    expect(editorState.spawned).toStrictEqual([
       { command: '/bin/zed', args: [`${repo.directory}/src/feature.ts:2:1`] },
     ]);
   });
 
-  it("opens beuve's head checkout when the working tree is on another commit", async () => {
-    const response = await open('src/feature.ts', 3);
+  test("opens beuve's head checkout when the working tree is on another commit", async ({
+    expect,
+    openInEditor,
+    editorState,
+    repo,
+  }) => {
+    const response = await openInEditor('src/feature.ts', 3);
     expect(response).toMatchObject({ kind: 'opened', location: 'beuve-checkout' });
-    const [launch] = spawned;
-    expect(launch?.args[0]).toMatch(checkoutLaunch);
+    const [launch] = editorState.spawned;
+    expect(launch?.args[0]).toMatch(/worktrees.*src\/feature\.ts:3:1$/u);
     expect(launch?.args[0]?.startsWith(repo.directory)).toBe(false);
   });
 
-  it('uses the checkout when the working tree file has uncommitted changes', async () => {
+  test('uses the checkout when the working tree file has uncommitted changes', async ({
+    expect,
+    openInEditor,
+    repo,
+  }) => {
     await repo.git('switch', '--quiet', 'feature');
     repo.write('src/feature.ts', 'changed\n');
-    expect(await open('src/feature.ts')).toMatchObject({ location: 'beuve-checkout' });
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({
+      location: 'beuve-checkout',
+    });
   });
 
-  it('reports a file that is not at the head', async () => {
-    expect(await open('src/missing.ts')).toMatchObject({
+  test('reports a file that is not at the head', async ({ expect, openInEditor, editorState }) => {
+    await expect(openInEditor('src/missing.ts')).resolves.toMatchObject({
       kind: 'failed',
       failure: 'file-unavailable',
     });
-    expect(spawned).toEqual([]);
+    expect(editorState.spawned).toStrictEqual([]);
   });
 
-  it('refuses a symlink that leaves the checkout', async () => {
+  test('refuses a symlink that leaves the checkout', async ({
+    expect,
+    openInEditor,
+    editorState,
+    repo,
+    tempDir,
+  }) => {
     await repo.git('switch', '--quiet', 'feature');
-    const outside = path.join(repo.scratch(), 'secret.txt');
+    const outside = path.join(tempDir, 'secret.txt');
     writeFileSync(outside, 'x');
     mkdirSync(path.join(repo.directory, 'links'));
     symlinkSync(outside, path.join(repo.directory, 'links/out.txt'));
     await repo.commit('add link');
-    expect(await open('links/out.txt')).toMatchObject({ failure: 'file-unavailable' });
-    expect(spawned).toEqual([]);
+    await expect(openInEditor('links/out.txt')).resolves.toMatchObject({
+      failure: 'file-unavailable',
+    });
+    expect(editorState.spawned).toStrictEqual([]);
   });
 
-  it('reports no editor, and a launch failure', async () => {
-    installed = [];
-    expect(await open('src/feature.ts')).toMatchObject({ failure: 'no-editor-found' });
-    installed = ['/bin/zed'];
-    spawnError = 'spawn ENOENT';
-    expect(await open('src/feature.ts')).toMatchObject({
+  test('reports no editor, and a launch failure', async ({ expect, openInEditor, editorState }) => {
+    editorState.installed = [];
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({
+      failure: 'no-editor-found',
+    });
+    editorState.installed = ['/bin/zed'];
+    editorState.spawnError = 'spawn ENOENT';
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({
       failure: 'launch-failed',
       message: expect.stringContaining('ENOENT') as string,
     });
   });
 
-  it('falls back to an installed editor, and honours the preference', async () => {
-    installed = ['/bin/code', '/bin/cursor'];
-    expect(await open('src/feature.ts')).toMatchObject({ editorId: 'vscode' });
+  test('falls back to an installed editor, and honours the preference', async ({
+    expect,
+    openInEditor,
+    editorState,
+    services,
+  }) => {
+    editorState.installed = ['/bin/code', '/bin/cursor'];
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({ editorId: 'vscode' });
     await services.editor.setPreferred({ editorId: 'cursor' });
-    expect(await open('src/feature.ts')).toMatchObject({ editorId: 'cursor' });
-    expect(spawned.at(-1)?.args[0]).toBe('--goto');
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({ editorId: 'cursor' });
+    expect(editorState.spawned.at(-1)?.args[0]).toBe('--goto');
     const settings = await services.editor.getSettings();
     expect(settings).toMatchObject({
       ok: true,
@@ -178,11 +114,18 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     });
   });
 
-  it('opens the Zed URL when only the macOS app exists', async () => {
-    installed = ['/Applications/Zed.app'];
-    expect(await open('src/feature.ts')).toMatchObject({ kind: 'opened', editorId: 'zed' });
-    expect(spawned).toEqual([]);
-    expect(opened).toHaveLength(1);
-    expect(opened[0]).toMatch(zedCheckoutUrl);
+  test('opens the Zed URL when only the macOS app exists', async ({
+    expect,
+    openInEditor,
+    editorState,
+  }) => {
+    editorState.installed = ['/Applications/Zed.app'];
+    await expect(openInEditor('src/feature.ts')).resolves.toMatchObject({
+      kind: 'opened',
+      editorId: 'zed',
+    });
+    expect(editorState.spawned).toStrictEqual([]);
+    expect(editorState.opened).toHaveLength(1);
+    expect(editorState.opened[0]).toMatch(/^zed:\/\/file\/.*worktrees.*\/src\/feature\.ts:2:1$/u);
   });
 });

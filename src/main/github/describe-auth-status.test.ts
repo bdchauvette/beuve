@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
 import { describeAuthStatus } from './describe-auth-status.ts';
+import { test } from '../testing/test.ts';
 
 describe('describeAuthStatus', () => {
-  it('names the login, provider and scopes, and a failed check', () => {
+  test('names the login, provider and scopes, and a failed check', ({ expect }) => {
     expect(
       describeAuthStatus(
         'github.com',
@@ -16,7 +17,7 @@ describe('describeAuthStatus', () => {
           account: { login: 'octocat', scopes: ['repo'], check: { kind: 'valid' } },
         }),
       ),
-    ).toEqual({
+    ).toStrictEqual({
       kind: 'signed-in',
       host: 'github.com',
       provider: 'gh-cli',
@@ -42,14 +43,14 @@ describe('describeAuthStatus', () => {
         'github.com',
         ok({ provider: 'gh-cli', host: 'github.com', account: undefined }),
       ),
-    ).toEqual({ kind: 'signed-in', host: 'github.com', provider: 'gh-cli' });
+    ).toStrictEqual({ kind: 'signed-in', host: 'github.com', provider: 'gh-cli' });
   });
 
-  it('gives the reason and remedy of a missing credential', () => {
+  test('gives the reason and remedy of a missing credential', ({ expect }) => {
     const remedy = 'gh auth login --hostname github.com';
     expect(
       describeAuthStatus('github.com', err({ kind: 'not-logged-in', host: 'github.com', remedy })),
-    ).toEqual({
+    ).toStrictEqual({
       kind: 'signed-out',
       host: 'github.com',
       reason: 'not-logged-in',

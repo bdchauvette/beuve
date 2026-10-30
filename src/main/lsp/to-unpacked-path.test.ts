@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { toUnpackedPath } from './to-unpacked-path.ts';
+import { test } from '../testing/test.ts';
 
 describe('toUnpackedPath', () => {
-  it('points a file inside app.asar at app.asar.unpacked', () => {
+  test('points a file inside app.asar at app.asar.unpacked', ({ expect }) => {
     expect(
       toUnpackedPath(
         '/Applications/beuve.app/Contents/Resources/app.asar/node_modules/typescript/lib/tsserver.js',
@@ -14,7 +15,7 @@ describe('toUnpackedPath', () => {
     );
   });
 
-  it('leaves paths outside an archive alone', () => {
+  test('leaves paths outside an archive alone', ({ expect }) => {
     expect(toUnpackedPath('/home/me/beuve/node_modules/typescript/lib/tsserver.js', '/')).toBe(
       '/home/me/beuve/node_modules/typescript/lib/tsserver.js',
     );
@@ -23,7 +24,7 @@ describe('toUnpackedPath', () => {
     );
   });
 
-  it('rewrites only the first archive segment, with the platform separator', () => {
+  test('rewrites only the first archive segment, with the platform separator', ({ expect }) => {
     expect(toUnpackedPath(String.raw`C:\beuve\resources\app.asar\x\app.asar`, '\\')).toBe(
       String.raw`C:\beuve\resources\app.asar.unpacked\x\app.asar`,
     );

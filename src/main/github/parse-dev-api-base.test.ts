@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseDevApiBase } from './parse-dev-api-base.ts';
+import { test } from '../testing/test.ts';
 
 describe('parseDevApiBase', () => {
-  it('accepts loopback http(s) roots and adds the trailing slash', () => {
+  test('accepts loopback http(s) roots and adds the trailing slash', ({ expect }) => {
     expect(parseDevApiBase('http://127.0.0.1:4010')?.href).toBe('http://127.0.0.1:4010/');
     expect(parseDevApiBase('http://localhost:4010/api/v3')?.href).toBe(
       'http://localhost:4010/api/v3/',
     );
   });
 
-  it.each([
+  test.for<string | undefined>([
     undefined,
     '',
     'https://api.github.com/',
@@ -18,7 +19,7 @@ describe('parseDevApiBase', () => {
     'http://user:pw@127.0.0.1:4010/',
     'ftp://127.0.0.1/',
     'http://127.0.0.1:4010/?x=1',
-  ])('ignores %s', (value) => {
+  ])('ignores %s', (value, { expect }) => {
     expect(parseDevApiBase(value)).toBeUndefined();
   });
 });

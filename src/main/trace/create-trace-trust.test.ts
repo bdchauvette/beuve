@@ -1,102 +1,114 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe } from 'vitest';
 
 import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
-import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/test-repository.ts';
+import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
+import type { TestRepositories } from '#internal/git/testing/test.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { test } from '../testing/test.ts';
 import { createTraceTrust } from './create-trace-trust.ts';
 
 describe('createTraceTrust', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  let directory: string;
-  let settingsPath: string;
-  beforeEach(async () => {
-    vi.useFakeTimers({
-      toFake: ['Date', 'Temporal'],
-      now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
-    });
-    repo = await createTestRepository();
-    repo.write('a.txt', 'a\n');
-    await repo.commit('first');
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-    directory = mkdtempSync(path.join(os.tmpdir(), 'beuve-trust-'));
-    settingsPath = path.join(directory, 'settings.json');
-  });
+  test(
+    'trusts nothing by default and keeps approvals in settings.json beside other keys',
+    { concurrent: false },
+    async ({ expect, clock, repositories, tempDir }) => {
+      clock.set('2026-10-28T12:00:00Z');
+      const { repo, git } = await openFirstCommit(repositories);
+      const settingsPath = path.join(tempDir, 'settings.json');
+      writeFileSync(settingsPath, JSON.stringify({ preferredEditor: 'zed' }));
+      const trust = createTraceTrust({ settingsPath });
+      await expect(trust.status(git)).resolves.toStrictEqual({
+        trusted: false,
+        repositoryPath: repo.directory,
+      });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    repo.cleanup();
-    rmSync(directory, { recursive: true, force: true });
-  });
+      await expect(trust.grant(git)).resolves.toStrictEqual({
+        trusted: true,
+        repositoryPath: repo.directory,
+      });
+      const fresh = createTraceTrust({ settingsPath });
+      await expect(fresh.status(git)).resolves.toMatchObject({ trusted: true });
+      expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toStrictEqual({
+        preferredEditor: 'zed',
+        traceTrustedRepositories: { [repo.directory]: { trustedAt: '2026-10-28T12:00:00.000Z' } },
+      });
 
-  it('trusts nothing by default and keeps approvals in settings.json beside other keys', async () => {
-    writeFileSync(settingsPath, JSON.stringify({ preferredEditor: 'zed' }));
-    const trust = createTraceTrust({ settingsPath });
-    await expect(trust.status(git)).resolves.toEqual({
-      trusted: false,
-      repositoryPath: repo.directory,
-    });
+      await expect(fresh.revoke(git)).resolves.toMatchObject({ trusted: false });
+      expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toStrictEqual({
+        preferredEditor: 'zed',
+        traceTrustedRepositories: {},
+      });
+    },
+  );
 
-    await expect(trust.grant(git)).resolves.toEqual({
-      trusted: true,
-      repositoryPath: repo.directory,
-    });
-    const fresh = createTraceTrust({ settingsPath });
-    await expect(fresh.status(git)).resolves.toMatchObject({ trusted: true });
-    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
-      preferredEditor: 'zed',
-      traceTrustedRepositories: { [repo.directory]: { trustedAt: '2026-10-28T12:00:00.000Z' } },
-    });
+  test(
+    'keys the approval by real path and withdraws it when the recorded remote is gone',
+    { concurrent: false },
+    async ({ expect, clock, repositories, tempDir }) => {
+      clock.set('2026-10-28T12:00:00Z');
+      const { repo, git } = await openFirstCommit(repositories);
+      const settingsPath = path.join(tempDir, 'settings.json');
+      await repo.git('remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+      const trust = createTraceTrust({ settingsPath });
+      await expect(trust.grant(git)).resolves.toMatchObject({
+        trusted: true,
+        remoteUrl: 'https://github.com/acme/widgets.git',
+      });
+      const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+        traceTrustedRepositories: Record<string, unknown>;
+      };
+      expect(stored.traceTrustedRepositories[repo.directory]).toStrictEqual({
+        trustedAt: '2026-10-28T12:00:00.000Z',
+        remoteUrl: 'https://github.com/acme/widgets.git',
+      });
 
-    await expect(fresh.revoke(git)).resolves.toMatchObject({ trusted: false });
-    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
-      preferredEditor: 'zed',
-      traceTrustedRepositories: {},
-    });
-  });
+      await repo.git('remote', 'set-url', 'origin', 'https://github.com/evil/widgets.git');
+      await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
+      await repo.git('remote', 'remove', 'origin');
+      await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
+    },
+  );
 
-  it('keys the approval by real path and withdraws it when the recorded remote is gone', async () => {
-    await repo.git('remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
-    const trust = createTraceTrust({ settingsPath });
-    await expect(trust.grant(git)).resolves.toMatchObject({
-      trusted: true,
-      remoteUrl: 'https://github.com/acme/widgets.git',
-    });
-    const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
-      traceTrustedRepositories: Record<string, unknown>;
-    };
-    expect(stored.traceTrustedRepositories[repo.directory]).toEqual({
-      trustedAt: '2026-10-28T12:00:00.000Z',
-      remoteUrl: 'https://github.com/acme/widgets.git',
-    });
+  test(
+    'keeps approvals in memory without a settings file and ignores malformed entries',
+    { concurrent: false },
+    async ({ expect, clock, repositories, tempDir }) => {
+      clock.set('2026-10-28T12:00:00Z');
+      const { repo, git } = await openFirstCommit(repositories);
+      const settingsPath = path.join(tempDir, 'settings.json');
+      const memory = createTraceTrust({});
+      await expect(memory.grant(git)).resolves.toMatchObject({ trusted: true });
+      await expect(memory.revoke(git)).resolves.toMatchObject({ trusted: false });
 
-    await repo.git('remote', 'set-url', 'origin', 'https://github.com/evil/widgets.git');
-    await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
-    await repo.git('remote', 'remove', 'origin');
-    await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
-  });
-
-  it('keeps approvals in memory without a settings file and ignores malformed entries', async () => {
-    const memory = createTraceTrust({});
-    await expect(memory.grant(git)).resolves.toMatchObject({ trusted: true });
-    await expect(memory.revoke(git)).resolves.toMatchObject({ trusted: false });
-
-    writeFileSync(
-      settingsPath,
-      JSON.stringify({ traceTrustedRepositories: { [repo.directory]: 'yes' } }),
-    );
-    await expect(createTraceTrust({ settingsPath }).status(git)).resolves.toMatchObject({
-      trusted: false,
-    });
-  });
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({ traceTrustedRepositories: { [repo.directory]: 'yes' } }),
+      );
+      await expect(createTraceTrust({ settingsPath }).status(git)).resolves.toMatchObject({
+        trusted: false,
+      });
+    },
+  );
 });
+
+function firstCommitTemplate(): RepositoryTemplate<undefined> {
+  return {
+    name: 'main-trace-trust: first commit',
+    build: async (repo): Promise<undefined> => {
+      repo.write('a.txt', 'a\n');
+      await repo.commit('first');
+    },
+  };
+}
+
+async function openFirstCommit(
+  repositories: TestRepositories,
+): Promise<{ readonly repo: TestRepository; readonly git: GitRepository }> {
+  const { repo } = await repositories.fromTemplate(firstCommitTemplate());
+  return { repo, git: okValueFrom(await openRepository(repo.directory)) };
+}

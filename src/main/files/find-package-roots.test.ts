@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { findPackageRoots } from './find-package-roots.ts';
+import { test } from '../testing/test.ts';
 
 describe('findPackageRoots', () => {
-  it('finds directories holding a manifest, the root as the empty string', () => {
+  test('finds directories holding a manifest, the root as the empty string', ({ expect }) => {
     expect(
       findPackageRoots([
         'package.json',
@@ -16,12 +17,12 @@ describe('findPackageRoots', () => {
         'docs/package.json.md',
         'apackage.json',
       ]),
-    ).toEqual(['', 'crates/core', 'packages/web', 'services/api', 'tools/lint']);
+    ).toStrictEqual(['', 'crates/core', 'packages/web', 'services/api', 'tools/lint']);
   });
 
-  it('ignores vendored manifests', () => {
+  test('ignores vendored manifests', ({ expect }) => {
     expect(
       findPackageRoots(['node_modules/x/package.json', 'app/vendor/y/go.mod', 'app/go.mod']),
-    ).toEqual(['app']);
+    ).toStrictEqual(['app']);
   });
 });

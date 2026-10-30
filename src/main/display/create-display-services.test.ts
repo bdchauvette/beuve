@@ -1,25 +1,20 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { createDisplayServices } from './create-display-services.ts';
+import { test } from '../testing/test.ts';
 
 describe('createDisplayServices', () => {
-  let directory: string;
-  beforeEach(() => {
-    directory = mkdtempSync(path.join(os.tmpdir(), 'beuve-display-'));
-  });
-  afterEach(() => {
-    rmSync(directory, { recursive: true, force: true });
-  });
-
-  it('defaults to split, whitespace shown, the sidebar right and generated files collapsed, and persists changes beside other keys', async () => {
-    const file = path.join(directory, 'settings.json');
+  test('defaults to split, whitespace shown, the sidebar right and generated files collapsed, and persists changes beside other keys', async ({
+    expect,
+    tempDir,
+  }) => {
+    const file = path.join(tempDir, 'settings.json');
     writeFileSync(file, JSON.stringify({ preferredEditor: 'zed', diffLayout: 'diagonal' }));
     const display = createDisplayServices(file);
-    expect(await display.get()).toEqual({
+    await expect(display.get()).resolves.toStrictEqual({
       ok: true,
       value: {
         layout: 'split',
@@ -28,7 +23,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
       },
     });
-    expect(await display.set({ layout: 'unified' })).toEqual({
+    await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
       ok: true,
       value: {
         layout: 'unified',
@@ -40,14 +35,14 @@ describe('createDisplayServices', () => {
     await display.set({ ignoreWhitespace: true });
     await display.set({ sidebarSide: 'left' });
     await display.set({ showGenerated: true });
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
       ignoreWhitespace: true,
       sidebarSide: 'left',
       showGenerated: true,
     });
-    expect(await createDisplayServices(file).get()).toEqual({
+    await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
       value: {
         layout: 'unified',
@@ -58,10 +53,10 @@ describe('createDisplayServices', () => {
     });
   });
 
-  it('remembers in memory without a file', async () => {
+  test('remembers in memory without a file', async ({ expect }) => {
     const display = createDisplayServices();
     await display.set({ ignoreWhitespace: true });
-    expect(await display.get()).toEqual({
+    await expect(display.get()).resolves.toStrictEqual({
       ok: true,
       value: {
         layout: 'split',

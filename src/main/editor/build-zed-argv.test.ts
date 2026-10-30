@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { buildZedArgv } from './build-zed-argv.ts';
+import { test } from '../testing/test.ts';
 
 describe('buildZedArgv', () => {
-  it('passes path:line:column as one argument, spaces intact', () => {
-    expect(buildZedArgv('/repo/my dir/a.ts', 42, 10)).toEqual(['/repo/my dir/a.ts:42:10']);
+  test('passes path:line:column as one argument, spaces intact', ({ expect }) => {
+    expect(buildZedArgv('/repo/my dir/a.ts', 42, 10)).toStrictEqual(['/repo/my dir/a.ts:42:10']);
   });
 });

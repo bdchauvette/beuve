@@ -1,38 +1,41 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
 import { parseUnifiedDiff } from '#internal/git/parse-unified-diff.ts';
 
 import { toChangedLines } from './to-changed-lines.ts';
+import { test } from '../testing/test.ts';
 
-const patch = [
-  'diff --git a/a.ts b/a.ts',
-  'index 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 100644',
-  '--- a/a.ts',
-  '+++ b/a.ts',
-  '@@ -1,6 +1,5 @@',
-  ' one',
-  '-two',
-  '-three',
-  '+TWO',
-  ' four',
-  '+four and a half',
-  ' five',
-  '-six',
-  '@@ -20,2 +19,4 @@',
-  ' twenty',
-  '+twenty-one',
-  '+twenty-two',
-  ' twenty-three',
-  '',
-].join('\n');
+function patch(): string {
+  return [
+    'diff --git a/a.ts b/a.ts',
+    'index 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 100644',
+    '--- a/a.ts',
+    '+++ b/a.ts',
+    '@@ -1,6 +1,5 @@',
+    ' one',
+    '-two',
+    '-three',
+    '+TWO',
+    ' four',
+    '+four and a half',
+    ' five',
+    '-six',
+    '@@ -20,2 +19,4 @@',
+    ' twenty',
+    '+twenty-one',
+    '+twenty-two',
+    ' twenty-three',
+    '',
+  ].join('\n');
+}
 
 describe('toChangedLines', () => {
-  it('merges removed lines by base number and added lines by head number into runs', () => {
-    const parsed = parseUnifiedDiff(patch);
-    if (!parsed.ok || parsed.value[0] === undefined) {
-      throw new Error('fixture does not parse');
-    }
-    expect(toChangedLines(parsed.value[0])).toEqual({
+  test('merges removed lines by base number and added lines by head number into runs', ({
+    expect,
+  }) => {
+    const [file] = okValueFrom(parseUnifiedDiff(patch()));
+    expect(toChangedLines(file ?? { hunks: [] })).toStrictEqual({
       base: [
         { start: 2, end: 3 },
         { start: 6, end: 6 },
@@ -45,7 +48,7 @@ describe('toChangedLines', () => {
     });
   });
 
-  it('is empty for a file without hunks', () => {
-    expect(toChangedLines({ hunks: [] })).toEqual({ base: [], head: [] });
+  test('is empty for a file without hunks', ({ expect }) => {
+    expect(toChangedLines({ hunks: [] })).toStrictEqual({ base: [], head: [] });
   });
 });

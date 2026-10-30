@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { appMigrations } from './app-migrations.ts';
 import { openAppDatabase } from './open-app-database.ts';
-
-const sessionMigration = /^session-/u;
+import { test } from '../testing/test.ts';
 
 describe('openAppDatabase', () => {
-  it('applies every migration in order, session before ura and chat, with foreign keys on', () => {
+  test('applies every migration in order, session before ura and chat, with foreign keys on', ({
+    expect,
+  }) => {
     const db = openAppDatabase(':memory:');
     const applied = db.prepare('SELECT id FROM schema_migrations ORDER BY rowid;').all();
-    expect(applied.map((row) => row['id'])).toEqual(appMigrations.map(({ id }) => id));
-    expect(appMigrations[0]?.id).toMatch(sessionMigration);
+    expect(applied.map((row) => row['id'])).toStrictEqual(appMigrations.map(({ id }) => id));
+    expect(appMigrations[0]?.id).toMatch(/^session-/u);
     const ids = appMigrations.map(({ id }) => id);
     expect(ids.findIndex((id) => id.startsWith('ura-'))).toBeGreaterThan(
       ids.findLastIndex((id) => id.startsWith('session-')),
@@ -20,22 +21,24 @@ describe('openAppDatabase', () => {
     );
     expect(
       db.prepare("SELECT name FROM sqlite_schema WHERE name = 'chat_messages';").get(),
-    ).toEqual({
+    ).toMatchObject({
       name: 'chat_messages',
     });
-    expect(db.prepare("SELECT name FROM sqlite_schema WHERE name = 'ura_items';").get()).toEqual({
+    expect(
+      db.prepare("SELECT name FROM sqlite_schema WHERE name = 'ura_items';").get(),
+    ).toMatchObject({
       name: 'ura_items',
     });
     expect(
       db.prepare("SELECT name FROM sqlite_schema WHERE name = 'agent_insights';").get(),
     ).toBeUndefined();
-    expect(db.prepare('PRAGMA foreign_keys;').get()).toEqual({ foreign_keys: 1 });
+    expect(db.prepare('PRAGMA foreign_keys;').get()).toMatchObject({ foreign_keys: 1 });
     db.close();
   });
 
-  it('closes the database and rethrows when a migration fails', () => {
+  test('closes the database and rethrows when a migration fails', ({ expect }) => {
     expect(() =>
       openAppDatabase(':memory:', [...appMigrations, { id: 'broken', up: 'NOT SQL;' }]),
-    ).toThrow();
+    ).toThrow('syntax error');
   });
 });

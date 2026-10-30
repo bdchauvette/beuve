@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { findMatchingRemote } from './find-matching-remote.ts';
+import { test } from '../testing/test.ts';
 
 describe('findMatchingRemote', () => {
   const repository = { host: 'github.com', owner: 'Octo-Org', repo: 'hello-world' };
 
-  it('finds the remote for the repository whatever the URL form and case', () => {
+  test('finds the remote for the repository whatever the URL form and case', ({ expect }) => {
     expect(
       findMatchingRemote(
         [
@@ -14,10 +15,10 @@ describe('findMatchingRemote', () => {
         ],
         repository,
       ),
-    ).toEqual({ name: 'upstream', url: 'ssh://git@github.com/octo-org/Hello-World.git' });
+    ).toStrictEqual({ name: 'upstream', url: 'ssh://git@github.com/octo-org/Hello-World.git' });
   });
 
-  it('ignores other hosts and local paths', () => {
+  test('ignores other hosts and local paths', ({ expect }) => {
     expect(
       findMatchingRemote(
         [
