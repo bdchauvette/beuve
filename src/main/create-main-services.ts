@@ -45,6 +45,7 @@ import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { readClaudeStatus } from './chat/read-claude-status.ts';
+import { createClaudeCodeVersionCheck } from './models/create-claude-code-version-check.ts';
 import { createModelRegistryStore } from './models/create-model-registry-store.ts';
 import { createModelServices } from './models/create-model-services.ts';
 import { createSecretStore } from './models/create-secret-store.ts';
@@ -207,6 +208,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       secrets,
       claude: options.claude ?? {},
       logger,
+      checkClaudeCodeVersion: createClaudeCodeVersionCheck(),
       ...(options.models?.bundledClaudeCodePath !== undefined && {
         bundledClaudeCodePath: options.models.bundledClaudeCodePath,
       }),

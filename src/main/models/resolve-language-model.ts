@@ -18,6 +18,7 @@ import type { Result } from '#x/result/result.ts';
 import type { ClaudeCodeSettings } from '../chat/claude-code-settings.ts';
 import { resolveClaudeCommand } from '../chat/resolve-claude-command.ts';
 import { checkClaudeCodeVersion } from './check-claude-code-version.ts';
+import type { ClaudeCodeVersionCheck } from './create-claude-code-version-check.ts';
 import type { ModelRegistryStore } from './create-model-registry-store.ts';
 import type { SecretStore } from './create-secret-store.ts';
 import type { ModelEntry } from './model-registry.ts';
@@ -37,6 +38,11 @@ export interface ModelResolverDeps {
     readonly inheritedEnv?: Readonly<Record<string, string | undefined>>;
   };
   readonly logger: Logger;
+  /**
+   * Checks an installed `claude` for the Agent SDK; main passes one that remembers the answer per
+   * executable (`createClaudeCodeVersionCheck`). Defaults to checking on every request.
+   */
+  readonly checkClaudeCodeVersion?: ClaudeCodeVersionCheck;
 }
 
 /** A built adapter, the entry it came from, and the name progress lines give it. */
@@ -58,7 +64,8 @@ const defaultOpenAiContextWindow = 32_768;
  * (ADR 0070): the entry's kind picks the adapter, its settings and capabilities configure it,
  * and its key comes from the secret store. A Claude Code CLI entry finds `claude` as the chat
  * always has (ADR 0022). An Agent SDK entry runs the bundled binary, or the installed `claude`
- * (its path, or found the same way) after checking it is at least the SDK's pinned version.
+ * (its path, or found the same way) after checking it is at least the SDK's pinned version
+ * (once per executable when `deps.checkClaudeCodeVersion` caches).
  * Expected failures are the model port's errors, so the chat reports them like a run's.
  */
 export async function resolveLanguageModel(
@@ -87,7 +94,8 @@ export async function resolveLanguageModel(
         if (!command.ok) {
           return command;
         }
-        const version = await checkClaudeCodeVersion(command.value, deps.claude.leadingArgs);
+        const check = deps.checkClaudeCodeVersion ?? checkClaudeCodeVersion;
+        const version = await check(command.value, deps.claude.leadingArgs);
         if (!version.ok) {
           return version;
         }
