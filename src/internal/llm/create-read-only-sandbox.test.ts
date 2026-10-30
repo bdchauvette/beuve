@@ -146,7 +146,7 @@ describe('createReadOnlySandbox', () => {
     });
   });
 
-  test('refuses unknown tools and rejects bad arguments',async ({ expect, tempDir }) => {
+  test('refuses unknown tools and rejects bad arguments', async ({ expect, tempDir }) => {
     const sandbox = createReadOnlySandbox(worktree(tempDir));
     await expect(sandbox.run('write_file', '{}')).resolves.toStrictEqual({
       output: 'refused: there is no tool named write_file',

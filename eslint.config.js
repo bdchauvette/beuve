@@ -119,6 +119,8 @@ export default defineConfig(
       'unicorn/prefer-iterator-zip': 'off',
       'unicorn/prefer-error-is-error': 'error',
       'e18e/prefer-get-or-insert': 'error',
+      'unicorn/prefer-uint8array-base64': 'error',
+      'unicorn/prefer-uint8array-hex': 'error',
       'unicorn/prefer-regexp-escape': 'error',
     },
   },

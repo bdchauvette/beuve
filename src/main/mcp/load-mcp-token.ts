@@ -22,7 +22,7 @@ async function readOrCreate(file: string): Promise<string> {
     await chmod(file, 0o600);
     return existing;
   }
-  const token = randomBytes(32).toString('base64url');
+  const token = randomBytes(32).toBase64({ alphabet: 'base64url', omitPadding: true });
   await writeFile(file, `${token}\n`, { mode: 0o600 });
   await chmod(file, 0o600);
   return token;

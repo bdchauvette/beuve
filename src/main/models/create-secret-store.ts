@@ -75,7 +75,7 @@ export function createSecretStore(options: {
         return undefined;
       }
       try {
-        return await cipher.decrypt(Buffer.from(stored, 'base64'));
+        return await cipher.decrypt(Buffer.from(Uint8Array.fromBase64(stored)));
       } catch {
         return undefined;
       }
@@ -85,7 +85,7 @@ export function createSecretStore(options: {
         return err('API keys cannot be stored: no system keychain or keyring is available.');
       }
       const bytes = await cipher.encrypt(secret);
-      const encrypted = bytes.toString('base64');
+      const encrypted = bytes.toBase64();
       await change((secrets) => ({ ...secrets, [ref]: encrypted }));
       return ok(undefined);
     },

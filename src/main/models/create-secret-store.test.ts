@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -34,6 +34,17 @@ describe('createSecretStore', () => {
     await expect(reopened.has('model:a')).resolves.toBe(false);
     await expect(reopened.get('model:b')).resolves.toBe('sk-SECRET-2');
     await expect(reopened.status()).resolves.toBe('os');
+  });
+
+  test('treats a corrupted ciphertext as no key', async ({ expect, tempDir }) => {
+    const filePath = path.join(tempDir, 'secrets.json');
+    const store = createSecretStore({ filePath, cipher: createFakeCipher() });
+    await store.set('model:a', 'sk-SECRET-1');
+    const stored = readFileSync(filePath, 'utf8');
+    writeFileSync(filePath, stored.replace(/"model:a": ?"[^"]*"/u, '"model:a":"%%not base64%%"'));
+
+    await expect(store.has('model:a')).resolves.toBe(true);
+    await expect(store.get('model:a')).resolves.toBeUndefined();
   });
 
   test('keeps concurrent writes', async ({ expect, tempDir }) => {
