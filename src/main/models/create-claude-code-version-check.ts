@@ -29,8 +29,7 @@ export function createClaudeCodeVersionCheck(
       return check(command, leadingArgs);
     }
     const key = JSON.stringify([command, leadingArgs, identity]);
-    const running = checked.get(key) ?? check(command, leadingArgs);
-    checked.set(key, running);
+    const running = checked.getOrInsertComputed(key, async () => await check(command, leadingArgs));
     const result = await running;
     if (!result.ok && result.error.kind === 'not-installed') {
       checked.delete(key);

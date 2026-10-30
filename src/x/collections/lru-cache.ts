@@ -41,6 +41,16 @@ export class LruCache<K, V> {
     return this;
   }
 
+  /** Returns the entry for `key`, computing and storing `compute()` only when it is missing. */
+  getOrInsertComputed(key: K, compute: () => V): V {
+    if (this.#entries.has(key)) {
+      return this.get(key) as V;
+    }
+    const value = compute();
+    this.set(key, value);
+    return value;
+  }
+
   has(key: K): boolean {
     return this.#entries.has(key);
   }

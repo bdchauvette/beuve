@@ -131,12 +131,9 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     getImpact,
     getImpactForRenderer: async (request): Promise<IpcResult<ImpactView>> => {
       const full = await getImpact(request);
-      if (!full.ok) {
-        return full;
-      }
-      const cached = slimmed.get(full.value) ?? slimImpactView(full.value);
-      slimmed.set(full.value, cached);
-      return ok(cached);
+      return full.ok
+        ? ok(slimmed.getOrInsertComputed(full.value, () => slimImpactView(full.value)))
+        : full;
     },
     observeHead: (sessionId, headSha): void => {
       lastObserved.set(sessionId, { sequence: ++observations, headSha });

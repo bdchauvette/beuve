@@ -29,6 +29,26 @@ describe('LruCache', () => {
     expect(cache.get('a')).toBeUndefined();
   });
 
+  test('computes a missing entry once and counts a hit as a use', ({ expect }) => {
+    const cache = new LruCache<string, number>(2);
+    const calls: string[] = [];
+    const compute = (key: string, value: number): (() => number) => {
+      return (): number => {
+        calls.push(key);
+        return value;
+      };
+    };
+
+    expect(cache.getOrInsertComputed('a', compute('a', 1))).toBe(1);
+    expect(cache.getOrInsertComputed('b', compute('b', 2))).toBe(2);
+    expect(cache.getOrInsertComputed('a', compute('a', 9))).toBe(1);
+    cache.set('c', 3);
+
+    expect(calls).toStrictEqual(['a', 'b']);
+    expect(cache.has('b')).toBe(false);
+    expect(cache.has('a')).toBe(true);
+  });
+
   test('deletes and clears', ({ expect }) => {
     const cache = new LruCache<string, number>(3);
     cache.set('a', 1).set('b', 2);

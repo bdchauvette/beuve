@@ -34,8 +34,7 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
   const open = new Map<string, Set<BrowserWindow>>();
   return {
     open: (request): void => {
-      const siblings = open.get(request.sessionId) ?? new Set<BrowserWindow>();
-      open.set(request.sessionId, siblings);
+      const siblings = open.getOrInsertComputed(request.sessionId, () => new Set<BrowserWindow>());
       const near = BrowserWindow.getFocusedWindow()?.getBounds();
       const display =
         near === undefined ? screen.getPrimaryDisplay() : screen.getDisplayMatching(near);

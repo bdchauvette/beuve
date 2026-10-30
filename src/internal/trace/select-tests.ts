@@ -95,9 +95,7 @@ function importDistances(
   const importers = new Map<string, string[]>();
   for (const [file, targets] of imports) {
     for (const target of targets) {
-      const list = importers.get(target) ?? [];
-      list.push(file);
-      importers.set(target, list);
+      importers.getOrInsertComputed(target, () => []).push(file);
     }
   }
   const distances = new Map<string, number>([[changedPath, 0]]);

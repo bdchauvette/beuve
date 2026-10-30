@@ -31,9 +31,7 @@ export function matchFunctions(
     if (matchedNames.has(measurement.name) || measurement.bodyLength < minRenameBodyLength) {
       continue;
     }
-    const bucket = unmatchedBodies.get(measurement.bodyHash) ?? [];
-    bucket.push(measurement);
-    unmatchedBodies.set(measurement.bodyHash, bucket);
+    unmatchedBodies.getOrInsertComputed(measurement.bodyHash, () => []).push(measurement);
   }
   const renamedFrom = new Set<FunctionMeasurement>();
   const pairs: FunctionPair[] = head.map((measurement): FunctionPair => {

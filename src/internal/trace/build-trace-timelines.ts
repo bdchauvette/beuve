@@ -31,10 +31,9 @@ export function buildTraceTimelines(
     const file = record.test?.file ?? '';
     const titles = record.test?.titles ?? [];
     const key = keyOf(file, titles);
-    const group = groups.get(key) ?? { file, titles, events: [], dropped: 0 };
+    const group = groups.getOrInsertComputed(key, () => ({ file, titles, events: [], dropped: 0 }));
     group.events.push(...record.events);
     group.dropped += record.dropped;
-    groups.set(key, group);
   }
   const timelines: TraceTimeline[] = [];
   for (const outcome of outcomes) {

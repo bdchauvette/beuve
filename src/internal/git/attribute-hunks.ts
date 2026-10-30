@@ -34,13 +34,12 @@ export function attributeHunks(
     for (const file of commit.files) {
       const path = newSidePath(file);
       touchedPaths[index]?.add(path);
-      const keys = own.get(path) ?? new Set<number>();
+      const keys = own.getOrInsertComputed(path, () => new Set<number>());
       for (const hunk of file.hunks) {
         for (const key of hunkKeys(hunk)) {
           keys.add(key);
         }
       }
-      own.set(path, keys);
     }
     touches[index] = own;
   }
@@ -112,11 +111,10 @@ function oldSidePath(file: DiffFile): string | undefined {
 }
 
 function merge(target: Map<string, Set<number>>, path: string, keys: Iterable<number>): void {
-  const existing = target.get(path) ?? new Set<number>();
+  const existing = target.getOrInsertComputed(path, () => new Set<number>());
   for (const key of keys) {
     existing.add(key);
   }
-  target.set(path, existing);
 }
 
 /**

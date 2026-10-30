@@ -15,8 +15,7 @@ export function chatTextFrom(parts: readonly ChatPart[]): string {
       text += part.text;
     } else if (part.kind === 'mention') {
       const key = mentionKeyOf(part.mention);
-      const number = numbers.get(key) ?? numbers.size + 1;
-      numbers.set(key, number);
+      const number = numbers.getOrInsertComputed(key, () => numbers.size + 1);
       text += `[[@${String(number)}]]`;
     }
   }
