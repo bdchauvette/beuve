@@ -64,7 +64,7 @@ export function measureFunctions(root: ImpactNode, rules: LanguageRules): Source
     }
   }
   return {
-    functions: deduplicate(tallies.map((tally) => toMeasurement(tally))),
+    functions: deduplicate(tallies.map((tally) => measurementFrom(tally))),
     parseErrors: root.hasError,
   };
 }
@@ -252,7 +252,7 @@ function isSelfCall(
   );
 }
 
-function toMeasurement(tally: Tally): FunctionMeasurement {
+function measurementFrom(tally: Tally): FunctionMeasurement {
   const { node, rule } = tally;
   const startLine = node.startPosition.row + 1;
   const endLine = node.endPosition.row + 1;

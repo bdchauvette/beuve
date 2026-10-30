@@ -50,17 +50,17 @@ import { planEditorLine } from './plan-editor-line.ts';
 import type { SelectedLines } from './plan-stage-anchor.ts';
 import { splitPatch } from './split-patch.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
-import { toHeadSideAnnotations } from './to-head-side-annotations.ts';
-import { toTextmateTheme } from './to-textmate-theme.ts';
-import type { TextmateTheme } from './to-textmate-theme.ts';
+import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
+import { textmateThemeFrom } from './textmate-theme-from.ts';
+import type { TextmateTheme } from './textmate-theme-from.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
-import { toUraMarkers } from './to-ura-markers.ts';
+import { uraMarkersFrom } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
 import { createInsightElement } from './create-insight-element.ts';
 import { describeInsightCount } from './describe-insight-count.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { planInsightMarks } from './plan-insight-marks.ts';
-import { toInsightMarkCss } from './to-insight-mark-css.ts';
+import { insightMarkCssFrom } from './insight-mark-css-from.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -808,7 +808,7 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = toHeadSideAnnotations(this.file?.hunks ?? [], this.notes());
+    const annotations = headSideAnnotationsFrom(this.file?.hunks ?? [], this.notes());
     const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'insights', 'composer'].some(
       (key) => changed.has(key as keyof BeuveFileCard),
     );
@@ -846,7 +846,7 @@ export class BeuveFileCard extends LitElement {
         ? { lineStart: composer.anchor.startLine, lineEnd: composer.anchor.endLine }
         : { lineStart: 0, lineEnd: 0 };
     return [
-      ...toUraMarkers(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => ({
+      ...uraMarkersFrom(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => ({
         lineStart,
         lineEnd,
         note: { kind: 'ura', item },
@@ -985,7 +985,7 @@ export class BeuveFileCard extends LitElement {
     if (root === undefined || root === null) {
       return;
     }
-    const css = toInsightMarkCss(
+    const css = insightMarkCssFrom(
       this.diffStyle,
       planInsightMarks(this.file?.hunks ?? [], this.insights),
     );
@@ -1286,7 +1286,7 @@ export class BeuveFileCard extends LitElement {
 
   private renderFallback(file: DiffFileView): TemplateResult {
     const path = file.path;
-    return html`${toUraMarkers(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
+    return html`${uraMarkersFrom(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
       ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
@@ -1569,7 +1569,7 @@ ${splitPatch(file.patch).map(
     }
     const { file, library } = this;
     this.metadata =
-      file === undefined || library === undefined ? undefined : toMetadata(library, file);
+      file === undefined || library === undefined ? undefined : metadataFrom(library, file);
     this.isFallback = false;
   }
 
@@ -1749,13 +1749,13 @@ function registerThemes(library: typeof Diffs): void {
     const name = themeNames[type];
     // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
     library.registerCustomTheme(name, async (): Promise<TextmateTheme> =>
-      toTextmateTheme(name, type, syntaxPalettes[type]),
+      textmateThemeFrom(name, type, syntaxPalettes[type]),
     );
   }
 }
 
 /** Parses the patch, keyed by its blobs and hunks, and turns highlighting off for languages beuve doesn't ship. */
-function toMetadata(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {
+function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {
   // The hunks tell apart diffs of the same blobs: a whitespace-ignoring variant, or an interdiff.
   const hunks = file.hunks.map((hunk) => hunk.header).join('\n');
   const cacheKey = [file.path, file.oldBlobSha ?? '', file.newBlobSha ?? '', hunks].join('\0');

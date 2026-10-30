@@ -3,7 +3,7 @@ import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { rowToUraItem } from './row-to-ura-item.ts';
+import { uraItemFromRow } from './ura-item-from-row.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
@@ -30,5 +30,5 @@ export function findUraItemByOrigin(
       )
       .get(item.sessionId, item.headSha, item.anchor.path, origin.metric, origin.functionName);
   }
-  return row === undefined ? ok(undefined) : rowToUraItem(row);
+  return row === undefined ? ok(undefined) : uraItemFromRow(row);
 }

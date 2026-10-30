@@ -136,7 +136,7 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
     return json(404, { message: 'Not Found' });
   }
   if (third === undefined && pull !== undefined && request.method === 'GET') {
-    return conditional(request, toGithubPull(api, pull));
+    return conditional(request, githubPullFrom(api, pull));
   }
   if (third === 'reviews' && pull !== undefined && request.method === 'POST') {
     return review(api, pull, token, request.body);
@@ -169,7 +169,7 @@ function listPulls(api: FakeGithubApi, query: URLSearchParams): unknown[] {
       (head === null || head === `${api.owner}:${pull.headRef}`) &&
       (base === null || base === pull.baseRef);
     if (isListed) {
-      listed.push(toGithubPull(api, pull));
+      listed.push(githubPullFrom(api, pull));
     }
   }
   return listed;
@@ -216,7 +216,7 @@ function review(
   });
 }
 
-function toGithubPull(api: FakeGithubApi, pull: FakePullRequest): Record<string, unknown> {
+function githubPullFrom(api: FakeGithubApi, pull: FakePullRequest): Record<string, unknown> {
   const repository = {
     name: api.repo,
     full_name: `${api.owner}/${api.repo}`,

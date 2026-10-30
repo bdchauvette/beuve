@@ -36,7 +36,7 @@ export interface ChatQuestion {
   readonly selections?: readonly ChatSelection[];
   /** The latest `/compact` summary (ADR 0047); `history` then holds only the turns after it. */
   readonly summary?: string;
-  /** Earlier turns of this session's transcript, oldest first (see `toChatHistory`). */
+  /** Earlier turns of this session's transcript, oldest first (see `chatHistoryFrom`). */
   readonly history?: readonly ChatTurn[];
   /**
    * Repository-relative paths that exist at the head (e.g. `git ls-files`), so answers may cite

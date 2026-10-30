@@ -129,14 +129,14 @@ export function createFileServices(options: FileServicesOptions): FileServices {
       if (!read.ok && read.error.kind !== 'unsupported-git-version') {
         return gitFailure(context.logger, read.error);
       }
-      const lists = toAttributeLists(read.ok ? read.value : new Map());
+      const lists = attributeListsFrom(read.ok ? read.value : new Map());
       attributes.set(key, lists);
       return ok({ sessionId, headSha: session.headSha, ...lists });
     },
   };
 }
 
-function toAttributeLists(read: ReadonlyMap<string, DiffAttributes>): AttributeLists {
+function attributeListsFrom(read: ReadonlyMap<string, DiffAttributes>): AttributeLists {
   const entries = [...read];
   const where = (isListed: (value: DiffAttributes) => boolean): string[] =>
     entries.filter(([, value]) => isListed(value)).map(([path]) => path);

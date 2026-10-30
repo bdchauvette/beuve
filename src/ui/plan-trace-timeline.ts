@@ -40,7 +40,7 @@ const maxArgsChars = 140;
 /** Groups a probe's timelines per test case and renders each step as a row. Pure. */
 export function planTraceTimeline(result: TraceResultView): TraceCase[] {
   return result.timelines.map((timeline, index) => {
-    const rows = timeline.entries.map((entry) => toRow(entry, result));
+    const rows = timeline.entries.map((entry) => rowFrom(entry, result));
     return {
       key: `${String(index)}:${timeline.file}:${timeline.titles.join('\0')}`,
       title: timeline.titles.length === 0 ? 'Outside any test' : timeline.titles.join(' › '),
@@ -54,7 +54,7 @@ export function planTraceTimeline(result: TraceResultView): TraceCase[] {
   });
 }
 
-function toRow(entry: TraceEntryView, result: TraceResultView): TraceRow {
+function rowFrom(entry: TraceEntryView, result: TraceResultView): TraceRow {
   const base = { seq: entry.seq, depth: entry.depth, line: entry.line, inHunk: entry.inHunk };
   switch (entry.kind) {
     case 'enter': {
@@ -68,7 +68,7 @@ function toRow(entry: TraceEntryView, result: TraceResultView): TraceRow {
       };
     }
     case 'branch': {
-      return { ...base, ...toBranch(entry) };
+      return { ...base, ...branchFrom(entry) };
     }
     case 'loop': {
       const times = `${String(entry.iterations)} ${entry.iterations === 1 ? 'iteration' : 'iterations'}`;
@@ -95,7 +95,7 @@ function toRow(entry: TraceEntryView, result: TraceResultView): TraceRow {
   }
 }
 
-function toBranch(
+function branchFrom(
   entry: Extract<TraceEntryView, { kind: 'branch' }>,
 ): Pick<TraceRow, 'tag' | 'text' | 'result' | 'tone'> {
   switch (entry.construct) {

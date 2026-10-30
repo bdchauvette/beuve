@@ -37,7 +37,7 @@ const defaults: DiffDisplayView = {
 export function createDisplayServices(filePath?: string): DisplayServices {
   let remembered = defaults;
   const read = async (): Promise<DiffDisplayView> =>
-    filePath === undefined ? remembered : toDisplay(await readSettingsFile(filePath));
+    filePath === undefined ? remembered : displayFrom(await readSettingsFile(filePath));
   return {
     get: async (): Promise<IpcResult<DiffDisplayView>> => ok(await read()),
     set: async (request): Promise<IpcResult<DiffDisplayView>> => {
@@ -58,7 +58,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
   };
 }
 
-function toDisplay(settings: Readonly<Record<string, unknown>>): DiffDisplayView {
+function displayFrom(settings: Readonly<Record<string, unknown>>): DiffDisplayView {
   const layout = settings['diffLayout'];
   const ignoreWhitespace = settings['ignoreWhitespace'];
   const sidebarSide = settings['sidebarSide'];

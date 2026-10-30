@@ -34,10 +34,10 @@ export function findStoredPullRequest(
         WHERE host = ? AND owner = ? AND repo = ? AND number = ?;`,
     )
     .get(ref.host, ref.owner, ref.repo, ref.number);
-  return row === undefined ? ok(undefined) : rowToStoredPullRequest(row, ref);
+  return row === undefined ? ok(undefined) : storedPullRequestFromRow(row, ref);
 }
 
-function rowToStoredPullRequest(
+function storedPullRequestFromRow(
   row: Row,
   ref: PullRequestRef,
 ): Result<StoredPullRequest, CorruptPullRequestRow> {

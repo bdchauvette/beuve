@@ -42,8 +42,8 @@ export const pullRequestSchema = z
     mergeable_state: z.string().optional(),
   })
   .transform((raw): PullRequest => {
-    const base = toTip(raw.base);
-    const head = toTip(raw.head);
+    const base = tipFrom(raw.base);
+    const head = tipFrom(raw.head);
     return {
       number: raw.number,
       title: raw.title,
@@ -64,7 +64,7 @@ export const pullRequestSchema = z
     };
   });
 
-function toTip(raw: z.infer<typeof branchSchema>): BranchTip {
+function tipFrom(raw: z.infer<typeof branchSchema>): BranchTip {
   return {
     ref: raw.ref,
     sha: raw.sha,

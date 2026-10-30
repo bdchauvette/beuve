@@ -19,7 +19,7 @@ import type {
 import { normalizeUri } from './normalize-uri.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import { symbolKindName } from './symbol-kind-name.ts';
-import { toFileReference } from './to-file-reference.ts';
+import { fileReferenceFrom } from './file-reference-from.ts';
 import { positionEncodings } from './position-encodings.ts';
 
 export interface ViewMapperContext {
@@ -60,7 +60,7 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
     );
 
   const location = (value: LspLocation): LocationView => ({
-    file: toFileReference(context.root, value.uri),
+    file: fileReferenceFrom(context.root, value.uri),
     range: range(value.uri, value.range),
   });
 
@@ -95,7 +95,7 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
       name: item.name,
       kind: symbolKindName(item.kind),
       detail: item.detail === '' ? undefined : item.detail,
-      file: toFileReference(context.root, item.uri),
+      file: fileReferenceFrom(context.root, item.uri),
       range: range(item.uri, item.range),
       selectionRange: range(item.uri, item.selectionRange),
     }),

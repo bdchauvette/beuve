@@ -114,22 +114,22 @@ export function buildAgentReview(artifact: UraArtifact): AgentReview {
     verdict: artifact.verdict.value,
     verdictSource: artifact.verdict.source,
     counts: countUraSeverities(artifact.entries),
-    items: artifact.entries.map((entry) => toItem(entry)),
+    items: artifact.entries.map((entry) => itemFrom(entry)),
   };
 }
 
-function toItem({ item, placement }: UraEntry): AgentReviewItem {
+function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
   return {
     id: item.id,
     severity: item.severity,
-    origin: toOrigin(item.origin),
+    origin: originFrom(item.origin),
     ...(placement.kind === 'current'
-      ? { anchor: toAnchor(placement.anchor) }
+      ? { anchor: anchorFrom(placement.anchor) }
       : {
           outdated: {
             reason: placement.reason,
             writtenAgainstSha: item.headSha,
-            originalAnchor: toAnchor(item.anchor),
+            originalAnchor: anchorFrom(item.anchor),
           },
         }),
     title: item.title,
@@ -138,7 +138,7 @@ function toItem({ item, placement }: UraEntry): AgentReviewItem {
   };
 }
 
-function toAnchor(anchor: UraAnchor): AgentReviewAnchor {
+function anchorFrom(anchor: UraAnchor): AgentReviewAnchor {
   switch (anchor.kind) {
     case 'lines': {
       const { path, startLine, endLine } = anchor;
@@ -153,7 +153,7 @@ function toAnchor(anchor: UraAnchor): AgentReviewAnchor {
   }
 }
 
-function toOrigin(origin: UraOrigin): AgentReviewOrigin {
+function originFrom(origin: UraOrigin): AgentReviewOrigin {
   switch (origin.kind) {
     case 'human': {
       return { kind: 'human' };

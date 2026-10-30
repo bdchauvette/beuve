@@ -23,7 +23,7 @@ import type { RangeDiff } from './load-review-diff.ts';
 import { markReviewed } from './mark-reviewed.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
-import { toSessionSummary } from './to-session-summary.ts';
+import { sessionSummaryFrom } from './session-summary-from.ts';
 
 export interface SessionServicesOptions {
   readonly db: DatabaseSync;
@@ -68,6 +68,6 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
 function listSummaries(context: SessionContext): IpcResult<readonly SessionSummary[]> {
   const sessions = listSessions(context.db);
   return sessions.ok
-    ? ok(sessions.value.map((session) => toSessionSummary(session)))
+    ? ok(sessions.value.map((session) => sessionSummaryFrom(session)))
     : sessionFailure(context.logger, sessions.error);
 }

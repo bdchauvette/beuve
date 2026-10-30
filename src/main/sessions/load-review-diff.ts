@@ -214,7 +214,7 @@ async function diffInterdiff(
   }
   const { files } = interdiff.value;
   return ok({
-    scope: { kind: 'interdiff', ...from, outcome: toOutcome(interdiff.value) },
+    scope: { kind: 'interdiff', ...from, outcome: outcomeFrom(interdiff.value) },
     baseSha: interdiff.value.nextMergeBase,
     files,
     ...stackForkPoint(fork.value),
@@ -229,7 +229,7 @@ function stackForkPoint(fork: StackForkPoint): { readonly forkPoint?: StackForkP
   return fork.reason === 'merge-base' ? {} : { forkPoint: fork };
 }
 
-function toOutcome(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interdiff' }>['outcome'] {
+function outcomeFrom(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interdiff' }>['outcome'] {
   switch (interdiff.kind) {
     case 'exact': {
       return { kind: 'exact' };

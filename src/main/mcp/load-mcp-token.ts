@@ -13,7 +13,7 @@ const tokenPattern = /^[\w-]{43,}$/u;
  * use. The file is owner-only (0600) so other local users can't read it.
  */
 export async function loadMcpToken(directory: string): Promise<Result<string, Error>> {
-  return fromPromise(readOrCreate(path.join(directory, fileName)), toError);
+  return fromPromise(readOrCreate(path.join(directory, fileName)), errorFrom);
 }
 
 async function readOrCreate(file: string): Promise<string> {
@@ -38,6 +38,6 @@ async function readExisting(file: string): Promise<string | undefined> {
   }
 }
 
-function toError(cause: unknown): Error {
+function errorFrom(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause));
 }

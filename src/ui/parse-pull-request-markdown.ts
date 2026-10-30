@@ -48,24 +48,24 @@ export function parsePullRequestMarkdown(body: string): BodyBlock[] {
     );
   const restore = (text: string): string =>
     text.replaceAll(sentinel, (_whole: string, index: string) => literals[Number(index)] ?? '');
-  const toSpans = (spans: readonly InlineSpan[]): BodySpan[] =>
+  const spansFrom = (spans: readonly InlineSpan[]): BodySpan[] =>
     spans.flatMap((span) =>
       span.kind === 'text' ? splitLinks(span.text, links) : { ...span, text: restore(span.text) },
     );
-  return parseMarkdownSubset(source).map((block) => toBlock(block, toSpans, restore));
+  return parseMarkdownSubset(source).map((block) => blockFrom(block, spansFrom, restore));
 }
 
-function toBlock(
+function blockFrom(
   block: MarkdownBlock,
-  toSpans: (spans: readonly InlineSpan[]) => BodySpan[],
+  spansFrom: (spans: readonly InlineSpan[]) => BodySpan[],
   restore: (text: string) => string,
 ): BodyBlock {
   switch (block.kind) {
     case 'paragraph': {
-      return { kind: 'paragraph', spans: toSpans(block.spans) };
+      return { kind: 'paragraph', spans: spansFrom(block.spans) };
     }
     case 'list': {
-      return { kind: 'list', items: block.items.map((item) => toSpans(item)) };
+      return { kind: 'list', items: block.items.map((item) => spansFrom(item)) };
     }
     case 'code': {
       return { kind: 'code', text: restore(block.text) };

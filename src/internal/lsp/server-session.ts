@@ -193,7 +193,7 @@ export class ServerSession {
       }
       this.close(uri);
     }
-    return toSynced(document, true);
+    return syncedFrom(document, true);
   }
 
   #nextSequence(): number {
@@ -336,7 +336,7 @@ export class ServerSession {
     if (existing.text === content.text && options.recheck !== true) {
       const touched = { ...existing, stamp: content.stamp };
       this.#documents.set(key, touched);
-      return toSynced(touched, false);
+      return syncedFrom(touched, false);
     }
     const version = existing.version + 1;
     const updated: OpenDocument = {
@@ -353,7 +353,7 @@ export class ServerSession {
       textDocument: { uri: key, version },
       contentChanges: [{ text: content.text }],
     });
-    return toSynced(updated, true);
+    return syncedFrom(updated, true);
   }
 
   /** Closes a document and forgets its diagnostics. */
@@ -403,7 +403,7 @@ export class ServerSession {
   }
 }
 
-function toSynced(document: OpenDocument, hasChanged: boolean): SyncedDocument {
+function syncedFrom(document: OpenDocument, hasChanged: boolean): SyncedDocument {
   return {
     uri: document.uri,
     absolutePath: document.absolutePath,

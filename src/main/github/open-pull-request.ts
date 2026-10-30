@@ -15,8 +15,8 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { gitErrorToIpcError } from '../sessions/git-error-to-ipc-error.ts';
-import { toSessionSummary } from '../sessions/to-session-summary.ts';
+import { ipcErrorFromGitError } from '../sessions/ipc-error-from-git-error.ts';
+import { sessionSummaryFrom } from '../sessions/session-summary-from.ts';
 
 import { canonicalPullRequestRef } from './canonical-pull-request-ref.ts';
 import { fetchPullRequest } from './fetch-pull-request.ts';
@@ -24,7 +24,7 @@ import { findMatchingRemote } from './find-matching-remote.ts';
 import type { GithubContext } from './github-context.ts';
 import { githubFailure } from './github-failure.ts';
 import { syncPullRequestHead } from './sync-pull-request-head.ts';
-import { toPullRequestView } from './to-pull-request-view.ts';
+import { pullRequestViewFrom } from './pull-request-view-from.ts';
 import { upsertPullRequestSession } from './upsert-pull-request-session.ts';
 
 /** A pull request session main has just opened or resumed. */
@@ -102,8 +102,8 @@ export async function openPullRequest(
   onOpened({ session: session.value, ref, pullRequest: synced.value.pullRequest });
   return {
     kind: 'opened',
-    session: toSessionSummary(session.value),
-    pullRequest: toPullRequestView(stored.value),
+    session: sessionSummaryFrom(session.value),
+    pullRequest: pullRequestViewFrom(stored.value),
     repoPath: repository.value.root,
   };
 }
@@ -129,7 +129,7 @@ async function openClone(
     : err(
         githubFailure(
           'needs-local-clone',
-          `${gitErrorToIpcError(opened.error).message}. Enter the path of a local clone of ${name}.`,
+          `${ipcErrorFromGitError(opened.error).message}. Enter the path of a local clone of ${name}.`,
         ),
       );
 }

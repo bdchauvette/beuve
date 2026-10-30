@@ -43,7 +43,7 @@ export function reduceChatTranscript(
       // A streaming answer here is newer than the stored preview, which lags by up to a second.
       const entries = action.messages.map(
         (message): MessageChatEntry =>
-          (message.status === 'streaming' ? live.get(message.id) : undefined) ?? toEntry(message),
+          (message.status === 'streaming' ? live.get(message.id) : undefined) ?? entryFrom(message),
       );
       return { entries: [...entries, ...local], pending: {} };
     }
@@ -55,8 +55,8 @@ export function reduceChatTranscript(
       return {
         entries: [
           ...state.entries,
-          toEntry(action.question),
-          toEntry(replay(action.answer, early)),
+          entryFrom(action.question),
+          entryFrom(replay(action.answer, early)),
         ],
         pending,
       };
@@ -82,7 +82,7 @@ export function reduceChatTranscript(
       if (hasMessage(state.entries, action.summary.id)) {
         return state;
       }
-      const entry = toEntry(action.summary);
+      const entry = entryFrom(action.summary);
       const at = state.entries.findIndex((item) => item.kind === 'compaction');
       const entries =
         at === -1
@@ -154,7 +154,7 @@ function replay(answer: ChatMessageView, early: PendingAnswer | undefined): Chat
     : settled;
 }
 
-function toEntry(message: ChatMessageView): MessageChatEntry {
+function entryFrom(message: ChatMessageView): MessageChatEntry {
   return { id: message.id, kind: 'message', message };
 }
 
@@ -169,7 +169,7 @@ function replaceMessage(entries: readonly ChatEntry[], message: ChatMessageView)
       return entry;
     }
     return message.status === 'streaming' && entry.progress !== undefined
-      ? { ...toEntry(message), progress: entry.progress }
-      : toEntry(message);
+      ? { ...entryFrom(message), progress: entry.progress }
+      : entryFrom(message);
   });
 }

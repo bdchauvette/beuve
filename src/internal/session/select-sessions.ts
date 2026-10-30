@@ -8,7 +8,7 @@ import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
 import { isUuid } from '#x/text/is-uuid.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
 import { parseSessionSource } from './parse-session-source.ts';
-import { rowToCheckpoint } from './row-to-checkpoint.ts';
+import { checkpointFromRow } from './checkpoint-from-row.ts';
 import type { ReviewState, Session, SessionError, SessionId, SessionSource } from './session.ts';
 
 type CorruptRow = Extract<SessionError, { kind: 'corrupt-row' }>;
@@ -42,7 +42,7 @@ export function selectSessions(
 
   const sessions: Session[] = [];
   for (const row of rows) {
-    const session = rowToSession(row);
+    const session = sessionFromRow(row);
     if (!session.ok) {
       return session;
     }
@@ -51,7 +51,7 @@ export function selectSessions(
   return ok(sessions);
 }
 
-function rowToSession(row: Row): Result<Session, CorruptRow> {
+function sessionFromRow(row: Row): Result<Session, CorruptRow> {
   const { id, head_sha: headSha, created_at: createdAt, updated_at: updatedAt } = row;
   const corrupt = (reason: string): Result<Session, CorruptRow> =>
     err({ kind: 'corrupt-row', table: 'sessions', id: String(id), reason });
@@ -59,7 +59,7 @@ function rowToSession(row: Row): Result<Session, CorruptRow> {
   if (typeof id !== 'string' || !isUuid(id)) {
     return corrupt('id is not a UUID');
   }
-  const source = rowToSource(row);
+  const source = sourceFromRow(row);
   if (typeof source === 'string') {
     return corrupt(source);
   }
@@ -73,7 +73,7 @@ function rowToSession(row: Row): Result<Session, CorruptRow> {
   if (typeof updatedAt !== 'string' || !isIsoTimestamp(updatedAt)) {
     return corrupt('updated_at is not an ISO-8601 UTC timestamp');
   }
-  const review = rowToReview(row);
+  const review = reviewFromRow(row);
   if (!review.ok) {
     return review;
   }
@@ -87,7 +87,7 @@ function rowToSession(row: Row): Result<Session, CorruptRow> {
   });
 }
 
-function rowToSource(row: Row): SessionSource | string {
+function sourceFromRow(row: Row): SessionSource | string {
   const { kind, repo_path: repoPath, base_ref: baseRef, head_ref: headRef } = row;
   const { host, owner, repo, pr_number: number } = row;
   if (typeof repoPath !== 'string' || typeof baseRef !== 'string') {
@@ -119,10 +119,10 @@ function rowToSource(row: Row): SessionSource | string {
   return parsed.ok ? parsed.value : parsed.error.reason;
 }
 
-function rowToReview(row: Row): Result<ReviewState, CorruptRow> {
+function reviewFromRow(row: Row): Result<ReviewState, CorruptRow> {
   if (row['checkpoint_id'] === null) {
     return ok({ kind: 'unreviewed' });
   }
-  const checkpoint = rowToCheckpoint(row);
+  const checkpoint = checkpointFromRow(row);
   return checkpoint.ok ? ok({ kind: 'reviewed', checkpoint: checkpoint.value }) : checkpoint;
 }

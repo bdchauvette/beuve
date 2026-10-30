@@ -48,7 +48,7 @@ describe('reduceChatTranscript', () => {
   test('puts a stored summary where the compaction entry was, once', ({ expect }) => {
     const summary: ChatMessageView = { ...question(), id: 's1', role: 'summary', content: 'Note.' };
     const compacting: ChatEntry = { id: 9, kind: 'compaction', status: 'running' };
-    const start = { entries: [toMessage(question()), compacting, note()], pending: {} };
+    const start = { entries: [messageFrom(question()), compacting, note()], pending: {} };
     const state = reduceChatTranscript(start, { kind: 'compacted', summary });
     expect(state.entries.map((entry) => entry.id)).toStrictEqual(['q1', 's1', 7]);
     expect(reduceChatTranscript(state, { kind: 'compacted', summary })).toBe(state);
@@ -211,6 +211,6 @@ function contents(state: ChatTranscript): string[] {
   return state.entries.flatMap((entry) => (entry.kind === 'message' ? entry.message.content : []));
 }
 
-function toMessage(message: ChatMessageView): ChatEntry {
+function messageFrom(message: ChatMessageView): ChatEntry {
   return { id: message.id, kind: 'message', message };
 }

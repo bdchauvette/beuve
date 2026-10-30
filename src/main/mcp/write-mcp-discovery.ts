@@ -29,7 +29,7 @@ export async function writeMcpDiscovery(
   discovery: McpDiscovery,
 ): Promise<Result<RemoveMcpDiscovery, Error>> {
   const file = path.join(directory, fileName);
-  return fromPromise(write(file, discovery), toError);
+  return fromPromise(write(file, discovery), errorFrom);
 }
 
 async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDiscovery> {
@@ -40,6 +40,6 @@ async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDi
   return async (): Promise<void> => rm(file, { force: true });
 }
 
-function toError(cause: unknown): Error {
+function errorFrom(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause));
 }

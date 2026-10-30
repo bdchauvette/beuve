@@ -35,8 +35,8 @@ import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 
-import { lspErrorToIpcError } from './lsp-error-to-ipc-error.ts';
-import { toHeadSpans } from './to-head-spans.ts';
+import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
+import { headSpansFrom } from './head-spans-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** Diagnostics for agents: lines and columns are 1-based, columns in UTF-16 code units. */
@@ -101,7 +101,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
 
   const fail = (error: LspError): Err<IpcError> => {
     logger.warn('language server request failed', { error });
-    return err(lspErrorToIpcError(error));
+    return err(ipcErrorFromLspError(error));
   };
 
   const expand = async (
@@ -113,7 +113,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       direction === 'incoming'
         ? await multiplexer.incomingCalls(nodeId)
         : await multiplexer.outgoingCalls(nodeId);
-    return calls.ok ? ok(calls.value.map((call) => toCallView(call, spans))) : fail(calls.error);
+    return calls.ok ? ok(calls.value.map((call) => callViewFrom(call, spans))) : fail(calls.error);
   };
 
   const locate = async (
@@ -159,7 +159,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         return diff;
       }
       const { session, repository } = diff.value.refreshed;
-      const spans = toHeadSpans(diff.value.files);
+      const spans = headSpansFrom(diff.value.files);
       spansBySession.set(request.sessionId, spans);
       if (request.nodeId !== undefined) {
         const calls = await expand(request.nodeId, request.direction, spans);
@@ -169,7 +169,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       if (!workspace.ok) {
         return workspace;
       }
-      const file = toRelative(repository, request.path);
+      const file = relativeFrom(repository, request.path);
       const position = await locate(workspace.value, request, file, spans);
       if (!position.ok) {
         return position;
@@ -196,7 +196,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         duration: stopwatch.elapsed(),
       });
       return calls.ok
-        ? ok({ direction: request.direction, root: toNodeView(root, spans), calls: calls.value })
+        ? ok({ direction: request.direction, root: nodeViewFrom(root, spans), calls: calls.value })
         : calls;
     },
 
@@ -218,7 +218,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       if (!workspace.ok) {
         return workspace;
       }
-      const file = toRelative(repository, requested);
+      const file = relativeFrom(repository, requested);
       const report = await multiplexer.getDiagnostics({ root: workspace.value.root, path: file });
       if (!report.ok) {
         return fail(report.error);
@@ -234,7 +234,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         path: report.value.path,
         serverId: report.value.serverId,
         freshness: report.value.freshness,
-        diagnostics: report.value.diagnostics.map((diagnostic) => toAgentDiagnostic(diagnostic)),
+        diagnostics: report.value.diagnostics.map((diagnostic) => agentDiagnosticFrom(diagnostic)),
       });
     },
   };
@@ -271,7 +271,7 @@ function findFirstCallable(
 }
 
 /** Agents often pass paths in the user's checkout; those map to the same relative path. */
-function toRelative(repository: GitRepository, requested: string): string {
+function relativeFrom(repository: GitRepository, requested: string): string {
   if (!path.isAbsolute(requested)) {
     return requested;
   }
@@ -279,14 +279,14 @@ function toRelative(repository: GitRepository, requested: string): string {
   return relative.startsWith('..') || path.isAbsolute(relative) ? requested : relative;
 }
 
-function toCallView(call: CallHierarchyCall, spans: ChangedLines): CallHierarchyCallView {
+function callViewFrom(call: CallHierarchyCall, spans: ChangedLines): CallHierarchyCallView {
   return {
-    node: toNodeView(call.node, spans),
+    node: nodeViewFrom(call.node, spans),
     callSiteLines: [...new Set(call.callSites.map((range) => range.start.line + 1))],
   };
 }
 
-function toNodeView(node: CallHierarchyNode, spans: ChangedLines): CallHierarchyNodeView {
+function nodeViewFrom(node: CallHierarchyNode, spans: ChangedLines): CallHierarchyNodeView {
   return {
     id: node.id,
     name: node.name,
@@ -300,7 +300,7 @@ function toNodeView(node: CallHierarchyNode, spans: ChangedLines): CallHierarchy
   };
 }
 
-function toAgentDiagnostic(diagnostic: DiagnosticView): AgentDiagnostic {
+function agentDiagnosticFrom(diagnostic: DiagnosticView): AgentDiagnostic {
   const { start, end } = diagnostic.range;
   return {
     line: start.line + 1,

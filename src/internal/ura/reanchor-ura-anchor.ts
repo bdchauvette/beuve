@@ -1,5 +1,5 @@
 import type { FileLineMapping, LineMappingHunk } from './line-mapping.ts';
-import { toChangeRegions } from './to-change-regions.ts';
+import { changeRegionsFrom } from './change-regions-from.ts';
 import type { UraAnchor } from './ura-item.ts';
 
 /** An anchor moved to the later head, or the reason it can't be. */
@@ -57,7 +57,7 @@ function shiftRange(
   hunks: readonly LineMappingHunk[],
 ): number | undefined {
   let shift = 0;
-  const regions = hunks.flatMap((hunk) => toChangeRegions(hunk));
+  const regions = hunks.flatMap((hunk) => changeRegionsFrom(hunk));
   for (const region of regions) {
     if (region.removed === 0) {
       if (region.before < start) {

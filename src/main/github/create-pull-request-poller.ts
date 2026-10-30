@@ -22,9 +22,9 @@ import { findMatchingRemote } from './find-matching-remote.ts';
 import type { GithubContext } from './github-context.ts';
 import { moveSessionHead } from './move-session-head.ts';
 import { syncPullRequestHead } from './sync-pull-request-head.ts';
-import { toCiStatusView } from './to-ci-status-view.ts';
-import { toPullRequestView } from './to-pull-request-view.ts';
-import { toStackView } from './to-stack-view.ts';
+import { ciStatusViewFrom } from './ci-status-view-from.ts';
+import { pullRequestViewFrom } from './pull-request-view-from.ts';
+import { stackViewFrom } from './stack-view-from.ts';
 import { multiplyDuration } from '#x/time/multiply-duration.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
@@ -195,7 +195,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
         findPullRequestStack(client, pullRequest),
       );
       if (stack.ok) {
-        state.stack = toStackView(host, stack.value);
+        state.stack = stackViewFrom(host, stack.value);
       }
       const isNewHead = pullRequest.head.sha !== session.headSha;
       const hasHeadMoved = isNewHead && (await didMoveHead(session, ref, pullRequest));
@@ -208,7 +208,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       if (stored.ok && stored.value !== undefined) {
         emit(updatedListeners, {
           sessionId,
-          pullRequest: toPullRequestView(stored.value),
+          pullRequest: pullRequestViewFrom(stored.value),
           stack: state.stack ?? { parents: [], children: [] },
           headMoved: hasHeadMoved,
         });
@@ -231,7 +231,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     }
     if (ci.value.kind === 'modified') {
       state.ciEtags = ci.value.etags;
-      state.ci = toCiStatusView(ci.value.value);
+      state.ci = ciStatusViewFrom(ci.value.value);
       emit(ciListeners, { sessionId, ci: state.ci });
     }
     state.failures = 0;

@@ -7,7 +7,7 @@ import type { ChatCompaction, CompactionBudget } from './build-compaction-prompt
 import type { Citation } from './chat-message.ts';
 import type { ChatModel } from './chat-model.ts';
 import { parseCitations } from './parse-citations.ts';
-import { toCitablePaths } from './to-citable-paths.ts';
+import { citablePathsFrom } from './citable-paths-from.ts';
 import { validateCitations } from './validate-citations.ts';
 import type { DroppedCitation } from './validate-citations.ts';
 
@@ -64,7 +64,7 @@ export async function compactConversation<E>(
   }
   const text = output.value.value.trim();
   const validated = validateCitations(text, parseCitations(text), {
-    knownPaths: toCitablePaths(input.files, input.worktreePaths),
+    knownPaths: citablePathsFrom(input.files, input.worktreePaths),
     worktreePath: input.worktreePath,
   });
   return ok({

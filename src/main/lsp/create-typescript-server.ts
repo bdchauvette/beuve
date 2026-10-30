@@ -4,7 +4,7 @@ import process from 'node:process';
 import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { typescriptServerDefinition } from '#internal/lsp/typescript-server-definition.ts';
 
-import { toUnpackedPath } from './to-unpacked-path.ts';
+import { unpackedPathFrom } from './unpacked-path-from.ts';
 
 /**
  * `typescript-language-server` and `tsserver` from beuve's own `node_modules`, never the
@@ -17,8 +17,8 @@ export function createTypescriptServer(): ServerDefinition {
   const require = createRequire(import.meta.url);
   return typescriptServerDefinition({
     command: process.execPath,
-    leadingArgs: [toUnpackedPath(require.resolve('typescript-language-server/lib/cli.mjs'))],
-    tsserverPath: toUnpackedPath(require.resolve('typescript/lib/tsserver.js')),
+    leadingArgs: [unpackedPathFrom(require.resolve('typescript-language-server/lib/cli.mjs'))],
+    tsserverPath: unpackedPathFrom(require.resolve('typescript/lib/tsserver.js')),
     env: { ELECTRON_RUN_AS_NODE: '1' },
   });
 }

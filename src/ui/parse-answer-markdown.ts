@@ -57,24 +57,26 @@ export function parseAnswerMarkdown(
   });
   const restore = (text: string): string =>
     text.replaceAll(sentinel, (_whole: string, index: string) => literals[Number(index)] ?? '');
-  const toSpans = (spans: readonly InlineSpan[]): AnswerSpan[] =>
+  const spansFrom = (spans: readonly InlineSpan[]): AnswerSpan[] =>
     spans.flatMap((span) =>
       span.kind === 'text' ? splitTokens(span.text, tokens) : { ...span, text: restore(span.text) },
     );
-  return parseMarkdownSubset(source).map((block): AnswerBlock => toBlock(block, toSpans, restore));
+  return parseMarkdownSubset(source).map((block): AnswerBlock =>
+    blockFrom(block, spansFrom, restore),
+  );
 }
 
-function toBlock(
+function blockFrom(
   block: MarkdownBlock,
-  toSpans: (spans: readonly InlineSpan[]) => AnswerSpan[],
+  spansFrom: (spans: readonly InlineSpan[]) => AnswerSpan[],
   restore: (text: string) => string,
 ): AnswerBlock {
   switch (block.kind) {
     case 'paragraph': {
-      return { kind: 'paragraph', spans: toSpans(block.spans) };
+      return { kind: 'paragraph', spans: spansFrom(block.spans) };
     }
     case 'list': {
-      return { kind: 'list', items: block.items.map((item) => toSpans(item)) };
+      return { kind: 'list', items: block.items.map((item) => spansFrom(item)) };
     }
     case 'code': {
       return { kind: 'code', text: restore(block.text) };

@@ -37,8 +37,8 @@ import { isAllowedGithubLink } from './is-allowed-github-link.ts';
 import { openPullRequest } from './open-pull-request.ts';
 import { postGithubReview } from './post-github-review.ts';
 import { prepareGithubReview } from './prepare-github-review.ts';
-import { toPullRequestView } from './to-pull-request-view.ts';
-import { toStackView } from './to-stack-view.ts';
+import { pullRequestViewFrom } from './pull-request-view-from.ts';
+import { stackViewFrom } from './stack-view-from.ts';
 
 /** The identifying metadata of a pull request, as `beuve_read_human_review` reports it. */
 export interface PullRequestSummary {
@@ -162,7 +162,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
             async (client) => findPullRequestStack(client, pullRequest),
           );
           if (stack.ok && session.source.kind === 'github-pull-request') {
-            poller.rememberStack(session.id, toStackView(session.source.host, stack.value));
+            poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));
           }
         })();
       });
@@ -192,7 +192,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       const snapshot = poller.snapshot(sessionId);
       return ok({
         sessionId,
-        pullRequest: toPullRequestView(current),
+        pullRequest: pullRequestViewFrom(current),
         stack: snapshot.stack ?? { parents: [], children: [] },
         ...(snapshot.ci !== undefined && { ci: snapshot.ci }),
       });

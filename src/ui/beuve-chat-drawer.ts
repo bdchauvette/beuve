@@ -21,7 +21,7 @@ import { insertDraftMention } from './insert-draft-mention.ts';
 import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
 import { removeDraftMention } from './remove-draft-mention.ts';
 import { serializeChatDraft } from './serialize-chat-draft.ts';
-import { toDraftParts } from './to-draft-parts.ts';
+import { draftPartsFrom } from './draft-parts-from.ts';
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
 import type { AnswerBlock, AnswerSpan } from './parse-answer-markdown.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -952,7 +952,7 @@ export class BeuveChatDrawer extends LitElement {
     }
     if (message.role !== 'assistant') {
       // No whitespace around the parts: the question is shown pre-wrapped.
-      const parts = toDraftParts(message.content, message.mentions).map((part) =>
+      const parts = draftPartsFrom(message.content, message.mentions).map((part) =>
         part.kind === 'text' ? part.text : this.renderChip(part.mention),
       );
       const answerId = this.queued.get(message.id);
@@ -1291,7 +1291,7 @@ export class BeuveChatDrawer extends LitElement {
   /** Replaces the input with a question and its chips, caret at the end (a refused question). */
   setDraft(text: string, mentions: readonly ChatMentionView[]): void {
     void this.updateComplete.then(() => {
-      const parts = toDraftParts(text, mentions);
+      const parts = draftPartsFrom(text, mentions);
       const caret = parts.reduce(
         (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
         0,

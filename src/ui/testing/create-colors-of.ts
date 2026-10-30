@@ -1,7 +1,7 @@
 import { getSharedHighlighter, registerCustomTheme } from '@pierre/diffs';
 
 import { syntaxPalettes } from '../syntax-palettes.ts';
-import { toTextmateTheme } from '../to-textmate-theme.ts';
+import { textmateThemeFrom } from '../textmate-theme-from.ts';
 
 /** The color of the first character of each `«…»`-marked span of `marked`, markers removed. */
 export type ColorsOf = (lang: string, marked: string) => string[];
@@ -12,7 +12,7 @@ const themeName = 'beuve-test-light';
 export async function createColorsOf(): Promise<ColorsOf> {
   const light = syntaxPalettes.light;
   // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
-  registerCustomTheme(themeName, async () => toTextmateTheme(themeName, 'light', light));
+  registerCustomTheme(themeName, async () => textmateThemeFrom(themeName, 'light', light));
   const highlighter = await getSharedHighlighter({
     themes: [themeName],
     langs: ['typescript', 'go', 'rust', 'python', 'shellscript'],

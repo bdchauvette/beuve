@@ -94,20 +94,20 @@ export function parseClaudeCodeEvent(text: string): ClaudeCodeEvent {
   }
   const { type, subtype } = envelope.data;
   if (type === 'system' && subtype === 'init') {
-    return toInit(json);
+    return initFrom(json);
   }
   switch (type) {
     case 'assistant': {
-      return toToolUse(json);
+      return toolUseFrom(json);
     }
     case 'stream_event': {
-      return toStreamEvent(json);
+      return streamEventFrom(json);
     }
     case 'rate_limit_event': {
-      return toRateLimit(json);
+      return rateLimitFrom(json);
     }
     case 'result': {
-      return toResult(json);
+      return resultFrom(json);
     }
     default: {
       return { kind: 'other' };
@@ -115,7 +115,7 @@ export function parseClaudeCodeEvent(text: string): ClaudeCodeEvent {
   }
 }
 
-function toInit(json: unknown): ClaudeCodeEvent {
+function initFrom(json: unknown): ClaudeCodeEvent {
   const parsed = init.safeParse(json);
   if (!parsed.success) {
     return { kind: 'invalid', reason: 'malformed init event' };
@@ -128,7 +128,7 @@ function toInit(json: unknown): ClaudeCodeEvent {
   };
 }
 
-function toToolUse(json: unknown): ClaudeCodeEvent {
+function toolUseFrom(json: unknown): ClaudeCodeEvent {
   const parsed = assistant.safeParse(json);
   if (!parsed.success) {
     return { kind: 'other' };
@@ -139,7 +139,7 @@ function toToolUse(json: unknown): ClaudeCodeEvent {
   return tools.length === 0 ? { kind: 'other' } : { kind: 'tool-use', tools };
 }
 
-function toStreamEvent(json: unknown): ClaudeCodeEvent {
+function streamEventFrom(json: unknown): ClaudeCodeEvent {
   const parsed = streamEvent.safeParse(json);
   if (!parsed.success || (parsed.data.parent_tool_use_id ?? undefined) !== undefined) {
     return { kind: 'other' };
@@ -154,7 +154,7 @@ function toStreamEvent(json: unknown): ClaudeCodeEvent {
     : { kind: 'other' };
 }
 
-function toRateLimit(json: unknown): ClaudeCodeEvent {
+function rateLimitFrom(json: unknown): ClaudeCodeEvent {
   const parsed = rateLimit.safeParse(json);
   if (!parsed.success) {
     return { kind: 'other' };
@@ -163,7 +163,7 @@ function toRateLimit(json: unknown): ClaudeCodeEvent {
   return { kind: 'rate-limit', status: info.status, resetsAt: info.resetsAt };
 }
 
-function toResult(json: unknown): ClaudeCodeEvent {
+function resultFrom(json: unknown): ClaudeCodeEvent {
   const parsed = result.safeParse(json);
   if (!parsed.success) {
     return { kind: 'invalid', reason: 'malformed result event' };

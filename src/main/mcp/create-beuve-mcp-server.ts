@@ -33,7 +33,8 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       inputSchema: { path, sessionId },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> => toToolResult(await services.getLspDiagnostics(input)),
+    async (input): Promise<CallToolResult> =>
+      toolResultFrom(await services.getLspDiagnostics(input)),
   );
 
   server.registerTool(
@@ -51,7 +52,7 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> => toToolResult(await services.runImpactCheck(input)),
+    async (input): Promise<CallToolResult> => toolResultFrom(await services.runImpactCheck(input)),
   );
 
   server.registerTool(
@@ -91,7 +92,7 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
           ),
       },
     },
-    async (input): Promise<CallToolResult> => toToolResult(await services.runTraceProbe(input)),
+    async (input): Promise<CallToolResult> => toolResultFrom(await services.runTraceProbe(input)),
   );
 
   server.registerTool(
@@ -116,13 +117,13 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       annotations: { readOnlyHint: true },
     },
     async (input): Promise<CallToolResult> =>
-      toDocumentResult(await services.readHumanReview(input)),
+      documentResultFrom(await services.readHumanReview(input)),
   );
 
   return server;
 }
 
-function toToolResult(outcome: McpToolOutcome): CallToolResult {
+function toolResultFrom(outcome: McpToolOutcome): CallToolResult {
   if (!outcome.ok) {
     return { isError: true, content: [{ type: 'text', text: outcome.error }] };
   }
@@ -132,7 +133,7 @@ function toToolResult(outcome: McpToolOutcome): CallToolResult {
   return isRecord(outcome.value) ? { content, structuredContent: outcome.value } : { content };
 }
 
-function toDocumentResult(outcome: McpDocumentOutcome): CallToolResult {
+function documentResultFrom(outcome: McpDocumentOutcome): CallToolResult {
   return outcome.ok
     ? {
         content: [{ type: 'text', text: outcome.value.text }],

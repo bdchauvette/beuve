@@ -9,9 +9,9 @@ import type { Result } from '#x/result/result.ts';
 import { loadReviewDiff } from './load-review-diff.ts';
 import type { ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
-import { toCommitPairView } from './to-commit-pair-view.ts';
-import { toDiffFileView } from './to-diff-file-view.ts';
-import { toSessionSummary } from './to-session-summary.ts';
+import { commitPairViewFrom } from './commit-pair-view-from.ts';
+import { diffFileViewFrom } from './diff-file-view-from.ts';
+import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /** The review as the renderer sees it: {@link loadReviewDiff} mapped to contract views. */
 export async function loadReview(
@@ -25,18 +25,18 @@ export async function loadReview(
   }
   const { refreshed, scope, baseSha, files, forkPoint, commitPairs, attribution } = diff.value;
   return ok({
-    session: toSessionSummary(refreshed.session),
+    session: sessionSummaryFrom(refreshed.session),
     scope,
     baseSha,
     headSha: refreshed.session.headSha,
-    files: files.map((file) => toDiffFileView(file)),
+    files: files.map((file) => diffFileViewFrom(file)),
     whitespace: options.ignoreWhitespace === true ? 'ignored' : 'shown',
-    ...toForkPointView(forkPoint),
-    ...toPairingViews(files, commitPairs, attribution),
+    ...forkPointViewFrom(forkPoint),
+    ...pairingViewsFrom(files, commitPairs, attribution),
   });
 }
 
-function toForkPointView(forkPoint: StackForkPoint | undefined): Pick<ReviewView, 'forkPoint'> {
+function forkPointViewFrom(forkPoint: StackForkPoint | undefined): Pick<ReviewView, 'forkPoint'> {
   return forkPoint === undefined || forkPoint.reason === 'merge-base'
     ? {}
     : {
@@ -49,7 +49,7 @@ function toForkPointView(forkPoint: StackForkPoint | undefined): Pick<ReviewView
 }
 
 /** Pair ids are the new commit's sha, so a hunk's attributed commits are already its pair ids. */
-function toPairingViews(
+function pairingViewsFrom(
   files: readonly DiffFile[],
   commitPairs: CommitPairs | undefined,
   attribution: readonly FileAttribution[] | undefined,
@@ -65,5 +65,8 @@ function toPairingViews(
       hunkPairIds: (attributed?.hunks ?? file.hunks.map(() => [])).map((shas) => [...shas]),
     };
   });
-  return { commitPairs: commitPairs.pairs.map((pair) => toCommitPairView(pair)), fileAttribution };
+  return {
+    commitPairs: commitPairs.pairs.map((pair) => commitPairViewFrom(pair)),
+    fileAttribution,
+  };
 }

@@ -50,7 +50,7 @@ export function buildTraceTimelines(
       status: outcome.status,
       failure: outcome.failure,
       duration: outcome.duration,
-      entries: group === undefined ? [] : toEntries(plan, group.events),
+      entries: group === undefined ? [] : entriesFrom(plan, group.events),
       dropped: group?.dropped ?? 0,
     });
   }
@@ -61,7 +61,7 @@ export function buildTraceTimelines(
       status: 'unknown',
       failure: undefined,
       duration: undefined,
-      entries: toEntries(plan, group.events),
+      entries: entriesFrom(plan, group.events),
       dropped: group.dropped,
     });
   }
@@ -72,7 +72,7 @@ function keyOf(file: string, titles: readonly string[]): string {
   return JSON.stringify([file, ...titles]);
 }
 
-function toEntries(plan: InstrumentationPlan, events: readonly RawTraceEvent[]): TraceEntry[] {
+function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]): TraceEntry[] {
   const frames = new Map<number, Frame>();
   const entries: TraceEntry[] = [];
   const probeOf = (id: number | undefined): Probe | undefined =>
@@ -92,7 +92,7 @@ function toEntries(plan: InstrumentationPlan, events: readonly RawTraceEvent[]):
       entries.push({ ...base(event.seq, probe, frame), kind: 'enter', args });
       continue;
     }
-    const entry = toEntry(plan, event, probeOf(event.probe), frames.get(event.frame));
+    const entry = entryFrom(plan, event, probeOf(event.probe), frames.get(event.frame));
     if (entry !== undefined) {
       entries.push(entry);
     }
@@ -100,7 +100,7 @@ function toEntries(plan: InstrumentationPlan, events: readonly RawTraceEvent[]):
   return entries;
 }
 
-function toEntry(
+function entryFrom(
   plan: InstrumentationPlan,
   event: Exclude<RawTraceEvent, { kind: 'enter' }>,
   probe: Probe | undefined,

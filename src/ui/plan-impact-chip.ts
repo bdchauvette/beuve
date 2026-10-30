@@ -84,7 +84,7 @@ export function planImpactChip(
     .filter((entry) => entry.inDiff && entry.change !== 'unchanged')
     .toSorted((a, b) => headValue(b) - headValue(a));
   const hidden = Math.max(0, changed.length - maxRows) + (file.omittedFunctions ?? 0);
-  const rows = changed.slice(0, maxRows).map((entry) => toRow(entry, byName.get(entry.name)));
+  const rows = changed.slice(0, maxRows).map((entry) => rowFrom(entry, byName.get(entry.name)));
   const count = aggregate.changedFunctions;
   const max = limit === undefined ? '' : ` (limit ${String(limit)})`;
   const summary = `Cognitive ${signed(aggregate.cognitiveDelta)} · max ${String(aggregate.maxCognitive)}${max} · ${String(count)} ${count === 1 ? 'function' : 'functions'} changed`;
@@ -106,7 +106,7 @@ export function planImpactChip(
   };
 }
 
-function toRow(entry: FunctionImpactView, finding: ImpactFindingView | undefined): ImpactChipRow {
+function rowFrom(entry: FunctionImpactView, finding: ImpactFindingView | undefined): ImpactChipRow {
   const shown = entry.change === 'removed' ? entry.base : entry.head;
   return {
     name: entry.name,

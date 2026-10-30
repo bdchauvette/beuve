@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { rowToCheckpoint } from './row-to-checkpoint.ts';
+import { checkpointFromRow } from './checkpoint-from-row.ts';
 import type { Checkpoint, SessionError, SessionId } from './session.ts';
 
 /** A session's checkpoints, oldest first: the revisions the reviewer has signed off on. */
@@ -21,7 +21,7 @@ export function listCheckpoints(
     .all(sessionId);
   const checkpoints: Checkpoint[] = [];
   for (const row of rows) {
-    const checkpoint = rowToCheckpoint(row);
+    const checkpoint = checkpointFromRow(row);
     if (!checkpoint.ok) {
       return checkpoint;
     }

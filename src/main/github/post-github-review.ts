@@ -12,7 +12,7 @@ import { ok } from '#x/result/ok.ts';
 import type { UraServices } from '../ura/create-ura-services.ts';
 
 import type { GithubContext } from './github-context.ts';
-import { githubErrorToFailure } from './github-error-to-failure.ts';
+import { failureFromGithubError } from './failure-from-github-error.ts';
 import { prepareGithubReview } from './prepare-github-review.ts';
 
 /**
@@ -38,7 +38,9 @@ export async function postGithubReview(
   );
   if (!posted.ok) {
     context.session.logger.info('github: review not posted', { kind: posted.error.kind });
-    return ok(githubErrorToFailure(posted.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`));
+    return ok(
+      failureFromGithubError(posted.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),
+    );
   }
   const { htmlUrl, movedToBody } = posted.value;
   const wereAllMoved = movedToBody > 0 && movedToBody >= payload.comments.length;

@@ -477,7 +477,7 @@ export function createIpcHandlers(
       const { focus, mentions, command, ...required } = parsed.data;
       return services.chat.ask({
         ...required,
-        ...(command !== undefined && { command: toChatCommand(command) }),
+        ...(command !== undefined && { command: chatCommandFrom(command) }),
         ...(focus !== undefined && {
           focus: { path: focus.path, ...(focus.line !== undefined && { line: focus.line }) },
         }),
@@ -622,7 +622,7 @@ function withoutUndefined(request: z.infer<typeof callHierarchyRequest>): CallHi
   };
 }
 
-function toChatCommand(command: z.infer<typeof chatCommand>): ChatCommandRequest {
+function chatCommandFrom(command: z.infer<typeof chatCommand>): ChatCommandRequest {
   if (command.kind === 'summarize') {
     return command;
   }

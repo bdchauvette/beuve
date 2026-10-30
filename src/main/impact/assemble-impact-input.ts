@@ -11,7 +11,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { toChangedLines } from './to-changed-lines.ts';
+import { changedLinesFrom } from './changed-lines-from.ts';
 
 /** A diff file left out before parsing, with the reason the impact view reports. */
 export interface PreSkippedFile {
@@ -71,7 +71,7 @@ export async function assembleImpactInput(
       ...location(file),
       baseText: baseText.value,
       headText: headText.value,
-      changedLines: toChangedLines(file),
+      changedLines: changedLinesFrom(file),
     });
   }
   return ok({ sources, skipped });

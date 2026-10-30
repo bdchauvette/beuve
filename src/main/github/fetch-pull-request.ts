@@ -6,7 +6,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GithubClients } from './create-github-clients.ts';
-import { githubErrorToFailure } from './github-error-to-failure.ts';
+import { failureFromGithubError } from './failure-from-github-error.ts';
 import { githubFailure } from './github-failure.ts';
 
 /** The pull request as GitHub reports it now (unconditionally), or why it couldn't be read. */
@@ -17,7 +17,7 @@ export async function fetchPullRequest(
   const fetched = await clients.withClient(ref.host, async (client) => getPullRequest(client, ref));
   if (!fetched.ok) {
     return err(
-      githubErrorToFailure(fetched.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),
+      failureFromGithubError(fetched.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),
     );
   }
   return fetched.value.kind === 'modified'

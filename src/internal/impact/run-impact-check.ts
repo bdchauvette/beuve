@@ -74,11 +74,11 @@ async function measureSide(
       : { language, measurement: measureFunctions(root, rules) };
   });
   if (!parsed.ok) {
-    return err(toSkipReason(parsed.error.kind));
+    return err(skipReasonFrom(parsed.error.kind));
   }
   return parsed.value === undefined ? err('unsupported-language') : ok(parsed.value);
 }
 
-function toSkipReason(kind: string): SkipReason {
+function skipReasonFrom(kind: string): SkipReason {
   return kind === 'unsupported-language' || kind === 'too-large' ? kind : 'parse-failed';
 }

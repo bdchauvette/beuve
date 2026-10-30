@@ -42,19 +42,20 @@ export function parseTraceRecord(line: string): TraceRecord | undefined {
   if (!isObject(parsed) || !Array.isArray(parsed.events)) {
     return undefined;
   }
-  const test = parsed.test === undefined || parsed.test === null ? undefined : toTest(parsed.test);
+  const test =
+    parsed.test === undefined || parsed.test === null ? undefined : testFrom(parsed.test);
   if (test === 'invalid') {
     return undefined;
   }
   const events = parsed.events.slice(0, maxEvents).flatMap((event: unknown) => {
-    const read = toEvent(event);
+    const read = eventFrom(event);
     return read === undefined ? [] : [read];
   });
   const dropped = isCount(parsed.dropped) ? parsed.dropped : 0;
   return { test, events, dropped: dropped + Math.max(0, parsed.events.length - maxEvents) };
 }
 
-function toTest(value: unknown): TraceTestId | 'invalid' {
+function testFrom(value: unknown): TraceTestId | 'invalid' {
   if (!isObject(value) || typeof value.file !== 'string' || !Array.isArray(value.titles)) {
     return 'invalid';
   }
@@ -68,7 +69,7 @@ function toTest(value: unknown): TraceTestId | 'invalid' {
   };
 }
 
-function toEvent(value: unknown): RawTraceEvent | undefined {
+function eventFrom(value: unknown): RawTraceEvent | undefined {
   if (!isObject(value) || !isCount(value.seq) || !isCount(value.frame)) {
     return undefined;
   }
@@ -80,7 +81,7 @@ function toEvent(value: unknown): RawTraceEvent | undefined {
       if (probe === undefined || !Array.isArray(value.args)) {
         return undefined;
       }
-      const args = value.args.slice(0, 64).map((arg: unknown) => toSummary(arg));
+      const args = value.args.slice(0, 64).map((arg: unknown) => summaryFrom(arg));
       return { kind: 'enter', seq, frame, parent, probe, args };
     }
     case 'branch': {
@@ -92,7 +93,7 @@ function toEvent(value: unknown): RawTraceEvent | undefined {
     case 'caught': {
       return probe === undefined
         ? undefined
-        : { kind: value.kind, seq, frame, probe, value: toSummary(value.value) };
+        : { kind: value.kind, seq, frame, probe, value: summaryFrom(value.value) };
     }
     case 'mark': {
       return probe === undefined ? undefined : { kind: 'mark', seq, frame, probe };
@@ -104,7 +105,7 @@ function toEvent(value: unknown): RawTraceEvent | undefined {
     }
     case 'return':
     case 'throw': {
-      return { kind: value.kind, seq, frame, probe, value: toSummary(value.value) };
+      return { kind: value.kind, seq, frame, probe, value: summaryFrom(value.value) };
     }
     default: {
       return undefined;
@@ -112,7 +113,7 @@ function toEvent(value: unknown): RawTraceEvent | undefined {
   }
 }
 
-function toSummary(value: unknown): ValueSummary {
+function summaryFrom(value: unknown): ValueSummary {
   if (isObject(value) && typeof value.type === 'string' && typeof value.preview === 'string') {
     const type = valueTypes.has(value.type) ? (value.type as ValueType) : 'unavailable';
     const preview =

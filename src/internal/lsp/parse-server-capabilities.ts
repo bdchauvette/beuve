@@ -19,7 +19,7 @@ export function parseServerCapabilities(result: unknown): LspServerCapabilities 
     return value === true || (typeof value === 'object' && value !== null);
   };
   return {
-    positionEncoding: toEncoding(raw['positionEncoding']),
+    positionEncoding: encodingFrom(raw['positionEncoding']),
     callHierarchy: isEnabled('callHierarchyProvider'),
     pullDiagnostics: isEnabled('diagnosticProvider'),
     definition: isEnabled('definitionProvider'),
@@ -30,7 +30,7 @@ export function parseServerCapabilities(result: unknown): LspServerCapabilities 
   };
 }
 
-function toEncoding(value: unknown): PositionEncoding {
+function encodingFrom(value: unknown): PositionEncoding {
   return value === positionEncodings.utf8 || value === positionEncodings.utf32
     ? value
     : positionEncodings.utf16;

@@ -1229,7 +1229,7 @@ export class BeuveApp extends LitElement {
     if (this.peek !== pending || this.review !== review) {
       return;
     }
-    this.peek = toPeekState(path, line, answer);
+    this.peek = peekStateFrom(path, line, answer);
   }
 
   private async openFlow(path: string, line: number | undefined): Promise<void> {
@@ -1259,7 +1259,7 @@ export class BeuveApp extends LitElement {
     if (this.flow !== pending || this.review !== review) {
       return;
     }
-    this.flow = toFlowState(path, line, answer);
+    this.flow = flowStateFrom(path, line, answer);
   }
 
   /** `r`: runs the tests covering the hunk with tracing; the portal follows `trace:status`. */
@@ -2726,7 +2726,11 @@ const scopeZones: Readonly<Partial<Record<CommandDefinition['scope'], ZoneId>>> 
   Files: 'intent',
 };
 
-function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchyView>): PeekState {
+function peekStateFrom(
+  path: string,
+  line: number,
+  answer: IpcResult<CallHierarchyView>,
+): PeekState {
   if (!answer.ok) {
     return { path, line, status: 'error', message: answer.error.message };
   }
@@ -2742,7 +2746,11 @@ function toPeekState(path: string, line: number, answer: IpcResult<CallHierarchy
       };
 }
 
-function toFlowState(path: string, line: number, answer: IpcResult<FlowGraphResponse>): FlowState {
+function flowStateFrom(
+  path: string,
+  line: number,
+  answer: IpcResult<FlowGraphResponse>,
+): FlowState {
   if (!answer.ok) {
     return { path, line, status: 'error', message: answer.error.message };
   }

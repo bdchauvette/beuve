@@ -3,8 +3,8 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { PatchHunk, PatchLine, SuggestedPatch, UraAnchor, UraItemError } from './ura-item.ts';
-import { toChangeRegions } from './to-change-regions.ts';
-import type { ChangeRegion } from './to-change-regions.ts';
+import { changeRegionsFrom } from './change-regions-from.ts';
+import type { ChangeRegion } from './change-regions-from.ts';
 
 type PatchError = Extract<UraItemError, { kind: 'invalid-patch' }>;
 
@@ -168,7 +168,7 @@ function checkPlacement(hunks: readonly PatchHunk[], anchor: UraAnchor): string 
     }
     previousEnd = hunk.oldStart + Math.max(hunk.oldCount, 1) - 1;
   }
-  const regions = hunks.flatMap((hunk) => toChangeRegions(hunk));
+  const regions = hunks.flatMap((hunk) => changeRegionsFrom(hunk));
   if (regions.length === 0) {
     return 'the patch changes nothing';
   }

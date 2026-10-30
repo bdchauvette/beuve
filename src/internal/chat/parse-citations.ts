@@ -26,7 +26,7 @@ export function parseCitations(answer: string): ParsedCitations {
   const markers: CitationMarker[] = [];
   let malformed = 0;
   for (const match of answer.matchAll(bracketed)) {
-    const marker = toMarker(match[1] ?? '', match.index, match[0].length);
+    const marker = markerFrom(match[1] ?? '', match.index, match[0].length);
     if (marker === undefined) {
       malformed += 1;
     } else {
@@ -40,7 +40,7 @@ const bracketed = /\[\[([^[\]\n]{1,512})\]\]/gu;
 const lineNumber = /^\d{1,9}$/u;
 const leadingDotSlash = /^(?:\.\/)+/u;
 
-function toMarker(inner: string, index: number, length: number): CitationMarker | undefined {
+function markerFrom(inner: string, index: number, length: number): CitationMarker | undefined {
   const colon = inner.lastIndexOf(':');
   if (colon === -1) {
     return undefined;

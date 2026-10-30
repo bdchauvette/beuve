@@ -74,7 +74,7 @@ async function runStructured<T>(
   request: ModelRequest<T>,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<ModelOutput<T>, ModelError>> {
-  const jsonSchema = toJsonSchema(request.outputSchema);
+  const jsonSchema = jsonSchemaFrom(request.outputSchema);
   if (jsonSchema === undefined) {
     return err({ kind: 'invalid-request', reason: 'the output schema has no JSON Schema form' });
   }
@@ -193,7 +193,7 @@ function logFinished(output: ModelOutput<unknown>, options: ClaudeCodeModelOptio
 }
 
 /** Without the `$schema` dialect key, which Claude Code's structured output doesn't need. */
-function toJsonSchema(schema: z.ZodType): string | undefined {
+function jsonSchemaFrom(schema: z.ZodType): string | undefined {
   try {
     const json = Object.entries(z.toJSONSchema(schema)).filter(([key]) => key !== '$schema');
     return JSON.stringify(Object.fromEntries(json));

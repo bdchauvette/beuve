@@ -310,7 +310,7 @@ function renderQuestion(
 ): { text: string; truncated: boolean } {
   const trimmed = expandMentionTokens(
     question.trim(),
-    selections.map((selection) => toPlace(selection)),
+    selections.map((selection) => placeFrom(selection)),
   );
   const isTruncated = trimmed.length > maxChars;
   const shown = isTruncated ? trimmed.slice(0, maxChars) : trimmed;
@@ -448,7 +448,7 @@ function renderSelection(
   const whole = selection.isWholeFile
     ? `, whole file of ${String(selection.totalLines)} lines`
     : '';
-  const heading = `### Selection ${String(number)}: ${formatMention(toPlace(selection))} (${commit}${whole})\n\n`;
+  const heading = `### Selection ${String(number)}: ${formatMention(placeFrom(selection))} (${commit}${whole})\n\n`;
   const width = String(selection.endLine).length;
   const numbered = selection.lines.map(
     (line, offset) => `${String(selection.startLine + offset).padStart(width)}  ${line}\n`,
@@ -489,7 +489,7 @@ function renderSelection(
 }
 
 /** A selection as the prompt names it: a whole file by its path alone. */
-function toPlace(selection: ChatSelection): MentionPlace {
+function placeFrom(selection: ChatSelection): MentionPlace {
   return selection.kind === 'lines' && !selection.isWholeFile
     ? selection
     : { path: selection.path, side: selection.side };

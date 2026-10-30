@@ -21,7 +21,7 @@ export function parseCheckAttr(output: string): ReadonlyMap<string, DiffAttribut
     const path = fields[index] ?? '';
     const name = fields[index + 1];
     const value = fields[index + 2] ?? 'unspecified';
-    const parsed = toAttribute(name, value);
+    const parsed = attributeFrom(name, value);
     if (path === '' || parsed === undefined) {
       continue;
     }
@@ -30,7 +30,7 @@ export function parseCheckAttr(output: string): ReadonlyMap<string, DiffAttribut
   return attributes;
 }
 
-function toAttribute(name: string | undefined, value: string): DiffAttributes | undefined {
+function attributeFrom(name: string | undefined, value: string): DiffAttributes | undefined {
   if (value === 'unspecified') {
     return undefined;
   }

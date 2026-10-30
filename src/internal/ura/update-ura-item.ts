@@ -4,7 +4,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { toUraItemRow } from './to-ura-item-row.ts';
+import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
@@ -23,6 +23,6 @@ export function updateUraItem(
       WHERE id = :id AND session_id = :session_id;`,
   );
   statement.setAllowUnknownNamedParameters(true);
-  const { changes } = statement.run(toUraItemRow(item));
+  const { changes } = statement.run(uraItemRowFrom(item));
   return Number(changes) === 0 ? err({ kind: 'item-not-found', id: item.id }) : ok(undefined);
 }

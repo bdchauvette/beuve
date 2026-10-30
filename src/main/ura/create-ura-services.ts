@@ -70,9 +70,9 @@ import type { SessionContext } from '../sessions/session-context.ts';
 
 import { buildLineMapping } from './build-line-mapping.ts';
 import { renderUraExport } from './render-ura-export.ts';
-import { toUraItemView } from './to-ura-item-view.ts';
-import { toUraSummary } from './to-ura-summary.ts';
-import { toVerdictNotice } from './to-verdict-notice.ts';
+import { uraItemViewFrom } from './ura-item-view-from.ts';
+import { uraSummaryFrom } from './ura-summary-from.ts';
+import { verdictNoticeFrom } from './verdict-notice-from.ts';
 import { uraFailure } from './ura-failure.ts';
 
 /** The URA staging dock (Zone 3) as the renderer and the MCP server reach it (ADR 0023, 0027). */
@@ -238,7 +238,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return head;
     }
     const place = await placer(head.value, [item]);
-    return ok(toUraItemView(item, place(item), postingsFor(item.sessionId).get(item.id)));
+    return ok(uraItemViewFrom(item, place(item), postingsFor(item.sessionId).get(item.id)));
   };
 
   const stored = <T>(result: StoreResult<T>): IpcResult<T> =>
@@ -291,7 +291,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return diff;
     }
     const { refreshed } = diff.value;
-    const summary = toUraSummary(diff.value);
+    const summary = uraSummaryFrom(diff.value);
     const items = listUraItems(db, summary.sessionId);
     if (!items.ok) {
       return uraFailure(logger, items.error);
@@ -321,7 +321,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return {
       derivedVerdict: deriveStagedVerdict(items),
       ...(choice.chosen !== undefined && { chosenVerdict: choice.chosen }),
-      ...(choice.cleared !== undefined && { verdictNotice: toVerdictNotice(choice.cleared) }),
+      ...(choice.cleared !== undefined && { verdictNotice: verdictNoticeFrom(choice.cleared) }),
     };
   };
 
@@ -338,7 +338,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const place = await placer(head.value, items.value);
       const postings = postingsFor(head.value.sessionId);
       const views = items.value.map((item) =>
-        toUraItemView(item, place(item), postings.get(item.id)),
+        uraItemViewFrom(item, place(item), postings.get(item.id)),
       );
       return ok({
         sessionId: head.value.sessionId,
@@ -384,7 +384,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       }
       changed(item.value.sessionId);
       const place = await placer(head.value, [item.value]);
-      return ok(toUraItemView(item.value, place(item.value)));
+      return ok(uraItemViewFrom(item.value, place(item.value)));
     },
 
     update: async ({ itemId, suggestedPatch, ...text }): Promise<IpcResult<UraItemView>> => {

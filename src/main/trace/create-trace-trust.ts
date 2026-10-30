@@ -43,7 +43,7 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
     }
     const settings = await readSettingsFile(settingsPath);
     const stored = settings[settingsKey];
-    return toApproval(
+    return approvalFrom(
       typeof stored === 'object' && stored !== null
         ? (stored as Record<string, unknown>)[key]
         : undefined,
@@ -102,7 +102,7 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
   };
 }
 
-function toApproval(value: unknown): Approval | undefined {
+function approvalFrom(value: unknown): Approval | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined;
   }

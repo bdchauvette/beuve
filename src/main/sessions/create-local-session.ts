@@ -17,7 +17,7 @@ import type { Result } from '#x/result/result.ts';
 import { gitFailure } from './git-failure.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
-import { toSessionSummary } from './to-session-summary.ts';
+import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /**
  * Starts reviewing a local branch, or resumes the session that already reviews it (moving its
@@ -48,7 +48,7 @@ export async function createLocalSession(
     headRef: request.headRef,
   };
   const saved = upsert(context, source, head.value);
-  return saved.ok ? ok(toSessionSummary(saved.value)) : saved;
+  return saved.ok ? ok(sessionSummaryFrom(saved.value)) : saved;
 }
 
 function upsert(

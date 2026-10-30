@@ -201,7 +201,7 @@ export async function startLanguageServer(
     if (!outcome.ok && isRetryable(outcome.error)) {
       outcome = await connection.request(method, params, requestOptions);
     }
-    return outcome.ok ? outcome : err(toLspError(serverId, outcome.error));
+    return outcome.ok ? outcome : err(lspErrorFrom(serverId, outcome.error));
   };
 
   const initialized = await initialize(connection, options, workspaceFolders);
@@ -308,7 +308,7 @@ function isRetryable(error: JsonRpcRequestError): boolean {
   );
 }
 
-function toLspError(serverId: string, error: JsonRpcRequestError): LspError {
+function lspErrorFrom(serverId: string, error: JsonRpcRequestError): LspError {
   switch (error.kind) {
     case 'timeout': {
       return { kind: 'request-timeout', method: error.method, timeout: error.timeout };

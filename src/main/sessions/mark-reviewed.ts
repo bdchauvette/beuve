@@ -11,7 +11,7 @@ import { loadSession } from './load-session.ts';
 import { refreshSession } from './refresh-session.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
-import { toSessionSummary } from './to-session-summary.ts';
+import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /**
  * Records a checkpoint at the session's current head and the fork point it has from the base
@@ -52,11 +52,11 @@ export async function markReviewed(
     review.checkpoint.headSha === session.headSha &&
     review.checkpoint.baseSha === baseSha
   ) {
-    return ok(toSessionSummary(session));
+    return ok(sessionSummaryFrom(session));
   }
   const recorded = recordCheckpoint(session, { baseSha, headSha: session.headSha }, context.deps);
   const inserted = insertCheckpoint(context.db, recorded.checkpoint);
   return inserted.ok
-    ? ok(toSessionSummary(recorded.session))
+    ? ok(sessionSummaryFrom(recorded.session))
     : sessionFailure(context.logger, inserted.error);
 }

@@ -85,7 +85,7 @@ export async function readBlobs(
     return read;
   }
   for (const [objectId, bytes] of read.value) {
-    contents.set(objectId, toContent(bytes));
+    contents.set(objectId, contentFrom(bytes));
   }
   return ok(contents);
 }
@@ -179,7 +179,7 @@ async function readContents(
   return ok(read);
 }
 
-function toContent(bytes: Buffer): BlobContent {
+function contentFrom(bytes: Buffer): BlobContent {
   const probe = bytes.subarray(0, binaryProbeBytes);
   return probe.includes(0)
     ? { kind: 'binary', size: bytes.length }

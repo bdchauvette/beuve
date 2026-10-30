@@ -5,7 +5,7 @@ import { test } from './testing/test.ts';
 import type { ChatMentionView } from '#contract/ipc-contract.ts';
 
 import { serializeChatDraft } from './serialize-chat-draft.ts';
-import { toDraftParts } from './to-draft-parts.ts';
+import { draftPartsFrom } from './draft-parts-from.ts';
 
 function sha(): string {
   return 'c'.repeat(40);
@@ -41,18 +41,18 @@ describe('serializeChatDraft', () => {
     });
   });
 
-  test('round-trips through toDraftParts', ({ expect }) => {
+  test('round-trips through draftPartsFrom', ({ expect }) => {
     const { text, mentions } = serializeChatDraft([
       { kind: 'mention', mention: head() },
       { kind: 'text', text: ' vs ' },
       { kind: 'mention', mention: base() },
     ]);
-    expect(toDraftParts(text, mentions)).toStrictEqual([
+    expect(draftPartsFrom(text, mentions)).toStrictEqual([
       { kind: 'mention', mention: head() },
       { kind: 'text', text: ' vs ' },
       { kind: 'mention', mention: base() },
     ]);
-    expect(toDraftParts('stray [[@3]] token', mentions)).toStrictEqual([
+    expect(draftPartsFrom('stray [[@3]] token', mentions)).toStrictEqual([
       { kind: 'text', text: 'stray [[@3]] token' },
     ]);
   });

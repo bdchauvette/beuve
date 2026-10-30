@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { rowToUraItem } from './row-to-ura-item.ts';
+import { uraItemFromRow } from './ura-item-from-row.ts';
 import type { SessionId, UraItem, UraStoreError } from './ura-item.ts';
 
 /** A session's items in dock order, every status and every head. */
@@ -16,7 +16,7 @@ export function listUraItems(
     .all(sessionId);
   const items: UraItem[] = [];
   for (const row of rows) {
-    const item = rowToUraItem(row);
+    const item = uraItemFromRow(row);
     if (!item.ok) {
       return item;
     }

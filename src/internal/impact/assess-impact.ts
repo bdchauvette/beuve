@@ -89,9 +89,9 @@ function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileA
     (pair.kind !== 'added' && isBaseChanged(pair.base.startLine, pair.base.endLine)) ||
     (pair.kind !== 'removed' && isHeadChanged(pair.head.startLine, pair.head.endLine));
   const entries = matchFunctions(base, head)
-    .map((pair) => toImpact(pair, isInDiff(pair), rank))
+    .map((pair) => impactFrom(pair, isInDiff(pair), rank))
     .filter((entry) => entry.change !== 'unchanged' || entry.inDiff);
-  const findings = entries.flatMap((entry) => toFinding(file.path, entry, config));
+  const findings = entries.flatMap((entry) => findingFrom(file.path, entry, config));
   return {
     impact: {
       status: 'analyzed',
@@ -106,7 +106,7 @@ function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileA
   };
 }
 
-function toImpact(pair: FunctionPair, isInDiff: boolean, rank: Rank): FunctionImpact {
+function impactFrom(pair: FunctionPair, isInDiff: boolean, rank: Rank): FunctionImpact {
   switch (pair.kind) {
     case 'added': {
       const head = snapshot(pair.head);
@@ -152,7 +152,7 @@ function toImpact(pair: FunctionPair, isInDiff: boolean, rank: Rank): FunctionIm
   }
 }
 
-function toFinding(
+function findingFrom(
   path: string,
   entry: FunctionImpact,
   config: ImpactConfig,

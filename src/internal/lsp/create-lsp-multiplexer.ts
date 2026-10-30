@@ -409,7 +409,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       ? ok(undefined)
       : err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
 
-  const toNodes = async (
+  const nodesFrom = async (
     session: ServerSession,
     entry: ServerEntry,
     edges: readonly LspCallHierarchyEdge[],
@@ -460,7 +460,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     }
     const edges = parseCallHierarchyItems(result.value, direction === 'incoming' ? 'from' : 'to');
     return ok(
-      await toNodes(
+      await nodesFrom(
         session.value,
         handle.entry,
         edges,
@@ -539,7 +539,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         return result;
       }
       const edges = parseCallHierarchyItems(result.value, 'items');
-      const calls = await toNodes(session, entry, edges, undefined);
+      const calls = await nodesFrom(session, entry, edges, undefined);
       return ok(calls.map((call) => call.node));
     },
 

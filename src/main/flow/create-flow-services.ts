@@ -20,7 +20,7 @@ import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
-import { toFlowChangedLines } from './to-flow-changed-lines.ts';
+import { flowChangedLinesFrom } from './flow-changed-lines-from.ts';
 
 /** Control-flow graphs for the renderer's `Shift+p` (ADR 0028, 0029). */
 export interface FlowServices {
@@ -84,7 +84,7 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
       if (blob?.kind !== 'text') {
         return failed('file-unavailable', `${path} has no readable text at the head`);
       }
-      const changedLines = toFlowChangedLines(file);
+      const changedLines = flowChangedLinesFrom(file);
       const built = await parse(path, blob.text, (root, parsedLanguage): FlowGraphResponse => {
         const rules = flowRulesByLanguage[parsedLanguage];
         if (rules === undefined) {

@@ -38,7 +38,7 @@ export function parseVitestReport(text: string, root: string): TestOutcome[] | u
       continue;
     }
     for (const assertion of assertions) {
-      const outcome = toOutcome(file, assertion);
+      const outcome = outcomeFrom(file, assertion);
       if (outcome !== undefined) {
         outcomes.push(outcome);
       }
@@ -47,7 +47,7 @@ export function parseVitestReport(text: string, root: string): TestOutcome[] | u
   return outcomes;
 }
 
-function toOutcome(file: string, value: unknown): TestOutcome | undefined {
+function outcomeFrom(file: string, value: unknown): TestOutcome | undefined {
   if (!isObject(value) || typeof value.title !== 'string') {
     return undefined;
   }
@@ -61,7 +61,7 @@ function toOutcome(file: string, value: unknown): TestOutcome | undefined {
   return {
     file,
     titles,
-    status: toStatus(value.status),
+    status: statusFrom(value.status),
     duration:
       typeof value.duration === 'number'
         ? Temporal.Duration.from({ milliseconds: Math.round(value.duration) })
@@ -70,7 +70,7 @@ function toOutcome(file: string, value: unknown): TestOutcome | undefined {
   };
 }
 
-function toStatus(status: unknown): TestStatus {
+function statusFrom(status: unknown): TestStatus {
   return status === 'passed' || status === 'failed' ? status : 'skipped';
 }
 

@@ -76,7 +76,7 @@ export function buildGithubReview(
   const inline: GithubReviewComment[] = [];
   const general: string[] = [];
   for (const entry of artifact.entries) {
-    const comment = toComment(entry, options.commentableRanges);
+    const comment = commentFrom(entry, options.commentableRanges);
     if (comment === undefined) {
       general.push(generalSection(entry, options.commentableRanges));
     } else {
@@ -109,7 +109,7 @@ function header(artifact: UraArtifact): string {
   return tally === '' ? summary : `${summary}\n\n${tally}.`;
 }
 
-function toComment(
+function commentFrom(
   { item, placement }: UraEntry,
   ranges: GithubReviewOptions['commentableRanges'],
 ): GithubReviewComment | undefined {

@@ -20,7 +20,7 @@ import type { UraServices } from '../ura/create-ura-services.ts';
 
 import type { GithubContext } from './github-context.ts';
 import { githubFailure } from './github-failure.ts';
-import { toCommentableRanges } from './to-commentable-ranges.ts';
+import { commentableRangesFrom } from './commentable-ranges-from.ts';
 
 /** A review ready to post: the payload, which items it carries and where each one lands. */
 export interface PreparedReview {
@@ -66,7 +66,7 @@ export async function prepareGithubReview(
   }
   const posted = new Set(ura.listPostings(session.id).map((posting) => posting.itemId as string));
   const fresh = artifact.value.entries.filter((entry) => !posted.has(entry.item.id));
-  const options = { commentableRanges: toCommentableRanges(diff.value.files) };
+  const options = { commentableRanges: commentableRangesFrom(diff.value.files) };
   const unposted: UraArtifact = { ...artifact.value, entries: fresh };
   const payload = buildGithubReview(unposted, options);
   const entries = fresh.map((entry) => ({

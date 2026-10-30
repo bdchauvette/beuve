@@ -12,7 +12,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { assembleImpactInput } from './assemble-impact-input.ts';
 import type { ImpactRunner } from './create-impact-worker.ts';
 import { slimImpactView } from './slim-impact-view.ts';
-import { toImpactView } from './to-impact-view.ts';
+import { impactViewFrom } from './impact-view-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 const headMoved: IpcError = {
@@ -83,7 +83,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
       compute,
     });
     return ok(
-      toImpactView({
+      impactViewFrom({
         sessionId,
         baseSha: diff.baseSha,
         headSha: diff.refreshed.session.headSha,

@@ -36,7 +36,7 @@ import { normalizePathScope } from '#internal/chat/normalize-path-scope.ts';
 import { reviewChange } from '#internal/chat/review-change.ts';
 import type { ReviewProgress } from '#internal/chat/review-change.ts';
 import { splitAtCompaction } from '#internal/chat/split-at-compaction.ts';
-import { toChatHistory } from '#internal/chat/to-chat-history.ts';
+import { chatHistoryFrom } from '#internal/chat/chat-history-from.ts';
 import { updateChatAnswer } from '#internal/chat/update-chat-answer.ts';
 import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
@@ -57,11 +57,11 @@ import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts'
 
 import type { ClaudeCodeSettings } from './claude-code-settings.ts';
 import { describeChatError } from './describe-chat-error.ts';
-import { modelErrorToChatFailure } from './model-error-to-chat-failure.ts';
+import { chatFailureFromModelError } from './chat-failure-from-model-error.ts';
 import { resolveChatMentions } from './resolve-chat-mentions.ts';
 import { resolveLanguageModel } from './resolve-language-model.ts';
-import { toChatMessageView } from './to-chat-message-view.ts';
-import { toChatQuestion } from './to-chat-question.ts';
+import { chatMessageViewFrom } from './chat-message-view-from.ts';
+import { chatQuestionFrom } from './chat-question-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** The read-only Q&A chat, as the renderer reaches it (ADR 0031, 0055–0057). */
@@ -184,7 +184,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const publish = (message: ChatMessage, droppedTurns = 0): void => {
     notify(updateListeners, {
-      message: toChatMessageView(message),
+      message: chatMessageViewFrom(message),
       ...(droppedTurns > 0 && { droppedTurns }),
     });
   };
@@ -307,11 +307,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return prepared.error;
     }
-    const input = toChatQuestion({
+    const input = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
       question: job.request.question,
-      history: toChatHistory(before.value),
+      history: chatHistoryFrom(before.value),
       summary: splitAtCompaction(before.value).summary?.content,
       selections: job.selections,
       focus: job.request.focus,
@@ -328,7 +328,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return prepared.error;
     }
-    const input = toChatQuestion({
+    const input = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
       question: '',
@@ -343,7 +343,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const askModel = async (
     job: AnswerJob,
-    input: ReturnType<typeof toChatQuestion>,
+    input: ReturnType<typeof chatQuestionFrom>,
   ): Promise<Outcome> => {
     const model = await resolveLanguageModel(claude, logger);
     if (!model.ok) {
@@ -367,7 +367,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       };
     }
     return asked.error.kind === 'model'
-      ? toOutcome(asked.error.error)
+      ? outcomeFrom(asked.error.error)
       : { status: 'failed', code: 'internal' };
   };
 
@@ -402,7 +402,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return { status: 'failed', code: 'nothing-to-review' };
     }
     const task: ChatTask = { kind: 'review', pathScope, maxFindings: 12 };
-    const input = toChatQuestion({
+    const input = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
       question: '',
@@ -451,7 +451,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     });
     if (!reviewed.ok) {
       return reviewed.error.kind === 'model'
-        ? toOutcome(reviewed.error.error)
+        ? outcomeFrom(reviewed.error.error)
         : { status: 'failed', code: 'internal' };
     }
     logger.info('chat review answered', {
@@ -547,7 +547,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       logger.error('chat history is corrupt', { error: stored.error });
       return err({ code: 'internal', message: 'stored chat history is corrupt' });
     }
-    const turns = toChatHistory(stored.value);
+    const turns = chatHistoryFrom(stored.value);
     if (turns.length === 0) {
       return err({
         code: 'refused',
@@ -562,7 +562,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return failed({ status: 'failed', code: 'not-installed' });
     }
-    const question = toChatQuestion({
+    const question = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
       question: '',
@@ -592,7 +592,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return failed(
         compacted.error.kind === 'nothing-to-compact'
           ? { status: 'failed', code: 'internal' }
-          : toOutcome(compacted.error.error),
+          : outcomeFrom(compacted.error.error),
       );
     }
     if (job.controller.signal.aborted) {
@@ -610,7 +610,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     };
     const appended = appendChatMessage(db, message);
     return appended.ok
-      ? ok({ outcome: 'compacted', summary: toChatMessageView(message) })
+      ? ok({ outcome: 'compacted', summary: chatMessageViewFrom(message) })
       : err({ code: 'not-found', message: 'no such session' });
   };
 
@@ -745,7 +745,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           wasQueued: isQueued,
           streamed: '',
         });
-        return ok({ question: toChatMessageView(question), answer: toChatMessageView(assistant) });
+        return ok({
+          question: chatMessageViewFrom(question),
+          answer: chatMessageViewFrom(assistant),
+        });
       }),
 
     list: ({ sessionId }): IpcResult<ChatListView> => {
@@ -761,7 +764,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       const messages = listed.value.map((message) => settleOrphan(message));
       return ok({
         sessionId: session.value.id,
-        messages: messages.map((message) => toChatMessageView(message)),
+        messages: messages.map((message) => chatMessageViewFrom(message)),
       });
     },
 
@@ -874,8 +877,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 }
 
 /** A model failure as an answer's outcome; a cancellation keeps what streamed (ADR 0031). */
-function toOutcome(error: ModelError): Outcome {
-  const failed = modelErrorToChatFailure(error);
+function outcomeFrom(error: ModelError): Outcome {
+  const failed = chatFailureFromModelError(error);
   return failed.kind === 'cancelled'
     ? { status: 'cancelled' }
     : { status: 'failed', code: failed.code };

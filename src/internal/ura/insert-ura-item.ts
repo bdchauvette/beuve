@@ -5,7 +5,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { sqliteErrorCode } from '#sqlite/sqlite-error-code.ts';
-import { toUraItemRow } from './to-ura-item-row.ts';
+import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 const foreignKeyViolation = 787;
@@ -34,7 +34,7 @@ export function insertUraItem(
                :chat_message_id, :chat_finding, :impact_metric, :impact_function, :impact_value,
                :impact_threshold, :impact_percentile, :title, :body, :patch, :status,
                :addressed_sha, :addressed_by, :created_at, :updated_at);`,
-    ).run(toUraItemRow(item));
+    ).run(uraItemRowFrom(item));
   } catch (error: unknown) {
     switch (sqliteErrorCode(error)) {
       case foreignKeyViolation: {

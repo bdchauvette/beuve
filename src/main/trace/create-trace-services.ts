@@ -37,9 +37,9 @@ import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts'
 
 import { describeTraceError } from './describe-trace-error.ts';
 import { findTestFiles } from './find-test-files.ts';
-import { toHunkChangedLines } from './to-hunk-changed-lines.ts';
-import { toRepositoryRelativePath } from './to-repository-relative-path.ts';
-import { toTraceResultView } from './to-trace-result-view.ts';
+import { hunkChangedLinesFrom } from './hunk-changed-lines-from.ts';
+import { repositoryRelativePathFrom } from './repository-relative-path-from.ts';
+import { traceResultViewFrom } from './trace-result-view-from.ts';
 import type { TraceTrust } from './create-trace-trust.ts';
 
 /** What an agent asks for (`beuve_run_trace_probe`). */
@@ -234,7 +234,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         repositoryPath: approval.repositoryPath,
       };
     }
-    const filePath = toRepositoryRelativePath(repository, request.path);
+    const filePath = repositoryRelativePathFrom(repository, request.path);
     const headSha = session.headSha;
     const search = await findTestFiles(repository, headSha, filePath);
     if (hasStopped(job)) {
@@ -253,7 +253,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       return failed('file-unavailable', `${filePath} has no readable text at the head.`);
     }
     const file = diff.files.find((candidate) => headPathOf(candidate) === filePath);
-    const planned = await plan(filePath, blob.text, toHunkChangedLines(file, request.line));
+    const planned = await plan(filePath, blob.text, hunkChangedLinesFrom(file, request.line));
     if (!planned.ok) {
       return planned.error;
     }
@@ -293,7 +293,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       }
       return { ...describeTraceError(probed.error, stopMessage(job)), kind: 'failed' };
     }
-    const result = toTraceResultView(probed.value, { headSha: session.headSha, testFiles });
+    const result = traceResultViewFrom(probed.value, { headSha: session.headSha, testFiles });
     return {
       kind: 'done',
       result,
@@ -382,7 +382,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       }
       const job = launched.value;
       void (async (): Promise<void> => {
-        notify(toStatus(echo(job), await job.outcome));
+        notify(statusFrom(echo(job), await job.outcome));
       })();
       return ok({ runId: job.runId });
     },
@@ -451,7 +451,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
   };
 }
 
-function toStatus(
+function statusFrom(
   echo: { sessionId: string; runId: string; path: string; line: number },
   outcome: Outcome,
 ): TraceStatusView {

@@ -20,7 +20,7 @@ export function createEditorSettings(filePath?: string): EditorSettings {
   return {
     read: async (): Promise<EditorId | undefined> => {
       const stored = filePath === undefined ? undefined : await readSettingsFile(filePath);
-      return filePath === undefined ? remembered : toEditorId(stored?.['preferredEditor']);
+      return filePath === undefined ? remembered : editorIdFrom(stored?.['preferredEditor']);
     },
     write: async (editorId): Promise<void> => {
       remembered = editorId;
@@ -32,6 +32,6 @@ export function createEditorSettings(filePath?: string): EditorSettings {
   };
 }
 
-function toEditorId(value: unknown): EditorId | undefined {
+function editorIdFrom(value: unknown): EditorId | undefined {
   return editorDefinitions.find((definition) => definition.id === value)?.id;
 }

@@ -4,7 +4,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { ChatMessage, ChatStoreError, SessionId } from './chat-message.ts';
-import { rowToChatMessage } from './row-to-chat-message.ts';
+import { chatMessageFromRow } from './chat-message-from-row.ts';
 
 /** A session's transcript, oldest first (insertion order breaks timestamp ties). */
 export function listChatMessages(
@@ -16,7 +16,7 @@ export function listChatMessages(
     .all(sessionId);
   const messages: ChatMessage[] = [];
   for (const row of rows) {
-    const message = rowToChatMessage(row);
+    const message = chatMessageFromRow(row);
     if (!message.ok) {
       return message;
     }
