@@ -16,6 +16,6 @@
     ],
     "types": []
   },
-  "include": ["."],
+  "include": [".", "../../types/dom"],
   "exclude": []
 }

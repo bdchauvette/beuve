@@ -50,5 +50,5 @@
     "*.ts",
     ".dependency-cruiser.js"
   ],
-  "exclude": ["src/ui"]
+  "exclude": ["src/ui", "types/dom"]
 }

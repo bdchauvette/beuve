@@ -5,6 +5,10 @@ import type { CommandId } from '#contract/command-catalog.ts';
 import './beuve-sheet-view.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutOf } from './shortcut-of.ts';
+import { installTrustedTypesPolicy } from './install-trusted-types-policy.ts';
+
+// Before the first render: the libraries' HTML goes through the default policy (ADR 0077).
+installTrustedTypesPolicy();
 
 const query = new URLSearchParams(location.search);
 const sheet = document.createElement('beuve-sheet-view');

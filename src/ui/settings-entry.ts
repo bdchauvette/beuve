@@ -1,6 +1,10 @@
 import type { SettingsApi } from '#contract/ipc-contract.ts';
 
 import './beuve-settings-view.ts';
+import { installTrustedTypesPolicy } from './install-trusted-types-policy.ts';
+
+// Before the first render: the libraries' HTML goes through the default policy (ADR 0077).
+installTrustedTypesPolicy();
 
 const view = document.createElement('beuve-settings-view');
 // The Settings preload exposes only the settings channels as `window.beuve` (ADR 0068).
