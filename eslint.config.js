@@ -188,6 +188,16 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/ui-event-delegation',
+    // ADR 0074: repeated templates delegate their events to the component root.
+    files: uiFiles,
+    ignores: [...testFiles, '**/testing/**'],
+    rules: {
+      'local/no-listener-in-repeated-template': 'error',
+    },
+  },
+
+  {
     name: 'beuve/time',
     // ADR 0059: Temporal only. Applies to shipped code, scripts and tests.
     files: timedFiles,

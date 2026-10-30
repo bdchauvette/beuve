@@ -5,6 +5,7 @@ import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-synt
 import { exportNameMatchesFilename } from './export-name-matches-filename.ts';
 import { noBarrelFiles } from './no-barrel-files.ts';
 import { noDate } from './no-date.ts';
+import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template.ts';
 import { noModuleMocking } from './no-module-mocking.ts';
 import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
 import { noTimeNumberArithmetic } from './no-time-number-arithmetic.ts';
@@ -28,6 +29,7 @@ const plugin = {
     'export-name-matches-filename': exportNameMatchesFilename,
     'no-barrel-files': noBarrelFiles,
     'no-date': noDate,
+    'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
     'no-module-mocking': noModuleMocking,
     'no-module-scope-bindings': noModuleScopeBindings,
     'no-time-number-arithmetic': noTimeNumberArithmetic,
