@@ -6,7 +6,7 @@ directories:
   output: out
   buildResources: build
 # Main, preload and ui are esbuild bundles (ADR 0007). The only node_modules main needs at run
-# time are the two it launches by path (ADR 0021); every other dependency is inside the bundles.
+# time are those it launches by path (ADR 0021, 0070); every other dependency is inside the bundles.
 # `dist/main/impact-worker.js` (ADR 0053) and the sheet and Settings pages and preloads (ADR 0067,
 # 0068) are dist files and load from the archive.
 files:
@@ -31,12 +31,22 @@ files:
       - package.json
       - LICENSE
       - lib/cli.mjs
+  # The Claude Code binary the Agent SDK runs when a model's executable is Bundled (ADR 0069,
+  # 0070): the platform package npm installed (darwin-arm64 for the dmg, linux-x64 here).
+  - from: node_modules/@anthropic-ai/claude-agent-sdk-${platform}-${arch}
+    to: node_modules/@anthropic-ai/claude-agent-sdk-${platform}-${arch}
+    filter:
+      - claude
+      - package.json
+      - LICENSE.md
 asar: true
 # Launched by path with ELECTRON_RUN_AS_NODE (ADR 0021). Inside the archive tsserver resolves its
 # lib files only partly and reports wrong diagnostics, so both run from app.asar.unpacked.
 asarUnpack:
   - node_modules/typescript/**
   - node_modules/typescript-language-server/**
+  # A native executable inside app.asar can't be run.
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/**
 # Nothing is native, so there is nothing to rebuild for Electron's ABI (ADR 0004).
 npmRebuild: false
 publish: null
