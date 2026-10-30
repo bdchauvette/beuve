@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { symbolKindName } from './symbol-kind-name.ts';
 
 describe('symbolKindName', () => {
-  it('names every LSP symbol kind and tolerates unknown ones', () => {
-    expect([1, 6, 9, 12, 26].map((kind) => symbolKindName(kind))).toEqual([
+  test('names every LSP symbol kind and tolerates unknown ones', ({ expect }) => {
+    expect([1, 6, 9, 12, 26].map((kind) => symbolKindName(kind))).toStrictEqual([
       'file',
       'method',
       'constructor',

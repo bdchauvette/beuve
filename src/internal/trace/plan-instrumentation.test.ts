@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
+import { test } from '#testing/test.ts';
 
 import { applyEdits } from './apply-edits.ts';
 import { ecmascriptTraceRules } from './ecmascript-trace-rules.ts';
@@ -7,9 +10,8 @@ import { describeTimeline } from './testing/describe-timeline.ts';
 import { parseTestSource } from './testing/parse-test-source.ts';
 import { traceTestSource } from './testing/trace-test-source.ts';
 
-const directiveFirst = /^function f\(x\) \{\n {2}'use strict';const __beuveFrame/u;
-
-const clamp = `function clamp(value, low, high) {
+function clamp(): string {
+  return `function clamp(value, low, high) {
   if (value < low) {
     return low;
   }
@@ -18,19 +20,24 @@ const clamp = `function clamp(value, low, high) {
   }
   return value;
 }`;
+}
 
 describe('planInstrumentation', () => {
-  it('traces entry, branches and the return of the function enclosing the hunk', async () => {
-    const trace = await traceTestSource(clamp, [5], 'clamp(12, 0, 10)');
-    expect(trace.outcome).toEqual({ value: 10 });
-    expect(trace.plan.functions).toEqual([{ index: 0, name: 'clamp', startLine: 1, endLine: 9 }]);
-    expect(describeTimeline(trace.timeline)).toEqual([
+  test('traces entry, branches and the return of the function enclosing the hunk', async ({
+    expect,
+  }) => {
+    const trace = await traceTestSource(clamp(), [5], 'clamp(12, 0, 10)');
+    expect(trace.outcome).toStrictEqual({ value: 10 });
+    expect(trace.plan.functions).toStrictEqual([
+      { index: 0, name: 'clamp', startLine: 1, endLine: 9 },
+    ]);
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter clamp(value=12, low=0, high=10)',
       '2: if value < low → false',
       '5: if value > high → true',
       '6: return 10',
     ]);
-    expect(trace.timeline.entries.map((entry) => entry.inHunk)).toEqual([
+    expect(trace.timeline.entries.map((entry) => entry.inHunk)).toStrictEqual([
       false,
       false,
       true,
@@ -38,15 +45,15 @@ describe('planInstrumentation', () => {
     ]);
   });
 
-  it('keeps every line where it was', async () => {
-    const trace = await traceTestSource(clamp, [2], 'clamp(1, 0, 10)');
+  test('keeps every line where it was', async ({ expect }) => {
+    const trace = await traceTestSource(clamp(), [2], 'clamp(1, 0, 10)');
     const lines = trace.code.split('\n');
-    expect(lines).toHaveLength(clamp.split('\n').length);
+    expect(lines).toHaveLength(clamp().split('\n').length);
     expect(lines[1]).toContain('value < low');
     expect(lines[5]).toContain('return');
   });
 
-  it('counts loop iterations per run and nests calls by depth', async () => {
+  test('counts loop iterations per run and nests calls by depth', async ({ expect }) => {
     const source = `function total(values) {
   let sum = 0;
   for (const value of values) {
@@ -58,8 +65,8 @@ function double(n) {
   return n * 2;
 }`;
     const trace = await traceTestSource(source, [4, 9], 'total([1, 2])');
-    expect(trace.outcome).toEqual({ value: 6 });
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(trace.outcome).toStrictEqual({ value: 6 });
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter total(values=[1, 2])',
       '3: loop for (const value of values) ×2',
       '  8: enter double(n=1)',
@@ -70,7 +77,7 @@ function double(n) {
     ]);
   });
 
-  it('records switch values, the cases entered and fallthrough', async () => {
+  test('records switch values, the cases entered and fallthrough', async ({ expect }) => {
     const source = `function kind(code) {
   switch (code) {
     case 1:
@@ -80,7 +87,7 @@ function double(n) {
   }
 }`;
     const trace = await traceTestSource(source, [4], 'kind(1)');
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter kind(code=1)',
       '2: switch code = 1',
       '3: case 1',
@@ -89,7 +96,7 @@ function double(n) {
     ]);
   });
 
-  it('reports thrown values, propagated exceptions and catches', async () => {
+  test('reports thrown values, propagated exceptions and catches', async ({ expect }) => {
     const source = `function check(input) {
   if (!input) throw new Error('missing');
   return input;
@@ -102,8 +109,8 @@ function safe(input) {
   }
 }`;
     const trace = await traceTestSource(source, [2, 7], 'safe(0)');
-    expect(trace.outcome).toEqual({ value: 'fallback' });
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(trace.outcome).toStrictEqual({ value: 'fallback' });
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '5: enter safe(input=0)',
       '  1: enter check(input=0)',
       '  2: if !input → true',
@@ -121,20 +128,22 @@ function inner() { throw new TypeError('bad'); }`,
       'outer()',
     );
     expect(propagated.outcome).toMatchObject({ error: { message: 'bad' } });
-    expect(describeTimeline(propagated.timeline)).toEqual([
+    expect(describeTimeline(propagated.timeline)).toStrictEqual([
       '1: enter outer()',
       '1: throw (propagated) TypeError: bad',
     ]);
   });
 
-  it('instruments expression-bodied arrows, ternaries and implicit returns', async () => {
+  test('instruments expression-bodied arrows, ternaries and implicit returns', async ({
+    expect,
+  }) => {
     const source = `const sign = (n) => n < 0 ? 'negative' : 'positive';
 function log(message) {
   message.length;
 }`;
     const trace = await traceTestSource(source, [1, 3], "[sign(-1), log('hi')]");
-    expect(trace.outcome).toEqual({ value: ['negative', undefined] });
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(trace.outcome).toMatchObject({ value: ['negative', undefined] });
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter sign(n=-1)',
       '1: ternary n < 0 → true',
       `1: return "negative"`,
@@ -143,20 +152,22 @@ function log(message) {
     ]);
   });
 
-  it('summarizes destructured parameters through arguments, and names methods by class', async () => {
+  test('summarizes destructured parameters through arguments, and names methods by class', async ({
+    expect,
+  }) => {
     const source = `class Cart {
   add({ id }, count = 1, ...rest) {
     return id + count + rest.length;
   }
 }`;
     const trace = await traceTestSource(source, [3], "new Cart().add({ id: 1 }, undefined, 'x')");
-    expect(trace.outcome).toEqual({ value: 3 });
+    expect(trace.outcome).toStrictEqual({ value: 3 });
     expect(describeTimeline(trace.timeline)[0]).toBe(
       '2: enter Cart.add({ id }={ id: 1 }, count=1, rest=["x"])',
     );
   });
 
-  it('wraps labelled loops whole, so labelled continue still works', async () => {
+  test('wraps labelled loops whole, so labelled continue still works', async ({ expect }) => {
     const source = `function find(rows) {
   let hits = 0;
   outer: for (const row of rows) {
@@ -167,8 +178,8 @@ function log(message) {
   return hits;
 }`;
     const trace = await traceTestSource(source, [5], 'find([[0, 1], [1], []])');
-    expect(trace.outcome).toEqual({ value: 2 });
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(trace.outcome).toStrictEqual({ value: 2 });
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter find(rows=[[0, 1], [1], []])',
       '3: loop for (const row of rows) ×3',
       '4: loop for (const cell of row) ×2',
@@ -181,7 +192,7 @@ function log(message) {
     ]);
   });
 
-  it('leaves nested functions alone unless they enclose a changed line', async () => {
+  test('leaves nested functions alone unless they enclose a changed line', async ({ expect }) => {
     const source = `function outer(list) {
   return list.map((item) => {
     if (item) return 1;
@@ -189,10 +200,10 @@ function log(message) {
   });
 }`;
     const outer = await traceTestSource(source, [1], 'outer([1])');
-    expect(outer.plan.probes.map((probe) => probe.kind)).toEqual(['enter', 'return']);
+    expect(outer.plan.probes.map((probe) => probe.kind)).toStrictEqual(['enter', 'return']);
     const inner = await traceTestSource(source, [3], 'outer([1, 0])');
-    expect(inner.plan.functions.map((fn) => fn.name)).toEqual(['<anonymous>']);
-    expect(describeTimeline(inner.timeline)).toEqual([
+    expect(inner.plan.functions.map((fn) => fn.name)).toStrictEqual(['<anonymous>']);
+    expect(describeTimeline(inner.timeline)).toStrictEqual([
       '2: enter <anonymous>(item=1)',
       '3: if item → true',
       '3: return 1',
@@ -202,50 +213,50 @@ function log(message) {
     ]);
   });
 
-  it('keeps directives first and handles bare returns', async () => {
+  test('keeps directives first and handles bare returns', async ({ expect }) => {
     const source = `function f(x) {
   'use strict';
   if (x) return;
   return x;
 }`;
     const trace = await traceTestSource(source, [3], 'f(1)');
-    expect(trace.code).toMatch(directiveFirst);
-    expect(describeTimeline(trace.timeline)).toEqual([
+    expect(trace.code).toMatch(/^function f\(x\) \{\n {2}'use strict';const __beuveFrame/u);
+    expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter f(x=1)',
       '3: if x → true',
       '3: return undefined',
     ]);
   });
 
-  it('refuses hunks outside functions and plans that are too large', async () => {
+  test('refuses hunks outside functions and plans that are too large', async ({ expect }) => {
     const root = await parseTestSource('const a = 1;\nfunction f() {\n  return a;\n}');
     expect(
       planInstrumentation(root, { path: 'a.ts', changedLines: new Set([1]) }, ecmascriptTraceRules),
-    ).toEqual({ ok: false, error: { kind: 'no-function' } });
+    ).toStrictEqual({ ok: false, error: { kind: 'no-function' } });
     expect(
       planInstrumentation(
         root,
         { path: 'a.ts', changedLines: new Set([3]), maxProbes: 1 },
         ecmascriptTraceRules,
       ),
-    ).toEqual({ ok: false, error: { kind: 'too-large', probeLimit: 1 } });
+    ).toStrictEqual({ ok: false, error: { kind: 'too-large', probeLimit: 1 } });
   });
 
-  it('produces valid TypeScript for typed code without changing offsets of types', async () => {
+  test('produces valid TypeScript for typed code without changing offsets of types', async ({
+    expect,
+  }) => {
     const source = `export function pick<T>(items: readonly T[], at: number): T | undefined {
   return at < items.length ? items[at] : undefined;
 }`;
     const root = await parseTestSource(source);
-    const plan = planInstrumentation(
-      root,
-      { path: 'pick.ts', changedLines: new Set([2]) },
-      ecmascriptTraceRules,
+    const plan = okValueFrom(
+      planInstrumentation(
+        root,
+        { path: 'pick.ts', changedLines: new Set([2]) },
+        ecmascriptTraceRules,
+      ),
     );
-    expect(plan.ok).toBe(true);
-    if (!plan.ok) {
-      return;
-    }
-    const code = applyEdits(source, plan.value.edits);
+    const code = applyEdits(source, plan.edits);
     const reparsed = await parseTestSource(code);
     expect(reparsed.text).toBe(code);
     expect(hasError(reparsed)).toBe(false);

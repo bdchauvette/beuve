@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { typescriptServerDefinition } from './typescript-server-definition.ts';
 
 describe('typescriptServerDefinition', () => {
-  it('runs over stdio with type acquisition and logging off', () => {
+  test('runs over stdio with type acquisition and logging off', ({ expect }) => {
     const definition = typescriptServerDefinition();
     expect(definition).toMatchObject({
       id: 'typescript',
@@ -11,14 +13,14 @@ describe('typescriptServerDefinition', () => {
       args: ['--stdio'],
     });
     expect(definition.languageIds['.tsx']).toBe('typescriptreact');
-    expect(definition.initializationOptions).toEqual({
+    expect(definition.initializationOptions).toStrictEqual({
       disableAutomaticTypingAcquisition: true,
       hostInfo: 'beuve',
       tsserver: { logVerbosity: 'off', trace: 'off' },
     });
   });
 
-  it('pins tsserver and accepts a Node launcher', () => {
+  test('pins tsserver and accepts a Node launcher', ({ expect }) => {
     const definition = typescriptServerDefinition({
       command: '/app/electron',
       leadingArgs: ['/app/cli.mjs'],

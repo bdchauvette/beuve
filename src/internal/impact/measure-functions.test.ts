@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { ecmascriptRules } from './ecmascript-rules.ts';
 import type { FunctionMetrics } from './function-measurement.ts';
@@ -10,7 +12,7 @@ import type { TestLanguage } from './testing/parse-test-source.ts';
 
 describe('measureFunctions', () => {
   describe('cognitive complexity (SonarSource whitepaper examples)', () => {
-    it('scores sumOfPrimes 7: nested loops, nested if, labelled continue', async () => {
+    test('scores sumOfPrimes 7: nested loops, nested if, labelled continue', async ({ expect }) => {
       const metrics = await metricsOf(`
         function sumOfPrimes(max: number): number {
           let total = 0;
@@ -24,7 +26,7 @@ describe('measureFunctions', () => {
           }
           return total;
         }`);
-      expect(metrics.get('sumOfPrimes')).toEqual({
+      expect(metrics.get('sumOfPrimes')).toStrictEqual({
         cognitive: 7,
         cyclomatic: 4,
         lines: 12,
@@ -33,7 +35,9 @@ describe('measureFunctions', () => {
       });
     });
 
-    it('scores getWords 1: a switch is one break in flow however many cases', async () => {
+    test('scores getWords 1: a switch is one break in flow however many cases', async ({
+      expect,
+    }) => {
       const metrics = await metricsOf(`
         function getWords(number: number): string {
           switch (number) {
@@ -50,7 +54,7 @@ describe('measureFunctions', () => {
       expect(metrics.get('getWords')).toMatchObject({ cognitive: 1, cyclomatic: 4, maxNesting: 1 });
     });
 
-    it('adds else and else-if without nesting increments', async () => {
+    test('adds else and else-if without nesting increments', async ({ expect }) => {
       const metrics = await metricsOf(`
         function f(a: boolean, b: boolean, c: boolean): void {
           if (a) {
@@ -66,18 +70,18 @@ describe('measureFunctions', () => {
       expect(metrics.get('f')).toMatchObject({ cognitive: 5, cyclomatic: 4, maxNesting: 2 });
     });
 
-    it('counts runs of like boolean operators, through parentheses', async () => {
+    test('counts runs of like boolean operators, through parentheses', async ({ expect }) => {
       const metrics = await metricsOf(`
         function a(x, y, z) { return x && y && z; }
         function b(x, y, z, w) { return x && y || z && w; }
         function c(x, y, z) { return x && (y && z); }
         function d(x, y, z) { if (x && !(y || z)) {} }
         function e(x, y, z) { return x ?? y ?? z; }`);
-      expect(cognitive(metrics)).toEqual({ a: 1, b: 3, c: 1, d: 3, e: 1 });
+      expect(cognitive(metrics)).toStrictEqual({ a: 1, b: 3, c: 1, d: 3, e: 1 });
       expect(metrics.get('b')?.cyclomatic).toBe(4);
     });
 
-    it('nests ternaries and catch, but not try or finally', async () => {
+    test('nests ternaries and catch, but not try or finally', async ({ expect }) => {
       const metrics = await metricsOf(`
         function f(a, b) {
           try {
@@ -93,7 +97,7 @@ describe('measureFunctions', () => {
       expect(metrics.get('f')).toMatchObject({ cognitive: 10, cyclomatic: 7, maxNesting: 3 });
     });
 
-    it('adds one for recursion, by name or through this', async () => {
+    test('adds one for recursion, by name or through this', async ({ expect }) => {
       const metrics = await metricsOf(`
         function factorial(n: number): number {
           return n <= 1 ? 1 : n * factorial(n - 1);
@@ -104,10 +108,10 @@ describe('measureFunctions', () => {
           }
           other(): number { return this.depth(root) + depth(); }
         }`);
-      expect(cognitive(metrics)).toEqual({ factorial: 2, 'Tree.depth': 2, 'Tree.other': 0 });
+      expect(cognitive(metrics)).toStrictEqual({ factorial: 2, 'Tree.depth': 2, 'Tree.other': 0 });
     });
 
-    it('ignores unlabelled jumps and counts each loop kind', async () => {
+    test('ignores unlabelled jumps and counts each loop kind', async ({ expect }) => {
       const metrics = await metricsOf(`
         function f(items) {
           for (const item of items) { if (item) break; }
@@ -119,7 +123,7 @@ describe('measureFunctions', () => {
   });
 
   describe('functions and names', () => {
-    it('qualifies methods, nested functions and named function values', async () => {
+    test('qualifies methods, nested functions and named function values', async ({ expect }) => {
       const measured = measureFunctions(
         await parseTestSource(`
           namespace Shapes {
@@ -142,7 +146,7 @@ describe('measureFunctions', () => {
           const object = { key() {}, value: () => {} };`),
         ecmascriptRules,
       );
-      expect(measured.functions.map(({ name }) => name)).toEqual([
+      expect(measured.functions.map(({ name }) => name)).toStrictEqual([
         'Shapes.Circle.area',
         'Shapes.Circle.get radius',
         'Shapes.Circle.set radius',
@@ -157,10 +161,12 @@ describe('measureFunctions', () => {
         'object.value',
       ]);
       const parameters = measured.functions.map(({ metrics }) => metrics.parameters);
-      expect(parameters).toEqual([0, 0, 1, 1, 0, 0, 0, 3, 1, 0, 0, 0]);
+      expect(parameters).toStrictEqual([0, 0, 1, 1, 0, 0, 0, 3, 1, 0, 0, 0]);
     });
 
-    it('keeps nested functions out of their parent and restarts their nesting', async () => {
+    test('keeps nested functions out of their parent and restarts their nesting', async ({
+      expect,
+    }) => {
       const metrics = await metricsOf(`
         function outer(list) {
           if (list) {
@@ -169,15 +175,17 @@ describe('measureFunctions', () => {
             });
           }
         }`);
-      expect(cognitive(metrics)).toEqual({ outer: 1, 'outer.list.forEach(…)': 1 });
+      expect(cognitive(metrics)).toStrictEqual({ outer: 1, 'outer.list.forEach(…)': 1 });
     });
 
-    it('labels test callbacks and numbers duplicates and overload implementations', async () => {
+    test('labels test callbacks and numbers duplicates and overload implementations', async ({
+      expect,
+    }) => {
       const measured = measureFunctions(
         await parseTestSource(`
           describe('parser', () => {
-            it('parses', () => {});
-            it('parses', () => {});
+            test('parses', ({ expect }) => {});
+            test('parses', ({ expect }) => {});
           });
           function over(a: string): void;
           function over(a: number): void;
@@ -185,16 +193,16 @@ describe('measureFunctions', () => {
           class C { m(): void; m(a?: number): void {} }`),
         ecmascriptRules,
       );
-      expect(measured.functions.map(({ name }) => name)).toEqual([
+      expect(measured.functions.map(({ name }) => name)).toStrictEqual([
         "describe('parser')",
-        "describe('parser').it('parses')",
-        "describe('parser').it('parses')#2",
+        "describe('parser').test('parses')",
+        "describe('parser').test('parses')#2",
         'over',
         'C.m',
       ]);
     });
 
-    it('parses TSX and JavaScript with the same rules', async () => {
+    test('parses TSX and JavaScript with the same rules', async ({ expect }) => {
       const tsx = await metricsOf(
         'const View = ({ on }) => <div onClick={() => on && go()}>{on ? <b /> : null}</div>;',
         'tsx',
@@ -203,11 +211,11 @@ describe('measureFunctions', () => {
         'class A { field = () => { if (a) {} }; m() { return a || b; } }',
         'javascript',
       );
-      expect(cognitive(tsx)).toEqual({ View: 1, 'View.<anonymous>': 1 });
-      expect(cognitive(javascript)).toEqual({ 'A.field': 1, 'A.m': 1 });
+      expect(cognitive(tsx)).toStrictEqual({ View: 1, 'View.<anonymous>': 1 });
+      expect(cognitive(javascript)).toStrictEqual({ 'A.field': 1, 'A.m': 1 });
     });
 
-    it('reports line spans, change digests and syntax errors', async () => {
+    test('reports line spans, change digests and syntax errors', async ({ expect }) => {
       const first = measureFunctions(
         await parseTestSource('\nfunction f() {\n  return 1;\n}'),
         ecmascriptRules,
@@ -230,14 +238,14 @@ describe('measureFunctions', () => {
       expect(broken.parseErrors).toBe(true);
     });
 
-    it('walks very deep trees without overflowing the stack', async () => {
+    test('walks very deep trees without overflowing the stack', async ({ expect }) => {
       const terms = Array.from({ length: 20_000 }, (_, index) => `x${String(index)}`);
       const metrics = await metricsOf(`function wide() { return ${terms.join(' && ')}; }`);
       expect(metrics.get('wide')).toMatchObject({ cognitive: 1, cyclomatic: 20_000 });
     });
   });
 
-  it('measures any grammar its rules describe, from hand-built nodes', () => {
+  test('measures any grammar its rules describe, from hand-built nodes', ({ expect }) => {
     const rules: LanguageRules = {
       functions: { def: { nameField: 'name', bodyField: 'body', parametersField: 'params' } },
       scopes: {},
@@ -245,6 +253,7 @@ describe('measureFunctions', () => {
       constructs: { when: { kind: 'branch', decision: true, nestedFields: ['then'] } },
       transparent: [],
     };
+    const node = nodeBuilder();
     const inner = node('when', 2, 2, [], 'then');
     const body = node('block', 1, 3, [node('when', 1, 3, [inner])], 'body');
     const tree = node('module', 0, 3, [
@@ -268,29 +277,34 @@ function cognitive(metrics: ReadonlyMap<string, FunctionMetrics>): Record<string
   return Object.fromEntries(Array.from(metrics, ([name, { cognitive: value }]) => [name, value]));
 }
 
-const ids = { next: 0 };
+type TestNode = ImpactNode & { readonly field?: string };
 
-/** A hand-built node; `field` is the field this node sits in within its parent. */
-function node(
+type NodeBuilder = (
   type: string,
   startRow: number,
   endRow: number,
-  children: readonly (ImpactNode & { readonly field?: string })[],
+  children: readonly TestNode[],
   field?: string,
-  text = type,
-): ImpactNode & { readonly field?: string } {
-  ids.next += 1;
-  return {
-    id: ids.next,
-    type,
-    isNamed: true,
-    text,
-    hasError: false,
-    startPosition: { row: startRow, column: 0 },
-    endPosition: { row: endRow, column: 0 },
-    children,
-    // eslint-disable-next-line unicorn/no-null -- the interface mirrors tree-sitter, which returns null
-    childForFieldName: (name) => children.find((child) => child.field === name) ?? null,
-    ...(field !== undefined && { field }),
+  text?: string,
+) => TestNode;
+
+/** Builds hand-built nodes with ids unique within the builder; `field` is the field a node sits in. */
+function nodeBuilder(): NodeBuilder {
+  let nextId = 0;
+  return (type, startRow, endRow, children, field, text = type): TestNode => {
+    nextId += 1;
+    return {
+      id: nextId,
+      type,
+      isNamed: true,
+      text,
+      hasError: false,
+      startPosition: { row: startRow, column: 0 },
+      endPosition: { row: endRow, column: 0 },
+      children,
+      // eslint-disable-next-line unicorn/no-null -- the interface mirrors tree-sitter, which returns null
+      childForFieldName: (name) => children.find((child) => child.field === name) ?? null,
+      ...(field !== undefined && { field }),
+    };
   };
 }

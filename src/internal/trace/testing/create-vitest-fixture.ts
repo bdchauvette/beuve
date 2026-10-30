@@ -16,9 +16,15 @@ export interface VitestFixture {
   readonly cleanup: () => void;
 }
 
-/** Creates the fixture in a new temporary directory, with `files` relative to the worktree. */
-export function createVitestFixture(files: Readonly<Record<string, string>>): VitestFixture {
-  const created = mkdtempSync(path.join(os.tmpdir(), 'beuve-trace-'));
+/**
+ * Creates the fixture in a new directory under `parent` (the system temporary directory by
+ * default), with `files` relative to the worktree.
+ */
+export function createVitestFixture(
+  files: Readonly<Record<string, string>>,
+  parent: string = os.tmpdir(),
+): VitestFixture {
+  const created = mkdtempSync(path.join(parent, 'beuve-trace-'));
   const base = realpathSync(created);
   const worktree = path.join(base, 'worktree');
   const dependencyRoot = path.join(base, 'dependencies');

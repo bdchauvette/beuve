@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createServerEnvironment } from './create-server-environment.ts';
 
 describe('createServerEnvironment', () => {
-  it('keeps only the allow-listed variables and adds extras', () => {
+  test('keeps only the allow-listed variables and adds extras', ({ expect }) => {
     const environment = createServerEnvironment(
       {
         PATH: '/usr/bin',
@@ -16,7 +18,7 @@ describe('createServerEnvironment', () => {
       },
       { TSS_LOG: '' },
     );
-    expect(environment).toEqual({
+    expect(environment).toStrictEqual({
       PATH: '/usr/bin',
       HOME: '/home/me',
       LC_ALL: 'C.UTF-8',

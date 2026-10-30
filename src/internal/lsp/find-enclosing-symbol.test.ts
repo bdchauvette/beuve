@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { findEnclosingSymbol } from './find-enclosing-symbol.ts';
 import type { DocumentSymbolView } from './lsp-model.ts';
@@ -23,13 +25,13 @@ describe('findEnclosingSymbol', () => {
     symbol('helper', 'function', 22, 30),
   ];
 
-  it('returns the innermost callable containing the line', () => {
+  test('returns the innermost callable containing the line', ({ expect }) => {
     expect(findEnclosingSymbol(symbols, 8)?.name).toBe('inner');
     expect(findEnclosingSymbol(symbols, 11)?.name).toBe('render');
     expect(findEnclosingSymbol(symbols, 25)?.name).toBe('helper');
   });
 
-  it('skips non-callables and lines outside every symbol', () => {
+  test('skips non-callables and lines outside every symbol', ({ expect }) => {
     expect(findEnclosingSymbol(symbols, 15)).toBeUndefined();
     expect(findEnclosingSymbol(symbols, 21)).toBeUndefined();
   });

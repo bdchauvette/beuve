@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { parseServerCapabilities } from './parse-server-capabilities.ts';
 import { positionEncodings } from './position-encodings.ts';
 
 describe('parseServerCapabilities', () => {
-  it('reads providers and the negotiated encoding, defaulting to UTF-16', () => {
+  test('reads providers and the negotiated encoding, defaulting to UTF-16', ({ expect }) => {
     expect(
       parseServerCapabilities({
         capabilities: {

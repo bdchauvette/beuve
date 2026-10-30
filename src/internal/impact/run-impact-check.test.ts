@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -28,7 +30,8 @@ async function parse<T>(
   return ok(use(await parseTestSource(text), path.endsWith('.py.ts') ? 'python' : 'typescript'));
 }
 
-const base = `
+function base(): string {
+  return `
 export function score(items: number[]): number {
   let total = 0;
   for (const item of items) {
@@ -43,8 +46,10 @@ export function untouched(): number {
 
 export function retired(): void {}
 `;
+}
 
-const head = `
+function head(): string {
+  return `
 export function score(items: number[]): number {
   let total = 0;
   for (const item of items) {
@@ -77,14 +82,15 @@ export function fresh(flag: boolean): number {
   return flag ? 1 : 0;
 }
 `;
+}
 
 describe('runImpactCheck', () => {
-  it('scores how a change moved each function and flags new breaches', async () => {
+  test('scores how a change moved each function and flags new breaches', async ({ expect }) => {
     const files: ImpactSourceFile[] = [
       {
         path: 'src/score.ts',
-        baseText: base,
-        headText: head,
+        baseText: base(),
+        headText: head(),
         changedLines: {
           base: [
             { start: 5, end: 5 },
@@ -101,7 +107,7 @@ describe('runImpactCheck', () => {
     const report = await runImpactCheck(files, parse, { cognitiveMax: 15 });
 
     expect(report.population).toBe(3);
-    expect(report.totals).toEqual({
+    expect(report.totals).toStrictEqual({
       analyzedFiles: 1,
       skippedFiles: 0,
       added: 1,
@@ -114,8 +120,8 @@ describe('runImpactCheck', () => {
     const [file] = report.files;
     expect(
       file?.status === 'analyzed' && file.functions.map(({ name, change }) => `${change} ${name}`),
-    ).toEqual(['modified score', 'removed retired', 'added fresh']);
-    expect(file?.status === 'analyzed' && file.aggregate).toEqual({
+    ).toStrictEqual(['modified score', 'removed retired', 'added fresh']);
+    expect(file?.status === 'analyzed' && file.aggregate).toStrictEqual({
       baseFunctions: 3,
       headFunctions: 3,
       baseCognitive: 1,
@@ -132,7 +138,7 @@ describe('runImpactCheck', () => {
       delta: { cognitive: 31, maxNesting: 6 },
       percentile: 83.3,
     });
-    expect(report.findings).toEqual([
+    expect(report.findings).toStrictEqual([
       {
         kind: 'cognitive-complexity',
         path: 'src/score.ts',
@@ -148,7 +154,7 @@ describe('runImpactCheck', () => {
     ]);
   });
 
-  it('treats added and deleted files as all-added and all-removed', async () => {
+  test('treats added and deleted files as all-added and all-removed', async ({ expect }) => {
     const report = await runImpactCheck(
       [
         {
@@ -170,11 +176,13 @@ describe('runImpactCheck', () => {
       report.files.map(
         (file) => file.status === 'analyzed' && file.functions.map(({ change }) => change),
       ),
-    ).toEqual([['added'], ['removed']]);
+    ).toStrictEqual([['added'], ['removed']]);
     expect(report.cognitiveMax).toBe(15);
   });
 
-  it('reports a moved but unedited function only because the diff touches it', async () => {
+  test('reports a moved but unedited function only because the diff touches it', async ({
+    expect,
+  }) => {
     const before = 'function a() { return 1; }\nfunction b() { return 2; }\n';
     const after = 'function b() { return 2; }\nfunction a() { return 1; }\n';
     const report = await runImpactCheck(
@@ -194,10 +202,10 @@ describe('runImpactCheck', () => {
     expect(
       file?.status === 'analyzed' &&
         file.functions.map(({ name, change, inDiff }) => [name, change, inDiff]),
-    ).toEqual([['a', 'unchanged', true]]);
+    ).toStrictEqual([['a', 'unchanged', true]]);
   });
 
-  it('skips files it cannot analyze instead of failing', async () => {
+  test('skips files it cannot analyze instead of failing', async ({ expect }) => {
     const side = { baseText: 'x', headText: 'y', changedLines: { base: [], head: [] } };
     const report = await runImpactCheck(
       [
@@ -214,7 +222,7 @@ describe('runImpactCheck', () => {
       ],
       parse,
     );
-    expect(report.files.map((file) => file.status === 'skipped' && file.reason)).toEqual([
+    expect(report.files.map((file) => file.status === 'skipped' && file.reason)).toStrictEqual([
       'unsupported-language',
       'too-large',
       'parse-failed',
@@ -222,6 +230,6 @@ describe('runImpactCheck', () => {
       'no-source',
     ]);
     expect(report.totals).toMatchObject({ analyzedFiles: 0, skippedFiles: 5 });
-    expect(structuredClone(report)).toEqual(report);
+    expect(structuredClone(report)).toStrictEqual(report);
   });
 });

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { isTestFile } from './is-test-file.ts';
 
 describe('isTestFile', () => {
-  it('recognises test and spec files and __tests__ directories', () => {
+  test('recognises test and spec files and __tests__ directories', ({ expect }) => {
     expect(isTestFile('src/a.test.ts')).toBe(true);
     expect(isTestFile('src/a.spec.tsx')).toBe(true);
     expect(isTestFile('src/__tests__/a.ts')).toBe(true);

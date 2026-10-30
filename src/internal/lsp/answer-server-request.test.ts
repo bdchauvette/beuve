@@ -1,21 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { answerServerRequest } from './answer-server-request.ts';
+import type { ServerRequestContext } from './answer-server-request.ts';
 
-const context = {
-  settings: { typescript: { format: { semicolons: 'insert' } } },
-  workspaceFolders: [{ uri: 'file:///w', name: 'w' }],
-};
+function context(): ServerRequestContext {
+  return {
+    settings: { typescript: { format: { semicolons: 'insert' } } },
+    workspaceFolders: [{ uri: 'file:///w', name: 'w' }],
+  };
+}
 
 describe('answerServerRequest', () => {
-  it('refuses workspace edits', () => {
-    expect(answerServerRequest('workspace/applyEdit', { edit: {} }, context)).toEqual({
+  test('refuses workspace edits', ({ expect }) => {
+    expect(answerServerRequest('workspace/applyEdit', { edit: {} }, context())).toStrictEqual({
       ok: true,
       value: { applied: false, failureReason: 'beuve is a read-only review tool' },
     });
   });
 
-  it('answers configuration by dotted section, in order', () => {
+  test('answers configuration by dotted section, in order', ({ expect }) => {
     const params = {
       items: [
         { section: 'typescript.format' },
@@ -24,39 +29,40 @@ describe('answerServerRequest', () => {
         { section: 'typescript.format.semicolons' },
       ],
     };
-    expect(answerServerRequest('workspace/configuration', params, context)).toEqual({
+    expect(answerServerRequest('workspace/configuration', params, context())).toStrictEqual({
       ok: true,
-      value: [{ semicolons: 'insert' }, undefined, context.settings, 'insert'],
+      value: [{ semicolons: 'insert' }, undefined, context().settings, 'insert'],
     });
-    expect(answerServerRequest('workspace/configuration', 'junk', context)).toEqual({
+    expect(answerServerRequest('workspace/configuration', 'junk', context())).toStrictEqual({
       ok: true,
       value: [],
     });
   });
 
-  it('acknowledges progress, registrations and refreshes, and declines UI requests', () => {
-    for (const method of [
-      'window/workDoneProgress/create',
-      'client/registerCapability',
-      'workspace/diagnostic/refresh',
-    ]) {
-      expect(answerServerRequest(method, {}, context), method).toEqual({
-        ok: true,
-        value: undefined,
-      });
-    }
-    expect(answerServerRequest('window/showDocument', {}, context)).toEqual({
+  test.for([
+    'window/workDoneProgress/create',
+    'client/registerCapability',
+    'workspace/diagnostic/refresh',
+  ])('acknowledges %s', (method, { expect }) => {
+    expect(answerServerRequest(method, {}, context())).toStrictEqual({
       ok: true,
-      value: { success: false },
-    });
-    expect(answerServerRequest('workspace/workspaceFolders', undefined, context)).toEqual({
-      ok: true,
-      value: context.workspaceFolders,
+      value: undefined,
     });
   });
 
-  it('reports unknown methods as not found', () => {
-    expect(answerServerRequest('workspace/willRenameFiles', {}, context)).toMatchObject({
+  test('declines UI requests and lists the workspace folders', ({ expect }) => {
+    expect(answerServerRequest('window/showDocument', {}, context())).toStrictEqual({
+      ok: true,
+      value: { success: false },
+    });
+    expect(answerServerRequest('workspace/workspaceFolders', undefined, context())).toStrictEqual({
+      ok: true,
+      value: context().workspaceFolders,
+    });
+  });
+
+  test('reports unknown methods as not found', ({ expect }) => {
+    expect(answerServerRequest('workspace/willRenameFiles', {}, context())).toMatchObject({
       ok: false,
       error: { code: -32_601 },
     });

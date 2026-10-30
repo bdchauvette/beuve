@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { ecmascriptRules } from './ecmascript-rules.ts';
 import type { ConstructRule, LanguageRules, NamerRule } from './language-rules.ts';
 import { loadTestLanguage } from './testing/load-test-language.ts';
 
 describe('ecmascriptRules', () => {
-  it('names only node types and fields the grammars have', async () => {
+  test('names only node types and fields the grammars have', async ({ expect }) => {
     const grammars = await Promise.all(
       (['typescript', 'tsx', 'javascript'] as const).map(async (language) =>
         loadTestLanguage(language),
@@ -22,9 +24,9 @@ describe('ecmascriptRules', () => {
       grammars.some((grammar) => !grammar.types.has(type)),
     );
 
-    expect(missingTypes).toEqual([]);
-    expect(missingFields).toEqual([]);
-    expect(grammarSpecific.toSorted((left, right) => left.localeCompare(right))).toEqual([
+    expect(missingTypes).toStrictEqual([]);
+    expect(missingFields).toStrictEqual([]);
+    expect(grammarSpecific.toSorted((left, right) => left.localeCompare(right))).toStrictEqual([
       'abstract_class_declaration',
       'field_definition',
       'internal_module',

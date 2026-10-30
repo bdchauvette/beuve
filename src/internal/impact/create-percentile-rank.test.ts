@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createPercentileRank } from './create-percentile-rank.ts';
 
 describe('createPercentileRank', () => {
-  it('ranks by mid-rank against the population', () => {
+  test('ranks by mid-rank against the population', ({ expect }) => {
     const rank = createPercentileRank([5, 0, 1, 1, 2, 0, 0, 3, 8, 20]);
     expect(rank(0)).toBe(15);
     expect(rank(1)).toBe(40);
@@ -12,7 +14,7 @@ describe('createPercentileRank', () => {
     expect(rank(-1)).toBe(0);
   });
 
-  it('rounds to one decimal and copes with an empty population', () => {
+  test('rounds to one decimal and copes with an empty population', ({ expect }) => {
     expect(createPercentileRank([1, 2, 3])(3)).toBe(83.3);
     expect(createPercentileRank([])(3)).toBe(0);
   });

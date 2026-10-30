@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { detectLanguage } from './detect-language.ts';
 
 describe('detectLanguage', () => {
-  it.each([
+  test.for([
     ['src/a.ts', 'typescript'],
     ['types/env.d.ts', 'typescript'],
     ['x/y.MTS', 'typescript'],
@@ -11,13 +13,13 @@ describe('detectLanguage', () => {
     ['lib/index.js', 'javascript'],
     ['app.jsx', 'javascript'],
     ['config.cjs', 'javascript'],
-  ])('detects %s as %s', (filePath, language) => {
+  ] as const)('detects %s as %s', ([filePath, language], { expect }) => {
     expect(detectLanguage(filePath)).toBe(language);
   });
 
-  it.each(['README.md', 'Makefile', 'src/a.ts.orig', '.ts/file'])(
+  test.for(['README.md', 'Makefile', 'src/a.ts.orig', '.ts/file'])(
     'has no language for %s',
-    (filePath) => {
+    (filePath, { expect }) => {
       expect(detectLanguage(filePath)).toBeUndefined();
     },
   );

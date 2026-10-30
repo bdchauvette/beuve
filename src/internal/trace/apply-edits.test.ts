@@ -1,16 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { applyEdits } from './apply-edits.ts';
 import type { SourceEdit } from './instrumentation-plan.ts';
 
 describe('applyEdits', () => {
-  it('inserts in offset order', () => {
+  test('inserts in offset order', ({ expect }) => {
     expect(applyEdits('abc', [edit(2, 'Y', 'open', 0, 0), edit(1, 'X', 'open', 0, 1)])).toBe(
       'aXbYc',
     );
   });
 
-  it('closes before opening and nests wrappers at one offset', () => {
+  test('closes before opening and nests wrappers at one offset', ({ expect }) => {
     const edits = [
       edit(0, '<inner>', 'open', 2, 1),
       edit(0, '<outer>', 'open', 5, 0),
@@ -22,7 +24,7 @@ describe('applyEdits', () => {
     expect(applyEdits('ab cd', edits)).toBe('<outer><inner>ab</inner><next> cd</next></outer>');
   });
 
-  it('keeps creation order between equal spans', () => {
+  test('keeps creation order between equal spans', ({ expect }) => {
     const edits = [
       edit(0, '1', 'open', 1, 0),
       edit(0, '2', 'open', 1, 1),
@@ -32,7 +34,7 @@ describe('applyEdits', () => {
     expect(applyEdits('x', edits)).toBe('12x)2)1');
   });
 
-  it('clamps offsets past the end', () => {
+  test('clamps offsets past the end', ({ expect }) => {
     expect(applyEdits('ab', [edit(9, '!', 'open', 0, 0)])).toBe('ab!');
   });
 });

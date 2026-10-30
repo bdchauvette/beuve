@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { buildControlFlowGraph } from './build-control-flow-graph.ts';
 import { ecmascriptFlowRules } from './ecmascript-flow-rules.ts';
@@ -8,14 +10,14 @@ import { describeGraph } from './testing/describe-graph.ts';
 import { parseTestSource } from './testing/parse-test-source.ts';
 
 describe('buildControlFlowGraph', () => {
-  it('merges straight-line statements into one block', async () => {
+  test('merges straight-line statements into one block', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f() {
   const a = 1;
   const b = 2;
   log(a + b);
 }`);
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       'block:const a = 1 (+2) -next-> exit:end',
       'entry:f -next-> block:const a = 1 (+2)',
     ]);
@@ -25,7 +27,7 @@ function f() {
     });
   });
 
-  it('models an if / else-if / else chain with early returns', async () => {
+  test('models an if / else-if / else chain with early returns', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function grade(score: number): string {
   if (score > 90) {
@@ -38,7 +40,7 @@ function grade(score: number): string {
   }
   return 'C';
 }`);
-    expect(describeGraph(graph)).toEqual(
+    expect(describeGraph(graph)).toStrictEqual(
       [
         "block:fail() -next-> return:return 'C'",
         'condition:score > 80 -false-> block:fail()',
@@ -54,7 +56,7 @@ function grade(score: number): string {
     );
   });
 
-  it('joins both branches of an if without else', async () => {
+  test('joins both branches of an if without else', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f(x: boolean) {
   if (x) {
@@ -62,7 +64,7 @@ function f(x: boolean) {
   }
   b();
 }`);
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       'block:a() -next-> block:b()',
       'block:b() -next-> exit:end',
       'condition:x -false-> block:b()',
@@ -71,16 +73,25 @@ function f(x: boolean) {
     ]);
   });
 
-  it('does not count optional chaining, ternaries or short-circuits as branches', async () => {
+  test('does not count optional chaining, ternaries or short-circuits as branches', async ({
+    expect,
+  }) => {
     const graph = await buildTestGraph(`
 function f(a?: { b?: number }) {
   const v = a?.b ?? (a ? 1 : 2);
   return v && v > 1 ? 'x' : 'y';
 }`);
-    expect(graph.nodes.map((node) => node.kind)).toEqual(['entry', 'exit', 'block', 'return']);
+    expect(graph.nodes.map((node) => node.kind)).toStrictEqual([
+      'entry',
+      'exit',
+      'block',
+      'return',
+    ]);
   });
 
-  it('loops back, breaks and continues out of nested loops, including labels', async () => {
+  test('loops back, breaks and continues out of nested loops, including labels', async ({
+    expect,
+  }) => {
     const graph = await buildTestGraph(`
 function f(items: number[]) {
   outer: for (const i of items) {
@@ -95,7 +106,7 @@ function f(items: number[]) {
     step();
   }
 }`);
-    expect(describeGraph(graph)).toEqual(
+    expect(describeGraph(graph)).toStrictEqual(
       [
         'block:break -break-> loop:for (const i of items)',
         'block:continue outer -continue-> loop:for (const i of items)',
@@ -119,7 +130,7 @@ function f(items: number[]) {
     );
   });
 
-  it('closes a do-while with a loop-back from its condition', async () => {
+  test('closes a do-while with a loop-back from its condition', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f() {
   setup();
@@ -127,7 +138,7 @@ function f() {
     step();
   } while (more());
 }`);
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       'block:setup() -next-> block:step()',
       'block:step() -next-> loop:while (more())',
       'entry:f -next-> block:setup()',
@@ -136,7 +147,7 @@ function f() {
     ]);
   });
 
-  it('falls through stacked and unterminated cases and exits on break', async () => {
+  test('falls through stacked and unterminated cases and exits on break', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f(x: number) {
   switch (x) {
@@ -151,7 +162,7 @@ function f(x: number) {
   }
   done();
 }`);
-    expect(describeGraph(graph)).toEqual(
+    expect(describeGraph(graph)).toStrictEqual(
       [
         'block:one() -next-> case:case 3',
         'block:other() -next-> block:done()',
@@ -170,7 +181,7 @@ function f(x: number) {
     );
   });
 
-  it('lets a switch without default skip every case', async () => {
+  test('lets a switch without default skip every case', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f(x: number) {
   switch (x) {
@@ -182,7 +193,7 @@ function f(x: number) {
     expect(describeGraph(graph)).toContain('switch:switch (x) -default-> block:tail()');
   });
 
-  it('routes returns and throws through finally and exceptions to catch', async () => {
+  test('routes returns and throws through finally and exceptions to catch', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f() {
   try {
@@ -194,7 +205,7 @@ function f() {
     done();
   }
 }`);
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       'block:done() -exception-> exit:end',
       'block:done() -next-> exit:end',
       'block:risky() -next-> return:return 5',
@@ -208,7 +219,7 @@ function f() {
     ]);
   });
 
-  it('continues after try/catch when the body can complete normally', async () => {
+  test('continues after try/catch when the body can complete normally', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f() {
   try {
@@ -218,7 +229,7 @@ function f() {
   }
   after();
 }`);
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       'block:after() -next-> exit:end',
       'block:recover() -next-> block:after()',
       'block:risky() -next-> block:after()',
@@ -229,7 +240,7 @@ function f() {
     ]);
   });
 
-  it('sends a throw inside try to the catch and one outside to the exit', async () => {
+  test('sends a throw inside try to the catch and one outside to the exit', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f(x: number) {
   if (x < 0) throw new Error('neg');
@@ -244,7 +255,7 @@ function f(x: number) {
     expect(edges).toContain("throw:throw new Error('zero') -exception-> catch:catch (e)");
   });
 
-  it('keeps nested functions inside their block label', async () => {
+  test('keeps nested functions inside their block label', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f(items: number[]) {
   const handler = (x: number) => {
@@ -253,11 +264,13 @@ function f(items: number[]) {
   };
   items.forEach(handler);
 }`);
-    expect(graph.nodes.map((node) => node.kind)).toEqual(['entry', 'exit', 'block']);
+    expect(graph.nodes.map((node) => node.kind)).toStrictEqual(['entry', 'exit', 'block']);
     expect(graph.nodes[2]?.label).toBe('const handler = (x: number) => {… (+1)');
   });
 
-  it('marks nodes whose own lines changed, not the lines of their branches', async () => {
+  test('marks nodes whose own lines changed, not the lines of their branches', async ({
+    expect,
+  }) => {
     const graph = await buildTestGraph(
       `
 function f(x: number) {
@@ -270,10 +283,10 @@ function f(x: number) {
       { changedLines: [3] },
     );
     const changed = graph.nodes.filter((node) => node.changed).map((node) => node.label);
-    expect(changed).toEqual(['a()']);
+    expect(changed).toStrictEqual(['a()']);
   });
 
-  it('flags a changed condition or loop header', async () => {
+  test('flags a changed condition or loop header', async ({ expect }) => {
     const graph = await buildTestGraph(
       `
 function f(x: number) {
@@ -283,19 +296,23 @@ function f(x: number) {
 }`,
       { changedLines: [2] },
     );
-    expect(graph.nodes.filter((node) => node.changed).map((node) => node.kind)).toEqual(['loop']);
+    expect(graph.nodes.filter((node) => node.changed).map((node) => node.kind)).toStrictEqual([
+      'loop',
+    ]);
   });
 
-  it('names an arrow function after its variable and graphs an expression body', async () => {
+  test('names an arrow function after its variable and graphs an expression body', async ({
+    expect,
+  }) => {
     const graph = await buildTestGraph(`const pick = (x: number) => x > 1 ? 'a' : 'b';`);
     expect(graph.name).toBe('pick');
-    expect(describeGraph(graph)).toEqual([
+    expect(describeGraph(graph)).toStrictEqual([
       "entry:pick -next-> return:x > 1 ? 'a' : 'b'",
       "return:x > 1 ? 'a' : 'b' -next-> exit:end",
     ]);
   });
 
-  it('reports too-large graphs instead of building them', async () => {
+  test('reports too-large graphs instead of building them', async ({ expect }) => {
     const statements = Array.from({ length: 30 }, (_, index) => `if (c${String(index)}) { a(); }`);
     const root = await parseTestSource(`function f() { ${statements.join('\n')} }`);
     const found = findFunctionAt(root, 1, ecmascriptFlowRules);
@@ -304,21 +321,21 @@ function f(x: number) {
       changedLines: new Set(),
       maxNodes: 20,
     });
-    expect(result).toEqual({ ok: false, error: { kind: 'too-large', nodeLimit: 20 } });
+    expect(result).toStrictEqual({ ok: false, error: { kind: 'too-large', nodeLimit: 20 } });
   });
 
-  it('rejects nodes that are not functions', async () => {
+  test('rejects nodes that are not functions', async ({ expect }) => {
     const root = await parseTestSource('const x = 1;');
     const result = buildControlFlowGraph(root, ecmascriptFlowRules, { changedLines: new Set() });
     expect(result.ok).toBe(false);
   });
 
-  it('drops unreachable code after a return', async () => {
+  test('drops unreachable code after a return', async ({ expect }) => {
     const graph = await buildTestGraph(`
 function f() {
   return 1;
   dead();
 }`);
-    expect(graph.nodes.map((node) => node.kind)).toEqual(['entry', 'exit', 'return']);
+    expect(graph.nodes.map((node) => node.kind)).toStrictEqual(['entry', 'exit', 'return']);
   });
 });

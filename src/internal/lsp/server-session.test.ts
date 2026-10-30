@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import type { LspError } from './lsp-error.ts';
 import type { LspServerCapabilities } from './lsp-protocol.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import { ServerSession } from './server-session.ts';
-import type { DocumentContent, ServerSessionOptions } from './server-session.ts';
+import type { DiagnosticsWait, DocumentContent, ServerSessionOptions } from './server-session.ts';
 import type { LanguageServer, ServerExit } from './start-language-server.ts';
 
 interface FakeServer {
@@ -70,11 +73,17 @@ function createFakeServer(
   };
 }
 
-const wait = {
-  timeout: Temporal.Duration.from({ milliseconds: 400 }),
-  grace: Temporal.Duration.from({ milliseconds: 80 }),
-  quiet: Temporal.Duration.from({ milliseconds: 30 }),
-};
+function wait(): DiagnosticsWait {
+  return {
+    timeout: Temporal.Duration.from({ milliseconds: 400 }),
+    grace: Temporal.Duration.from({ milliseconds: 80 }),
+    quiet: Temporal.Duration.from({ milliseconds: 30 }),
+  };
+}
+
+function isAtLeast(duration: Temporal.Duration, milliseconds: number): boolean {
+  return Temporal.Duration.compare(duration, Temporal.Duration.from({ milliseconds })) >= 0;
+}
 
 function content(name: string, text: string): DocumentContent {
   return {
@@ -109,7 +118,7 @@ function later(run: () => void, ms: number): void {
 }
 
 describe('ServerSession', () => {
-  it('opens, changes and closes documents with increasing versions', () => {
+  test('opens, changes and closes documents with increasing versions', ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     expect(session.sync(content('a.ts', 'one'))).toMatchObject({ version: 1, changed: true });
@@ -120,19 +129,19 @@ describe('ServerSession', () => {
       changed: true,
     });
     session.close('file:///workspace/a.ts');
-    expect(fake.notifications.map((n) => n.method)).toEqual([
+    expect(fake.notifications.map((n) => n.method)).toStrictEqual([
       'textDocument/didOpen',
       'textDocument/didChange',
       'textDocument/didChange',
       'textDocument/didClose',
     ]);
-    expect(fake.notifications[1]?.params).toEqual({
+    expect(fake.notifications[1]?.params).toStrictEqual({
       textDocument: { uri: 'file:///workspace/a.ts', version: 2 },
       contentChanges: [{ text: 'two' }],
     });
   });
 
-  it('closes the least recently used document beyond the limit', () => {
+  test('closes the least recently used document beyond the limit', ({ expect }) => {
     const fake = createFakeServer();
     const options: ServerSessionOptions = { maxOpenDocuments: 2 };
     const session = new ServerSession(fake.server, options);
@@ -140,17 +149,19 @@ describe('ServerSession', () => {
     session.sync(content('b.ts', 'b'));
     session.sync(content('a.ts', 'a'));
     session.sync(content('c.ts', 'c'));
-    expect(session.openDocuments.map((document) => document.absolutePath)).toEqual([
+    expect(session.openDocuments.map((document) => document.absolutePath)).toStrictEqual([
       '/workspace/a.ts',
       '/workspace/c.ts',
     ]);
-    expect(fake.notifications.at(-1)).toEqual({
+    expect(fake.notifications.at(-1)).toStrictEqual({
       method: 'textDocument/didClose',
       params: { textDocument: { uri: 'file:///workspace/b.ts' } },
     });
   });
 
-  it('settles on the first report after a change once the server is quiet', async () => {
+  test('settles on the first report after a change once the server is quiet', async ({
+    expect,
+  }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
@@ -160,12 +171,14 @@ describe('ServerSession', () => {
     later(() => {
       publish(fake, ['semantic pass']);
     }, 20);
-    const result = unwrap(await session.diagnostics(document, wait));
+    const result = unwrap(await session.diagnostics(document, wait()));
     expect(result.freshness).toBe('fresh');
-    expect(result.diagnostics.map((d) => d.message)).toEqual(['semantic pass']);
+    expect(result.diagnostics.map((d) => d.message)).toStrictEqual(['semantic pass']);
   });
 
-  it('ignores reports for older versions and waits while work-done progress runs', async () => {
+  test('ignores reports for older versions and waits while work-done progress runs', async ({
+    expect,
+  }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     session.sync(content('a.ts', 'v1'));
@@ -178,36 +191,38 @@ describe('ServerSession', () => {
     later(() => {
       fake.push('$/progress', { token: 't', value: { kind: 'end' } });
     }, 120);
-    const started = performance.now();
-    const result = unwrap(await session.diagnostics(document, wait));
-    expect(performance.now() - started).toBeGreaterThanOrEqual(110);
+    const waited = new Stopwatch();
+    const result = unwrap(await session.diagnostics(document, wait()));
+    expect(isAtLeast(waited.elapsed(), 110)).toBe(true);
     expect(result).toMatchObject({ freshness: 'fresh', diagnostics: [{ message: 'new' }] });
   });
 
-  it('assumes an unchanged report when the server stays silent after a re-check', async () => {
+  test('assumes an unchanged report when the server stays silent after a re-check', async ({
+    expect,
+  }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     session.sync(content('a.ts', 'x'));
     publish(fake, []);
     const document = session.sync(content('a.ts', 'x'), { recheck: true });
-    await expect(session.diagnostics(document, wait)).resolves.toEqual(
+    await expect(session.diagnostics(document, wait())).resolves.toStrictEqual(
       ok({ diagnostics: [], freshness: 'assumed-unchanged' }),
     );
   });
 
-  it('times out when a newly opened document never gets a report', async () => {
+  test('times out when a newly opened document never gets a report', async ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
     await expect(
       session.diagnostics(document, {
-        ...wait,
+        ...wait(),
         timeout: Temporal.Duration.from({ milliseconds: 60 }),
       }),
-    ).resolves.toEqual(ok({ diagnostics: [], freshness: 'timed-out' }));
+    ).resolves.toStrictEqual(ok({ diagnostics: [], freshness: 'timed-out' }));
   });
 
-  it('pulls diagnostics when the server supports it', async () => {
+  test('pulls diagnostics when the server supports it', async ({ expect }) => {
     const fake = createFakeServer({ pullDiagnostics: true }, (method) =>
       method === 'textDocument/diagnostic'
         ? {
@@ -223,37 +238,37 @@ describe('ServerSession', () => {
     );
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
-    await expect(session.diagnostics(document, wait)).resolves.toMatchObject({
+    await expect(session.diagnostics(document, wait())).resolves.toMatchObject({
       ok: true,
       value: { freshness: 'fresh', diagnostics: [{ message: 'pulled' }] },
     });
   });
 
-  it('fails a diagnostics wait as soon as the server exits', async () => {
+  test('fails a diagnostics wait as soon as the server exits', async ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
     later(() => {
       fake.exit({ exitCode: 1, signal: undefined, expected: false });
     }, 10);
-    const started = performance.now();
-    await expect(session.diagnostics(document, wait)).resolves.toMatchObject({
+    const waited = new Stopwatch();
+    await expect(session.diagnostics(document, wait())).resolves.toMatchObject({
       ok: false,
       error: { kind: 'server-exited', exitCode: 1 },
     });
-    expect(performance.now() - started).toBeLessThan(300);
+    expect(isAtLeast(waited.elapsed(), 300)).toBe(false);
   });
 
-  it('tracks busy and idle time around requests', async () => {
+  test('tracks busy and idle time around requests', async ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(session.idle.total('milliseconds')).toBeGreaterThanOrEqual(30);
+    expect(isAtLeast(session.idle, 30)).toBe(true);
     const pending = session.request('x', {});
     expect(session.isBusy).toBe(true);
-    expect(session.idle.total('milliseconds')).toBe(0);
+    expect(session.idle.sign).toBe(0);
     await pending;
     expect(session.isBusy).toBe(false);
-    expect(session.idle.total('milliseconds')).toBeLessThan(30);
+    expect(isAtLeast(session.idle, 30)).toBe(false);
   });
 });

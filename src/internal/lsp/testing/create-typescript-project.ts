@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -8,12 +8,11 @@ export interface TypescriptProject {
   readonly root: string;
   /** Writes a file relative to the root, creating parent directories. */
   readonly write: (file: string, content: string) => void;
-  readonly cleanup: () => void;
 }
 
-/** Creates the project in a new temporary directory. */
-export function createTypescriptProject(): TypescriptProject {
-  const created = mkdtempSync(path.join(os.tmpdir(), 'beuve-lsp-'));
+/** Creates the project in a new directory under `parent` (the system temporary directory by default). */
+export function createTypescriptProject(parent: string = os.tmpdir()): TypescriptProject {
+  const created = mkdtempSync(path.join(parent, 'beuve-lsp-'));
   const root = realpathSync(created);
   const write = (file: string, content: string): void => {
     const target = path.join(root, file);
@@ -23,13 +22,7 @@ export function createTypescriptProject(): TypescriptProject {
   for (const [file, content] of Object.entries(typescriptProjectFiles)) {
     write(file, content);
   }
-  return {
-    root,
-    write,
-    cleanup: (): void => {
-      rmSync(root, { recursive: true, force: true });
-    },
-  };
+  return { root, write };
 }
 
 /** The files every project starts with: a call chain `a → b → c` and a type error. */

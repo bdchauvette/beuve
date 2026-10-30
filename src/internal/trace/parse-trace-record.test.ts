@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { parseTraceRecord } from './parse-trace-record.ts';
 
 describe('parseTraceRecord', () => {
-  it('reads what the recorder writes', () => {
+  test('reads what the recorder writes', ({ expect }) => {
     const record = {
       test: { file: '/w/a.test.ts', titles: ['a', 'b'] },
       dropped: 1,
@@ -13,7 +15,7 @@ describe('parseTraceRecord', () => {
         { kind: 'return', seq: 3, frame: 1, value: { type: 'string', preview: '"x"' } },
       ],
     };
-    expect(parseTraceRecord(JSON.stringify(record))).toEqual({
+    expect(parseTraceRecord(JSON.stringify(record))).toStrictEqual({
       test: record.test,
       dropped: 1,
       events: [
@@ -37,7 +39,7 @@ describe('parseTraceRecord', () => {
     });
   });
 
-  it('rejects malformed lines and skips malformed events', () => {
+  test('rejects malformed lines and skips malformed events', ({ expect }) => {
     expect(parseTraceRecord('not json')).toBeUndefined();
     expect(parseTraceRecord('{"events":3}')).toBeUndefined();
     expect(parseTraceRecord('{"test":{"file":1},"events":[]}')).toBeUndefined();

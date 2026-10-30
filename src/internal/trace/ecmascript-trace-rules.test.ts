@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { ecmascriptTraceRules } from './ecmascript-trace-rules.ts';
 import { loadTestLanguage } from './testing/load-test-language.ts';
 
 describe('ecmascriptTraceRules', () => {
-  it('names only node types and fields the grammars have', async () => {
+  test('names only node types and fields the grammars have', async ({ expect }) => {
     const rules = ecmascriptTraceRules;
     const grammars = await Promise.all(
       (['typescript', 'tsx', 'javascript'] as const).map(async (language) =>
@@ -56,6 +58,6 @@ describe('ecmascriptTraceRules', () => {
     const missingFields = fields.filter((field) =>
       grammars.every((grammar) => !grammar.fields.has(field)),
     );
-    expect({ missingTypes, missingFields }).toEqual({ missingTypes: [], missingFields: [] });
+    expect({ missingTypes, missingFields }).toStrictEqual({ missingTypes: [], missingFields: [] });
   });
 });

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { ecmascriptFlowRules } from './ecmascript-flow-rules.ts';
 import { loadTestLanguage } from './testing/load-test-language.ts';
 
 describe('ecmascriptFlowRules', () => {
-  it('names only node types and fields the grammars have', async () => {
+  test('names only node types and fields the grammars have', async ({ expect }) => {
     const rules = ecmascriptFlowRules;
     const grammars = await Promise.all(
       (['typescript', 'tsx', 'javascript'] as const).map(async (language) =>
@@ -42,7 +44,7 @@ describe('ecmascriptFlowRules', () => {
       grammars.every((grammar) => !grammar.fields.has(field)),
     );
 
-    expect(missingTypes).toEqual([]);
-    expect(missingFields).toEqual([]);
+    expect(missingTypes).toStrictEqual([]);
+    expect(missingFields).toStrictEqual([]);
   });
 });

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { buildImportGraph } from './build-import-graph.ts';
 
 describe('buildImportGraph', () => {
-  it('resolves relative specifiers the way TypeScript projects write them', () => {
+  test('resolves relative specifiers the way TypeScript projects write them', ({ expect }) => {
     const files = ['src/a.ts', 'src/b.ts', 'src/c/index.tsx', 'src/d.js', 'src/e.mts', 'src/f.ts'];
     const source = [
       "import { b } from './b.js';",
@@ -16,17 +18,17 @@ describe('buildImportGraph', () => {
       "import x from '#x/x.ts';",
       "import missing from './missing';",
     ].join('\n');
-    expect(buildImportGraph(new Map([['src/a.ts', source]]), files)).toEqual(
+    expect(buildImportGraph(new Map([['src/a.ts', source]]), files)).toStrictEqual(
       new Map([['src/a.ts', ['src/b.ts', 'src/c/index.tsx', 'src/d.js', 'src/e.mts', 'src/f.ts']]]),
     );
   });
 
-  it('follows parent directories and multi-line imports', () => {
+  test('follows parent directories and multi-line imports', ({ expect }) => {
     const source = "import {\n  one,\n  two,\n} from '../lib/util';\n";
     expect(
       buildImportGraph(new Map([['src/x/y.test.ts', source]]), ['src/lib/util.ts']).get(
         'src/x/y.test.ts',
       ),
-    ).toEqual(['src/lib/util.ts']);
+    ).toStrictEqual(['src/lib/util.ts']);
   });
 });

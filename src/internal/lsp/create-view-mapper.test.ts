@@ -1,35 +1,45 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createViewMapper } from './create-view-mapper.ts';
+import type { ViewMapper } from './create-view-mapper.ts';
 import { LineIndex } from './line-index.ts';
+import type { LspRange } from './lsp-protocol.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import { positionEncodings } from './position-encodings.ts';
 
-const root = '/w' as WorkspaceRoot;
-const uri = 'file:///w/src/a.ts';
-const lines = new LineIndex('const 😀 = 1;\n');
+function uri(): string {
+  return 'file:///w/src/a.ts';
+}
+
+function mapper(): ViewMapper {
+  const lines = new LineIndex('const 😀 = 1;\n');
+  return createViewMapper({
+    root: '/w' as WorkspaceRoot,
+    encoding: positionEncodings.utf8,
+    lines: (key) => (key === uri() ? lines : undefined),
+  });
+}
+
+function utf8Range(): LspRange {
+  return { start: { line: 0, character: 6 }, end: { line: 0, character: 10 } };
+}
 
 describe('createViewMapper', () => {
-  const mapper = createViewMapper({
-    root,
-    encoding: positionEncodings.utf8,
-    lines: (key) => (key === uri ? lines : undefined),
-  });
-  const utf8Range = { start: { line: 0, character: 6 }, end: { line: 0, character: 10 } };
-
-  it('converts diagnostics to UTF-16 columns and readable fields', () => {
+  test('converts diagnostics to UTF-16 columns and readable fields', ({ expect }) => {
     expect(
-      mapper.diagnostic(uri, {
-        range: utf8Range,
+      mapper().diagnostic(uri(), {
+        range: utf8Range(),
         severity: 1,
         code: 2322,
         message: 'm',
         tags: [1, 2, 9],
         relatedInformation: [
-          { location: { uri: 'file:///elsewhere.ts', range: utf8Range }, message: 'r' },
+          { location: { uri: 'file:///elsewhere.ts', range: utf8Range() }, message: 'r' },
         ],
       }),
-    ).toEqual({
+    ).toStrictEqual({
       range: { start: { line: 0, character: 6 }, end: { line: 0, character: 8 } },
       severity: 'error',
       code: '2322',
@@ -38,24 +48,24 @@ describe('createViewMapper', () => {
       tags: ['unnecessary', 'deprecated'],
       related: [
         {
-          location: { file: { kind: 'external', uri: 'file:///elsewhere.ts' }, range: utf8Range },
+          location: { file: { kind: 'external', uri: 'file:///elsewhere.ts' }, range: utf8Range() },
           message: 'r',
         },
       ],
     });
   });
 
-  it('maps call hierarchy items to nodes with kind names', () => {
+  test('maps call hierarchy items to nodes with kind names', ({ expect }) => {
     expect(
-      mapper.node('id-1', {
+      mapper().node('id-1', {
         name: 'f',
         kind: 12,
         detail: '',
-        uri,
-        range: utf8Range,
-        selectionRange: utf8Range,
+        uri: uri(),
+        range: utf8Range(),
+        selectionRange: utf8Range(),
       }),
-    ).toEqual({
+    ).toStrictEqual({
       id: 'id-1',
       name: 'f',
       kind: 'function',

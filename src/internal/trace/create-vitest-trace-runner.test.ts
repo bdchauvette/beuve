@@ -2,20 +2,24 @@ import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { createVitestTraceRunner } from './create-vitest-trace-runner.ts';
 import { ecmascriptTraceRules } from './ecmascript-trace-rules.ts';
 import type { InstrumentationPlan } from './instrumentation-plan.ts';
 import { planInstrumentation } from './plan-instrumentation.ts';
 import { runTraceProbe } from './run-trace-probe.ts';
-import { createVitestFixture } from './testing/create-vitest-fixture.ts';
 import type { VitestFixture } from './testing/create-vitest-fixture.ts';
 import { describeTimeline } from './testing/describe-timeline.ts';
 import { parseTestSource } from './testing/parse-test-source.ts';
-import type { TraceRunRequest } from './trace-runner.ts';
+import { test } from './testing/test.ts';
+import type { VitestFixtures } from './testing/test.ts';
+import type { TraceRunner, TraceRunRequest } from './trace-runner.ts';
 
-const math = `export function clamp(value: number, low: number, high: number): number {
+function math(): string {
+  return `export function clamp(value: number, low: number, high: number): number {
   if (value < low) {
     return low;
   }
@@ -25,8 +29,10 @@ const math = `export function clamp(value: number, low: number, high: number): n
   return value;
 }
 `;
+}
 
-const mathTest = `import { describe, expect, it } from 'vitest';
+function mathTest(): string {
+  return `import { describe, expect, it } from 'vitest';
 import { clamp } from './math.ts';
 
 describe('clamp', () => {
@@ -41,69 +47,76 @@ describe('clamp', () => {
   });
 });
 `;
+}
 
-const hangingTest = `import { it } from 'vitest';
+function hangingTest(): string {
+  return `import { it } from 'vitest';
 
 it('hangs', async () => new Promise(() => {}), 60_000);
 `;
+}
 
-// Slow: each run starts a real Vitest process (about 0.5 to 1.5 s).
-describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
-  let fixture: VitestFixture;
-  let plan: InstrumentationPlan;
-
-  beforeAll(async () => {
-    fixture = createVitestFixture({
-      'src/math.ts': math,
-      'src/math.test.ts': mathTest,
-      'src/hang.test.ts': hangingTest,
-    });
-    const planned = planInstrumentation(
-      await parseTestSource(math),
-      { path: 'src/math.ts', changedLines: new Set([5]) },
-      ecmascriptTraceRules,
-    );
-    if (!planned.ok) {
-      throw new Error('no plan');
-    }
-    plan = planned.value;
+/** The fixture project of the tracing tests, and the plan for `math.ts` line 5. */
+async function mathProject(
+  fixtures: VitestFixtures,
+): Promise<{ readonly fixture: VitestFixture; readonly plan: InstrumentationPlan }> {
+  const fixture = fixtures.create({
+    'src/math.ts': math(),
+    'src/math.test.ts': mathTest(),
+    'src/hang.test.ts': hangingTest(),
   });
+  const root = await parseTestSource(math());
+  const planned = planInstrumentation(
+    root,
+    { path: 'src/math.ts', changedLines: new Set([5]) },
+    ecmascriptTraceRules,
+  );
+  return { fixture, plan: okValueFrom(planned) };
+}
 
-  afterAll(() => {
-    fixture.cleanup();
-  });
-
-  const request = (overrides: Partial<TraceRunRequest> = {}): Omit<TraceRunRequest, 'files'> => ({
+function request(
+  fixture: VitestFixture,
+  overrides: Partial<TraceRunRequest> = {},
+): Omit<TraceRunRequest, 'files'> {
+  return {
     trusted: true,
     worktree: fixture.worktree,
     dependencyRoot: fixture.dependencyRoot,
     testFiles: ['src/math.test.ts'],
     timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
     ...overrides,
+  };
+}
+
+function runnerFor(
+  fixture: VitestFixture,
+  inheritedEnvironment: NodeJS.ProcessEnv = process.env,
+): ReturnType<typeof createVitestTraceRunner> {
+  return createVitestTraceRunner({
+    nodePath: process.execPath,
+    inheritedEnvironment,
+    temporaryDirectory: fixture.temporaryDirectory,
   });
-  const runner = (): ReturnType<typeof createVitestTraceRunner> =>
-    createVitestTraceRunner({
-      nodePath: process.execPath,
-      inheritedEnvironment: process.env,
-      temporaryDirectory: fixture.temporaryDirectory,
-    });
+}
 
-  it('traces each test without writing into the worktree', async () => {
+// Slow: each run starts a real Vitest process (about 0.5 to 1.5 s).
+describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
+  test('traces each test without writing into the worktree', async ({ expect, vitestFixtures }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
     const before = snapshot(fixture.worktree);
-    const result = await runTraceProbe({ ...request(), plan, source: math }, runner());
+    const result = await runTraceProbe(
+      { ...request(fixture), plan, source: math() },
+      runnerFor(fixture),
+    );
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const { timelines } = result.value;
-    expect(timelines.map((timeline) => [timeline.titles, timeline.status])).toEqual([
+    const { timelines } = okValueFrom(result);
+    expect(timelines.map((timeline) => [timeline.titles, timeline.status])).toStrictEqual([
       [['clamp', 'caps high values'], 'passed'],
       [['clamp', 'keeps values in range'], 'passed'],
       [['clamp', 'never calls clamp'], 'passed'],
     ]);
     expect(timelines[0]?.file).toBe('src/math.test.ts');
-    expect(timelines.map((timeline) => describeTimeline(timeline))).toEqual([
+    expect(timelines.map((timeline) => describeTimeline(timeline))).toStrictEqual([
       [
         '1: enter clamp(value=12, low=0, high=10)',
         '2: if value < low → false',
@@ -118,137 +131,111 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
       ],
       [],
     ]);
-    expect(snapshot(fixture.worktree)).toEqual(before);
-    expect(readdirSync(fixture.temporaryDirectory)).toEqual([]);
+    expect(snapshot(fixture.worktree)).toStrictEqual(before);
+    expect(readdirSync(fixture.temporaryDirectory)).toStrictEqual([]);
   });
 
-  it('runs only the tests matching a name pattern', async () => {
+  test('runs only the tests matching a name pattern', async ({ expect, vitestFixtures }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
-      { ...request({ testNamePattern: 'in range' }), plan, source: math },
-      runner(),
+      { ...request(fixture, { testNamePattern: 'in range' }), plan, source: math() },
+      runnerFor(fixture),
     );
-    expect(result.ok && result.value.timelines.map((timeline) => timeline.titles)).toEqual([
+    expect(okValueFrom(result).timelines.map((timeline) => timeline.titles)).toStrictEqual([
       ['clamp', 'keeps values in range'],
     ]);
   });
 
-  it('fails the test file instead of tracing a source that changed since planning', async () => {
+  test('fails the test file instead of tracing a source that changed since planning', async ({
+    expect,
+    vitestFixtures,
+  }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
-      { ...request(), plan, source: math.replace('low', 'lowest') },
-      runner(),
+      { ...request(fixture), plan, source: math().replace('low', 'lowest') },
+      runnerFor(fixture),
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    expect(result.value.timelines).toMatchObject([
+    const { timelines } = okValueFrom(result);
+    expect(timelines).toMatchObject([
       { file: 'src/math.test.ts', titles: [], status: 'failed', entries: [] },
     ]);
-    expect(result.value.timelines[0]?.failure).toContain('differs from the text');
+    expect(timelines[0]?.failure).toContain('differs from the text');
   });
 
-  it('kills a run that outlives its timeout', async () => {
+  test('kills a run that outlives its timeout', async ({ expect, vitestFixtures }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
     const result = await runTraceProbe(
       {
-        ...request({
+        ...request(fixture, {
           testFiles: ['src/hang.test.ts'],
           timeout: Temporal.Duration.from({ milliseconds: 1500 }),
         }),
         plan,
-        source: math,
+        source: math(),
       },
-      runner(),
+      runnerFor(fixture),
     );
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       ok: false,
       error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1500 }) },
     });
   });
 
-  it('stops when cancelled', async () => {
+  test('stops when cancelled', async ({ expect, vitestFixtures }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
     const controller = new AbortController();
     const running = runTraceProbe(
       {
-        ...request({ testFiles: ['src/hang.test.ts'], signal: controller.signal }),
+        ...request(fixture, { testFiles: ['src/hang.test.ts'], signal: controller.signal }),
         plan,
-        source: math,
+        source: math(),
       },
-      runner(),
+      runnerFor(fixture),
     );
     setTimeout(() => {
       controller.abort();
     }, 200);
-    await expect(running).resolves.toEqual({ ok: false, error: { kind: 'cancelled' } });
+    await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
   });
 });
 
 describe('createVitestTraceRunner cancelled during setup', { timeout: 60_000 }, () => {
-  it('stops a run whose signal aborted after the first check but before the process started', async () => {
-    const fixture = createVitestFixture({
-      'src/hang.test.ts': hangingTest,
-      'src/math.ts': math,
+  test('stops a run whose signal aborted after the first check but before the process started', async ({
+    expect,
+    vitestFixtures,
+  }) => {
+    const fixture = vitestFixtures.create({
+      'src/hang.test.ts': hangingTest(),
+      'src/math.ts': math(),
     });
-    try {
-      const controller = new AbortController();
-      const running = createVitestTraceRunner({
-        nodePath: process.execPath,
-        inheritedEnvironment: process.env,
-        temporaryDirectory: fixture.temporaryDirectory,
-      }).run({
-        trusted: true,
-        worktree: fixture.worktree,
-        dependencyRoot: fixture.dependencyRoot,
-        testFiles: ['src/hang.test.ts'],
-        files: [],
-        timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
-        signal: controller.signal,
-      });
-      queueMicrotask(() => {
-        controller.abort();
-      });
-      await expect(running).resolves.toEqual({ ok: false, error: { kind: 'cancelled' } });
-    } finally {
-      fixture.cleanup();
-    }
+    const controller = new AbortController();
+    const running = runnerFor(fixture).run({
+      trusted: true,
+      worktree: fixture.worktree,
+      dependencyRoot: fixture.dependencyRoot,
+      testFiles: ['src/hang.test.ts'],
+      files: [],
+      timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
+      signal: controller.signal,
+    });
+    queueMicrotask(() => {
+      controller.abort();
+    });
+    await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
   });
 });
 
 describe('createVitestTraceRunner refusals', () => {
-  let fixture: VitestFixture;
-
-  beforeAll(() => {
-    fixture = createVitestFixture({ 'src/a.test.ts': '' });
-  });
-
-  afterAll(() => {
-    fixture.cleanup();
-  });
-
-  const run = async (
-    overrides: Partial<TraceRunRequest>,
-  ): ReturnType<ReturnType<typeof createVitestTraceRunner>['run']> =>
-    createVitestTraceRunner({
-      nodePath: process.execPath,
-      inheritedEnvironment: {},
-      temporaryDirectory: fixture.temporaryDirectory,
-    }).run({
-      trusted: true,
-      worktree: fixture.worktree,
-      dependencyRoot: fixture.dependencyRoot,
-      testFiles: ['src/a.test.ts'],
-      files: [],
-      timeout: Temporal.Duration.from({ milliseconds: 1000 }),
-      ...overrides,
-    });
-
-  it('refuses untrusted runs', async () => {
-    await expect(run({ trusted: false as unknown as true })).resolves.toEqual({
+  test('refuses untrusted runs', async ({ expect, vitestFixtures }) => {
+    const { run } = refusalRunner(vitestFixtures);
+    await expect(run({ trusted: false as unknown as true })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'untrusted' },
     });
   });
 
-  it('refuses paths outside the worktree', async () => {
+  test('refuses paths outside the worktree', async ({ expect, vitestFixtures }) => {
+    const { run } = refusalRunner(vitestFixtures);
     await expect(run({ testFiles: ['../dependencies/x.test.ts'] })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-path', path: '../dependencies/x.test.ts' },
@@ -263,16 +250,39 @@ describe('createVitestTraceRunner refusals', () => {
     });
   });
 
-  it('reports a dependency root without Vitest', async () => {
-    await expect(run({ dependencyRoot: fixture.worktree })).resolves.toEqual({
+  test('reports a dependency root without Vitest', async ({ expect, vitestFixtures }) => {
+    const { fixture, run } = refusalRunner(vitestFixtures);
+    const worktree = fixture.worktree;
+    await expect(run({ dependencyRoot: worktree })).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'vitest-not-found',
-        searched: path.join(fixture.worktree, 'node_modules', 'vitest'),
+        searched: path.join(worktree, 'node_modules', 'vitest'),
       },
     });
   });
 });
+
+/** Runs the runner with an empty environment against a fresh fixture holding one empty test. */
+function refusalRunner(fixtures: VitestFixtures): {
+  readonly fixture: VitestFixture;
+  readonly run: RefusalRun;
+} {
+  const fixture = fixtures.create({ 'src/a.test.ts': '' });
+  const run: RefusalRun = async (overrides) =>
+    runnerFor(fixture, {}).run({
+      trusted: true,
+      worktree: fixture.worktree,
+      dependencyRoot: fixture.dependencyRoot,
+      testFiles: ['src/a.test.ts'],
+      files: [],
+      timeout: Temporal.Duration.from({ milliseconds: 1000 }),
+      ...overrides,
+    });
+  return { fixture, run };
+}
+
+type RefusalRun = (overrides: Partial<TraceRunRequest>) => ReturnType<TraceRunner['run']>;
 
 /** Every path under `root` with its size and modification time. */
 function snapshot(root: string): string[] {

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import type { FunctionMeasurement } from './function-measurement.ts';
 import { matchFunctions } from './match-functions.ts';
 
 describe('matchFunctions', () => {
-  it('pairs by name, then identical bodies as renames, then adds and removes', () => {
+  test('pairs by name, then identical bodies as renames, then adds and removes', ({ expect }) => {
     const base = [
       fn('kept', 'a'),
       fn('A.old', 'long-body', 40),
@@ -12,7 +14,7 @@ describe('matchFunctions', () => {
       fn('tiny', 'same-tiny', 4),
     ];
     const head = [fn('A.renamed', 'long-body', 40), fn('kept', 'c'), fn('fresh', 'same-tiny', 4)];
-    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toEqual([
+    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toStrictEqual([
       'renamed A.old -> A.renamed',
       'matched kept',
       'added fresh',
@@ -21,10 +23,10 @@ describe('matchFunctions', () => {
     ]);
   });
 
-  it('pairs each base body at most once', () => {
+  test('pairs each base body at most once', ({ expect }) => {
     const base = [fn('one', 'shared', 40)];
     const head = [fn('two', 'shared', 40), fn('three', 'shared', 40)];
-    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toEqual([
+    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toStrictEqual([
       'renamed one -> two',
       'added three',
     ]);

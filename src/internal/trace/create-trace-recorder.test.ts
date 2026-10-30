@@ -1,19 +1,22 @@
 import vm from 'node:vm';
 
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createTraceRecorder } from './create-trace-recorder.ts';
+import type { TraceRecorder } from './create-trace-recorder.ts';
 import { defaultRecorderLimits } from './default-recorder-limits.ts';
 
-const recorder = createTraceRecorder(defaultRecorderLimits);
-const sneakyPattern = /^\{ plain: 1, computed: \[Getter\], toString: \[Function toString\]/u;
-const regexp = /a+b/u;
+function recorder(): TraceRecorder {
+  return createTraceRecorder(defaultRecorderLimits);
+}
 
 describe('createTraceRecorder summaries', () => {
-  it('renders primitives', () => {
+  test('renders primitives', ({ expect }) => {
     // eslint-disable-next-line unicorn/no-null -- null is a value the recorder must render
     const values = [undefined, null, true, 1.5, -0, NaN, 12n];
-    expect(values.map((value) => preview(value))).toEqual([
+    expect(values.map((value) => preview(value))).toStrictEqual([
       'undefined',
       'null',
       'true',
@@ -24,10 +27,10 @@ describe('createTraceRecorder summaries', () => {
     ]);
     expect(preview('a"b')).toBe('"a\\"b"');
     expect(preview(Symbol('tag'))).toBe('Symbol(tag)');
-    expect(recorder.summarize(12n).type).toBe('bigint');
+    expect(recorder().summarize(12n).type).toBe('bigint');
   });
 
-  it('bounds strings, items, depth and the whole preview', () => {
+  test('bounds strings, items, depth and the whole preview', ({ expect }) => {
     expect(preview('x'.repeat(100))).toBe(`"${'x'.repeat(59)}…"`);
     expect(preview([1, 2, 3, 4, 5, 6, 7])).toBe('[1, 2, 3, 4, 5, … 2 more]');
     expect(preview({ a: { b: { c: 1 } } })).toBe('{ a: { b: [Object] } }');
@@ -38,7 +41,7 @@ describe('createTraceRecorder summaries', () => {
     expect(preview(wide)).toHaveLength(defaultRecorderLimits.maxPreviewLength);
   });
 
-  it('never runs getters, toString, toJSON or proxy traps', () => {
+  test('never runs getters, toString, toJSON or proxy traps', ({ expect }) => {
     let touched = 0;
     const sneaky = {
       plain: 1,
@@ -60,8 +63,10 @@ describe('createTraceRecorder summaries', () => {
       throw new Error('trap');
     };
     const proxy = new Proxy({}, { get: trap, ownKeys: trap, getPrototypeOf: trap });
-    expect(preview(sneaky)).toMatch(sneakyPattern);
-    expect(recorder.summarize(proxy)).toEqual({ type: 'proxy', preview: '[Proxy]' });
+    expect(preview(sneaky)).toMatch(
+      /^\{ plain: 1, computed: \[Getter\], toString: \[Function toString\]/u,
+    );
+    expect(recorder().summarize(proxy)).toStrictEqual({ type: 'proxy', preview: '[Proxy]' });
     expect(preview({ inner: proxy })).toBe('{ inner: [Proxy] }');
     class Tagged {
       get [Symbol.toStringTag](): string {
@@ -73,7 +78,7 @@ describe('createTraceRecorder summaries', () => {
     expect(touched).toBe(0);
   });
 
-  it('marks cycles and renders shared references twice', () => {
+  test('marks cycles and renders shared references twice', ({ expect }) => {
     const node: { name: string; self?: unknown } = { name: 'n' };
     node.self = node;
     expect(preview(node)).toBe('{ name: "n", self: [Circular] }');
@@ -81,16 +86,18 @@ describe('createTraceRecorder summaries', () => {
     expect(preview([shared, shared])).toBe('[{ v: 1 }, { v: 1 }]');
   });
 
-  it('renders built-ins through their intrinsics', () => {
+  test('renders built-ins through their intrinsics', ({ expect }) => {
     class Money {
       readonly cents = 5;
     }
     expect(preview(new Money())).toBe('Money { cents: 5 }');
     expect(preview(new Map([['a', 1]]))).toBe('Map(1) { "a" => 1 }');
     expect(preview(new Set([1, 2]))).toBe('Set(2) { 1, 2 }');
+    // eslint-disable-next-line local/no-date -- the recorder must summarize Dates from the program under test
     expect(preview(new Date(0))).toBe('1970-01-01T00:00:00.000Z');
+    // eslint-disable-next-line local/no-date -- the recorder must summarize Dates from the program under test
     expect(preview(new Date(NaN))).toBe('Invalid Date');
-    expect(preview(regexp)).toBe('/a+b/');
+    expect(preview(/a+b/u)).toBe('/a+b/');
     expect(preview(new RangeError('too far'))).toBe('RangeError: too far');
     expect(preview(Promise.resolve(1))).toBe('Promise');
     expect(preview(new Uint8Array(3))).toBe('Uint8Array(3)');
@@ -103,7 +110,7 @@ describe('createTraceRecorder summaries', () => {
 });
 
 describe('createTraceRecorder events', () => {
-  it('attributes events to the current test and resets on take', () => {
+  test('attributes events to the current test and resets on take', ({ expect }) => {
     const fresh = createTraceRecorder(defaultRecorderLimits);
     expect(fresh.take()).toBeUndefined();
     fresh.setTest({ file: '/a.test.ts', titles: ['a'] });
@@ -111,7 +118,7 @@ describe('createTraceRecorder events', () => {
     expect(fresh.branch(frame, 1, 'yes')).toBe('yes');
     fresh.returns(frame, 2, 3);
     fresh.exit(frame);
-    expect(fresh.take()).toEqual({
+    expect(fresh.take()).toStrictEqual({
       test: { file: '/a.test.ts', titles: ['a'] },
       dropped: 0,
       events: [
@@ -130,7 +137,7 @@ describe('createTraceRecorder events', () => {
     expect(fresh.take()).toBeUndefined();
   });
 
-  it('drops events past its limits and counts them', () => {
+  test('drops events past its limits and counts them', ({ expect }) => {
     const small = createTraceRecorder({ ...defaultRecorderLimits, maxEventsPerProbe: 2 });
     const frame = small.enter(0, []);
     for (let index = 0; index < 5; index += 1) {
@@ -143,7 +150,7 @@ describe('createTraceRecorder events', () => {
     expect(tiny.take()).toMatchObject({ dropped: 1, events: [{ kind: 'enter' }] });
   });
 
-  it('tells thrown values from exceptions passing through', () => {
+  test('tells thrown values from exceptions passing through', ({ expect }) => {
     const fresh = createTraceRecorder(defaultRecorderLimits);
     const error = new Error('own');
     const own = fresh.enter(0, []);
@@ -156,7 +163,7 @@ describe('createTraceRecorder events', () => {
     expect(events).toMatchObject([{ probe: 1 }, { probe: undefined }]);
   });
 
-  it('is self-contained, so the setup module can embed its source', () => {
+  test('is self-contained, so the setup module can embed its source', ({ expect }) => {
     const context = vm.createContext({ limits: defaultRecorderLimits });
     const summaries = vm.runInContext(
       `const recorder = (${String(createTraceRecorder)})(limits);
@@ -165,12 +172,12 @@ describe('createTraceRecorder events', () => {
       recorder.take().events[0].args.map((arg) => arg.preview);`,
       context,
     ) as unknown;
-    expect(summaries).toEqual(['{ list: [1, [Map(1)]] }', 'Error: x']);
+    expect([...(summaries as string[])]).toStrictEqual(['{ list: [1, [Map(1)]] }', 'Error: x']);
   });
 });
 
 function preview(value: unknown): string {
-  return recorder.summarize(value).preview;
+  return recorder().summarize(value).preview;
 }
 
 function named(): string {

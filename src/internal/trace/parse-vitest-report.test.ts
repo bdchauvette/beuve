@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { parseVitestReport } from './parse-vitest-report.ts';
 
 describe('parseVitestReport', () => {
-  it('reads test results and files that failed to load', () => {
+  test('reads test results and files that failed to load', ({ expect }) => {
     const report = {
       testResults: [
         {
@@ -34,7 +36,7 @@ describe('parseVitestReport', () => {
         },
       ],
     };
-    expect(parseVitestReport(JSON.stringify(report), '/w')).toEqual([
+    expect(parseVitestReport(JSON.stringify(report), '/w')).toStrictEqual([
       {
         file: 'src/a.test.ts',
         titles: ['suite', 'works'],
@@ -66,7 +68,7 @@ describe('parseVitestReport', () => {
     ]);
   });
 
-  it('refuses text that is not a report', () => {
+  test('refuses text that is not a report', ({ expect }) => {
     expect(parseVitestReport('', '/w')).toBeUndefined();
     expect(parseVitestReport('{}', '/w')).toBeUndefined();
   });

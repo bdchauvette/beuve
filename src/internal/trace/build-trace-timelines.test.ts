@@ -1,34 +1,42 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { buildTraceTimelines } from './build-trace-timelines.ts';
 import type { InstrumentationPlan } from './instrumentation-plan.ts';
+import type { ValueSummary } from './value-summary.ts';
 import type { TestOutcome } from './trace-runner.ts';
 
-const plan: InstrumentationPlan = {
-  path: 'src/a.ts',
-  functions: [{ index: 0, name: 'a', startLine: 1, endLine: 5 }],
-  probes: [
-    { id: 0, kind: 'enter', fn: 0, line: 1, label: 'a', inHunk: false, parameters: ['x'] },
-    { id: 1, kind: 'if', fn: 0, line: 2, label: 'x', inHunk: true },
-  ],
-  edits: [],
-};
-const one = { type: 'number', preview: '1' } as const;
+function plan(): InstrumentationPlan {
+  return {
+    path: 'src/a.ts',
+    functions: [{ index: 0, name: 'a', startLine: 1, endLine: 5 }],
+    probes: [
+      { id: 0, kind: 'enter', fn: 0, line: 1, label: 'a', inHunk: false, parameters: ['x'] },
+      { id: 1, kind: 'if', fn: 0, line: 2, label: 'x', inHunk: true },
+    ],
+    edits: [],
+  };
+}
+
+function one(): ValueSummary {
+  return { type: 'number', preview: '1' };
+}
 
 describe('buildTraceTimelines', () => {
-  it('joins records to outcomes, orders by sequence and skips unknown probes', () => {
+  test('joins records to outcomes, orders by sequence and skips unknown probes', ({ expect }) => {
     const timelines = buildTraceTimelines(
-      plan,
+      plan(),
       [
         {
           test: { file: 'src/a.test.ts', titles: ['one'] },
           dropped: 2,
           events: [
-            { kind: 'return', seq: 4, frame: 1, probe: undefined, value: one },
+            { kind: 'return', seq: 4, frame: 1, probe: undefined, value: one() },
             { kind: 'branch', seq: 2, frame: 1, probe: 1, taken: false },
             { kind: 'branch', seq: 3, frame: 1, probe: 9, taken: true },
             { kind: 'mark', seq: 3, frame: 1, probe: 1 },
-            { kind: 'enter', seq: 1, frame: 1, parent: 7, probe: 0, args: [one] },
+            { kind: 'enter', seq: 1, frame: 1, parent: 7, probe: 0, args: [one()] },
           ],
         },
         {
@@ -39,7 +47,7 @@ describe('buildTraceTimelines', () => {
       ],
       [outcome(['one'], 'passed'), outcome(['two'], 'failed'), outcome(['three'], 'skipped')],
     );
-    expect(timelines).toEqual([
+    expect(timelines).toStrictEqual([
       {
         file: 'src/a.test.ts',
         titles: ['one'],
@@ -56,7 +64,7 @@ describe('buildTraceTimelines', () => {
             inHunk: false,
             label: 'a',
             kind: 'enter',
-            args: [{ name: 'x', value: one }],
+            args: [{ name: 'x', value: one() }],
           },
           {
             seq: 2,
@@ -77,7 +85,7 @@ describe('buildTraceTimelines', () => {
             inHunk: false,
             label: 'a',
             kind: 'return',
-            value: one,
+            value: one(),
             implicit: true,
           },
         ],
@@ -96,6 +104,7 @@ describe('buildTraceTimelines', () => {
         titles: [],
         status: 'unknown',
         failure: undefined,
+        duration: undefined,
         dropped: 0,
         entries: [
           {

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { createTraceEnvironment } from './create-trace-environment.ts';
 
 describe('createTraceEnvironment', () => {
-  it('passes an allow-list, extras, and forces CI without colours', () => {
+  test('passes an allow-list, extras, and forces CI without colours', ({ expect }) => {
     expect(
       createTraceEnvironment(
         {
@@ -18,7 +20,7 @@ describe('createTraceEnvironment', () => {
         },
         { ELECTRON_RUN_AS_NODE: '1' },
       ),
-    ).toEqual({
+    ).toStrictEqual({
       PATH: '/bin',
       HOME: '/home/me',
       TZ: 'UTC',
