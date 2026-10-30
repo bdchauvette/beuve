@@ -105,7 +105,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       ((this: unknown) => Iterator<[unknown, unknown]>) | undefined,
     setValues: method(Set.prototype, 'values') as
       ((this: unknown) => Iterator<unknown>) | undefined,
-    dateToIso: method(Date.prototype, 'toISOString') as Text,
+    instantFromDate: method(Date.prototype, 'toTemporalInstant') as
+      ((this: unknown) => Temporal.Instant) | undefined,
+    instantText: method(Temporal.Instant.prototype, 'toString') as
+      ((this: unknown, options: Temporal.InstantToStringOptions) => string) | undefined,
     regexpSource: getter(RegExp.prototype, 'source'),
     typedLength: getter(typedArrayPrototype, 'length'),
     bufferLength: getter(ArrayBuffer.prototype, 'byteLength'),
@@ -114,6 +117,13 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   };
   const call = <T>(method: ((this: unknown) => T) | undefined, target: unknown): T | undefined =>
     method === undefined ? undefined : Reflect.apply(method, target, []);
+  /** A foreign Date as an ISO instant with milliseconds, through Temporal (ADR 0059). */
+  const isoFromDate = (value: unknown): string | undefined => {
+    const instant = call(intrinsics.instantFromDate, value);
+    return instant === undefined || intrinsics.instantText === undefined
+      ? undefined
+      : Reflect.apply(intrinsics.instantText, instant, [{ fractionalSecondDigits: 3 }]);
+  };
   const isProxy = (value: object): boolean => types?.isProxy(value) ?? false;
   const isKind = (value: object, test: keyof UtilTypes, isFallback: () => boolean): boolean => {
     try {
@@ -224,7 +234,7 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       }
       case 'date': {
         try {
-          return call(intrinsics.dateToIso, value) ?? 'Date';
+          return isoFromDate(value) ?? 'Date';
         } catch {
           return 'Invalid Date';
         }
