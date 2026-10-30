@@ -43,6 +43,8 @@ const typescriptProjectFiles: Readonly<Record<string, string>> = {
     "import { c } from './c';\n\nexport function b(n: number): number {\n  return c(n) + 1;\n}\n",
   'src/a.ts': "import { b } from './b';\n\nexport function a(): number {\n  return b(1);\n}\n",
   'src/broken.ts': "export const answer: number = 'forty-two';\n",
+  'src/shape.ts':
+    'export interface Shape {\n  readonly sides: number;\n}\nexport const square: Shape = { sides: 4 };\n',
   'src/wide.ts':
     "import { c } from './c';\r\n\r\nexport const label = '😀😀'; export function wide(): number { return c(3); }\r\n",
 };

@@ -24,6 +24,7 @@ describe('createDisplayServices', () => {
         showInsights: true,
         reviewOrder: 'path',
         skipReviewed: false,
+        sheets: 'window',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -36,6 +37,7 @@ describe('createDisplayServices', () => {
         showInsights: true,
         reviewOrder: 'path',
         skipReviewed: false,
+        sheets: 'window',
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -44,6 +46,7 @@ describe('createDisplayServices', () => {
     await display.set({ showInsights: false });
     await display.set({ reviewOrder: 'imports' });
     await display.set({ skipReviewed: true });
+    await display.set({ sheets: 'inline' });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -53,6 +56,7 @@ describe('createDisplayServices', () => {
       showInsights: false,
       reviewOrder: 'imports',
       skipReviewed: true,
+      sheets: 'inline',
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -64,6 +68,7 @@ describe('createDisplayServices', () => {
         showInsights: false,
         reviewOrder: 'imports',
         skipReviewed: true,
+        sheets: 'inline',
       },
     });
   });
@@ -81,6 +86,7 @@ describe('createDisplayServices', () => {
         showInsights: true,
         reviewOrder: 'path',
         skipReviewed: false,
+        sheets: 'window',
       },
     });
   });

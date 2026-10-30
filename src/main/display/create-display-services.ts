@@ -4,6 +4,7 @@ import type {
   IpcResult,
   ReviewOrderMode,
   SetDiffDisplayRequest,
+  SheetModeView,
   SidebarSideView,
 } from '#contract/ipc-contract.ts';
 import { ok } from '#x/result/ok.ts';
@@ -30,13 +31,14 @@ const defaults: Required<DiffDisplayView> = {
   showInsights: true,
   reviewOrder: 'path',
   skipReviewed: false,
+  sheets: 'window',
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061), `reviewOrder` (ADR 0065) and `skipReviewed` (ADR 0064), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064) and `sheets` (ADR 0067), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, definitions in sheet windows. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -58,6 +60,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
           showInsights: next.showInsights,
           reviewOrder: next.reviewOrder,
           skipReviewed: next.skipReviewed,
+          sheets: next.sheets,
         }));
       }
       return ok(next);
@@ -73,6 +76,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
   const showInsights = settings['showInsights'];
   const reviewOrder = settings['reviewOrder'];
   const skipReviewed = settings['skipReviewed'];
+  const sheets = settings['sheets'];
   return {
     layout: isLayout(layout) ? layout : defaults.layout,
     ignoreWhitespace:
@@ -82,6 +86,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     showInsights: typeof showInsights === 'boolean' ? showInsights : defaults.showInsights,
     reviewOrder: isReviewOrder(reviewOrder) ? reviewOrder : defaults.reviewOrder,
     skipReviewed: typeof skipReviewed === 'boolean' ? skipReviewed : defaults.skipReviewed,
+    sheets: isSheetMode(sheets) ? sheets : defaults.sheets,
   };
 }
 
@@ -91,6 +96,10 @@ function isLayout(value: unknown): value is DiffLayoutView {
 
 function isReviewOrder(value: unknown): value is ReviewOrderMode {
   return typeof value === 'string' && reviewOrderModes.has(value);
+}
+
+function isSheetMode(value: unknown): value is SheetModeView {
+  return value === 'window' || value === 'inline';
 }
 
 function isSidebarSide(value: unknown): value is SidebarSideView {

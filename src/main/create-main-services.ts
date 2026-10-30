@@ -39,6 +39,8 @@ import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
+import { createSheetServices } from './sheets/create-sheet-services.ts';
+import { createRemoteServices } from './remote/create-remote-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createTraceServices } from './trace/create-trace-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
@@ -225,6 +227,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       },
     }),
     lsp,
+    sheets: createSheetServices({ context, ura }),
+    remote: createRemoteServices({
+      context,
+      ...(options.github?.openExternal !== undefined && {
+        openExternal: options.github.openExternal,
+      }),
+    }),
     flow: createFlowServices({ context, parse: parser.parse }),
     editor: createEditorServices({
       context,

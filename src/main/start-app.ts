@@ -7,6 +7,7 @@ import type { App } from 'electron';
 import type { Logger } from '#x/log/create-logger.ts';
 
 import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
+import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 
 import { createIpcHandlers } from './ipc/create-ipc-handlers.ts';
 import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';
@@ -14,6 +15,7 @@ import { sendEvent } from './ipc/send-event.ts';
 import type { MainServices } from './main-services.ts';
 import { launchMcpServer } from './mcp/launch-mcp-server.ts';
 import { createMainWindow } from './window/create-main-window.ts';
+import { createSheetWindows } from './window/create-sheet-windows.ts';
 import { hardenSession } from './window/harden-session.ts';
 import { hardenWebContents } from './window/harden-web-contents.ts';
 
@@ -21,6 +23,9 @@ export interface StartAppOptions {
   readonly services: MainServices;
   readonly preloadPath: string;
   readonly indexHtmlPath: string;
+  /** The sheet page and its preload (ADR 0067). */
+  readonly sheetPreloadPath: string;
+  readonly sheetHtmlPath: string;
   readonly mcpPort: number;
   readonly logger: Logger;
 }
@@ -110,14 +115,25 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       return chosen.canceled ? undefined : chosen.filePaths[0];
     },
   };
-  registerIpcHandlers(ipcMain, createIpcHandlers(services, readAppInfo(app), platform), {
-    trustedUrl: pathToFileURL(options.indexHtmlPath).href,
-    logger,
+  const sheets = createSheetWindows({
+    preloadPath: options.sheetPreloadPath,
+    sheetHtmlPath: options.sheetHtmlPath,
   });
+  registerIpcHandlers(
+    ipcMain,
+    createIpcHandlers(services, readAppInfo(app), { ...platform, openSheet: sheets.open }),
+    {
+      pages: [
+        { url: pathToFileURL(options.indexHtmlPath).href, channels: 'all' },
+        { url: pathToFileURL(options.sheetHtmlPath).href, channels: sheetInvokeChannels },
+      ],
+      logger,
+    },
+  );
 
   openWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (BrowserWindow.getAllWindows().every((window) => !isMainWindow(window, options))) {
       openWindow();
     }
   });
@@ -139,6 +155,12 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     await stopMcp();
     await services.dispose();
   });
+}
+
+/** Sheets alone don't count as the app being open: the dock icon brings the main window back. */
+function isMainWindow(window: BrowserWindow, options: StartAppOptions): boolean {
+  const url = window.webContents.getURL();
+  return url === '' || url.startsWith(pathToFileURL(options.indexHtmlPath).href);
 }
 
 function readAppInfo(app: App): AppInfo {

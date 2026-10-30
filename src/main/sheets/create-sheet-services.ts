@@ -1,0 +1,121 @@
+import type {
+  IpcResult,
+  OpenSheetRequest,
+  SheetFileRequest,
+  SheetFileView,
+  SheetHeadView,
+  SheetNoteView,
+  UraItemView,
+} from '#contract/ipc-contract.ts';
+import { diffObjects } from '#internal/git/diff-objects.ts';
+import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
+import { ok } from '#x/result/ok.ts';
+
+import { gitFailure } from '../sessions/git-failure.ts';
+import { loadSession } from '../sessions/load-session.ts';
+import { refreshSession } from '../sessions/refresh-session.ts';
+import type { SessionContext } from '../sessions/session-context.ts';
+import type { UraServices } from '../ura/create-ura-services.ts';
+
+import { readSheetSource } from './read-sheet-source.ts';
+import { resolveSheetCommit } from './resolve-sheet-commit.ts';
+import { sheetMarksFrom } from './sheet-marks-from.ts';
+
+/** What sheets (ADR 0067) read: a file at one commit, and where the session head is now. */
+export interface SheetServices {
+  readonly getFile: (request: SheetFileRequest) => Promise<IpcResult<SheetFileView>>;
+  readonly getHead: (request: { readonly sessionId: string }) => Promise<IpcResult<SheetHeadView>>;
+  /** Checks that the sheet's commit and file exist before main opens a window for it. */
+  readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<{ readonly opened: true }>>;
+}
+
+export interface SheetServicesOptions {
+  readonly context: SessionContext;
+  readonly ura: Pick<UraServices, 'list'>;
+}
+
+/**
+ * `sheet:get-file` reads `path` at the sheet's pinned commit (never "the head now"), with gutter
+ * marks against where the change starts (the session base's fork point for that commit), and the
+ * session's staged notes when the commit is the session head, where their lines are placed.
+ */
+export function createSheetServices(options: SheetServicesOptions): SheetServices {
+  const { context, ura } = options;
+  return {
+    getFile: async ({ sessionId, sha, path }): Promise<IpcResult<SheetFileView>> => {
+      const commit = await resolveSheetCommit(context, sessionId, sha);
+      if (!commit.ok) {
+        return commit;
+      }
+      const contents = await readSheetSource(context, commit.value, path);
+      if (!contents.ok) {
+        return contents;
+      }
+      const { repository, baseTip, session } = commit.value.refreshed;
+      const fork = await findStackForkPoint(repository, { base: baseTip, head: commit.value.sha });
+      if (!fork.ok) {
+        return gitFailure(context.logger, fork.error);
+      }
+      const files = await diffObjects(repository, fork.value.forkPoint, commit.value.sha, {
+        paths: [path],
+        contextLines: 0,
+      });
+      if (!files.ok) {
+        return gitFailure(context.logger, files.error);
+      }
+      const lineCount = contents.value.split('\n').length;
+      const isHead = commit.value.sha === session.headSha;
+      const listed = isHead ? await ura.list({ sessionId: session.id }) : undefined;
+      return ok({
+        sessionId: session.id,
+        sha: commit.value.sha,
+        headSha: session.headSha,
+        baseSha: fork.value.forkPoint,
+        path,
+        contents: contents.value,
+        marks: sheetMarksFrom(files.value[0]?.hunks ?? [], lineCount),
+        notes: listed?.ok === true ? notesOn(path, listed.value.items) : [],
+      });
+    },
+    getHead: async ({ sessionId }): Promise<IpcResult<SheetHeadView>> => {
+      const loaded = loadSession(context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const refreshed = await refreshSession(context, loaded.value);
+      return refreshed.ok
+        ? ok({ sessionId: refreshed.value.session.id, headSha: refreshed.value.session.headSha })
+        : refreshed;
+    },
+    checkOpen: async ({ sessionId, sha, path }): Promise<IpcResult<{ readonly opened: true }>> => {
+      const commit = await resolveSheetCommit(context, sessionId, sha);
+      if (!commit.ok) {
+        return commit;
+      }
+      const contents = await readSheetSource(context, commit.value, path);
+      return contents.ok ? ok({ opened: true }) : contents;
+    },
+  };
+}
+
+function notesOn(path: string, items: readonly UraItemView[]): SheetNoteView[] {
+  return items.flatMap((item): SheetNoteView[] => {
+    const { placement } = item;
+    if (
+      item.status.kind !== 'staged' ||
+      placement.kind !== 'current' ||
+      placement.anchor.kind !== 'lines' ||
+      placement.anchor.path !== path
+    ) {
+      return [];
+    }
+    return [
+      {
+        startLine: placement.anchor.startLine,
+        endLine: placement.anchor.endLine,
+        severity: item.severity,
+        title: item.title,
+      },
+    ];
+  });
+}

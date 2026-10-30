@@ -542,6 +542,128 @@ export interface CallHierarchyView {
 }
 
 /**
+ * Where the symbol on a line is defined (ADR 0067), asked of the language server in a checkout of
+ * `sha` (a commit of the session's repository; the session head when absent). Without
+ * `character` (0-based UTF-16), main picks the token: the line's calls first, then its other
+ * names, the names it declares last, and falls back to the enclosing symbol's name.
+ */
+export interface DefinitionRequest {
+  readonly sessionId: string;
+  readonly sha?: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+  /** 1-based. */
+  readonly line: number;
+  readonly character?: number;
+  readonly kind?: 'definition' | 'type-definition';
+}
+
+/** A place in a file: 1-based lines, 0-based UTF-16 characters, the end exclusive. */
+export interface SheetRangeView {
+  readonly startLine: number;
+  readonly startCharacter: number;
+  readonly endLine: number;
+  readonly endCharacter: number;
+}
+
+export interface DefinitionTargetView extends SheetRangeView {
+  readonly file:
+    | { readonly kind: 'workspace'; readonly path: string }
+    | { readonly kind: 'external'; readonly uri: string };
+}
+
+/**
+ * `token` is what the server was asked about (absent when the enclosing symbol's name was);
+ * `targets` is empty when it knows no definition. `sha` is the commit the answer is for.
+ */
+export interface DefinitionView {
+  readonly sha: string;
+  readonly token?: SheetRangeView & { readonly text: string };
+  readonly targets: readonly DefinitionTargetView[];
+}
+
+/**
+ * Opens a new sheet (ADR 0067): a read-only window showing `path` as it is at commit `sha`,
+ * scrolled to and highlighting `range` (or line 1). Every call opens a new window.
+ */
+export interface OpenSheetRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+  readonly range?: SheetRangeView;
+}
+
+/** A whole file at a commit for a sheet, with what the review changed in it. */
+export interface SheetFileRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+}
+
+/**
+ * Lines the change made relative to the review base (1-based, inclusive spans): `added` and
+ * `modified` lines, and `deletedAt`, the lines a removal sits just above (the last line for a
+ * removal at the end of the file).
+ */
+export interface SheetMarksView {
+  readonly added: readonly { readonly startLine: number; readonly endLine: number }[];
+  readonly modified: readonly { readonly startLine: number; readonly endLine: number }[];
+  readonly deletedAt: readonly number[];
+}
+
+/** A staged URA note on the sheet's lines; only for a sheet at the session head. */
+export interface SheetNoteView {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly severity: UraSeverityView;
+  readonly title: string;
+}
+
+/**
+ * `sha` is the commit the sheet is pinned to, `headSha` the session head now and `baseSha` the
+ * review base the marks compare against.
+ */
+export interface SheetFileView {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly headSha: string;
+  readonly baseSha: string;
+  readonly path: string;
+  readonly contents: string;
+  readonly marks: SheetMarksView;
+  readonly notes: readonly SheetNoteView[];
+}
+
+export interface SheetHeadView {
+  readonly sessionId: string;
+  readonly headSha: string;
+}
+
+/**
+ * A permalink (ADR 0067) to `path` at commit `sha` on the session's primary remote: the remote of
+ * a pull request's base repository, else `origin`, else the first GitHub remote. Lines are
+ * 1-based and inclusive; without them the link is to the whole file.
+ */
+export interface PermalinkRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+  readonly startLine?: number;
+  readonly endLine?: number;
+}
+
+/**
+ * `link` names the remote it points at; the commit may not be pushed yet, in which case GitHub
+ * answers 404 until it is. `no-remote` when the repository has no GitHub remote.
+ */
+export type PermalinkView =
+  | { readonly kind: 'link'; readonly url: string; readonly remote: string }
+  | { readonly kind: 'no-remote' };
+
+/** Where `lsp:definition` jumps open: a sheet window each, or the overlay in the main window. */
+export type SheetModeView = 'window' | 'inline';
+
+/**
  * The control-flow graph of the function enclosing head line `line` (1-based) of `path`, a file
  * of the review `session:get-review` shows for the session now (ADR 0028, 0029).
  */
@@ -1303,6 +1425,8 @@ export interface DiffDisplayView {
   readonly reviewOrder?: ReviewOrderMode;
   /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
   readonly skipReviewed?: boolean;
+  /** How definitions open (ADR 0067); `window` until chosen. Always set by main. */
+  readonly sheets?: SheetModeView;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1314,6 +1438,7 @@ export interface SetDiffDisplayRequest {
   readonly showInsights?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
+  readonly sheets?: SheetModeView;
 }
 
 /**
@@ -1649,6 +1774,30 @@ export interface InvokeChannelMap {
     readonly request: CallHierarchyRequest;
     readonly response: IpcResult<CallHierarchyView>;
   };
+  'lsp:definition': {
+    readonly request: DefinitionRequest;
+    readonly response: IpcResult<DefinitionView>;
+  };
+  'sheet:open': {
+    readonly request: OpenSheetRequest;
+    readonly response: IpcResult<{ readonly opened: true }>;
+  };
+  'sheet:get-file': {
+    readonly request: SheetFileRequest;
+    readonly response: IpcResult<SheetFileView>;
+  };
+  'sheet:get-head': {
+    readonly request: { readonly sessionId: string };
+    readonly response: IpcResult<SheetHeadView>;
+  };
+  'remote:permalink': {
+    readonly request: PermalinkRequest;
+    readonly response: IpcResult<PermalinkView>;
+  };
+  'remote:open-permalink': {
+    readonly request: PermalinkRequest;
+    readonly response: IpcResult<PermalinkView>;
+  };
   'flow:get-graph': {
     readonly request: GetFlowGraphRequest;
     readonly response: IpcResult<FlowGraphResponse>;
@@ -1793,6 +1942,24 @@ export type EventPayload<E extends EventChannel> = EventChannelMap[E];
 
 /** Unsubscribes a listener registered with {@link BeuveApi.on}. */
 export type Unsubscribe = () => void;
+
+/** The channels a sheet window may call (ADR 0067); its preload and main allow nothing else. */
+export type SheetInvokeChannel =
+  | 'lsp:definition'
+  | 'sheet:open'
+  | 'sheet:get-file'
+  | 'sheet:get-head'
+  | 'remote:permalink'
+  | 'remote:open-permalink'
+  | 'clipboard:write-text';
+
+/** The API the sheet preload exposes as `window.beuve`: invoke only, sheet channels only. */
+export interface SheetApi {
+  readonly invoke: <C extends SheetInvokeChannel>(
+    channel: C,
+    ...request: InvokeRequest<C> extends undefined ? [] : [InvokeRequest<C>]
+  ) => Promise<InvokeResponse<C>>;
+}
 
 /** The API the preload exposes as `window.beuve`. */
 export interface BeuveApi {

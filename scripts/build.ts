@@ -17,7 +17,8 @@ const dist = path.join(root, 'dist');
 await buildAll();
 
 /**
- * Bundles main (ESM), preload (CJS, sandboxed per ADR 0005) and ui (ESM, code-split per ADR 0025)
+ * Bundles main (ESM), the main and sheet preloads (CJS, sandboxed per ADR 0005, 0067) and ui (ESM,
+ * code-split per ADR 0025, with the sheet page `sheet-entry.js` as a second entry sharing its chunks)
  * into dist/ (plus main's ImpactGate worker as `dist/main/impact-worker.js`, ADR 0053), and copies the Tree-sitter runtime and grammar wasm files main loads from
  * `dist/main/wasm/` (ADR 0014). Prints the renderer's eager size.
  */
@@ -29,8 +30,10 @@ async function buildAll(): Promise<void> {
     build(mainOptions()),
     build(impactWorkerOptions()),
     build(preloadOptions()),
+    build(sheetPreloadOptions()),
   ]);
   await copyFile(path.join(root, 'src/ui/index.html'), path.join(dist, 'ui/index.html'));
+  await copyFile(path.join(root, 'src/ui/sheet.html'), path.join(dist, 'ui/sheet.html'));
   await copyWasmAssets(path.join(dist, 'main/wasm'));
   if (ui.metafile !== undefined) {
     reportUiSize(ui.metafile);
@@ -106,6 +109,15 @@ function preloadOptions(): BuildOptions {
   };
 }
 
+/** The sheet windows' preload (ADR 0067), which exposes only the sheet channels. */
+function sheetPreloadOptions(): BuildOptions {
+  return {
+    ...preloadOptions(),
+    entryPoints: [path.join(root, 'src/preload/sheet-preload.ts')],
+    outfile: path.join(dist, 'preload/sheet-preload.cjs'),
+  };
+}
+
 /**
  * The renderer splits so Shiki grammars load lazily through `import()` (ADR 0018). Chunks live in
  * `dist/ui/chunks/` and load over `file://` like the entry.
@@ -113,7 +125,11 @@ function preloadOptions(): BuildOptions {
 function uiOptions(): BuildOptions {
   return {
     ...sharedOptions(),
-    entryPoints: [path.join(root, 'src/ui/index.ts'), path.join(root, 'src/ui/index.css')],
+    entryPoints: [
+      path.join(root, 'src/ui/index.ts'),
+      path.join(root, 'src/ui/sheet-entry.ts'),
+      path.join(root, 'src/ui/index.css'),
+    ],
     outdir: path.join(dist, 'ui'),
     platform: 'browser',
     target: 'chrome140',

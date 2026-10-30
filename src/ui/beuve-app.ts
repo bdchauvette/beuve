@@ -101,6 +101,10 @@ import { formatDuration } from './format-duration.ts';
 import type { TraceState } from './trace-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
+import './beuve-sheet-view.ts';
+import { runSheetAction } from './run-sheet-action.ts';
+import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
+import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 
 const impactGrace = Temporal.Duration.from({ milliseconds: 1500 });
@@ -283,6 +287,15 @@ export class BeuveApp extends LitElement {
       color: var(--beuve-text-muted);
     }
 
+    .sheet-overlay {
+      position: fixed;
+      inset: var(--beuve-titlebar-height) 0 var(--beuve-statusbar-height) auto;
+      z-index: 15;
+      width: min(760px, 62vw);
+      border-left: 1px solid var(--beuve-border);
+      box-shadow: -8px 0 24px var(--beuve-scrim-soft);
+    }
+
     .scrim {
       position: fixed;
       inset: 0;
@@ -372,6 +385,15 @@ export class BeuveApp extends LitElement {
     event: CustomEvent<{ path: string; line: number | undefined }>,
   ): void => {
     void this.openPeek(event.detail.path, event.detail.line);
+  };
+
+  private readonly onSheetRequest = (event: CustomEvent<SheetOpenDetail>): void => {
+    void this.sheetAction({ kind: 'open', ...event.detail });
+  };
+
+  private readonly onSheetClose = (): void => {
+    this.inlineSheet = undefined;
+    this.focusedZone = 'diff';
   };
 
   private readonly onPeekExpand = (event: CustomEvent<{ nodeId: string }>): void => {
@@ -690,6 +712,8 @@ export class BeuveApp extends LitElement {
   @state() accessor order: ReviewOrderView | undefined;
   @state() accessor impact: ImpactView | undefined;
   @state() accessor peek: PeekState | undefined;
+  /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
+  @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
   /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
   @state() accessor flow: FlowState | undefined;
   /** The trace timeline portal; at most one of `peek`, `flow` and `trace` is open at a time. */
@@ -1592,6 +1616,22 @@ export class BeuveApp extends LitElement {
         });
         return;
       }
+      case 'sheets': {
+        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
+        void this.setDisplay(command.mode === undefined ? {} : { sheets: command.mode }).then(
+          (display) => {
+            if (display !== undefined) {
+              this.note(
+                'info',
+                display.sheets === 'inline'
+                  ? 'Definitions open over the diff.'
+                  : 'Definitions open in a new sheet window each.',
+              );
+            }
+          },
+        );
+        return;
+      }
       case 'insights': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.setDisplay(
@@ -2155,6 +2195,12 @@ export class BeuveApp extends LitElement {
       }
       return;
     }
+    const sheetKey = sheetKeyActions[event.key];
+    if (sheetKey !== undefined && this.focusedZone === 'diff' && this.review !== undefined) {
+      event.preventDefault();
+      this.runAppAction(sheetKey);
+      return;
+    }
     const action = plainKeyActions[event.key];
     if (action === undefined || (action === 'cycle-zone' && event.key !== 'Tab')) {
       return;
@@ -2289,7 +2335,45 @@ export class BeuveApp extends LitElement {
       }
       case 'commit-pairs': {
         void this.openCommitPairs();
+        return;
       }
+      case 'open-definition':
+      case 'open-type-definition':
+      case 'copy-permalink':
+      case 'open-permalink': {
+        const target = this.renderRoot
+          .querySelector<BeuveDiffStream>('beuve-diff-stream')
+          ?.target();
+        if (target !== undefined) {
+          void this.sheetAction({ kind: sheetActionKinds[action], target });
+        }
+      }
+    }
+  }
+
+  /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
+  private async sheetAction(action: SheetAction): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    const outcome = await runSheetAction(
+      {
+        bridge,
+        sessionId: review.session.id,
+        headSha: review.headSha,
+        baseSha: review.baseSha,
+        mode: this.display.sheets ?? 'window',
+      },
+      action,
+    );
+    if (outcome.kind === 'inline') {
+      this.inlineSheet = { sha: outcome.sha, place: outcome.place };
+      await this.updateComplete;
+      this.renderRoot.querySelector<HTMLElement>('beuve-sheet-view')?.focus();
+    } else {
+      this.showNotice(outcome.notice);
     }
   }
 
@@ -2602,6 +2686,7 @@ export class BeuveApp extends LitElement {
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
+      @beuve-sheet-request=${this.onSheetRequest}
       @beuve-flow-request=${this.onFlowRequest}
       @beuve-flow-close=${this.onFlowClose}
       @beuve-trace-request=${this.onTraceRequest}
@@ -2745,6 +2830,19 @@ export class BeuveApp extends LitElement {
         .githubAuth=${this.githubAuth}
       ></beuve-status-bar>
       ${
+        this.inlineSheet === undefined || this.review === undefined
+          ? nothing
+          : html`<beuve-sheet-view
+              class="sheet-overlay"
+              mode="inline"
+              .api=${beuveBridge()}
+              .sessionId=${this.review.session.id}
+              .sha=${this.inlineSheet.sha}
+              .place=${this.inlineSheet.place}
+              @beuve-sheet-close=${this.onSheetClose}
+            ></beuve-sheet-view>`
+      }
+      ${
         this.openDialog
           ? html`<div
               class="scrim"
@@ -2846,6 +2944,21 @@ const orderActions: Readonly<Record<Extract<AppAction, `order-${string}`>, Revie
   'order-imports': 'imports',
   'order-calls': 'calls',
 };
+
+/** Diff keys for sheets and permalinks (ADR 0067): `Shift+d`, `Shift+t`, `Shift+y`, `Shift+o`. */
+const sheetKeyActions: Readonly<Record<string, AppAction>> = {
+  D: 'open-definition',
+  T: 'open-type-definition',
+  Y: 'copy-permalink',
+  O: 'open-permalink',
+};
+
+const sheetActionKinds = {
+  'open-definition': 'definition',
+  'open-type-definition': 'type-definition',
+  'copy-permalink': 'copy-link',
+  'open-permalink': 'open-link',
+} as const;
 
 const plainKeyActions: Readonly<Record<string, AppAction>> = {
   Tab: 'cycle-zone',

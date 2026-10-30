@@ -184,6 +184,13 @@ describe('parseChatCommand', () => {
     });
   });
 
+  test('parses /sheets', ({ expect }) => {
+    expect(parseChatCommand('/sheets')).toStrictEqual({ kind: 'sheets' });
+    expect(parseChatCommand('/sheets Inline')).toStrictEqual({ kind: 'sheets', mode: 'inline' });
+    expect(parseChatCommand('/sheets window')).toStrictEqual({ kind: 'sheets', mode: 'window' });
+    expect(parseChatCommand('/sheets tab').kind).toBe('invalid');
+  });
+
   test('parses /sidebar', ({ expect }) => {
     expect(parseChatCommand('/sidebar left')).toStrictEqual({ kind: 'sidebar', side: 'left' });
     expect(parseChatCommand('/layout a').kind).toBe('invalid');

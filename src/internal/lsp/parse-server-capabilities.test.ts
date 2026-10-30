@@ -14,6 +14,7 @@ describe('parseServerCapabilities', () => {
           callHierarchyProvider: {},
           hoverProvider: true,
           definitionProvider: false,
+          typeDefinitionProvider: true,
         },
       }),
     ).toMatchObject({
@@ -21,6 +22,7 @@ describe('parseServerCapabilities', () => {
       callHierarchy: true,
       hover: true,
       definition: false,
+      typeDefinition: true,
       pullDiagnostics: false,
     });
     expect(

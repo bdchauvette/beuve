@@ -25,6 +25,7 @@ import type {
   CallHierarchyNode,
   DiagnosticsReport,
   DocumentSymbolView,
+  LocationView,
   Position,
   ServerStatus,
 } from './lsp-model.ts';
@@ -33,6 +34,7 @@ import { normalizeUri } from './normalize-uri.ts';
 import { parseCallHierarchyItems } from './parse-call-hierarchy-items.ts';
 import type { LspCallHierarchyEdge } from './parse-call-hierarchy-items.ts';
 import { parseDocumentSymbols } from './parse-document-symbols.ts';
+import { parseLocations } from './parse-locations.ts';
 import { resolveWorkspaceFile } from './resolve-workspace-file.ts';
 import type { WorkspaceFile } from './resolve-workspace-file.ts';
 import { resolveWorkspaceRoot } from './resolve-workspace-root.ts';
@@ -93,6 +95,11 @@ export interface DiagnosticsRequest extends FileRequest {
   readonly timeout?: Temporal.Duration;
 }
 
+export interface DefinitionRequest extends PositionRequest {
+  /** `definition` (the default) or `type-definition`. */
+  readonly kind?: 'definition' | 'type-definition';
+}
+
 /**
  * Read-only access to language servers, one process per (workspace root, server), started on
  * first use. Every method resolves to a `Result`; none rejects.
@@ -113,6 +120,13 @@ export interface LspMultiplexer {
   readonly documentSymbols: (
     request: FileRequest,
   ) => Promise<Result<readonly DocumentSymbolView[], LspError>>;
+  /**
+   * Where the symbol at a position is defined (`textDocument/definition`), or where its type is
+   * (`textDocument/typeDefinition`). Location links answer their selection range. Read-only.
+   */
+  readonly definition: (
+    request: DefinitionRequest,
+  ) => Promise<Result<readonly LocationView[], LspError>>;
   readonly status: () => readonly ServerStatus[];
   /** Shuts every server down cleanly (`shutdown`, `exit`, then signals). Idempotent. */
   readonly dispose: () => Promise<void>;
@@ -403,7 +417,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 
   const requireCapability = (
     opened: { readonly session: ServerSession; readonly entry: ServerEntry },
-    capability: 'callHierarchy' | 'documentSymbol',
+    capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
   ): Result<undefined, LspError> =>
     opened.session.server.capabilities[capability]
       ? ok(undefined)
@@ -569,6 +583,33 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return ok(
         parseDocumentSymbols(result.value).map((symbol) => mapper.symbol(document.uri, symbol)),
       );
+    },
+
+    definition: async (request): Promise<Result<readonly LocationView[], LspError>> => {
+      const opened = await openFile(request);
+      if (!opened.ok) {
+        return opened;
+      }
+      const isType = request.kind === 'type-definition';
+      const capable = requireCapability(opened.value, isType ? 'typeDefinition' : 'definition');
+      if (!capable.ok) {
+        return capable;
+      }
+      const { session, entry } = opened.value;
+      const result = await session.request(
+        isType ? 'textDocument/typeDefinition' : 'textDocument/definition',
+        positionParams(opened.value, request.position),
+      );
+      if (!result.ok) {
+        return result;
+      }
+      const locations = parseLocations(result.value);
+      const mapper = await mapperFor(
+        session,
+        entry.root,
+        locations.map((location) => location.uri),
+      );
+      return ok(locations.map((location) => mapper.location(location)));
     },
 
     status: (): readonly ServerStatus[] => {

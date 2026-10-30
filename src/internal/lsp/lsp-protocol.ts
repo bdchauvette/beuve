@@ -68,6 +68,7 @@ export interface LspServerCapabilities {
   readonly callHierarchy: boolean;
   readonly pullDiagnostics: boolean;
   readonly definition: boolean;
+  readonly typeDefinition: boolean;
   readonly references: boolean;
   readonly hover: boolean;
   readonly documentSymbol: boolean;

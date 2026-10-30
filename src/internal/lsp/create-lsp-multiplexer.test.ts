@@ -158,6 +158,43 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     expect(symbols).toContainEqual(expect.objectContaining({ name: 'b', kind: 'function' }));
   });
 
+  test('finds where a called function and a type are defined, across files', async ({
+    expect,
+    sharedTypescriptWorkspace: { project, lsp },
+  }) => {
+    const [definition, typeDefinition, nothingThere] = await Promise.all([
+      lsp.definition({
+        root: project.root,
+        path: 'src/b.ts',
+        position: { line: 3, character: 9 },
+      }),
+      lsp.definition({
+        root: project.root,
+        path: 'src/shape.ts',
+        position: { line: 3, character: 13 },
+        kind: 'type-definition',
+      }),
+      lsp.definition({
+        root: project.root,
+        path: 'src/b.ts',
+        position: { line: 1, character: 0 },
+      }),
+    ]);
+    expect(okValueFrom(definition)).toStrictEqual([
+      {
+        file: { kind: 'workspace', path: 'src/c.ts' },
+        range: { start: { line: 0, character: 16 }, end: { line: 0, character: 17 } },
+      },
+    ]);
+    expect(okValueFrom(typeDefinition)).toStrictEqual([
+      {
+        file: { kind: 'workspace', path: 'src/shape.ts' },
+        range: { start: { line: 0, character: 17 }, end: { line: 0, character: 22 } },
+      },
+    ]);
+    expect(okValueFrom(nothingThere)).toStrictEqual([]);
+  });
+
   test('refuses paths outside the root, odd files and unknown nodes', async ({
     expect,
     tempDir,

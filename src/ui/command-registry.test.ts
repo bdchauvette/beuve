@@ -66,6 +66,7 @@ describe('commandRegistry', () => {
       '/insights',
       '/order',
       '/sidebar',
+      '/sheets',
       '/trust',
       '/untrust',
       '/clear',

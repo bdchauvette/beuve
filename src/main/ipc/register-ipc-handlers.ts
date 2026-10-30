@@ -4,28 +4,36 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 
 import { invokeChannels } from '#contract/invoke-channels.ts';
-import type { IpcResult } from '#contract/ipc-contract.ts';
+import type { InvokeChannel, IpcResult } from '#contract/ipc-contract.ts';
 
 import type { IpcHandlers } from './create-ipc-handlers.ts';
 
+/** A page of beuve's own and the channels it may call; `all` for the main window's page. */
+export interface TrustedPage {
+  readonly url: string;
+  readonly channels: 'all' | readonly InvokeChannel[];
+}
+
 /**
- * Registers every contract channel on `ipcMain`. Calls from frames other than the app's own page,
- * or with more than one argument, are refused before reaching a handler; unexpected exceptions
- * become `internal` errors so the renderer never sees a stack. Returns an unregister function.
+ * Registers every contract channel on `ipcMain`. Calls from frames other than the top-level
+ * frame of one of beuve's own pages, for a channel that page may not call (a sheet calls only the
+ * sheet channels, ADR 0067), or with more than one argument, are refused before reaching a
+ * handler; unexpected exceptions become `internal` errors so the renderer never sees a stack.
+ * Returns an unregister function.
  */
 export function registerIpcHandlers(
   ipcMain: IpcMain,
   handlers: IpcHandlers,
-  options: { readonly trustedUrl: string; readonly logger: Logger },
+  options: { readonly pages: readonly TrustedPage[]; readonly logger: Logger },
 ): () => void {
-  const { trustedUrl, logger } = options;
+  const { pages, logger } = options;
   for (const channel of invokeChannels) {
     const handler: (request: unknown) => IpcResult<unknown> | Promise<IpcResult<unknown>> =
       handlers[channel];
     ipcMain.handle(
       channel,
       async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IpcResult<unknown>> => {
-        if (!isTrustedSender(event, trustedUrl)) {
+        if (!isTrustedSender(event, pages, channel)) {
           logger.warn('ipc call from untrusted frame refused', { channel });
           return err({ code: 'invalid-request', message: 'untrusted sender' });
         }
@@ -48,7 +56,11 @@ export function registerIpcHandlers(
   };
 }
 
-function isTrustedSender(event: IpcMainInvokeEvent, trustedUrl: string): boolean {
+function isTrustedSender(
+  event: IpcMainInvokeEvent,
+  pages: readonly TrustedPage[],
+  channel: InvokeChannel,
+): boolean {
   const frame = event.senderFrame;
   if (frame?.parent !== null) {
     return false;
@@ -56,5 +68,6 @@ function isTrustedSender(event: IpcMainInvokeEvent, trustedUrl: string): boolean
   const url = new URL(frame.url);
   url.hash = '';
   url.search = '';
-  return url.href === trustedUrl;
+  const page = pages.find((candidate) => candidate.url === url.href);
+  return page !== undefined && (page.channels === 'all' || page.channels.includes(channel));
 }

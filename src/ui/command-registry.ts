@@ -22,7 +22,11 @@ export type AppAction =
   | 'order-path'
   | 'order-imports'
   | 'order-calls'
-  | 'commit-pairs';
+  | 'commit-pairs'
+  | 'open-definition'
+  | 'open-type-definition'
+  | 'copy-permalink'
+  | 'open-permalink';
 
 /** What running a command from the palette does. */
 export type CommandRun =
@@ -345,6 +349,38 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     run: zoneKey('diff', 'o'),
   },
   {
+    id: 'open-definition',
+    title: 'Open the definition of this line’s symbol in a sheet (a new window per jump)',
+    scope: 'Diff',
+    keys: ['Shift+d'],
+    available: true,
+    run: app('open-definition'),
+  },
+  {
+    id: 'open-type-definition',
+    title: 'Open the type of this line’s symbol in a sheet',
+    scope: 'Diff',
+    keys: ['Shift+t'],
+    available: true,
+    run: app('open-type-definition'),
+  },
+  {
+    id: 'copy-permalink',
+    title: 'Copy a GitHub permalink to these lines',
+    scope: 'Diff',
+    keys: ['Shift+y'],
+    available: true,
+    run: app('copy-permalink'),
+  },
+  {
+    id: 'open-permalink',
+    title: 'Open these lines on GitHub',
+    scope: 'Diff',
+    keys: ['Shift+o'],
+    available: true,
+    run: app('open-permalink'),
+  },
+  {
     id: 'toggle-reviewed',
     title: 'Mark the file reviewed / not reviewed (reviewed files collapse)',
     scope: 'Diff',
@@ -512,6 +548,16 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze([
     help: 'choose the editor the o key opens (just /editor shows the current one)',
     available: true,
     run: slash('/editor ', true),
+  },
+  {
+    id: 'sheets-mode',
+    title: 'Open definitions in sheet windows or over the diff…',
+    scope: 'Chat',
+    keys: [],
+    slash: '/sheets window|inline',
+    help: 'definitions (Shift+d) open in a new sheet window each, or over the diff (just /sheets shows the current one)',
+    available: true,
+    run: slash('/sheets ', true),
   },
   {
     id: 'diff-layout',

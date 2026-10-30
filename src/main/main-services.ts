@@ -21,6 +21,8 @@ import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
+import type { RemoteServices } from './remote/create-remote-services.ts';
+import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
@@ -48,7 +50,11 @@ export interface MainServices {
   readonly impact: ImpactServices;
   readonly files: FileServices;
   readonly order: OrderServices;
-  readonly lsp: Pick<LspServices, 'callHierarchy'>;
+  readonly lsp: Pick<LspServices, 'callHierarchy' | 'definition'>;
+  /** Sheets: whole files pinned to a commit (ADR 0067). */
+  readonly sheets: SheetServices;
+  /** Permalinks to the primary remote (ADR 0067). */
+  readonly remote: RemoteServices;
   readonly flow: FlowServices;
   readonly editor: EditorServices;
   readonly display: DisplayServices;

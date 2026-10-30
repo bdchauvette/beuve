@@ -1,7 +1,7 @@
 import { describe } from 'vitest';
 import type { ExpectStatic } from 'vitest';
 
-import type { AppInfo, IpcError, SessionSummary } from '#contract/ipc-contract.ts';
+import type { AppInfo, IpcError, IpcResult, SessionSummary } from '#contract/ipc-contract.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err, Ok } from '#x/result/result.ts';
@@ -40,6 +40,16 @@ function notWiredError(): Err<IpcError> {
 async function notWired(): Promise<Err<IpcError>> {
   await Promise.resolve();
   return notWiredError();
+}
+
+async function sheetChecked(): Promise<Ok<{ readonly opened: true }>> {
+  await Promise.resolve();
+  return ok({ opened: true });
+}
+
+async function notFound(): Promise<Err<IpcError>> {
+  await Promise.resolve();
+  return err({ code: 'not-found', message: 'no such file' });
 }
 
 async function opening(): Promise<Ok<SessionSummary>> {
@@ -242,6 +252,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             calls.push(request);
             return notWired();
           },
+          definition: notWired,
         },
       },
       appInfo(),
@@ -260,6 +271,82 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
     await handlers['lsp:call-hierarchy'](good);
     await handlers['lsp:call-hierarchy']({ ...good, character: 4, nodeId: 'n1' });
     expect(calls).toStrictEqual([good, { ...good, character: 4, nodeId: 'n1' }]);
+  });
+
+  test('validates lsp:definition paths, commits and positions', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          callHierarchy: notWired,
+          definition: async (request) => {
+            calls.push(request);
+            return notWired();
+          },
+        },
+      },
+      appInfo(),
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
+    for (const bad of [
+      { ...good, path: '../secret.ts' },
+      { ...good, path: '/etc/passwd' },
+      { ...good, path: 'src//a.ts' },
+      { ...good, path: 'src/./a.ts' },
+      { ...good, sha: 'HEAD~1' },
+      { ...good, sha: 'abc1234' },
+      { ...good, line: 0 },
+      { ...good, kind: 'references' },
+    ]) {
+      await expectInvalid(expect, handlers['lsp:definition'](bad));
+    }
+    const sha = 'a'.repeat(40);
+    await handlers['lsp:definition'](good);
+    await handlers['lsp:definition']({ ...good, sha, character: 2, kind: 'type-definition' });
+    expect(calls).toStrictEqual([good, { ...good, sha, character: 2, kind: 'type-definition' }]);
+  });
+
+  test('opens a sheet only for a request main has checked', async ({ expect }) => {
+    const opened: unknown[] = [];
+    const sha = 'b'.repeat(40);
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        sheets: {
+          getFile: notWired,
+          getHead: notWired,
+          checkOpen: async (request): Promise<IpcResult<{ readonly opened: true }>> =>
+            request.path === 'src/a.ts' ? sheetChecked() : notFound(),
+        },
+      },
+      appInfo(),
+      {
+        openSheet: (request): void => {
+          opened.push(request);
+        },
+      },
+    );
+    const range = { startLine: 4, startCharacter: 0, endLine: 4, endCharacter: 3 };
+    await expectInvalid(expect, handlers['sheet:open']({ sessionId: 's1', sha, path: '..' }));
+    await expectInvalid(
+      expect,
+      handlers['sheet:open']({ sessionId: 's1', sha, path: 'a', range: { ...range, endLine: 1 } }),
+    );
+    await expect(
+      handlers['sheet:open']({ sessionId: 's1', sha, path: 'src/b.ts' }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
+    await expect(
+      handlers['sheet:open']({ sessionId: 's1', sha, path: 'src/a.ts', range }),
+    ).resolves.toStrictEqual({ ok: true, value: { opened: true } });
+    expect(opened).toStrictEqual([{ sessionId: 's1', sha, path: 'src/a.ts', range }]);
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['sheet:open']({
+        sessionId: 's1',
+        sha,
+        path: 'src/a.ts',
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });
 
   test('validates flow:get-graph before delegating', async ({ expect }) => {
@@ -804,7 +891,9 @@ function stubServices(
       getFileAttributes: notWired,
     },
     order: { getOrder: notWired },
-    lsp: { callHierarchy: notWired },
+    lsp: { callHierarchy: notWired, definition: notWired },
+    sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
+    remote: { permalink: notWired, openPermalink: notWired },
     flow: { getGraph: notWired },
     editor: {
       open: notWired,

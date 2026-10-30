@@ -36,6 +36,7 @@ function createFakeServer(
       callHierarchy: false,
       pullDiagnostics: false,
       definition: false,
+      typeDefinition: false,
       references: false,
       hover: false,
       documentSymbol: false,

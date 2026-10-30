@@ -98,9 +98,16 @@ export default {
     {
       name: 'no-entrypoint-imports',
       severity: 'error',
-      comment: 'Process entrypoints (src/*/index.ts) are never imported.',
+      comment:
+        'Process entrypoints (src/*/index.ts, the sheet page and preload) are never imported.',
       from: {},
-      to: { path: '^src/[^/]+/index\\.ts$' },
+      to: {
+        path: [
+          '^src/[^/]+/index\\.ts$',
+          '^src/preload/sheet-preload\\.ts$',
+          '^src/ui/sheet-entry\\.ts$',
+        ],
+      },
     },
     {
       name: 'testing-only-in-tests',
@@ -114,11 +121,11 @@ export default {
       name: 'pierre-only-in-wrappers',
       severity: 'error',
       comment:
-        'Only beuve-file-card and beuve-radar-tree import @pierre/* (ADR 0018), so a library swap stays local; tests and src/ui/testing may.',
+        'Only beuve-file-card, beuve-radar-tree and beuve-sheet-code import @pierre/* (ADR 0018, 0067), so a library swap stays local; tests and src/ui/testing may.',
       from: {
         path: '^src/',
         pathNot: [
-          '^src/ui/beuve-(file-card|radar-tree)\\.ts$',
+          '^src/ui/beuve-(file-card|radar-tree|sheet-code)\\.ts$',
           '\\.test\\.ts$',
           '^src/ui/testing/',
         ],

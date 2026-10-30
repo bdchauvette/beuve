@@ -36,6 +36,7 @@ export const clientCapabilities = Object.freeze({
     diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false },
     callHierarchy: { dynamicRegistration: false },
     definition: { dynamicRegistration: false, linkSupport: true },
+    typeDefinition: { dynamicRegistration: false, linkSupport: true },
     references: { dynamicRegistration: false },
     hover: { dynamicRegistration: false, contentFormat: ['markdown', 'plaintext'] },
     documentSymbol: {

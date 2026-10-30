@@ -391,6 +391,97 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   );
 
   test(
+    'jumps to definitions at the head and at an older pinned commit, and reads sheets there',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, services, repositories, worktreeRoot }) => {
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const [head, base] = await Promise.all([
+        repo.git('rev-parse', 'feature'),
+        repo.git('rev-parse', 'main'),
+      ]);
+      const atHead = okValueFrom(
+        await services.lsp.definition({ sessionId, path: 'src/handler.ts', line: 4 }),
+      );
+      expect(atHead).toStrictEqual({
+        sha: head,
+        token: { startLine: 4, startCharacter: 9, endLine: 4, endCharacter: 17, text: 'validate' },
+        targets: [
+          {
+            file: { kind: 'workspace', path: 'src/auth.ts' },
+            startLine: 1,
+            startCharacter: 16,
+            endLine: 1,
+            endCharacter: 24,
+          },
+        ],
+      });
+      const atBase = okValueFrom(
+        await services.lsp.definition({ sessionId, sha: base, path: 'src/handler.ts', line: 3 }),
+      );
+      expect(atBase.sha).toBe(base);
+      expect(atBase.token?.text).toBe('token');
+      expect(new Set(checkouts(worktreeRoot))).toStrictEqual(new Set([base, head]));
+      const own = okValueFrom(
+        await services.lsp.definition({
+          sessionId,
+          path: 'src/handler.ts',
+          line: 7,
+          character: 18,
+        }),
+      );
+      expect(own.targets).toMatchObject([{ file: { path: 'src/handler.ts' }, startLine: 7 }]);
+      await expect(
+        services.lsp.definition({ sessionId, sha: base, path: 'src/complex.ts', line: 1 }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
+
+      const sheet = okValueFrom(
+        await services.sheets.getFile({ sessionId, sha: head, path: 'src/auth.ts' }),
+      );
+      expect(sheet).toMatchObject({
+        sha: head,
+        headSha: head,
+        baseSha: base,
+        marks: { added: [], modified: [{ startLine: 2, endLine: 2 }], deletedAt: [] },
+        notes: [],
+      });
+      expect(sheet.contents).toContain('token.length > 8');
+      const old = okValueFrom(
+        await services.sheets.getFile({ sessionId, sha: base, path: 'src/auth.ts' }),
+      );
+      expect(old).toMatchObject({ sha: base, headSha: head, marks: { modified: [] } });
+      expect(old.contents).toContain('token.length > 0');
+    },
+  );
+
+  test(
+    'links to a file at a commit on the primary remote',
+    { timeout: 30_000 },
+    async ({ expect, services, repositories }) => {
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const base = await repo.git('rev-parse', 'main');
+      const request = { sessionId, sha: base, path: 'src/auth.ts', startLine: 1, endLine: 2 };
+      await expect(services.remote.permalink(request)).resolves.toStrictEqual({
+        ok: true,
+        value: { kind: 'no-remote' },
+      });
+      await repo.git('remote', 'add', 'backup', repo.scratch());
+      await repo.git('remote', 'add', 'github', 'git@github.com:octo/handler.git');
+      await expect(services.remote.permalink(request)).resolves.toStrictEqual({
+        ok: true,
+        value: {
+          kind: 'link',
+          remote: 'github',
+          url: `https://github.com/octo/handler/blob/${base}/src/auth.ts#L1-L2`,
+        },
+      });
+      await expect(services.remote.openPermalink(request)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'not-wired' },
+      });
+    },
+  );
+
+  test(
     'moves the session checkout when the head moves, and prunes it on startup',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories, worktreeRoot }) => {

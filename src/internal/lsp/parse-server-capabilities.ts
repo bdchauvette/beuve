@@ -23,6 +23,7 @@ export function parseServerCapabilities(result: unknown): LspServerCapabilities 
     callHierarchy: isEnabled('callHierarchyProvider'),
     pullDiagnostics: isEnabled('diagnosticProvider'),
     definition: isEnabled('definitionProvider'),
+    typeDefinition: isEnabled('typeDefinitionProvider'),
     references: isEnabled('referencesProvider'),
     hover: isEnabled('hoverProvider'),
     documentSymbol: isEnabled('documentSymbolProvider'),

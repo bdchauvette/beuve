@@ -5,6 +5,9 @@ import type {
   CallHierarchyNodeView,
   CallHierarchyRequest,
   CallHierarchyView,
+  DefinitionRequest,
+  DefinitionTargetView,
+  DefinitionView,
   IpcError,
   IpcResult,
 } from '#contract/ipc-contract.ts';
@@ -15,6 +18,8 @@ import type { ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
 import type { LspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
 import { findEnclosingSymbol } from '#internal/lsp/find-enclosing-symbol.ts';
 import type { LspError } from '#internal/lsp/lsp-error.ts';
+import { planDefinitionProbes } from '#internal/lsp/plan-definition-probes.ts';
+import type { ProbeToken } from '#internal/lsp/plan-definition-probes.ts';
 import type {
   CallHierarchyCall,
   CallHierarchyNode,
@@ -22,7 +27,9 @@ import type {
   DiagnosticSeverity,
   DiagnosticView,
   DocumentSymbolView,
+  LocationView,
   Position,
+  Range,
 } from '#internal/lsp/lsp-model.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -33,6 +40,8 @@ import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
+import { readSheetSource } from '../sheets/read-sheet-source.ts';
+import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
@@ -63,6 +72,12 @@ export interface AgentDiagnostic {
 /** Language-server features over a checkout of the session head (ADR 0020). */
 export interface LspServices {
   readonly callHierarchy: (request: CallHierarchyRequest) => Promise<IpcResult<CallHierarchyView>>;
+  /**
+   * Where the symbol on a line is defined (ADR 0067), in a checkout of the requested commit: the
+   * session head's own (ADR 0020), or, for a sheet pinned to an older commit, a checkout of that
+   * commit kept until the next startup prune.
+   */
+  readonly definition: (request: DefinitionRequest) => Promise<IpcResult<DefinitionView>>;
   readonly diagnostics: (request: {
     readonly sessionId: string;
     readonly path: string;
@@ -146,7 +161,157 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       : ok(symbol.selectionRange.start);
   };
 
+  /**
+   * A server may answer an imported name with its import in the same file (typescript-language-
+   * server does while it is still loading the project). Asking again at the import, then at its
+   * module specifier and looking the imported name up among that module's symbols, reaches the
+   * declaration. Once per target, so a cycle can't loop.
+   */
+  const throughImports = async (
+    root: string,
+    file: string,
+    text: string,
+    targets: readonly LocationView[],
+  ): Promise<Result<readonly LocationView[], LspError>> => {
+    const lines = text.split(lineBreak);
+    const followed: LocationView[] = [];
+    for (const target of targets) {
+      const lineText = lines[target.range.start.line] ?? '';
+      const isImport =
+        target.file.kind === 'workspace' && target.file.path === file && importLine.test(lineText);
+      if (!isImport) {
+        followed.push(target);
+        continue;
+      }
+      const onward = await importedDeclaration(root, file, lineText, target);
+      if (!onward.ok) {
+        return onward;
+      }
+      followed.push(...(onward.value.length > 0 ? onward.value : [target]));
+    }
+    return ok(followed);
+  };
+
+  const importedDeclaration = async (
+    root: string,
+    file: string,
+    lineText: string,
+    target: LocationView,
+  ): Promise<Result<readonly LocationView[], LspError>> => {
+    const outside = (locations: readonly LocationView[]): LocationView[] =>
+      locations.filter((next) => next.file.kind !== 'workspace' || next.file.path !== file);
+    const again = await multiplexer.definition({ root, path: file, position: target.range.start });
+    if (!again.ok || outside(again.value).length > 0) {
+      return again.ok ? ok(outside(again.value)) : again;
+    }
+    const specifier = moduleSpecifier.exec(lineText);
+    if (specifier?.index === undefined || specifier[1] === undefined) {
+      return ok([]);
+    }
+    const quote = specifier.index + specifier[0].length - specifier[1].length - 1;
+    const modules = await multiplexer.definition({
+      root,
+      path: file,
+      position: { line: target.range.start.line, character: quote + 1 },
+    });
+    if (!modules.ok) {
+      return modules;
+    }
+    const [module] = outside(modules.value);
+    if (module?.file.kind !== 'workspace') {
+      return ok(module === undefined ? [] : [module]);
+    }
+    const local = lineText.slice(target.range.start.character, target.range.end.character);
+    const name = aliasedName.exec(lineText.slice(0, target.range.start.character))?.[1] ?? local;
+    const symbols = await multiplexer.documentSymbols({ root, path: module.file.path });
+    if (!symbols.ok) {
+      return symbols;
+    }
+    const declared = symbols.value.find((symbol) => symbol.name === name);
+    return ok([
+      declared === undefined ? module : { file: module.file, range: declared.selectionRange },
+    ]);
+  };
+
+  const define = async (request: DefinitionRequest): Promise<IpcResult<DefinitionView>> => {
+    const commit = await resolveSheetCommit(context, request.sessionId, request.sha);
+    if (!commit.ok) {
+      return commit;
+    }
+    const { sha } = commit.value;
+    const { session, repository } = commit.value.refreshed;
+    const holder = sha === session.headSha ? session.id : `sheet\0${session.id}\0${sha}`;
+    const root = await worktrees.ensure(repository, holder, sha);
+    if (!root.ok) {
+      return gitFailure(logger, root.error);
+    }
+    const text = await readSheetSource(context, commit.value, request.path);
+    if (!text.ok) {
+      return text;
+    }
+    const line = request.line - 1;
+    const lineText = text.value.split(lineBreak)[line];
+    if (lineText === undefined) {
+      return err({
+        code: 'invalid-request',
+        message: `${request.path} has no line ${String(request.line)}`,
+      });
+    }
+    const probes = planDefinitionProbes(lineText, request.character);
+    let first: { token: ProbeToken; targets: readonly LocationView[] } | undefined;
+    for (const token of probes) {
+      const found = await multiplexer.definition({
+        root: root.value,
+        path: request.path,
+        position: { line, character: token.start },
+        ...(request.kind !== undefined && { kind: request.kind }),
+      });
+      if (!found.ok) {
+        return fail(found.error);
+      }
+      const resolved = await throughImports(root.value, request.path, text.value, found.value);
+      if (!resolved.ok) {
+        return fail(resolved.error);
+      }
+      const elsewhere = resolved.value.filter((target) => !isAt(target, request.path, line, token));
+      if (elsewhere.length > 0) {
+        return ok({
+          sha,
+          token: tokenView(line, token),
+          targets: elsewhere.map((target) => targetViewFrom(target)),
+        });
+      }
+      first ??= { token, targets: resolved.value };
+    }
+    if (first !== undefined && first.targets.length > 0) {
+      return ok({
+        sha,
+        token: tokenView(line, first.token),
+        targets: first.targets.map((target) => targetViewFrom(target)),
+      });
+    }
+    const symbols = await multiplexer.documentSymbols({ root: root.value, path: request.path });
+    if (!symbols.ok) {
+      return fail(symbols.error);
+    }
+    const enclosing = findEnclosingSymbol(symbols.value, line);
+    return ok({
+      sha,
+      ...(first !== undefined && { token: tokenView(line, first.token) }),
+      targets:
+        enclosing === undefined
+          ? []
+          : [
+              targetViewFrom({
+                file: { kind: 'workspace', path: request.path },
+                range: enclosing.selectionRange,
+              }),
+            ],
+    });
+  };
+
   return {
+    definition: define,
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
       const stopwatch = new Stopwatch();
       const cachedSpans = spansBySession.get(request.sessionId);
@@ -237,6 +402,47 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         diagnostics: report.value.diagnostics.map((diagnostic) => agentDiagnosticFrom(diagnostic)),
       });
     },
+  };
+}
+
+const importLine = /^\s*(?:import|export\s*(?:\{|\*|type\s*\{))/u;
+/** `{ original as local }`: the name before `as`, when the import renames. */
+const aliasedName = /([\w$]+)\s+as\s+$/u;
+const moduleSpecifier = /(?:from|import)\s*['"]([^'"]+)['"]/u;
+const lineBreak = /\r\n|\n|\r/u;
+
+/** Whether a definition is the asked-about token itself (a name the line declares). */
+function isAt(target: LocationView, path: string, line: number, token: ProbeToken): boolean {
+  const { start } = target.range;
+  return (
+    target.file.kind === 'workspace' &&
+    target.file.path === path &&
+    start.line === line &&
+    start.character <= token.end &&
+    target.range.end.character >= token.start
+  );
+}
+
+function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView['token']> {
+  return {
+    startLine: line + 1,
+    startCharacter: token.start,
+    endLine: line + 1,
+    endCharacter: token.end,
+    text: token.text,
+  };
+}
+
+function targetViewFrom(target: LocationView): DefinitionTargetView {
+  return { file: { ...target.file }, ...rangeViewFrom(target.range) };
+}
+
+function rangeViewFrom(range: Range): Omit<DefinitionTargetView, 'file'> {
+  return {
+    startLine: range.start.line + 1,
+    startCharacter: range.start.character,
+    endLine: range.end.line + 1,
+    endCharacter: range.end.character,
   };
 }
 

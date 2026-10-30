@@ -10,6 +10,14 @@ import type {
   CallHierarchyRequest,
   CallHierarchyView,
   ChooseFolderResponse,
+  DefinitionRequest,
+  DefinitionView,
+  OpenSheetRequest,
+  PermalinkRequest,
+  PermalinkView,
+  SheetFileView,
+  SheetHeadView,
+  SheetRangeView,
   ChatAskedView,
   ChatCancelledView,
   ChatClearedView,
@@ -60,6 +68,11 @@ export interface IpcPlatform {
     readonly title?: string;
     readonly defaultPath?: string;
   }) => Promise<string | undefined>;
+  /**
+   * Opens a new sheet window (ADR 0067) for a request main has already checked; absent outside
+   * Electron, where `sheet:open` answers `not-wired`.
+   */
+  readonly openSheet?: (request: OpenSheetRequest) => void;
 }
 
 /** One handler per invoke channel. Each takes the raw, untrusted renderer argument. */
@@ -122,6 +135,57 @@ const callHierarchyRequest = z.strictObject({
   direction: z.enum(['incoming', 'outgoing']),
   nodeId: z.string().min(1).max(200).optional(),
 });
+
+const fullSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
+/** Repository-relative, `/`-separated, already normal: no `..`, `.` or empty segments, no NUL. */
+const sheetPath = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine((value) => normalizePathPrefix(value) === value, 'expected a repository-relative path');
+const character = z.number().int().min(0).max(10_000_000);
+
+const definitionRequest = z.strictObject({
+  sessionId,
+  sha: fullSha.optional(),
+  path: sheetPath,
+  line: z.number().int().min(1).max(10_000_000),
+  character: character.optional(),
+  kind: z.enum(['definition', 'type-definition']).optional(),
+});
+
+const sheetRange = z
+  .strictObject({
+    startLine: z.number().int().min(1).max(10_000_000),
+    startCharacter: character,
+    endLine: z.number().int().min(1).max(10_000_000),
+    endCharacter: character,
+  })
+  .refine((range) => range.endLine >= range.startLine, 'endLine comes before startLine');
+
+const openSheetRequest = z.strictObject({
+  sessionId,
+  sha: fullSha,
+  path: sheetPath,
+  range: sheetRange.optional(),
+});
+
+const sheetFileRequest = z.strictObject({ sessionId, sha: fullSha, path: sheetPath });
+
+const permalinkRequest = z
+  .strictObject({
+    sessionId,
+    sha: fullSha,
+    path: sheetPath,
+    startLine: z.number().int().min(1).max(10_000_000).optional(),
+    endLine: z.number().int().min(1).max(10_000_000).optional(),
+  })
+  .refine(
+    (request) =>
+      request.endLine === undefined ||
+      (request.startLine !== undefined && request.endLine >= request.startLine),
+    'endLine needs a startLine before it',
+  );
 
 const flowGraphRequest = z.strictObject({
   sessionId,
@@ -288,6 +352,7 @@ const displayRequest = z.strictObject({
   showInsights: z.boolean().optional(),
   reviewOrder: reviewOrderMode.optional(),
   skipReviewed: z.boolean().optional(),
+  sheets: z.enum(['window', 'inline']).optional(),
 });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
@@ -409,6 +474,59 @@ export function createIpcHandlers(
       const parsed = callHierarchyRequest.safeParse(request);
       return parsed.success
         ? services.lsp.callHierarchy(withoutUndefined(parsed.data))
+        : invalid(parsed.error);
+    },
+    'lsp:definition': async (request): Promise<IpcResult<DefinitionView>> => {
+      const parsed = definitionRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sha, character: column, kind, ...required } = parsed.data;
+      const definition: DefinitionRequest = {
+        ...required,
+        ...(sha !== undefined && { sha }),
+        ...(column !== undefined && { character: column }),
+        ...(kind !== undefined && { kind }),
+      };
+      return services.lsp.definition(definition);
+    },
+    'sheet:open': async (request): Promise<IpcResult<{ opened: true }>> => {
+      const parsed = openSheetRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (platform.openSheet === undefined) {
+        return err({ code: 'not-wired', message: 'no sheet windows outside Electron' });
+      }
+      const { range, ...required } = parsed.data;
+      const sheet: OpenSheetRequest = {
+        ...required,
+        ...(range !== undefined && { range: range satisfies SheetRangeView }),
+      };
+      const checked = await services.sheets.checkOpen(sheet);
+      if (checked.ok) {
+        platform.openSheet(sheet);
+      }
+      return checked;
+    },
+    'sheet:get-file': async (request): Promise<IpcResult<SheetFileView>> => {
+      const parsed = sheetFileRequest.safeParse(request);
+      return parsed.success ? services.sheets.getFile(parsed.data) : invalid(parsed.error);
+    },
+    'sheet:get-head': async (request): Promise<IpcResult<SheetHeadView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      return parsed.success ? services.sheets.getHead(parsed.data) : invalid(parsed.error);
+    },
+    'remote:permalink': async (request): Promise<IpcResult<PermalinkView>> => {
+      const parsed = permalinkRequest.safeParse(request);
+      return parsed.success
+        ? services.remote.permalink(permalinkRequestFrom(parsed.data))
+        : invalid(parsed.error);
+    },
+    'remote:open-permalink': async (request): Promise<IpcResult<PermalinkView>> => {
+      const parsed = permalinkRequest.safeParse(request);
+      return parsed.success
+        ? services.remote.openPermalink(permalinkRequestFrom(parsed.data))
         : invalid(parsed.error);
     },
     'flow:get-graph': async (request): Promise<IpcResult<FlowGraphResponse>> => {
@@ -603,6 +721,7 @@ export function createIpcHandlers(
         showInsights,
         reviewOrder,
         skipReviewed,
+        sheets,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -612,6 +731,7 @@ export function createIpcHandlers(
         ...(showInsights !== undefined && { showInsights }),
         ...(reviewOrder !== undefined && { reviewOrder }),
         ...(skipReviewed !== undefined && { skipReviewed }),
+        ...(sheets !== undefined && { sheets }),
       });
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
@@ -659,6 +779,15 @@ export function createIpcHandlers(
       await platform.writeClipboard(parsed.data.text);
       return ok({ length: parsed.data.text.length });
     },
+  };
+}
+
+function permalinkRequestFrom(request: z.infer<typeof permalinkRequest>): PermalinkRequest {
+  const { startLine, endLine, ...required } = request;
+  return {
+    ...required,
+    ...(startLine !== undefined && { startLine }),
+    ...(endLine !== undefined && { endLine }),
   };
 }
 

@@ -87,6 +87,33 @@ export class BeuvePeekPortal extends LitElement {
       white-space: nowrap;
     }
 
+    li {
+      position: relative;
+    }
+
+    li > .row {
+      padding-right: 52px;
+    }
+
+    .open {
+      position: absolute;
+      top: 2px;
+      right: 0;
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      border-radius: 4px;
+      background: var(--beuve-surface);
+      color: var(--beuve-text-muted);
+      font: var(--beuve-font-small);
+      cursor: pointer;
+      opacity: 0;
+    }
+
+    li:hover > .open,
+    .open:focus-visible {
+      opacity: 1;
+    }
+
     .badge {
       margin-left: auto;
       padding: 0 var(--beuve-space-1);
@@ -186,8 +213,41 @@ export class BeuvePeekPortal extends LitElement {
         <span class="where">${location(node, callSiteLines)}</span>
         <span class="badge ${node.badge}">${badgeLabels[node.badge]}</span>
       </button>
+      ${node.file.kind === 'workspace' ? this.renderOpen(node) : nothing}
       ${isOpen ? this.renderChildren(node) : nothing}
     </li>`;
+  }
+
+  /** Opens the node's declaration in a sheet (ADR 0067); `beuve-app` decides window or overlay. */
+  private renderOpen(node: CallHierarchyNodeView): TemplateResult {
+    const { file } = node;
+    return html`<button
+      type="button"
+      class="open"
+      title="Open the definition in a sheet"
+      @click=${(): void => {
+        if (file.kind !== 'workspace') {
+          return;
+        }
+        this.dispatchEvent(
+          new CustomEvent('beuve-sheet-request', {
+            detail: {
+              path: file.path,
+              range: {
+                startLine: node.selectionLine,
+                startCharacter: 0,
+                endLine: node.endLine,
+                endCharacter: 0,
+              },
+            },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }}
+    >
+      Open
+    </button>`;
   }
 
   private renderChildren(node: CallHierarchyNodeView): TemplateResult {

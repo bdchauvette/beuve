@@ -3,6 +3,7 @@ import type {
   EditorId,
   ReviewEffort,
   ReviewOrderMode,
+  SheetModeView,
   SidebarSideView,
 } from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
@@ -41,6 +42,8 @@ export type ChatCommand =
       readonly verify: boolean;
       readonly effort?: ReviewEffort;
     }
+  /** `/sheets` shows where definitions open; `/sheets window|inline` sets it (ADR 0067). */
+  | { readonly kind: 'sheets'; readonly mode?: SheetModeView }
   /** Puts the sidebar on one side (ADR 0044). */
   | { readonly kind: 'sidebar'; readonly side: SidebarSideView }
   /** Plain text: a question about the change for the Q&A chat (ADR 0031). */
@@ -56,7 +59,7 @@ const whitespace = /\s+/u;
  * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), `/trust`, `/untrust`,
  * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
  * `/generated [show|hide]`, `/insights [show|hide]`, `/order [path|imports|calls]`,
- * `/sidebar left|right`, and
+ * `/sidebar left|right`, `/sheets [window|inline]`, and
  * `/review [--fresh] [--no-verify] [--effort=low|medium|high] [path-prefix…]`, options and
  * prefixes in any order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
  * dropped); command names are case-insensitive. Pure: the drawer shows the result.
@@ -121,6 +124,15 @@ export function parseChatCommand(input: string): ChatCommand {
     }
     case '/review': {
       return parseReview(args);
+    }
+    case '/sheets': {
+      const choice = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
+      if (args.length === 0) {
+        return { kind: 'sheets' };
+      }
+      return choice === 'window' || choice === 'inline'
+        ? { kind: 'sheets', mode: choice }
+        : invalid('/sheets takes window or inline, e.g. /sheets inline.');
     }
     case '/sidebar': {
       const [side] = args;
