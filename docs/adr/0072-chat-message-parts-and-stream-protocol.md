@@ -21,6 +21,6 @@ A chat message was one Markdown `content` string with side lists (`mentions`, `c
 
 - A live answer shows what the model is doing as it does it (thinking, each file read or search), and a stored one keeps that record, folded. Text the model wrote before a tool call still vanishes when the next turn starts, as before; showing it as narration would be a later choice.
 - Adding a kind of part is a union member, a migration-free JSON field and a renderer case; the protocol needs no new event.
-- The `/review` verification pass reports no progress, so its tool calls don't show as parts; the status line still says it runs.
+- The `/review` verification pass reports no progress, so its tool calls don't show as parts; the status line still says it runs. (Changed by [0073](0073-streaming-markdown-renderer.md): it reports them now.)
 - Two contract channels went away; anything listening to `chat:delta` or `chat:message-updated` (only beuve's renderer) moved to `chat:stream`. ADR 0061's insights now arrive in `message` events.
 - A database migrated forward can't be opened by an older beuve.
