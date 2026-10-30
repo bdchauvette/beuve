@@ -18,3 +18,7 @@ ADR 0014 left parsing on the calling thread and named a `worker_thread` as the w
 ## Consequences
 
 On the 304-file synthetic review, main's worst event-loop stall during a cold computation fell from 0.5 to 0.9 s (up to 2.9 s in the earlier measurement) to about 30 ms, and the reply from 3.4 MB to 243 KB. Total latency is unchanged, because the work is the same and still serial. Texts are structured-cloned to the worker (a memcpy of the blobs) and the report back. The worker's wasm instance is separate from main's, which still parses for trace probes. Parallel workers are a later option if one review's latency matters.
+
+## Amendment 2026-10-30: a head move also cancels a request still loading its diff
+
+`observeHead` aborts only computations already registered, so a `getImpact` that was still loading its diff when the head moved went on to answer for the superseded head. `getImpact` now notes the head observations made while it loaded and answers `stale-review` if one names a different head than the diff it loaded. The head-move test holds the run in an injected `ImpactRunner` (`impactRunner` in `createMainServices`) and awaits its start instead of sleeping, which had made it fail on slow macOS runners (and would fail on fast machines that finished first).
