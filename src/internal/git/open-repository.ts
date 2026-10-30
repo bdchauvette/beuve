@@ -21,7 +21,10 @@ export interface GitRepository {
   readonly root: RepositoryPath;
   readonly version: GitVersion;
   /** Runs git in `root` with the hardening and limits this repository was opened with. */
-  readonly run: (args: readonly string[]) => Promise<Result<string, GitError>>;
+  readonly run: (
+    args: readonly string[],
+    options?: GitRunOptions,
+  ) => Promise<Result<string, GitError>>;
   /** Like `run`, with `input` on stdin and raw stdout, for byte-exact output such as blobs. */
   readonly exec: (
     args: readonly string[],
@@ -29,7 +32,12 @@ export interface GitRepository {
   ) => Promise<Result<Buffer, GitError>>;
 }
 
-export interface GitExecOptions {
+export interface GitRunOptions {
+  /** Kills git when it aborts (`aborted`), together with the repository's own signal. */
+  readonly signal?: AbortSignal | undefined;
+}
+
+export interface GitExecOptions extends GitRunOptions {
   readonly input?: string;
   /** Overrides the repository's output cap for this call. */
   readonly maxBufferBytes?: number;
@@ -41,6 +49,11 @@ export interface OpenRepositoryOptions {
   readonly gitBinary?: string;
   readonly timeout?: Temporal.Duration;
   readonly maxBufferBytes?: number;
+  /**
+   * Bounds opening and every command the handle runs, such as a test's signal; a call's own
+   * `signal` adds to it.
+   */
+  readonly signal?: AbortSignal | undefined;
   readonly logger?: Logger;
 }
 
@@ -58,10 +71,18 @@ export async function openRepository(
   if (!path.isAbsolute(directory)) {
     return err({ kind: 'invalid-argument', argument: directory, reason: 'path must be absolute' });
   }
-  const runIn = async (cwd: string, args: readonly string[]): Promise<Result<string, GitError>> =>
-    runGit({ ...options, cwd, args });
+  const signalFor = (own: AbortSignal | undefined): AbortSignal | undefined =>
+    own === undefined || options.signal === undefined || own === options.signal
+      ? (own ?? options.signal)
+      : AbortSignal.any([options.signal, own]);
+  const runIn = async (
+    cwd: string,
+    args: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<Result<string, GitError>> =>
+    runGit({ ...options, cwd, args, signal: signalFor(signal) });
 
-  const versionOutput = await runIn(directory, ['--version']);
+  const versionOutput = await runIn(directory, ['--version'], options.signal);
   if (!versionOutput.ok) {
     return versionOutput;
   }
@@ -74,7 +95,7 @@ export async function openRepository(
     return err({ kind: 'unsupported-git-version', found: version, required });
   }
 
-  const topLevel = await runIn(directory, ['rev-parse', '--show-toplevel']);
+  const topLevel = await runIn(directory, ['rev-parse', '--show-toplevel'], options.signal);
   if (!topLevel.ok) {
     return topLevel;
   }
@@ -82,8 +103,15 @@ export async function openRepository(
   return ok({
     root,
     version,
-    run: async (args): Promise<Result<string, GitError>> => runIn(root, args),
+    run: async (args, runOptions): Promise<Result<string, GitError>> =>
+      runIn(root, args, runOptions?.signal),
     exec: async (args, execOptions): Promise<Result<Buffer, GitError>> =>
-      execGit({ ...options, ...execOptions, cwd: root, args }),
+      execGit({
+        ...options,
+        ...execOptions,
+        cwd: root,
+        args,
+        signal: signalFor(execOptions.signal),
+      }),
   });
 }

@@ -8,6 +8,8 @@ import type { GitRepository } from './open-repository.ts';
 export interface FetchRefsOptions {
   /** Kill git after this long. Defaults to 2 minutes, since it talks to the network. */
   readonly timeout?: Temporal.Duration;
+  /** Kills the fetch when it aborts (`aborted`). */
+  readonly signal?: AbortSignal | undefined;
 }
 
 const defaultTimeout = Temporal.Duration.from({ minutes: 2 });
@@ -50,6 +52,7 @@ export async function fetchRefs(
   ];
   const fetched = await repository.exec(args, {
     timeout: options.timeout ?? defaultTimeout,
+    signal: options.signal,
   });
   return fetched.ok ? ok(undefined) : fetched;
 }

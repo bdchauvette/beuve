@@ -7,10 +7,14 @@ import type { RepositoryTemplate, TestRepository } from './test-repository.ts';
 
 /** Builds each {@link RepositoryTemplate} once and hands out copies of it. */
 export interface RepositoryTemplates {
-  /** A copy of `template` at `<home>/repo`; `home` must exist and hold no `repo` yet. */
+  /**
+   * A copy of `template` at `<home>/repo`; `home` must exist and hold no `repo` yet. `signal`
+   * bounds the copy's git commands, not the build, which tests share.
+   */
   readonly copy: <T>(
     template: RepositoryTemplate<T>,
     home: string,
+    signal?: AbortSignal,
   ) => Promise<{ readonly repo: TestRepository; readonly value: T }>;
 }
 
@@ -50,6 +54,7 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
     copy: async <T>(
       template: RepositoryTemplate<T>,
       home: string,
+      signal?: AbortSignal,
     ): Promise<{ readonly repo: TestRepository; readonly value: T }> => {
       const source = await build(template);
       cpSync(source.directory, path.join(home, 'repo'), {
@@ -57,7 +62,7 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
         mode: constants.COPYFILE_FICLONE,
         filter: (entry): boolean => !isGitLockFile(entry),
       });
-      return { repo: openTestRepository(home), value: source.value as T };
+      return { repo: openTestRepository(home, signal), value: source.value as T };
     },
   };
 }

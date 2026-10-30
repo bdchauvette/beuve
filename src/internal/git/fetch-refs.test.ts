@@ -16,6 +16,7 @@ describe('fetchRefs', () => {
   test('fetches pull request heads into refs/beuve/ and follows force-pushes', async ({
     expect,
     repositories,
+    signal,
   }) => {
     const { upstream, clone, git, bare } = await withRemote(repositories);
     await upstream.git('switch', '--quiet', '-c', 'topic');
@@ -27,7 +28,7 @@ describe('fetchRefs', () => {
       '+refs/pull/7/head:refs/beuve/pr/7/head',
       '+refs/heads/main:refs/beuve/pr/7/base',
     ];
-    await expect(fetchRefs(git, 'origin', spec)).resolves.toStrictEqual({
+    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
@@ -39,7 +40,7 @@ describe('fetchRefs', () => {
     await upstream.git('commit', '--quiet', '--amend', '--message', 'rewritten');
     const second = await upstream.git('rev-parse', 'HEAD');
     await upstream.git('push', '--quiet', '--force', bare, 'topic:refs/pull/7/head');
-    await expect(fetchRefs(git, 'origin', spec)).resolves.toStrictEqual({
+    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
@@ -56,24 +57,35 @@ describe('fetchRefs', () => {
   test('refuses destinations outside refs/beuve/, option-like remotes and unsafe refs', async ({
     expect,
     repositories,
+    signal,
   }) => {
     const { git } = await withRemote(repositories);
     const refused = [
-      await fetchRefs(git, 'origin', ['+refs/pull/1/head:refs/heads/main']),
-      await fetchRefs(git, '--upload-pack=touch /tmp/x', ['refs/pull/1/head:refs/beuve/x']),
-      await fetchRefs(git, 'origin', ['refs/pull/*/head:refs/beuve/*']),
-      await fetchRefs(git, 'origin', ['refs/pull/1/../head:refs/beuve/x']),
-      await fetchRefs(git, 'https://user:secret@github.com/o/r.git', ['refs/a:refs/beuve/a']),
-      await fetchRefs(git, 'origin', []),
+      await fetchRefs(git, 'origin', ['+refs/pull/1/head:refs/heads/main'], { signal }),
+      await fetchRefs(git, '--upload-pack=touch /tmp/x', ['refs/pull/1/head:refs/beuve/x'], {
+        signal,
+      }),
+      await fetchRefs(git, 'origin', ['refs/pull/*/head:refs/beuve/*'], { signal }),
+      await fetchRefs(git, 'origin', ['refs/pull/1/../head:refs/beuve/x'], { signal }),
+      await fetchRefs(git, 'https://user:secret@github.com/o/r.git', ['refs/a:refs/beuve/a'], {
+        signal,
+      }),
+      await fetchRefs(git, 'origin', [], { signal }),
     ];
     for (const result of refused) {
       expect(result).toMatchObject({ ok: false, error: { kind: 'invalid-argument' } });
     }
   });
 
-  test('reports a ref the remote lacks as a failed command', async ({ expect, repositories }) => {
+  test('reports a ref the remote lacks as a failed command', async ({
+    expect,
+    repositories,
+    signal,
+  }) => {
     const { git } = await withRemote(repositories);
-    const missing = await fetchRefs(git, 'origin', ['+refs/pull/9/head:refs/beuve/pr/9/head']);
+    const missing = await fetchRefs(git, 'origin', ['+refs/pull/9/head:refs/beuve/pr/9/head'], {
+      signal,
+    });
     expect(missing).toMatchObject({ ok: false, error: { kind: 'command-failed' } });
   });
 });

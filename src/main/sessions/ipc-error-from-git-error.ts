@@ -37,6 +37,9 @@ export function ipcErrorFromGitError(error: GitError): IpcError {
     case 'timeout': {
       return { code: 'git-failed', message: `git ${subcommand(error.args)} timed out` };
     }
+    case 'aborted': {
+      return { code: 'git-failed', message: `git ${subcommand(error.args)} was cancelled` };
+    }
     case 'output-too-large': {
       return { code: 'git-failed', message: `git ${subcommand(error.args)} output is too large` };
     }

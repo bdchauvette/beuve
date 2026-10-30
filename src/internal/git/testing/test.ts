@@ -33,7 +33,7 @@ export const test = baseTest
   .extend('repositoryTemplates', { scope: 'worker' }, ({ tempRoot }): RepositoryTemplates => {
     return createRepositoryTemplates(mkdtempSync(path.join(tempRoot, 'templates-')));
   })
-  .extend('repositories', ({ tempDir, repositoryTemplates }): TestRepositories => {
+  .extend('repositories', ({ tempDir, repositoryTemplates, signal }): TestRepositories => {
     let count = 0;
     const fromTemplate = async <T>(
       template: RepositoryTemplate<T>,
@@ -41,7 +41,7 @@ export const test = baseTest
       count += 1;
       const home = path.join(tempDir, `repository-${String(count)}`);
       mkdirSync(home);
-      return repositoryTemplates.copy(template, home);
+      return repositoryTemplates.copy(template, home, signal);
     };
     return {
       create: async (): Promise<TestRepository> => {
@@ -52,8 +52,8 @@ export const test = baseTest
     };
   })
   .extend('repo', async ({ repositories }): Promise<TestRepository> => repositories.create())
-  .extend('repository', async ({ repo }): Promise<GitRepository> =>
-    okValueFrom(await openRepository(repo.directory)),
+  .extend('repository', async ({ repo, signal }): Promise<GitRepository> =>
+    okValueFrom(await openRepository(repo.directory, { signal })),
   );
 
 const emptyRepository: RepositoryTemplate<undefined> = {

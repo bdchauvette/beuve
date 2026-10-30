@@ -13,8 +13,9 @@ import type { TestRepository } from './test-repository.ts';
  * config, and holds `scratch` directories. `cleanup` removes `home`. Auto-maintenance is off: after
  * `git commit` it would otherwise keep a background `git maintenance` running, which creates and
  * removes `.git/objects/maintenance.lock` while a template is being copied (ENOENT in `fs.cp`).
+ * `signal`, a test's, kills the git commands still running when it aborts.
  */
-export function openTestRepository(home: string): TestRepository {
+export function openTestRepository(home: string, signal?: AbortSignal): TestRepository {
   const directory = path.join(home, 'repo');
   let scratchCount = 0;
   const environment = testEnvironment(home);
@@ -25,6 +26,7 @@ export function openTestRepository(home: string): TestRepository {
       cwd: directory,
       env: environment,
       encoding: 'utf8',
+      signal,
     });
     return stdout.trim();
   };

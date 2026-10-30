@@ -26,6 +26,8 @@ export type GitError =
       readonly args: readonly string[];
       readonly timeout: Temporal.Duration;
     }
+  /** The caller's `AbortSignal` aborted, and git was killed. */
+  | { readonly kind: 'aborted'; readonly args: readonly string[] }
   | {
       readonly kind: 'output-too-large';
       readonly args: readonly string[];

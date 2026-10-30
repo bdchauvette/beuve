@@ -13,9 +13,10 @@ describe('computeCommitPairs', () => {
   test('pairs like git range-diff, with a per-pair interdiff for the modified commit', async ({
     expect,
     repositories,
+    signal,
   }) => {
     const { repo, value: series } = await repositories.fromTemplate(reworkedSeries());
-    const git = okValueFrom(await openRepository(repo.directory));
+    const git = okValueFrom(await openRepository(repo.directory, { signal }));
     const result = okValueFrom(await computeCommitPairs(git, series.previous, series.next));
     const ours = result.pairs.map((pair) => describePair(pair));
     expect(ours).toStrictEqual(['=change a ten', '!change b twenty (and 21)', '<add c', '>add d']);
@@ -35,9 +36,9 @@ describe('computeCommitPairs', () => {
     ]);
   });
 
-  test('caps the per-pair interdiffs', async ({ expect, repositories }) => {
+  test('caps the per-pair interdiffs', async ({ expect, repositories, signal }) => {
     const { repo, value: series } = await repositories.fromTemplate(reworkedSeries());
-    const git = okValueFrom(await openRepository(repo.directory));
+    const git = okValueFrom(await openRepository(repo.directory, { signal }));
     const result = await computeCommitPairs(git, series.previous, series.next, {
       maxInterdiffs: 0,
     });

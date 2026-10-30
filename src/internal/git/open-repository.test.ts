@@ -12,35 +12,64 @@ describe('openRepository', () => {
   test('finds the top level from a subdirectory and reports the git version', async ({
     expect,
     repo,
+    signal,
   }) => {
     const nested = path.join(repo.directory, 'a', 'b');
     mkdirSync(nested, { recursive: true });
-    const opened = await openRepository(nested);
+    const opened = await openRepository(nested, { signal });
     expect(opened).toMatchObject({ ok: true, value: { root: repo.directory } });
     const openedValue = okValueFrom(opened);
     expect(openedValue.version.major).toBeGreaterThanOrEqual(2);
-    await expect(openedValue.run(['rev-parse', '--show-prefix'])).resolves.toStrictEqual({
+    await expect(
+      openedValue.run(['rev-parse', '--show-prefix'], { signal }),
+    ).resolves.toStrictEqual({
       ok: true,
       value: '\n',
     });
   });
 
-  test('rejects relative paths and non-repositories', async ({ expect, repo }) => {
-    await expect(openRepository('repo')).resolves.toMatchObject({
+  test('bounds every command by its own signal and the call’s', async ({
+    expect,
+    repo,
+    signal,
+  }) => {
+    const opening = new AbortController();
+    const opened = okValueFrom(
+      await openRepository(repo.directory, { signal: AbortSignal.any([signal, opening.signal]) }),
+    );
+    await expect(opened.run(['status'], { signal: AbortSignal.abort() })).resolves.toStrictEqual({
+      ok: false,
+      error: { kind: 'aborted', args: ['status'] },
+    });
+    opening.abort();
+    await expect(opened.run(['status'], { signal })).resolves.toStrictEqual({
+      ok: false,
+      error: { kind: 'aborted', args: ['status'] },
+    });
+    await expect(opened.exec(['status'], { signal })).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'aborted' },
+    });
+  });
+
+  test('rejects relative paths and non-repositories', async ({ expect, repo, signal }) => {
+    await expect(openRepository('repo', { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },
     });
-    await expect(openRepository(repo.scratch())).resolves.toMatchObject({
+    await expect(openRepository(repo.scratch(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-a-repository' },
     });
   });
 
-  test('refuses a git older than the supported minimum', async ({ expect, repo }) => {
+  test('refuses a git older than the supported minimum', async ({ expect, repo, signal }) => {
     const fake = path.join(repo.scratch(), 'old-git');
     writeFileSync(fake, '#!/bin/sh\necho "git version 2.20.1"\n');
     chmodSync(fake, 0o755);
-    await expect(openRepository(repo.directory, { gitBinary: fake })).resolves.toStrictEqual({
+    await expect(
+      openRepository(repo.directory, { gitBinary: fake, signal }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'unsupported-git-version',

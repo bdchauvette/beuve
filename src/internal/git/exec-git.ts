@@ -25,6 +25,8 @@ export interface GitRequest {
   readonly maxBufferBytes?: number;
   /** Written to git's stdin, which is then closed. */
   readonly input?: string;
+  /** Kills git when it aborts; the request then fails with `aborted`. */
+  readonly signal?: AbortSignal | undefined;
   readonly logger?: Logger;
 }
 
@@ -75,6 +77,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     timeout,
     maxBufferBytes,
     input: request.input,
+    signal: request.signal,
   });
   request.logger?.debug('git', {
     args: request.args,
@@ -119,6 +122,7 @@ async function execute(
     readonly timeout: Temporal.Duration;
     readonly maxBufferBytes: number;
     readonly input: string | undefined;
+    readonly signal: AbortSignal | undefined;
   },
 ): Promise<ExecOutcome> {
   return new Promise((resolve) => {
@@ -133,6 +137,7 @@ async function execute(
         encoding: 'buffer',
         windowsHide: true,
         shell: false,
+        ...(options.signal !== undefined && { signal: options.signal }),
       },
       (error, stdout, stderr): void => {
         resolve({ error, stdout, stderr: stderr.toString('utf8') });
@@ -178,6 +183,9 @@ async function classifyFailure(
     return (await isDirectory(request.cwd))
       ? { kind: 'git-not-found', gitBinary: request.gitBinary }
       : { kind: 'not-a-repository', path: request.cwd, stderr: 'directory does not exist' };
+  }
+  if (code === 'ABORT_ERR') {
+    return { kind: 'aborted', args };
   }
   if (code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
     return { kind: 'output-too-large', args, maxBufferBytes: request.maxBufferBytes };
