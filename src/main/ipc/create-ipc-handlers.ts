@@ -431,6 +431,7 @@ const openPullRequestRequest = z.strictObject({
 });
 const githubReviewRequest = z.strictObject({ sessionId, verdict: uraVerdict.optional() });
 const githubLinkRequest = z.strictObject({ url: z.string().min(1).max(8192) });
+const openUrlRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 
 /**
  * Builds the invoke handlers. The renderer is untrusted, so each handler validates its argument
@@ -834,6 +835,10 @@ export function createIpcHandlers(
     'github:open-link': async (request): Promise<IpcResult<{ opened: true }>> => {
       const parsed = githubLinkRequest.safeParse(request);
       return parsed.success ? services.github.openLink(parsed.data) : invalid(parsed.error);
+    },
+    'shell:open-url': async (request): Promise<IpcResult<{ opened: true }>> => {
+      const parsed = openUrlRequest.safeParse(request);
+      return parsed.success ? services.shell.openUrl(parsed.data) : invalid(parsed.error);
     },
     'menu:set-state': (request, sender): IpcResult<{ readonly applied: true }> => {
       const parsed = menuStateRequest.safeParse(request);

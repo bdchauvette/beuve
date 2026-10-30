@@ -17,3 +17,7 @@ Pull request bodies are untrusted Markdown with links; the renderer runs sandbox
 ## Consequences
 
 Untrusted Markdown can't run script or navigate, and only GitHub URLs leave the app. A packaged app always talks to `api.github.com` or `https://<host>/api/v3`. A development run with the override sends the real gh token to the loopback server if `BEUVE_GH_PATH` isn't also set to a fake, which is the developer's choice on their own machine.
+
+## Amendment 2026-10-30: chat answers' links open any http(s) URL
+
+A link in a chat answer (the Markdown view, ADR 0073) opens in the default browser whatever its host. The drawer still emits `beuve-open-link`; for the chat the app sends it to its own channel, `shell:open-url { url }`, whose handler parses the text with `URL` and passes the normalised `href` to `shell.openExternal` only for an absolute `https:` or `http:` URL; `file:`, `javascript:`, `data:`, editor and other schemes, and relative or unparsable text answer `invalid-request` and never reach the shell. The renderer already renders a link only for such a URL (`safeHrefFrom`), so main's check is the second gate. Pull request bodies, the review dock's "View on GitHub" and every other emitter stay on `github:open-link` and its GitHub-only rule. The window still never navigates. Consequence: a chat answer can now send the reviewer to any website, as a link in any document can; the URL shows in the link's tooltip before the click.

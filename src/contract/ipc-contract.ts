@@ -1710,6 +1710,11 @@ export interface OpenGithubLinkRequest {
   readonly url: string;
 }
 
+/** A link from a chat answer; main opens any absolute `http:` or `https:` URL in the browser. */
+export interface OpenUrlRequest {
+  readonly url: string;
+}
+
 /**
  * Whose turn a pull request is (ADR 0066): `you` (the signed-in user must act), `author`,
  * `reviewers`, or `unknown`. `reasons` are short sentences, most decisive first.
@@ -2122,6 +2127,10 @@ export interface InvokeChannelMap {
   };
   'github:open-link': {
     readonly request: OpenGithubLinkRequest;
+    readonly response: IpcResult<{ readonly opened: true }>;
+  };
+  'shell:open-url': {
+    readonly request: OpenUrlRequest;
     readonly response: IpcResult<{ readonly opened: true }>;
   };
   'menu:set-state': {

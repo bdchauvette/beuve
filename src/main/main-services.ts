@@ -24,6 +24,7 @@ import type { OrderServices } from './order/create-order-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
 import type { ModelServices } from './models/create-model-services.ts';
 import type { RemoteServices } from './remote/create-remote-services.ts';
+import type { ShellServices } from './shell/create-shell-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
@@ -57,6 +58,8 @@ export interface MainServices {
   readonly sheets: SheetServices;
   /** Permalinks to the primary remote (ADR 0067). */
   readonly remote: RemoteServices;
+  /** The browser for chat answers' links (ADR 0040, amended). */
+  readonly shell: ShellServices;
   readonly flow: FlowServices;
   readonly editor: EditorServices;
   readonly display: DisplayServices;

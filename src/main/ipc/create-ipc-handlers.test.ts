@@ -1017,6 +1017,8 @@ describe('github channels', () => {
       handlers['github:post-review']({ sessionId: 's1', verdict: 'lgtm' }),
     );
     await expectInvalid(expect, handlers['github:open-link']({ url: '' }));
+    await expectInvalid(expect, handlers['shell:open-url']({ url: '' }));
+    await expectInvalid(expect, handlers['shell:open-url']({ url: 'https://a.example', extra: 1 }));
     await expectInvalid(expect, handlers['github:auth-status']({ host: '' }));
     await handlers['github:auth-status'](undefined);
     await handlers['github:open-pr']({ ref: ' o/r#1 ', repoPath: '/clone' });
@@ -1065,6 +1067,7 @@ function stubServices(
     lsp: { callHierarchy: notWired, definition: notWired },
     sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
     remote: { permalink: notWired, openPermalink: notWired },
+    shell: { openUrl: notWired },
     flow: { getGraph: notWired },
     editor: {
       open: notWired,

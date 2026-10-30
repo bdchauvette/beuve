@@ -53,6 +53,7 @@ export const invokeChannels = Object.freeze([
   'github:preview-review',
   'github:post-review',
   'github:open-link',
+  'shell:open-url',
   'menu:set-state',
   'menu:context',
   'menu:run-main',

@@ -83,6 +83,7 @@ async function launch(): Promise<void> {
           ...bundledClaudeCode(),
         },
         trace: { settingsPath, temporaryDirectory: path.join(userData, 'trace') },
+        shell: { openExternal: async (url) => shell.openExternal(url) },
         github: {
           settingsPath,
           openExternal: async (url) => shell.openExternal(url),

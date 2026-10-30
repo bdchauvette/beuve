@@ -398,6 +398,10 @@ export class BeuveApp extends LitElement {
     void this.openLink(event.detail.url);
   };
 
+  private readonly onOpenChatLink = (event: CustomEvent<{ url: string }>): void => {
+    void this.openUrl(event.detail.url);
+  };
+
   private readonly onGithubPreview = (): void => {
     void this.previewGithubReview();
   };
@@ -943,6 +947,14 @@ export class BeuveApp extends LitElement {
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
   private async openLink(url: string): Promise<void> {
     const opened = await beuveBridge()?.invoke('github:open-link', { url });
+    if (opened !== undefined && !opened.ok) {
+      this.showNotice({ tone: 'error', text: opened.error.message });
+    }
+  }
+
+  /** A chat answer's link: main opens any http(s) URL in the browser (ADR 0040, amended). */
+  private async openUrl(url: string): Promise<void> {
+    const opened = await beuveBridge()?.invoke('shell:open-url', { url });
     if (opened !== undefined && !opened.ok) {
       this.showNotice({ tone: 'error', text: opened.error.message });
     }
@@ -3037,7 +3049,7 @@ export class BeuveApp extends LitElement {
       .stagedFindings=${this.stagedFindings()}
       .subscribeChatStream=${this.subscribeChatStream}
       ?hasSession=${this.review !== undefined}
-      @beuve-open-link=${this.onOpenLink}
+      @beuve-open-link=${this.onOpenChatLink}
       @beuve-chat-submit=${this.onChatSubmit}
       @beuve-chat-escape=${this.onChatEscape}
       @beuve-chat-cancel=${this.onChatCancel}

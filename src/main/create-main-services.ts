@@ -54,6 +54,7 @@ import type { ModelResolverDeps } from './models/resolve-language-model.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import { createSheetServices } from './sheets/create-sheet-services.ts';
 import { createRemoteServices } from './remote/create-remote-services.ts';
+import { createShellServices } from './shell/create-shell-services.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createTraceServices } from './trace/create-trace-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
@@ -125,6 +126,10 @@ export interface MainServicesOptions {
    * the system browser for allow-listed links. `polling.scheduled: false` leaves polling to
    * explicit `pollNow` calls.
    */
+  /** `openExternal` is the system browser for any http(s) link in a chat answer. */
+  readonly shell?: {
+    readonly openExternal?: (url: string) => Promise<void>;
+  };
   readonly github?: {
     readonly credentials?: GithubCredentialProvider;
     readonly fetch?: FetchLike;
@@ -274,6 +279,11 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       context,
       ...(options.github?.openExternal !== undefined && {
         openExternal: options.github.openExternal,
+      }),
+    }),
+    shell: createShellServices({
+      ...(options.shell?.openExternal !== undefined && {
+        openExternal: options.shell.openExternal,
       }),
     }),
     flow: createFlowServices({ context, parse: parser.parse }),
