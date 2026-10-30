@@ -46,8 +46,17 @@ describe('mergeReviewInsights', () => {
   test('keeps the newest of a finding made twice, and remembers where else it came from', ({
     expect,
   }) => {
-    const older = createFindingView({ startLine: 3, endLine: 4, title: 'Old wording' });
-    const newer = createFindingView({ startLine: 4, endLine: 6, title: 'New wording' });
+    const older = createFindingView({
+      startLine: 3,
+      endLine: 4,
+      title: 'Unchecked `null` return.',
+    });
+    const newer = createFindingView({
+      startLine: 4,
+      endLine: 6,
+      category: 'error-handling',
+      title: 'unchecked  null **return**',
+    });
     const insights = mergeReviewInsights(
       [
         createReviewMessageView([older], { id: 'older', createdAt: '2026-10-30T10:00:00.000Z' }),
@@ -66,12 +75,12 @@ describe('mergeReviewInsights', () => {
     ]);
   });
 
-  test('does not merge findings that differ in file, category or lines', ({ expect }) => {
+  test('does not merge findings that differ in file, lines or title', ({ expect }) => {
     const base = createFindingView({ startLine: 3, endLine: 4 });
     const others = [
       createFindingView({ path: 'src/b.ts' }),
-      createFindingView({ category: 'security' }),
       createFindingView({ startLine: 5, endLine: 6 }),
+      createFindingView({ startLine: 3, endLine: 4, title: 'Another problem' }),
     ];
     const insights = mergeReviewInsights(
       [
@@ -81,6 +90,19 @@ describe('mergeReviewInsights', () => {
       head(),
     );
     expect(insights).toHaveLength(4);
+  });
+
+  test('keeps two problems of one category on the same lines apart across runs', ({ expect }) => {
+    const empty = createFindingView({ category: 'edge-case', title: 'Empty list throws' });
+    const overflow = createFindingView({ category: 'edge-case', title: 'Index can overflow' });
+    const insights = mergeReviewInsights(
+      [
+        createReviewMessageView([empty], { id: 'one', createdAt: '2026-10-30T10:00:00.000Z' }),
+        createReviewMessageView([overflow], { id: 'two', createdAt: '2026-10-30T11:00:00.000Z' }),
+      ],
+      head(),
+    );
+    expect(insights.map(({ key }) => key)).toStrictEqual(['two:0', 'one:0']);
   });
 
   test('does not merge findings within one answer', ({ expect }) => {

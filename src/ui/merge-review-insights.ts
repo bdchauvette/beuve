@@ -14,11 +14,16 @@ export interface ReviewInsight {
   readonly sources: readonly string[];
 }
 
+const markPattern = /[`*_]/gu;
+const spacePattern = /\s+/gu;
+const closingPattern = /[.!]$/u;
+
 /**
  * The insights for the session head `headSha`, derived from the stored chat messages: completed
  * `/review` answers at that head, every scope together. The same finding in several answers (the
- * same file, overlapping lines and category) appears once, from the newest answer. Findings of
- * one answer are never merged with each other. Pure, in answer order and finding order.
+ * same file, overlapping head lines and the same title once normalized) appears once, from the
+ * newest answer; two different problems on the same lines stay separate. Findings of one answer
+ * are never merged with each other. Pure, in answer order and finding order.
  */
 export function mergeReviewInsights(
   messages: readonly ChatMessageView[],
@@ -62,8 +67,18 @@ interface Entry {
 function isSameFinding(a: ChatFindingView, b: ChatFindingView): boolean {
   return (
     a.path === b.path &&
-    a.category === b.category &&
     a.startLine <= b.endLine &&
-    b.startLine <= a.endLine
+    b.startLine <= a.endLine &&
+    normalizedTitle(a.title) === normalizedTitle(b.title)
   );
+}
+
+/** The title without case, inline-code and emphasis marks, extra spaces or a closing full stop. */
+function normalizedTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replaceAll(markPattern, '')
+    .replaceAll(spacePattern, ' ')
+    .trim()
+    .replace(closingPattern, '');
 }
