@@ -61,4 +61,5 @@ Conventions and examples: `docs/testing.md` (ADR 0058; time: ADR 0059). Every te
 - The preload is bundled as CommonJS (`dist/preload/index.cjs`) and runs sandboxed: only `electron`'s renderer APIs are available.
 - The renderer CSP in `src/ui/index.html` is strict (`default-src 'none'`). Widen it deliberately, with an ADR.
 - Commands (ADR 0068): every command is in `src/contract/command-catalog.ts` with its behaviour in `src/ui/command-registry.ts`, and every shortcut has a menu item. Chords are menu accelerators dispatched by main (`menu:run`); the renderer never handles a chord itself and binds no bare letters. Mark chords a text field uses `textConflict`. Show keys in tooltips from the catalog, never in UI text.
+- Repeated templates delegate events (ADR 0074): mark items with `data-action`/`data-*` and handle them with an `ActionDelegation` on the component; `local/no-listener-in-repeated-template` flags `@event=` bindings in `.map`/`repeat` callbacks.
 - Every model call is a chat request (ADR 0055–0057): add an LLM feature as a chat command that goes through the per-session queue in `src/main/chat`, not as a new service, table or channel.

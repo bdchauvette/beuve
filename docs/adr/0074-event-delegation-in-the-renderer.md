@@ -1,0 +1,23 @@
+# 0074. Event delegation in the renderer: `data-action` and one listener per type
+
+- Status: Accepted
+- Date: 2026-10-30
+
+## Context
+
+Lit binds a listener per `@event=${…}` part, so a template repeated per item adds a listener per item and event type. On a 300-file review (3 hunks each) the renderer held 1,812 live listeners after opening, 1,500 of them on the file cards: the stream's `@click` per card, the title's `@click`, and the card host's two `keydown` and one `pointermove` listeners. Cards with an ImpactGate chip added up to twelve more, and each insight note three to five. The review dock, palette, open panel, commit pairing, peek, trace and flow portals, pull request intent and settings bound per row as well. The chat drawer and its Markdown view already used one delegated `click` listener reading `data-action` (ADR 0072, 0073), written by hand.
+
+## Decision
+
+- **Repeated content delegates its events.** An element says what it does in `data-action` and what it acts on in `data-*` (an id or path, read back from the component's own state; an index only where the list is the component's last render). A component handles them with one listener per event type on its render root.
+- **One helper**, in three small files in `src/ui`: `dispatchAction(event, scope, handlers)` runs the handler named by the innermost `data-action` on `event.composedPath()` that lies in `scope` (the component's shadow root) and has a handler for the event's type, stopping at the listener's own target; `delegateActions(root, { click: {…}, keydown: {…} }, { signal })` adds those listeners, removed when `signal` aborts; `ActionDelegation` is the Lit controller that installs them on connect and aborts on disconnect. Handlers get `(data, event, element)`, with the event typed by its type; `withPayload(parse, run)` parses a typed payload from the data at the edge and runs only when it parses. The chat drawer uses it too.
+- **Semantics.** Elements in nested components' shadow roots are theirs to handle. An action with no handler for the event's type is passed over for an ancestor's, and only the innermost matching action runs. `pointerover`/`pointerout`, `mouseover`/`mouseout` and `focusin`/`focusout` run as enter and leave (a move inside the matched element is skipped), replacing `mouseenter`, `mouseleave`, `focus` and `blur`. Native propagation is unchanged: a handler that stops propagation keeps the event from listeners further out.
+- **No chords** (ADR 0068). A key event with Ctrl or ⌘ is never dispatched, unless it was typed in a text field or a form, which keep their keys (⌘↩ saves the dock's editor). Menu accelerators stay main's.
+- **File cards add no listeners.** The diff stream's root delegates `click`, `keydown` and `pointermove` with a `card` action on each card host and forwards the event to the card's own action table (`runAction`, `notePointerMove`); a listener on the stream host activates the card unless a card control stopped the click. Focus and hover moving inside a card never leave its shadow root (their related target retargets to the same host), so a card delegates those four crossing types on its own root, and only while it shows an ImpactGate chip or insight notes. Suggest Edit's capture `keydown` is added when an edit starts and removed when it ends. Insight notes, built outside Lit, carry `data-action` and no listeners.
+- **Lint.** `local/no-listener-in-repeated-template` reports a Lit event binding in a template made inside a callback of `.map`, `.flatMap`, `repeat` or Lit's `map`, and a call from such a callback to a method or function of the same file that renders one, directly or through others. It applies to `src/ui` outside tests.
+
+## Consequences
+
+Measured on that review in the real app (Xvfb, after opening): 1,812 live listeners before, 316 after, by a wrapper on `addEventListener`; 1,808 and 312 by `DOMDebugger.getEventListeners` over every node with shadow roots pierced (20,691 nodes). Listeners on cards went from 1,500 to none. What remains per item belongs to `@pierre/trees` (about 150 on visible tree rows) and `@pierre/diffs` (6 per mounted diff); delegation does not reach into their DOM. Single controls (a form's `submit`, one input, the find bar's buttons, a sheet's toolbar) keep their bindings.
+
+Markup gains `data-action` attributes and handlers move from templates to a table per component, so finding what a button does means searching for its action name. A component forwarding to children (the stream to its cards) must know which event types they need. The rule is syntactic: a render helper reached through a variable or another file escapes it, and a bounded list (three order modes) must delegate too.
