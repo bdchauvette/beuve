@@ -2,6 +2,8 @@ import { AST_NODE_TYPES, ESLintUtils, TSESLint } from '@typescript-eslint/utils'
 import type { ParserServicesWithTypeInformation, TSESTree } from '@typescript-eslint/utils';
 import ts from 'typescript';
 
+import { tailOf } from '#x/text/tail-of.ts';
+
 type MessageIds = 'forward' | 'forwardOneOf';
 
 type Context = Readonly<TSESLint.RuleContext<MessageIds, []>>;
@@ -506,7 +508,7 @@ function normalized(text: string): string {
 
 function calleeText(context: Context, node: Call): string {
   const text = context.sourceCode.getText(node.callee).replaceAll(whitespace, '');
-  return text.length > 40 ? `…${text.slice(-39)}` : text;
+  return text.length > 40 ? `…${tailOf(text, 39)}` : text;
 }
 
 function fixFor(

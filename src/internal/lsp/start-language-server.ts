@@ -18,6 +18,7 @@ import type { LspServerCapabilities } from './lsp-protocol.ts';
 import { parseServerCapabilities } from './parse-server-capabilities.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import type { ServerDefinition } from './server-definition.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 /** How a server process ended. `expected` is true when beuve asked it to stop. */
 export interface ServerExit {
@@ -92,7 +93,7 @@ export async function startLanguageServer(
   let stderrTail = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
-    stderrTail = (stderrTail + chunk).slice(-stderrTailBytes);
+    stderrTail = tailOf(stderrTail + chunk, stderrTailBytes);
     logger?.debug('lsp: server stderr', { serverId, text: chunk.trimEnd() });
   });
 

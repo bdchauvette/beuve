@@ -9,6 +9,7 @@ import { noDate } from './no-date.ts';
 import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template.ts';
 import { noModuleMocking } from './no-module-mocking.ts';
 import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
+import { noStringTailSlice } from './no-string-tail-slice.ts';
 import { noTimeNumberArithmetic } from './no-time-number-arithmetic.ts';
 import { preferUrlParse } from './prefer-url-parse.ts';
 import { preferUsing } from './prefer-using.ts';
@@ -36,6 +37,7 @@ const plugin = {
     'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
     'no-module-mocking': noModuleMocking,
     'no-module-scope-bindings': noModuleScopeBindings,
+    'no-string-tail-slice': noStringTailSlice,
     'no-time-number-arithmetic': noTimeNumberArithmetic,
     'prefer-url-parse': preferUrlParse,
     'prefer-using': preferUsing,

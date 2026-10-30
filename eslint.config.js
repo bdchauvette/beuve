@@ -182,6 +182,7 @@ export default defineConfig(
       'local/prefer-using': 'error',
       // ADR 0079.
       'local/prefer-url-parse': 'error',
+      'local/no-string-tail-slice': 'error',
     },
   },
 

@@ -1,5 +1,6 @@
 import type { TraceFailureKind } from '#contract/ipc-contract.ts';
 import type { TraceError } from '#internal/trace/trace-error.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 export interface TraceFailureText {
   readonly failure: TraceFailureKind;
@@ -48,7 +49,7 @@ export function describeTraceError(error: TraceError, stopReason: string): Trace
       return { failure: 'cancelled', message: stopReason };
     }
     case 'run-failed': {
-      const tail = error.output.slice(-outputTailChars).trim();
+      const tail = tailOf(error.output, outputTailChars).trim();
       const how =
         error.signal === undefined
           ? `exit code ${String(error.exitCode ?? 'unknown')}`

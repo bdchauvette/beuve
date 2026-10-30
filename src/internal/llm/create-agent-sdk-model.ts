@@ -33,6 +33,7 @@ import type {
   TextStreamEvent,
 } from './language-model.ts';
 import { validateModelRequest } from './validate-model-request.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 export interface AgentSdkModelOptions {
   /** The user's Anthropic API key. Given to Claude Code's environment only; never logged. */
@@ -283,7 +284,7 @@ async function execute(
     conversation = query({
       prompt: flattenModelMessages(request.messages),
       options: sdkOptions(request, options, mode, configDir, controller, (chunk) => {
-        stderr = (stderr + chunk).slice(-stderrTailChars);
+        stderr = tailOf(stderr + chunk, stderrTailChars);
       }),
     });
     for await (const message of conversation) {
@@ -384,7 +385,7 @@ function failedToRun(failure: unknown, stderr: string, options: AgentSdkModelOpt
     kind: 'process-failed',
     exitCode: undefined,
     signal: undefined,
-    stderr: `${message}\n${stderr}`.trim().slice(-stderrTailChars),
+    stderr: tailOf(`${message}\n${stderr}`.trim(), stderrTailChars),
   };
 }
 

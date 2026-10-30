@@ -28,6 +28,7 @@ import type { TraceRecord } from './trace-record.ts';
 import type { TraceRunner, TraceRunOutput, TraceRunRequest } from './trace-runner.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 import { timeoutSignal } from '#x/time/timeout-signal.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 export interface VitestTraceRunnerOptions {
   /** The Node binary that runs Vitest (in the app: `process.execPath` with `ELECTRON_RUN_AS_NODE`). */
@@ -223,9 +224,11 @@ async function spawnVitest(
     windowsHide: true,
   });
   let output = '';
-  const collect = (chunk: Buffer): void => {
-    output = (output + chunk.toString('utf8')).slice(-outputTailLength);
+  const collect = (chunk: string): void => {
+    output = tailOf(output + chunk, outputTailLength);
   };
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
   child.stdout.on('data', collect);
   child.stderr.on('data', collect);
   const signalGroup = (signal: NodeJS.Signals): void => {

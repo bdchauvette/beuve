@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 export interface GhInvocation {
   readonly command: string;
@@ -71,7 +72,7 @@ export async function runGh(invocation: GhInvocation): Promise<Result<GhExit, Gh
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
-    stderr = (stderr + chunk).slice(-stderrTailChars);
+    stderr = tailOf(stderr + chunk, stderrTailChars);
   });
 
   // Awaited, not returned: the timer must outlive the process.

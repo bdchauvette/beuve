@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -272,6 +272,50 @@ describe('createVitestTraceRunner refusals', () => {
     });
   });
 });
+
+describe('createVitestTraceRunner output', { timeout: 30_000 }, () => {
+  test('keeps a multi-byte character that arrives split across chunks', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
+    const { fixture, run } = refusalRunner(vitestFixtures);
+    installChattyVitest(fixture.dependencyRoot);
+
+    const result = await run({
+      signal,
+      timeout: Temporal.Duration.from({ milliseconds: 20_000 }),
+    });
+
+    expect(result).toStrictEqual({
+      ok: false,
+      error: { kind: 'run-failed', exitCode: 1, signal: undefined, output: 'before 🙂 after' },
+    });
+  });
+});
+
+/**
+ * Replaces the fixture's Vitest with a script that prints "before 🙂 after" to stdout, with the
+ * four bytes of the emoji split over two writes 100 ms apart, then fails without a report.
+ */
+function installChattyVitest(dependencyRoot: string): void {
+  const directory = path.join(dependencyRoot, 'node_modules', 'vitest');
+  rmSync(directory, { recursive: true, force: true });
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    path.join(directory, 'package.json'),
+    JSON.stringify({ name: 'vitest', version: '0.0.0', bin: 'cli.mjs' }),
+  );
+  writeFileSync(
+    path.join(directory, 'cli.mjs'),
+    `import { setTimeout } from 'node:timers/promises';
+process.stdout.write(Buffer.from([...Buffer.from('before '), 0xf0, 0x9f]));
+await setTimeout(100);
+process.stdout.write(Buffer.from([0x99, 0x82, ...Buffer.from(' after')]));
+process.exitCode = 1;
+`,
+  );
+}
 
 /** Runs the runner with an empty environment against a fresh fixture holding one empty test. */
 function refusalRunner(fixtures: VitestFixtures): {

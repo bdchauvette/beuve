@@ -32,6 +32,7 @@ import type {
   TextModelRequest,
   TextStreamEvent,
 } from './language-model.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 export interface ClaudeCodeModelOptions {
   /** The `claude` executable: a bare name looked up on `PATH`, or an absolute path. */
@@ -324,7 +325,7 @@ async function execute(
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
-    stderr = (stderr + chunk).slice(-stderrTailChars);
+    stderr = tailOf(stderr + chunk, stderrTailChars);
   });
 
   child.stdin.end(flattenModelMessages(request.messages));

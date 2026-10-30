@@ -4,6 +4,7 @@ import type { Result } from '#x/result/result.ts';
 
 import type { ClaudeCodeResult } from './claude-code-event-from.ts';
 import type { ModelError } from './language-model.ts';
+import { tailOf } from '#x/text/tail-of.ts';
 
 /** What a finished `claude` process left behind, after the stream was read. */
 export interface ClaudeCodeOutcome {
@@ -61,7 +62,7 @@ const rateLimitPattern = /rate.?limit|usage limit|overloaded|too many requests/i
 const stderrTailChars = 2000;
 
 function withoutResult(outcome: ClaudeCodeOutcome): ModelError {
-  const stderr = outcome.stderr.trim().slice(-stderrTailChars);
+  const stderr = tailOf(outcome.stderr.trim(), stderrTailChars);
   if (authenticationPattern.test(stderr)) {
     return { kind: 'not-authenticated', message: stderr };
   }
@@ -78,7 +79,7 @@ function withoutResult(outcome: ClaudeCodeOutcome): ModelError {
 }
 
 function failedResult(result: ClaudeCodeResult, outcome: ClaudeCodeOutcome): ModelError {
-  const message = (result.text ?? outcome.stderr).trim().slice(-stderrTailChars);
+  const message = tailOf((result.text ?? outcome.stderr).trim(), stderrTailChars);
   const status = result.apiErrorStatus;
   if (status === 401 || status === 403 || authenticationPattern.test(message)) {
     return { kind: 'not-authenticated', message };
