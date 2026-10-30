@@ -1,4 +1,5 @@
 import type {
+  AttentionView,
   CiStatusChangedView,
   PullRequestStackView,
   PullRequestUpdatedView,
@@ -11,6 +12,9 @@ import { findStoredPullRequest } from '#internal/github/find-stored-pull-request
 import { getCiStatus } from '#internal/github/get-ci-status.ts';
 import type { CiEtags } from '#internal/github/get-ci-status.ts';
 import { getPullRequest } from '#internal/github/get-pull-request.ts';
+import { getPullRequestReviews } from '#internal/github/get-pull-request-reviews.ts';
+import { getReviewRequests } from '#internal/github/get-review-requests.ts';
+import type { PullRequestReview, ReviewRequests } from '#internal/github/pull-request-review.ts';
 import type { PullRequest, PullRequestRef } from '#internal/github/pull-request.ts';
 import { savePullRequest } from '#internal/github/save-pull-request.ts';
 import type { Session } from '#internal/session/session.ts';
@@ -22,6 +26,7 @@ import { findMatchingRemote } from './find-matching-remote.ts';
 import type { GithubContext } from './github-context.ts';
 import { moveSessionHead } from './move-session-head.ts';
 import { syncPullRequestHead } from './sync-pull-request-head.ts';
+import { attentionViewFrom } from './attention-view-from.ts';
 import { ciStatusViewFrom } from './ci-status-view-from.ts';
 import { pullRequestViewFrom } from './pull-request-view-from.ts';
 import { stackViewFrom } from './stack-view-from.ts';
@@ -43,6 +48,7 @@ export interface PullRequestPoller {
   readonly snapshot: (sessionId: string) => {
     readonly ci?: CiStatusView;
     readonly stack?: PullRequestStackView;
+    readonly attention?: AttentionView;
   };
   /** Remembers a stack found elsewhere (when the pull request was opened). */
   readonly rememberStack: (sessionId: string, stack: PullRequestStackView) => void;
@@ -65,6 +71,12 @@ interface PollState {
   ciEtags?: CiEtags | undefined;
   ci?: CiStatusView;
   stack?: PullRequestStackView;
+  /** What the attention rules read (ADR 0066); set once the reviews have been fetched. */
+  reviews?: readonly PullRequestReview[];
+  requests?: ReviewRequests;
+  /** The signed-in login, once asked for (`login` is absent when it could not be told). */
+  viewer?: { readonly login: string | undefined };
+  attention?: AttentionView;
   failures: number;
   /** Measures the time since the last poll started. */
   lastPolled: Stopwatch | undefined;
@@ -133,6 +145,42 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return Temporal.Duration.compare(backoff, maxBackoff) < 0 ? backoff : maxBackoff;
   };
 
+  /** Reads the reviews and review requests; keeps the old ones when GitHub does not answer. */
+  const readReviews = async (state: PollState, ref: PullRequestRef): Promise<void> => {
+    const [reviews, requests] = await Promise.all([
+      context.clients.withClient(ref.host, async (client) => getPullRequestReviews(client, ref)),
+      context.clients.withClient(ref.host, async (client) => getReviewRequests(client, ref)),
+    ]);
+    if (reviews.ok && requests.ok) {
+      state.reviews = reviews.value;
+      state.requests = requests.value;
+    } else {
+      logger.info('github poll: reviews unavailable');
+    }
+    if (state.viewer !== undefined) {
+      return;
+    }
+    const described = await context.clients.credentials.describe({ host: ref.host });
+    state.viewer = { login: described.ok ? described.value.account?.login : undefined };
+  };
+
+  /** Recomputes the attention; true when it differs from the one last computed. */
+  const isAttentionChanged = (state: PollState, ref: PullRequestRef): boolean => {
+    const stored = findStoredPullRequest(context.session.db, ref);
+    if (!stored.ok || stored.value === undefined || state.reviews === undefined) {
+      return false;
+    }
+    const next = attentionViewFrom(stored.value, {
+      viewer: state.viewer?.login,
+      reviews: state.reviews,
+      requests: state.requests ?? { users: [], teams: [] },
+      ci: state.ci,
+    });
+    const previous = state.attention;
+    state.attention = next;
+    return previous?.turn !== next.turn || previous.reasons.join('\n') !== next.reasons.join('\n');
+  };
+
   const didMoveHead = async (
     session: Session,
     ref: PullRequestRef,
@@ -166,6 +214,25 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return moveSessionHead(context.session, session, synced.value.headSha).ok;
   };
 
+  const emitUpdated = (
+    sessionId: string,
+    ref: PullRequestRef,
+    state: PollState,
+    isHeadMoved: boolean,
+  ): void => {
+    const stored = findStoredPullRequest(context.session.db, ref);
+    if (!stored.ok || stored.value === undefined) {
+      return;
+    }
+    emit(updatedListeners, {
+      sessionId,
+      pullRequest: pullRequestViewFrom(stored.value),
+      stack: state.stack ?? { parents: [], children: [] },
+      headMoved: isHeadMoved,
+      ...(state.attention !== undefined && { attention: state.attention }),
+    });
+  };
+
   const pollOnce = async (sessionId: string): Promise<Temporal.Duration> => {
     const state = stateOf(sessionId);
     state.lastPolled = new Stopwatch();
@@ -197,6 +264,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       if (stack.ok) {
         state.stack = stackViewFrom(host, stack.value);
       }
+      await readReviews(state, ref);
       const isNewHead = pullRequest.head.sha !== session.headSha;
       const hasHeadMoved = isNewHead && (await didMoveHead(session, ref, pullRequest));
       // A head that couldn't be fetched is asked for unconditionally next time, not 304'd past.
@@ -204,15 +272,8 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       if (hasHeadMoved) {
         headSha = pullRequest.head.sha;
       }
-      const stored = findStoredPullRequest(context.session.db, ref);
-      if (stored.ok && stored.value !== undefined) {
-        emit(updatedListeners, {
-          sessionId,
-          pullRequest: pullRequestViewFrom(stored.value),
-          stack: state.stack ?? { parents: [], children: [] },
-          headMoved: hasHeadMoved,
-        });
-      }
+      isAttentionChanged(state, ref);
+      emitUpdated(sessionId, ref, state, hasHeadMoved);
     }
     if (state.ciSha !== headSha) {
       state.ciSha = headSha;
@@ -233,6 +294,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       state.ciEtags = ci.value.etags;
       state.ci = ciStatusViewFrom(ci.value.value);
       emit(ciListeners, { sessionId, ci: state.ci });
+      if (isAttentionChanged(state, ref)) {
+        emitUpdated(sessionId, ref, state, false);
+      }
     }
     state.failures = 0;
     return interval;
@@ -302,6 +366,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return {
         ...(state?.ci !== undefined && { ci: state.ci }),
         ...(state?.stack !== undefined && { stack: state.stack }),
+        ...(state?.attention !== undefined && { attention: state.attention }),
       };
     },
     rememberStack: (sessionId, stack): void => {

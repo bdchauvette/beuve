@@ -195,6 +195,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
         pullRequest: pullRequestViewFrom(current),
         stack: snapshot.stack ?? { parents: [], children: [] },
         ...(snapshot.ci !== undefined && { ci: snapshot.ci }),
+        ...(snapshot.attention !== undefined && { attention: snapshot.attention }),
       });
     },
 

@@ -25,6 +25,14 @@ export interface FakeCheck {
   readonly result: string;
 }
 
+/** A review already on a pull request, as `GET …/reviews` lists it. */
+export interface FakeSubmittedReview {
+  readonly reviewer: string;
+  readonly state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  readonly commitSha: string;
+  readonly submittedAt: string;
+}
+
 export interface FakeReviewRequest {
   readonly number: number;
   readonly token: string | undefined;
@@ -56,6 +64,10 @@ export interface FakeGithubApi {
   readonly pullRequests: Map<number, FakePullRequest>;
   /** Checks by commit sha. */
   readonly checks: Map<string, FakeCheck[]>;
+  /** Reviews already submitted, by pull request number. */
+  readonly submittedReviews: Map<number, FakeSubmittedReview[]>;
+  /** Users and team slugs asked to review, by pull request number. */
+  readonly requestedReviewers: Map<number, { users: string[]; teams: string[] }>;
   /** The login the token belongs to: GitHub refuses its approvals on its own pull requests. */
   viewer: string;
   /** Tokens the fake accepts; any other bearer token gets 401. */
@@ -92,6 +104,8 @@ export function createFakeGithubApi(owner = 'octo-org', repo = 'hello-world'): F
     repo,
     pullRequests: new Map(),
     checks: new Map(),
+    submittedReviews: new Map(),
+    requestedReviewers: new Map(),
     viewer: 'reviewer',
     validTokens: new Set(['gho_fake_token']),
     rejectCommentPaths: new Set(),
@@ -137,6 +151,26 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   }
   if (third === undefined && pull !== undefined && request.method === 'GET') {
     return conditional(request, githubPullFrom(api, pull));
+  }
+  if (third === 'reviews' && pull !== undefined && request.method === 'GET') {
+    const listed = api.submittedReviews.get(pull.number) ?? [];
+    return conditional(
+      request,
+      listed.map((entry, index) => ({
+        id: index + 1,
+        user: { login: entry.reviewer },
+        state: entry.state,
+        commit_id: entry.commitSha,
+        submitted_at: entry.state === 'PENDING' ? jsonNull : entry.submittedAt,
+      })),
+    );
+  }
+  if (third === 'requested_reviewers' && pull !== undefined && request.method === 'GET') {
+    const requested = api.requestedReviewers.get(pull.number) ?? { users: [], teams: [] };
+    return conditional(request, {
+      users: requested.users.map((login) => ({ login })),
+      teams: requested.teams.map((slug) => ({ slug })),
+    });
   }
   if (third === 'reviews' && pull !== undefined && request.method === 'POST') {
     return review(api, pull, token, request.body);

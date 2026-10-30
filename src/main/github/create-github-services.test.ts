@@ -163,6 +163,61 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect(interdiff.files.map((file) => file.path)).toStrictEqual(['app.ts']);
   });
 
+  test('derives whose turn it is from requests, reviews and CI, and pushes it with the update', async ({
+    expect,
+    services,
+    opened,
+    updates,
+    world,
+  }) => {
+    const { api, firstHead } = world;
+    const sessionId = await opened();
+    const bump = (updatedAt: string): void => {
+      Object.assign(api.pullRequests.get(7) ?? {}, { updatedAt });
+    };
+
+    api.requestedReviewers.set(7, { users: ['reviewer'], teams: [] });
+    bump('2026-10-28T10:01:00Z');
+    await services.github.pollNow(sessionId);
+    expect(updates.at(-1)?.attention).toStrictEqual({
+      turn: 'you',
+      reasons: ['a review was requested from reviewer'],
+    });
+    expect(okValueFrom(await services.github.getPullRequest(sessionId)).attention?.turn).toBe(
+      'you',
+    );
+
+    api.requestedReviewers.set(7, { users: [], teams: [] });
+    api.submittedReviews.set(7, [reviewBy('CHANGES_REQUESTED', firstHead)]);
+    bump('2026-10-28T10:02:00Z');
+    await services.github.pollNow(sessionId);
+    expect(updates.at(-1)?.attention).toStrictEqual({
+      turn: 'author',
+      reasons: ['rita requested changes'],
+    });
+
+    api.submittedReviews.set(7, [reviewBy('CHANGES_REQUESTED', 'e'.repeat(40))]);
+    bump('2026-10-28T10:03:00Z');
+    await services.github.pollNow(sessionId);
+    expect(updates.at(-1)?.attention).toStrictEqual({
+      turn: 'reviewers',
+      reasons: ['the author pushed since rita requested changes'],
+    });
+
+    api.submittedReviews.set(7, [reviewBy('APPROVED', firstHead)]);
+    bump('2026-10-28T10:04:00Z');
+    await services.github.pollNow(sessionId);
+    expect(updates.at(-1)?.attention?.turn).toBe('unknown');
+    const before = updates.length;
+    api.checks.set(firstHead, [{ kind: 'check-run', name: 'test', result: 'failure' }]);
+    await services.github.pollNow(sessionId);
+    expect(updates).toHaveLength(before + 1);
+    expect(updates.at(-1)).toMatchObject({
+      headMoved: false,
+      attention: { turn: 'author', reasons: ['CI is failing (1 check)'] },
+    });
+  });
+
   test('posts the staged items as one review, then only new ones, with the own-PR and off-diff fallbacks', async ({
     expect,
     services,
@@ -391,4 +446,11 @@ function racingFetch(
     },
     pullGets: () => pullGets,
   };
+}
+
+function reviewBy(
+  state: 'CHANGES_REQUESTED' | 'APPROVED',
+  commitSha: string,
+): { reviewer: string; state: typeof state; commitSha: string; submittedAt: string } {
+  return { reviewer: 'rita', state, commitSha, submittedAt: '2026-10-28T10:30:00Z' };
 }

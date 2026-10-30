@@ -1498,6 +1498,8 @@ export interface PullRequestSessionView {
   readonly pullRequest: PullRequestView;
   readonly stack: PullRequestStackView;
   readonly ci?: CiStatusView;
+  /** Whose turn it is, once polling has read the reviews (ADR 0066). */
+  readonly attention?: AttentionView;
 }
 
 /** Post (or preview) the session's staged URA items as one GitHub review on the current head. */
@@ -1534,12 +1536,25 @@ export interface OpenGithubLinkRequest {
   readonly url: string;
 }
 
-/** Pushed when polling finds a pull request changed; `headMoved` when its head did. */
+/**
+ * Whose turn a pull request is (ADR 0066): `you` (the signed-in user must act), `author`,
+ * `reviewers`, or `unknown`. `reasons` are short sentences, most decisive first.
+ */
+export interface AttentionView {
+  readonly turn: 'you' | 'author' | 'reviewers' | 'unknown';
+  readonly reasons: readonly string[];
+}
+
+/**
+ * Pushed when polling finds a pull request changed (or its attention changed, as CI finishes);
+ * `headMoved` when its head did. `attention` is absent until the reviews have been read.
+ */
 export interface PullRequestUpdatedView {
   readonly sessionId: string;
   readonly pullRequest: PullRequestView;
   readonly stack: PullRequestStackView;
   readonly headMoved: boolean;
+  readonly attention?: AttentionView;
 }
 
 export interface CiStatusChangedView {
