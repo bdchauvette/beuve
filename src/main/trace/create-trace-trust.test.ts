@@ -21,9 +21,9 @@ describe('createTraceTrust', () => {
       toFake: ['Date', 'Temporal'],
       now: Temporal.Instant.from('2026-10-28T12:00:00Z'),
     });
-    repo = createTestRepository();
+    repo = await createTestRepository();
     repo.write('a.txt', 'a\n');
-    repo.commit('first');
+    await repo.commit('first');
     const opened = await openRepository(repo.directory);
     if (!opened.ok) {
       throw new Error(opened.error.kind);
@@ -66,7 +66,7 @@ describe('createTraceTrust', () => {
   });
 
   it('keys the approval by real path and withdraws it when the recorded remote is gone', async () => {
-    repo.git('remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    await repo.git('remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
     const trust = createTraceTrust({ settingsPath });
     await expect(trust.grant(git)).resolves.toMatchObject({
       trusted: true,
@@ -80,9 +80,9 @@ describe('createTraceTrust', () => {
       remoteUrl: 'https://github.com/acme/widgets.git',
     });
 
-    repo.git('remote', 'set-url', 'origin', 'https://github.com/evil/widgets.git');
+    await repo.git('remote', 'set-url', 'origin', 'https://github.com/evil/widgets.git');
     await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
-    repo.git('remote', 'remove', 'origin');
+    await repo.git('remote', 'remove', 'origin');
     await expect(trust.status(git)).resolves.toMatchObject({ trusted: false });
   });
 

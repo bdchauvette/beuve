@@ -24,7 +24,7 @@ describe('createFileServices (integration: SQLite + git)', () => {
   let sessionId: string;
 
   beforeEach(async () => {
-    repo = createTestRepository();
+    repo = await createTestRepository();
     db = openAppDatabase(':memory:');
     const logger = createLogger('test', { sink: (): void => undefined });
     const context: SessionContext = { db, logger, deps: systemSessionDeps, git: { logger } };
@@ -33,12 +33,12 @@ describe('createFileServices (integration: SQLite + git)', () => {
     repo.write('packages/web/package.json', '{}\n');
     repo.write('packages/web/src/app.ts', 'export const a = 1;\n');
     repo.write('packages/web/src/gone.ts', 'old\n');
-    repo.commit('base');
-    repo.git('switch', '--quiet', '--create', 'feature');
+    await repo.commit('base');
+    await repo.git('switch', '--quiet', '--create', 'feature');
     repo.write('packages/web/src/app.ts', 'export const a = 2;\n');
     repo.write('services/api/go.mod', 'module api\n');
-    repo.git('rm', '--quiet', 'packages/web/src/gone.ts');
-    repo.commit('feature');
+    await repo.git('rm', '--quiet', 'packages/web/src/gone.ts');
+    await repo.commit('feature');
     const sessions = createSessionServices({ db, logger });
     const created = value(
       await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
@@ -60,7 +60,7 @@ describe('createFileServices (integration: SQLite + git)', () => {
       'services/api/go.mod',
     ]);
     expect(tree.packageRoots).toEqual(['', 'packages/web', 'services/api']);
-    expect(tree.headSha).toBe(repo.git('rev-parse', 'feature'));
+    expect(tree.headSha).toBe(await repo.git('rev-parse', 'feature'));
     expect(value(await files.getTree({ sessionId }))).toEqual(tree);
   });
 
@@ -69,10 +69,10 @@ describe('createFileServices (integration: SQLite + git)', () => {
       '.gitattributes',
       'services/** linguist-generated\npackages/** -linguist-generated\n**/gone.ts -diff\n',
     );
-    const head = repo.commit('attributes');
+    const head = await repo.commit('attributes');
     const attributes = value(await files.getFileAttributes({ sessionId }));
     expect(attributes.headSha).toBe(head);
-    const version = parseGitVersion(repo.git('--version'));
+    const version = parseGitVersion(await repo.git('--version'));
     if (version === undefined || !isVersionAtLeast(version, 2, 40)) {
       expect(attributes).toMatchObject({ generated: [], notGenerated: [], noDiff: [] });
       return;

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -45,21 +44,27 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
   let baseSha: string;
   let firstHead: string;
 
-  beforeEach(() => {
-    upstream = createTestRepository();
+  beforeEach(async () => {
+    upstream = await createTestRepository();
     upstream.write('app.ts', lines(['export const answer = 1;', 'export const other = 2;']));
-    baseSha = upstream.commit('base');
-    upstream.git('switch', '--quiet', '-c', 'feature');
+    baseSha = await upstream.commit('base');
+    await upstream.git('switch', '--quiet', '-c', 'feature');
     upstream.write('app.ts', lines(['export const answer = 42;', 'export const other = 2;']));
     upstream.write('notes.md', 'why\n');
-    firstHead = upstream.commit('feature');
+    firstHead = await upstream.commit('feature');
     bare = path.join(upstream.scratch(), 'hello-world.git');
-    execFileSync('git', ['init', '--quiet', '--bare', bare]);
-    upstream.git('push', '--quiet', bare, `${baseSha}:refs/heads/main`, 'feature:refs/pull/7/head');
+    await upstream.git('init', '--quiet', '--bare', bare);
+    await upstream.git(
+      'push',
+      '--quiet',
+      bare,
+      `${baseSha}:refs/heads/main`,
+      'feature:refs/pull/7/head',
+    );
 
-    clone = createTestRepository();
-    clone.git('remote', 'add', 'origin', remoteUrl);
-    clone.git('config', `url.${bare}.insteadOf`, remoteUrl);
+    clone = await createTestRepository();
+    await clone.git('remote', 'add', 'origin', remoteUrl);
+    await clone.git('config', `url.${bare}.insteadOf`, remoteUrl);
 
     api = createFakeGithubApi();
     api.pullRequests.set(7, {
@@ -172,7 +177,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
 
   it('opens a pull request into a local clone, idempotently, and remembers the clone', async () => {
     expect(await openPull()).toMatchObject({ kind: 'failed', failure: 'needs-local-clone' });
-    const stranger = createTestRepository();
+    const stranger = await createTestRepository();
     try {
       expect(await openPull(stranger.directory)).toMatchObject({
         kind: 'failed',
@@ -203,8 +208,8 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       },
       pullRequest: { title: 'Make the answer right', author: 'octocat', state: 'open' },
     });
-    expect(clone.git('rev-parse', 'refs/beuve/pr/7/head')).toBe(firstHead);
-    expect(clone.git('rev-parse', 'refs/beuve/pr/7/base')).toBe(baseSha);
+    expect(await clone.git('rev-parse', 'refs/beuve/pr/7/head')).toBe(firstHead);
+    expect(await clone.git('rev-parse', 'refs/beuve/pr/7/base')).toBe(baseSha);
 
     const again = await openPull();
     expect(again.kind === 'opened' && first.kind === 'opened' && again.session.id).toBe(
@@ -233,9 +238,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
   });
 
   it('follows a force-push between the API answer and the fetch by asking GitHub again', async () => {
-    upstream.git('commit', '--quiet', '--amend', '--message', 'feature, amended');
-    const amended = upstream.git('rev-parse', 'HEAD');
-    upstream.git('push', '--quiet', '--force', bare, 'feature:refs/pull/7/head');
+    await upstream.git('commit', '--quiet', '--amend', '--message', 'feature, amended');
+    const amended = await upstream.git('rev-parse', 'HEAD');
+    await upstream.git('push', '--quiet', '--force', bare, 'feature:refs/pull/7/head');
     const pull = api.pullRequests.get(7);
     let pullGets = 0;
     const fetch = api.fetch;
@@ -281,8 +286,8 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect(api.log.slice(-3).every((entry) => entry.startsWith('GET'))).toBe(true);
 
     upstream.write('app.ts', lines(['export const answer = 42;', 'export const other = 3;']));
-    const secondHead = upstream.commit('fixup');
-    upstream.git('push', '--quiet', bare, 'feature:refs/pull/7/head');
+    const secondHead = await upstream.commit('fixup');
+    await upstream.git('push', '--quiet', bare, 'feature:refs/pull/7/head');
     const pull = api.pullRequests.get(7);
     if (pull !== undefined) {
       pull.headSha = secondHead;

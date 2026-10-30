@@ -19,7 +19,7 @@ describe('flow:get-graph (integration: git + Tree-sitter, no Electron)', () => {
   let sessionId: string;
 
   beforeEach(async () => {
-    repo = createTestRepository();
+    repo = await createTestRepository();
     db = openAppDatabase(':memory:');
     services = createMainServices({
       db,
@@ -29,15 +29,15 @@ describe('flow:get-graph (integration: git + Tree-sitter, no Electron)', () => {
     repo.write('README.md', lines(['# test']));
     repo.write('src/flow.ts', lines(source('item * 2', 'total += 4')));
     repo.write('src/data.json', '{}\n');
-    repo.commit('base');
-    repo.git('switch', '--quiet', '--create', 'feature');
+    await repo.commit('base');
+    await repo.git('switch', '--quiet', '--create', 'feature');
     repo.write('src/flow.ts', lines(source('item', 'total += 5')));
     repo.write('src/data.json', '{ "a": 1 }\n');
     repo.write('src/gone.ts', lines(['export function gone(): void {', '  return;', '}']));
-    repo.commit('change flow');
-    repo.git('rm', '--quiet', 'README.md');
-    repo.commit('drop readme');
-    repo.git('switch', '--quiet', 'main');
+    await repo.commit('change flow');
+    await repo.git('rm', '--quiet', 'README.md');
+    await repo.commit('drop readme');
+    await repo.git('switch', '--quiet', 'main');
     const created = await services.sessions.createLocal({
       repoPath: repo.directory,
       baseRef: 'main',
@@ -118,12 +118,12 @@ describe('flow:get-graph (integration: git + Tree-sitter, no Electron)', () => {
       { length: 120 },
       (_, index) => `  if (a === ${String(index)}) { a += 1; }`,
     );
-    repo.git('switch', '--quiet', 'feature');
+    await repo.git('switch', '--quiet', 'feature');
     repo.write(
       'src/big.ts',
       lines(['export function big(a: number): number {', ...body, '  return a;', '}']),
     );
-    repo.commit('add big');
+    await repo.commit('add big');
     const response = value(
       await services.flow.getGraph({ sessionId, path: 'src/big.ts', line: 3 }),
     );

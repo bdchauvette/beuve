@@ -54,14 +54,14 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     opened = [];
     installed = ['/bin/zed'];
     spawnError = undefined;
-    repo = createTestRepository();
+    repo = await createTestRepository();
     db = openAppDatabase(':memory:');
     repo.write('app.ts', 'one\n');
-    repo.commit('base');
-    repo.git('switch', '--quiet', '--create', 'feature');
+    await repo.commit('base');
+    await repo.git('switch', '--quiet', '--create', 'feature');
     repo.write('src/feature.ts', 'a\nb\nc\n');
-    repo.commit('add feature');
-    repo.git('switch', '--quiet', 'main');
+    await repo.commit('add feature');
+    await repo.git('switch', '--quiet', 'main');
     let id = 0;
     const deps: SessionDeps = {
       newId: (): string => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
@@ -103,7 +103,7 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
   };
 
   it("opens the user's working tree when it is at the session head", async () => {
-    repo.git('switch', '--quiet', 'feature');
+    await repo.git('switch', '--quiet', 'feature');
     expect(await open('src/feature.ts')).toMatchObject({
       kind: 'opened',
       editorId: 'zed',
@@ -123,7 +123,7 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
   });
 
   it('uses the checkout when the working tree file has uncommitted changes', async () => {
-    repo.git('switch', '--quiet', 'feature');
+    await repo.git('switch', '--quiet', 'feature');
     repo.write('src/feature.ts', 'changed\n');
     expect(await open('src/feature.ts')).toMatchObject({ location: 'beuve-checkout' });
   });
@@ -137,12 +137,12 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
   });
 
   it('refuses a symlink that leaves the checkout', async () => {
-    repo.git('switch', '--quiet', 'feature');
+    await repo.git('switch', '--quiet', 'feature');
     const outside = path.join(repo.scratch(), 'secret.txt');
     writeFileSync(outside, 'x');
     mkdirSync(path.join(repo.directory, 'links'));
     symlinkSync(outside, path.join(repo.directory, 'links/out.txt'));
-    repo.commit('add link');
+    await repo.commit('add link');
     expect(await open('links/out.txt')).toMatchObject({ failure: 'file-unavailable' });
     expect(spawned).toEqual([]);
   });

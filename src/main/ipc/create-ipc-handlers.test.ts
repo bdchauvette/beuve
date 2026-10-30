@@ -1,57 +1,73 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+import type { ExpectStatic } from 'vitest';
 
 import type { AppInfo, IpcError, SessionSummary } from '#contract/ipc-contract.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
-import type { Err } from '#x/result/result.ts';
+import type { Err, Ok } from '#x/result/result.ts';
 
 import type { MainServices, SessionServices } from '../main-services.ts';
 import { unimplementedMcpTools } from '../mcp/unimplemented-mcp-tools.ts';
 
+import { test } from '../testing/test.ts';
 import { createIpcHandlers } from './create-ipc-handlers.ts';
 
-const appInfo: AppInfo = {
-  name: 'beuve',
-  version: '0.1.0',
-  platform: 'linux',
-  electronVersion: '45.1.0',
-  chromeVersion: '140',
-  nodeVersion: '24',
-};
+function appInfo(): AppInfo {
+  return {
+    name: 'beuve',
+    version: '0.1.0',
+    platform: 'linux',
+    electronVersion: '45.1.0',
+    chromeVersion: '140',
+    nodeVersion: '24',
+  };
+}
 
-const session: SessionSummary = {
-  id: 's1',
-  source: { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feature' },
-  headSha: 'a'.repeat(40),
-  createdAt: '2026-10-28T00:00:00.000Z',
-  updatedAt: '2026-10-28T00:00:00.000Z',
-};
+function sessionSummary(): SessionSummary {
+  return {
+    id: 's1',
+    source: { kind: 'local', repoPath: '/repo', baseRef: 'main', headRef: 'feature' },
+    headSha: 'a'.repeat(40),
+    createdAt: '2026-10-28T00:00:00.000Z',
+    updatedAt: '2026-10-28T00:00:00.000Z',
+  };
+}
 
-const notWiredError: Err<IpcError> = err({ code: 'not-wired', message: 'not wired in this test' });
-const notWired = Promise.resolve(notWiredError);
-const opening = Promise.resolve(ok(session));
+function notWiredError(): Err<IpcError> {
+  return err({ code: 'not-wired', message: 'not wired in this test' });
+}
+
+async function notWired(): Promise<Err<IpcError>> {
+  await Promise.resolve();
+  return notWiredError();
+}
+
+async function opening(): Promise<Ok<SessionSummary>> {
+  await Promise.resolve();
+  return ok(sessionSummary());
+}
 
 describe('createIpcHandlers', () => {
-  it('answers app:get-info and rejects unexpected arguments', async () => {
-    const handlers = createIpcHandlers(stubServices({}), appInfo);
-    expect(await handlers['app:get-info'](undefined)).toEqual(ok(appInfo));
-    expect(await handlers['app:get-info']({ sneaky: true })).toMatchObject({
+  test('answers app:get-info and rejects unexpected arguments', ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    expect(handlers['app:get-info'](undefined)).toStrictEqual(ok(appInfo()));
+    expect(handlers['app:get-info']({ sneaky: true })).toMatchObject({
       ok: false,
       error: { code: 'invalid-request' },
     });
   });
 
-  it('passes service failures through unchanged', async () => {
-    const handlers = createIpcHandlers(stubServices({}), appInfo);
-    expect(await handlers['session:list'](undefined)).toMatchObject({
+  test('passes service failures through unchanged', ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    expect(handlers['session:list'](undefined)).toMatchObject({
       ok: false,
       error: { code: 'not-wired' },
     });
   });
 
-  it('validates session:create-local before delegating', async () => {
+  test('validates session:create-local before delegating', async ({ expect }) => {
     const { calls, services } = recording('createLocal');
-    const handlers = createIpcHandlers(services, appInfo);
+    const handlers = createIpcHandlers(services, appInfo());
     const good = { repoPath: '/repo', baseRef: 'main', headRef: 'HEAD' };
     for (const bad of [
       undefined,
@@ -61,34 +77,43 @@ describe('createIpcHandlers', () => {
       { ...good, extra: true },
       { repoPath: '/repo', baseRef: 'main' },
     ]) {
-      await expectInvalid(handlers['session:create-local'](bad));
+      await expectInvalid(expect, handlers['session:create-local'](bad));
     }
-    expect(await handlers['session:create-local'](good)).toEqual(ok(session));
-    expect(calls).toEqual([good]);
+    await expect(handlers['session:create-local'](good)).resolves.toStrictEqual(
+      ok(sessionSummary()),
+    );
+    expect(calls).toStrictEqual([good]);
   });
 
-  it('validates session:get-review before delegating', async () => {
+  test('validates session:get-review before delegating', async ({ expect }) => {
     const { calls, services } = recording('getReview');
-    const handlers = createIpcHandlers(services, appInfo);
-    await expectInvalid(handlers['session:get-review']({ sessionId: 3 }));
-    await expectInvalid(handlers['session:get-review']({ sessionId: 's1', ignoreWhitespace: 1 }));
+    const handlers = createIpcHandlers(services, appInfo());
+    await expectInvalid(expect, handlers['session:get-review']({ sessionId: 3 }));
+    await expectInvalid(
+      expect,
+      handlers['session:get-review']({ sessionId: 's1', ignoreWhitespace: 1 }),
+    );
     await handlers['session:get-review']({ sessionId: 's1' });
     await handlers['session:get-review']({ sessionId: 's1', ignoreWhitespace: true });
-    expect(calls).toEqual([{ sessionId: 's1' }, { sessionId: 's1', ignoreWhitespace: true }]);
+    expect(calls).toStrictEqual([{ sessionId: 's1' }, { sessionId: 's1', ignoreWhitespace: true }]);
   });
 
-  it('validates session:mark-reviewed, including the optional expected head', async () => {
+  test('validates session:mark-reviewed, including the optional expected head', async ({
+    expect,
+  }) => {
     const { calls, services } = recording('markReviewed');
-    const handlers = createIpcHandlers(services, appInfo);
+    const handlers = createIpcHandlers(services, appInfo());
     await expectInvalid(
+      expect,
       handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'HEAD' }),
     );
     await expectInvalid(
+      expect,
       handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'A'.repeat(40) }),
     );
     await handlers['session:mark-reviewed']({ sessionId: 's1' });
     await handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'b'.repeat(40) });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       { sessionId: 's1' },
       { sessionId: 's1', expectedHeadSha: 'b'.repeat(40) },
     ]);
@@ -96,7 +121,7 @@ describe('createIpcHandlers', () => {
 });
 
 describe('createIpcHandlers for impact and call hierarchy', () => {
-  it('validates session:get-impact before delegating', async () => {
+  test('validates session:get-impact before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       {
@@ -105,18 +130,20 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
           ...stubServices({}).impact,
           getImpactForRenderer: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
-    await expectInvalid(handlers['session:get-impact']({ sessionId: 's1', paths: [] }));
+    await expectInvalid(expect, handlers['session:get-impact']({ sessionId: 's1', paths: [] }));
     await handlers['session:get-impact']({ sessionId: 's1' });
-    expect(calls).toEqual([{ sessionId: 's1' }]);
+    expect(calls).toStrictEqual([{ sessionId: 's1' }]);
   });
 
-  it('validates session:get-tree and session:get-file-pair before delegating', async () => {
+  test('validates session:get-tree and session:get-file-pair before delegating', async ({
+    expect,
+  }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       {
@@ -124,35 +151,38 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
         files: {
           getTree: async (request) => {
             calls.push(['tree', request]);
-            return notWired;
+            return notWired();
           },
           getFilePair: async (request) => {
             calls.push(['pair', request]);
-            return notWired;
+            return notWired();
           },
           getFileAttributes: async (request) => {
             calls.push(['attributes', request]);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
-    await expectInvalid(handlers['session:get-tree']({ sessionId: 's1', path: 'a' }));
-    await expectInvalid(handlers['session:get-file-pair']({ sessionId: 's1' }));
-    await expectInvalid(handlers['session:get-file-pair']({ sessionId: 's1', path: '' }));
+    await expectInvalid(expect, handlers['session:get-tree']({ sessionId: 's1', path: 'a' }));
+    await expectInvalid(expect, handlers['session:get-file-pair']({ sessionId: 's1' }));
+    await expectInvalid(expect, handlers['session:get-file-pair']({ sessionId: 's1', path: '' }));
     await handlers['session:get-tree']({ sessionId: 's1' });
     await handlers['session:get-file-pair']({ sessionId: 's1', path: 'src/a.ts' });
-    await expectInvalid(handlers['session:get-file-attributes']({ sessionId: 's1', paths: [] }));
+    await expectInvalid(
+      expect,
+      handlers['session:get-file-attributes']({ sessionId: 's1', paths: [] }),
+    );
     await handlers['session:get-file-attributes']({ sessionId: 's1' });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       ['tree', { sessionId: 's1' }],
       ['pair', { sessionId: 's1', path: 'src/a.ts' }],
       ['attributes', { sessionId: 's1' }],
     ]);
   });
 
-  it('validates lsp:call-hierarchy and drops absent optional fields', async () => {
+  test('validates lsp:call-hierarchy and drops absent optional fields', async ({ expect }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       {
@@ -160,11 +190,11 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
         lsp: {
           callHierarchy: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
     const good = { sessionId: 's1', path: 'src/a.ts', line: 3, direction: 'incoming' };
     for (const bad of [
@@ -175,14 +205,14 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
       { ...good, path: '' },
       { ...good, extra: true },
     ]) {
-      await expectInvalid(handlers['lsp:call-hierarchy'](bad));
+      await expectInvalid(expect, handlers['lsp:call-hierarchy'](bad));
     }
     await handlers['lsp:call-hierarchy'](good);
     await handlers['lsp:call-hierarchy']({ ...good, character: 4, nodeId: 'n1' });
-    expect(calls).toEqual([good, { ...good, character: 4, nodeId: 'n1' }]);
+    expect(calls).toStrictEqual([good, { ...good, character: 4, nodeId: 'n1' }]);
   });
 
-  it('validates flow:get-graph before delegating', async () => {
+  test('validates flow:get-graph before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       {
@@ -190,11 +220,11 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
         flow: {
           getGraph: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
     const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
     for (const bad of [
@@ -204,15 +234,15 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
       { sessionId: 's1', path: 'a.ts' },
       { ...good, extra: true },
     ]) {
-      await expectInvalid(handlers['flow:get-graph'](bad));
+      await expectInvalid(expect, handlers['flow:get-graph'](bad));
     }
     await handlers['flow:get-graph'](good);
-    expect(calls).toEqual([good]);
+    expect(calls).toStrictEqual([good]);
   });
 });
 
 describe('createIpcHandlers for trace probes', () => {
-  it('validates trace:run and trace:set-trust before delegating', async () => {
+  test('validates trace:run and trace:set-trust before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       {
@@ -221,15 +251,15 @@ describe('createIpcHandlers for trace probes', () => {
           ...stubServices({}).trace,
           run: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
           setTrust: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
     const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
     for (const bad of [
@@ -239,14 +269,14 @@ describe('createIpcHandlers for trace probes', () => {
       { ...good, extra: true },
       { sessionId: 's1', line: 3 },
     ]) {
-      await expectInvalid(handlers['trace:run'](bad));
+      await expectInvalid(expect, handlers['trace:run'](bad));
     }
     await handlers['trace:run'](good);
     await handlers['trace:run']({ ...good, testNamePattern: 'clamp' });
-    await expectInvalid(handlers['trace:set-trust']({ sessionId: 's1' }));
-    await expectInvalid(handlers['trace:set-trust']({ sessionId: 's1', trusted: 'yes' }));
+    await expectInvalid(expect, handlers['trace:set-trust']({ sessionId: 's1' }));
+    await expectInvalid(expect, handlers['trace:set-trust']({ sessionId: 's1', trusted: 'yes' }));
     await handlers['trace:set-trust']({ sessionId: 's1', trusted: true });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       good,
       { ...good, testNamePattern: 'clamp' },
       { sessionId: 's1', trusted: true },
@@ -263,7 +293,7 @@ describe('createIpcHandlers for the chat', () => {
     sha: 'c'.repeat(40),
   } as const;
 
-  it('validates chat:ask and drops absent options', async () => {
+  test('validates chat:ask and drops absent options', async ({ expect }) => {
     const calls: unknown[] = [];
     const base = stubServices({});
     const handlers = createIpcHandlers(
@@ -273,11 +303,11 @@ describe('createIpcHandlers for the chat', () => {
           ...base.chat,
           ask: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
     for (const bad of [
       { sessionId: 's1' },
@@ -306,7 +336,7 @@ describe('createIpcHandlers for the chat', () => {
       { sessionId: 's1', question: '/x', command: { kind: 'essay' } },
       { sessionId: 's1', question: '/summarize', command: { kind: 'summarize', paths: [] } },
     ]) {
-      await expectInvalid(handlers['chat:ask'](bad));
+      await expectInvalid(expect, handlers['chat:ask'](bad));
     }
     await handlers['chat:ask']({ sessionId: 's1', question: '  why?  ' });
     await handlers['chat:ask']({
@@ -346,7 +376,7 @@ describe('createIpcHandlers for the chat', () => {
       question: '/summarize',
       command: { kind: 'summarize' },
     });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       { sessionId: 's1', question: 'why?' },
       { sessionId: 's1', question: 'why?', focus: { path: 'src/a.ts' } },
       { sessionId: 's1', question: 'why?', focus: { path: 'a', line: 3 } },
@@ -372,15 +402,15 @@ describe('createIpcHandlers for the chat', () => {
     ]);
   });
 
-  it('validates chat:list, chat:cancel and chat:clear', async () => {
-    const handlers = createIpcHandlers(stubServices({}), appInfo);
-    await expectInvalid(handlers['chat:list']({}));
-    await expectInvalid(handlers['chat:clear']({ sessionId: '' }));
-    await expectInvalid(handlers['chat:clear']({ sessionId: 's1', queuedOnly: 'yes' }));
-    await expectInvalid(handlers['chat:cancel']({ messageId: 'not-a-uuid' }));
-    await expectInvalid(handlers['chat:cancel']({ sessionId: '' }));
-    await expectInvalid(handlers['chat:compact']({ sessionId: 's1', extra: 1 }));
-    expect(await handlers['chat:compact']({ sessionId: 's1' })).toMatchObject({
+  test('validates chat:list, chat:cancel and chat:clear', async ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    await expectInvalid(expect, handlers['chat:list']({}));
+    await expectInvalid(expect, handlers['chat:clear']({ sessionId: '' }));
+    await expectInvalid(expect, handlers['chat:clear']({ sessionId: 's1', queuedOnly: 'yes' }));
+    await expectInvalid(expect, handlers['chat:cancel']({ messageId: 'not-a-uuid' }));
+    await expectInvalid(expect, handlers['chat:cancel']({ sessionId: '' }));
+    await expectInvalid(expect, handlers['chat:compact']({ sessionId: 's1', extra: 1 }));
+    await expect(handlers['chat:compact']({ sessionId: 's1' })).resolves.toMatchObject({
       error: { code: 'not-wired' },
     });
     expect(handlers['chat:cancel']({ sessionId: 's1' })).toMatchObject({
@@ -398,11 +428,11 @@ describe('createIpcHandlers for the chat', () => {
 describe('createIpcHandlers for the review dock and clipboard', () => {
   const id = '00000000-0000-4000-8000-000000000001';
 
-  it('validates ura channels before delegating, dropping absent options', async () => {
+  test('validates ura channels before delegating, dropping absent options', async ({ expect }) => {
     const calls: unknown[] = [];
     const record = async (request: unknown): Promise<Err<IpcError>> => {
       calls.push(request);
-      return notWired;
+      return notWired();
     };
     const base = stubServices({});
     const handlers = createIpcHandlers(
@@ -418,15 +448,15 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           export: record,
           setVerdict: (request) => {
             calls.push(request);
-            return notWiredError;
+            return notWiredError();
           },
           reorder: (request) => {
             calls.push(request);
-            return notWiredError;
+            return notWiredError();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
     const note = {
       sessionId: 's1',
@@ -445,20 +475,30 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { ...note, origin: { kind: 'human' } },
       { ...note, origin: { kind: 'chat-answer', messageId: 'm1' } },
     ]) {
-      await expectInvalid(handlers['ura:create'](bad));
+      await expectInvalid(expect, handlers['ura:create'](bad));
     }
-    await expectInvalid(handlers['ura:update']({ itemId: 'x' }));
-    await expectInvalid(handlers['ura:transition']({ itemId: id, to: 'deleted' }));
-    await expectInvalid(handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
-    await expectInvalid(handlers['ura:stage-review-finding']({ messageId: id, finding: -1 }));
-    await expectInvalid(handlers['ura:stage-review-finding']({ messageId: 'm', finding: 0 }));
+    await expectInvalid(expect, handlers['ura:update']({ itemId: 'x' }));
+    await expectInvalid(expect, handlers['ura:transition']({ itemId: id, to: 'deleted' }));
+    await expectInvalid(expect, handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
     await expectInvalid(
+      expect,
+      handlers['ura:stage-review-finding']({ messageId: id, finding: -1 }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:stage-review-finding']({ messageId: 'm', finding: 0 }),
+    );
+    await expectInvalid(
+      expect,
       handlers['ura:stage-review-finding']({ messageId: id, finding: 0, severity: 'meh' }),
     );
-    await expectInvalid(handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }));
-    await expectInvalid(handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
-    await expectInvalid(handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
-    await expectInvalid(handlers['ura:list']({}));
+    await expectInvalid(
+      expect,
+      handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }),
+    );
+    await expectInvalid(expect, handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
+    await expectInvalid(expect, handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
+    await expectInvalid(expect, handlers['ura:list']({}));
 
     await handlers['ura:create'](note);
     await handlers['ura:create']({ ...note, origin: { kind: 'chat-answer', messageId: id } });
@@ -470,7 +510,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
     await handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'comment' });
     await handlers['ura:set-verdict']({ sessionId: 's1' });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       note,
       { ...note, origin: { kind: 'chat-answer', messageId: id } },
       { itemId: id, title: 'New' },
@@ -484,62 +524,64 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     ]);
   });
 
-  it('writes the clipboard through the platform, and only text', async () => {
+  test('writes the clipboard through the platform, and only text', async ({ expect }) => {
     const written: string[] = [];
-    const handlers = createIpcHandlers(stubServices({}), appInfo, {
+    const handlers = createIpcHandlers(stubServices({}), appInfo(), {
       writeClipboard: async (text) => {
         written.push(text);
         await Promise.resolve();
       },
     });
-    await expectInvalid(handlers['clipboard:write-text']({ text: 7 }));
-    expect(await handlers['clipboard:write-text']({ text: '<beuve-review/>' })).toEqual(
-      ok({ length: 15 }),
-    );
-    expect(written).toEqual(['<beuve-review/>']);
-    expect(
-      await createIpcHandlers(stubServices({}), appInfo)['clipboard:write-text']({ text: 'x' }),
-    ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    await expectInvalid(expect, handlers['clipboard:write-text']({ text: 7 }));
+    await expect(
+      handlers['clipboard:write-text']({ text: '<beuve-review/>' }),
+    ).resolves.toStrictEqual(ok({ length: 15 }));
+    expect(written).toStrictEqual(['<beuve-review/>']);
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['clipboard:write-text']({ text: 'x' }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });
 });
 
 describe('createIpcHandlers for the open flow', () => {
-  it('inspects only absolute paths', async () => {
+  test('inspects only absolute paths', async ({ expect }) => {
     const calls: unknown[] = [];
     const handlers = createIpcHandlers(
       stubServices({
         inspectRepository: async (request) => {
           calls.push(request);
           await Promise.resolve();
-          return notWired;
+          return notWired();
         },
       }),
-      appInfo,
+      appInfo(),
     );
-    await expectInvalid(handlers['repository:inspect']({ path: 'relative/dir' }));
-    await expectInvalid(handlers['repository:inspect']({ path: '/x', extra: 1 }));
+    await expectInvalid(expect, handlers['repository:inspect']({ path: 'relative/dir' }));
+    await expectInvalid(expect, handlers['repository:inspect']({ path: '/x', extra: 1 }));
     await handlers['repository:inspect']({ path: '/code/beuve' });
-    expect(calls).toEqual([{ path: '/code/beuve' }]);
+    expect(calls).toStrictEqual([{ path: '/code/beuve' }]);
   });
 
-  it('shows the folder picker through the platform', async () => {
+  test('shows the folder picker through the platform', async ({ expect }) => {
     const asked: unknown[] = [];
-    const handlers = createIpcHandlers(stubServices({}), appInfo, {
+    const handlers = createIpcHandlers(stubServices({}), appInfo(), {
       chooseFolder: async (options) => {
         asked.push(options);
         await Promise.resolve();
         return asked.length === 1 ? '/code/beuve' : undefined;
       },
     });
-    await expectInvalid(handlers['dialog:choose-folder']({ title: 7 }));
-    expect(await handlers['dialog:choose-folder']({ defaultPath: '/code' })).toEqual(
+    await expectInvalid(expect, handlers['dialog:choose-folder']({ title: 7 }));
+    await expect(handlers['dialog:choose-folder']({ defaultPath: '/code' })).resolves.toStrictEqual(
       ok({ kind: 'chosen', path: '/code/beuve' }),
     );
-    expect(await handlers['dialog:choose-folder']({})).toEqual(ok({ kind: 'cancelled' }));
-    expect(asked).toEqual([{ defaultPath: '/code' }, {}]);
-    expect(
-      await createIpcHandlers(stubServices({}), appInfo)['dialog:choose-folder']({}),
-    ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
+    await expect(handlers['dialog:choose-folder']({})).resolves.toStrictEqual(
+      ok({ kind: 'cancelled' }),
+    );
+    expect(asked).toStrictEqual([{ defaultPath: '/code' }, {}]);
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['dialog:choose-folder']({}),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });
 });
 
@@ -553,7 +595,7 @@ describe('createIpcHandlers for the editor', () => {
     line: 3,
   });
 
-  it('validates editor:open and normalizes the path before delegating', async () => {
+  test('validates editor:open and normalizes the path before delegating', async ({ expect }) => {
     const calls: unknown[] = [];
     const services: MainServices = {
       ...stubServices({}),
@@ -566,7 +608,7 @@ describe('createIpcHandlers for the editor', () => {
         },
       },
     };
-    const handlers = createIpcHandlers(services, appInfo);
+    const handlers = createIpcHandlers(services, appInfo());
     const base = { sessionId: 's1', path: 'src/a.ts', line: 3 };
     for (const bad of [
       undefined,
@@ -581,45 +623,52 @@ describe('createIpcHandlers for the editor', () => {
       { ...base, column: 0 },
       { ...base, extra: true },
     ]) {
-      await expectInvalid(handlers['editor:open'](bad));
+      await expectInvalid(expect, handlers['editor:open'](bad));
     }
-    expect(await handlers['editor:open']({ ...base, path: './src//a.ts', column: 4 })).toEqual(
-      opened,
-    );
-    expect(calls).toEqual([{ sessionId: 's1', path: 'src/a.ts', line: 3, column: 4 }]);
+    await expect(
+      handlers['editor:open']({ ...base, path: './src//a.ts', column: 4 }),
+    ).resolves.toStrictEqual(opened);
+    expect(calls).toStrictEqual([{ sessionId: 's1', path: 'src/a.ts', line: 3, column: 4 }]);
   });
 
-  it('accepts only known editors for editor:set-preferred', async () => {
-    const handlers = createIpcHandlers(stubServices({}), appInfo);
-    await expectInvalid(handlers['editor:set-preferred']({ editorId: 'emacs' }));
-    await expectInvalid(handlers['editor:set-preferred']({}));
-    await expectInvalid(handlers['editor:get-settings']({ x: 1 }));
+  test('accepts only known editors for editor:set-preferred', async ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    const responses = await Promise.all([
+      handlers['editor:set-preferred']({ editorId: 'emacs' }),
+      handlers['editor:set-preferred']({}),
+      handlers['editor:get-settings']({ x: 1 }),
+    ]);
+    expect(responses).toMatchObject([
+      { ok: false, error: { code: 'invalid-request' } },
+      { ok: false, error: { code: 'invalid-request' } },
+      { ok: false, error: { code: 'invalid-request' } },
+    ]);
   });
 
-  it('validates the diff display preferences', async () => {
+  test('validates the diff display preferences', async ({ expect }) => {
     const calls: unknown[] = [];
     const services = stubServices({});
     const handlers = createIpcHandlers(
       {
         ...services,
         display: {
-          get: async () => notWired,
+          get: notWired,
           set: async (request) => {
             calls.push(request);
-            return notWired;
+            return notWired();
           },
         },
       },
-      appInfo,
+      appInfo(),
     );
-    await expectInvalid(handlers['display:set']({ layout: 'diagonal' }));
-    await expectInvalid(handlers['display:set']({ ignoreWhitespace: 'yes' }));
-    await expectInvalid(handlers['display:set']({ showGenerated: 1 }));
-    await expectInvalid(handlers['display:get']({ x: 1 }));
+    await expectInvalid(expect, handlers['display:set']({ layout: 'diagonal' }));
+    await expectInvalid(expect, handlers['display:set']({ ignoreWhitespace: 'yes' }));
+    await expectInvalid(expect, handlers['display:set']({ showGenerated: 1 }));
+    await expectInvalid(expect, handlers['display:get']({ x: 1 }));
     await handlers['display:set']({ layout: 'unified' });
     await handlers['display:set']({ ignoreWhitespace: false });
     await handlers['display:set']({ showGenerated: true });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       { layout: 'unified' },
       { ignoreWhitespace: false },
       { showGenerated: true },
@@ -628,12 +677,14 @@ describe('createIpcHandlers for the editor', () => {
 });
 
 describe('github channels', () => {
-  it('validates refs, paths, verdicts and links before reaching the services', async () => {
+  test('validates refs, paths, verdicts and links before reaching the services', async ({
+    expect,
+  }) => {
     const calls: unknown[] = [];
-    const record = async (request: unknown): Promise<typeof notWiredError> => {
+    const record = async (request: unknown): Promise<Err<IpcError>> => {
       calls.push(request);
       await Promise.resolve();
-      return notWiredError;
+      return notWiredError();
     };
     const handlers = createIpcHandlers(
       stubServices(
@@ -646,19 +697,22 @@ describe('github channels', () => {
           getPullRequest: record,
         },
       ),
-      appInfo,
+      appInfo(),
     );
-    await expectInvalid(handlers['github:open-pr']({ ref: '' }));
-    await expectInvalid(handlers['github:open-pr']({ ref: 'o/r#1', token: 'x' }));
-    await expectInvalid(handlers['github:post-review']({ sessionId: 's1', verdict: 'lgtm' }));
-    await expectInvalid(handlers['github:open-link']({ url: '' }));
-    await expectInvalid(handlers['github:auth-status']({ host: '' }));
+    await expectInvalid(expect, handlers['github:open-pr']({ ref: '' }));
+    await expectInvalid(expect, handlers['github:open-pr']({ ref: 'o/r#1', token: 'x' }));
+    await expectInvalid(
+      expect,
+      handlers['github:post-review']({ sessionId: 's1', verdict: 'lgtm' }),
+    );
+    await expectInvalid(expect, handlers['github:open-link']({ url: '' }));
+    await expectInvalid(expect, handlers['github:auth-status']({ host: '' }));
     await handlers['github:auth-status'](undefined);
     await handlers['github:open-pr']({ ref: ' o/r#1 ', repoPath: '/clone' });
     await handlers['github:open-pr']({ ref: 'o/r#2' });
     await handlers['github:post-review']({ sessionId: 's1', verdict: 'comment' });
     await handlers['github:get-pr']({ sessionId: 's1' });
-    expect(calls).toEqual([
+    expect(calls).toStrictEqual([
       {},
       { ref: 'o/r#1', repoPath: '/clone' },
       { ref: 'o/r#2' },
@@ -668,7 +722,7 @@ describe('github channels', () => {
   });
 });
 
-async function expectInvalid(response: unknown): Promise<void> {
+async function expectInvalid(expect: ExpectStatic, response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
 
@@ -678,68 +732,68 @@ function stubServices(
 ): MainServices {
   return {
     sessions: {
-      list: () => notWiredError,
-      createLocal: async () => notWired,
-      getReview: async () => notWired,
-      markReviewed: async () => notWired,
-      inspectRepository: async () => notWired,
+      list: notWiredError,
+      createLocal: notWired,
+      getReview: notWired,
+      markReviewed: notWired,
+      inspectRepository: notWired,
       ...overrides,
     },
     impact: {
-      getImpact: async () => notWired,
-      getImpactForRenderer: async () => notWired,
+      getImpact: notWired,
+      getImpactForRenderer: notWired,
       observeHead: noop,
     },
     files: {
-      getTree: async () => notWired,
-      getFilePair: async () => notWired,
-      getFileAttributes: async () => notWired,
+      getTree: notWired,
+      getFilePair: notWired,
+      getFileAttributes: notWired,
     },
-    lsp: { callHierarchy: async () => notWired },
-    flow: { getGraph: async () => notWired },
+    lsp: { callHierarchy: notWired },
+    flow: { getGraph: notWired },
     editor: {
-      open: async () => notWired,
-      getSettings: async () => notWired,
-      setPreferred: async () => notWired,
+      open: notWired,
+      getSettings: notWired,
+      setPreferred: notWired,
     },
-    display: { get: async () => notWired, set: async () => notWired },
+    display: { get: notWired, set: notWired },
     chat: {
-      ask: async () => notWired,
-      list: () => notWiredError,
-      cancel: () => notWiredError,
-      compact: async () => notWired,
-      clear: () => notWiredError,
+      ask: notWired,
+      list: notWiredError,
+      cancel: notWiredError,
+      compact: notWired,
+      clear: notWiredError,
       onDelta: () => doNothingSync,
       onMessageUpdated: () => doNothingSync,
       dispose: doNothing,
     },
     ura: {
-      list: async () => notWired,
-      create: async () => notWired,
-      update: async () => notWired,
-      transition: async () => notWired,
-      reorder: () => notWiredError,
-      stageReviewFinding: async () => notWired,
-      stageImpactFinding: async () => notWired,
-      setVerdict: () => notWiredError,
-      export: async () => notWired,
+      list: notWired,
+      create: notWired,
+      update: notWired,
+      transition: notWired,
+      reorder: notWiredError,
+      stageReviewFinding: notWired,
+      stageImpactFinding: notWired,
+      setVerdict: notWiredError,
+      export: notWired,
       onChanged: () => doNothingSync,
     },
     trace: {
-      run: async () => notWired,
-      cancel: () => notWiredError,
-      getTrust: async () => notWired,
-      setTrust: async () => notWired,
+      run: notWired,
+      cancel: notWiredError,
+      getTrust: notWired,
+      setTrust: notWired,
       onStatus: () => doNothingSync,
       dispose: doNothing,
     },
     github: {
-      authStatus: async () => notWired,
-      openPullRequest: async () => notWired,
-      getPullRequest: async () => notWired,
-      previewReview: async () => notWired,
-      postReview: async () => notWired,
-      openLink: async () => notWired,
+      authStatus: notWired,
+      openPullRequest: notWired,
+      getPullRequest: notWired,
+      previewReview: notWired,
+      postReview: notWired,
+      openLink: notWired,
       pollNow: doNothing,
       setForeground: doNothingSync,
       onPullRequestUpdated: () => doNothingSync,
@@ -762,19 +816,19 @@ function recording(name: Exclude<keyof SessionServices, 'list' | 'inspectReposit
     createLocal: {
       createLocal: async (request) => {
         calls.push(request);
-        return opening;
+        return opening();
       },
     },
     getReview: {
       getReview: async (request) => {
         calls.push(request);
-        return notWired;
+        return notWired();
       },
     },
     markReviewed: {
       markReviewed: async (request) => {
         calls.push(request);
-        return opening;
+        return opening();
       },
     },
   };

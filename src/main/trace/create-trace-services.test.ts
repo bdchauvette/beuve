@@ -83,20 +83,20 @@ describe(
 
     beforeEach(async () => {
       events.length = 0;
-      repo = createTestRepository();
+      repo = await createTestRepository();
       createTraceTestProject(repo);
       repo.write('src/math.ts', baseMath);
       repo.write('src/math.test.ts', mathTest);
       repo.write('src/hang.ts', hang(0));
       repo.write('src/hang.test.ts', hangTest);
       repo.write('src/orphan.ts', 'export function orphan(): number {\n  return 1;\n}\n');
-      repo.commit('base');
-      repo.git('switch', '--quiet', '-c', 'feature');
+      await repo.commit('base');
+      await repo.git('switch', '--quiet', '-c', 'feature');
       repo.write('src/math.ts', headMath);
       repo.write('src/hang.ts', hang(1));
       repo.write('src/orphan.ts', 'export function orphan(): number {\n  return 2;\n}\n');
       repo.write('notes.md', 'notes\n');
-      repo.commit('feature');
+      await repo.commit('feature');
       const scratch = repo.scratch();
       temporary = path.join(scratch, 'trace');
       db = openAppDatabase(':memory:');
@@ -177,14 +177,14 @@ describe(
         taken: true,
       });
       expect(result.timelines[1]?.entries[2]).toMatchObject({ kind: 'branch', taken: false });
-      expect(repo.git('status', '--porcelain')).toBe('');
+      expect(await repo.git('status', '--porcelain')).toBe('');
       expect(existsSync(temporary) ? await isDirectoryEmpty(temporary) : true).toBe(true);
     });
 
     it('reports failing tests together with their trace', async () => {
       value(await services.trace.setTrust({ sessionId, trusted: true }));
       repo.write('src/math.ts', failingMath);
-      repo.commit('break');
+      await repo.commit('break');
       value(await services.trace.run({ sessionId, path: 'src/math.ts', line: 5 }));
       const done = await settled();
       expect(done).toMatchObject({ state: 'failed', failure: 'test-failed-with-trace' });
@@ -232,7 +232,7 @@ describe(
       value(await services.trace.run({ sessionId, path: 'src/hang.ts', line: 2 }));
       await until(() => events.some((event) => event.state === 'running'));
       repo.write('src/extra.ts', 'export const extra = 1;\n');
-      repo.commit('push');
+      await repo.commit('push');
       value(await services.sessions.getReview({ sessionId }));
       const stopped = await settled();
       expect(stopped).toMatchObject({ state: 'failed', failure: 'cancelled' });
@@ -280,7 +280,7 @@ describe(
         testFiles: ['src/math.test.ts'],
         testsFailed: false,
       });
-      expect(traced['headSha']).toBe(repo.git('rev-parse', 'feature'));
+      expect(traced['headSha']).toBe(await repo.git('rev-parse', 'feature'));
       const timelines = traced['timelines'] as { titles: string[]; entries: { line: number }[] }[];
       expect(timelines.map((timeline) => timeline.titles)).toEqual([['clamp', 'caps high values']]);
       expect(timelines[0]?.entries.map((entry) => entry.line)).toEqual([1, 2, 5, 6]);
