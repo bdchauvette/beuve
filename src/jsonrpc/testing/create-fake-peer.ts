@@ -15,6 +15,8 @@ export interface FakePeer {
   readonly sendRaw: (bytes: string) => void;
   readonly endInput: () => void;
   readonly nextSent: () => Promise<unknown>;
+  /** Closes the connection and destroys both streams. Safe to call twice. */
+  readonly close: () => void;
 }
 
 /** Creates a {@link FakePeer} over a connection with in-memory streams. */
@@ -61,6 +63,11 @@ export function createFakePeer(options: Partial<JsonRpcConnectionOptions> = {}):
     },
     endInput: (): void => {
       input.end();
+    },
+    close: (): void => {
+      connection.close();
+      input.destroy();
+      output.destroy();
     },
     nextSent: async (): Promise<unknown> => {
       if (consumed < sent.length) {

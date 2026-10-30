@@ -7,8 +7,8 @@ import { ok } from '#x/result/ok.ts';
 
 import { createFakePeer } from './testing/create-fake-peer.ts';
 describe('JsonRpcConnection', () => {
-  test('correlates out-of-order responses with their requests', async ({ expect }) => {
-    const peer = createFakePeer();
+  test('correlates out-of-order responses with their requests', async ({ expect, closing }) => {
+    const peer = closing(createFakePeer());
     const first = peer.connection.request('a', { n: 1 });
     const second = peer.connection.request('b', [2]);
     await expect(peer.nextSent()).resolves.toMatchObject({ id: 1, method: 'a', params: { n: 1 } });
@@ -22,8 +22,11 @@ describe('JsonRpcConnection', () => {
     expect(peer.connection.pendingRequests).toBe(0);
   });
 
-  test('times out and sends $/cancelRequest, ignoring the late response', async ({ expect }) => {
-    const peer = createFakePeer();
+  test('times out and sends $/cancelRequest, ignoring the late response', async ({
+    expect,
+    closing,
+  }) => {
+    const peer = closing(createFakePeer());
     const result = await peer.connection.request('slow', undefined, {
       timeout: Temporal.Duration.from({ milliseconds: 20 }),
     });
@@ -42,8 +45,8 @@ describe('JsonRpcConnection', () => {
     expect(peer.connection.closeReason).toBeUndefined();
   });
 
-  test('cancels through an AbortSignal', async ({ expect }) => {
-    const peer = createFakePeer();
+  test('cancels through an AbortSignal', async ({ expect, closing }) => {
+    const peer = closing(createFakePeer());
     const controller = new AbortController();
     const pending = peer.connection.request('long', {}, { signal: controller.signal });
     controller.abort();
@@ -53,15 +56,17 @@ describe('JsonRpcConnection', () => {
     ).resolves.toStrictEqual(err({ kind: 'cancelled', method: 'x' }));
   });
 
-  test('dispatches notifications and answers peer requests', async ({ expect }) => {
+  test('dispatches notifications and answers peer requests', async ({ expect, closing }) => {
     const notifications: unknown[] = [];
-    const peer = createFakePeer({
-      onNotification: (method, params): void => {
-        notifications.push({ method, params });
-      },
-      onRequest: (method, params) =>
-        method === 'echo' ? ok(params) : err({ code: -32_601, message: `no ${method}` }),
-    });
+    const peer = closing(
+      createFakePeer({
+        onNotification: (method, params): void => {
+          notifications.push({ method, params });
+        },
+        onRequest: (method, params) =>
+          method === 'echo' ? ok(params) : err({ code: -32_601, message: `no ${method}` }),
+      }),
+    );
     peer.send({ jsonrpc: '2.0', method: 'hello', params: { a: 1 } });
     peer.send({ jsonrpc: '2.0', id: 'r1', method: 'echo', params: [1, 2] });
     await expect(peer.nextSent()).resolves.toStrictEqual({
@@ -80,41 +85,46 @@ describe('JsonRpcConnection', () => {
 
   test('answers method-not-found without a handler, and internal-error when one throws', async ({
     expect,
+    closing,
   }) => {
-    const plain = createFakePeer();
+    const plain = closing(createFakePeer());
     plain.send({ jsonrpc: '2.0', id: 1, method: 'x' });
     await expect(plain.nextSent()).resolves.toMatchObject({ id: 1, error: { code: -32_601 } });
 
-    const throwing = createFakePeer({
-      onRequest: (): never => {
-        throw new Error('boom');
-      },
-    });
+    const throwing = closing(
+      createFakePeer({
+        onRequest: (): never => {
+          throw new Error('boom');
+        },
+      }),
+    );
     throwing.send({ jsonrpc: '2.0', id: 2, method: 'x' });
     await expect(throwing.nextSent()).resolves.toMatchObject({ id: 2, error: { code: -32_603 } });
   });
 
-  test('honours $/cancelRequest for peer requests', async ({ expect }) => {
+  test('honours $/cancelRequest for peer requests', async ({ expect, closing }) => {
     let wasAborted = false;
-    const peer = createFakePeer({
-      onRequest: async (_method, _params, signal) =>
-        new Promise((resolve) => {
-          signal.addEventListener('abort', () => {
-            wasAborted = true;
-            setTimeout(() => {
-              resolve(ok('too late'));
-            }, 5);
-          });
-        }),
-    });
+    const peer = closing(
+      createFakePeer({
+        onRequest: async (_method, _params, signal) =>
+          new Promise((resolve) => {
+            signal.addEventListener('abort', () => {
+              wasAborted = true;
+              setTimeout(() => {
+                resolve(ok('too late'));
+              }, 5);
+            });
+          }),
+      }),
+    );
     peer.send({ jsonrpc: '2.0', id: 9, method: 'wait' });
     peer.send({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 9 } });
     await expect(peer.nextSent()).resolves.toMatchObject({ id: 9, error: { code: -32_800 } });
     expect(wasAborted).toBe(true);
   });
 
-  test('drops malformed messages and keeps going', async ({ expect }) => {
-    const peer = createFakePeer();
+  test('drops malformed messages and keeps going', async ({ expect, closing }) => {
+    const peer = closing(createFakePeer());
     const body = '{"jsonrpc":"1.0"}';
     peer.sendRaw(`Content-Length: ${String(body.length)}\r\n\r\n${body}`);
     const pending = peer.connection.request('still-alive', {});
@@ -125,8 +135,9 @@ describe('JsonRpcConnection', () => {
 
   test('settles pending requests as closed when input ends, and refuses new work', async ({
     expect,
+    closing,
   }) => {
-    const peer = createFakePeer();
+    const peer = closing(createFakePeer());
     const pending = peer.connection.request('a', {});
     peer.endInput();
     await expect(pending).resolves.toStrictEqual(err({ kind: 'closed', method: 'a' }));
@@ -137,8 +148,8 @@ describe('JsonRpcConnection', () => {
     expect(peer.connection.notify('c')).toStrictEqual(err({ kind: 'closed', method: 'c' }));
   });
 
-  test('closes on a framing error', async ({ expect }) => {
-    const peer = createFakePeer();
+  test('closes on a framing error', async ({ expect, closing }) => {
+    const peer = closing(createFakePeer());
     const pending = peer.connection.request('a', {});
     peer.sendRaw('Bogus: header\r\n\r\n');
     await expect(pending).resolves.toStrictEqual(err({ kind: 'closed', method: 'a' }));

@@ -17,6 +17,9 @@ export interface Clock {
   readonly advance: (duration: Temporal.DurationLike) => void;
 }
 
+/** Registers a resource to be closed after the test and returns it. */
+export type Closing = <T extends { readonly close: () => void }>(resource: T) => T;
+
 /** A logger that records each serialized line instead of writing it. */
 export interface RecordingLogger {
   readonly logger: Logger;
@@ -32,6 +35,8 @@ export interface RecordingLogger {
  * - `tempDir`: a fresh empty directory under `tempRoot`, removed after the test.
  * - `db`: an empty in-memory SQLite database (`openDatabase(':memory:')`), closed after the test.
  * - `logger`: a {@link RecordingLogger}.
+ * - `closing`: `closing(resource)` returns `resource` and calls its `close()` after the test, for
+ *   resources a shared directory (which cannot import vitest) creates, such as the JSON-RPC fake peer.
  * - `clock`: fakes `Temporal.Now` and `Date` (timers stay real) starting at
  *   `2026-10-28T12:00:00Z`, restored after the test. Fake time is global to the test file, so a
  *   test that uses it must be declared with `{ concurrent: false }`; `local/require-sequential-fake-time`
@@ -69,6 +74,18 @@ export const test = vitestTest
       },
     });
     return { logger, lines };
+  })
+  .extend('closing', ({}, { onCleanup }): Closing => {
+    const resources: { readonly close: () => void }[] = [];
+    onCleanup(() => {
+      for (const resource of resources.toReversed()) {
+        resource.close();
+      }
+    });
+    return (resource) => {
+      resources.push(resource);
+      return resource;
+    };
   })
   .extend('clock', ({}, { onCleanup }): Clock => {
     vi.useFakeTimers({
