@@ -44,7 +44,7 @@ function model(mode: string, pidFile = '-'): ReturnType<typeof createClaudeCodeM
     leadingArgs: [script, mode, pidFile],
     model: 'sonnet',
     inheritedEnv: { PATH: process.env['PATH'], HOME: directory, ANTHROPIC_API_KEY: 'sk-secret' },
-    killGraceMs: 200,
+    killGrace: Temporal.Duration.from({ milliseconds: 200 }),
   });
 }
 
@@ -56,7 +56,7 @@ function request(
     prompt: 'diff --git a/x b/x\n'.repeat(10_000),
     cwd: directory,
     outputSchema: echoSchema,
-    timeoutMs: 10_000,
+    timeout: Temporal.Duration.from({ milliseconds: 10_000 }),
     ...overrides,
   };
 }
@@ -150,8 +150,13 @@ describe('createClaudeCodeModel', () => {
 
   it('times out, killing the whole process group', async () => {
     const pidFile = path.join(directory, 'timeout.json');
-    const outcome = await model('hang', pidFile).run(request({ timeoutMs: 500 }));
-    expect(outcome).toEqual({ ok: false, error: { kind: 'timeout', timeoutMs: 500 } });
+    const outcome = await model('hang', pidFile).run(
+      request({ timeout: Temporal.Duration.from({ milliseconds: 500 }) }),
+    );
+    expect(outcome).toEqual({
+      ok: false,
+      error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 500 }) },
+    });
     await expectReaped(pidFile);
   });
 
@@ -263,7 +268,7 @@ function textRequest(overrides: Partial<TextModelRequest> = {}): TextModelReques
     system: 'Answer questions.',
     prompt: 'What does parse do?',
     cwd: directory,
-    timeoutMs: 10_000,
+    timeout: Temporal.Duration.from({ milliseconds: 10_000 }),
     ...overrides,
   };
 }

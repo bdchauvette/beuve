@@ -80,13 +80,13 @@ export interface MainServicesOptions {
   readonly display?: { readonly settingsPath?: string };
   /**
    * Trace probes (ADR 0036, 0041): `settingsPath` holds the per-repository approvals (in memory
-   * without it), `temporaryDirectory` where runs work, `timeoutMs` the longest a probe may run.
+   * without it), `temporaryDirectory` where runs work, `timeout` the longest a probe may run.
    * Tests may pass a `runner`.
    */
   readonly trace?: {
     readonly settingsPath?: string;
     readonly temporaryDirectory?: string;
-    readonly timeoutMs?: number;
+    readonly timeout?: Temporal.Duration;
     readonly runner?: TraceRunner;
   };
   /**
@@ -102,7 +102,7 @@ export interface MainServicesOptions {
     readonly apiBase?: URL;
     readonly settingsPath?: string;
     readonly openExternal?: (url: string) => Promise<void>;
-    readonly polling?: { readonly intervalMs?: number; readonly scheduled?: boolean };
+    readonly polling?: { readonly interval?: Temporal.Duration; readonly scheduled?: boolean };
   };
 }
 
@@ -184,7 +184,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ...(options.trace?.temporaryDirectory !== undefined && {
       temporaryDirectory: options.trace.temporaryDirectory,
     }),
-    ...(options.trace?.timeoutMs !== undefined && { timeoutMs: options.trace.timeoutMs }),
+    ...(options.trace?.timeout !== undefined && { timeout: options.trace.timeout }),
   });
   heads.trace = trace;
   const credentials = createCachedCredentialProvider(

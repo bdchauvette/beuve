@@ -7,10 +7,10 @@ import type { GitRepository } from './open-repository.ts';
 
 export interface FetchRefsOptions {
   /** Kill git after this long. Defaults to 2 minutes, since it talks to the network. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
-const defaultTimeoutMs = 120_000;
+const defaultTimeout = Temporal.Duration.from({ minutes: 2 });
 const maxRefspecs = 32;
 const remoteName = /^[\w.-]{1,200}$/u;
 const refspecPattern = /^(\+?)(refs\/[^:]+):(refs\/[^:]+)$/u;
@@ -49,7 +49,7 @@ export async function fetchRefs(
     ...refspecs,
   ];
   const fetched = await repository.exec(args, {
-    timeoutMs: options.timeoutMs ?? defaultTimeoutMs,
+    timeout: options.timeout ?? defaultTimeout,
   });
   return fetched.ok ? ok(undefined) : fetched;
 }

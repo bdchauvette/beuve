@@ -88,7 +88,7 @@ function impactOf(files: FileImpactView[], findings: ImpactFindingView[]): Impac
       cognitiveDelta: 0,
       findings: findings.length,
     },
-    computeMs: 1,
+    compute: 'PT0.001S',
   };
 }
 

@@ -21,7 +21,11 @@ export type GitError =
       readonly stdout: string;
       readonly stderr: string;
     }
-  | { readonly kind: 'timeout'; readonly args: readonly string[]; readonly timeoutMs: number }
+  | {
+      readonly kind: 'timeout';
+      readonly args: readonly string[];
+      readonly timeout: Temporal.Duration;
+    }
   | {
       readonly kind: 'output-too-large';
       readonly args: readonly string[];

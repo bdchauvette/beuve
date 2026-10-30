@@ -24,11 +24,13 @@ function inner(): Inner {
       await Promise.resolve();
       if (provider.failNext) {
         provider.failNext = false;
-        return err({ kind: 'timeout', timeoutMs: 1 });
+        return err({ kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1 }) });
       }
       issued += 1;
       const token = GithubToken.parse(`gho_token${String(issued)}`);
-      return token === undefined ? err({ kind: 'timeout', timeoutMs: 1 }) : ok(token);
+      return token === undefined
+        ? err({ kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1 }) })
+        : ok(token);
     },
     invalidate: (): void => {
       // The fake caches nothing.
@@ -53,7 +55,9 @@ describe('createCachedCredentialProvider', () => {
       vi.useRealTimers();
     });
     const source = inner();
-    const cached = createCachedCredentialProvider(source, { ttlMs: 1000 });
+    const cached = createCachedCredentialProvider(source, {
+      ttl: Temporal.Duration.from({ seconds: 1 }),
+    });
     expect(await reveal(cached)).toBe('gho_token1');
     vi.setSystemTime(999);
     expect(await reveal(cached, 'GITHUB.com')).toBe('gho_token1');

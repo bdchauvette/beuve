@@ -3,6 +3,9 @@ import type { Result } from '#x/result/result.ts';
 /**
  * The typed IPC contract between main, preload and ui (ADR 0011). Plain serializable data
  * only: everything here crosses a structured-clone boundary and must stay DOM- and Node-free.
+ * Temporal objects do not survive structured clone (`DataCloneError`), so instants are ISO-8601
+ * UTC strings and durations are ISO-8601 duration strings (`PT0.712S`, ADR 0059); main converts
+ * with `Temporal.Duration#toString` and the UI parses with `Temporal.Duration.from`.
  */
 
 /** Static facts about the running app, for the status bar and diagnostics. */
@@ -392,8 +395,8 @@ export interface ImpactView {
     readonly cognitiveDelta: number;
     readonly findings: number;
   };
-  /** Wall time of the computation that produced this report (blob reads and parsing). */
-  readonly computeMs: number;
+  /** How long the computation that produced this report took (blob reads and parsing), as an ISO-8601 duration. */
+  readonly compute: string;
 }
 
 /**
@@ -678,7 +681,8 @@ export interface TraceTimelineView {
   readonly titles: readonly string[];
   readonly status: 'passed' | 'failed' | 'skipped' | 'unknown';
   readonly failure?: string;
-  readonly durationMs?: number;
+  /** ISO-8601 duration, e.g. `PT0.712S`. */
+  readonly duration?: string;
   readonly entries: readonly TraceEntryView[];
   /** Events the recorder dropped at its limits. */
   readonly dropped: number;
@@ -691,7 +695,8 @@ export interface TraceResultView {
   readonly testFiles: readonly string[];
   readonly functions: readonly TracedFunctionView[];
   readonly timelines: readonly TraceTimelineView[];
-  readonly durationMs: number;
+  /** ISO-8601 duration, e.g. `PT0.712S`. */
+  readonly duration: string;
 }
 
 export type TraceFailureKind =

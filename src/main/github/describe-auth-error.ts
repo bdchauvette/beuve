@@ -18,7 +18,7 @@ export function describeAuthError(error: AuthError): string {
       return `gh is not signed in to ${error.host}. Run \`${error.remedy}\`.`;
     }
     case 'timeout': {
-      return `gh did not answer within ${String(Math.round(error.timeoutMs / 1000))} s.`;
+      return `gh did not answer within ${String(error.timeout.round({ largestUnit: 'second', smallestUnit: 'second', roundingMode: 'halfExpand' }).seconds)} s.`;
     }
     case 'command-failed': {
       return `gh failed: ${error.message}`;

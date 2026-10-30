@@ -22,5 +22,5 @@ export interface ServerDefinition {
    * After a push-diagnostics report, how long the server must stay quiet before the report counts
    * as settled. Servers that publish syntax and semantic results separately need more.
    */
-  readonly diagnosticsQuietMs: number;
+  readonly diagnosticsQuiet: Temporal.Duration;
 }

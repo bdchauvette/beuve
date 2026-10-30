@@ -137,6 +137,8 @@ test(
 );
 ```
 
+Elapsed time is different from wall time. Code measures it with `new Stopwatch()` (`#x/time/stopwatch.ts`; ADR 0059, amended 2026-10-30), a monotonic clock that the `clock` fixture and `vi.useFakeTimers` do not fake. Use `clock` only for wall time. To control elapsed time, pass a fake clock to the stopwatch: `new Stopwatch({ now: () => fake.nanoseconds })` where `now` returns monotonic nanoseconds as a bigint, or pass the measured `Temporal.Duration` into a function that decides from it. Code that creates its own stopwatch is tested with real, short durations and margins (a 4 s budget against a 5 s minimum for the "spent" branch). Options that take durations are `Temporal.Duration` values: `{ timeout: Temporal.Duration.from({ milliseconds: 50 }) }`.
+
 ## Converting a directory
 
 1. Move shared setup into fixtures in the directory's `testing/test.ts` (or reuse the ones above). File-specific setup with state becomes a top-level function the test calls with its fixtures (see `attribute-hunks.test.ts`, `find-stack-fork-point.test.ts`).

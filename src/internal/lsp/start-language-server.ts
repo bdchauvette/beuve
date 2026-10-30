@@ -27,7 +27,7 @@ export interface ServerExit {
 }
 
 export interface ServerRequestOptions {
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   readonly signal?: AbortSignal;
 }
 
@@ -62,11 +62,11 @@ export interface StartLanguageServerOptions {
   readonly env: Readonly<Record<string, string>>;
   readonly logger?: Logger;
   /** Default per-request timeout. Defaults to 15 s. */
-  readonly requestTimeoutMs?: number;
+  readonly requestTimeout?: Temporal.Duration;
   /** For the `initialize` handshake. Defaults to 30 s. */
-  readonly initializeTimeoutMs?: number;
+  readonly initializeTimeout?: Temporal.Duration;
   /** For each step of shutdown. Defaults to 2 s. */
-  readonly shutdownTimeoutMs?: number;
+  readonly shutdownTimeout?: Temporal.Duration;
 }
 
 const contentModified = -32_801;
@@ -132,7 +132,7 @@ export async function startLanguageServer(
     input: child.stdout,
     output: child.stdin,
     cancelMethod: '$/cancelRequest',
-    defaultTimeoutMs: options.requestTimeoutMs ?? 15_000,
+    defaultTimeout: options.requestTimeout ?? Temporal.Duration.from({ seconds: 15 }),
     ...(logger !== undefined && { logger }),
     onRequest: (method, params): JsonRpcHandlerOutcome =>
       answerServerRequest(method, params, { settings, workspaceFolders }),
@@ -147,7 +147,7 @@ export async function startLanguageServer(
     },
   });
 
-  const shutdownStepMs = options.shutdownTimeoutMs ?? 2000;
+  const shutdownStep = options.shutdownTimeout ?? Temporal.Duration.from({ seconds: 2 });
   const hasExitedInTime = async (): Promise<boolean> => {
     if (hasExited) {
       return true;
@@ -156,7 +156,7 @@ export async function startLanguageServer(
     const timedOut = new Promise<boolean>((resolve) => {
       timer = setTimeout(() => {
         resolve(false);
-      }, shutdownStepMs);
+      }, shutdownStep.total('milliseconds'));
     });
     const isFinished = await Promise.race([
       (async (): Promise<boolean> => {
@@ -173,7 +173,7 @@ export async function startLanguageServer(
     stopping ??= (async (): Promise<void> => {
       isExpected = true;
       if (!hasExited) {
-        await connection.request('shutdown', undefined, { timeoutMs: shutdownStepMs });
+        await connection.request('shutdown', undefined, { timeout: shutdownStep });
         connection.notify('exit');
         child.stdin.end();
       }
@@ -285,7 +285,7 @@ async function initialize(
       initializationOptions: definition.initializationOptions,
       trace: 'off',
     },
-    { timeoutMs: options.initializeTimeoutMs ?? 30_000 },
+    { timeout: options.initializeTimeout ?? Temporal.Duration.from({ seconds: 30 }) },
   );
   if (!result.ok) {
     return err(`initialize failed: ${describe(result.error)}`);
@@ -311,7 +311,7 @@ function isRetryable(error: JsonRpcRequestError): boolean {
 function toLspError(serverId: string, error: JsonRpcRequestError): LspError {
   switch (error.kind) {
     case 'timeout': {
-      return { kind: 'request-timeout', method: error.method, timeoutMs: error.timeoutMs };
+      return { kind: 'request-timeout', method: error.method, timeout: error.timeout };
     }
     case 'cancelled': {
       return { kind: 'request-cancelled', method: error.method };
@@ -339,7 +339,7 @@ function toLspError(serverId: string, error: JsonRpcRequestError): LspError {
 function describe(error: JsonRpcRequestError): string {
   switch (error.kind) {
     case 'timeout': {
-      return `timed out after ${String(error.timeoutMs)} ms`;
+      return `timed out after ${error.timeout.toString()}`;
     }
     case 'cancelled': {
       return 'cancelled';

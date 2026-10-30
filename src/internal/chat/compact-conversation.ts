@@ -16,7 +16,7 @@ export interface CompactConversationDeps<E> {
   readonly signal?: AbortSignal;
   readonly budget?: CompactionBudget;
   /** Defaults to 3 minutes. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
 /** The note that replaces the compacted turns. Its markers are all validated `citations`. */
@@ -56,7 +56,7 @@ export async function compactConversation<E>(
     system: built.system,
     prompt: built.prompt,
     cwd: input.worktreePath,
-    timeoutMs: deps.timeoutMs ?? 3 * 60 * 1000,
+    timeout: deps.timeout ?? Temporal.Duration.from({ minutes: 3 }),
     ...(deps.signal !== undefined && { signal: deps.signal }),
   });
   if (!output.ok) {

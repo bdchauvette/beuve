@@ -5,6 +5,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import type { AuthError } from './auth-error.ts';
 import { classifyGhFailure } from './classify-gh-failure.ts';
@@ -33,9 +34,9 @@ export interface GhCliCredentialProviderOptions {
   /** gh's working directory. Defaults to `os.homedir()`, never a repository under review. */
   readonly cwd?: string;
   /** For `gh auth token`, which reads local config or the keyring. Defaults to 10 s. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   /** For `gh auth status`, which checks the token against the API. Defaults to 15 s. */
-  readonly statusTimeoutMs?: number;
+  readonly statusTimeout?: Temporal.Duration;
   readonly logger?: Logger;
 }
 
@@ -53,7 +54,7 @@ export function createGhCliCredentialProvider(
 
   const run = async (
     args: readonly string[],
-    timeoutMs: number,
+    timeout: Temporal.Duration,
   ): Promise<Result<GhExit, AuthError>> => {
     if (resolved === undefined) {
       const found = await resolveGhCommand(options.resolve);
@@ -63,20 +64,18 @@ export function createGhCliCredentialProvider(
       resolved = found.value;
     }
     const command = resolved;
-    const started = Temporal.Now.instant();
+    const stopwatch = new Stopwatch();
     const outcome = await runGh({
       command,
       ...(options.leadingArgs !== undefined && { leadingArgs: options.leadingArgs }),
       args,
       env: createGhEnvironment(options.inheritedEnv ?? process.env),
       cwd: options.cwd ?? os.homedir(),
-      timeoutMs,
+      timeout,
     });
     options.logger?.debug('gh: finished', {
       subcommand: args.slice(0, 2).join(' '),
-      durationMs: Temporal.Now.instant()
-        .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-        .total('milliseconds'),
+      duration: stopwatch.elapsed(),
       outcome: outcome.ok ? outcome.value.exitCode : outcome.error.kind,
     });
     if (outcome.ok) {
@@ -90,7 +89,7 @@ export function createGhCliCredentialProvider(
         return err({ kind: 'cli-not-installed', searched: [command] });
       }
       case 'timeout': {
-        return err({ kind: 'timeout', timeoutMs });
+        return err({ kind: 'timeout', timeout });
       }
       case 'output-too-large': {
         return err({ kind: 'command-failed', exitCode: undefined, message: 'gh wrote too much' });
@@ -108,7 +107,7 @@ export function createGhCliCredentialProvider(
     }
     const exit = await run(
       ['auth', 'token', '--hostname', normalized],
-      options.timeoutMs ?? 10_000,
+      options.timeout ?? Temporal.Duration.from({ seconds: 10 }),
     );
     if (!exit.ok) {
       return exit;
@@ -132,7 +131,7 @@ export function createGhCliCredentialProvider(
     }
     const exit = await run(
       ['auth', 'status', '--hostname', normalized, '--json', 'hosts'],
-      options.statusTimeoutMs ?? 15_000,
+      options.statusTimeout ?? Temporal.Duration.from({ seconds: 15 }),
     );
     if (!exit.ok) {
       return exit;

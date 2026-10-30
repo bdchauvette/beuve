@@ -7,7 +7,7 @@ export interface ClaudeCodeSettings {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly homeDirectory?: string;
   /** Per request; defaults to 5 minutes for a question, 10 for `/review` (both passes). */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   readonly model?: string;
-  readonly killGraceMs?: number;
+  readonly killGrace?: Temporal.Duration;
 }

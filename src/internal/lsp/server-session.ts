@@ -1,6 +1,7 @@
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { LineIndex } from './line-index.ts';
 import type { LspError } from './lsp-error.ts';
@@ -37,11 +38,11 @@ export interface DocumentContent {
 
 export interface DiagnosticsWait {
   /** Give up waiting and report what arrived. */
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   /** When the server had reported on the previous text, how long to wait for a new report. */
-  readonly graceMs: number;
+  readonly grace: Temporal.Duration;
   /** How long the server must stay quiet after a report. */
-  readonly quietMs: number;
+  readonly quiet: Temporal.Duration;
 }
 
 export interface SessionDiagnostics {
@@ -68,11 +69,14 @@ interface OpenDocument {
   readonly hadReport: boolean;
 }
 
+const minimumWait = Temporal.Duration.from({ milliseconds: 1 });
+
 interface Report {
   readonly diagnostics: readonly LspDiagnostic[];
   readonly version: number | undefined;
   readonly sequence: number;
-  readonly receivedAt: Temporal.Instant;
+  /** Measures the time since the report arrived. */
+  readonly received: Stopwatch;
 }
 
 /**
@@ -89,13 +93,13 @@ export class ServerSession {
   readonly #maxOpenDocuments: number;
   #sequence = 0;
   #inFlight = 0;
-  #lastActivity: Temporal.Instant;
+  #lastActivity: Stopwatch;
   #exit: ServerExit | undefined;
 
   constructor(server: LanguageServer, options: ServerSessionOptions = {}) {
     this.#server = server;
     this.#maxOpenDocuments = options.maxOpenDocuments ?? 64;
-    this.#lastActivity = Temporal.Now.instant();
+    this.#lastActivity = new Stopwatch();
     server.setNotificationListener((method, params) => {
       this.#onNotification(method, params);
     });
@@ -124,7 +128,7 @@ export class ServerSession {
         diagnostics,
         version,
         sequence: this.#sequence,
-        receivedAt: Temporal.Now.instant(),
+        received: new Stopwatch(),
       });
       this.#emit();
     } else if (method === '$/progress' && 'token' in params && 'value' in params) {
@@ -199,12 +203,12 @@ export class ServerSession {
 
   async #track<T>(work: () => Promise<T>): Promise<T> {
     this.#inFlight += 1;
-    this.#lastActivity = Temporal.Now.instant();
+    this.#lastActivity = new Stopwatch();
     try {
       return await work();
     } finally {
       this.#inFlight -= 1;
-      this.#lastActivity = Temporal.Now.instant();
+      this.#lastActivity = new Stopwatch();
     }
   }
 
@@ -228,10 +232,7 @@ export class ServerSession {
     const open = this.#documents.get(document.uri);
     const syncedAt = open?.syncedAt ?? this.#sequence;
     const hasPriorReport = open?.hadReport ?? false;
-    const started = Temporal.Now.instant();
-    const deadline = started.add({ milliseconds: wait.timeoutMs });
-    const quiet = Temporal.Duration.from({ milliseconds: wait.quietMs });
-    const grace = Temporal.Duration.from({ milliseconds: wait.graceMs });
+    const waited = new Stopwatch();
     for (;;) {
       if (this.#exit !== undefined) {
         return err({
@@ -242,7 +243,7 @@ export class ServerSession {
           restartsExhausted: false,
         });
       }
-      const now = Temporal.Now.instant();
+      const elapsed = waited.elapsed();
       const report = this.#reports.get(document.uri);
       const isCurrent =
         report !== undefined &&
@@ -252,32 +253,29 @@ export class ServerSession {
       if (
         isCurrent &&
         !isBusy &&
-        Temporal.Duration.compare(report.receivedAt.until(now), quiet) >= 0
+        Temporal.Duration.compare(report.received.elapsed(), wait.quiet) >= 0
       ) {
         return ok({ diagnostics: report.diagnostics, freshness: 'fresh' });
       }
       const previous = report?.diagnostics ?? [];
-      if (Temporal.Instant.compare(now, deadline) >= 0) {
+      if (Temporal.Duration.compare(elapsed, wait.timeout) >= 0) {
         return ok({ diagnostics: previous, freshness: 'timed-out' });
       }
       if (
         !isCurrent &&
         hasPriorReport &&
         !isBusy &&
-        Temporal.Duration.compare(started.until(now), grace) >= 0
+        Temporal.Duration.compare(elapsed, wait.grace) >= 0
       ) {
         return ok({ diagnostics: previous, freshness: 'assumed-unchanged' });
       }
-      const wakeAt = isCurrent
-        ? report.receivedAt.add(quiet)
+      const untilDeadline = wait.timeout.subtract(elapsed);
+      const untilWake = isCurrent
+        ? wait.quiet.subtract(report.received.elapsed())
         : hasPriorReport
-          ? started.add(grace)
-          : deadline;
-      const [soonest = deadline] = [
-        deadline,
-        latestOf(wakeAt, now.add({ milliseconds: 1 })),
-      ].toSorted((a, b) => Temporal.Instant.compare(a, b));
-      await this.#nextEvent(now.until(soonest));
+          ? wait.grace.subtract(elapsed)
+          : untilDeadline;
+      await this.#nextEvent(shorterOf(untilDeadline, longerOf(untilWake, minimumWait)));
     }
   }
 
@@ -306,7 +304,7 @@ export class ServerSession {
 
   /** Time since the last request, sync or wait finished; zero while busy. */
   get idle(): Temporal.Duration {
-    return this.isBusy ? new Temporal.Duration() : this.#lastActivity.until(Temporal.Now.instant());
+    return this.isBusy ? new Temporal.Duration() : this.#lastActivity.elapsed();
   }
 
   /** The stamp of an open document, to decide whether it needs re-reading. */
@@ -325,7 +323,7 @@ export class ServerSession {
    * dependencies that changed on disk. Marks the document most recently used.
    */
   sync(content: DocumentContent, options: { readonly recheck?: boolean } = {}): SyncedDocument {
-    this.#lastActivity = Temporal.Now.instant();
+    this.#lastActivity = new Stopwatch();
     const key = normalizeUri(content.uri);
     const existing = this.#documents.get(key);
     if (existing?.languageId !== content.languageId) {
@@ -415,6 +413,10 @@ function toSynced(document: OpenDocument, hasChanged: boolean): SyncedDocument {
   };
 }
 
-function latestOf(a: Temporal.Instant, b: Temporal.Instant): Temporal.Instant {
-  return Temporal.Instant.compare(a, b) >= 0 ? a : b;
+function longerOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
+  return Temporal.Duration.compare(a, b) >= 0 ? a : b;
+}
+
+function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
+  return Temporal.Duration.compare(a, b) <= 0 ? a : b;
 }

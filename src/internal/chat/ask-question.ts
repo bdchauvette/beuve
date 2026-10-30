@@ -22,7 +22,7 @@ export interface AskQuestionDeps<E> {
   readonly onProgress?: (progress: ChatModelProgress) => void;
   readonly budget?: ChatPromptBudget;
   /** Defaults to 5 minutes. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
 export interface ChatAnswer {
@@ -36,7 +36,7 @@ export interface ChatAnswer {
     readonly model: string | undefined;
     readonly turns: number | undefined;
     readonly costUsd: number | undefined;
-    readonly durationMs: number;
+    readonly duration: Temporal.Duration;
     readonly deniedToolUses: number;
   };
 }
@@ -71,7 +71,7 @@ export async function askQuestion<E>(
     system: built.system,
     prompt: built.prompt,
     cwd: input.worktreePath,
-    timeoutMs: deps.timeoutMs ?? 5 * 60 * 1000,
+    timeout: deps.timeout ?? Temporal.Duration.from({ minutes: 5 }),
     ...(deps.signal !== undefined && { signal: deps.signal }),
     ...(deps.onProgress !== undefined && { onProgress: deps.onProgress }),
     ...(deps.onDelta !== undefined && { onText: deps.onDelta }),
@@ -85,13 +85,13 @@ export async function askQuestion<E>(
     knownPaths,
     worktreePath: input.worktreePath,
   });
-  const { model, turns, costUsd, durationMs, deniedToolUses } = output.value;
+  const { model, turns, costUsd, duration, deniedToolUses } = output.value;
   return ok({
     answer: validated.content,
     citations: validated.citations,
     dropped: validated.dropped,
     malformedCitations: validated.malformed,
     prompt: built.report,
-    usage: { model, turns, costUsd, durationMs, deniedToolUses },
+    usage: { model, turns, costUsd, duration, deniedToolUses },
   });
 }

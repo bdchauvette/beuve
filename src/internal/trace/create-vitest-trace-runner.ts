@@ -27,6 +27,7 @@ import { renderVitestConfig } from './render-vitest-config.ts';
 import type { TraceError } from './trace-error.ts';
 import type { TraceRecord } from './trace-record.ts';
 import type { TraceRunner, TraceRunOutput, TraceRunRequest } from './trace-runner.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 export interface VitestTraceRunnerOptions {
   /** The Node binary that runs Vitest (in the app: `process.execPath` with `ELECTRON_RUN_AS_NODE`). */
@@ -38,7 +39,7 @@ export interface VitestTraceRunnerOptions {
   readonly temporaryDirectory: string;
   readonly logger?: Logger;
   /** Grace between SIGTERM and SIGKILL when a run is stopped. Defaults to 1 s. */
-  readonly killGraceMs?: number;
+  readonly killGrace?: Temporal.Duration;
 }
 
 interface Workspace {
@@ -180,17 +181,15 @@ async function runIn(
   }
   args.push(...workspace.testFiles);
 
-  const started = Temporal.Now.instant();
+  const stopwatch = new Stopwatch();
   const exit = await spawnVitest(options, request, args, workspace.root);
-  const durationMs = Temporal.Now.instant()
-    .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-    .total('milliseconds');
-  options.logger?.debug('trace: vitest exited', { durationMs, ...exit, output: undefined });
+  const duration = stopwatch.elapsed();
+  options.logger?.debug('trace: vitest exited', { duration, ...exit, output: undefined });
   if (exit.stopped === 'cancelled') {
     return err({ kind: 'cancelled' });
   }
   if (exit.stopped === 'timeout') {
-    return err({ kind: 'timeout', timeoutMs: request.timeoutMs });
+    return err({ kind: 'timeout', timeout: request.timeout });
   }
   const report = await readText(reportFile);
   const outcomes = report === undefined ? undefined : parseVitestReport(report, workspace.worktree);
@@ -206,7 +205,7 @@ async function runIn(
     return err({ kind: 'no-tests', testFiles: request.testFiles });
   }
   const records = await readRecords(eventsDirectory, workspace.worktree);
-  return ok({ records, outcomes, durationMs });
+  return ok({ records, outcomes, duration });
 }
 
 async function spawnVitest(
@@ -246,13 +245,16 @@ async function spawnVitest(
   const stop = (reason: 'timeout' | 'cancelled'): void => {
     stopped ??= reason;
     signalGroup('SIGTERM');
-    killTimer ??= setTimeout(() => {
-      signalGroup('SIGKILL');
-    }, options.killGraceMs ?? 1000);
+    killTimer ??= setTimeout(
+      () => {
+        signalGroup('SIGKILL');
+      },
+      (options.killGrace ?? Temporal.Duration.from({ seconds: 1 })).total('milliseconds'),
+    );
   };
   const timer = setTimeout(() => {
     stop('timeout');
-  }, request.timeoutMs);
+  }, request.timeout.total('milliseconds'));
   const onAbort = (): void => {
     stop('cancelled');
   };

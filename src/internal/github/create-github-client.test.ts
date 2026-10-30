@@ -86,7 +86,7 @@ describe('createGithubClient', () => {
     const slow = createGithubClient({
       host: 'github.com',
       getToken: async () => settle(ok({ reveal: (): string => 't' })),
-      timeoutMs: 50,
+      timeout: Temporal.Duration.from({ milliseconds: 50 }),
       fetch: async (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
           init.signal?.addEventListener('abort', () => {
@@ -98,7 +98,7 @@ describe('createGithubClient', () => {
     if (slow.ok) {
       await expect(slow.value.send({ method: 'GET', path: '/x' })).resolves.toEqual({
         ok: false,
-        error: { kind: 'timeout', timeoutMs: 50 },
+        error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 50 }) },
       });
     }
   });

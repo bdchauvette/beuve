@@ -146,11 +146,7 @@ export default defineConfig(
     ignores: testFiles,
     rules: {
       'local/no-date': 'error',
-      'local/no-time-number-arithmetic': [
-        'error',
-        // Structured log fields and the ms-typed options internal APIs still take.
-        { sinkProperties: ['durationMs', 'computeMs', 'timeoutMs'] },
-      ],
+      'local/no-time-number-arithmetic': 'error',
     },
   },
 
@@ -159,10 +155,7 @@ export default defineConfig(
     files: convertedTestFiles,
     rules: {
       'local/no-date': 'error',
-      'local/no-time-number-arithmetic': [
-        'error',
-        { sinkProperties: ['durationMs', 'computeMs', 'timeoutMs'] },
-      ],
+      'local/no-time-number-arithmetic': 'error',
     },
   },
 

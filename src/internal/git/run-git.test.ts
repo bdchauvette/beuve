@@ -54,8 +54,16 @@ describe('runGit', () => {
     writeFileSync(slow, '#!/bin/sh\nsleep 5\n');
     chmodSync(slow, 0o755);
     await expect(
-      runGit({ cwd: repo.directory, args: ['status'], gitBinary: slow, timeoutMs: 100 }),
-    ).resolves.toMatchObject({ ok: false, error: { kind: 'timeout', timeoutMs: 100 } });
+      runGit({
+        cwd: repo.directory,
+        args: ['status'],
+        gitBinary: slow,
+        timeout: Temporal.Duration.from({ milliseconds: 100 }),
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 100 }) },
+    });
 
     repo.write('big.txt', 'x'.repeat(10_000));
     repo.commit('big');

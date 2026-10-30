@@ -36,7 +36,7 @@ function fakeModel(
         model: 'fake-model',
         turns: 2,
         costUsd: 0.01,
-        durationMs: 900,
+        duration: Temporal.Duration.from({ milliseconds: 900 }),
         deniedToolUses: 0,
       });
     },
@@ -55,7 +55,10 @@ describe('askQuestion', () => {
       { model: fakeModel(ok(answer), seen) },
     );
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toMatchObject({ cwd: '/work/repo', timeoutMs: 300_000 });
+    expect(seen[0]).toMatchObject({
+      cwd: '/work/repo',
+      timeout: Temporal.Duration.from({ minutes: 5 }),
+    });
     expect(seen[0]?.prompt).toContain('Why does parse trim the first part?');
     expect(seen[0]?.system).toContain('[[path:start-end]]');
     expect(result).toMatchObject({
@@ -69,7 +72,11 @@ describe('askQuestion', () => {
         ],
         dropped: [{ path: 'src/c.ts', startLine: 1, endLine: 1, reason: 'unknown-path' }],
         malformedCitations: 0,
-        usage: { model: 'fake-model', turns: 2, durationMs: 900 },
+        usage: {
+          model: 'fake-model',
+          turns: 2,
+          duration: Temporal.Duration.from({ milliseconds: 900 }),
+        },
       },
     });
   });

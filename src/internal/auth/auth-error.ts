@@ -13,7 +13,7 @@ export type AuthError =
     }
   | { readonly kind: 'not-logged-in'; readonly host: string; readonly remedy: string }
   | { readonly kind: 'host-not-configured'; readonly host: string; readonly remedy: string }
-  | { readonly kind: 'timeout'; readonly timeoutMs: number }
+  | { readonly kind: 'timeout'; readonly timeout: Temporal.Duration }
   | {
       readonly kind: 'command-failed';
       readonly exitCode: number | undefined;

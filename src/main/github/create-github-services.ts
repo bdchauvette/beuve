@@ -90,7 +90,7 @@ export interface GithubServicesOptions {
   readonly ura: Pick<UraServices, 'compileArtifact' | 'listPostings' | 'recordPostings'>;
   /** Opens an allow-listed URL in the system browser; absent outside Electron. */
   readonly openExternal?: (url: string) => Promise<void>;
-  readonly polling?: { readonly intervalMs?: number; readonly scheduled?: boolean };
+  readonly polling?: { readonly interval?: Temporal.Duration; readonly scheduled?: boolean };
   /** The session the reviewer has open, for `github:auth-status` without a host. */
   readonly openSessionId: () => string | undefined;
 }

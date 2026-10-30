@@ -17,7 +17,7 @@ export function toTraceResultView(
     testFiles: context.testFiles,
     functions: result.functions.map((fn) => ({ ...fn })),
     timelines: result.timelines.map((timeline) => toTimelineView(timeline)),
-    durationMs: result.durationMs,
+    duration: result.duration.toString({ smallestUnit: 'millisecond' }),
   };
 }
 
@@ -27,7 +27,9 @@ function toTimelineView(timeline: TraceTimeline): TraceTimelineView {
     titles: timeline.titles,
     status: timeline.status,
     ...(timeline.failure !== undefined && { failure: timeline.failure }),
-    ...(timeline.durationMs !== undefined && { durationMs: timeline.durationMs }),
+    ...(timeline.duration !== undefined && {
+      duration: timeline.duration.toString({ smallestUnit: 'millisecond' }),
+    }),
     entries: timeline.entries,
     dropped: timeline.dropped,
   };

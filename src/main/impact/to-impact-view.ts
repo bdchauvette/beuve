@@ -23,7 +23,7 @@ export interface ImpactViewSource {
   readonly skipped: readonly PreSkippedFile[];
   /** Head paths in diff order; the view lists files in this order. */
   readonly order: readonly string[];
-  readonly computeMs: number;
+  readonly compute: Temporal.Duration;
 }
 
 /** Maps an ImpactGate report and the files skipped before parsing to the contract view. */
@@ -54,7 +54,7 @@ export function toImpactView(source: ImpactViewSource): ImpactView {
     files,
     findings: report.findings.map((finding) => toFindingView(finding)),
     totals: { ...report.totals, skippedFiles: report.totals.skippedFiles + source.skipped.length },
-    computeMs: source.computeMs,
+    compute: source.compute.toString({ smallestUnit: 'millisecond' }),
   };
 }
 

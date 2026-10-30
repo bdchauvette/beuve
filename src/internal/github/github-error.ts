@@ -34,6 +34,6 @@ export type GithubError<E> =
     }
   | { readonly kind: 'unexpected-status'; readonly status: number; readonly message: string }
   | { readonly kind: 'network'; readonly message: string }
-  | { readonly kind: 'timeout'; readonly timeoutMs: number }
+  | { readonly kind: 'timeout'; readonly timeout: Temporal.Duration }
   | { readonly kind: 'invalid-request'; readonly reason: string }
   | { readonly kind: 'unexpected-shape'; readonly reason: string };

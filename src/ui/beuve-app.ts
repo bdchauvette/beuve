@@ -93,7 +93,7 @@ import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import type { ZoneId } from './zones.ts';
 
-const impactGraceMs = 1500;
+const impactGrace = Temporal.Duration.from({ milliseconds: 1500 });
 
 /**
  * Root of the renderer: the four-zone shell (spec section 4), the zone focus model and the
@@ -1097,7 +1097,7 @@ export class BeuveApp extends LitElement {
   private async loadImpactAfterFirstDiff(review: ReviewView): Promise<void> {
     this.releaseImpact?.();
     await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, impactGraceMs);
+      const timer = setTimeout(resolve, impactGrace.total('milliseconds'));
       this.releaseImpact = (): void => {
         clearTimeout(timer);
         resolve();
@@ -1315,7 +1315,7 @@ export class BeuveApp extends LitElement {
     this.trace = next;
     if (next?.status === 'ready') {
       const tests = next.result.timelines.length;
-      const took = formatDuration(next.result.durationMs);
+      const took = formatDuration(next.result.duration);
       this.showNotice({
         tone: next.note === undefined ? 'info' : 'error',
         text:

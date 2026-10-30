@@ -8,6 +8,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import type { GitError } from './git-error.ts';
 
@@ -19,7 +20,7 @@ export interface GitRequest {
   /** Executable to run. Defaults to `git` on `PATH`. */
   readonly gitBinary?: string;
   /** Kill git after this long. Defaults to 30 s. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   /** Fail with `output-too-large` past this many bytes of stdout or stderr. Defaults to 64 MiB. */
   readonly maxBufferBytes?: number;
   /** Written to git's stdin, which is then closed. */
@@ -27,7 +28,7 @@ export interface GitRequest {
   readonly logger?: Logger;
 }
 
-const defaultTimeoutMs = 30_000;
+const defaultTimeout = Temporal.Duration.from({ seconds: 30 });
 const defaultMaxBufferBytes = 64 * 1024 * 1024;
 
 /**
@@ -66,21 +67,19 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     return err(invalid);
   }
   const gitBinary = request.gitBinary ?? 'git';
-  const timeoutMs = request.timeoutMs ?? defaultTimeoutMs;
+  const timeout = request.timeout ?? defaultTimeout;
   const maxBufferBytes = request.maxBufferBytes ?? defaultMaxBufferBytes;
-  const started = Temporal.Now.instant();
+  const stopwatch = new Stopwatch();
   const outcome = await execute(gitBinary, [...hardeningArgs, ...request.args], {
     cwd: request.cwd,
-    timeoutMs,
+    timeout,
     maxBufferBytes,
     input: request.input,
   });
   request.logger?.debug('git', {
     args: request.args,
     cwd: request.cwd,
-    durationMs: Temporal.Now.instant()
-      .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-      .total('milliseconds'),
+    duration: stopwatch.elapsed(),
     exitCode: outcome.error === null ? 0 : outcome.error.code,
   });
   return outcome.error === null
@@ -90,7 +89,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
           cwd: request.cwd,
           args: request.args,
           gitBinary,
-          timeoutMs,
+          timeout,
           maxBufferBytes,
         }),
       );
@@ -117,7 +116,7 @@ async function execute(
   args: readonly string[],
   options: {
     readonly cwd: string;
-    readonly timeoutMs: number;
+    readonly timeout: Temporal.Duration;
     readonly maxBufferBytes: number;
     readonly input: string | undefined;
   },
@@ -129,7 +128,7 @@ async function execute(
       {
         cwd: options.cwd,
         env: hardenedEnvironment(),
-        timeout: options.timeoutMs,
+        timeout: options.timeout.total('milliseconds'),
         maxBuffer: options.maxBufferBytes,
         encoding: 'buffer',
         windowsHide: true,
@@ -170,9 +169,7 @@ const dubiousOwnershipPattern = /dubious ownership/iu;
 
 async function classifyFailure(
   outcome: ExecOutcome,
-  request: Required<
-    Pick<GitRequest, 'cwd' | 'args' | 'gitBinary' | 'timeoutMs' | 'maxBufferBytes'>
-  >,
+  request: Required<Pick<GitRequest, 'cwd' | 'args' | 'gitBinary' | 'timeout' | 'maxBufferBytes'>>,
 ): Promise<GitError> {
   const { error, stdout, stderr } = outcome;
   const { args } = request;
@@ -186,7 +183,7 @@ async function classifyFailure(
     return { kind: 'output-too-large', args, maxBufferBytes: request.maxBufferBytes };
   }
   if (error?.killed === true) {
-    return { kind: 'timeout', args, timeoutMs: request.timeoutMs };
+    return { kind: 'timeout', args, timeout: request.timeout };
   }
   if (notARepositoryPattern.test(stderr)) {
     return { kind: 'not-a-repository', path: request.cwd, stderr: stderr.trim() };

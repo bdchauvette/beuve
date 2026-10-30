@@ -77,7 +77,7 @@ export function createMcpTools(options: McpToolsOptions): McpToolServices {
         testsFailed,
         functions: result.functions,
         timelines: result.timelines,
-        durationMs: result.durationMs,
+        duration: result.duration,
       });
     },
     readHumanReview: async ({ sessionId }): Promise<McpDocumentOutcome> => {

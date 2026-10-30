@@ -52,7 +52,7 @@ function scripted(
             model: 'fake',
             turns: 1,
             costUsd: 0,
-            durationMs: 1,
+            duration: Temporal.Duration.from({ milliseconds: 1 }),
             deniedToolUses: 0,
           })
         : err('invalid-output');
@@ -130,39 +130,28 @@ describe('reviewChange', () => {
     });
   });
 
-  test(
-    'shares one time budget: no verification once it is nearly spent',
-    { concurrent: false },
-    async ({ expect, clock }) => {
-      const start = Temporal.Now.instant();
-      const slow: ReviewModel<string> = {
-        run: async (request) => {
-          clock.advance({ seconds: 598 });
-          return firstPass().run(request);
-        },
-      };
-      const checked: ReviewModelRequest<unknown>[] = [];
-      const result = await reviewChange(question(), {
-        model: slow,
-        verifier: scripted(ok({ verdicts: [] }), checked),
-      });
-      expect(result.ok && result.value.review.verification).toBe('failed');
-      expect(checked).toStrictEqual([]);
+  test('shares one time budget: no verification once it is nearly spent', async ({ expect }) => {
+    const checked: ReviewModelRequest<unknown>[] = [];
+    const result = await reviewChange(question(), {
+      model: firstPass(),
+      verifier: scripted(ok({ verdicts: [] }), checked),
+      timeout: Temporal.Duration.from({ seconds: 4 }),
+    });
+    expect(result.ok && result.value.review.verification).toBe('failed');
+    expect(checked).toStrictEqual([]);
+  });
 
-      clock.set(start);
-      const quick: ReviewModel<string> = {
-        run: async (request) => {
-          clock.advance({ seconds: 60 });
-          return firstPass().run(request);
-        },
-      };
-      await reviewChange(question(), {
-        model: quick,
-        verifier: scripted(ok({ verdicts: [] }), checked),
-      });
-      expect(checked[0]?.timeoutMs).toBe(540_000);
-    },
-  );
+  test('gives the verifier what the first pass left of the budget', async ({ expect }) => {
+    const checked: ReviewModelRequest<unknown>[] = [];
+    await reviewChange(question(), {
+      model: firstPass(),
+      verifier: scripted(ok({ verdicts: [] }), checked),
+      timeout: Temporal.Duration.from({ minutes: 10 }),
+    });
+    const given = checked[0]?.timeout ?? new Temporal.Duration();
+    expect(Temporal.Duration.compare(given, { minutes: 10 })).toBeLessThanOrEqual(0);
+    expect(Temporal.Duration.compare(given, { minutes: 9, seconds: 55 })).toBeGreaterThan(0);
+  });
 
   test('fails on a cancelled verification and on a failed first pass', async ({ expect }) => {
     const controller = new AbortController();

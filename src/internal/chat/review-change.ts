@@ -16,6 +16,7 @@ import type { ReviewModel } from './review-model.ts';
 import { validateFindings } from './validate-findings.ts';
 import { verifyFindings } from './verify-findings.ts';
 import type { FindingVerdict } from './verify-findings.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** `E` is the model adapter's error type. */
 export interface ReviewChangeDeps<E> {
@@ -30,7 +31,7 @@ export interface ReviewChangeDeps<E> {
   /** Defaults to 0.3. */
   readonly minConfidence?: number;
   /** For both passes together; defaults to 10 minutes. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
 /** Coarse progress for the transcript's status line; never prompt or file content. */
@@ -61,8 +62,8 @@ export async function reviewChange<E>(
   input: ChatQuestion,
   deps: ReviewChangeDeps<E>,
 ): Promise<Result<ReviewedChange, ChatError<E>>> {
-  const timeoutMs = deps.timeoutMs ?? 10 * 60 * 1000;
-  const deadline = Temporal.Now.instant().add({ milliseconds: timeoutMs });
+  const timeout = deps.timeout ?? Temporal.Duration.from({ minutes: 10 });
+  const stopwatch = new Stopwatch();
   const maxFindings = deps.maxFindings ?? 12;
   const pathScope = input.task?.kind === 'review' ? input.task.pathScope : [];
   const task = { kind: 'review', pathScope, maxFindings } as const;
@@ -78,7 +79,7 @@ export async function reviewChange<E>(
     prompt: built.prompt,
     cwd: input.worktreePath,
     outputSchema: findingOutputSchema,
-    timeoutMs,
+    timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
     onProgress: (progress) => deps.onProgress?.({ kind: 'model', progress }),
   });
@@ -95,7 +96,7 @@ export async function reviewChange<E>(
       assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'skipped'),
     );
   }
-  const remaining = Temporal.Now.instant().until(deadline);
+  const remaining = timeout.subtract(stopwatch.elapsed());
   if (Temporal.Duration.compare(remaining, minVerify) < 0) {
     return ok(
       assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'),
@@ -112,7 +113,7 @@ export async function reviewChange<E>(
     },
     {
       model: deps.verifier,
-      timeoutMs: remaining.total('milliseconds'),
+      timeout: remaining,
       ...(deps.signal !== undefined && { signal: deps.signal }),
     },
   );

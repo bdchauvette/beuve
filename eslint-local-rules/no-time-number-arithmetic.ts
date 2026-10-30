@@ -3,7 +3,13 @@ import type { TSESTree } from '@typescript-eslint/utils';
 import type ts from 'typescript';
 
 type MessageIds =
-  'arithmetic' | 'unitArithmetic' | 'comparison' | 'math' | 'nonSinkArgument' | 'nonSinkProperty';
+  | 'arithmetic'
+  | 'unitArithmetic'
+  | 'comparison'
+  | 'math'
+  | 'nonSinkArgument'
+  | 'nonSinkProperty'
+  | 'monotonicClock';
 
 interface Options {
   /** Calls that take a millisecond (or other raw time) number, written as their callee text. */
@@ -24,6 +30,9 @@ const defaultSinks = [
 ];
 const defaultSinkProperties = ['timeout'];
 const defaultSources = ['performance.now', 'Date.now'];
+const monotonicClocks = new Set(['performance.now', 'process.hrtime', 'process.hrtime.bigint']);
+const monotonicClockCalls = new Set(['hrtime', 'hrtime.bigint']);
+const optionalChain = /\?\./gu;
 
 const durationUnits = new Set([
   'years',
@@ -74,10 +83,12 @@ const comparisonOperators = new Set(['<', '>', '<=', '>=', '==', '===', '!=', '!
 /**
  * Keeps raw time numbers out of the code (ADR 0059). A number read from a Temporal escape hatch
  * (`epochMilliseconds`, `epochNanoseconds`, a Duration unit field, `duration.total(unit)`) or from
- * `performance.now()` is tracked through local variables of the same function, and may only be
+ * `performance.now()` or `Date.now()` is tracked through local variables of the same function, and may only be
  * passed unchanged to a sink: a call in `sinks` (`setTimeout`, `AbortSignal.timeout`, …) or the
  * value of a key in `sinkProperties` (`timeout`). Arithmetic, comparison and `Math.*` on it, and
- * passing it to any other call, are reported with the Temporal API to use instead. Type-aware.
+ * passing it to any other call, are reported with the Temporal API to use instead. The monotonic
+ * clocks (`performance.now`, `process.hrtime`) are reported everywhere; `Stopwatch` opts out with a
+ * file-level disable comment. Type-aware.
  */
 export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Options], MessageIds>({
   meta: {
@@ -105,6 +116,8 @@ export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Optio
       math: '`Math.{{name}}` on a time number ({{source}}). Use `duration.round({ smallestUnit, roundingMode })`, or pick with `Temporal.Duration.compare`.',
       nonSinkArgument:
         'A time number ({{source}}) is passed to `{{callee}}`, which is not a time sink. Pass a `Temporal.Instant` or `Temporal.Duration` instead, or list `{{callee}}` in `sinks`.',
+      monotonicClock:
+        '`{{name}}` reads a monotonic clock directly. Measure elapsed time with `new Stopwatch()` from `#x/time/stopwatch.ts` (`stopwatch.elapsed()` is a `Temporal.Duration`).',
       nonSinkProperty:
         'A time number ({{source}}) is stored as `{{key}}`, which is not a time sink. Store a Temporal value instead, or list `{{key}}` in `sinkProperties`.',
     },
@@ -276,7 +289,25 @@ export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Optio
       }
     };
 
+    const reportMonotonicClock = (node: TSESTree.Node, name: string): void => {
+      context.report({ node, messageId: 'monotonicClock', data: { name } });
+    };
+
     return {
+      MemberExpression(node: TSESTree.MemberExpression): void {
+        const name = calleeText(context, node).replaceAll(optionalChain, '.');
+        const isInner =
+          node.parent.type === AST_NODE_TYPES.MemberExpression && node.parent.object === node;
+        if (monotonicClocks.has(name) && !(name === 'process.hrtime' && isInner)) {
+          reportMonotonicClock(node, name);
+        }
+      },
+      CallExpression(node: TSESTree.CallExpression): void {
+        const name = calleeText(context, node.callee);
+        if (monotonicClockCalls.has(name)) {
+          reportMonotonicClock(node.callee, name);
+        }
+      },
       'MemberExpression, CallExpression'(
         node: TSESTree.MemberExpression | TSESTree.CallExpression,
       ): void {

@@ -69,7 +69,7 @@ describe('createChatServices (integration: SQLite + git + fake claude, no Electr
       logger: createLogger('test', { sink: (): void => undefined }),
       deps,
       worktreeRoot: path.join(repo.scratch(), 'worktrees'),
-      claude: { killGraceMs: 200, ...claude },
+      claude: { killGrace: Temporal.Duration.from({ milliseconds: 200 }), ...claude },
     });
     services.chat.onDelta((event: ChatDeltaView) => {
       deltas.push(event);

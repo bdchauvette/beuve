@@ -104,7 +104,10 @@ describe(
         db,
         logger: createLogger('test', { sink: (): void => undefined }),
         worktreeRoot: path.join(scratch, 'worktrees'),
-        trace: { temporaryDirectory: temporary, timeoutMs: 30_000 },
+        trace: {
+          temporaryDirectory: temporary,
+          timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
+        },
       });
       services.trace.onStatus((event) => {
         events.push(event);
@@ -241,7 +244,10 @@ describe(
         db,
         logger: createLogger('test', { sink: (): void => undefined }),
         worktreeRoot: path.join(repo.scratch(), 'worktrees'),
-        trace: { temporaryDirectory: temporary, timeoutMs: 1500 },
+        trace: {
+          temporaryDirectory: temporary,
+          timeout: Temporal.Duration.from({ milliseconds: 1500 }),
+        },
       });
       try {
         value(await quick.trace.setTrust({ sessionId, trusted: true }));

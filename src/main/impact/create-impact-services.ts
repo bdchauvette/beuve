@@ -13,6 +13,7 @@ import { assembleImpactInput } from './assemble-impact-input.ts';
 import type { ImpactRunner } from './create-impact-worker.ts';
 import { slimImpactView } from './slim-impact-view.ts';
 import { toImpactView } from './to-impact-view.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 const headMoved: IpcError = {
   code: 'stale-review',
@@ -60,7 +61,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     diff: ReviewDiff,
     signal: AbortSignal,
   ): Promise<Result<ImpactView, IpcError>> => {
-    const started = Temporal.Now.instant();
+    const stopwatch = new Stopwatch();
     const input = await assembleImpactInput(diff.refreshed.repository, diff.files);
     if (!input.ok) {
       return gitFailure(context.logger, input.error);
@@ -74,14 +75,12 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
       );
     }
     const report = run.value;
-    const computeMs = Temporal.Now.instant()
-      .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-      .total('milliseconds');
+    const compute = stopwatch.elapsed();
     context.logger.debug('impact computed', {
       sessionId,
       files: diff.files.length,
       parsed: input.value.sources.length,
-      computeMs,
+      compute,
     });
     return ok(
       toImpactView({
@@ -91,7 +90,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
         report,
         skipped: input.value.skipped,
         order: diff.files.map((file) => ('newPath' in file ? file.newPath : file.path)),
-        computeMs,
+        compute,
       }),
     );
   };

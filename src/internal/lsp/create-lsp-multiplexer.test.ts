@@ -32,8 +32,8 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     lsp = createLspMultiplexer({
       servers: [typescriptServerDefinition({ tsserverPath })],
       searchDirectories: [binDirectory],
-      requestTimeoutMs: 30_000,
-      diagnosticsTimeoutMs: 45_000,
+      requestTimeout: Temporal.Duration.from({ seconds: 30 }),
+      diagnosticsTimeout: Temporal.Duration.from({ seconds: 45 }),
     });
   });
 
@@ -224,7 +224,7 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     command: process.execPath,
     args: [script, mode],
     languageIds: { '.ts': 'typescript' },
-    diagnosticsQuietMs: 20,
+    diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 20 }),
   });
 
   it('converts UTF-16 positions to the negotiated UTF-8 and back', async () => {
@@ -255,7 +255,10 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
   });
 
   it('stops an idle server and starts it again on demand', async () => {
-    const lsp = createLspMultiplexer({ servers: [fakeServer('normal')], idleTimeoutMs: 100 });
+    const lsp = createLspMultiplexer({
+      servers: [fakeServer('normal')],
+      idleTimeout: Temporal.Duration.from({ milliseconds: 100 }),
+    });
     try {
       const request = { root: project.root, path: 'src/a.ts' };
       unwrap(await lsp.getDiagnostics(request));

@@ -13,6 +13,7 @@ import { removeWorktree } from '#internal/git/remove-worktree.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 export interface SessionWorktreesOptions {
   /** Directory beuve owns for checkouts, `<userData>/worktrees`. Created on first use. */
@@ -69,15 +70,13 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     if (pending !== undefined) {
       return pending;
     }
-    const started = Temporal.Now.instant();
+    const stopwatch = new Stopwatch();
     const adding = (async (): Promise<Result<string, GitError>> => {
       const added = await addWorktree(repository, { root, commit: headSha });
       if (added.ok) {
         logger.debug('worktree ready', {
           path: added.value.path,
-          durationMs: Temporal.Now.instant()
-            .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-            .total('milliseconds'),
+          duration: stopwatch.elapsed(),
         });
       }
       return added.ok ? ok(added.value.path) : added;

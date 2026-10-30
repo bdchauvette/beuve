@@ -16,6 +16,7 @@ import type {
 import type { GithubError } from './github-error.ts';
 import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import { resolveGithubApiBase } from './resolve-github-api-base.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 const invalidJson = Symbol('invalid-json');
 
@@ -32,7 +33,7 @@ export interface GithubClientOptions<E> {
    */
   readonly apiBase?: URL;
   /** Per request, including reading the body. Defaults to 20 s. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   /** Sent as `X-GitHub-Api-Version`. Defaults to `2022-11-28`. */
   readonly apiVersion?: string;
   readonly userAgent?: string;
@@ -55,7 +56,7 @@ export function createGithubClient<E>(
   }
   const base = options.apiBase ?? resolveGithubApiBase(host);
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const timeoutMs = options.timeoutMs ?? 20_000;
+  const timeout = options.timeout ?? Temporal.Duration.from({ seconds: 20 });
 
   const send = async (request: GithubRequest): Promise<Result<GithubResponse, GithubError<E>>> => {
     const token = await options.getToken(host);
@@ -71,15 +72,13 @@ export function createGithubClient<E>(
     if (!built.ok) {
       return err({ kind: 'invalid-request', reason: built.error });
     }
-    const started = Temporal.Now.instant();
-    const response = await exchange(built.value, fetchImpl, timeoutMs, request.signal);
+    const stopwatch = new Stopwatch();
+    const response = await exchange(built.value, fetchImpl, timeout, request.signal);
     options.logger?.debug('github: request', {
       method: request.method,
       path: new URL(built.value.url).pathname,
       status: response.ok ? response.value.status : response.error.kind,
-      durationMs: Temporal.Now.instant()
-        .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-        .total('milliseconds'),
+      duration: stopwatch.elapsed(),
       rateLimitRemaining: response.ok ? response.value.rateLimitRemaining : undefined,
     });
     if (!response.ok) {
@@ -128,10 +127,10 @@ interface Exchange {
 async function exchange(
   request: HttpRequest,
   fetchImpl: FetchLike,
-  timeoutMs: number,
+  timeout: Temporal.Duration,
   signal: AbortSignal | undefined,
 ): Promise<Result<Exchange, GithubError<never>>> {
-  const timeout = AbortSignal.timeout(timeoutMs);
+  const timeoutSignal = AbortSignal.timeout(timeout.total('milliseconds'));
   try {
     const response = await fetchImpl(request.url, {
       method: request.method,
@@ -139,7 +138,7 @@ async function exchange(
       ...(request.body !== undefined && { body: request.body }),
       // Renamed repositories answer 301; fetch drops Authorization on a cross-origin redirect.
       redirect: 'follow',
-      signal: signal === undefined ? timeout : AbortSignal.any([timeout, signal]),
+      signal: signal === undefined ? timeoutSignal : AbortSignal.any([timeoutSignal, signal]),
     });
     const text = await response.text();
     return ok({
@@ -149,8 +148,8 @@ async function exchange(
       rateLimitRemaining: response.headers.get('x-ratelimit-remaining') ?? undefined,
     });
   } catch (error: unknown) {
-    if (timeout.aborted) {
-      return err({ kind: 'timeout', timeoutMs });
+    if (timeoutSignal.aborted) {
+      return err({ kind: 'timeout', timeout });
     }
     return err({
       kind: 'network',

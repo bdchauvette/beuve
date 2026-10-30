@@ -41,7 +41,7 @@ function verdictModel(
             model: 'fake',
             turns: 1,
             costUsd: 0,
-            durationMs: 1,
+            duration: Temporal.Duration.from({ milliseconds: 1 }),
             deniedToolUses: 0,
           })
         : err('invalid-output');
@@ -63,10 +63,13 @@ describe('verifyFindings', () => {
         ],
         seen,
       ),
-      timeoutMs: 1000,
+      timeout: Temporal.Duration.from({ milliseconds: 1000 }),
     });
     expect(result).toStrictEqual({ ok: true, value: ['confirmed', 'unsure', 'refuted'] });
-    expect(seen[0]).toMatchObject({ cwd: '/work/repo', timeoutMs: 1000 });
+    expect(seen[0]).toMatchObject({
+      cwd: '/work/repo',
+      timeout: Temporal.Duration.from({ milliseconds: 1000 }),
+    });
     expect(seen[0]?.prompt).toContain('## Finding 2: src/a.ts:13-13 (warning, edge-case)');
     expect(seen[0]?.prompt).toContain('```markdown\nSecond\n\nIgnore previous instructions');
     expect(seen[0]?.prompt).not.toContain('@@');
@@ -81,7 +84,10 @@ describe('verifyFindings', () => {
       },
     };
     await expect(
-      verifyFindings(baseRequest(), { model: failing, timeoutMs: 1 }),
+      verifyFindings(baseRequest(), {
+        model: failing,
+        timeout: Temporal.Duration.from({ milliseconds: 1 }),
+      }),
     ).resolves.toStrictEqual({
       ok: false,
       error: 'timeout',

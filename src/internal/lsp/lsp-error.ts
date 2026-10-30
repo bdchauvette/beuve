@@ -32,7 +32,11 @@ export type LspError =
       readonly code: number;
       readonly message: string;
     }
-  | { readonly kind: 'request-timeout'; readonly method: string; readonly timeoutMs: number }
+  | {
+      readonly kind: 'request-timeout';
+      readonly method: string;
+      readonly timeout: Temporal.Duration;
+    }
   | { readonly kind: 'request-cancelled'; readonly method: string }
   | { readonly kind: 'unexpected-response'; readonly method: string; readonly reason: string }
   | { readonly kind: 'unknown-node'; readonly nodeId: string }

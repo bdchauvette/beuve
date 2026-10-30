@@ -35,6 +35,6 @@ export async function runTraceProbe(
     path: plan.path,
     functions: plan.functions,
     timelines: buildTraceTimelines(plan, output.value.records, output.value.outcomes),
-    durationMs: output.value.durationMs,
+    duration: output.value.duration,
   });
 }

@@ -15,7 +15,7 @@ export function createTraceResultView(): TraceResultView {
         file: 'src/math.test.ts',
         titles: ['clamp', 'caps high values'],
         status: 'passed',
-        durationMs: 3.4,
+        duration: 'PT0.0034S',
         entries: createEntries(),
         dropped: 0,
       },
@@ -24,12 +24,12 @@ export function createTraceResultView(): TraceResultView {
         titles: ['clamp', 'never reaches it'],
         status: 'failed',
         failure: 'AssertionError: expected 1 to be 2\n    at foo',
-        durationMs: 1200,
+        duration: 'PT1.2S',
         entries: [],
         dropped: 4,
       },
     ],
-    durationMs: 712,
+    duration: 'PT0.712S',
   };
 }
 

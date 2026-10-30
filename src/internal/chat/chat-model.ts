@@ -15,7 +15,7 @@ export interface ChatModelRequest {
   readonly prompt: string;
   /** The head worktree, which the model may read and must never write. */
   readonly cwd: string;
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: ChatModelProgress) => void;
   readonly onText?: (event: ChatDelta) => void;
@@ -37,6 +37,6 @@ export interface ChatModelOutput {
   readonly model: string | undefined;
   readonly turns: number | undefined;
   readonly costUsd: number | undefined;
-  readonly durationMs: number;
+  readonly duration: Temporal.Duration;
   readonly deniedToolUses: number;
 }

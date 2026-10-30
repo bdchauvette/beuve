@@ -20,7 +20,7 @@ import { parseMessage } from './parse-message.ts';
 
 /** Why an outgoing request produced no result. */
 export type JsonRpcRequestError =
-  | { readonly kind: 'timeout'; readonly method: string; readonly timeoutMs: number }
+  | { readonly kind: 'timeout'; readonly method: string; readonly timeout: Temporal.Duration }
   | { readonly kind: 'cancelled'; readonly method: string }
   | { readonly kind: 'closed'; readonly method: string }
   | {
@@ -60,13 +60,13 @@ export interface JsonRpcConnectionOptions {
    */
   readonly cancelMethod?: string;
   /** Applies to requests that don't pass their own. Defaults to 30 s. */
-  readonly defaultTimeoutMs?: number;
+  readonly defaultTimeout?: Temporal.Duration;
   readonly maxMessageBytes?: number;
   readonly logger?: Logger;
 }
 
 export interface JsonRpcRequestOptions {
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   readonly signal?: AbortSignal;
 }
 
@@ -298,7 +298,8 @@ export class JsonRpcConnection {
     }
     const id = this.#nextId;
     this.#nextId += 1;
-    const timeoutMs = options.timeoutMs ?? this.#options.defaultTimeoutMs ?? 30_000;
+    const timeout =
+      options.timeout ?? this.#options.defaultTimeout ?? Temporal.Duration.from({ seconds: 30 });
     return new Promise((resolve) => {
       const giveUp = (error: JsonRpcRequestError): void => {
         if (!this.#pending.has(id)) {
@@ -308,8 +309,8 @@ export class JsonRpcConnection {
         this.#sendCancel(id);
       };
       const timer = setTimeout(() => {
-        giveUp({ kind: 'timeout', method, timeoutMs });
-      }, timeoutMs);
+        giveUp({ kind: 'timeout', method, timeout });
+      }, timeout.total('milliseconds'));
       const onAbort = (): void => {
         giveUp({ kind: 'cancelled', method });
       };

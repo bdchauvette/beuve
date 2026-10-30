@@ -62,6 +62,7 @@ import { resolveChatMentions } from './resolve-chat-mentions.ts';
 import { resolveLanguageModel } from './resolve-language-model.ts';
 import { toChatMessageView } from './to-chat-message-view.ts';
 import { toChatQuestion } from './to-chat-question.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** The read-only Q&A chat, as the renderer reaches it (ADR 0031, 0055–0057). */
 export interface ChatServices {
@@ -97,7 +98,7 @@ export interface ChatServicesOptions {
   /** The session's stated intent (a pull request's title and body), put in question prompts. */
   readonly intentFor?: (sessionId: string) => string | undefined;
   /** Least time between stores of the streaming preview. Defaults to 1 second. */
-  readonly previewIntervalMs?: number;
+  readonly previewInterval?: Temporal.Duration;
   /** Requests that may wait behind a session's running one (ADR 0057). Defaults to 10. */
   readonly maxQueued?: number;
 }
@@ -166,9 +167,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   const { context, impact, worktrees } = options;
   const { db, logger } = context;
   const claude = options.claude ?? {};
-  const previewInterval = Temporal.Duration.from({
-    milliseconds: options.previewIntervalMs ?? 1000,
-  });
+  const previewInterval = options.previewInterval ?? Temporal.Duration.from({ seconds: 1 });
   const deltaListeners = new Set<(event: ChatDeltaView) => void>();
   const updateListeners = new Set<(event: ChatMessageUpdatedView) => void>();
   let isDisposed = false;
@@ -275,7 +274,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const streamInto = (job: AnswerJob): ((delta: ChatDelta) => void) => {
-    let lastStoredAt: Temporal.Instant | undefined;
+    let lastStored: Stopwatch | undefined;
     return (delta: ChatDelta): void => {
       if (job.controller.signal.aborted) {
         return;
@@ -287,15 +286,14 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         kind: delta.kind,
         text: delta.kind === 'reset' ? '' : delta.text,
       });
-      const now = Temporal.Now.instant();
       if (
-        lastStoredAt !== undefined &&
-        Temporal.Duration.compare(lastStoredAt.until(now), previewInterval) < 0
+        lastStored !== undefined &&
+        Temporal.Duration.compare(lastStored.elapsed(), previewInterval) < 0
       ) {
         return;
       }
 
-      lastStoredAt = now;
+      lastStored = new Stopwatch();
       updateChatAnswer(db, job.assistant.id, { status: 'streaming', content: job.streamed });
     };
   };
@@ -355,7 +353,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       model: model.value,
       signal: job.controller.signal,
       onDelta: streamInto(job),
-      ...(claude.timeoutMs !== undefined && { timeoutMs: claude.timeoutMs }),
+      ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
     if (asked.ok) {
       return {
@@ -449,7 +447,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       ...(verifier?.ok === true && { verifier: verifier.value }),
       signal: job.controller.signal,
       onProgress,
-      ...(claude.timeoutMs !== undefined && { timeoutMs: claude.timeoutMs }),
+      ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
     if (!reviewed.ok) {
       return reviewed.error.kind === 'model'
@@ -587,7 +585,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       {
         model: model.value,
         signal: job.controller.signal,
-        ...(claude.timeoutMs !== undefined && { timeoutMs: claude.timeoutMs }),
+        ...(claude.timeout !== undefined && { timeout: claude.timeout }),
       },
     );
     if (!compacted.ok) {

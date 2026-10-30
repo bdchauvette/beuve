@@ -72,8 +72,41 @@ createTypedRuleTester().run('no-time-number-arithmetic', noTimeNumberArithmetic,
       errors: [{ messageId: 'math', data: { name: 'round', source: 'Duration#total()' } }],
     },
     {
-      code: 'const started = performance.now(); const elapsed = performance.now() - started;',
+      code: 'const started = Date.now(); const elapsed = Date.now() - started;',
       errors: [{ messageId: 'arithmetic' }, { messageId: 'arithmetic' }],
+    },
+    {
+      code: 'const started = performance.now();',
+      errors: [{ messageId: 'monotonicClock', data: { name: 'performance.now' } }],
+    },
+    {
+      code: 'const started = globalThis.performance.now();',
+      errors: [{ messageId: 'monotonicClock', data: { name: 'performance.now' } }],
+    },
+    {
+      code: 'const started = process.hrtime.bigint();',
+      errors: [{ messageId: 'monotonicClock', data: { name: 'process.hrtime.bigint' } }],
+    },
+    {
+      code: 'const started = process.hrtime();',
+      errors: [{ messageId: 'monotonicClock', data: { name: 'process.hrtime' } }],
+    },
+    {
+      code: 'const hrtime = globalThis.process?.hrtime?.bigint;',
+      errors: [{ messageId: 'monotonicClock', data: { name: 'process.hrtime.bigint' } }],
+    },
+    {
+      code: "import { hrtime } from 'node:process'; const started = hrtime.bigint();",
+      errors: [{ messageId: 'monotonicClock', data: { name: 'hrtime.bigint' } }],
+    },
+    {
+      code: 'const started = performance.now(); const elapsed = performance.now() - started;',
+      errors: [
+        { messageId: 'monotonicClock' },
+        { messageId: 'arithmetic' },
+        { messageId: 'arithmetic' },
+        { messageId: 'monotonicClock' },
+      ],
     },
     {
       code: "declare const d: Temporal.Duration; declare function wait(ms: number): void; wait(d.total('milliseconds'));",

@@ -25,7 +25,10 @@ interface Fixture {
   readonly calls: () => readonly { args: string[]; envKeys: string[]; cwd: string }[];
 }
 
-function fake(scenario: Omit<FakeGhScenario, 'callsFile'>, timeoutMs = 5000): Fixture {
+function fake(
+  scenario: Omit<FakeGhScenario, 'callsFile'>,
+  timeout = Temporal.Duration.from({ seconds: 5 }),
+): Fixture {
   scenarios.count += 1;
   const file = path.join(directory, `scenario-${String(scenarios.count)}.json`);
   const callsFile = `${file}.calls`;
@@ -43,7 +46,7 @@ function fake(scenario: Omit<FakeGhScenario, 'callsFile'>, timeoutMs = 5000): Fi
       NODE_OPTIONS: '--inspect',
     },
     cwd: directory,
-    timeoutMs,
+    timeout,
   });
   const calls = (): { args: string[]; envKeys: string[]; cwd: string }[] =>
     readFileSync(callsFile, 'utf8')
@@ -108,10 +111,13 @@ describe('createGhCliCredentialProvider', () => {
   });
 
   it('times out a gh that hangs', async () => {
-    const { provider } = fake({ hosts: {}, hang: true }, 300);
+    const { provider } = fake(
+      { hosts: {}, hang: true },
+      Temporal.Duration.from({ milliseconds: 300 }),
+    );
     await expect(provider.getToken({ host: 'github.com' })).resolves.toEqual({
       ok: false,
-      error: { kind: 'timeout', timeoutMs: 300 },
+      error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 300 }) },
     });
   });
 

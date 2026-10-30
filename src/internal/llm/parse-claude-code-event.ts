@@ -38,7 +38,7 @@ export interface ClaudeCodeResult {
   readonly apiErrorStatus: number | undefined;
   readonly turns: number | undefined;
   readonly costUsd: number | undefined;
-  readonly durationMs: number | undefined;
+  readonly duration: Temporal.Duration | undefined;
   readonly deniedToolUses: number;
 }
 
@@ -181,7 +181,10 @@ function toResult(json: unknown): ClaudeCodeEvent {
       apiErrorStatus: data.api_error_status ?? undefined,
       turns: data.num_turns,
       costUsd: data.total_cost_usd,
-      durationMs: data.duration_ms,
+      duration:
+        data.duration_ms === undefined
+          ? undefined
+          : Temporal.Duration.from({ milliseconds: Math.round(data.duration_ms) }),
       deniedToolUses: data.permission_denials?.length ?? 0,
     },
   };

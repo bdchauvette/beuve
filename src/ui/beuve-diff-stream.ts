@@ -40,6 +40,7 @@ import type { EditTarget } from './plan-edit-target.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPosition } from './step-review-position.ts';
+import { formatDuration } from './format-duration.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
@@ -993,7 +994,7 @@ export class BeuveDiffStream extends LitElement {
     const count = impact.totals.findings;
     return html`<span
       class="impact ${count > 0 ? 'warning' : ''}"
-      title="ImpactGate computed in ${String(impact.computeMs)} ms"
+      title="ImpactGate computed in ${formatDuration(impact.compute)}"
       >ImpactGate:
       ${count === 0 ? 'no findings' : `${String(count)} ${count === 1 ? 'finding' : 'findings'}`}</span
     >`;

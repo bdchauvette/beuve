@@ -130,6 +130,6 @@ function view(files: FileImpactView[]): ImpactView {
       cognitiveDelta: 0,
       findings: 0,
     },
-    computeMs: 1,
+    compute: 'PT0.001S',
   };
 }

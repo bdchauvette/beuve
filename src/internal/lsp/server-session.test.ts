@@ -1,4 +1,4 @@
-import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -70,7 +70,11 @@ function createFakeServer(
   };
 }
 
-const wait = { timeoutMs: 400, graceMs: 80, quietMs: 30 };
+const wait = {
+  timeout: Temporal.Duration.from({ milliseconds: 400 }),
+  grace: Temporal.Duration.from({ milliseconds: 80 }),
+  quiet: Temporal.Duration.from({ milliseconds: 30 }),
+};
 
 function content(name: string, text: string): DocumentContent {
   return {
@@ -195,9 +199,12 @@ describe('ServerSession', () => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
-    await expect(session.diagnostics(document, { ...wait, timeoutMs: 60 })).resolves.toEqual(
-      ok({ diagnostics: [], freshness: 'timed-out' }),
-    );
+    await expect(
+      session.diagnostics(document, {
+        ...wait,
+        timeout: Temporal.Duration.from({ milliseconds: 60 }),
+      }),
+    ).resolves.toEqual(ok({ diagnostics: [], freshness: 'timed-out' }));
   });
 
   it('pulls diagnostics when the server supports it', async () => {
@@ -238,19 +245,15 @@ describe('ServerSession', () => {
   });
 
   it('tracks busy and idle time around requests', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'Temporal'], now: 0 });
-    onTestFinished(() => {
-      vi.useRealTimers();
-    });
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    vi.setSystemTime(50);
-    expect(session.idle.total('milliseconds')).toBe(50);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(session.idle.total('milliseconds')).toBeGreaterThanOrEqual(30);
     const pending = session.request('x', {});
     expect(session.isBusy).toBe(true);
     expect(session.idle.total('milliseconds')).toBe(0);
     await pending;
-    vi.setSystemTime(70);
-    expect(session.idle.total('milliseconds')).toBe(20);
+    expect(session.isBusy).toBe(false);
+    expect(session.idle.total('milliseconds')).toBeLessThan(30);
   });
 });

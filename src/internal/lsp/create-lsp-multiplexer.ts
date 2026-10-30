@@ -10,6 +10,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { convertCharacter } from './convert-character.ts';
 import { createServerEnvironment } from './create-server-environment.ts';
@@ -58,16 +59,16 @@ export interface LspMultiplexerOptions {
   readonly environment?: Readonly<Record<string, string | undefined>>;
   readonly logger?: Logger;
   /** Per request. Defaults to 15 s. */
-  readonly requestTimeoutMs?: number;
+  readonly requestTimeout?: Temporal.Duration;
   /** Default upper bound for `getDiagnostics`. Defaults to 20 s. */
-  readonly diagnosticsTimeoutMs?: number;
+  readonly diagnosticsTimeout?: Temporal.Duration;
   /** How long to wait for a new report after a change when the old one stands. Defaults to 1.5 s. */
-  readonly diagnosticsGraceMs?: number;
+  readonly diagnosticsGrace?: Temporal.Duration;
   /** Stop a server after this long without use; 0 never does. Defaults to 5 minutes. */
-  readonly idleTimeoutMs?: number;
+  readonly idleTimeout?: Temporal.Duration;
   /** Unexpected exits tolerated per window before giving up. Defaults to 3 per 5 minutes. */
   readonly maxRestarts?: number;
-  readonly restartWindowMs?: number;
+  readonly restartWindow?: Temporal.Duration;
   readonly maxOpenDocuments?: number;
   /** Larger files are refused. Defaults to 8 MiB. */
   readonly maxFileBytes?: number;
@@ -88,8 +89,8 @@ export interface PositionRequest extends FileRequest {
 }
 
 export interface DiagnosticsRequest extends FileRequest {
-  /** Overrides `diagnosticsTimeoutMs`. */
-  readonly timeoutMs?: number;
+  /** Overrides `diagnosticsTimeout`. */
+  readonly timeout?: Temporal.Duration;
 }
 
 /**
@@ -123,7 +124,8 @@ interface ServerEntry {
   readonly definition: ServerDefinition;
   session: ServerSession | undefined;
   starting: Promise<Result<ServerSession, LspError>> | undefined;
-  crashes: Temporal.Instant[];
+  /** One stopwatch per unexpected exit, started when it happened. */
+  crashes: Stopwatch[];
   lastExit: ServerExit | undefined;
   restarts: number;
 }
@@ -141,10 +143,11 @@ interface NodeHandle {
 }
 
 const defaultMaxFileBytes = 8 * 1024 * 1024;
+const idleTimerPeriod = Temporal.Duration.from({ minutes: 1 });
 
 /**
  * Creates the LSP multiplexer. It owns its server processes: callers must `dispose` it (main does
- * so on quit). Servers stop after `idleTimeoutMs`, restart lazily on the next call, and are given
+ * so on quit). Servers stop after `idleTimeout`, restart lazily on the next call, and are given
  * up on (until the window passes) after `maxRestarts` unexpected exits.
  */
 export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMultiplexer {
@@ -153,8 +156,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const maxFileBytes = options.maxFileBytes ?? defaultMaxFileBytes;
   const entries = new Map<string, ServerEntry>();
   const nodes = new LruCache<string, NodeHandle>(options.maxNodes ?? 10_000);
-  const idleTimeoutMs = options.idleTimeoutMs ?? 5 * 60_000;
-  const idleTimeout = Temporal.Duration.from({ milliseconds: idleTimeoutMs });
+  const idleTimeout = options.idleTimeout ?? Temporal.Duration.from({ minutes: 5 });
   const lifecycle = { isDisposed: false };
 
   const definitionFor = (file: WorkspaceFile): ServerDefinition | undefined => {
@@ -184,7 +186,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       commandPath: command.value,
       env: createServerEnvironment(environment, definition.env),
       ...(logger !== undefined && { logger }),
-      ...(options.requestTimeoutMs !== undefined && { requestTimeoutMs: options.requestTimeoutMs }),
+      ...(options.requestTimeout !== undefined && { requestTimeout: options.requestTimeout }),
     });
     if (!started.ok) {
       return started;
@@ -205,7 +207,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return;
     }
 
-    entry.crashes.push(Temporal.Now.instant());
+    entry.crashes.push(new Stopwatch());
     entry.lastExit = exit;
   };
 
@@ -237,10 +239,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (entry.starting !== undefined) {
       return entry.starting;
     }
-    const windowStart = Temporal.Now.instant().subtract({
-      milliseconds: options.restartWindowMs ?? 5 * 60_000,
-    });
-    entry.crashes = entry.crashes.filter((at) => Temporal.Instant.compare(at, windowStart) >= 0);
+    const restartWindow = options.restartWindow ?? Temporal.Duration.from({ minutes: 5 });
+    entry.crashes = entry.crashes.filter(
+      (crash) => Temporal.Duration.compare(crash.elapsed(), restartWindow) <= 0,
+    );
     if (entry.crashes.length > (options.maxRestarts ?? 3)) {
       return err({
         kind: 'server-exited',
@@ -258,7 +260,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       const started = await startSession(current);
       current.starting = undefined;
       if (!started.ok) {
-        current.crashes.push(Temporal.Now.instant());
+        current.crashes.push(new Stopwatch());
         return started;
       }
       if (lifecycle.isDisposed) {
@@ -468,28 +470,22 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   };
 
   const idleTimer =
-    idleTimeoutMs > 0
-      ? setInterval(
-          () => {
-            for (const entry of entries.values()) {
-              const { session } = entry;
-              if (
-                session === undefined ||
-                Temporal.Duration.compare(session.idle, idleTimeout) < 0
-              ) {
-                continue;
-              }
-
-              entry.session = undefined;
-              logger?.info('lsp: stopping idle server', {
-                serverId: entry.definition.id,
-                root: entry.root,
-              });
-              void session.dispose();
+    idleTimeout.sign > 0
+      ? setInterval(() => {
+          for (const entry of entries.values()) {
+            const { session } = entry;
+            if (session === undefined || Temporal.Duration.compare(session.idle, idleTimeout) < 0) {
+              continue;
             }
-          },
-          Math.min(idleTimeoutMs, 60_000),
-        )
+
+            entry.session = undefined;
+            logger?.info('lsp: stopping idle server', {
+              serverId: entry.definition.id,
+              root: entry.root,
+            });
+            void session.dispose();
+          }
+        }, shorterOf(idleTimeout, idleTimerPeriod).total('milliseconds'))
       : undefined;
   idleTimer?.unref();
 
@@ -501,9 +497,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       }
       const { session, entry, document, file } = opened.value;
       const settled = await session.diagnostics(document, {
-        timeoutMs: request.timeoutMs ?? options.diagnosticsTimeoutMs ?? 20_000,
-        graceMs: options.diagnosticsGraceMs ?? 1500,
-        quietMs: entry.definition.diagnosticsQuietMs,
+        timeout:
+          request.timeout ?? options.diagnosticsTimeout ?? Temporal.Duration.from({ seconds: 20 }),
+        grace: options.diagnosticsGrace ?? Temporal.Duration.from({ milliseconds: 1500 }),
+        quiet: entry.definition.diagnosticsQuiet,
       });
       if (!settled.ok) {
         return settled;
@@ -607,6 +604,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       nodes.clear();
     },
   };
+}
+
+function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
+  return Temporal.Duration.compare(a, b) <= 0 ? a : b;
 }
 
 function positionParams(opened: OpenedFile, position: Position): Record<string, unknown> {

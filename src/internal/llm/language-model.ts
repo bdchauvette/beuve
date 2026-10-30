@@ -23,7 +23,7 @@ export interface BaseModelRequest {
   readonly prompt: string;
   /** Absolute directory the model may read (the session worktree). It must never be written. */
   readonly cwd: string;
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
   /** Coarse progress for a status line. Carries no prompt or file content. */
   readonly onProgress?: (progress: ModelProgress) => void;
@@ -57,7 +57,7 @@ export interface ModelOutput<T> {
   readonly turns: number | undefined;
   /** The backend's cost estimate; for subscription logins this is notional, not billed. */
   readonly costUsd: number | undefined;
-  readonly durationMs: number;
+  readonly duration: Temporal.Duration;
   /** Tool calls the backend refused under the read-only policy. */
   readonly deniedToolUses: number;
 }
@@ -72,7 +72,7 @@ export type ModelError =
       readonly message: string;
       readonly resetsAt: string | undefined;
     }
-  | { readonly kind: 'timeout'; readonly timeoutMs: number }
+  | { readonly kind: 'timeout'; readonly timeout: Temporal.Duration }
   | { readonly kind: 'cancelled' }
   | { readonly kind: 'output-too-large'; readonly maxBytes: number }
   | { readonly kind: 'invalid-output'; readonly reason: string }

@@ -78,7 +78,7 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     worktree: fixture.worktree,
     dependencyRoot: fixture.dependencyRoot,
     testFiles: ['src/math.test.ts'],
-    timeoutMs: 30_000,
+    timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
     ...overrides,
   });
   const runner = (): ReturnType<typeof createVitestTraceRunner> =>
@@ -149,10 +149,20 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
 
   it('kills a run that outlives its timeout', async () => {
     const result = await runTraceProbe(
-      { ...request({ testFiles: ['src/hang.test.ts'], timeoutMs: 1500 }), plan, source: math },
+      {
+        ...request({
+          testFiles: ['src/hang.test.ts'],
+          timeout: Temporal.Duration.from({ milliseconds: 1500 }),
+        }),
+        plan,
+        source: math,
+      },
       runner(),
     );
-    expect(result).toEqual({ ok: false, error: { kind: 'timeout', timeoutMs: 1500 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1500 }) },
+    });
   });
 
   it('stops when cancelled', async () => {
@@ -190,7 +200,7 @@ describe('createVitestTraceRunner cancelled during setup', { timeout: 60_000 }, 
         dependencyRoot: fixture.dependencyRoot,
         testFiles: ['src/hang.test.ts'],
         files: [],
-        timeoutMs: 30_000,
+        timeout: Temporal.Duration.from({ milliseconds: 30_000 }),
         signal: controller.signal,
       });
       queueMicrotask(() => {
@@ -227,7 +237,7 @@ describe('createVitestTraceRunner refusals', () => {
       dependencyRoot: fixture.dependencyRoot,
       testFiles: ['src/a.test.ts'],
       files: [],
-      timeoutMs: 1000,
+      timeout: Temporal.Duration.from({ milliseconds: 1000 }),
       ...overrides,
     });
 

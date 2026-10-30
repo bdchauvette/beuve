@@ -51,7 +51,13 @@ export async function traceTestSource(
   }
   const record = recorder.take();
   const timelines = buildTraceTimelines(plan, record === undefined ? [] : [record], [
-    { file: 'test.ts', titles: ['case'], status: 'passed', durationMs: 1, failure: undefined },
+    {
+      file: 'test.ts',
+      titles: ['case'],
+      status: 'passed',
+      duration: Temporal.Duration.from({ milliseconds: 1 }),
+      failure: undefined,
+    },
   ]);
   const timeline = timelines[0];
   if (timeline === undefined) {

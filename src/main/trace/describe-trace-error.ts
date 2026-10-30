@@ -41,7 +41,7 @@ export function describeTraceError(error: TraceError, stopReason: string): Trace
     case 'timeout': {
       return {
         failure: 'timeout',
-        message: `The tests took longer than ${String(Math.round(error.timeoutMs / 1000))} s and were stopped.`,
+        message: `The tests took longer than ${String(error.timeout.round({ largestUnit: 'second', smallestUnit: 'second', roundingMode: 'halfExpand' }).seconds)} s and were stopped.`,
       };
     }
     case 'cancelled': {

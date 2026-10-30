@@ -32,7 +32,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
     args: [script, mode],
     languageIds: { '.ts': 'typescript' },
     settings: { fake: { flag: true } },
-    diagnosticsQuietMs: 20,
+    diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 20 }),
   });
 
   const start = async (

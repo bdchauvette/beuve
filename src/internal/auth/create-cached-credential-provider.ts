@@ -10,7 +10,7 @@ import type { GithubToken } from './github-token.ts';
 
 export interface CachedCredentialProviderOptions {
   /** How long a token is reused before the inner provider is asked again. Defaults to 5 minutes. */
-  readonly ttlMs?: number;
+  readonly ttl?: Temporal.Duration;
 }
 
 interface Entry {
@@ -28,7 +28,7 @@ export function createCachedCredentialProvider(
   inner: GithubCredentialProvider,
   options: CachedCredentialProviderOptions = {},
 ): GithubCredentialProvider {
-  const ttl = Temporal.Duration.from({ milliseconds: options.ttlMs ?? 5 * 60_000 });
+  const ttl = options.ttl ?? Temporal.Duration.from({ minutes: 5 });
   const entries = new Map<string, Entry>();
 
   const getToken = async (request: CredentialRequest): Promise<Result<GithubToken, AuthError>> => {

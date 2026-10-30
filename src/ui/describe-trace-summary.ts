@@ -13,7 +13,7 @@ export function describeTraceSummary(result: TraceResultView, cases: readonly Tr
     names === '' ? 'No function traced' : `Traced ${names}`,
     `${String(count)} ${count === 1 ? 'test' : 'tests'}, ${String(reached)} reached it`,
     failed > 0 ? `${String(failed)} failed` : '',
-    formatDuration(result.durationMs),
+    formatDuration(result.duration),
   ]
     .filter((part) => part !== '')
     .join(' · ');

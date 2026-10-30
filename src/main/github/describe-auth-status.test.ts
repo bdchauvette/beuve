@@ -62,8 +62,10 @@ describe('describeAuthStatus', () => {
         err({ kind: 'cli-not-installed', searched: ['/usr/bin/gh'] }),
       ),
     ).toMatchObject({ kind: 'signed-out', reason: 'cli-not-installed' });
-    expect(
-      describeAuthStatus('ghe.example.com', err({ kind: 'timeout', timeoutMs: 10_000 })),
-    ).toMatchObject({ reason: 'timeout', message: 'gh did not answer within 10 s.' });
+    const timeout = Temporal.Duration.from({ seconds: 10 });
+    expect(describeAuthStatus('ghe.example.com', err({ kind: 'timeout', timeout }))).toMatchObject({
+      reason: 'timeout',
+      message: 'gh did not answer within 10 s.',
+    });
   });
 });

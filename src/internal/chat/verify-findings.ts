@@ -21,7 +21,7 @@ export interface VerificationRequest {
 
 export interface VerifyFindingsDeps<E> {
   readonly model: ReviewModel<E>;
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
 }
 
@@ -41,7 +41,7 @@ export async function verifyFindings<E>(
     prompt: buildVerificationPrompt(request),
     cwd: request.worktreePath,
     outputSchema: verdictOutputSchema,
-    timeoutMs: deps.timeoutMs,
+    timeout: deps.timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
   });
   if (!output.ok) {

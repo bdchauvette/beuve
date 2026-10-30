@@ -49,7 +49,7 @@ export async function resolveLanguageModel(
     inheritedEnv: env,
     ...(claude.leadingArgs !== undefined && { leadingArgs: claude.leadingArgs }),
     ...(claude.model !== undefined && { model: claude.model }),
-    ...(claude.killGraceMs !== undefined && { killGraceMs: claude.killGraceMs }),
+    ...(claude.killGrace !== undefined && { killGrace: claude.killGrace }),
     ...(effort !== undefined && { effort }),
     // A GUI app's PATH may lack the directory of the `node` an npm-installed `claude` needs.
     ...(path.isAbsolute(command) && {

@@ -37,6 +37,7 @@ import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts'
 
 import { lspErrorToIpcError } from './lsp-error-to-ipc-error.ts';
 import { toHeadSpans } from './to-head-spans.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** Diagnostics for agents: lines and columns are 1-based, columns in UTF-16 code units. */
 export interface AgentDiagnosticsReport {
@@ -147,7 +148,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
 
   return {
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
-      const started = Temporal.Now.instant();
+      const stopwatch = new Stopwatch();
       const cachedSpans = spansBySession.get(request.sessionId);
       if (cachedSpans !== undefined && request.nodeId !== undefined) {
         const calls = await expand(request.nodeId, request.direction, cachedSpans);
@@ -192,9 +193,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       logger.debug('call hierarchy', {
         path: file,
         direction: request.direction,
-        durationMs: Temporal.Now.instant()
-          .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-          .total('milliseconds'),
+        duration: stopwatch.elapsed(),
       });
       return calls.ok
         ? ok({ direction: request.direction, root: toNodeView(root, spans), calls: calls.value })
@@ -205,7 +204,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       sessionId,
       path: requested,
     }): Promise<Result<AgentDiagnosticsReport, IpcError>> => {
-      const started = Temporal.Now.instant();
+      const stopwatch = new Stopwatch();
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
         return loaded;
@@ -227,9 +226,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       logger.debug('diagnostics', {
         path: file,
         freshness: report.value.freshness,
-        durationMs: Temporal.Now.instant()
-          .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-          .total('milliseconds'),
+        duration: stopwatch.elapsed(),
       });
       return ok({
         sessionId: session.id,

@@ -25,6 +25,8 @@ import { syncPullRequestHead } from './sync-pull-request-head.ts';
 import { toCiStatusView } from './to-ci-status-view.ts';
 import { toPullRequestView } from './to-pull-request-view.ts';
 import { toStackView } from './to-stack-view.ts';
+import { multiplyDuration } from '#x/time/multiply-duration.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /**
  * Keeps the open pull request session in step with GitHub (ADR 0038): one session at a time,
@@ -52,7 +54,7 @@ export interface PullRequestPoller {
 export interface PullRequestPollerOptions {
   readonly context: GithubContext;
   /** Between polls of a focused window. Defaults to 60 s. */
-  readonly intervalMs?: number;
+  readonly interval?: Temporal.Duration;
   /** Off in tests, which call `pollNow`; `watch` then only records the session. */
   readonly scheduled?: boolean;
 }
@@ -64,20 +66,21 @@ interface PollState {
   ci?: CiStatusView;
   stack?: PullRequestStackView;
   failures: number;
-  lastPolledAt: Temporal.Instant | undefined;
+  /** Measures the time since the last poll started. */
+  lastPolled: Stopwatch | undefined;
 }
 
 const backgroundFactor = 5;
-const maxBackoffMs = 15 * 60_000;
+const maxBackoff = Temporal.Duration.from({ minutes: 15 });
 
 /** Creates the poller. Timers are unref'd, so polling never keeps the process alive. */
 export function createPullRequestPoller(options: PullRequestPollerOptions): PullRequestPoller {
   const { context } = options;
   const { logger } = context.session;
-  const intervalMs = options.intervalMs ?? 60_000;
+  const interval = options.interval ?? Temporal.Duration.from({ seconds: 60 });
   const isScheduled = options.scheduled ?? true;
   const states = new Map<string, PollState>();
-  const inFlight = new Map<string, Promise<number>>();
+  const inFlight = new Map<string, Promise<Temporal.Duration>>();
   const updatedListeners = new Set<(event: PullRequestUpdatedView) => void>();
   const ciListeners = new Set<(event: CiStatusChangedView) => void>();
   let watched: string | undefined;
@@ -90,7 +93,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     if (existing !== undefined) {
       return existing;
     }
-    const created: PollState = { failures: 0, lastPolledAt: undefined };
+    const created: PollState = { failures: 0, lastPolled: undefined };
     states.set(sessionId, created);
     return created;
   };
@@ -109,20 +112,25 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   const failed = (
     state: PollState,
     error: { readonly kind: string; readonly resetAt?: string | undefined },
-  ): number => {
+  ): Temporal.Duration => {
     state.failures += 1;
     if (error.kind === 'rate-limited' && error.resetAt !== undefined) {
       const untilReset = Temporal.Now.instant()
         .until(Temporal.Instant.from(error.resetAt))
         .add({ seconds: 1 });
-      const floor = Temporal.Duration.from({ milliseconds: intervalMs });
-      const ceiling = Temporal.Duration.from({ milliseconds: maxBackoffMs });
-      const [, clamped = floor] = [floor, untilReset, ceiling].toSorted((a, b) =>
+      const [, clamped = interval] = [interval, untilReset, maxBackoff].toSorted((a, b) =>
         Temporal.Duration.compare(a, b),
       );
-      return clamped.total('milliseconds');
+      return clamped;
     }
-    return Math.min(maxBackoffMs, intervalMs * 2 ** state.failures);
+    let backoff = interval;
+    for (let doubled = 0; doubled < state.failures; doubled += 1) {
+      if (Temporal.Duration.compare(backoff, maxBackoff) >= 0) {
+        break;
+      }
+      backoff = backoff.add(backoff);
+    }
+    return Temporal.Duration.compare(backoff, maxBackoff) < 0 ? backoff : maxBackoff;
   };
 
   const didMoveHead = async (
@@ -158,17 +166,17 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return moveSessionHead(context.session, session, synced.value.headSha).ok;
   };
 
-  const pollOnce = async (sessionId: string): Promise<number> => {
+  const pollOnce = async (sessionId: string): Promise<Temporal.Duration> => {
     const state = stateOf(sessionId);
-    state.lastPolledAt = Temporal.Now.instant();
+    state.lastPolled = new Stopwatch();
     const loaded = loadSession(context.session, sessionId);
     if (!loaded.ok) {
-      return intervalMs;
+      return interval;
     }
     const session = loaded.value;
     const { source } = session;
     if (source.kind !== 'github-pull-request') {
-      return intervalMs;
+      return interval;
     }
     const { host, owner, repo, number } = source;
     const ref: PullRequestRef = { host, owner, repo, number };
@@ -227,20 +235,20 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       emit(ciListeners, { sessionId, ci: state.ci });
     }
     state.failures = 0;
-    return intervalMs;
+    return interval;
   };
 
-  const pollShared = async (sessionId: string): Promise<number> => {
+  const pollShared = async (sessionId: string): Promise<Temporal.Duration> => {
     const running = inFlight.get(sessionId);
     if (running !== undefined) {
       return running;
     }
-    const started = (async (): Promise<number> => {
+    const started = (async (): Promise<Temporal.Duration> => {
       try {
         return await pollOnce(sessionId);
       } catch (error: unknown) {
         logger.error('github poll failed', { error });
-        return intervalMs;
+        return interval;
       } finally {
         inFlight.delete(sessionId);
       }
@@ -260,9 +268,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       void (async (): Promise<void> => {
         const next = await pollShared(sessionId);
         if (watched === sessionId) {
-          schedule(
-            Temporal.Duration.from({ milliseconds: isForeground ? next : next * backgroundFactor }),
-          );
+          schedule(isForeground ? next : multiplyDuration(next, backgroundFactor));
         }
       })();
     }, delay.total('milliseconds'));
@@ -286,12 +292,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       if (!isNowForeground || !wasBackground || watched === undefined) {
         return;
       }
-      const last = stateOf(watched).lastPolledAt;
-      const interval = Temporal.Duration.from({ milliseconds: intervalMs });
+      const last = stateOf(watched).lastPolled;
       const remaining =
-        last === undefined
-          ? new Temporal.Duration()
-          : interval.subtract(last.until(Temporal.Now.instant()));
+        last === undefined ? new Temporal.Duration() : interval.subtract(last.elapsed());
       schedule(remaining.sign < 0 ? new Temporal.Duration() : remaining);
     },
     snapshot: (sessionId): ReturnType<PullRequestPoller['snapshot']> => {

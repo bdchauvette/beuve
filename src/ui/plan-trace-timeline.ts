@@ -45,7 +45,7 @@ export function planTraceTimeline(result: TraceResultView): TraceCase[] {
       key: `${String(index)}:${timeline.file}:${timeline.titles.join('\0')}`,
       title: timeline.titles.length === 0 ? 'Outside any test' : timeline.titles.join(' › '),
       status: timeline.status,
-      duration: formatDuration(timeline.durationMs),
+      duration: formatDuration(timeline.duration),
       failure: firstLine(timeline.failure ?? ''),
       rows,
       hunkRows: rows.filter((row) => row.inHunk).length,

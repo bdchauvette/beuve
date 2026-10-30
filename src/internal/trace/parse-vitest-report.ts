@@ -32,7 +32,7 @@ export function parseVitestReport(text: string, root: string): TestOutcome[] | u
         file,
         titles: [],
         status: 'failed',
-        durationMs: undefined,
+        duration: undefined,
         failure: bounded(typeof result.message === 'string' ? result.message : undefined),
       });
       continue;
@@ -62,7 +62,10 @@ function toOutcome(file: string, value: unknown): TestOutcome | undefined {
     file,
     titles,
     status: toStatus(value.status),
-    durationMs: typeof value.duration === 'number' ? value.duration : undefined,
+    duration:
+      typeof value.duration === 'number'
+        ? Temporal.Duration.from({ milliseconds: Math.round(value.duration) })
+        : undefined,
     failure: bounded(typeof first === 'string' ? first : undefined),
   };
 }

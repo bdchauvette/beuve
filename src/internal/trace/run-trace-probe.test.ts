@@ -18,7 +18,7 @@ const base = {
   worktree: '/w',
   dependencyRoot: '/r',
   testFiles: ['src/a.test.ts'],
-  timeoutMs: 1000,
+  timeout: Temporal.Duration.from({ milliseconds: 1000 }),
 };
 
 describe('runTraceProbe', () => {
@@ -29,13 +29,13 @@ describe('runTraceProbe', () => {
         seen.push(request);
         await Promise.resolve();
         return ok({
-          durationMs: 5,
+          duration: Temporal.Duration.from({ milliseconds: 5 }),
           outcomes: [
             {
               file: 'src/a.test.ts',
               titles: ['t'],
               status: 'passed',
-              durationMs: 1,
+              duration: Temporal.Duration.from({ milliseconds: 1 }),
               failure: undefined,
             },
           ],
@@ -57,7 +57,7 @@ describe('runTraceProbe', () => {
       ok: true,
       value: {
         path: 'src/a.ts',
-        durationMs: 5,
+        duration: Temporal.Duration.from({ milliseconds: 5 }),
         timelines: [
           { titles: ['t'], status: 'passed', entries: [{ kind: 'enter', fn: 0, line: 1 }] },
         ],

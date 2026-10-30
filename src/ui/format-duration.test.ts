@@ -9,7 +9,7 @@ describe('formatDuration', () => {
     expect,
   }) => {
     expect(formatDuration(undefined)).toBe('');
-    expect(formatDuration(999.4)).toBe('999 ms');
-    expect(formatDuration(2450)).toBe('2.5 s');
+    expect(formatDuration('PT0.9994S')).toBe('999 ms');
+    expect(formatDuration('PT2.45S')).toBe('2.5 s');
   });
 });

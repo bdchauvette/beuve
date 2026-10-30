@@ -14,7 +14,7 @@ function result(): TraceResultView {
     testFiles: ['src/a.test.ts'],
     functions: [],
     timelines: [],
-    durationMs: 12,
+    duration: 'PT0.012S',
   };
 }
 function echo(): { sessionId: string; runId: string; path: string; line: number } {

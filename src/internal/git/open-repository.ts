@@ -34,12 +34,12 @@ export interface GitExecOptions {
   /** Overrides the repository's output cap for this call. */
   readonly maxBufferBytes?: number;
   /** Overrides the repository's timeout for this call, e.g. for a network fetch. */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
 export interface OpenRepositoryOptions {
   readonly gitBinary?: string;
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
   readonly maxBufferBytes?: number;
   readonly logger?: Logger;
 }

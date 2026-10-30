@@ -93,7 +93,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       claude: {
         command: process.execPath,
         leadingArgs: [writeFakeClaude(scratch), 'chat', chatFile],
-        killGraceMs: 200,
+        killGrace: Temporal.Duration.from({ milliseconds: 200 }),
       },
       github: {
         credentials: createGhCliCredentialProvider({

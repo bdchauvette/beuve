@@ -6,7 +6,7 @@ export type TraceError =
   | { readonly kind: 'vitest-not-found'; readonly searched: string }
   /** No selected test file matched the project's Vitest config, or none was given. */
   | { readonly kind: 'no-tests'; readonly testFiles: readonly string[] }
-  | { readonly kind: 'timeout'; readonly timeoutMs: number }
+  | { readonly kind: 'timeout'; readonly timeout: Temporal.Duration }
   | { readonly kind: 'cancelled' }
   /** Vitest ended without a report; `output` is the tail of its stdout and stderr. */
   | {

@@ -10,6 +10,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
+import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { buildClaudeCodeArgs } from './build-claude-code-args.ts';
 import type { ClaudeCodeEffort } from './build-claude-code-args.ts';
@@ -43,7 +44,7 @@ export interface ClaudeCodeModelOptions {
   /** Fail with `output-too-large` past this many bytes of stdout. Defaults to 32 MiB. */
   readonly maxOutputBytes?: number;
   /** Between SIGTERM and SIGKILL when stopping a run. Defaults to 2 s. */
-  readonly killGraceMs?: number;
+  readonly killGrace?: Temporal.Duration;
   readonly logger?: Logger;
 }
 
@@ -84,7 +85,7 @@ async function runStructured<T>(
   const parsed = request.outputSchema.safeParse(answer.value.value);
   if (!parsed.success) {
     options.logger?.info('claude-code: output does not match the schema', {
-      durationMs: answer.value.durationMs,
+      duration: answer.value.duration,
     });
     return err({ kind: 'invalid-output', reason: z.prettifyError(parsed.error) });
   }
@@ -137,7 +138,7 @@ async function runClaudeCode(
     ...(options.maxBudgetUsd !== undefined && { maxBudgetUsd: options.maxBudgetUsd }),
   });
   const command = options.command ?? 'claude';
-  const started = Temporal.Now.instant();
+  const stopwatch = new Stopwatch();
   options.logger?.debug('claude-code: starting', {
     command,
     cwd: request.cwd,
@@ -152,11 +153,9 @@ async function runClaudeCode(
     mode.onText,
     options,
   );
-  const durationMs = Temporal.Now.instant()
-    .since(started, { smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
-    .total('milliseconds');
+  const duration = stopwatch.elapsed();
   if (!run.ok) {
-    options.logger?.info('claude-code: run failed', { durationMs, error: run.error.kind });
+    options.logger?.info('claude-code: run failed', { duration, error: run.error.kind });
     return run;
   }
   const { outcome, model } = run.value;
@@ -166,7 +165,7 @@ async function runClaudeCode(
   );
   if (!classified.ok) {
     options.logger?.info('claude-code: run failed', {
-      durationMs,
+      duration,
       error: classified.error.kind,
       exitCode: outcome.exitCode,
     });
@@ -178,14 +177,14 @@ async function runClaudeCode(
     model,
     turns: result.turns,
     costUsd: result.costUsd,
-    durationMs,
+    duration,
     deniedToolUses: result.deniedToolUses,
   });
 }
 
 function logFinished(output: ModelOutput<unknown>, options: ClaudeCodeModelOptions): void {
   options.logger?.info('claude-code: run finished', {
-    durationMs: output.durationMs,
+    duration: output.duration,
     model: output.model,
     turns: output.turns,
     costUsd: output.costUsd,
@@ -213,8 +212,8 @@ function validateRequest(request: BaseModelRequest, jsonSchema: string): ModelEr
   if (request.system.length + jsonSchema.length > maxArgumentChars) {
     return { kind: 'invalid-request', reason: 'the system prompt and schema are too long' };
   }
-  if (!(request.timeoutMs > 0)) {
-    return { kind: 'invalid-request', reason: 'timeoutMs must be positive' };
+  if (request.timeout.sign <= 0) {
+    return { kind: 'invalid-request', reason: 'timeout must be positive' };
   }
   return undefined;
 }
@@ -260,13 +259,16 @@ async function execute(
     }
     termination = reason;
     signalGroup('SIGTERM');
-    killTimer = setTimeout(() => {
-      signalGroup('SIGKILL');
-    }, options.killGraceMs ?? 2000);
+    killTimer = setTimeout(
+      () => {
+        signalGroup('SIGKILL');
+      },
+      (options.killGrace ?? Temporal.Duration.from({ seconds: 2 })).total('milliseconds'),
+    );
   };
   const timeout = setTimeout(() => {
     terminate('timeout');
-  }, request.timeoutMs);
+  }, request.timeout.total('milliseconds'));
   const onAbort = (): void => {
     terminate('cancelled');
   };
@@ -362,7 +364,7 @@ async function execute(
 
   switch (termination) {
     case 'timeout': {
-      return err({ kind: 'timeout', timeoutMs: request.timeoutMs });
+      return err({ kind: 'timeout', timeout: request.timeout });
     }
     case 'cancelled': {
       return err({ kind: 'cancelled' });

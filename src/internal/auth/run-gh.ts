@@ -12,7 +12,7 @@ export interface GhInvocation {
   readonly env: Readonly<Record<string, string>>;
   /** An absolute directory unrelated to any repository under review. */
   readonly cwd: string;
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   /** Fail with `output-too-large` past this many bytes of stdout. Defaults to 1 MiB. */
   readonly maxOutputBytes?: number;
 }
@@ -60,7 +60,7 @@ export async function runGh(invocation: GhInvocation): Promise<Result<GhExit, Gh
     };
     const timer = setTimeout(() => {
       stop({ kind: 'timeout' });
-    }, invocation.timeoutMs);
+    }, invocation.timeout.total('milliseconds'));
 
     let stdout = '';
     let outputBytes = 0;

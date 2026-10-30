@@ -106,8 +106,16 @@ describe('JsonRpcConnection', () => {
 
   it('times out and sends $/cancelRequest, ignoring the late response', async () => {
     const peer = createPeer();
-    const result = await peer.connection.request('slow', undefined, { timeoutMs: 20 });
-    expect(result).toEqual(err({ kind: 'timeout', method: 'slow', timeoutMs: 20 }));
+    const result = await peer.connection.request('slow', undefined, {
+      timeout: Temporal.Duration.from({ milliseconds: 20 }),
+    });
+    expect(result).toEqual(
+      err({
+        kind: 'timeout',
+        method: 'slow',
+        timeout: Temporal.Duration.from({ milliseconds: 20 }),
+      }),
+    );
     expect(peer.sent).toEqual([
       { jsonrpc: '2.0', id: 1, method: 'slow' },
       { jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 1 } },

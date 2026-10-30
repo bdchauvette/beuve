@@ -31,7 +31,7 @@ describe('askQuestion with the Claude Code adapter (fake claude)', () => {
       command: process.execPath,
       leadingArgs: [script, mode, file],
       inheritedEnv: { PATH: process.env['PATH'] },
-      killGraceMs: 200,
+      killGrace: Temporal.Duration.from({ milliseconds: 200 }),
     });
   };
   const question = createChatQuestion({ worktreePath: directory });

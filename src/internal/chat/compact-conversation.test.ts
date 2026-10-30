@@ -26,7 +26,7 @@ function fakeModel(
             model: 'fake',
             turns: 1,
             costUsd: 0,
-            durationMs: 1,
+            duration: Temporal.Duration.from({ milliseconds: 1 }),
             deniedToolUses: 0,
           })
         : answer;

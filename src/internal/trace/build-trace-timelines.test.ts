@@ -45,7 +45,7 @@ describe('buildTraceTimelines', () => {
         titles: ['one'],
         status: 'passed',
         failure: undefined,
-        durationMs: 1,
+        duration: Temporal.Duration.from({ milliseconds: 1 }),
         dropped: 2,
         entries: [
           {
@@ -87,7 +87,7 @@ describe('buildTraceTimelines', () => {
         titles: ['two'],
         status: 'failed',
         failure: undefined,
-        durationMs: 1,
+        duration: Temporal.Duration.from({ milliseconds: 1 }),
         dropped: 0,
         entries: [],
       },
@@ -120,7 +120,7 @@ function outcome(titles: string[], status: TestOutcome['status']): TestOutcome {
     file: 'src/a.test.ts',
     titles,
     status,
-    durationMs: 1,
+    duration: Temporal.Duration.from({ milliseconds: 1 }),
     failure: undefined,
   };
 }

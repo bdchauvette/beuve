@@ -90,7 +90,7 @@ export interface TraceServicesOptions {
   /** Where each run makes its throwaway directory. Defaults to a folder under the OS temp. */
   readonly temporaryDirectory?: string;
   /** Longest a probe may run. Defaults to 30 s (ADR 0041). */
-  readonly timeoutMs?: number;
+  readonly timeout?: Temporal.Duration;
 }
 
 type StopReason = 'cancelled' | 'head-changed' | 'app-quit';
@@ -115,7 +115,7 @@ interface Job {
   outcome: Promise<Outcome>;
 }
 
-const defaultTimeoutMs = 30_000;
+const defaultTimeout = Temporal.Duration.from({ seconds: 30 });
 const stopReasons: ReadonlySet<string> = new Set(['cancelled', 'head-changed', 'app-quit']);
 const stopMessages: Readonly<Record<StopReason, string>> = {
   cancelled: 'The probe was cancelled.',
@@ -134,7 +134,7 @@ const stopMessages: Readonly<Record<StopReason, string>> = {
 export function createTraceServices(options: TraceServicesOptions): TraceServices {
   const { context, worktrees, parse, trust } = options;
   const { logger } = context;
-  const timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
+  const timeout = options.timeout ?? defaultTimeout;
   const runner =
     options.runner ??
     createVitestTraceRunner({
@@ -279,7 +279,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         worktree: worktree.value,
         dependencyRoot: repository.root,
         testFiles,
-        timeoutMs,
+        timeout,
         signal: job.controller.signal,
         plan: planned.value,
         source: blob.text,

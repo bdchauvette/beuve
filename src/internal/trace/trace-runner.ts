@@ -27,7 +27,7 @@ export interface TraceRunRequest {
   /** Vitest's `--testNamePattern`. */
   readonly testNamePattern?: string;
   readonly files: readonly InstrumentedFile[];
-  readonly timeoutMs: number;
+  readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
 }
 
@@ -39,7 +39,7 @@ export interface TestOutcome {
   readonly file: string;
   readonly titles: readonly string[];
   readonly status: TestStatus;
-  readonly durationMs: number | undefined;
+  readonly duration: Temporal.Duration | undefined;
   /** First failure message, bounded. */
   readonly failure: string | undefined;
 }
@@ -48,7 +48,7 @@ export interface TraceRunOutput {
   /** Records with worktree-relative test files. */
   readonly records: readonly TraceRecord[];
   readonly outcomes: readonly TestOutcome[];
-  readonly durationMs: number;
+  readonly duration: Temporal.Duration;
 }
 
 /** Runs tests against instrumented sources and collects the recorder's output (ADR 0036). */

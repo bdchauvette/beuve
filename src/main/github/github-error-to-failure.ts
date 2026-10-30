@@ -93,7 +93,7 @@ function describeTransport(
       return error.message;
     }
     case 'timeout': {
-      return `no answer within ${String(Math.round(error.timeoutMs / 1000))} s`;
+      return `no answer within ${String(error.timeout.round({ largestUnit: 'second', smallestUnit: 'second', roundingMode: 'halfExpand' }).seconds)} s`;
     }
     case 'invalid-request': {
       return error.reason;
