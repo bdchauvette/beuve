@@ -7,6 +7,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -377,7 +378,7 @@ function sdkOptions(
 
 /** The SDK threw before a result: Claude Code is missing, failed to start or died. */
 function failedToRun(failure: unknown, stderr: string, options: AgentSdkModelOptions): ModelError {
-  const message = Error.isError(failure) ? failure.message : String(failure);
+  const message = errorFrom(failure).message;
   if (isMissingExecutable(message)) {
     return { kind: 'not-installed', command: options.pathToClaudeCodeExecutable ?? 'claude' };
   }

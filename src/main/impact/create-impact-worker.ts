@@ -1,5 +1,6 @@
 import { Worker } from 'node:worker_threads';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import type { ImpactSourceFile } from '#internal/impact/impact-input.ts';
 import type { ImpactReport } from '#internal/impact/impact-report.ts';
 import type { Logger } from '#x/log/create-logger.ts';
@@ -99,7 +100,7 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
     try {
       worker.postMessage(request);
     } catch (error: unknown) {
-      finish(job, err({ kind: 'worker-failed', message: messageOf(error) }));
+      finish(job, err({ kind: 'worker-failed', message: errorFrom(error).message }));
     }
   };
 
@@ -176,8 +177,4 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
       }
     },
   };
-}
-
-function messageOf(error: unknown): string {
-  return Error.isError(error) ? error.message : String(error);
 }

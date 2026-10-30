@@ -1,5 +1,7 @@
 import process from 'node:process';
 
+import { errorFrom } from '#x/error/error-from.ts';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type LogFields = Readonly<Record<string, unknown>>;
@@ -113,7 +115,7 @@ function serialize(record: Readonly<Record<string, unknown>>): string {
       level: record['level'],
       namespace: record['namespace'],
       message: record['message'],
-      serializationError: String(error),
+      serializationError: errorFrom(error).message,
     });
   }
 }

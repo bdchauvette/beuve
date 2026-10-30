@@ -11,6 +11,7 @@ import { noModuleMocking } from './no-module-mocking.ts';
 import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
 import { noStringTailSlice } from './no-string-tail-slice.ts';
 import { noTimeNumberArithmetic } from './no-time-number-arithmetic.ts';
+import { preferErrorFrom } from './prefer-error-from.ts';
 import { preferUrlParse } from './prefer-url-parse.ts';
 import { preferUsing } from './prefer-using.ts';
 import { requireSequentialFakeTime } from './require-sequential-fake-time.ts';
@@ -39,6 +40,7 @@ const plugin = {
     'no-module-scope-bindings': noModuleScopeBindings,
     'no-string-tail-slice': noStringTailSlice,
     'no-time-number-arithmetic': noTimeNumberArithmetic,
+    'prefer-error-from': preferErrorFrom,
     'prefer-url-parse': preferUrlParse,
     'prefer-using': preferUsing,
     'require-sequential-fake-time': requireSequentialFakeTime,

@@ -184,6 +184,7 @@ export default defineConfig(
       // ADR 0076.
       'local/prefer-using': 'error',
       // ADR 0080.
+      'local/prefer-error-from': 'error',
       'local/prefer-url-parse': 'error',
       'local/no-string-tail-slice': 'error',
     },

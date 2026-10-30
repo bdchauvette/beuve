@@ -39,6 +39,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - `import type` for type-only imports.
 - Forward an `AbortSignal` in scope (a parameter, options `signal`, the test context's `signal`, a local or field controller) to every callee that takes one (ADR 0075, `local/forward-abort-signal`); disable the line with a reason only for work that must outlive the caller.
 - Thin data, pure functions; discriminated unions (`#x/result/`) and branded types (`#x/brand/brand.ts`) for illegal states. Expected failures are `Result`s, not exceptions.
+- Normalise a caught `unknown` with `errorFrom(e)` (`#x/error/error-from.ts`) and show a `Temporal.Duration` with `formatDuration(d)` (`#x/time/format-duration.ts`, `Intl.DurationFormat`); lint bans the hand-written versions (ADR 0080).
 - Resources (temp dirs, file handles, timers, listeners, processes) are released by `using`/`await using`, with a per-call `DisposableStack` for what isn't a disposable value; deadlines are `AbortSignal.any([signal, timeoutSignal(d)])`, told from cancels by `reason`; `finally` is for bookkeeping only (ADR 0076, `local/prefer-using`).
 - Modern APIs (ADR 0080, `lib` is `es2025` plus `esnext.*`): `Error.isError`, `getOrInsertComputed`, `URL.parse`, `tailOf` (never `string.slice(-n)`), `RegExp.escape`, `Uint8Array` base64/hex; stream-decode child output with `setEncoding('utf8')`. Anything a test runs must exist on Node 26 (no `Iterator.zip`, `Math.sumPrecise`).
 - No enums, namespaces or parameter properties (`erasableSyntaxOnly`).

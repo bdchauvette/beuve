@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { Language, Parser } from 'web-tree-sitter';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -124,7 +125,7 @@ async function loadGrammar(
     return err({
       kind: 'load-failed',
       language,
-      message: Error.isError(error) ? error.message : String(error),
+      message: errorFrom(error).message,
     });
   }
 }

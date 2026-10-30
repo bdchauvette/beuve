@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 
 import { z } from 'zod';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { readServerSentEvents } from '#x/net/read-server-sent-events.ts';
 import { err } from '#x/result/err.ts';
@@ -573,8 +574,8 @@ function unreachable(baseUrl: string, error: unknown, signal: AbortSignal): Mode
   if (signal.aborted) {
     return { kind: 'cancelled' };
   }
-  const cause =
-    Error.isError(error) && Error.isError(error.cause) ? error.cause.message : String(error);
+  const failure = errorFrom(error);
+  const cause = Error.isError(failure.cause) ? failure.cause.message : failure.message;
   const origin = URL.parse(baseUrl)?.origin ?? baseUrl;
   return {
     kind: 'model-failed',

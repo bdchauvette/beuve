@@ -1,6 +1,7 @@
 import { chmod, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -38,8 +39,4 @@ async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDi
   await chmod(temporary, 0o600);
   await rename(temporary, file);
   return async (): Promise<void> => rm(file, { force: true });
-}
-
-function errorFrom(cause: unknown): Error {
-  return Error.isError(cause) ? cause : new Error(String(cause));
 }

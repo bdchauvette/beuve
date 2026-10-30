@@ -1,6 +1,7 @@
 import { mkdir, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import { ok } from '#x/result/ok.ts';
@@ -111,6 +112,10 @@ async function canonicalRoot(root: string): Promise<Result<string, GitError>> {
       await mkdir(root, { recursive: true });
       return realpath(root);
     })(),
-    (cause): GitError => ({ kind: 'invalid-argument', argument: root, reason: String(cause) }),
+    (cause): GitError => ({
+      kind: 'invalid-argument',
+      argument: root,
+      reason: errorFrom(cause).message,
+    }),
   );
 }

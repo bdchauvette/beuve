@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { nextCalverVersion } from '../src/release/next-calver-version.ts';
 
 release();
@@ -28,7 +29,7 @@ function release(): void {
     console.log(`Created commit and tag v${version}. Publish with:\n`);
     console.log('  git push --follow-tags origin main');
   } catch (error) {
-    console.error(`release: ${Error.isError(error) ? error.message : String(error)}`);
+    console.error(`release: ${errorFrom(error).message}`);
     process.exitCode = 1;
   }
 }

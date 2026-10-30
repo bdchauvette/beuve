@@ -10,6 +10,7 @@ import type { GitRepository, OpenRepositoryOptions } from '#internal/git/open-re
 import { planWorktreePath } from '#internal/git/plan-worktree-path.ts';
 import { pruneWorktrees } from '#internal/git/prune-worktrees.ts';
 import { removeWorktree } from '#internal/git/remove-worktree.ts';
+import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { untilAborted } from '#x/async/until-aborted.ts';
 import { err } from '#x/result/err.ts';
@@ -138,7 +139,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       (cause): GitError => ({
         kind: 'invalid-argument',
         argument: options.root,
-        reason: String(cause),
+        reason: errorFrom(cause).message,
       }),
     );
     const resolved = await canonicalRoot;

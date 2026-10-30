@@ -1,3 +1,4 @@
+import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -10,7 +11,7 @@ export function parseMessage(body: string): Result<ParsedJsonRpcMessage, string>
   try {
     value = JSON.parse(body);
   } catch (error: unknown) {
-    return err(`invalid JSON: ${String(error)}`);
+    return err(`invalid JSON: ${errorFrom(error).message}`);
   }
   if (!isRecord(value) || value['jsonrpc'] !== '2.0') {
     return err('not a JSON-RPC 2.0 object');

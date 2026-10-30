@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import type { MessagePort } from 'node:worker_threads';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { runImpactCheck } from '#internal/impact/run-impact-check.ts';
 import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 
@@ -41,7 +42,7 @@ async function handle(request: ImpactWorkerRequest): Promise<ImpactWorkerRespons
     return {
       id: request.id,
       ok: false,
-      message: Error.isError(error) ? error.message : String(error),
+      message: errorFrom(error).message,
     };
   }
 }

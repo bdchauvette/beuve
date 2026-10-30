@@ -15,6 +15,7 @@ import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { readPathStatus } from '#internal/git/read-path-status.ts';
+import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
@@ -205,7 +206,7 @@ async function launch(
     await platform.openExternal(plan.url);
     return undefined;
   } catch (error: unknown) {
-    return Error.isError(error) ? error.message : String(error);
+    return errorFrom(error).message;
   }
 }
 

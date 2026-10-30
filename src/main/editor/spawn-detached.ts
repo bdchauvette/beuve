@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -23,7 +24,7 @@ export async function spawnDetached(
         resolve(ok(undefined));
       });
     } catch (error: unknown) {
-      resolve(err(Error.isError(error) ? error.message : String(error)));
+      resolve(err(errorFrom(error).message));
     }
   });
 }

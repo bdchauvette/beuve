@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -36,8 +37,4 @@ async function readExisting(file: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
-}
-
-function errorFrom(cause: unknown): Error {
-  return Error.isError(cause) ? cause : new Error(String(cause));
 }

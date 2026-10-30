@@ -1,3 +1,4 @@
+import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -153,7 +154,7 @@ async function exchange(
     }
     return err({
       kind: 'network',
-      message: Error.isError(error) ? error.message : String(error),
+      message: errorFrom(error).message,
     });
   }
 }
