@@ -29,10 +29,9 @@ describe('openDatabase', () => {
   });
 
   test('uses WAL for files but not for :memory:', ({ expect, db, tempDir }) => {
-    const file = openDatabase(path.join(tempDir, 'test.db'));
+    using file = openDatabase(path.join(tempDir, 'test.db'));
     expect(file.prepare('PRAGMA journal_mode;').get()).toMatchObject({ journal_mode: 'wal' });
     expect(db.prepare('PRAGMA journal_mode;').get()).toMatchObject({ journal_mode: 'memory' });
-    file.close();
   });
 });
 

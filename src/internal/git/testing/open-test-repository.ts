@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { promisify } from 'node:util';
@@ -10,7 +10,7 @@ import type { TestRepository } from './test-repository.ts';
 /**
  * Drives the existing repository at `<home>/repo`. `home` is also its `HOME` and
  * `XDG_CONFIG_HOME`, isolating git from the caller's `GIT_*` environment, global and system
- * config, and holds `scratch` directories. `cleanup` removes `home`. Auto-maintenance is off: after
+ * config, and holds `scratch` directories; whoever made `home` removes it. Auto-maintenance is off: after
  * `git commit` it would otherwise keep a background `git maintenance` running, which creates and
  * removes `.git/objects/maintenance.lock` while a template is being copied (ENOENT in `fs.cp`).
  * `signal`, a test's, kills the git commands still running when it aborts.
@@ -49,9 +49,6 @@ export function openTestRepository(home: string, signal?: AbortSignal): TestRepo
       const created = path.join(home, `scratch-${String(scratchCount)}`);
       mkdirSync(created);
       return created;
-    },
-    cleanup: (): void => {
-      rmSync(home, { recursive: true, force: true });
     },
   };
 }

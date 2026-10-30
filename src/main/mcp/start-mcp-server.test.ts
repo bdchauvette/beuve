@@ -15,6 +15,7 @@ describe('startMcpServer', () => {
 
   test('lists the four spec tools and reports service failures as tool errors', async ({
     expect,
+    closing,
     mcpServer: handle,
     mcpToken: token,
     signal,
@@ -26,47 +27,44 @@ describe('startMcpServer', () => {
       }),
       { signal },
     );
-    try {
-      const { tools } = await client.listTools(undefined, { signal });
-      expect(tools.map((tool) => tool.name).toSorted((a, b) => a.localeCompare(b))).toStrictEqual([
-        'beuve_get_lsp_diagnostics',
-        'beuve_read_human_review',
-        'beuve_run_impact_check',
-        'beuve_run_trace_probe',
-      ]);
+    closing(client);
+    const { tools } = await client.listTools(undefined, { signal });
+    expect(tools.map((tool) => tool.name).toSorted((a, b) => a.localeCompare(b))).toStrictEqual([
+      'beuve_get_lsp_diagnostics',
+      'beuve_read_human_review',
+      'beuve_run_impact_check',
+      'beuve_run_trace_probe',
+    ]);
 
-      const failed = await client.callTool(
-        {
-          name: 'beuve_get_lsp_diagnostics',
-          arguments: { path: 'src/a.ts' },
-        },
-        undefined,
-        { signal },
-      );
-      expect(failed).toMatchObject({
-        isError: true,
-        content: [{ type: 'text', text: 'not implemented yet' }],
-      });
+    const failed = await client.callTool(
+      {
+        name: 'beuve_get_lsp_diagnostics',
+        arguments: { path: 'src/a.ts' },
+      },
+      undefined,
+      { signal },
+    );
+    expect(failed).toMatchObject({
+      isError: true,
+      content: [{ type: 'text', text: 'not implemented yet' }],
+    });
 
-      const passed = await client.callTool(
-        { name: 'beuve_run_impact_check', arguments: {} },
-        undefined,
-        { signal },
-      );
-      expect(passed).toMatchObject({ content: [{ type: 'text', text: '{"breaches":[]}' }] });
+    const passed = await client.callTool(
+      { name: 'beuve_run_impact_check', arguments: {} },
+      undefined,
+      { signal },
+    );
+    expect(passed).toMatchObject({ content: [{ type: 'text', text: '{"breaches":[]}' }] });
 
-      const invalid = await client.callTool(
-        {
-          name: 'beuve_run_trace_probe',
-          arguments: { path: 'src/a.ts', line: 0 },
-        },
-        undefined,
-        { signal },
-      );
-      expect(invalid).toMatchObject({ isError: true });
-    } finally {
-      await client.close();
-    }
+    const invalid = await client.callTool(
+      {
+        name: 'beuve_run_trace_probe',
+        arguments: { path: 'src/a.ts', line: 0 },
+      },
+      undefined,
+      { signal },
+    );
+    expect(invalid).toMatchObject({ isError: true });
   });
 
   test('rejects requests without the bearer token', async ({ expect, mcpServer: handle }) => {

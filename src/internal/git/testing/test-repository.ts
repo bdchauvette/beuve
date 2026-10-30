@@ -10,9 +10,8 @@ export interface TestRepository {
   readonly write: (file: string, content: string | Uint8Array) => void;
   /** Stages everything and commits, returning the new commit's sha. */
   readonly commit: (message: string) => Promise<CommitSha>;
-  /** A fresh empty temporary directory, removed by `cleanup`. */
+  /** A fresh empty temporary directory, removed with the repository's home. */
   readonly scratch: () => string;
-  readonly cleanup: () => void;
 }
 
 /**

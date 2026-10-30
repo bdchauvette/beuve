@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempDisposableSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -17,8 +17,18 @@ export interface Clock {
   readonly advance: (duration: Temporal.DurationLike) => void;
 }
 
-/** Registers a resource to be closed after the test and returns it. */
-export type Closing = <T extends { readonly close: () => void }>(resource: T) => T;
+/**
+ * What `closing` can release: a `Disposable`, an `AsyncDisposable`, or anything with a `close()`
+ * or `dispose()` (synchronous or not).
+ */
+export type Closable =
+  | Disposable
+  | AsyncDisposable
+  | { readonly close: () => void | PromiseLike<void> }
+  | { readonly dispose: () => void | PromiseLike<void> };
+
+/** Registers a resource to be released after the test and returns it. */
+export type Closing = <T extends Closable>(resource: T) => T;
 
 /** A logger that records each serialized line instead of writing it. */
 export interface RecordingLogger {
@@ -35,8 +45,10 @@ export interface RecordingLogger {
  * - `tempDir`: a fresh empty directory under `tempRoot`, removed after the test.
  * - `db`: an empty in-memory SQLite database (`openDatabase(':memory:')`), closed after the test.
  * - `logger`: a {@link RecordingLogger}.
- * - `closing`: `closing(resource)` returns `resource` and calls its `close()` after the test, for
- *   resources a shared directory (which cannot import vitest) creates, such as the JSON-RPC fake peer.
+ * - `closing`: `closing(resource)` returns `resource` and releases it after the test, last in first
+ *   out: `Symbol.asyncDispose` or `Symbol.dispose` when it has one, else `close()` or `dispose()`,
+ *   awaited. For resources a shared directory (which cannot import vitest) creates, such as the
+ *   JSON-RPC fake peer, and for services a test builds itself instead of a `try`/`finally`.
  * - `clock`: fakes `Temporal.Now` and `Date` (timers stay real) starting at
  *   `2026-10-28T12:00:00Z`, restored after the test. Fake time is global to the test file, so a
  *   test that uses it must be declared with `{ concurrent: false }`; `local/require-sequential-fake-time`
@@ -44,19 +56,19 @@ export interface RecordingLogger {
  */
 export const test = vitestTest
   .extend('tempRoot', { scope: 'worker' }, ({}, { onCleanup }) => {
-    const prefix = path.join(os.tmpdir(), 'beuve-test-');
-    const root = realpathSync(mkdtempSync(prefix));
+    const prefix = path.join(realpathSync(os.tmpdir()), 'beuve-test-');
+    const root = mkdtempDisposableSync(prefix);
     onCleanup(() => {
-      rmSync(root, { recursive: true, force: true });
+      root.remove();
     });
-    return root;
+    return root.path;
   })
   .extend('tempDir', ({ tempRoot }, { onCleanup }) => {
-    const directory = mkdtempSync(path.join(tempRoot, 'test-'));
+    const directory = mkdtempDisposableSync(path.join(tempRoot, 'test-'));
     onCleanup(() => {
-      rmSync(directory, { recursive: true, force: true });
+      directory.remove();
     });
-    return directory;
+    return directory.path;
   })
   .extend('db', ({}, { onCleanup }): DatabaseSync => {
     const db = openDatabase(':memory:');
@@ -76,14 +88,17 @@ export const test = vitestTest
     return { logger, lines };
   })
   .extend('closing', ({}, { onCleanup }): Closing => {
-    const resources: { readonly close: () => void }[] = [];
-    onCleanup(() => {
-      for (const resource of resources.toReversed()) {
-        resource.close();
-      }
-    });
+    const resources = new AsyncDisposableStack();
+    onCleanup(async () => resources.disposeAsync());
     return (resource) => {
-      resources.push(resource);
+      // eslint-disable-next-line unicorn/no-computed-property-existence-check -- the dispose symbols live on prototypes, which `Object.hasOwn` misses.
+      if (Symbol.asyncDispose in resource || Symbol.dispose in resource) {
+        resources.use(resource);
+      } else if ('close' in resource) {
+        resources.defer(async () => resource.close());
+      } else {
+        resources.defer(async () => resource.dispose());
+      }
       return resource;
     };
   })

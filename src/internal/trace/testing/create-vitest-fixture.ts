@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { linkTestVitest } from './link-test-vitest.ts';
@@ -13,16 +12,15 @@ export interface VitestFixture {
   /** Where runners may put their temporary directories. */
   readonly temporaryDirectory: string;
   readonly write: (file: string, content: string) => void;
-  readonly cleanup: () => void;
 }
 
 /**
- * Creates the fixture in a new directory under `parent` (the system temporary directory by
- * default), with `files` relative to the worktree.
+ * Creates the fixture in a new directory under `parent` (a test's `tempDir`, which removes it),
+ * with `files` relative to the worktree.
  */
 export function createVitestFixture(
   files: Readonly<Record<string, string>>,
-  parent: string = os.tmpdir(),
+  parent: string,
 ): VitestFixture {
   const created = mkdtempSync(path.join(parent, 'beuve-trace-'));
   const base = realpathSync(created);
@@ -48,8 +46,5 @@ export function createVitestFixture(
     dependencyRoot,
     temporaryDirectory,
     write,
-    cleanup: (): void => {
-      rmSync(base, { recursive: true, force: true });
-    },
   };
 }

@@ -264,39 +264,36 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
 describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () => {
   test('converts UTF-16 positions to the negotiated UTF-8 and back', async ({
     expect,
+    closing,
     typescriptProject: project,
     fakeServerScript,
   }) => {
     const lsp = createLspMultiplexer({ servers: [fakeServer(fakeServerScript, 'normal')] });
-    try {
-      const line = "export const label = '😀😀'; export function wide(): number { return c(3); }";
-      const column = line.indexOf('wide');
-      const [node] = okValueFrom(
-        await lsp.prepareCallHierarchy({
-          root: project.root,
-          path: 'src/wide.ts',
-          position: { line: 2, character: column },
-        }),
-      );
-      expect(JSON.parse(node?.detail ?? '')).toStrictEqual({ line: 2, character: column + 4 });
-      expect(node?.selectionRange).toStrictEqual({
-        start: { line: 2, character: column },
-        end: { line: 2, character: column + 4 },
-      });
-      const report = okValueFrom(
-        await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }),
-      );
-      expect(report).toMatchObject({
-        freshness: 'fresh',
-        diagnostics: [{ severity: 'warning', message: 'version 1' }],
-      });
-    } finally {
-      await lsp.dispose();
-    }
+    closing(lsp);
+    const line = "export const label = '😀😀'; export function wide(): number { return c(3); }";
+    const column = line.indexOf('wide');
+    const [node] = okValueFrom(
+      await lsp.prepareCallHierarchy({
+        root: project.root,
+        path: 'src/wide.ts',
+        position: { line: 2, character: column },
+      }),
+    );
+    expect(JSON.parse(node?.detail ?? '')).toStrictEqual({ line: 2, character: column + 4 });
+    expect(node?.selectionRange).toStrictEqual({
+      start: { line: 2, character: column },
+      end: { line: 2, character: column + 4 },
+    });
+    const report = okValueFrom(await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }));
+    expect(report).toMatchObject({
+      freshness: 'fresh',
+      diagnostics: [{ severity: 'warning', message: 'version 1' }],
+    });
   });
 
   test('stops an idle server and starts it again on demand', async ({
     expect,
+    closing,
     typescriptProject: project,
     fakeServerScript,
   }) => {
@@ -304,23 +301,21 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
       servers: [fakeServer(fakeServerScript, 'normal')],
       idleTimeout: Temporal.Duration.from({ milliseconds: 100 }),
     });
-    try {
-      const request = { root: project.root, path: 'src/a.ts' };
-      okValueFrom(await lsp.getDiagnostics(request));
-      const pid = requirePid(lsp.status()[0]?.pid);
-      await waitUntil(
-        'the idle server to stop',
-        async () => lsp.status().length === 0 && !(await isAlive(pid)),
-      );
-      okValueFrom(await lsp.getDiagnostics(request));
-      expect(lsp.status()).toMatchObject([{ state: 'running', restarts: 0 }]);
-    } finally {
-      await lsp.dispose();
-    }
+    closing(lsp);
+    const request = { root: project.root, path: 'src/a.ts' };
+    okValueFrom(await lsp.getDiagnostics(request));
+    const pid = requirePid(lsp.status()[0]?.pid);
+    await waitUntil(
+      'the idle server to stop',
+      async () => lsp.status().length === 0 && !(await isAlive(pid)),
+    );
+    okValueFrom(await lsp.getDiagnostics(request));
+    expect(lsp.status()).toMatchObject([{ state: 'running', restarts: 0 }]);
   });
 
   test('gives up on a server that keeps failing until the restart window passes', async ({
     expect,
+    closing,
     typescriptProject: project,
     fakeServerScript,
   }) => {
@@ -328,24 +323,22 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
       servers: [fakeServer(fakeServerScript, 'fail-initialize')],
       maxRestarts: 1,
     });
-    try {
-      const request = { root: project.root, path: 'src/a.ts' };
-      await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
-        error: { kind: 'server-start-failed' },
-      });
-      await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
-        error: { kind: 'server-start-failed' },
-      });
-      await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
-        error: { kind: 'server-exited', restartsExhausted: true },
-      });
-    } finally {
-      await lsp.dispose();
-    }
+    closing(lsp);
+    const request = { root: project.root, path: 'src/a.ts' };
+    await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
+      error: { kind: 'server-start-failed' },
+    });
+    await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
+      error: { kind: 'server-start-failed' },
+    });
+    await expect(lsp.getDiagnostics(request)).resolves.toMatchObject({
+      error: { kind: 'server-exited', restartsExhausted: true },
+    });
   });
 
   test('does not search the workspace for server binaries unless trusted', async ({
     expect,
+    closing,
     typescriptProject: project,
     fakeServerScript,
   }) => {
@@ -354,15 +347,12 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
       environment: { PATH: '' },
     });
     project.write('node_modules/.bin/planted-server', '#!/bin/sh\nexit 1\n');
-    try {
-      const result = await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' });
-      expect(result).toMatchObject({
-        ok: false,
-        error: { kind: 'server-not-found', searched: [] },
-      });
-    } finally {
-      await lsp.dispose();
-    }
+    closing(lsp);
+    const result = await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'server-not-found', searched: [] },
+    });
   });
 });
 

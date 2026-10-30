@@ -833,6 +833,7 @@ describe(
   () => {
     test('summarizes from the diff alone, never sending the stated intent it gives questions', async ({
       expect,
+      closing,
       fakeClaude,
       createServices,
       repo,
@@ -872,39 +873,35 @@ describe(
       chat.onStream((event) => {
         updates.push(...(event.type === 'message' ? [event.message] : []));
       });
-      try {
-        const { id: sessionId } = okValueFrom(
-          await main.sessions.createLocal({
-            repoPath: repo.directory,
-            baseRef: 'main',
-            headRef: 'feature',
-          }),
-        );
-        const finished = async (id: string): Promise<ChatMessageView> =>
-          waitForSettled(updates, id);
-        const summary = okValueFrom(
-          await chat.ask({ sessionId, question: '/summarize', command: { kind: 'summarize' } }),
-        );
-        const question = okValueFrom(await chat.ask({ sessionId, question: 'What is it for?' }));
-        expect(summary.answer).toMatchObject({ answerKind: 'abstract', status: 'submitted' });
-        expect(question.answer.status).toBe('queued');
-        await expect(finished(summary.answer.id)).resolves.toMatchObject({
-          status: 'done',
-          answerKind: 'abstract',
-          citations: [{ path: 'feature.rs', startLine: 1, endLine: 3 }],
-        });
-        await finished(question.answer.id);
-        const [summarized, asked] = claude.calls();
-        expect(summarized?.args.some((arg) => arg.startsWith('--json-schema='))).toBe(false);
-        expect(summarized?.stdin).toContain('## Task');
-        expect(summarized?.stdin).toContain('feature.rs');
-        expect(summarized?.stdin).not.toContain('AUTHOR-CLAIM');
-        expect(summarized?.stdin).not.toContain('stated intent');
-        expect(summarized?.args.join('\n')).toContain('**Why**');
-        expect(asked?.stdin).toContain('AUTHOR-CLAIM');
-      } finally {
-        await chat.dispose();
-      }
+      closing(chat);
+      const { id: sessionId } = okValueFrom(
+        await main.sessions.createLocal({
+          repoPath: repo.directory,
+          baseRef: 'main',
+          headRef: 'feature',
+        }),
+      );
+      const finished = async (id: string): Promise<ChatMessageView> => waitForSettled(updates, id);
+      const summary = okValueFrom(
+        await chat.ask({ sessionId, question: '/summarize', command: { kind: 'summarize' } }),
+      );
+      const question = okValueFrom(await chat.ask({ sessionId, question: 'What is it for?' }));
+      expect(summary.answer).toMatchObject({ answerKind: 'abstract', status: 'submitted' });
+      expect(question.answer.status).toBe('queued');
+      await expect(finished(summary.answer.id)).resolves.toMatchObject({
+        status: 'done',
+        answerKind: 'abstract',
+        citations: [{ path: 'feature.rs', startLine: 1, endLine: 3 }],
+      });
+      await finished(question.answer.id);
+      const [summarized, asked] = claude.calls();
+      expect(summarized?.args.some((arg) => arg.startsWith('--json-schema='))).toBe(false);
+      expect(summarized?.stdin).toContain('## Task');
+      expect(summarized?.stdin).toContain('feature.rs');
+      expect(summarized?.stdin).not.toContain('AUTHOR-CLAIM');
+      expect(summarized?.stdin).not.toContain('stated intent');
+      expect(summarized?.args.join('\n')).toContain('**Why**');
+      expect(asked?.stdin).toContain('AUTHOR-CLAIM');
     });
   },
 );

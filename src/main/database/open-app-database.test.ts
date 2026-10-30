@@ -8,7 +8,7 @@ describe('openAppDatabase', () => {
   test('applies every migration in order, session before ura and chat, with foreign keys on', ({
     expect,
   }) => {
-    const db = openAppDatabase(':memory:');
+    using db = openAppDatabase(':memory:');
     const applied = db.prepare('SELECT id FROM schema_migrations ORDER BY rowid;').all();
     expect(applied.map((row) => row['id'])).toStrictEqual(appMigrations.map(({ id }) => id));
     expect(appMigrations[0]?.id).toMatch(/^session-/u);
@@ -33,7 +33,6 @@ describe('openAppDatabase', () => {
       db.prepare("SELECT name FROM sqlite_schema WHERE name = 'agent_insights';").get(),
     ).toBeUndefined();
     expect(db.prepare('PRAGMA foreign_keys;').get()).toMatchObject({ foreign_keys: 1 });
-    db.close();
   });
 
   test('closes the database and rethrows when a migration fails', ({ expect }) => {
