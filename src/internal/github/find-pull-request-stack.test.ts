@@ -1,17 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { findPullRequestStack } from './find-pull-request-stack.ts';
 import type { PullRequest } from './pull-request.ts';
 import { pullRequestSchema } from './pull-request-schema.ts';
-import { createFakeGithub } from './testing/create-fake-github.ts';
 import githubFixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-const sameRepoHead = {
-  ...githubFixtures.pullRequest.head,
-  label: 'octo-org:feature-2',
-  ref: 'feature-2',
-  repo: githubFixtures.pullRequest.base.repo,
-};
+function sameRepoHead(): typeof githubFixtures.pullRequest.head {
+  return {
+    ...githubFixtures.pullRequest.head,
+    label: 'octo-org:feature-2',
+    ref: 'feature-2',
+    repo: githubFixtures.pullRequest.base.repo,
+  };
+}
 
 function raw(
   number: number,
@@ -23,7 +26,7 @@ function raw(
     ...githubFixtures.pullRequest,
     number,
     base: { ...githubFixtures.pullRequest.base, ref: base },
-    head: { ...sameRepoHead, ref: head, repo },
+    head: { ...sameRepoHead(), ref: head, repo },
   };
 }
 
@@ -32,9 +35,12 @@ function decode(body: unknown): PullRequest {
 }
 
 describe('findPullRequestStack', () => {
-  it('finds the parent and the children within the base repository', async () => {
+  test('finds the parent and the children within the base repository', async ({
+    expect,
+    fakeGithub,
+  }) => {
     const pullRequest = decode(raw(20, 'feature-1', 'feature-2'));
-    const { client, requests } = createFakeGithub((request) => {
+    const { client, requests } = fakeGithub((request) => {
       const url = new URL(request.url);
       if (url.searchParams.has('head')) {
         return { status: 200, body: [raw(10, 'main', 'feature-1')] };
@@ -49,18 +55,18 @@ describe('findPullRequestStack', () => {
       };
     });
     const result = await findPullRequestStack(client, pullRequest);
-    expect(requests.map((request) => request.url)).toEqual([
+    expect(requests.map((request) => request.url)).toStrictEqual([
       'https://api.github.com/repos/octo-org/hello-world/pulls?state=open&per_page=100&head=octo-org%3Afeature-1',
       'https://api.github.com/repos/octo-org/hello-world/pulls?state=open&per_page=100&base=feature-2',
     ]);
-    expect(result.ok && result.value.parents.map((parent) => parent.number)).toEqual([10]);
-    expect(result.ok && result.value.children.map((child) => child.number)).toEqual([30]);
+    expect(result.ok && result.value.parents.map((parent) => parent.number)).toStrictEqual([10]);
+    expect(result.ok && result.value.children.map((child) => child.number)).toStrictEqual([30]);
   });
 
-  it('gives a pull request from a fork no children', async () => {
+  test('gives a pull request from a fork no children', async ({ expect, fakeGithub }) => {
     const pullRequest = decode(githubFixtures.pullRequest);
-    const { client, requests } = createFakeGithub(() => ({ status: 200, body: [] }));
-    await expect(findPullRequestStack(client, pullRequest)).resolves.toEqual({
+    const { client, requests } = fakeGithub(() => ({ status: 200, body: [] }));
+    await expect(findPullRequestStack(client, pullRequest)).resolves.toStrictEqual({
       ok: true,
       value: { parents: [], children: [] },
     });

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseGithubRemoteUrl } from './parse-github-remote-url.ts';
 
 describe('parseGithubRemoteUrl', () => {
-  it.each([
+  test.for<[string, string]>([
     ['https://github.com/octo-org/hello-world.git', 'github.com'],
     ['https://github.com/octo-org/hello-world', 'github.com'],
     ['https://GitHub.com/octo-org/hello-world/', 'github.com'],
@@ -13,11 +15,15 @@ describe('parseGithubRemoteUrl', () => {
     ['ssh://git@ssh.github.com:443/octo-org/hello-world.git', 'github.com'],
     ['https://ghe.example.com/octo-org/hello-world.git', 'ghe.example.com'],
     ['git@ghe.example.com:octo-org/hello-world.git', 'ghe.example.com'],
-  ])('reads %s', (url, host) => {
-    expect(parseGithubRemoteUrl(url)).toEqual({ host, owner: 'octo-org', repo: 'hello-world' });
+  ])('reads %s', ([url, host], { expect }) => {
+    expect(parseGithubRemoteUrl(url)).toStrictEqual({
+      host,
+      owner: 'octo-org',
+      repo: 'hello-world',
+    });
   });
 
-  it.each([
+  test.for([
     '/srv/git/hello-world.git',
     './relative.git',
     'file:///srv/git/o/r.git',
@@ -26,7 +32,7 @@ describe('parseGithubRemoteUrl', () => {
     'https://github.com/-bad/repo',
     'C:\\repos\\x',
     '',
-  ])('ignores %s', (url) => {
+  ])('ignores %s', (url, { expect }) => {
     expect(parseGithubRemoteUrl(url)).toBeUndefined();
   });
 });

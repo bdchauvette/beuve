@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { getCiStatus } from './get-ci-status.ts';
 import { summarizeCiStatus } from './summarize-ci-status.ts';
-import { createFakeGithub } from './testing/create-fake-github.ts';
 import type { FakeResponse, RecordedRequest } from './testing/create-fake-github.ts';
 import githubFixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-const commit = { owner: 'octo-org', repo: 'hello-world', sha: githubFixtures.headSha };
+function commit(): { owner: string; repo: string; sha: string } {
+  return { owner: 'octo-org', repo: 'hello-world', sha: githubFixtures.headSha };
+}
 
 function ci(request: RecordedRequest): FakeResponse {
   return request.url.includes('/check-runs')
@@ -15,10 +18,12 @@ function ci(request: RecordedRequest): FakeResponse {
 }
 
 describe('getCiStatus', () => {
-  it('merges check runs and statuses into one rollup', async () => {
-    const { client, requests } = createFakeGithub(ci);
-    const result = await getCiStatus(client, commit);
-    expect(requests.map((request) => request.url).toSorted((a, b) => a.localeCompare(b))).toEqual([
+  test('merges check runs and statuses into one rollup', async ({ expect, fakeGithub }) => {
+    const { client, requests } = fakeGithub(ci);
+    const result = await getCiStatus(client, commit());
+    expect(
+      requests.map((request) => request.url).toSorted((a, b) => a.localeCompare(b)),
+    ).toStrictEqual([
       `https://api.github.com/repos/octo-org/hello-world/commits/${githubFixtures.headSha}/check-runs?per_page=100`,
       `https://api.github.com/repos/octo-org/hello-world/commits/${githubFixtures.headSha}/status?per_page=100`,
     ]);
@@ -65,33 +70,33 @@ describe('getCiStatus', () => {
     });
   });
 
-  it('is not-modified when both endpoints answer 304', async () => {
-    const { client, requests } = createFakeGithub(() => ({ status: 304 }));
-    const result = await getCiStatus(client, commit, {
+  test('is not-modified when both endpoints answer 304', async ({ expect, fakeGithub }) => {
+    const { client, requests } = fakeGithub(() => ({ status: 304 }));
+    const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-1"' },
     });
-    expect(result).toEqual({ ok: true, value: { kind: 'not-modified' } });
+    expect(result).toStrictEqual({ ok: true, value: { kind: 'not-modified' } });
     expect(
       requests
         .map((request) => request.headers['If-None-Match'] ?? '')
         .toSorted((a, b) => a.localeCompare(b)),
-    ).toEqual(['"checks-1"', '"status-1"']);
+    ).toStrictEqual(['"checks-1"', '"status-1"']);
   });
 
-  it('refetches both when one of them changed', async () => {
-    const { client, requests } = createFakeGithub((request, index) =>
+  test('refetches both when one of them changed', async ({ expect, fakeGithub }) => {
+    const { client, requests } = fakeGithub((request, index) =>
       index < 2 && request.url.includes('/status') ? { status: 304 } : ci(request),
     );
-    const result = await getCiStatus(client, commit, {
+    const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-0"' },
     });
     expect(result).toMatchObject({ ok: true, value: { kind: 'modified' } });
     expect(requests).toHaveLength(4);
   });
 
-  it('drops the check-runs ETag when they span pages', async () => {
+  test('drops the check-runs ETag when they span pages', async ({ expect, fakeGithub }) => {
     const page2 = `https://api.github.com/repositories/1/commits/${githubFixtures.headSha}/check-runs?page=2`;
-    const { client } = createFakeGithub((request) =>
+    const { client } = fakeGithub((request) =>
       request.url === page2
         ? {
             status: 200,
@@ -105,7 +110,7 @@ describe('getCiStatus', () => {
             }
           : ci(request),
     );
-    const result = await getCiStatus(client, commit);
+    const result = await getCiStatus(client, commit());
     expect(
       result.ok && result.value.kind === 'modified' && result.value.etags.checkRuns,
     ).toBeUndefined();
@@ -116,8 +121,8 @@ describe('getCiStatus', () => {
 });
 
 describe('summarizeCiStatus', () => {
-  it('prefers failure, then pending, then success, then neutral', () => {
-    expect(summarizeCiStatus([])).toEqual({
+  test('prefers failure, then pending, then success, then neutral', ({ expect }) => {
+    expect(summarizeCiStatus([])).toStrictEqual({
       overall: 'none',
       counts: { pending: 0, success: 0, failure: 0, neutral: 0 },
     });

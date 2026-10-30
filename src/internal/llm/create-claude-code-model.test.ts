@@ -1,17 +1,13 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+import type { ExpectStatic } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { z } from 'zod';
 
 import { createClaudeCodeModel } from './create-claude-code-model.ts';
@@ -21,24 +17,31 @@ import type {
   TextModelRequest,
   TextStreamEvent,
 } from './language-model.ts';
-import { writeFakeClaude } from './testing/write-fake-claude.ts';
+import { test } from './testing/test.ts';
 
-const temporary = mkdtempSync(path.join(tmpdir(), 'beuve-fake-claude-'));
-const directory = realpathSync(temporary);
-const script = writeFakeClaude(directory);
+interface Echo {
+  readonly args: string[];
+  readonly stdin: string;
+  readonly cwd: string;
+  readonly envKeys: string[];
+}
 
-afterAll(() => {
-  rmSync(directory, { recursive: true, force: true });
-});
+function echoSchema(): z.ZodType<Echo> {
+  return z.object({
+    args: z.array(z.string()),
+    stdin: z.string(),
+    cwd: z.string(),
+    envKeys: z.array(z.string()),
+  });
+}
 
-const echoSchema = z.object({
-  args: z.array(z.string()),
-  stdin: z.string(),
-  cwd: z.string(),
-  envKeys: z.array(z.string()),
-});
-
-function model(mode: string, pidFile = '-'): ReturnType<typeof createClaudeCodeModel> {
+/** The model over the fake `claude` in `mode`; `directory` is its HOME and holds its pid file. */
+function model(
+  script: string,
+  directory: string,
+  mode: string,
+  pidFile = '-',
+): ReturnType<typeof createClaudeCodeModel> {
   return createClaudeCodeModel({
     command: process.execPath,
     leadingArgs: [script, mode, pidFile],
@@ -49,36 +52,39 @@ function model(mode: string, pidFile = '-'): ReturnType<typeof createClaudeCodeM
 }
 
 function request(
-  overrides: Partial<ModelRequest<z.infer<typeof echoSchema>>> = {},
-): ModelRequest<z.infer<typeof echoSchema>> {
+  directory: string,
+  overrides: Partial<ModelRequest<Echo>> = {},
+): ModelRequest<Echo> {
   return {
     system: 'Review carefully.',
     prompt: 'diff --git a/x b/x\n'.repeat(10_000),
     cwd: directory,
-    outputSchema: echoSchema,
+    outputSchema: echoSchema(),
     timeout: Temporal.Duration.from({ milliseconds: 10_000 }),
     ...overrides,
   };
 }
 
 describe('createClaudeCodeModel', () => {
-  it('runs the CLI read-only in the worktree, with the prompt on stdin and a minimal env', async () => {
+  test('runs the CLI read-only in the worktree, with the prompt on stdin and a minimal env', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
     const progress: ModelProgress[] = [];
-    const outcome = await model('echo').run(
-      request({
-        onProgress: (event) => {
-          progress.push(event);
-        },
-      }),
+    const outcome = okValueFrom(
+      await model(script, directory, 'echo').run(
+        request(directory, {
+          onProgress: (event) => {
+            progress.push(event);
+          },
+        }),
+      ),
     );
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) {
-      return;
-    }
-    const { value } = outcome.value;
-    expect(value.stdin).toBe(request().prompt);
+    const { value } = outcome;
+    expect(value.stdin).toBe(request(directory).prompt);
     expect(value.cwd).toBe(directory);
-    expect(value.envKeys).toEqual(['HOME', 'PATH']);
+    expect(value.envKeys).toStrictEqual(['HOME', 'PATH']);
     expect(value.args).toContain('--print');
     expect(value.args).toContain('--tools=Read,Grep,Glob');
     expect(value.args).toContain('--append-system-prompt=Review carefully.');
@@ -89,25 +95,37 @@ describe('createClaudeCodeModel', () => {
       required: ['args', 'stdin', 'cwd', 'envKeys'],
     });
     expect(schemaArg).not.toContain('$schema');
-    expect(outcome.value).toMatchObject({
+    expect(outcome).toMatchObject({
       model: 'fake-model-1',
       turns: 2,
       costUsd: 0.01,
       deniedToolUses: 1,
     });
-    expect(progress).toEqual([
+    expect(progress).toStrictEqual([
       { kind: 'started', model: 'fake-model-1' },
       { kind: 'tool-use', tool: 'Read' },
     ]);
   });
 
-  it('falls back to parsing the result text when there is no structured output', async () => {
-    const outcome = await model('text-result').run(request({ prompt: 'small' }));
+  test('falls back to parsing the result text when there is no structured output', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const outcome = await model(script, directory, 'text-result').run(
+      request(directory, { prompt: 'small' }),
+    );
     expect(outcome).toMatchObject({ ok: true, value: { value: { stdin: 'small' } } });
   });
 
-  it('reports a stream without a result as invalid output', async () => {
-    expect(await model('garbage').run(request())).toEqual({
+  test('reports a stream without a result as invalid output', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    await expect(
+      model(script, directory, 'garbage').run(request(directory)),
+    ).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'invalid-output',
@@ -116,13 +134,21 @@ describe('createClaudeCodeModel', () => {
     });
   });
 
-  it('validates the structured output against the schema', async () => {
-    const outcome = await model('mismatch').run(request());
+  test('validates the structured output against the schema', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const outcome = await model(script, directory, 'mismatch').run(request(directory));
     expect(outcome).toMatchObject({ ok: false, error: { kind: 'invalid-output' } });
   });
 
-  it('reports a non-zero exit without a result as a process failure with stderr', async () => {
-    expect(await model('fail').run(request())).toEqual({
+  test('reports a non-zero exit without a result as a process failure with stderr', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    await expect(model(script, directory, 'fail').run(request(directory))).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'process-failed',
@@ -133,76 +159,106 @@ describe('createClaudeCodeModel', () => {
     });
   });
 
-  it('recognizes a missing login, a rate limit and a spent budget', async () => {
-    expect(await model('not-logged-in').run(request())).toMatchObject({
+  test('recognizes a missing login, a rate limit and a spent budget', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    await expect(
+      model(script, directory, 'not-logged-in').run(request(directory)),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated', message: 'Not logged in · Please run /login' },
     });
-    expect(await model('rate-limited').run(request())).toMatchObject({
+    await expect(
+      model(script, directory, 'rate-limited').run(request(directory)),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'rate-limited', resetsAt: '2026-10-28T22:00:00.000Z' },
     });
-    expect(await model('budget').run(request())).toMatchObject({
-      ok: false,
-      error: { kind: 'model-failed', reason: 'error_max_budget_usd' },
-    });
+    await expect(model(script, directory, 'budget').run(request(directory))).resolves.toMatchObject(
+      {
+        ok: false,
+        error: { kind: 'model-failed', reason: 'error_max_budget_usd' },
+      },
+    );
   });
 
-  it('times out, killing the whole process group', async () => {
+  test('times out, killing the whole process group', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
     const pidFile = path.join(directory, 'timeout.json');
-    const outcome = await model('hang', pidFile).run(
-      request({ timeout: Temporal.Duration.from({ milliseconds: 500 }) }),
+    const outcome = await model(script, directory, 'hang', pidFile).run(
+      request(directory, { timeout: Temporal.Duration.from({ milliseconds: 500 }) }),
     );
-    expect(outcome).toEqual({
+    expect(outcome).toStrictEqual({
       ok: false,
       error: { kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 500 }) },
     });
-    await expectReaped(pidFile);
+    await expectReaped(expect, pidFile);
   });
 
-  it('cancels on abort, escalating to SIGKILL when SIGTERM is ignored', async () => {
+  test('cancels on abort, escalating to SIGKILL when SIGTERM is ignored', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
     const pidFile = path.join(directory, 'cancel.json');
     const controller = new AbortController();
-    const running = model('stubborn', pidFile).run(request({ signal: controller.signal }));
-    await waitFor(() => existsSync(pidFile));
+    const running = model(script, directory, 'stubborn', pidFile).run(
+      request(directory, { signal: controller.signal }),
+    );
+    await waitFor(expect, () => existsSync(pidFile));
     controller.abort();
-    expect(await running).toEqual({ ok: false, error: { kind: 'cancelled' } });
-    await expectReaped(pidFile);
+    await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
+    await expectReaped(expect, pidFile);
   });
 
-  it('does not start when already aborted', async () => {
-    const aborted = request({ signal: AbortSignal.abort() });
-    expect(await model('echo').run(aborted)).toEqual({
+  test('does not start when already aborted', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const aborted = request(directory, { signal: AbortSignal.abort() });
+    await expect(model(script, directory, 'echo').run(aborted)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'cancelled' },
     });
   });
 
-  it('caps stdout', async () => {
+  test('caps stdout', async ({ expect, fakeClaude: script, tempDir: directory }) => {
     const capped = createClaudeCodeModel({
       command: process.execPath,
       leadingArgs: [script, 'flood', '-'],
       inheritedEnv: {},
       maxOutputBytes: 64 * 1024,
     });
-    expect(await capped.run(request())).toEqual({
+    await expect(capped.run(request(directory))).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'output-too-large', maxBytes: 64 * 1024 },
     });
   });
 
-  it('reports a missing executable and a missing worktree', async () => {
+  test('reports a missing executable and a missing worktree', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
     const missing = createClaudeCodeModel({ command: path.join(directory, 'no-such-claude') });
-    expect(await missing.run(request())).toEqual({
+    await expect(missing.run(request(directory))).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'not-installed', command: path.join(directory, 'no-such-claude') },
     });
-    const gone = request({ cwd: path.join(directory, 'gone') });
-    expect(await model('echo').run(gone)).toEqual({
+    const gone = request(directory, { cwd: path.join(directory, 'gone') });
+    await expect(model(script, directory, 'echo').run(gone)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd is not a directory' },
     });
-    expect(await model('echo').run(request({ cwd: 'relative' }))).toEqual({
+    await expect(
+      model(script, directory, 'echo').run(request(directory, { cwd: 'relative' })),
+    ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd must be absolute' },
     });
@@ -210,13 +266,17 @@ describe('createClaudeCodeModel', () => {
 });
 
 describe('createClaudeCodeModel runText', () => {
-  it('returns the final text, streaming its deltas and resetting after a tool call', async () => {
+  test('returns the final text, streaming its deltas and resetting after a tool call', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
     const events: TextStreamEvent[] = [];
-    const outcome = await chat('stream', {
+    const outcome = await chat(script, directory, 'stream', {
       preamble: 'Let me look.',
       chunks: ['It splits ', 'on commas [[src/a.ts:10-12]].'],
     }).runText(
-      textRequest({
+      textRequest(directory, {
         onText: (event) => {
           events.push(event);
         },
@@ -226,44 +286,63 @@ describe('createClaudeCodeModel runText', () => {
       ok: true,
       value: { value: 'It splits on commas [[src/a.ts:10-12]].', model: 'fake-model-1', turns: 2 },
     });
-    expect(events).toEqual<TextStreamEvent[]>([
+    expect(events).toStrictEqual<TextStreamEvent[]>([
       { kind: 'append', text: 'Let me look.' },
       { kind: 'reset' },
       { kind: 'append', text: 'It splits ' },
       { kind: 'append', text: 'on commas [[src/a.ts:10-12]].' },
     ]);
-    const [call] = calls('stream');
+    const [call] = calls(directory, 'stream');
     expect(call?.args).toContain('--include-partial-messages');
     expect(call?.args.some((arg) => arg.startsWith('--json-schema'))).toBe(false);
     expect(call?.args).toContain('--tools=Read,Grep,Glob');
   });
 
-  it('does not ask for partial messages without onText', async () => {
-    const outcome = await chat('quiet', { chunks: ['Plain.'] }).runText(textRequest());
+  test('does not ask for partial messages without onText', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const outcome = await chat(script, directory, 'quiet', { chunks: ['Plain.'] }).runText(
+      textRequest(directory),
+    );
     expect(outcome).toMatchObject({ ok: true, value: { value: 'Plain.' } });
-    expect(calls('quiet')[0]?.args).not.toContain('--include-partial-messages');
+    expect(calls(directory, 'quiet')[0]?.args).not.toContain('--include-partial-messages');
   });
 
-  it('maps failures and cancellation like structured runs', async () => {
-    expect(await model('not-logged-in').runText(textRequest())).toMatchObject({
+  test('maps failures and cancellation like structured runs', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    await expect(
+      model(script, directory, 'not-logged-in').runText(textRequest(directory)),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated' },
     });
-    expect(await model('fail').runText(textRequest())).toMatchObject({
+    await expect(
+      model(script, directory, 'fail').runText(textRequest(directory)),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'process-failed', exitCode: 2 },
     });
     const pidFile = path.join(directory, 'text-cancel.json');
     const controller = new AbortController();
-    const running = model('hang', pidFile).runText(textRequest({ signal: controller.signal }));
-    await waitFor(() => existsSync(pidFile));
+    const running = model(script, directory, 'hang', pidFile).runText(
+      textRequest(directory, { signal: controller.signal }),
+    );
+    await waitFor(expect, () => existsSync(pidFile));
     controller.abort();
-    expect(await running).toEqual({ ok: false, error: { kind: 'cancelled' } });
-    await expectReaped(pidFile);
+    await expect(running).resolves.toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
+    await expectReaped(expect, pidFile);
   });
 });
 
-function textRequest(overrides: Partial<TextModelRequest> = {}): TextModelRequest {
+function textRequest(
+  directory: string,
+  overrides: Partial<TextModelRequest> = {},
+): TextModelRequest {
   return {
     system: 'Answer questions.',
     prompt: 'What does parse do?',
@@ -273,31 +352,36 @@ function textRequest(overrides: Partial<TextModelRequest> = {}): TextModelReques
   };
 }
 
-function chat(name: string, chatScript: object): ReturnType<typeof createClaudeCodeModel> {
+function chat(
+  script: string,
+  directory: string,
+  name: string,
+  chatScript: object,
+): ReturnType<typeof createClaudeCodeModel> {
   const file = path.join(directory, `${name}.json`);
   writeFileSync(file, JSON.stringify(chatScript));
-  return model('chat', file);
+  return model(script, directory, 'chat', file);
 }
 
-function calls(name: string): { args: string[] }[] {
+function calls(directory: string, name: string): { args: string[] }[] {
   return readFileSync(path.join(directory, `${name}.json.calls`), 'utf8')
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line) as { args: string[] });
 }
 
-async function waitFor(isDone: () => boolean): Promise<void> {
+async function waitFor(expect: ExpectStatic, isDone: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !isDone(); attempt += 1) {
     await delay(25);
   }
   expect(isDone()).toBe(true);
 }
 
-async function expectReaped(pidFile: string): Promise<void> {
+async function expectReaped(expect: ExpectStatic, pidFile: string): Promise<void> {
   const pids = z
     .object({ self: z.number(), child: z.number() })
     .parse(JSON.parse(readFileSync(pidFile, 'utf8')));
-  await waitFor(() => !isAlive(pids.self) && !isAlive(pids.child));
+  await waitFor(expect, () => !isAlive(pids.self) && !isAlive(pids.child));
 }
 
 function isAlive(pid: number): boolean {

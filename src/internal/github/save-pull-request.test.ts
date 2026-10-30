@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { openDatabase } from '#sqlite/open-database.ts';
+import { test } from './testing/test.ts';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
 
 import { decodeWith } from './decode-with.ts';
@@ -11,19 +13,15 @@ import { pullRequestSchema } from './pull-request-schema.ts';
 import { savePullRequest } from './save-pull-request.ts';
 import fixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-const ref = { host: 'github.com', owner: 'octo-org', repo: 'hello-world', number: 1347 };
-
 describe('savePullRequest', () => {
-  it('stores, replaces and reads back pull request metadata', () => {
-    const db = openDatabase(':memory:');
-    expect(runMigrations(db, githubMigrations)).toEqual(['github-0001-initial']);
-    expect(findStoredPullRequest(db, ref)).toEqual({ ok: true, value: undefined });
+  test('stores, replaces and reads back pull request metadata', ({ expect, db }) => {
+    const ref = { host: 'github.com', owner: 'octo-org', repo: 'hello-world', number: 1347 };
+    expect(runMigrations(db, githubMigrations)).toStrictEqual(['github-0001-initial']);
+    expect(findStoredPullRequest(db, ref)).toStrictEqual({ ok: true, value: undefined });
 
-    const decoded = decodeWith(pullRequestSchema, fixtures.pullRequest);
-    if (!decoded.ok) {
-      throw new Error(decoded.error);
-    }
-    const pullRequest: PullRequest = decoded.value;
+    const pullRequest: PullRequest = okValueFrom(
+      decodeWith(pullRequestSchema, fixtures.pullRequest),
+    );
     savePullRequest(db, ref, pullRequest, Temporal.Instant.from('2026-10-28T12:00:00.000Z'));
     savePullRequest(
       db,
@@ -31,7 +29,7 @@ describe('savePullRequest', () => {
       { ...pullRequest, title: 'Renamed', isDraft: true, state: 'merged' },
       Temporal.Instant.from('2026-10-28T13:00:00.000Z'),
     );
-    expect(findStoredPullRequest(db, ref)).toEqual({
+    expect(findStoredPullRequest(db, ref)).toStrictEqual({
       ok: true,
       value: {
         ref,
@@ -50,7 +48,7 @@ describe('savePullRequest', () => {
         fetchedAt: '2026-10-28T13:00:00.000Z',
       },
     });
-    expect(findStoredPullRequest(db, { ...ref, host: 'ghe.example.com' })).toEqual({
+    expect(findStoredPullRequest(db, { ...ref, host: 'ghe.example.com' })).toStrictEqual({
       ok: true,
       value: undefined,
     });

@@ -1,13 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { isCalverTag } from './is-calver-tag.ts';
 
 describe('isCalverTag', () => {
-  it.each(['v2026.10.1', 'v2026.1.1', 'v2027.12.34'])('accepts %s', (tag) => {
+  test.for(['v2026.10.1', 'v2026.1.1', 'v2027.12.34'])('accepts %s', (tag, { expect }) => {
     expect(isCalverTag(tag)).toBe(true);
   });
 
-  it.each([
+  test.for([
     'v2026.10',
     'v2026.10.0',
     'v2026.13.1',
@@ -21,7 +23,7 @@ describe('isCalverTag', () => {
     'v0.1.0',
     'v2026.10.1.1',
     'v2026.10.1\n',
-  ])('rejects %j', (tag) => {
+  ])('rejects %j', (tag, { expect }) => {
     expect(isCalverTag(tag)).toBe(false);
   });
 });

@@ -1,26 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseGhAuthStatus } from './parse-gh-auth-status.ts';
 
 /** Shapes captured from gh 2.89 with a throwaway config (the error entry names a fake host). */
-const failedCheck = JSON.stringify({
-  hosts: {
-    'ghe.invalid': [
-      {
-        state: 'error',
-        error: 'Get "https://ghe.invalid/api/v3/": dial tcp: lookup ghe.invalid: no such host',
-        active: true,
-        host: 'ghe.invalid',
-        login: 'fakeuser',
-        tokenSource: '/home/u/.config/gh/hosts.yml',
-        gitProtocol: 'https',
-      },
-    ],
-  },
-});
+function failedCheck(): string {
+  return JSON.stringify({
+    hosts: {
+      'ghe.invalid': [
+        {
+          state: 'error',
+          error: 'Get "https://ghe.invalid/api/v3/": dial tcp: lookup ghe.invalid: no such host',
+          active: true,
+          host: 'ghe.invalid',
+          login: 'fakeuser',
+          tokenSource: '/home/u/.config/gh/hosts.yml',
+          gitProtocol: 'https',
+        },
+      ],
+    },
+  });
+}
 
 describe('parseGhAuthStatus', () => {
-  it('reads the active account and its scopes', () => {
+  test('reads the active account and its scopes', ({ expect }) => {
     const stdout = JSON.stringify({
       hosts: {
         'github.com': [
@@ -36,15 +40,15 @@ describe('parseGhAuthStatus', () => {
         ],
       },
     });
-    expect(parseGhAuthStatus(stdout, 'github.com')).toEqual({
+    expect(parseGhAuthStatus(stdout, 'github.com')).toStrictEqual({
       login: 'octocat',
       scopes: ['gist', 'read:org', 'repo'],
       check: { kind: 'valid' },
     });
   });
 
-  it('reports a failed check with gh’s reason', () => {
-    expect(parseGhAuthStatus(failedCheck, 'ghe.invalid')).toEqual({
+  test('reports a failed check with gh’s reason', ({ expect }) => {
+    expect(parseGhAuthStatus(failedCheck(), 'ghe.invalid')).toStrictEqual({
       login: 'fakeuser',
       scopes: undefined,
       check: {
@@ -54,11 +58,11 @@ describe('parseGhAuthStatus', () => {
     });
   });
 
-  it('has no account for a host gh does not list', () => {
+  test('has no account for a host gh does not list', ({ expect }) => {
     expect(parseGhAuthStatus('{"hosts":{}}', 'github.com')).toBeUndefined();
   });
 
-  it('rejects output of another shape', () => {
+  test('rejects output of another shape', ({ expect }) => {
     expect(parseGhAuthStatus('not json', 'github.com')).toBe('invalid');
     expect(parseGhAuthStatus('{"hosts":[]}', 'github.com')).toBe('invalid');
   });

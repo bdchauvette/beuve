@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from '#testing/test.ts';
 
 import { parseMessage } from './parse-message.ts';
 
 describe('parseMessage', () => {
-  it('classifies requests, notifications and responses', () => {
-    expect(parseMessage('{"jsonrpc":"2.0","id":1,"method":"a","params":{}}')).toEqual({
+  test('classifies requests, notifications and responses', ({ expect }) => {
+    expect(parseMessage('{"jsonrpc":"2.0","id":1,"method":"a","params":{}}')).toStrictEqual({
       ok: true,
       value: { kind: 'request', message: { jsonrpc: '2.0', id: 1, method: 'a', params: {} } },
     });
@@ -12,7 +14,7 @@ describe('parseMessage', () => {
       ok: true,
       value: { kind: 'notification', message: { method: 'b', params: [1] } },
     });
-    expect(parseMessage('{"jsonrpc":"2.0","id":"7","result":0}')).toEqual({
+    expect(parseMessage('{"jsonrpc":"2.0","id":"7","result":0}')).toStrictEqual({
       ok: true,
       value: { kind: 'response', message: { jsonrpc: '2.0', id: '7', result: 0 } },
     });
@@ -24,7 +26,7 @@ describe('parseMessage', () => {
     });
   });
 
-  it('rejects malformed messages', () => {
+  test('rejects malformed messages', ({ expect }) => {
     for (const body of [
       'not json',
       '[]',
@@ -35,7 +37,7 @@ describe('parseMessage', () => {
       '{"jsonrpc":"2.0","id":1,"result":1,"error":{"code":1,"message":"x"}}',
       '{"jsonrpc":"2.0","id":1,"error":{"code":"x","message":"x"}}',
     ]) {
-      expect(parseMessage(body).ok, body).toBe(false);
+      expect({ body, ok: parseMessage(body).ok }).toStrictEqual({ body, ok: false });
     }
   });
 });

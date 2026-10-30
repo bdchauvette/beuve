@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { createClaudeCodeEnvironment } from './create-claude-code-environment.ts';
 
 describe('createClaudeCodeEnvironment', () => {
-  it('keeps what the CLI needs for its own login and drops secrets and session leakage', () => {
+  test('keeps what the CLI needs for its own login and drops secrets and session leakage', ({
+    expect,
+  }) => {
     const environment = createClaudeCodeEnvironment({
       PATH: '/usr/bin',
       HOME: '/Users/me',
@@ -18,7 +22,7 @@ describe('createClaudeCodeEnvironment', () => {
       GITHUB_TOKEN: 'ghp_secret',
       UNSET: undefined,
     });
-    expect(environment).toEqual({
+    expect(environment).toStrictEqual({
       PATH: '/usr/bin',
       HOME: '/Users/me',
       LC_ALL: 'C',
@@ -27,9 +31,9 @@ describe('createClaudeCodeEnvironment', () => {
     });
   });
 
-  it('lets main add variables explicitly', () => {
-    expect(createClaudeCodeEnvironment({ PATH: '/bin' }, { CLAUDE_CODE_USE_BEDROCK: '1' })).toEqual(
-      { PATH: '/bin', CLAUDE_CODE_USE_BEDROCK: '1' },
-    );
+  test('lets main add variables explicitly', ({ expect }) => {
+    expect(
+      createClaudeCodeEnvironment({ PATH: '/bin' }, { CLAUDE_CODE_USE_BEDROCK: '1' }),
+    ).toStrictEqual({ PATH: '/bin', CLAUDE_CODE_USE_BEDROCK: '1' });
   });
 });

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseLinkHeader } from './parse-link-header.ts';
 
 describe('parseLinkHeader', () => {
-  it('reads GitHub pagination links', () => {
+  test('reads GitHub pagination links', ({ expect }) => {
     const links = parseLinkHeader(
       '<https://api.github.com/repositories/1/pulls?page=2>; rel="next", <https://api.github.com/repositories/1/pulls?page=5>; rel="last"',
     );
@@ -12,7 +14,7 @@ describe('parseLinkHeader', () => {
     expect(links.get('prev')).toBeUndefined();
   });
 
-  it('handles absent, empty and multi-relation headers', () => {
+  test('handles absent, empty and multi-relation headers', ({ expect }) => {
     expect(parseLinkHeader().size).toBe(0);
     expect(parseLinkHeader('').size).toBe(0);
     expect(parseLinkHeader('<https://x/a>; rel="prev first"').get('first')).toBe('https://x/a');

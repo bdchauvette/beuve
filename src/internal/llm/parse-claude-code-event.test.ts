@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
 import type { ClaudeCodeEvent } from './parse-claude-code-event.ts';
@@ -6,13 +8,15 @@ import { claudeCodeStreamFixture } from './testing/claude-code-stream-fixture.ts
 import { claudeCodeTextStreamFixture } from './testing/claude-code-text-stream-fixture.ts';
 
 describe('parseClaudeCodeEvent', () => {
-  it('reads init, tool use, rate limit and result from a real Claude Code stream', () => {
+  test('reads init, tool use, rate limit and result from a real Claude Code stream', ({
+    expect,
+  }) => {
     const events = claudeCodeStreamFixture
       .split('\n')
       .filter((line) => line !== '')
       .map((line) => parseClaudeCodeEvent(line))
       .filter((event) => event.kind !== 'other');
-    expect(events).toEqual<ClaudeCodeEvent[]>([
+    expect(events).toStrictEqual<ClaudeCodeEvent[]>([
       {
         kind: 'init',
         model: 'claude-sonnet-5-5',
@@ -42,13 +46,15 @@ describe('parseClaudeCodeEvent', () => {
     ]);
   });
 
-  it('reads message starts and text deltas from a real stream with partial messages', () => {
+  test('reads message starts and text deltas from a real stream with partial messages', ({
+    expect,
+  }) => {
     const events = claudeCodeTextStreamFixture
       .split('\n')
       .filter((line) => line !== '')
       .map((line) => parseClaudeCodeEvent(line))
       .filter((event) => event.kind !== 'other' && event.kind !== 'rate-limit');
-    expect(events).toEqual<ClaudeCodeEvent[]>([
+    expect(events).toStrictEqual<ClaudeCodeEvent[]>([
       {
         kind: 'init',
         model: 'claude-haiku-5-5',
@@ -75,17 +81,17 @@ describe('parseClaudeCodeEvent', () => {
     ]);
   });
 
-  it("ignores a subagent's stream events and deltas that carry no text", () => {
+  test("ignores a subagent's stream events and deltas that carry no text", ({ expect }) => {
     const delta = (fields: object): string =>
       JSON.stringify({
         type: 'stream_event',
         event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'x' } },
         ...fields,
       });
-    expect(parseClaudeCodeEvent(delta({ parent_tool_use_id: 'toolu_1' }))).toEqual({
+    expect(parseClaudeCodeEvent(delta({ parent_tool_use_id: 'toolu_1' }))).toStrictEqual({
       kind: 'other',
     });
-    expect(parseClaudeCodeEvent(delta({}))).toEqual({
+    expect(parseClaudeCodeEvent(delta({}))).toStrictEqual({
       kind: 'text-delta',
       text: 'x',
     });
@@ -96,25 +102,25 @@ describe('parseClaudeCodeEvent', () => {
         delta: { type: 'input_json_delta', partial_json: '{' },
       },
     });
-    expect(parseClaudeCodeEvent(inputDelta)).toEqual({ kind: 'other' });
+    expect(parseClaudeCodeEvent(inputDelta)).toStrictEqual({ kind: 'other' });
   });
 
-  it('rejects lines that are not stream-json events', () => {
-    expect(parseClaudeCodeEvent('Error: something')).toEqual({
+  test('rejects lines that are not stream-json events', ({ expect }) => {
+    expect(parseClaudeCodeEvent('Error: something')).toStrictEqual({
       kind: 'invalid',
       reason: 'not JSON',
     });
-    expect(parseClaudeCodeEvent('[1,2]')).toEqual({
+    expect(parseClaudeCodeEvent('[1,2]')).toStrictEqual({
       kind: 'invalid',
       reason: 'not a stream-json event',
     });
-    expect(parseClaudeCodeEvent('{"type":"result"}')).toEqual({
+    expect(parseClaudeCodeEvent('{"type":"result"}')).toStrictEqual({
       kind: 'invalid',
       reason: 'malformed result event',
     });
   });
 
-  it('treats an error subtype without is_error as an error', () => {
+  test('treats an error subtype without is_error as an error', ({ expect }) => {
     const event = parseClaudeCodeEvent('{"type":"result","subtype":"error_during_execution"}');
     expect(event).toMatchObject({ kind: 'result', result: { isError: true } });
   });

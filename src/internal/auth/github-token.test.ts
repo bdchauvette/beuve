@@ -1,11 +1,13 @@
 import { inspect } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { GithubToken } from './github-token.ts';
 
 describe('GithubToken', () => {
-  it('trims and keeps the secret behind reveal()', () => {
+  test('trims and keeps the secret behind reveal()', ({ expect }) => {
     const token = GithubToken.parse('  ghp_secretsecret\n');
     expect(token?.reveal()).toBe('ghp_secretsecret');
     expect(`${String(token)} ${JSON.stringify([token])} ${inspect(token)}`).toBe(
@@ -13,7 +15,7 @@ describe('GithubToken', () => {
     );
   });
 
-  it('rejects empty or multi-word output', () => {
+  test('rejects empty or multi-word output', ({ expect }) => {
     expect(GithubToken.parse('\n')).toBeUndefined();
     expect(GithubToken.parse('two words')).toBeUndefined();
   });
