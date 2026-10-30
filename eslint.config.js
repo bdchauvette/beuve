@@ -31,6 +31,37 @@ const blockingProcessImports = ['node:child_process', 'child_process'].map((name
     'Synchronous child processes block the worker, so concurrent tests cannot overlap and every test timeout covers the whole file. Use `execFile` from `node:child_process` through `promisify` (ADR 0058).',
 }));
 const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
+const staticOrStandalone =
+  'Name a standalone or static conversion `yFrom(x)` or `Y.fromX(x)`, not `toY`; `toY()` is for instance methods (ADR 0062, CLAUDE.md "Conversion naming").';
+const instanceMethod =
+  'Name an instance conversion `x.toY()`, not `fromY`; `fromX` is for static factories and standalone `yFrom` functions (ADR 0062, CLAUDE.md "Conversion naming").';
+const functionValue = '/^(ArrowFunctionExpression|FunctionExpression)$/';
+const conversionNamingSelectors = [
+  {
+    selector: 'FunctionDeclaration[id.name=/^to[A-Z]/]',
+    message: staticOrStandalone,
+  },
+  {
+    selector: `VariableDeclarator[id.name=/^to[A-Z]/][init.type=${functionValue}]`,
+    message: staticOrStandalone,
+  },
+  {
+    selector: 'MethodDefinition[static=true][kind="method"][key.name=/^to[A-Z]/]',
+    message: staticOrStandalone,
+  },
+  {
+    selector: `PropertyDefinition[static=true][key.name=/^to[A-Z]/][value.type=${functionValue}]`,
+    message: staticOrStandalone,
+  },
+  {
+    selector: 'MethodDefinition[static=false][kind="method"][key.name=/^from[A-Z]/]',
+    message: instanceMethod,
+  },
+  {
+    selector: `PropertyDefinition[static=false][key.name=/^from[A-Z]/][value.type=${functionValue}]`,
+    message: instanceMethod,
+  },
+];
 
 export default defineConfig(
   globalIgnores(['dist/', 'out/', 'coverage/']),
@@ -102,6 +133,15 @@ export default defineConfig(
       'local/no-barrel-files': 'error',
       'local/enforce-internal-utils': 'error',
       'local/enforce-top-level-function-syntax': 'error',
+    },
+  },
+
+  {
+    name: 'beuve/conversion-naming',
+    // ADR 0062.
+    files: nodeFiles,
+    rules: {
+      'no-restricted-syntax': ['error', ...conversionNamingSelectors],
     },
   },
 
