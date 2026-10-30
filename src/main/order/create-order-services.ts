@@ -17,6 +17,7 @@ import type { ModuleResolver } from '#internal/syntax/create-module-resolver.ts'
 import { LruCache } from '#x/collections/lru-cache.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { headPathOf } from '../sessions/head-path-of.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
@@ -31,7 +32,10 @@ import { isImportSource } from './is-import-source.ts';
 
 /** `session:get-order`: the review's files in reading order (ADR 0065). */
 export interface OrderServices {
-  readonly getOrder: (request: GetReviewOrderRequest) => Promise<IpcResult<ReviewOrderView>>;
+  readonly getOrder: (
+    request: GetReviewOrderRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<ReviewOrderView>>;
 }
 
 export interface OrderServicesOptions {
@@ -42,6 +46,7 @@ export interface OrderServicesOptions {
   /** `linguist-generated` per file (`FileServices.getFileAttributes`). */
   readonly getFileAttributes: (
     request: GetFileAttributesRequest,
+    options?: RequestOptions,
   ) => Promise<IpcResult<FileAttributesView>>;
   /** The saved mode, for requests without one. */
   readonly defaultMode: () => Promise<ReviewOrderMode>;
@@ -124,12 +129,17 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
   };
 
   return {
-    getOrder: async (request): Promise<IpcResult<ReviewOrderView>> => {
+    getOrder: async (request, call = {}): Promise<IpcResult<ReviewOrderView>> => {
+      const { signal } = call;
       const requestedMode = request.mode ?? (await options.defaultMode());
       const [diff, ignoring, attributes] = await Promise.all([
-        loadReviewDiff(context, request.sessionId, { cache: diffs }),
-        loadReviewDiff(context, request.sessionId, { cache: diffs, ignoreWhitespace: true }),
-        options.getFileAttributes({ sessionId: request.sessionId }),
+        loadReviewDiff(context, request.sessionId, { cache: diffs, signal }),
+        loadReviewDiff(context, request.sessionId, {
+          cache: diffs,
+          ignoreWhitespace: true,
+          signal,
+        }),
+        options.getFileAttributes({ sessionId: request.sessionId }, { signal }),
       ]);
       if (!diff.ok) {
         return diff;

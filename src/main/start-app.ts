@@ -14,6 +14,7 @@ import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 
 import { createIpcHandlers } from './ipc/create-ipc-handlers.ts';
 import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';
+import { RequestScopes } from './ipc/request-scopes.ts';
 import { sendEvent } from './ipc/send-event.ts';
 import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
 import type { MainServices } from './main-services.ts';
@@ -142,8 +143,19 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   });
   void services.pruneWorktrees();
   hardenSession(session.defaultSession);
+  const scopes = new RequestScopes();
   app.on('web-contents-created', (_event, contents) => {
     hardenWebContents(contents, logger);
+    // A closed or reloaded window's loads would answer nobody: stop them, git included (ADR 0079).
+    const { id } = contents;
+    contents.once('destroyed', () => {
+      scopes.closeWindow(id);
+    });
+    contents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        scopes.closeWindow(id);
+      }
+    });
   });
   // The renderer's own clipboard needs a permission the hardened session denies (ADR 0027).
   const platform = {
@@ -165,11 +177,12 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       return chosen.canceled ? undefined : chosen.filePaths[0];
     },
   };
-  const handlers = createIpcHandlers(services, readAppInfo(app), {
-    ...platform,
-    openSheet: sheets.open,
-    menus,
-  });
+  const handlers = createIpcHandlers(
+    services,
+    readAppInfo(app),
+    { ...platform, openSheet: sheets.open, menus },
+    scopes,
+  );
 
   registerIpcHandlers(ipcMain, withSettingsBroadcast(handlers, announceSettingsChanged), {
     pages: [

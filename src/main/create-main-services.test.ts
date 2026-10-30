@@ -26,6 +26,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect,
     services: { sessions },
     repositories,
+    signal,
   }) => {
     const {
       repo,
@@ -46,7 +47,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect(again.id).toBe(created.id);
     expect(okValueFrom(sessions.list()).map(({ id }) => id)).toStrictEqual([created.id]);
 
-    const full = okValueFrom(await sessions.getReview({ sessionId: created.id }));
+    const full = okValueFrom(await sessions.getReview({ sessionId: created.id }, { signal }));
     expect(full.scope).toStrictEqual({ kind: 'full' });
     expect(full.baseSha).toBe(mergeBase);
     expect(fileSummary(full)).toStrictEqual([
@@ -59,7 +60,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
       await sessions.markReviewed({ sessionId: created.id, expectedHeadSha: full.headSha }),
     );
     expect(reviewed.lastReviewedSha).toBe(full.headSha);
-    const upToDate = okValueFrom(await sessions.getReview({ sessionId: created.id }));
+    const upToDate = okValueFrom(await sessions.getReview({ sessionId: created.id }, { signal }));
     expect(upToDate).toMatchObject({ scope: { kind: 'up-to-date' }, files: [] });
 
     const newBase = await upstreamAdvances(repo);
@@ -69,7 +70,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     await repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
     const newHead = await repo.git('rev-parse', 'feature');
 
-    const interdiff = okValueFrom(await sessions.getReview({ sessionId: created.id }));
+    const interdiff = okValueFrom(await sessions.getReview({ sessionId: created.id }, { signal }));
     expect(interdiff.headSha).toBe(newHead);
     expect(interdiff.baseSha).toBe(newBase);
     expect(interdiff.session.headSha).toBe(newHead);
@@ -86,7 +87,9 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
       sessions.markReviewed({ sessionId: created.id, expectedHeadSha: full.headSha }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
     okValueFrom(await sessions.markReviewed({ sessionId: created.id, expectedHeadSha: newHead }));
-    expect(okValueFrom(await sessions.getReview({ sessionId: created.id }))).toMatchObject({
+    expect(
+      okValueFrom(await sessions.getReview({ sessionId: created.id }, { signal })),
+    ).toMatchObject({
       scope: { kind: 'up-to-date' },
       baseSha: newBase,
       files: [],
@@ -100,6 +103,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect,
     services: { sessions },
     repositories,
+    signal,
   }) => {
     const { repo } = await repositories.fromTemplate(featureBranchTemplate());
     const { id } = okValueFrom(
@@ -115,7 +119,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     repo.write('notes.md', 'follow-up\n');
     await repo.commit('follow-up');
 
-    const review = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const review = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(review.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
     expect(fileSummary(review)).toStrictEqual([['notes.md', 'added', 1, 0]]);
   });
@@ -124,6 +128,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect,
     services,
     repo,
+    signal,
   }) => {
     const { sessions } = services;
     repo.write('app.py', lines(['def run():', '  x=1', '  return x', '']));
@@ -137,14 +142,14 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     const { id } = okValueFrom(
       await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
     );
-    const shown = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const shown = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(shown.whitespace).toBe('shown');
     expect(fileSummary(shown)).toStrictEqual([
       ['app.py', 'modified', 3, 2],
       ['spaces.txt', 'modified', 1, 1],
     ]);
     const ignored = okValueFrom(
-      await sessions.getReview({ sessionId: id, ignoreWhitespace: true }),
+      await sessions.getReview({ sessionId: id, ignoreWhitespace: true }, { signal }),
     );
     expect(ignored.whitespace).toBe('ignored');
     expect(ignored.headSha).toBe(shown.headSha);
@@ -166,7 +171,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
       }),
     );
     expect(item.placement).toStrictEqual({ kind: 'current', anchor: item.anchor });
-    okValueFrom(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }));
+    okValueFrom(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }, { signal }));
     expect(
       okValueFrom(await services.ura.list({ sessionId: id })).items[0]?.placement,
     ).toStrictEqual({
@@ -179,9 +184,11 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     repo.write('app.py', lines(['def run():', '\tx = 1', '\treturn x', '', 'run()', 'run()']));
     await repo.commit('tabs, and call twice');
     await repo.git('switch', '--quiet', 'main');
-    const interdiff = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const interdiff = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(fileSummary(interdiff)).toStrictEqual([['app.py', 'modified', 3, 2]]);
-    const quiet = okValueFrom(await sessions.getReview({ sessionId: id, ignoreWhitespace: true }));
+    const quiet = okValueFrom(
+      await sessions.getReview({ sessionId: id, ignoreWhitespace: true }, { signal }),
+    );
     expect(quiet.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
     expect(fileSummary(quiet)).toStrictEqual([['app.py', 'modified', 1, 0]]);
     expect(quiet.files[0]?.hunks).toStrictEqual([
@@ -193,6 +200,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect,
     services: { sessions },
     repositories,
+    signal,
   }) => {
     const { repo, value: stack } = await repositories.fromTemplate(pullRequestStackTemplate);
     await repo.git('update-ref', 'refs/review/base', 'pr1');
@@ -203,7 +211,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
         headRef: 'pr2',
       }),
     );
-    const full = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const full = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(fileSummary(full)).toStrictEqual([['b.txt', 'modified', 2, 2]]);
     okValueFrom(await sessions.markReviewed({ sessionId: id, expectedHeadSha: full.headSha }));
 
@@ -215,7 +223,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     setLine(repo, 'b.txt', 25, 'pr2-b25');
     const fixup = await repo.commit('pr2: b25');
 
-    const retargeted = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const retargeted = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(retargeted.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'exact' } });
     expect(retargeted.baseSha).toBe(stack.pr1[1]);
     expect(retargeted.forkPoint).toStrictEqual({
@@ -235,7 +243,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
 
     okValueFrom(await sessions.markReviewed({ sessionId: id, expectedHeadSha: fixup }));
     await repo.git('rebase', '--quiet', '--onto', 'main', stack.pr1[1] ?? '', 'pr2');
-    const rebased = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const rebased = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(rebased.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'rebased' } });
     expect(rebased.files).toStrictEqual([]);
     expect(rebased.forkPoint).toBeUndefined();
@@ -251,6 +259,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     services: { sessions },
     repositories,
     tempDir,
+    signal,
   }) => {
     const { repo } = await repositories.fromTemplate(featureBranchTemplate());
     const outside = tempDir;
@@ -263,12 +272,14 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     await expect(
       sessions.createLocal({ repoPath: 'relative', baseRef: 'main', headRef: 'HEAD' }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
-    await expect(sessions.getReview({ sessionId: 'not-a-uuid' })).resolves.toMatchObject({
+    await expect(
+      sessions.getReview({ sessionId: 'not-a-uuid' }, { signal }),
+    ).resolves.toMatchObject({
       ok: false,
       error: { code: 'invalid-request' },
     });
     await expect(
-      sessions.getReview({ sessionId: '00000000-0000-4000-8000-000000000000' }),
+      sessions.getReview({ sessionId: '00000000-0000-4000-8000-000000000000' }, { signal }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
     expect(okValueFrom(sessions.list())).toStrictEqual([]);
   });
@@ -278,10 +289,10 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   test(
     'reports the added complex function as the one introduced finding, cached per diff',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories }) => {
+    async ({ expect, services, repositories, signal }) => {
       const { sessionId } = await openTypescriptSession(services, repositories);
-      const review = okValueFrom(await services.sessions.getReview({ sessionId }));
-      const impact = okValueFrom(await services.impact.getImpact({ sessionId }));
+      const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
+      const impact = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
       expect(impact).toMatchObject({ baseSha: review.baseSha, headSha: review.headSha });
       expect(impact.findings).toStrictEqual([
         expect.objectContaining({
@@ -304,7 +315,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       expect(auth?.status === 'analyzed' && auth.functions).toStrictEqual([
         expect.objectContaining({ name: 'validate', change: 'modified', inDiff: true }),
       ]);
-      await expect(services.impact.getImpact({ sessionId })).resolves.toStrictEqual({
+      await expect(services.impact.getImpact({ sessionId }, { signal })).resolves.toStrictEqual({
         ok: true,
         value: impact,
       });
@@ -398,7 +409,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   test(
     'jumps to definitions at the head and at an older pinned commit, and reads sheets there',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories, worktreeRoot }) => {
+    async ({ expect, services, repositories, worktreeRoot, signal }) => {
       const { sessionId, repo } = await openTypescriptSession(services, repositories);
       const [head, base] = await Promise.all([
         repo.git('rev-parse', 'feature'),
@@ -440,7 +451,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
 
       const sheet = okValueFrom(
-        await services.sheets.getFile({ sessionId, sha: head, path: 'src/auth.ts' }),
+        await services.sheets.getFile({ sessionId, sha: head, path: 'src/auth.ts' }, { signal }),
       );
       expect(sheet).toMatchObject({
         sha: head,
@@ -451,7 +462,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       });
       expect(sheet.contents).toContain('token.length > 8');
       const old = okValueFrom(
-        await services.sheets.getFile({ sessionId, sha: base, path: 'src/auth.ts' }),
+        await services.sheets.getFile({ sessionId, sha: base, path: 'src/auth.ts' }, { signal }),
       );
       expect(old).toMatchObject({ sha: base, headSha: head, marks: { modified: [] } });
       expect(old.contents).toContain('token.length > 0');
@@ -489,7 +500,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   test(
     'moves the session checkout when the head moves, and prunes it on startup',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories, worktreeRoot }) => {
+    async ({ expect, services, repositories, worktreeRoot, signal }) => {
       const { sessionId, repo } = await openTypescriptSession(services, repositories);
       const before = await repo.git('rev-parse', 'feature');
       await repo.git('switch', '--quiet', 'feature');
@@ -505,7 +516,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       expect(checkouts(worktreeRoot)).toStrictEqual([after]);
       expect(after).not.toBe(before);
 
-      const impact = okValueFrom(await services.impact.getImpact({ sessionId }));
+      const impact = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
       expect(impact.headSha).toBe(after);
 
       await repo.git(
@@ -674,10 +685,10 @@ describe('createMainServices (integration: ImpactGate in a worker thread)', () =
   test(
     'answers other channels while a large computation runs, then ships the slim view',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger }) => {
+    async ({ expect, createServices, repositories, logger, signal }) => {
       const { services, sessionId } = await openLargeSession(createServices, repositories, logger);
-      const computing = services.impact.getImpactForRenderer({ sessionId });
-      const review = await services.sessions.getReview({ sessionId });
+      const computing = services.impact.getImpactForRenderer({ sessionId }, { signal });
+      const review = await services.sessions.getReview({ sessionId }, { signal });
       expect(review.ok).toBe(true);
       const state = await Promise.race([computing, Promise.resolve('pending')]);
       expect(state).toBe('pending');
@@ -687,7 +698,7 @@ describe('createMainServices (integration: ImpactGate in a worker thread)', () =
       const first = slim.files[0];
       expect(first?.status === 'analyzed' && first.functions).toHaveLength(8);
       expect(first).toMatchObject({ omittedFunctions: 12, aggregate: { changedFunctions: 20 } });
-      const full = okValueFrom(await services.impact.getImpact({ sessionId }));
+      const full = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
       const fullFirst = full.files[0];
       expect(fullFirst?.status === 'analyzed' && fullFirst.functions).toHaveLength(20);
       expect(JSON.stringify(slim).length).toBeLessThan(JSON.stringify(full).length / 2);
@@ -697,24 +708,24 @@ describe('createMainServices (integration: ImpactGate in a worker thread)', () =
   test(
     'cancels the computation when the session head moves',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger }) => {
+    async ({ expect, createServices, repositories, logger, signal }) => {
       const { services, sessionId, repo, runner } = await openLargeSession(
         createServices,
         repositories,
         logger,
       );
       await advance(repo, 'src/first.ts');
-      okValueFrom(await services.sessions.getReview({ sessionId }));
+      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       const held = runner.hold();
-      const computing = services.impact.getImpact({ sessionId });
+      const computing = services.impact.getImpact({ sessionId }, { signal });
       await held.started;
       await advance(repo, 'src/second.ts');
-      okValueFrom(await services.sessions.getReview({ sessionId }));
+      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       await expect(computing).resolves.toMatchObject({
         ok: false,
         error: { code: 'stale-review' },
       });
-      const moved = okValueFrom(await services.impact.getImpact({ sessionId }));
+      const moved = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
       expect(moved.files.map((file) => file.path)).toContain('src/second.ts');
     },
   );
@@ -722,9 +733,9 @@ describe('createMainServices (integration: ImpactGate in a worker thread)', () =
   test(
     'does not answer a request whose diff was loading when the head moved',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger }) => {
+    async ({ expect, createServices, repositories, logger, signal }) => {
       const { services, sessionId } = await openLargeSession(createServices, repositories, logger);
-      const loading = services.impact.getImpact({ sessionId });
+      const loading = services.impact.getImpact({ sessionId }, { signal });
       services.impact.observeHead(sessionId, 'f'.repeat(40));
       await expect(loading).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
     },

@@ -13,9 +13,10 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     expect,
     services: { sessions },
     repo,
+    signal,
   }) => {
     const id = await startReview(repo, sessions);
-    const first = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const first = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(states(first)).toStrictEqual([
       ['a.txt', 'no'],
       ['b.txt', 'no'],
@@ -52,7 +53,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     repo.write('b.txt', lines(['b1', 'b2 changed again']));
     repo.write('c.txt', lines(['c']));
     await repo.commit('follow-up');
-    const second = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const second = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(second.scope).toMatchObject({ kind: 'full' });
     expect(states(second)).toStrictEqual([
       ['a.txt', 'yes'],
@@ -71,6 +72,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     expect,
     services: { sessions },
     repo,
+    signal,
   }) => {
     const id = await startReview(repo, sessions);
     okValueFrom(
@@ -86,7 +88,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     await repo.commit('upstream');
     await repo.git('switch', '--quiet', 'feature');
     await repo.git('rebase', '--quiet', 'main');
-    const rebased = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const rebased = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(states(rebased)).toStrictEqual([
       ['a.txt', 'yes'],
       ['b.txt', 'no'],
@@ -97,6 +99,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     expect,
     services: { sessions },
     repo,
+    signal,
   }) => {
     const id = await startReview(repo, sessions);
     okValueFrom(
@@ -110,7 +113,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     await repo.git('switch', '--quiet', 'feature');
     await repo.git('mv', 'a.txt', 'renamed.txt');
     await repo.commit('rename a');
-    const renamed = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const renamed = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(states(renamed)).toStrictEqual([
       ['b.txt', 'no'],
       ['renamed.txt', 'yes'],
@@ -129,7 +132,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     );
     repo.write('renamed.txt', lines(['a1', 'a2', 'a3']));
     await repo.commit('extend');
-    const interdiff = okValueFrom(await sessions.getReview({ sessionId: id }));
+    const interdiff = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
     expect(interdiff.scope.kind).toBe('interdiff');
     expect(states(interdiff)).toStrictEqual([['renamed.txt', 'changed-since']]);
   });
@@ -179,6 +182,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
     expect,
     services: { sessions },
     repo,
+    signal,
   }) => {
     const id = await startReview(repo, sessions);
     okValueFrom(
@@ -190,7 +194,7 @@ describe('review:set-file-reviewed (integration: SQLite + git)', { timeout: 30_0
       }),
     );
     const ignoring = okValueFrom(
-      await sessions.getReview({ sessionId: id, ignoreWhitespace: true }),
+      await sessions.getReview({ sessionId: id, ignoreWhitespace: true }, { signal }),
     );
     expect(states(ignoring)).toStrictEqual([
       ['a.txt', 'yes'],

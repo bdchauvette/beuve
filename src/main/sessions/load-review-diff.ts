@@ -46,6 +46,8 @@ export interface ReviewDiffOptions {
   readonly headSha?: CommitSha;
   /** Diff from this base tip, which the caller resolved, instead of reading the base again. */
   readonly baseTip?: CommitSha;
+  /** Aborts the diff's git commands (ADR 0079). */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** The diff a review shows, still in git-domain types, with the refreshed session behind it. */
@@ -70,6 +72,7 @@ export async function loadReviewDiff(
   const refreshed = await refreshSession(context, loaded.value, {
     ...(options.headSha !== undefined && { headSha: options.headSha }),
     ...(options.baseTip !== undefined && { baseTip: options.baseTip }),
+    signal: options.signal,
   });
   if (!refreshed.ok) {
     return refreshed;

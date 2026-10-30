@@ -11,6 +11,7 @@ import { planWorktreePath } from '#internal/git/plan-worktree-path.ts';
 import { pruneWorktrees } from '#internal/git/prune-worktrees.ts';
 import { removeWorktree } from '#internal/git/remove-worktree.ts';
 import type { Logger } from '#x/log/create-logger.ts';
+import { untilAborted } from '#x/async/until-aborted.ts';
 import { err } from '#x/result/err.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import { ok } from '#x/result/ok.ts';
@@ -330,27 +331,6 @@ function holderOf(claim: WorktreeClaim): string {
   return claim.kind === 'session-head'
     ? `session\0${claim.sessionId}`
     : `pinned\0${claim.sessionId}\0${claim.commit}`;
-}
-
-/** `work`'s result, or `aborted` as soon as `signal` aborts; `work` itself goes on. */
-async function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T | 'aborted'> {
-  if (signal.aborted) {
-    return 'aborted';
-  }
-  using stack = new DisposableStack();
-  const listening = stack.adopt(new AbortController(), (controller) => {
-    controller.abort();
-  });
-  const aborted = new Promise<'aborted'>((resolve) => {
-    signal.addEventListener(
-      'abort',
-      () => {
-        resolve('aborted');
-      },
-      { once: true, signal: listening.signal },
-    );
-  });
-  return await Promise.race([work, aborted]);
 }
 
 async function pruneAll(

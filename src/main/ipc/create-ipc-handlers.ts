@@ -51,6 +51,7 @@ import type {
   ChatCommandRequest,
   RepositoryInspectionView,
   RepositoryTreeView,
+  RequestCancelledView,
   ReviewOrderView,
   ReviewView,
   SessionSummary,
@@ -70,8 +71,12 @@ import type {
 } from '#contract/ipc-contract.ts';
 import { modelRoles } from '#contract/model-roles.ts';
 import type { MainServices } from '../main-services.ts';
+import type { RequestOptions } from '../request-options.ts';
 import { modelEntryInputFrom } from '../models/model-entry-input-from.ts';
 import { modelEntrySchema } from '../models/model-entry-schema.ts';
+
+import { RequestScopes } from './request-scopes.ts';
+import type { SupersededKind } from './request-scopes.ts';
 
 /** What the handlers need from Electron itself; tests pass a stub. */
 export interface IpcPlatform {
@@ -422,10 +427,13 @@ const traceRemoveTrustRequest = z.strictObject({ repositoryPath: z.string().min(
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
 const githubAuthRequest = z.strictObject({ host: z.string().min(1).max(253).optional() });
+const requestId = z.string().min(1).max(200);
 const openPullRequestRequest = z.strictObject({
   ref: z.string().trim().min(1).max(2048),
   repoPath: z.string().trim().min(1).max(4096).optional(),
+  requestId: requestId.optional(),
 });
+const cancelRequestRequest = z.strictObject({ requestId });
 const githubReviewRequest = z.strictObject({
   sessionId,
   verdict: uraVerdict.optional(),
@@ -437,12 +445,31 @@ const openUrlRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 /**
  * Builds the invoke handlers. The renderer is untrusted, so each handler validates its argument
  * before anything reaches `services`, and answers bad input with an `invalid-request` error.
+ * Loads a window only needs the latest of run in a {@link RequestScopes} scope (ADR 0079): a
+ * newer one of the same kind from that window, a `request:cancel` naming it, or the window
+ * closing aborts it, git included, and it answers `cancelled`.
  */
 export function createIpcHandlers(
   services: MainServices,
   appInfo: AppInfo,
   platform: IpcPlatform = {},
+  scopes: RequestScopes = new RequestScopes(),
 ): IpcHandlers {
+  /** Runs `work` in a scope of `kind` for the sender's window; without a sender, unscoped. */
+  const scoped = async <T>(
+    sender: IpcSender | undefined,
+    kind: SupersededKind,
+    work: (options: RequestOptions) => Promise<IpcResult<T>>,
+    id?: string,
+  ): Promise<IpcResult<T>> => {
+    if (sender === undefined) {
+      return work({});
+    }
+    using scope = scopes.begin(sender.webContentsId, kind, id);
+    const result = await work({ signal: scope.signal });
+    return scope.signal.aborted ? err({ code: 'cancelled', message: 'cancelled' }) : result;
+  };
+
   return {
     'app:get-info': (request): IpcResult<AppInfo> => {
       const parsed = noRequest.safeParse(request);
@@ -477,16 +504,18 @@ export function createIpcHandlers(
       });
       return ok(chosen === undefined ? { kind: 'cancelled' } : { kind: 'chosen', path: chosen });
     },
-    'session:get-review': async (request): Promise<IpcResult<ReviewView>> => {
+    'session:get-review': async (request, sender): Promise<IpcResult<ReviewView>> => {
       const parsed = reviewRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
       const { sessionId: id, ignoreWhitespace } = parsed.data;
-      return services.sessions.getReview({
-        sessionId: id,
-        ...(ignoreWhitespace !== undefined && { ignoreWhitespace }),
-      });
+      return scoped(sender, 'review', async (options) =>
+        services.sessions.getReview(
+          { sessionId: id, ...(ignoreWhitespace !== undefined && { ignoreWhitespace }) },
+          options,
+        ),
+      );
     },
     'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = markReviewedRequest.safeParse(request);
@@ -498,33 +527,47 @@ export function createIpcHandlers(
         ? services.sessions.setFileReviewed(parsed.data)
         : invalid(parsed.error);
     },
-    'session:get-order': async (request): Promise<IpcResult<ReviewOrderView>> => {
+    'session:get-order': async (request, sender): Promise<IpcResult<ReviewOrderView>> => {
       const parsed = reviewOrderRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
       const { sessionId: id, mode } = parsed.data;
-      return services.order.getOrder(
-        mode === undefined ? { sessionId: id } : { sessionId: id, mode },
+      return scoped(sender, 'order', async (options) =>
+        services.order.getOrder(
+          mode === undefined ? { sessionId: id } : { sessionId: id, mode },
+          options,
+        ),
       );
     },
-    'session:get-impact': async (request): Promise<IpcResult<ImpactView>> => {
+    'session:get-impact': async (request, sender): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success
-        ? services.impact.getImpactForRenderer(parsed.data)
+        ? scoped(sender, 'impact', async (options) =>
+            services.impact.getImpactForRenderer(parsed.data, options),
+          )
         : invalid(parsed.error);
     },
     'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
       const parsed = filePairRequest.safeParse(request);
       return parsed.success ? services.files.getFilePair(parsed.data) : invalid(parsed.error);
     },
-    'session:get-tree': async (request): Promise<IpcResult<RepositoryTreeView>> => {
+    'session:get-tree': async (request, sender): Promise<IpcResult<RepositoryTreeView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.files.getTree(parsed.data) : invalid(parsed.error);
+      return parsed.success
+        ? scoped(sender, 'tree', async (options) => services.files.getTree(parsed.data, options))
+        : invalid(parsed.error);
     },
-    'session:get-file-attributes': async (request): Promise<IpcResult<FileAttributesView>> => {
+    'session:get-file-attributes': async (
+      request,
+      sender,
+    ): Promise<IpcResult<FileAttributesView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.files.getFileAttributes(parsed.data) : invalid(parsed.error);
+      return parsed.success
+        ? scoped(sender, 'file-attributes', async (options) =>
+            services.files.getFileAttributes(parsed.data, options),
+          )
+        : invalid(parsed.error);
     },
     'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
       const parsed = callHierarchyRequest.safeParse(request);
@@ -565,13 +608,21 @@ export function createIpcHandlers(
       }
       return checked;
     },
-    'sheet:get-file': async (request): Promise<IpcResult<SheetFileView>> => {
+    'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
       const parsed = sheetFileRequest.safeParse(request);
-      return parsed.success ? services.sheets.getFile(parsed.data) : invalid(parsed.error);
+      return parsed.success
+        ? scoped(sender, 'sheet-file', async (options) =>
+            services.sheets.getFile(parsed.data, options),
+          )
+        : invalid(parsed.error);
     },
-    'sheet:get-head': async (request): Promise<IpcResult<SheetHeadView>> => {
+    'sheet:get-head': async (request, sender): Promise<IpcResult<SheetHeadView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.sheets.getHead(parsed.data) : invalid(parsed.error);
+      return parsed.success
+        ? scoped(sender, 'sheet-head', async (options) =>
+            services.sheets.getHead(parsed.data, options),
+          )
+        : invalid(parsed.error);
     },
     'remote:permalink': async (request): Promise<IpcResult<PermalinkView>> => {
       const parsed = permalinkRequest.safeParse(request);
@@ -717,6 +768,16 @@ export function createIpcHandlers(
       const parsed = chatCancelRequest.safeParse(request);
       return parsed.success ? services.chat.cancel(parsed.data) : invalid(parsed.error);
     },
+    'request:cancel': (request, sender): IpcResult<RequestCancelledView> => {
+      const parsed = cancelRequestRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      return ok({
+        cancelled:
+          sender !== undefined && scopes.cancel(sender.webContentsId, parsed.data.requestId),
+      });
+    },
     'chat:compact': async (request): Promise<IpcResult<ChatCompactedView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success ? services.chat.compact(parsed.data) : invalid(parsed.error);
@@ -753,16 +814,22 @@ export function createIpcHandlers(
       const { host } = parsed.data;
       return services.github.authStatus(host === undefined ? {} : { host });
     },
-    'github:open-pr': async (request): Promise<IpcResult<OpenPullRequestResponse>> => {
+    'github:open-pr': async (request, sender): Promise<IpcResult<OpenPullRequestResponse>> => {
       const parsed = openPullRequestRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { ref, repoPath } = parsed.data;
-      return services.github.openPullRequest({
-        ref,
-        ...(repoPath !== undefined && { repoPath }),
-      });
+      const { ref, repoPath, requestId: id } = parsed.data;
+      return scoped(
+        sender,
+        'open-pull-request',
+        async (options) =>
+          services.github.openPullRequest(
+            { ref, ...(repoPath !== undefined && { repoPath }) },
+            options,
+          ),
+        id,
+      );
     },
     'display:get': async (request): Promise<IpcResult<DiffDisplayView>> => {
       const parsed = noRequest.safeParse(request);

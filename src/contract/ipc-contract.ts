@@ -1631,6 +1631,21 @@ export interface CiStatusView {
 export interface OpenPullRequestRequest {
   readonly ref: string;
   readonly repoPath?: string;
+  /** Names this request for `request:cancel` (ADR 0079): fetching a large pull request takes a while. */
+  readonly requestId?: string;
+}
+
+/**
+ * `request:cancel` (ADR 0079): stops the calling window's outstanding request that carried this
+ * `requestId`. The request then answers `cancelled`, which the renderer drops quietly.
+ */
+export interface CancelRequestRequest {
+  readonly requestId: string;
+}
+
+/** Whether a request with that id was still outstanding. */
+export interface RequestCancelledView {
+  readonly cancelled: boolean;
 }
 
 /**
@@ -2089,6 +2104,10 @@ export interface InvokeChannelMap {
   'chat:cancel': {
     readonly request: ChatCancelRequest;
     readonly response: IpcResult<ChatCancelledView>;
+  };
+  'request:cancel': {
+    readonly request: CancelRequestRequest;
+    readonly response: IpcResult<RequestCancelledView>;
   };
   'chat:compact': {
     readonly request: ChatCompactRequest;

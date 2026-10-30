@@ -14,6 +14,7 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
     expect,
     fakeClaude,
     startChat,
+    signal,
   }) => {
     const claude = fakeClaude.scripted(
       {
@@ -32,7 +33,7 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
       'insights',
     );
     const { services, chat, sessionId, settled } = await startChat(claude.settings);
-    const { headSha } = okValueFrom(await services.sessions.getReview({ sessionId }));
+    const { headSha } = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
 
     const verified = okValueFrom(
       await chat.ask({ sessionId, question: '/review', command: { kind: 'review' } }),

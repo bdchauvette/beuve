@@ -476,11 +476,14 @@ export class BeuveSheetView extends LitElement {
       this.files.set(place.path, pending);
     }
     const file = await pending;
-    if (this.current() !== place) {
+    if (!file.ok && this.files.get(place.path) === pending) {
+      this.files.delete(place.path);
+    }
+    // A newer load superseded this one (ADR 0079); it ends quietly.
+    if (this.current() !== place || (!file.ok && file.error.code === 'cancelled')) {
       return;
     }
     if (!file.ok) {
-      this.files.delete(place.path);
       this.loaded = { status: 'error', message: file.error.message };
       return;
     }

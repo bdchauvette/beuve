@@ -5,6 +5,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -26,12 +27,13 @@ export async function resolveSheetCommit(
   context: SessionContext,
   sessionId: string,
   sha: string | undefined,
+  options: RequestOptions = {},
 ): Promise<Result<SheetCommit, IpcError>> {
   const loaded = loadSession(context, sessionId);
   if (!loaded.ok) {
     return loaded;
   }
-  const refreshed = await refreshSession(context, loaded.value);
+  const refreshed = await refreshSession(context, loaded.value, { signal: options.signal });
   if (!refreshed.ok) {
     return refreshed;
   }

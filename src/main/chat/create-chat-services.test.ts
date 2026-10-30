@@ -214,6 +214,7 @@ describe(
       fakeClaude,
       startChat,
       repo,
+      signal,
     }) => {
       // The preamble streams at once and the chunks only after `delayMs`, far longer than the test:
       // the running answer is provably streaming, and provably unfinished until it is cancelled.
@@ -247,7 +248,7 @@ describe(
       repo.write('more.rs', 'pub fn more() {}\n');
       await repo.commit('push');
       await repo.git('switch', '--quiet', 'main');
-      okValueFrom(await services.sessions.getReview({ sessionId }));
+      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
 
       // The queue drop is synchronous with the head refresh. A queued request that was merely left to
       // start would still be queued here, and cancelled only once `prepare` saw the moved head.
@@ -279,10 +280,11 @@ describe(
       expect,
       fakeClaude,
       startChat,
+      signal,
     }) => {
       const claude = fakeClaude.scripted({ chunks: ['x'], delayMs: 600_000 });
       const { services, chat, sessionId } = await startChat(claude.settings);
-      const review = okValueFrom(await services.sessions.getReview({ sessionId }));
+      const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       const mention = { path: 'feature.rs', side: 'head', sha: review.headSha } as const;
       const asked = await Promise.all([
         chat.ask({ sessionId, question: 'One?' }),
@@ -575,6 +577,7 @@ describe(
       fakeClaude,
       startChat,
       repo,
+      signal,
     }) => {
       await repo.git('switch', '--quiet', 'feature');
       repo.write('app.rs', 'fn main() {\n  run();\n  stop();\n}\n');
@@ -582,7 +585,7 @@ describe(
       await repo.git('switch', '--quiet', 'main');
       const claude = fakeClaude.scripted({ chunks: ['It returns [[feature.rs:2]].'] });
       const { services, chat, sessionId, settled } = await startChat(claude.settings);
-      const review = okValueFrom(await services.sessions.getReview({ sessionId }));
+      const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       const mentions = [
         { path: 'feature.rs', side: 'head', startLine: 1, endLine: 2, sha: review.headSha },
         { path: 'app.rs', side: 'base', startLine: 2, endLine: 3, sha: review.baseSha },
@@ -628,10 +631,11 @@ describe(
       expect,
       fakeClaude,
       startChat,
+      signal,
     }) => {
       const claude = fakeClaude.scripted({ chunks: ['x'] });
       const { services, chat, sessionId, settled } = await startChat(claude.settings);
-      const review = okValueFrom(await services.sessions.getReview({ sessionId }));
+      const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       const refused = async (mention: {
         path: string;
         side: 'head' | 'base';
@@ -785,6 +789,7 @@ describe(
       fakeClaude,
       startChat,
       db,
+      signal,
     }) => {
       const claude = fakeClaude.scripted({ chunks: ['x'] });
       const { services, chat, sessionId } = await startChat(claude.settings);
@@ -794,7 +799,9 @@ describe(
       });
       expect(chat.clear({ sessionId: 'nope' })).toMatchObject({ ok: false });
 
-      const head = okValueFrom(await services.sessions.getReview({ sessionId })).headSha;
+      const head = okValueFrom(
+        await services.sessions.getReview({ sessionId }, { signal }),
+      ).headSha;
       appendChatMessage(db, {
         id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as ChatMessageId,
         sessionId: sessionId as SessionId,

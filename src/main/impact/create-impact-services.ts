@@ -1,9 +1,11 @@
 import type { GetImpactRequest, IpcError, IpcResult, ImpactView } from '#contract/ipc-contract.ts';
+import { untilAborted } from '#x/async/until-aborted.ts';
 import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
@@ -15,6 +17,8 @@ import { slimImpactView } from './slim-impact-view.ts';
 import { impactViewFrom } from './impact-view-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
+const cancelled: IpcError = { code: 'cancelled', message: 'cancelled' };
+
 const headMoved: IpcError = {
   code: 'stale-review',
   message: 'ImpactGate was cancelled: the head moved',
@@ -23,9 +27,15 @@ const headMoved: IpcError = {
 /** ImpactGate for the renderer and the MCP tool. */
 export interface ImpactServices {
   /** The full view: every changed function of every file. For MCP and main-side consumers. */
-  readonly getImpact: (request: GetImpactRequest) => Promise<IpcResult<ImpactView>>;
+  readonly getImpact: (
+    request: GetImpactRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<ImpactView>>;
   /** The renderer's view of the same computation, without the function rows it never shows. */
-  readonly getImpactForRenderer: (request: GetImpactRequest) => Promise<IpcResult<ImpactView>>;
+  readonly getImpactForRenderer: (
+    request: GetImpactRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<ImpactView>>;
   /** Cancels the session's in-flight computation if it is for a head other than `headSha`. */
   readonly observeHead: (sessionId: string, headSha: string) => void;
 }
@@ -47,7 +57,10 @@ export interface ImpactServicesOptions {
  */
 export function createImpactServices(options: ImpactServicesOptions): ImpactServices {
   const { context, runner } = options;
-  const running = new Map<string, { readonly headSha: string; readonly abort: AbortController }>();
+  const running = new Map<
+    string,
+    { readonly headSha: string; readonly abort: AbortController; waiters: number }
+  >();
   const cache = new LruCache<string, Promise<Result<ImpactView, IpcError>>>(
     options.cacheSize ?? 32,
   );
@@ -95,9 +108,38 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     );
   };
 
-  const getImpact = async ({ sessionId }: GetImpactRequest): Promise<IpcResult<ImpactView>> => {
+  /**
+   * Waits for a shared computation on the caller's signal. The last waiter to give up aborts it
+   * and drops it from the cache, since nobody is left to want it (ADR 0079).
+   */
+  const waitFor = async (
+    key: string,
+    computing: Promise<Result<ImpactView, IpcError>>,
+    signal: AbortSignal | undefined,
+  ): Promise<Result<ImpactView, IpcError>> => {
+    const job = running.get(key);
+    if (job === undefined) {
+      return computing;
+    }
+    job.waiters += 1;
+    const outcome = signal === undefined ? await computing : await untilAborted(computing, signal);
+    job.waiters -= 1;
+    if (outcome !== 'aborted') {
+      return outcome;
+    }
+    if (job.waiters === 0 && running.get(key) === job) {
+      job.abort.abort();
+      cache.delete(key);
+    }
+    return err(cancelled);
+  };
+
+  const getImpact = async (
+    { sessionId }: GetImpactRequest,
+    call: RequestOptions = {},
+  ): Promise<IpcResult<ImpactView>> => {
     const requestedAt = observations;
-    const diff = await loadReviewDiff(context, sessionId);
+    const diff = await loadReviewDiff(context, sessionId, { signal: call.signal });
     if (!diff.ok) {
       return diff;
     }
@@ -112,25 +154,30 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     const key = cacheKey(sessionId, diff.value);
     const cached = cache.get(key);
     if (cached !== undefined) {
-      return cached;
+      return waitFor(key, cached, call.signal);
     }
     const abort = new AbortController();
     const headSha = diff.value.refreshed.session.headSha;
-    running.set(key, { headSha, abort });
+    const job = { headSha, abort, waiters: 0 };
+    running.set(key, job);
     const computing = compute(sessionId, diff.value, abort.signal);
+    void (async (): Promise<void> => {
+      const result = await computing;
+      if (running.get(key) === job) {
+        running.delete(key);
+      }
+      if (!result.ok && cache.get(key) === computing) {
+        cache.delete(key);
+      }
+    })();
     cache.set(key, computing);
-    const result = await computing;
-    running.delete(key);
-    if (!result.ok) {
-      cache.delete(key);
-    }
-    return result;
+    return waitFor(key, computing, call.signal);
   };
 
   return {
     getImpact,
-    getImpactForRenderer: async (request): Promise<IpcResult<ImpactView>> => {
-      const full = await getImpact(request);
+    getImpactForRenderer: async (request, call = {}): Promise<IpcResult<ImpactView>> => {
+      const full = await getImpact(request, call);
       return full.ok
         ? ok(slimmed.getOrInsertComputed(full.value, () => slimImpactView(full.value)))
         : full;

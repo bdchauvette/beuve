@@ -42,6 +42,16 @@ The worktree manager (ADR 0020) handed a path out with no record of who used it,
 - `settled()` waits for queued adds and removals; main's `dispose` awaits it.
 - **Task #28's writable review-edits worktree** is meant to be a third claim kind with its own planned path and add operation (a branch, not a detached head), keeping the same leases, holders and per-path serialisation.
 
+### Renderer requests are superseded, cancellable, and stopped with their window
+
+AbortSignals can't cross IPC, so main keeps one per renderer request in `RequestScopes` (`src/main/ipc/request-scopes.ts`), and each handler passes it to its service as `RequestOptions.signal`. Services forward it to `refreshSession` and `loadReviewDiff`, which bind the repository handle to it, so every git command of the request is interrupted as its policy says.
+
+- **Supersession.** A newer request of the same kind from the same window aborts the older one. The kinds are `review` (`session:get-review`, the diff load and session open of the main window), `order`, `impact`, `tree`, `file-attributes`, `sheet-file` (a sheet's file snapshot), `sheet-head` and `open-pull-request`. The key is the window and the kind, not the session: a window shows one review and one sheet file at a time, so switching sessions quickly also stops the loads of the session left behind.
+- **Explicit cancel, only for opening a pull request**, the one long operation the reviewer watches (it fetches from the network). `github:open-pr` takes an optional `requestId`, and `request:cancel { requestId }` aborts that request of the calling window. The dialog shows Cancel while it fetches, and closing it cancels too.
+- **Closing or reloading a window** (`destroyed`, or a main-frame navigation) aborts everything it has outstanding.
+- **Cancelled requests end quietly.** The handler answers a request whose signal aborted with the IPC code `cancelled`, whatever the service returned; git's `aborted` maps to it too and is logged at debug level; the renderer drops `cancelled` answers without a notice, and a sheet no longer caches a cancelled file load.
+- **Shared ImpactGate runs count their waiters.** A cancelled caller stops waiting at once; the computation is aborted and dropped from the cache only when no caller is left, and a caller without a signal (chat, MCP) always counts. Chat passes its job's signal to its diff and ImpactGate requests.
+
 ### Head writes are compare-and-swap, and the base is pinned like the head
 
 - **`updateSessionHead(db, session, expectedHeadSha)`** stores the head only `WHERE head_sha = expectedHeadSha`, the head the writer's observation started from, and otherwise answers `head-changed` with the stored head. A slower observation that finishes last can no longer move a head back.

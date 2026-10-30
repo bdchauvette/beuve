@@ -24,6 +24,7 @@ import type { Session } from '#internal/session/session.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { UraServices } from '../ura/create-ura-services.ts';
@@ -56,6 +57,7 @@ export interface GithubServices {
   ) => Promise<IpcResult<GithubAuthStatusView>>;
   readonly openPullRequest: (
     request: OpenPullRequestRequest,
+    options?: RequestOptions,
   ) => Promise<IpcResult<OpenPullRequestResponse>>;
   readonly getPullRequest: (sessionId: string) => Promise<IpcResult<PullRequestSessionView>>;
   readonly previewReview: (
@@ -156,19 +158,25 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       return ok(describeAuthStatus(target, described));
     },
 
-    openPullRequest: async (request): Promise<IpcResult<OpenPullRequestResponse>> => {
-      const opened = await openPullRequest(github, request, ({ session, pullRequest }) => {
-        poller.watch(session.id);
-        void (async (): Promise<void> => {
-          const stack = await options.clients.withClient(
-            session.source.kind === 'github-pull-request' ? session.source.host : 'github.com',
-            async (client) => findPullRequestStack(client, pullRequest),
-          );
-          if (stack.ok && session.source.kind === 'github-pull-request') {
-            poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));
-          }
-        })();
-      });
+    openPullRequest: async (request, call = {}): Promise<IpcResult<OpenPullRequestResponse>> => {
+      const opened = await openPullRequest(
+        github,
+        request,
+        ({ session, pullRequest }) => {
+          poller.watch(session.id);
+          void (async (): Promise<void> => {
+            const stack = await options.clients.withClient(
+              session.source.kind === 'github-pull-request' ? session.source.host : 'github.com',
+              // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
+              async (client) => findPullRequestStack(client, pullRequest),
+            );
+            if (stack.ok && session.source.kind === 'github-pull-request') {
+              poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));
+            }
+          })();
+        },
+        call.signal,
+      );
       return ok(opened);
     },
 

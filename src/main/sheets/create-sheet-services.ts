@@ -11,6 +11,7 @@ import { diffObjects } from '#internal/git/diff-objects.ts';
 import { findStackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -23,8 +24,14 @@ import { sheetMarksFrom } from './sheet-marks-from.ts';
 
 /** What sheets (ADR 0067) read: a file at one commit, and where the session head is now. */
 export interface SheetServices {
-  readonly getFile: (request: SheetFileRequest) => Promise<IpcResult<SheetFileView>>;
-  readonly getHead: (request: { readonly sessionId: string }) => Promise<IpcResult<SheetHeadView>>;
+  readonly getFile: (
+    request: SheetFileRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<SheetFileView>>;
+  readonly getHead: (
+    request: { readonly sessionId: string },
+    options?: RequestOptions,
+  ) => Promise<IpcResult<SheetHeadView>>;
   /** Checks that the sheet's commit and file exist before main opens a window for it. */
   readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<{ readonly opened: true }>>;
 }
@@ -42,8 +49,8 @@ export interface SheetServicesOptions {
 export function createSheetServices(options: SheetServicesOptions): SheetServices {
   const { context, ura } = options;
   return {
-    getFile: async ({ sessionId, sha, path }): Promise<IpcResult<SheetFileView>> => {
-      const commit = await resolveSheetCommit(context, sessionId, sha);
+    getFile: async ({ sessionId, sha, path }, call = {}): Promise<IpcResult<SheetFileView>> => {
+      const commit = await resolveSheetCommit(context, sessionId, sha, call);
       if (!commit.ok) {
         return commit;
       }
@@ -77,12 +84,12 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         notes: listed?.ok === true ? notesOn(path, listed.value.items) : [],
       });
     },
-    getHead: async ({ sessionId }): Promise<IpcResult<SheetHeadView>> => {
+    getHead: async ({ sessionId }, call = {}): Promise<IpcResult<SheetHeadView>> => {
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
         return loaded;
       }
-      const refreshed = await refreshSession(context, loaded.value);
+      const refreshed = await refreshSession(context, loaded.value, { signal: call.signal });
       return refreshed.ok
         ? ok({ sessionId: refreshed.value.session.id, headSha: refreshed.value.session.headSha })
         : refreshed;

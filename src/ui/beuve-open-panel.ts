@@ -47,7 +47,8 @@ type Row =
  * Two steps cover the rest: "Pull request…" (link and local clone, with a folder picker) and
  * "Local branch…" (folder, then head and base suggested from git). Emits
  * `beuve-select-session { sessionId }`, `beuve-open-pull-request` and `beuve-open-repository`;
- * `beuve-open-close` asks the dialog to close. `beuve-app` does the IPC.
+ * `beuve-open-close` asks the dialog to close, and `beuve-open-pull-cancel` stops a pull request
+ * fetch in flight. `beuve-app` does the IPC.
  */
 @customElement('beuve-open-panel')
 export class BeuveOpenPanel extends LitElement {
@@ -290,6 +291,10 @@ export class BeuveOpenPanel extends LitElement {
 
     event.preventDefault();
     this.emit('beuve-open-close', {});
+  };
+
+  private readonly onCancelPull = (): void => {
+    this.emit('beuve-open-pull-cancel', {});
   };
 
   private readonly onFormKeyDown = (event: KeyboardEvent): void => {
@@ -664,6 +669,13 @@ export class BeuveOpenPanel extends LitElement {
           <button class="primary" type="submit" ?disabled=${this.openingPull}>
             ${this.openingPull ? 'Fetching…' : 'Open pull request'}
           </button>
+          ${
+            this.openingPull
+              ? html`<button type="button" data-action="cancel-pull" @click=${this.onCancelPull}>
+                  Cancel
+                </button>`
+              : nothing
+          }
         </div>
         ${this.renderFailure(this.pullFailure)}
       </form>

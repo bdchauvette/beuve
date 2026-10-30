@@ -169,13 +169,16 @@ export const test = baseTest
   )
   .extend(
     'openPull',
-    ({ services }): OpenPull =>
+    ({ services, signal }): OpenPull =>
       async (repoPath) =>
         okValueFrom(
-          await services.github.openPullRequest({
-            ref: 'https://github.com/octo-org/hello-world/pull/7/files',
-            ...(repoPath !== undefined && { repoPath }),
-          }),
+          await services.github.openPullRequest(
+            {
+              ref: 'https://github.com/octo-org/hello-world/pull/7/files',
+              ...(repoPath !== undefined && { repoPath }),
+            },
+            { signal },
+          ),
         ),
   )
   .extend('opened', ({ world, openPull }): (() => Promise<string>) => async () => {

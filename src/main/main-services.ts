@@ -11,6 +11,7 @@ import type {
   SetFileReviewedRequest,
   SetFileReviewedResponse,
 } from '#contract/ipc-contract.ts';
+import type { RequestOptions } from './request-options.ts';
 
 import type { ChatServices } from './chat/create-chat-services.ts';
 import type { DisplayServices } from './display/create-display-services.ts';
@@ -33,7 +34,10 @@ import type { UraServices } from './ura/create-ura-services.ts';
 export interface SessionServices {
   readonly list: () => IpcResult<readonly SessionSummary[]>;
   readonly createLocal: (request: CreateLocalSessionRequest) => Promise<IpcResult<SessionSummary>>;
-  readonly getReview: (request: GetReviewRequest) => Promise<IpcResult<ReviewView>>;
+  readonly getReview: (
+    request: GetReviewRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<ReviewView>>;
   readonly markReviewed: (request: MarkReviewedRequest) => Promise<IpcResult<SessionSummary>>;
   readonly setFileReviewed: (
     request: SetFileReviewedRequest,

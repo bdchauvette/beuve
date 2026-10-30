@@ -45,17 +45,18 @@ export async function openPullRequest(
   context: GithubContext,
   request: OpenPullRequestRequest,
   onOpened: (opened: OpenedPullRequest) => void,
+  signal?: AbortSignal,
 ): Promise<OpenPullRequestResponse> {
   const asked = parsePullRequestRef(request.ref);
   if (!asked.ok) {
     return githubFailure('invalid-ref', `Not a pull request: ${asked.error}.`);
   }
-  const fetched = await fetchPullRequest(context.clients, asked.value);
+  const fetched = await fetchPullRequest(context.clients, asked.value, signal);
   if (!fetched.ok) {
     return fetched.error;
   }
   const ref = canonicalPullRequestRef(asked.value, fetched.value);
-  const repository = await openClone(context, ref, request.repoPath);
+  const repository = await openClone(context, ref, request.repoPath, signal);
   if (!repository.ok) {
     return repository.error;
   }
@@ -80,8 +81,9 @@ export async function openPullRequest(
     repository: repository.value,
     remote: remote.name,
     pullRequest: fetched.value,
-    refetch: async () => fetchPullRequest(context.clients, ref),
+    refetch: async () => fetchPullRequest(context.clients, ref, signal),
     logger: context.session.logger,
+    signal,
   });
   if (!synced.ok) {
     return synced.error;
@@ -115,6 +117,7 @@ async function openClone(
   context: GithubContext,
   ref: PullRequestRef,
   repoPath: string | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<Result<GitRepository, GithubFailureView>> {
   const target = repoPath ?? (await context.clonePaths.read(ref));
   const name = `${ref.owner}/${ref.repo}`;
@@ -126,7 +129,7 @@ async function openClone(
       ),
     );
   }
-  const opened = await openRepository(target, context.session.git);
+  const opened = await openRepository(target, { ...context.session.git, signal });
   return opened.ok
     ? ok(opened.value)
     : err(

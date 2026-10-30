@@ -58,8 +58,12 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
     list: (): IpcResult<readonly SessionSummary[]> => listSummaries(context),
     createLocal: async (request): Promise<IpcResult<SessionSummary>> =>
       createLocalSession(context, request),
-    getReview: async ({ sessionId, ignoreWhitespace }): Promise<IpcResult<ReviewView>> =>
-      loadReview(context, sessionId, { cache, ignoreWhitespace: ignoreWhitespace === true }),
+    getReview: async ({ sessionId, ignoreWhitespace }, call = {}): Promise<IpcResult<ReviewView>> =>
+      loadReview(context, sessionId, {
+        cache,
+        ignoreWhitespace: ignoreWhitespace === true,
+        signal: call.signal,
+      }),
     markReviewed: async (request): Promise<IpcResult<SessionSummary>> =>
       markReviewed(context, request),
     setFileReviewed: async (request): Promise<IpcResult<SetFileReviewedResponse>> =>

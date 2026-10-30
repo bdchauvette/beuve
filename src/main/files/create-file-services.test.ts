@@ -8,8 +8,14 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { test } from './testing/test.ts';
 
 describe('createFileServices (integration: SQLite + git)', () => {
-  test('lists the head tree and its package roots', async ({ expect, files, repo, sessionId }) => {
-    const tree = okValueFrom(await files.getTree({ sessionId }));
+  test('lists the head tree and its package roots', async ({
+    expect,
+    files,
+    repo,
+    sessionId,
+    signal,
+  }) => {
+    const tree = okValueFrom(await files.getTree({ sessionId }, { signal }));
     expect(tree.paths).toStrictEqual([
       'package.json',
       'packages/web/package.json',
@@ -18,7 +24,7 @@ describe('createFileServices (integration: SQLite + git)', () => {
     ]);
     expect(tree.packageRoots).toStrictEqual(['', 'packages/web', 'services/api']);
     expect(tree.headSha).toBe(await repo.git('rev-parse', 'feature'));
-    expect(okValueFrom(await files.getTree({ sessionId }))).toStrictEqual(tree);
+    expect(okValueFrom(await files.getTree({ sessionId }, { signal }))).toStrictEqual(tree);
   });
 
   test('reads the review files’ attributes from .gitattributes at the head', async ({
@@ -26,16 +32,19 @@ describe('createFileServices (integration: SQLite + git)', () => {
     files,
     repo,
     sessionId,
+    signal,
   }) => {
     repo.write(
       '.gitattributes',
       'services/** linguist-generated\npackages/** -linguist-generated\n**/gone.ts -diff\n',
     );
     const head = await repo.commit('attributes');
-    const attributes = okValueFrom(await files.getFileAttributes({ sessionId }));
+    const attributes = okValueFrom(await files.getFileAttributes({ sessionId }, { signal }));
     expect(attributes.headSha).toBe(head);
     expect(attributes).toMatchObject(await expectedAttributes(repo));
-    expect(okValueFrom(await files.getFileAttributes({ sessionId }))).toStrictEqual(attributes);
+    expect(okValueFrom(await files.getFileAttributes({ sessionId }, { signal }))).toStrictEqual(
+      attributes,
+    );
   });
 
   test('reads both sides of a reviewed file, leaving out an absent side', async ({

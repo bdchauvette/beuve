@@ -291,7 +291,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     const isAborted = (): boolean => job.controller.signal.aborted;
     const unavailable = (): Result<never, Outcome> =>
       err({ status: 'failed', code: 'chat-unavailable' });
-    const diff = await loadReviewDiff(context, job.sessionId);
+    const diff = await loadReviewDiff(context, job.sessionId, { signal: job.controller.signal });
     if (isAborted()) {
       return err({ status: 'cancelled' });
     }
@@ -305,7 +305,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
     let findings: readonly ImpactFindingView[] | undefined;
     if (options.withImpact) {
-      const impactView = await impact.getImpact({ sessionId: job.sessionId });
+      const impactView = await impact.getImpact(
+        { sessionId: job.sessionId },
+        { signal: job.controller.signal },
+      );
       findings =
         impactView.ok && impactView.value.headSha === job.headSha
           ? impactView.value.findings

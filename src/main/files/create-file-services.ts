@@ -17,6 +17,7 @@ import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { RequestOptions } from '../request-options.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
@@ -30,10 +31,14 @@ import { findPackageRoots } from './find-package-roots.ts';
  * review files' `.gitattributes` (ADR 0052).
  */
 export interface FileServices {
-  readonly getTree: (request: GetTreeRequest) => Promise<IpcResult<RepositoryTreeView>>;
+  readonly getTree: (
+    request: GetTreeRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<RepositoryTreeView>>;
   readonly getFilePair: (request: GetFilePairRequest) => Promise<IpcResult<FilePairView>>;
   readonly getFileAttributes: (
     request: GetFileAttributesRequest,
+    options?: RequestOptions,
   ) => Promise<IpcResult<FileAttributesView>>;
 }
 
@@ -62,12 +67,12 @@ export function createFileServices(options: FileServicesOptions): FileServices {
   );
   const attributes = new LruCache<string, AttributeLists>(options.cacheSize ?? 8);
   return {
-    getTree: async ({ sessionId }): Promise<IpcResult<RepositoryTreeView>> => {
+    getTree: async ({ sessionId }, call = {}): Promise<IpcResult<RepositoryTreeView>> => {
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
         return loaded;
       }
-      const refreshed = await refreshSession(context, loaded.value);
+      const refreshed = await refreshSession(context, loaded.value, { signal: call.signal });
       if (!refreshed.ok) {
         return refreshed;
       }
@@ -113,8 +118,8 @@ export function createFileServices(options: FileServicesOptions): FileServices {
         ...(newContents.value !== undefined && { newContents: newContents.value }),
       });
     },
-    getFileAttributes: async ({ sessionId }): Promise<IpcResult<FileAttributesView>> => {
-      const diff = await loadReviewDiff(context, sessionId);
+    getFileAttributes: async ({ sessionId }, call = {}): Promise<IpcResult<FileAttributesView>> => {
+      const diff = await loadReviewDiff(context, sessionId, { signal: call.signal });
       if (!diff.ok) {
         return diff;
       }

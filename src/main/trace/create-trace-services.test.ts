@@ -162,6 +162,7 @@ describe(
       repo,
       traceEvents,
       settledTrace,
+      signal,
     }) => {
       okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
       okValueFrom(await services.trace.run({ sessionId, path: 'src/hang.ts', line: 2 }));
@@ -171,7 +172,7 @@ describe(
       );
       repo.write('src/extra.ts', 'export const extra = 1;\n');
       await repo.commit('push');
-      okValueFrom(await services.sessions.getReview({ sessionId }));
+      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
       const stopped = await settledTrace();
       expect(stopped).toMatchObject({ state: 'failed', failure: 'cancelled' });
       expect(stopped.state === 'failed' && stopped.message).toContain('head moved');

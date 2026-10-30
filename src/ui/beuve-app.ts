@@ -331,6 +331,8 @@ export class BeuveApp extends LitElement {
   private activePath: string | undefined;
   private jumpNonce = 0;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The `requestId` of the `github:open-pr` in flight, for `request:cancel`. */
+  private pullRequestId: string | undefined;
 
   private readonly onFocusIn = (event: FocusEvent): void => {
     const zone = event
@@ -704,7 +706,20 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onOpenClose = (): void => {
+    this.cancelOpeningPull();
     this.closeOpenDialog();
+  };
+
+  private readonly onOpenPullCancel = (): void => {
+    this.cancelOpeningPull();
+  };
+
+  /** Stops the pull request fetch in flight, if any; it then ends without a notice (ADR 0079). */
+  private readonly cancelOpeningPull = (): void => {
+    const requestId = this.pullRequestId;
+    if (requestId !== undefined) {
+      void beuveBridge()?.invoke('request:cancel', { requestId });
+    }
   };
 
   private readonly onShortcutsClose = (): void => {
@@ -924,8 +939,14 @@ export class BeuveApp extends LitElement {
     }
     this.openingPull = true;
     this.pullFailure = undefined;
-    const opened = await bridge.invoke('github:open-pr', request);
+    const requestId = crypto.randomUUID();
+    this.pullRequestId = requestId;
+    const opened = await bridge.invoke('github:open-pr', { ...request, requestId });
     this.openingPull = false;
+    this.pullRequestId = undefined;
+    if (!opened.ok && opened.error.code === 'cancelled') {
+      return;
+    }
     if (!opened.ok) {
       this.pullFailure = { message: opened.error.message };
       this.openDialog = this.review !== undefined;
@@ -1263,7 +1284,8 @@ export class BeuveApp extends LitElement {
       sessionId,
       ignoreWhitespace: this.display.ignoreWhitespace,
     });
-    if (sessionId !== this.selectedId) {
+    // A newer load of this window superseded this one (ADR 0079); that one will answer.
+    if (sessionId !== this.selectedId || (!review.ok && review.error.code === 'cancelled')) {
       return;
     }
     this.reviewLoading = false;
@@ -1369,7 +1391,8 @@ export class BeuveApp extends LitElement {
     }
     const mode = this.display.reviewOrder;
     const order = await bridge.invoke('session:get-order', { sessionId: review.session.id });
-    if (this.review !== review || mode !== this.display.reviewOrder) {
+    const isSuperseded = !order.ok && order.error.code === 'cancelled';
+    if (isSuperseded || this.review !== review || mode !== this.display.reviewOrder) {
       return;
     }
     if (order.ok) {
@@ -3055,6 +3078,7 @@ export class BeuveApp extends LitElement {
       @beuve-open-pull-request=${this.onOpenPullRequest}
       @beuve-open-repository=${this.onOpenRepository}
       @beuve-open-close=${this.onOpenClose}
+      @beuve-open-pull-cancel=${this.onOpenPullCancel}
     ></beuve-open-panel>`;
   }
 

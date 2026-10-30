@@ -17,9 +17,12 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect,
     services,
     repo,
+    signal,
   }) => {
     const sessionId = await startReview(repo, services);
-    const order = okValueFrom(await services.order.getOrder({ sessionId, mode: 'path' }));
+    const order = okValueFrom(
+      await services.order.getOrder({ sessionId, mode: 'path' }, { signal }),
+    );
     expect(order).toMatchObject({ requestedMode: 'path', mode: 'path' });
     expect(order.fallback).toBeUndefined();
     expect(order.groups).toStrictEqual([
@@ -48,9 +51,12 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect,
     services,
     repo,
+    signal,
   }) => {
     const sessionId = await startReview(repo, services);
-    const order = okValueFrom(await services.order.getOrder({ sessionId, mode: 'imports' }));
+    const order = okValueFrom(
+      await services.order.getOrder({ sessionId, mode: 'imports' }, { signal }),
+    );
     expect(order.mode).toBe('imports');
     expect(order.groups[0]).toStrictEqual({
       id: 'changes',
@@ -70,10 +76,15 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     ]);
   });
 
-  test('uses the saved mode when the request has none', async ({ expect, services, repo }) => {
+  test('uses the saved mode when the request has none', async ({
+    expect,
+    services,
+    repo,
+    signal,
+  }) => {
     const sessionId = await startReview(repo, services);
     await services.display.set({ reviewOrder: 'imports' });
-    expect(okValueFrom(await services.order.getOrder({ sessionId }))).toMatchObject({
+    expect(okValueFrom(await services.order.getOrder({ sessionId }, { signal }))).toMatchObject({
       requestedMode: 'imports',
       mode: 'imports',
     });
@@ -86,6 +97,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     db,
     deps,
     logger,
+    signal,
   }) => {
     const sessionId = await startReview(repo, services);
     const queried: string[] = [];
@@ -104,7 +116,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
         okCalls(request.path === 'src/shared.ts' ? [workspaceCall('src/x/helper.ts')] : []),
       );
     });
-    const calls = okValueFrom(await answering.getOrder({ sessionId, mode: 'calls' }));
+    const calls = okValueFrom(await answering.getOrder({ sessionId, mode: 'calls' }, { signal }));
     expect(calls).toMatchObject({ requestedMode: 'calls', mode: 'calls' });
     expect(calls.fallback).toBeUndefined();
     expect(calls.groups[0]?.paths).toStrictEqual([
@@ -122,7 +134,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
         error: { code: 'unsupported', message: 'no language server for this file' },
       }),
     );
-    const fallen = okValueFrom(await noServer.getOrder({ sessionId, mode: 'calls' }));
+    const fallen = okValueFrom(await noServer.getOrder({ sessionId, mode: 'calls' }, { signal }));
     expect(fallen).toMatchObject({
       requestedMode: 'calls',
       mode: 'imports',
@@ -131,7 +143,9 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect(fallen.paths.indexOf('src/shared.ts')).toBeLessThan(fallen.paths.indexOf('src/app.ts'));
 
     const quiet = orderWith(async () => later(okCalls([])));
-    expect(okValueFrom(await quiet.getOrder({ sessionId, mode: 'calls' }))).toMatchObject({
+    expect(
+      okValueFrom(await quiet.getOrder({ sessionId, mode: 'calls' }, { signal })),
+    ).toMatchObject({
       mode: 'imports',
       fallback: { kind: 'no-call-edges' },
     });
@@ -141,6 +155,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect,
     services,
     repo,
+    signal,
   }) => {
     repo.write('base.md', lines(['base']));
     await repo.commit('base');
@@ -157,15 +172,15 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
       }),
     );
     const order = okValueFrom(
-      await services.order.getOrder({ sessionId: created.id, mode: 'imports' }),
+      await services.order.getOrder({ sessionId: created.id, mode: 'imports' }, { signal }),
     );
     expect(order).toMatchObject({ mode: 'path', fallback: { kind: 'no-source-files' } });
     expect(order.paths).toStrictEqual(['a.md', 'b.md']);
   });
 
-  test('refuses an unknown session', async ({ expect, services }) => {
+  test('refuses an unknown session', async ({ expect, services, signal }) => {
     await expect(
-      services.order.getOrder({ sessionId: '00000000-0000-4000-8000-0000000000ff' }),
+      services.order.getOrder({ sessionId: '00000000-0000-4000-8000-0000000000ff' }, { signal }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
   });
 });

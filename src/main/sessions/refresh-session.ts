@@ -35,6 +35,8 @@ export interface RefreshSessionOptions {
    * ref is not read again, so a base fetched meanwhile can't change the fork point mid-operation.
    */
   readonly baseTip?: CommitSha;
+  /** Bounds every git command the refreshed repository handle runs (ADR 0079). */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /**
@@ -49,7 +51,10 @@ export async function refreshSession(
   options: RefreshSessionOptions = {},
 ): Promise<Result<RefreshedSession, IpcError>> {
   const { logger } = context;
-  const repository = await openRepository(session.source.repoPath, context.git);
+  const repository = await openRepository(session.source.repoPath, {
+    ...context.git,
+    signal: combinedSignal(context.git.signal, options.signal),
+  });
   if (!repository.ok) {
     return gitFailure(logger, repository.error);
   }
@@ -118,4 +123,11 @@ async function advanceLocalHead(
     }
     session = reloaded.value;
   }
+}
+
+function combinedSignal(
+  bound: AbortSignal | undefined,
+  own: AbortSignal | undefined,
+): AbortSignal | undefined {
+  return bound === undefined || own === undefined ? (bound ?? own) : AbortSignal.any([bound, own]);
 }

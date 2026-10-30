@@ -18,6 +18,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
     deps,
     logger,
     world,
+    signal,
   }) => {
     const { upstream, bare, api, firstHead } = world;
     const sessionId = await opened();
@@ -52,7 +53,9 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       updatedAt: '2026-10-28T11:00:00Z',
     });
     await services.github.pollNow(sessionId);
-    expect(okValueFrom(await services.sessions.getReview({ sessionId })).headSha).toBe(secondHead);
+    expect(okValueFrom(await services.sessions.getReview({ sessionId }, { signal })).headSha).toBe(
+      secondHead,
+    );
     held.release();
 
     const prepared = okValueFrom(await preparing);

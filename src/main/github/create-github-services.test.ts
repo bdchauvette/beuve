@@ -6,8 +6,13 @@ import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-
 import { advanceHead } from '#internal/session/advance-head.ts';
 import type { CommitSha } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
+import type { AppInfo } from '#contract/ipc-contract.ts';
+import { startHoldServer } from '#internal/git/testing/start-hold-server.ts';
+import { writeHoldScript } from '#internal/git/testing/write-hold-script.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { createIpcHandlers } from '../ipc/create-ipc-handlers.ts';
+import { RequestScopes } from '../ipc/request-scopes.ts';
 import type { MainServices } from '../main-services.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { lines } from '../testing/lines.ts';
@@ -22,6 +27,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     openPull,
     repositories,
     world,
+    signal,
   }) => {
     const { clone, baseSha, firstHead } = world;
     await expect(openPull()).resolves.toMatchObject({
@@ -75,7 +81,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     ]);
 
     const sessionId = first.kind === 'opened' ? first.session.id : '';
-    const review = okValueFrom(await services.sessions.getReview({ sessionId }));
+    const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
     expect(review.scope).toStrictEqual({ kind: 'full' });
     expect(review.baseSha).toBe(baseSha);
     expect(review.files.map((file) => file.path)).toStrictEqual(['app.ts', 'notes.md']);
@@ -89,6 +95,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     expect,
     recreate,
     world,
+    signal,
   }) => {
     const { upstream, clone, bare, firstHead, api } = world;
     await upstream.git('commit', '--quiet', '--amend', '--message', 'feature, amended');
@@ -98,10 +105,13 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     Object.assign(api, { fetch: racing.fetch });
     const restarted = recreate(services);
     const result = okValueFrom(
-      await restarted.github.openPullRequest({
-        ref: 'https://github.com/octo-org/hello-world/pull/7/files',
-        repoPath: clone.directory,
-      }),
+      await restarted.github.openPullRequest(
+        {
+          ref: 'https://github.com/octo-org/hello-world/pull/7/files',
+          repoPath: clone.directory,
+        },
+        { signal },
+      ),
     );
     expect(result).toMatchObject({ kind: 'opened', session: { headSha: amended } });
     expect(racing.pullGets()).toBe(2);
@@ -114,10 +124,11 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     updates,
     ciEvents,
     world,
+    signal,
   }) => {
     const { upstream, bare, firstHead, api } = world;
     const sessionId = await opened();
-    const reviewed = okValueFrom(await services.sessions.getReview({ sessionId }));
+    const reviewed = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
     okValueFrom(
       await services.sessions.markReviewed({ sessionId, expectedHeadSha: reviewed.headSha }),
     );
@@ -159,7 +170,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       pullRequest: { headSha: secondHead },
     });
     expect(ciEvents.at(-1)).toMatchObject({ ci: { sha: secondHead, overall: 'success' } });
-    const interdiff = okValueFrom(await services.sessions.getReview({ sessionId }));
+    const interdiff = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
     expect(interdiff.headSha).toBe(secondHead);
     expect(interdiff.scope).toMatchObject({
       kind: 'interdiff',
@@ -167,6 +178,45 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       outcome: { kind: 'exact' },
     });
     expect(interdiff.files.map((file) => file.path)).toStrictEqual(['app.ts']);
+  });
+
+  test('request:cancel stops opening a pull request mid-fetch, quietly (ADR 0079)', async ({
+    expect,
+    services,
+    world,
+    closing,
+    signal,
+  }) => {
+    const { clone } = world;
+    const server = closing(await startHoldServer(signal));
+    const uploadPack = writeHoldScript(clone.scratch(), 'upload-pack', server.port, {
+      kind: 'upload-pack',
+    });
+    await clone.git('config', 'remote.origin.uploadpack', uploadPack.command);
+    const handlers = createIpcHandlers(services, appInfo(), {}, new RequestScopes());
+    const window = { webContentsId: 1 };
+    const request = {
+      ref: 'https://github.com/octo-org/hello-world/pull/7/files',
+      repoPath: clone.directory,
+      requestId: 'open-1',
+    };
+    const opening = handlers['github:open-pr'](request, window);
+    const fetch = await server.next();
+    expect(handlers['request:cancel']({ requestId: 'open-1' }, window)).toStrictEqual({
+      ok: true,
+      value: { cancelled: true },
+    });
+    await expect(opening).resolves.toStrictEqual({
+      ok: false,
+      error: { code: 'cancelled', message: 'cancelled' },
+    });
+    await expect(fetch.ended).resolves.toBeDefined();
+    expect(services.sessions.list()).toStrictEqual({ ok: true, value: [] });
+    await clone.git('config', '--unset', 'remote.origin.uploadpack');
+    await expect(handlers['github:open-pr'](request, window)).resolves.toMatchObject({
+      ok: true,
+      value: { kind: 'opened' },
+    });
   });
 
   test('a head written behind the poller’s back is not pinned by its ETag (ADR 0079)', async ({
@@ -355,6 +405,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     services,
     opened,
     world,
+    signal,
   }) => {
     const { firstHead, api } = world;
     const sessionId = await opened();
@@ -365,7 +416,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
 
     const secondHead = await pushHead(world, 'the author pushes while the dialog is open');
     await services.github.pollNow(sessionId);
-    expect(okValueFrom(await services.sessions.getReview({ sessionId })).headSha).toBe(secondHead);
+    expect(okValueFrom(await services.sessions.getReview({ sessionId }, { signal })).headSha).toBe(
+      secondHead,
+    );
 
     const refused = okValueFrom(
       await services.github.postReview({ sessionId, expectedHeadSha: firstHead }),
@@ -424,6 +477,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     services,
     ciEvents,
     world,
+    signal,
   }) => {
     const { upstream, bare, api } = world;
     const sessionId = await opened();
@@ -441,7 +495,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
 
     await restarted.github.pollNow(sessionId);
     expect(racing.pullGets()).toBe(2);
-    expect(okValueFrom(await restarted.sessions.getReview({ sessionId })).headSha).toBe(synced);
+    expect(okValueFrom(await restarted.sessions.getReview({ sessionId }, { signal })).headSha).toBe(
+      synced,
+    );
     expect(ciEvents.at(-1)).toMatchObject({ sessionId, ci: { sha: synced, overall: 'failure' } });
     expect(api.log.filter((entry) => entry.includes(answered))).toStrictEqual([]);
   });
@@ -638,4 +694,15 @@ function reviewBy(
   commitSha: string,
 ): { reviewer: string; state: typeof state; commitSha: string; submittedAt: string } {
   return { reviewer: 'rita', state, commitSha, submittedAt: '2026-10-28T10:30:00Z' };
+}
+
+function appInfo(): AppInfo {
+  return {
+    name: 'beuve',
+    version: '0.1.0',
+    platform: 'linux',
+    electronVersion: '45.1.0',
+    chromeVersion: '140',
+    nodeVersion: '24',
+  };
 }
