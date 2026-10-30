@@ -70,10 +70,8 @@ interface Problem {
 
 function remoteProblem(remote: string): Problem | undefined {
   if (remote.startsWith('https://')) {
-    let url: URL;
-    try {
-      url = new URL(remote);
-    } catch {
+    const url = URL.parse(remote);
+    if (url === null) {
       return { argument: remote, reason: 'not a URL' };
     }
     return url.username === '' && url.password === '' && url.search === '' && url.hash === ''

@@ -50,10 +50,8 @@ interface Parts {
 }
 
 function fromUrl(input: string): Parts | string {
-  let url: URL;
-  try {
-    url = new URL(input);
-  } catch {
+  const url = URL.parse(input);
+  if (url === null) {
     return 'not a URL';
   }
   if (url.protocol !== 'https:' || url.port !== '' || url.username !== '') {

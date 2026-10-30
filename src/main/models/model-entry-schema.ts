@@ -10,16 +10,13 @@ const httpUrl = z
   .min(1)
   .max(2000)
   .refine((value) => {
-    try {
-      const url = new URL(value);
-      return (
-        (url.protocol === 'http:' || url.protocol === 'https:') &&
-        url.username === '' &&
-        url.password === ''
-      );
-    } catch {
-      return false;
-    }
+    const url = URL.parse(value);
+    return (
+      url !== null &&
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.username === '' &&
+      url.password === ''
+    );
   }, 'must be an http or https URL without credentials');
 
 const absolutePath = text(4096).refine(

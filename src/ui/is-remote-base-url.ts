@@ -4,10 +4,8 @@
  * included. Main decides the same for stored entries. Pure.
  */
 export function isRemoteBaseUrl(url: string): boolean {
-  let host: string;
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
+  const host = URL.parse(url)?.hostname.toLowerCase();
+  if (host === undefined) {
     return true;
   }
   const isLoopback =

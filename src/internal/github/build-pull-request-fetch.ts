@@ -61,12 +61,14 @@ const branchCharacters = /^[\w./-]+$/;
 
 function isRemote(remote: string): boolean {
   if (remote.startsWith('https://')) {
-    try {
-      const url = new URL(remote);
-      return url.username === '' && url.password === '' && url.search === '' && url.hash === '';
-    } catch {
-      return false;
-    }
+    const url = URL.parse(remote);
+    return (
+      url !== null &&
+      url.username === '' &&
+      url.password === '' &&
+      url.search === '' &&
+      url.hash === ''
+    );
   }
   return remoteName.test(remote) && !remote.startsWith('-') && !remote.startsWith('.');
 }

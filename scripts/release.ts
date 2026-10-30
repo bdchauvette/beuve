@@ -28,7 +28,7 @@ function release(): void {
     console.log(`Created commit and tag v${version}. Publish with:\n`);
     console.log('  git push --follow-tags origin main');
   } catch (error) {
-    console.error(`release: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`release: ${Error.isError(error) ? error.message : String(error)}`);
     process.exitCode = 1;
   }
 }

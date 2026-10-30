@@ -50,13 +50,11 @@ interface Parts {
 }
 
 function fromUrl(text: string): Parts | undefined {
-  let url: URL;
-  try {
-    url = new URL(text);
-  } catch {
-    return undefined;
-  }
-  if (!['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'].includes(url.protocol)) {
+  const url = URL.parse(text);
+  if (
+    url === null ||
+    !['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'].includes(url.protocol)
+  ) {
     return undefined;
   }
   return url.hostname === '' ? undefined : { host: url.hostname, path: url.pathname.slice(1) };

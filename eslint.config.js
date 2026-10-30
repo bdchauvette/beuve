@@ -180,6 +180,8 @@ export default defineConfig(
       'local/forward-abort-signal': 'error',
       // ADR 0076.
       'local/prefer-using': 'error',
+      // ADR 0079.
+      'local/prefer-url-parse': 'error',
     },
   },
 

@@ -575,12 +575,7 @@ function unreachable(baseUrl: string, error: unknown, signal: AbortSignal): Mode
   }
   const cause =
     Error.isError(error) && Error.isError(error.cause) ? error.cause.message : String(error);
-  let origin = baseUrl;
-  try {
-    origin = new URL(baseUrl).origin;
-  } catch {
-    // Shown as configured.
-  }
+  const origin = URL.parse(baseUrl)?.origin ?? baseUrl;
   return {
     kind: 'model-failed',
     reason: 'unreachable',

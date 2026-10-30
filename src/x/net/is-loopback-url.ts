@@ -5,10 +5,8 @@ import { isIP } from 'node:net';
  * (ADR 0071, the non-loopback warning). Anything else, an unparsable URL included, may send the diff off the machine.
  */
 export function isLoopbackUrl(url: string): boolean {
-  let host: string;
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
+  const host = URL.parse(url)?.hostname.toLowerCase();
+  if (host === undefined) {
     return false;
   }
   const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;

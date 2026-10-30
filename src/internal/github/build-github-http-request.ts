@@ -60,14 +60,9 @@ function resolveUrl(request: GithubRequest, base: URL): URL | undefined {
   if (!isAbsolute && (!request.path.startsWith('/') || request.path.startsWith('//'))) {
     return undefined;
   }
-  let url: URL;
-  try {
-    url = isAbsolute ? new URL(request.path) : new URL(request.path.slice(1), base);
-  } catch {
-    return undefined;
-  }
+  const url = isAbsolute ? URL.parse(request.path) : URL.parse(request.path.slice(1), base.href);
   if (
-    url.origin !== base.origin ||
+    url?.origin !== base.origin ||
     !url.pathname.startsWith(base.pathname) ||
     url.username !== ''
   ) {

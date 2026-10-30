@@ -4,13 +4,9 @@
  * requests from), with no credentials or port. Everything else stays unopened. Pure.
  */
 export function isAllowedGithubLink(text: string, hosts: ReadonlySet<string>): boolean {
-  let url: URL;
-  try {
-    url = new URL(text);
-  } catch {
-    return false;
-  }
+  const url = URL.parse(text);
   return (
+    url !== null &&
     url.protocol === 'https:' &&
     url.username === '' &&
     url.password === '' &&

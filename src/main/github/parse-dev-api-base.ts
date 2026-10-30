@@ -10,13 +10,9 @@ export function parseDevApiBase(value: string | undefined): URL | undefined {
   if (value === undefined || value === '') {
     return undefined;
   }
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return undefined;
-  }
+  const url = URL.parse(value);
   if (
+    url === null ||
     !['http:', 'https:'].includes(url.protocol) ||
     !loopbackHosts.has(url.hostname) ||
     url.username !== '' ||
