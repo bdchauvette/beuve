@@ -1,15 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 
 describe('describeChatPlaceholder', () => {
-  it('stays short enough for the minimum sidebar width in either state', () => {
+  test('stays short enough for the minimum sidebar width in either state', ({ expect }) => {
     for (const isAnswering of [false, true]) {
       expect(describeChatPlaceholder(isAnswering).length).toBeLessThanOrEqual(26);
     }
   });
 
-  it('hints at commands while idle and says that what is sent queues while answering', () => {
+  test('hints at commands while idle and says that what is sent queues while answering', ({
+    expect,
+  }) => {
     expect(describeChatPlaceholder(false)).toBe('Ask, or / for commands');
     expect(describeChatPlaceholder(true)).toContain('waits its turn');
   });

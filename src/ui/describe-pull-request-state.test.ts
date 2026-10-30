@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describePullRequestState } from './describe-pull-request-state.ts';
 
 describe('describePullRequestState', () => {
-  it('shows drafts as Draft and folds merged', () => {
+  test('shows drafts as Draft and folds merged', ({ expect }) => {
     expect(describePullRequestState({ state: 'open', isDraft: true }).label).toBe('Draft');
-    expect(describePullRequestState({ state: 'open', isDraft: false })).toEqual({
+    expect(describePullRequestState({ state: 'open', isDraft: false })).toStrictEqual({
       label: 'Open',
       tone: 'ok',
     });

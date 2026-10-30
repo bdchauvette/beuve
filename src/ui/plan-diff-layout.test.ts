@@ -1,24 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { minimumSplitWidth } from './minimum-split-width.ts';
 import { planDiffLayout } from './plan-diff-layout.ts';
 
 describe('planDiffLayout', () => {
-  it('splits modifications and renames by default', () => {
-    expect(planDiffLayout('modified', 'split', 1400)).toEqual({
+  test('splits modifications and renames by default', ({ expect }) => {
+    expect(planDiffLayout('modified', 'split', 1400)).toStrictEqual({
       style: 'split',
       reason: 'preference',
     });
-    expect(planDiffLayout('renamed', 'split', undefined)).toEqual({
+    expect(planDiffLayout('renamed', 'split', undefined)).toStrictEqual({
       style: 'split',
       reason: 'preference',
     });
     expect(planDiffLayout('copied', 'split', minimumSplitWidth).style).toBe('split');
   });
 
-  it('shows new and deleted files full width, in one column', () => {
+  test('shows new and deleted files full width, in one column', ({ expect }) => {
     for (const status of ['added', 'deleted'] as const) {
-      expect(planDiffLayout(status, 'split', 1400)).toEqual({
+      expect(planDiffLayout(status, 'split', 1400)).toStrictEqual({
         style: 'unified',
         reason: 'single-sided',
       });
@@ -26,15 +28,15 @@ describe('planDiffLayout', () => {
     }
   });
 
-  it('follows an inline preference', () => {
-    expect(planDiffLayout('modified', 'unified', 1400)).toEqual({
+  test('follows an inline preference', ({ expect }) => {
+    expect(planDiffLayout('modified', 'unified', 1400)).toStrictEqual({
       style: 'unified',
       reason: 'preference',
     });
   });
 
-  it('falls back to inline while the stream is too narrow for two columns', () => {
-    expect(planDiffLayout('modified', 'split', minimumSplitWidth - 1)).toEqual({
+  test('falls back to inline while the stream is too narrow for two columns', ({ expect }) => {
+    expect(planDiffLayout('modified', 'split', minimumSplitWidth - 1)).toStrictEqual({
       style: 'unified',
       reason: 'narrow',
     });

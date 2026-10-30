@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseOpenQuery } from './parse-open-query.ts';
 
 describe('parseOpenQuery', () => {
-  it('recognizes pull request URLs, with trailing pages', () => {
-    expect(parseOpenQuery(' https://github.com/octo-org/hello/pull/12/files ')).toEqual({
+  test('recognizes pull request URLs, with trailing pages', ({ expect }) => {
+    expect(parseOpenQuery(' https://github.com/octo-org/hello/pull/12/files ')).toStrictEqual({
       kind: 'pull-request',
       ref: 'https://github.com/octo-org/hello/pull/12/files',
       host: 'github.com',
@@ -14,7 +16,7 @@ describe('parseOpenQuery', () => {
     });
   });
 
-  it('recognizes owner/repo#n and host/owner/repo#n', () => {
+  test('recognizes owner/repo#n and host/owner/repo#n', ({ expect }) => {
     expect(parseOpenQuery('octo-org/hello#7')).toMatchObject({ host: 'github.com', number: 7 });
     expect(parseOpenQuery('GHE.example.com/a/b#3')).toMatchObject({
       kind: 'pull-request',
@@ -24,14 +26,14 @@ describe('parseOpenQuery', () => {
     });
   });
 
-  it('treats absolute and home paths as folders', () => {
-    expect(parseOpenQuery('/src/beuve')).toEqual({ kind: 'path', path: '/src/beuve' });
-    expect(parseOpenQuery('~/code/x')).toEqual({ kind: 'path', path: '~/code/x' });
+  test('treats absolute and home paths as folders', ({ expect }) => {
+    expect(parseOpenQuery('/src/beuve')).toStrictEqual({ kind: 'path', path: '/src/beuve' });
+    expect(parseOpenQuery('~/code/x')).toStrictEqual({ kind: 'path', path: '~/code/x' });
   });
 
-  it('filters with anything else, and is empty when blank', () => {
-    expect(parseOpenQuery('tax')).toEqual({ kind: 'filter', text: 'tax' });
-    expect(parseOpenQuery('a/b#0')).toEqual({ kind: 'filter', text: 'a/b#0' });
-    expect(parseOpenQuery('  ')).toEqual({ kind: 'empty' });
+  test('filters with anything else, and is empty when blank', ({ expect }) => {
+    expect(parseOpenQuery('tax')).toStrictEqual({ kind: 'filter', text: 'tax' });
+    expect(parseOpenQuery('a/b#0')).toStrictEqual({ kind: 'filter', text: 'a/b#0' });
+    expect(parseOpenQuery('  ')).toStrictEqual({ kind: 'empty' });
   });
 });

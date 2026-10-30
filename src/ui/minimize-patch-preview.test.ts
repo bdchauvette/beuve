@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { minimizePatchPreview } from './minimize-patch-preview.ts';
 import { splitPatch } from './split-patch.ts';
@@ -9,7 +11,7 @@ function preview(body: string[]): string[] {
 }
 
 describe('minimizePatchPreview', () => {
-  it('turns anchored lines the edit kept into context', () => {
+  test('turns anchored lines the edit kept into context', ({ expect }) => {
     expect(
       preview([
         ' before',
@@ -21,7 +23,7 @@ describe('minimizePatchPreview', () => {
         '+const c = 3;',
         ' after',
       ]),
-    ).toEqual([
+    ).toStrictEqual([
       ' before',
       ' const a = 1;',
       '-const b = 2;',
@@ -31,23 +33,23 @@ describe('minimizePatchPreview', () => {
     ]);
   });
 
-  it('shows pure insertions and deletions as they are', () => {
-    expect(preview(['-gone', '-kept', '+kept'])).toEqual(['-gone', ' kept']);
-    expect(preview(['-kept', '+kept', '+new'])).toEqual([' kept', '+new']);
+  test('shows pure insertions and deletions as they are', ({ expect }) => {
+    expect(preview(['-gone', '-kept', '+kept'])).toStrictEqual(['-gone', ' kept']);
+    expect(preview(['-kept', '+kept', '+new'])).toStrictEqual([' kept', '+new']);
   });
 
-  it('hides context beyond two lines of a change, marking gaps between changes', () => {
+  test('hides context beyond two lines of a change, marking gaps between changes', ({ expect }) => {
     expect(
       preview([' 1', ' 2', ' 3', '-x', '+y', ' 4', ' 5', ' a', ' 6', ' 7', '-p', '+q', ' 8']),
-    ).toEqual([' 2', ' 3', '-x', '+y', ' 4', ' 5', '⋯', ' 6', ' 7', '-p', '+q', ' 8']);
+    ).toStrictEqual([' 2', ' 3', '-x', '+y', ' 4', ' 5', '⋯', ' 6', ' 7', '-p', '+q', ' 8']);
   });
 
-  it('keeps the whole patch when nothing changes', () => {
-    expect(preview([' a', ' b'])).toEqual([' a', ' b']);
+  test('keeps the whole patch when nothing changes', ({ expect }) => {
+    expect(preview([' a', ' b'])).toStrictEqual([' a', ' b']);
   });
 
-  it('leaves runs with no-newline markers alone', () => {
-    expect(preview(['-a', '\\ No newline at end of file', '+a'])).toEqual([
+  test('leaves runs with no-newline markers alone', ({ expect }) => {
+    expect(preview(['-a', '\\ No newline at end of file', '+a'])).toStrictEqual([
       '-a',
       '\\ No newline at end of file',
       '+a',

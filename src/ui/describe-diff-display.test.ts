@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeDiffDisplay } from './describe-diff-display.ts';
 
 describe('describeDiffDisplay', () => {
-  it('names the layout and whether whitespace is hidden', () => {
+  test('names the layout and whether whitespace is hidden', ({ expect }) => {
     expect(describeDiffDisplay({ layout: 'split', ignoreWhitespace: false }, false).text).toBe(
       'Split',
     );
@@ -12,7 +14,7 @@ describe('describeDiffDisplay', () => {
     );
   });
 
-  it('says when a split falls back to inline in a narrow window', () => {
+  test('says when a split falls back to inline in a narrow window', ({ expect }) => {
     const label = describeDiffDisplay({ layout: 'split', ignoreWhitespace: false }, true);
     expect(label.text).toBe('Inline (narrow)');
     expect(label.title).toContain('too narrow');

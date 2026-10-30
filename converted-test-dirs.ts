@@ -7,6 +7,10 @@
  */
 export const convertedTestDirs: readonly string[] = [
   'eslint-local-rules',
+  'scripts/lib/image',
+  'src/contract',
+  'src/git',
   'src/internal/git',
   'src/internal/session',
+  'src/ui',
 ];

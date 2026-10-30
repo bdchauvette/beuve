@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeGithubAuth } from './describe-github-auth.ts';
 
 describe('describeGithubAuth', () => {
-  it('names the login and mechanism', () => {
+  test('names the login and mechanism', ({ expect }) => {
     expect(
       describeGithubAuth({
         kind: 'signed-in',
@@ -12,14 +14,14 @@ describe('describeGithubAuth', () => {
         login: 'octocat',
         scopes: ['repo', 'read:org'],
       }),
-    ).toEqual({
+    ).toStrictEqual({
       tone: 'ok',
       text: 'GitHub: @octocat via gh',
       title: 'github.com\nScopes: repo, read:org',
     });
   });
 
-  it('tells a signed-out reviewer what to run', () => {
+  test('tells a signed-out reviewer what to run', ({ expect }) => {
     expect(
       describeGithubAuth({
         kind: 'signed-out',
@@ -28,7 +30,7 @@ describe('describeGithubAuth', () => {
         message: 'Not signed in.',
         remedy: 'gh auth login --hostname github.com',
       }),
-    ).toEqual({
+    ).toStrictEqual({
       tone: 'warn',
       text: 'GitHub: not signed in — run gh auth login',
       title: 'Run: gh auth login --hostname github.com',

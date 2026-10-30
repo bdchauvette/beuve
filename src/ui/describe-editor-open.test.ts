@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeEditorOpen } from './describe-editor-open.ts';
 
 describe('describeEditorOpen', () => {
-  it('names the editor and flags a beuve checkout', () => {
+  test('names the editor and flags a beuve checkout', ({ expect }) => {
     const opened = {
       kind: 'opened',
       editorId: 'zed',
@@ -11,7 +13,7 @@ describe('describeEditorOpen', () => {
       path: 'src/a.ts',
       line: 4,
     } as const;
-    expect(describeEditorOpen({ ...opened, location: 'working-tree' })).toEqual({
+    expect(describeEditorOpen({ ...opened, location: 'working-tree' })).toStrictEqual({
       tone: 'info',
       text: 'Opened src/a.ts:4 in Zed.',
     });
@@ -20,9 +22,9 @@ describe('describeEditorOpen', () => {
     );
   });
 
-  it('shows failures as errors', () => {
+  test('shows failures as errors', ({ expect }) => {
     expect(
       describeEditorOpen({ kind: 'failed', failure: 'launch-failed', message: 'nope' }),
-    ).toEqual({ tone: 'error', text: 'nope' });
+    ).toStrictEqual({ tone: 'error', text: 'nope' });
   });
 });

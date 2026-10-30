@@ -1,23 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { fuzzyMatch } from './fuzzy-match.ts';
 
 describe('fuzzyMatch', () => {
-  it('matches subsequences case-insensitively and reports the characters', () => {
+  test('matches subsequences case-insensitively and reports the characters', ({ expect }) => {
     expect(fuzzyMatch('rvw', 'Run a preliminary review')?.indices).toHaveLength(3);
     expect(fuzzyMatch('xyz', 'review')).toBeUndefined();
-    expect(fuzzyMatch('', 'anything')).toEqual({ score: 0, indices: [] });
+    expect(fuzzyMatch('', 'anything')).toStrictEqual({ score: 0, indices: [] });
   });
 
-  it('prefers word starts and consecutive runs', () => {
+  test('prefers word starts and consecutive runs', ({ expect }) => {
     const atStart = fuzzyMatch('tc', 'src/total-checkout.ts');
-    expect(atStart?.indices).toEqual([4, 10]);
+    expect(atStart?.indices).toStrictEqual([4, 10]);
     const words = fuzzyMatch('ct', 'checkout total')?.score ?? 0;
     const scattered = fuzzyMatch('ct', 'architecture')?.score ?? 0;
     expect(words).toBeGreaterThan(scattered);
   });
 
-  it('ranks a shorter path above a longer one for the same match', () => {
+  test('ranks a shorter path above a longer one for the same match', ({ expect }) => {
     const short = fuzzyMatch('auth', 'src/auth.ts')?.score ?? 0;
     const long = fuzzyMatch('auth', 'src/deeply/nested/folder/auth.ts')?.score ?? 0;
     expect(short).toBeGreaterThan(long);

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type {
   FileImpactView,
@@ -13,26 +15,32 @@ function metrics(cognitive: number): FunctionMetricsView {
   return { cognitive, cyclomatic: 1, lines: 10, maxNesting: 1, parameters: 1 };
 }
 
-const handle: FunctionImpactView = {
-  name: 'handleAuth',
-  inDiff: true,
-  delta: metrics(18),
-  change: 'modified',
-  base: { startLine: 3, endLine: 20, metrics: metrics(4) },
-  head: { startLine: 3, endLine: 30, metrics: metrics(22) },
-  percentile: 96.4,
-};
+function handle(): FunctionImpactView {
+  return {
+    name: 'handleAuth',
+    inDiff: true,
+    delta: metrics(18),
+    change: 'modified',
+    base: { startLine: 3, endLine: 20, metrics: metrics(4) },
+    head: { startLine: 3, endLine: 30, metrics: metrics(22) },
+    percentile: 96.4,
+  };
+}
 
-const added: FunctionImpactView = {
-  name: 'helper',
-  inDiff: true,
-  delta: metrics(2),
-  change: 'added',
-  head: { startLine: 32, endLine: 36, metrics: metrics(2) },
-  percentile: 40,
-};
+function added(): FunctionImpactView {
+  return {
+    name: 'helper',
+    inDiff: true,
+    delta: metrics(2),
+    change: 'added',
+    head: { startLine: 32, endLine: 36, metrics: metrics(2) },
+    percentile: 40,
+  };
+}
 
-const untouched: FunctionImpactView = { ...handle, name: 'other', inDiff: false };
+function untouched(): FunctionImpactView {
+  return { ...handle(), name: 'other', inDiff: false };
+}
 
 function analyzed(
   functions: readonly FunctionImpactView[],
@@ -77,9 +85,9 @@ function skipped(reason: 'too-large' | 'unsupported-language'): FileImpactView {
 }
 
 describe('planImpactChip', () => {
-  it('warns with the worst breach and lists the changed functions, worst first', () => {
+  test('warns with the worst breach and lists the changed functions, worst first', ({ expect }) => {
     const chip = planImpactChip(
-      analyzed([added, untouched, handle], 2),
+      analyzed([added(), untouched(), handle()], 2),
       [finding('handleAuth', 22), finding('helper', 16), { ...finding('x', 30), path: 'b.ts' }],
       15,
     );
@@ -89,8 +97,11 @@ describe('planImpactChip', () => {
       summary: 'Cognitive +20 · max 22 (limit 15) · 2 functions changed',
       note: '',
     });
-    expect(chip?.findings.map((entry) => entry.functionName)).toEqual(['handleAuth', 'helper']);
-    expect(chip?.rows).toEqual([
+    expect(chip?.findings.map((entry) => entry.functionName)).toStrictEqual([
+      'handleAuth',
+      'helper',
+    ]);
+    expect(chip?.rows).toStrictEqual([
       {
         name: 'handleAuth',
         lines: '3–30',
@@ -111,8 +122,11 @@ describe('planImpactChip', () => {
     ]);
   });
 
-  it('is a quiet mark for a change without findings, and nothing without changed functions', () => {
-    expect(planImpactChip(analyzed([added], 1), [], 15)).toMatchObject({
+  test('is a quiet mark for a change without findings, and nothing without changed functions', ({
+    expect,
+  }) => {
+    const changed = analyzed([added()], 1);
+    expect(planImpactChip(changed, [], 15)).toMatchObject({
       tone: 'quiet',
       label: '',
       summary: 'Cognitive +20 · max 22 (limit 15) · 1 function changed',
@@ -121,7 +135,9 @@ describe('planImpactChip', () => {
     expect(planImpactChip(undefined, [], 15)).toBeUndefined();
   });
 
-  it('says why a file was skipped, except for languages ImpactGate does not read', () => {
+  test('says why a file was skipped, except for languages ImpactGate does not read', ({
+    expect,
+  }) => {
     expect(planImpactChip(skipped('too-large'), [], 15)).toMatchObject({
       tone: 'skipped',
       summary: 'ImpactGate skipped this file: too large.',
@@ -129,9 +145,9 @@ describe('planImpactChip', () => {
     expect(planImpactChip(skipped('unsupported-language'), [], 15)).toBeUndefined();
   });
 
-  it('notes parse errors and functions beyond the first eight', () => {
+  test('notes parse errors and functions beyond the first eight', ({ expect }) => {
     const many = Array.from({ length: 10 }, (_, index) => ({
-      ...added,
+      ...added(),
       name: `f${String(index)}`,
     }));
     const chip = planImpactChip({ ...analyzed(many, 10), parseErrors: true }, [], undefined);

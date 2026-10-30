@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeCiStatus } from './describe-ci-status.ts';
 
 describe('describeCiStatus', () => {
-  it('counts worst first and names failing and pending checks', () => {
+  test('counts worst first and names failing and pending checks', ({ expect }) => {
     expect(
       describeCiStatus({
         sha: 'a'.repeat(40),
@@ -16,14 +18,14 @@ describe('describeCiStatus', () => {
         ],
         isTruncated: false,
       }),
-    ).toEqual({
+    ).toStrictEqual({
       tone: 'danger',
       text: 'CI 1 failing · 1 pending · 3 passing',
       title: `Failing: test\nPending: e2e\nHead ${'a'.repeat(12)}`,
     });
   });
 
-  it('says when there are no checks', () => {
+  test('says when there are no checks', ({ expect }) => {
     expect(
       describeCiStatus({
         sha: 'b'.repeat(40),

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { groupStable } from './group-stable.ts';
 
@@ -12,21 +14,21 @@ function keys(item: Item): readonly string[] {
 }
 
 describe('groupStable', () => {
-  it('groups items under each of their keys, in input order', () => {
+  test('groups items under each of their keys, in input order', ({ expect }) => {
     const a = { id: 'a', paths: ['x'] };
     const b = { id: 'b', paths: ['y', 'x'] };
     const groups = groupStable([a, b], keys);
-    expect(groups.get('x')).toEqual([a, b]);
-    expect(groups.get('y')).toEqual([b]);
+    expect(groups.get('x')).toStrictEqual([a, b]);
+    expect(groups.get('y')).toStrictEqual([b]);
     expect(groups.get('z')).toBeUndefined();
   });
 
-  it('lists an item once under a key it names twice', () => {
+  test('lists an item once under a key it names twice', ({ expect }) => {
     const a = { id: 'a', paths: ['x', 'x'] };
-    expect(groupStable([a], keys).get('x')).toEqual([a]);
+    expect(groupStable([a], keys).get('x')).toStrictEqual([a]);
   });
 
-  it('keeps the previous array of a group whose members did not change', () => {
+  test('keeps the previous array of a group whose members did not change', ({ expect }) => {
     const a = { id: 'a', paths: ['x'] };
     const b = { id: 'b', paths: ['y'] };
     const first = groupStable([a, b], keys);
@@ -34,14 +36,14 @@ describe('groupStable', () => {
     const second = groupStable([a, changed], keys, first);
     expect(second.get('x')).toBe(first.get('x'));
     expect(second.get('y')).not.toBe(first.get('y'));
-    expect(second.get('y')).toEqual([changed]);
+    expect(second.get('y')).toStrictEqual([changed]);
   });
 
-  it('replaces a group whose order or size changed', () => {
+  test('replaces a group whose order or size changed', ({ expect }) => {
     const a = { id: 'a', paths: ['x'] };
     const b = { id: 'b', paths: ['x'] };
     const first = groupStable([a, b], keys);
     expect(groupStable([b, a], keys, first).get('x')).not.toBe(first.get('x'));
-    expect(groupStable([a], keys, first).get('x')).toEqual([a]);
+    expect(groupStable([a], keys, first).get('x')).toStrictEqual([a]);
   });
 });

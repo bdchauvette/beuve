@@ -1,13 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { buildSuggestedPatch } from './build-suggested-patch.ts';
 
-const head = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'].map((line) => `${line}\n`).join('');
+function head(): string {
+  return ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'].map((line) => `${line}\n`).join('');
+}
 
 describe('buildSuggestedPatch', () => {
-  it('replaces exactly the edited range, with context around it', () => {
-    const edited = head.replace('d\ne\n', 'D\nE\nE2\n');
-    expect(buildSuggestedPatch('src/x.ts', head, edited, { startLine: 4, endLine: 5 })).toEqual({
+  test('replaces exactly the edited range, with context around it', ({ expect }) => {
+    const edited = head().replace('d\ne\n', 'D\nE\nE2\n');
+    expect(
+      buildSuggestedPatch('src/x.ts', head(), edited, { startLine: 4, endLine: 5 }),
+    ).toStrictEqual({
       kind: 'patch',
       text: [
         '--- a/src/x.ts',
@@ -29,42 +35,51 @@ describe('buildSuggestedPatch', () => {
     });
   });
 
-  it('removes every anchored line even when only one changed', () => {
-    const edited = head.replace('e\n', 'E\n');
-    const plan = buildSuggestedPatch('x', head, edited, { startLine: 4, endLine: 6 }, 0);
-    expect(plan).toEqual({
+  test('removes every anchored line even when only one changed', ({ expect }) => {
+    const edited = head().replace('e\n', 'E\n');
+    const plan = buildSuggestedPatch('x', head(), edited, { startLine: 4, endLine: 6 }, 0);
+    expect(plan).toStrictEqual({
       kind: 'patch',
       text: '--- a/x\n+++ b/x\n@@ -4,3 +4,3 @@\n-d\n-e\n-f\n+d\n+E\n+f\n',
     });
   });
 
-  it('deletes the range, clipping context at the start of the file', () => {
-    const edited = head.replace('a\nb\n', '');
-    expect(buildSuggestedPatch('x', head, edited, { startLine: 1, endLine: 2 }, 1)).toEqual({
-      kind: 'patch',
-      text: '--- a/x\n+++ b/x\n@@ -1,3 +1,1 @@\n-a\n-b\n c\n',
-    });
+  test('deletes the range, clipping context at the start of the file', ({ expect }) => {
+    const edited = head().replace('a\nb\n', '');
+    expect(buildSuggestedPatch('x', head(), edited, { startLine: 1, endLine: 2 }, 1)).toStrictEqual(
+      {
+        kind: 'patch',
+        text: '--- a/x\n+++ b/x\n@@ -1,3 +1,1 @@\n-a\n-b\n c\n',
+      },
+    );
     const all = buildSuggestedPatch('x', 'only\n', '', { startLine: 1, endLine: 1 });
-    expect(all).toEqual({ kind: 'patch', text: '--- a/x\n+++ b/x\n@@ -1,1 +0,0 @@\n-only\n' });
+    expect(all).toStrictEqual({
+      kind: 'patch',
+      text: '--- a/x\n+++ b/x\n@@ -1,1 +0,0 @@\n-only\n',
+    });
   });
 
-  it('refuses edits outside the range, and reports no edit', () => {
-    const outside = buildSuggestedPatch('x', head, head.replace('a\n', 'A\n'), {
+  test('refuses edits outside the range, and reports no edit', ({ expect }) => {
+    const outside = buildSuggestedPatch('x', head(), head().replace('a\n', 'A\n'), {
       startLine: 4,
       endLine: 5,
     });
-    expect(outside).toEqual({ kind: 'outside', message: 'Edits must stay within lines 4–5.' });
+    expect(outside).toStrictEqual({
+      kind: 'outside',
+      message: 'Edits must stay within lines 4–5.',
+    });
     expect(
-      buildSuggestedPatch('x', head, head.replace('i\n', 'i'), { startLine: 4, endLine: 5 }).kind,
+      buildSuggestedPatch('x', head(), head().replace('i\n', 'i'), { startLine: 4, endLine: 5 })
+        .kind,
     ).toBe('outside');
-    expect(buildSuggestedPatch('x', head, head, { startLine: 4, endLine: 5 })).toEqual({
+    expect(buildSuggestedPatch('x', head(), head(), { startLine: 4, endLine: 5 })).toStrictEqual({
       kind: 'unchanged',
     });
   });
 
-  it('marks a missing final newline and keeps carriage returns', () => {
+  test('marks a missing final newline and keeps carriage returns', ({ expect }) => {
     const plan = buildSuggestedPatch('x', 'a\r\nb', 'a\r\nB', { startLine: 2, endLine: 2 });
-    expect(plan).toEqual({
+    expect(plan).toStrictEqual({
       kind: 'patch',
       text: [
         '--- a/x',

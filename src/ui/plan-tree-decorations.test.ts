@@ -1,16 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type {
   FileImpactView,
   FunctionImpactView,
+  FunctionSnapshotView,
   ImpactFindingView,
   ImpactView,
 } from '#contract/ipc-contract.ts';
 
 import { planTreeDecorations } from './plan-tree-decorations.ts';
 
-const metrics = { cognitive: 1, cyclomatic: 1, lines: 3, maxNesting: 0, parameters: 0 };
-const snapshot = { startLine: 1, endLine: 3, metrics };
+function metrics(): FunctionImpactView['delta'] {
+  return { cognitive: 1, cyclomatic: 1, lines: 3, maxNesting: 0, parameters: 0 };
+}
+function snapshot(): FunctionSnapshotView {
+  return { startLine: 1, endLine: 3, metrics: metrics() };
+}
 
 function fn(
   name: string,
@@ -18,8 +25,14 @@ function fn(
   percentile: number,
   where: 'in-diff' | 'outside-diff' = 'in-diff',
 ): FunctionImpactView {
-  const common = { name, inDiff: where === 'in-diff', delta: metrics, head: snapshot, percentile };
-  return change === 'added' ? { ...common, change } : { ...common, change, base: snapshot };
+  const common = {
+    name,
+    inDiff: where === 'in-diff',
+    delta: metrics(),
+    head: snapshot(),
+    percentile,
+  };
+  return change === 'added' ? { ...common, change } : { ...common, change, base: snapshot() };
 }
 
 function analyzed(path: string, functions: FunctionImpactView[]): FileImpactView {
@@ -86,7 +99,9 @@ describe('planTreeDecorations', () => {
     ['top.ts', ''],
   ]);
 
-  it('badges files and packages with their highest changed percentile and findings', () => {
+  test('badges files and packages with their highest changed percentile and findings', ({
+    expect,
+  }) => {
     const impact = impactOf(
       [
         analyzed('web/a.ts', [
@@ -100,7 +115,7 @@ describe('planTreeDecorations', () => {
       ],
       [finding(96.4), finding(80)],
     );
-    expect(Object.fromEntries(planTreeDecorations(impact, packageOf))).toEqual({
+    expect(Object.fromEntries(planTreeDecorations(impact, packageOf))).toStrictEqual({
       'web/a.ts': {
         text: 'p40',
         title: 'ImpactGate: the most complex changed function in this file ranks at percentile 40',
@@ -122,7 +137,7 @@ describe('planTreeDecorations', () => {
     });
   });
 
-  it('is empty until the impact check answers', () => {
+  test('is empty until the impact check answers', ({ expect }) => {
     expect(planTreeDecorations(undefined, packageOf).size).toBe(0);
   });
 });

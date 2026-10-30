@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { headRowSelector } from './head-row-selector.ts';
 
 describe('headRowSelector', () => {
-  it('looks every row up in the single column inline', () => {
+  test('looks every row up in the single column inline', ({ expect }) => {
     expect(headRowSelector('unified', 'context', 12)).toBe(
       "code[data-unified] [data-line='12'][data-line-type='context']",
     );
@@ -12,7 +14,9 @@ describe('headRowSelector', () => {
     );
   });
 
-  it('looks head lines up on the right and deleted lines on the left when split', () => {
+  test('looks head lines up on the right and deleted lines on the left when split', ({
+    expect,
+  }) => {
     expect(headRowSelector('split', 'additions', 7)).toBe(
       "code[data-additions] [data-line='7'][data-line-type='change-addition']",
     );

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeEditorSettings } from './describe-editor-settings.ts';
 
 describe('describeEditorSettings', () => {
-  it('says what is preferred and what is found', () => {
+  test('says what is preferred and what is found', ({ expect }) => {
     const lines = describeEditorSettings({
       preferred: 'cursor',
       editors: [
@@ -15,7 +17,7 @@ describe('describeEditorSettings', () => {
     expect(lines[1]).toBe('Found: Zed.');
   });
 
-  it('handles no choice and nothing installed', () => {
+  test('handles no choice and nothing installed', ({ expect }) => {
     const lines = describeEditorSettings({ editors: [] });
     expect(lines[0]).toContain('No editor chosen');
     expect(lines[1]).toBe('No supported editor found.');

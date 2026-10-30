@@ -1,21 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { planStepHighlight } from './plan-step-highlight.ts';
 
 describe('planStepHighlight', () => {
-  it('confines a split highlight to the head side of a replacement', () => {
-    expect(planStepHighlight('split', { side: 'additions', start: 3, end: 4 })).toEqual({
+  test('confines a split highlight to the head side of a replacement', ({ expect }) => {
+    expect(planStepHighlight('split', { side: 'additions', start: 3, end: 4 })).toStrictEqual({
       activeLineSide: 'additions',
     });
   });
 
-  it('keeps a pure deletion on the base side', () => {
-    expect(planStepHighlight('split', { side: 'deletions', start: 3, end: 4 })).toEqual({
+  test('keeps a pure deletion on the base side', ({ expect }) => {
+    expect(planStepHighlight('split', { side: 'deletions', start: 3, end: 4 })).toStrictEqual({
       activeLineSide: 'deletions',
     });
   });
 
-  it('leaves inline diffs and missing steps alone', () => {
+  test('leaves inline diffs and missing steps alone', ({ expect }) => {
     expect(planStepHighlight('unified', { side: 'additions', start: 1, end: 1 })).toBeUndefined();
     expect(planStepHighlight('split', undefined)).toBeUndefined();
   });

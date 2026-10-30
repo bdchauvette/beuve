@@ -114,10 +114,14 @@ export default {
       name: 'pierre-only-in-wrappers',
       severity: 'error',
       comment:
-        'Only beuve-file-card and beuve-radar-tree import @pierre/* (ADR 0018), so a library swap stays local; tests may.',
+        'Only beuve-file-card and beuve-radar-tree import @pierre/* (ADR 0018), so a library swap stays local; tests and src/ui/testing may.',
       from: {
         path: '^src/',
-        pathNot: ['^src/ui/beuve-(file-card|radar-tree)\\.ts$', '\\.test\\.ts$'],
+        pathNot: [
+          '^src/ui/beuve-(file-card|radar-tree)\\.ts$',
+          '\\.test\\.ts$',
+          '^src/ui/testing/',
+        ],
       },
       to: { path: '^node_modules/@pierre/' },
     },
@@ -125,8 +129,8 @@ export default {
       name: 'no-dev-deps-in-src',
       severity: 'error',
       comment:
-        'Application code may not use devDependencies (electron is provided at runtime); src/testing may use vitest.',
-      from: { path: '^src/', pathNot: ['\\.test\\.ts$', '^src/testing/'] },
+        'Application code may not use devDependencies (electron is provided at runtime); src/testing and src/ui/testing may use vitest.',
+      from: { path: '^src/', pathNot: ['\\.test\\.ts$', '^src/testing/', '^src/ui/testing/'] },
       to: {
         dependencyTypes: ['npm-dev'],
         dependencyTypesNot: ['type-only'],

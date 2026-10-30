@@ -1,15 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type { ChatMessageView } from '#contract/ipc-contract.ts';
 
 import type { ChatEntry } from './chat-entry.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 
-const base = { sessionId: 's1', headSha: 'b'.repeat(40), createdAt: '2026-10-28T12:00:00.000Z' };
-const diff = new Set(['src/a.ts']);
+function base(): { sessionId: string; headSha: string; createdAt: string } {
+  return { sessionId: 's1', headSha: 'b'.repeat(40), createdAt: '2026-10-28T12:00:00.000Z' };
+}
+function diff(): Set<string> {
+  return new Set(['src/a.ts']);
+}
 
 describe('planChatStage', () => {
-  it('anchors on the first citation inside the diff and titles the note with the question', () => {
+  test('anchors on the first citation inside the diff and titles the note with the question', ({
+    expect,
+  }) => {
     const entries = [
       ask('  Why does\n parse trim?  '),
       reply({
@@ -20,7 +28,7 @@ describe('planChatStage', () => {
         ],
       }),
     ];
-    expect(planChatStage(entries, 'a', diff)).toEqual({
+    expect(planChatStage(entries, 'a', diff())).toStrictEqual({
       messageId: 'a',
       headSha: 'b'.repeat(40),
       anchor: { kind: 'lines', path: 'src/a.ts', startLine: 12, endLine: 13 },
@@ -30,45 +38,49 @@ describe('planChatStage', () => {
     });
   });
 
-  it('anchors on the whole change when nothing cited is in the diff', () => {
+  test('anchors on the whole change when nothing cited is in the diff', ({ expect }) => {
     const entries = [
       ask('Anything else?'),
       reply({ citations: [{ path: 'lib/x.ts', startLine: 1, endLine: 2 }] }),
     ];
-    expect(planChatStage(entries, 'a', diff)).toMatchObject({ anchor: { kind: 'change' } });
-    expect(planChatStage([ask('Anything?'), reply({})], 'a', diff)).toMatchObject({
+    expect(planChatStage(entries, 'a', diff())).toMatchObject({ anchor: { kind: 'change' } });
+    expect(planChatStage([ask('Anything?'), reply({})], 'a', diff())).toMatchObject({
       anchor: { kind: 'change' },
     });
   });
 
-  it('shortens a long question to a one-line title', () => {
-    const plan = planChatStage([ask(`${'word '.repeat(60)}?`), reply({})], 'a', diff);
+  test('shortens a long question to a one-line title', ({ expect }) => {
+    const plan = planChatStage([ask(`${'word '.repeat(60)}?`), reply({})], 'a', diff());
     expect(plan?.title).toHaveLength(100);
     expect(plan?.title.endsWith('…')).toBe(true);
   });
 
-  it('plans nothing for unfinished answers, questions, blank answers or unknown messages', () => {
-    expect(planChatStage([ask('q'), reply({ status: 'streaming' })], 'a', diff)).toBeUndefined();
-    expect(planChatStage([ask('q'), reply({ status: 'cancelled' })], 'a', diff)).toBeUndefined();
-    expect(planChatStage([ask('q'), reply({ content: '  ' })], 'a', diff)).toBeUndefined();
-    expect(planChatStage([ask('q'), reply({})], 'q', diff)).toBeUndefined();
-    expect(planChatStage([ask('q')], 'zzz', diff)).toBeUndefined();
+  test('plans nothing for unfinished answers, questions, blank answers or unknown messages', ({
+    expect,
+  }) => {
+    expect(planChatStage([ask('q'), reply({ status: 'streaming' })], 'a', diff())).toBeUndefined();
+    expect(planChatStage([ask('q'), reply({ status: 'cancelled' })], 'a', diff())).toBeUndefined();
+    expect(planChatStage([ask('q'), reply({ content: '  ' })], 'a', diff())).toBeUndefined();
+    expect(planChatStage([ask('q'), reply({})], 'q', diff())).toBeUndefined();
+    expect(planChatStage([ask('q')], 'zzz', diff())).toBeUndefined();
   });
 
-  it('titles a /summarize answer as the summary, and leaves /review answers to their findings', () => {
+  test('titles a /summarize answer as the summary, and leaves /review answers to their findings', ({
+    expect,
+  }) => {
     const summary = planChatStage(
       [ask('/summarize'), reply({ answerKind: 'abstract' })],
       'a',
-      diff,
+      diff(),
     );
     expect(summary?.title).toBe('Summary of the change (beuve, from the diff)');
-    expect(planChatStage([ask('/review'), reply({ answerKind: 'review' })], 'a', diff)).toBe(
-      undefined,
-    );
+    expect(
+      planChatStage([ask('/review'), reply({ answerKind: 'review' })], 'a', diff()),
+    ).toBeUndefined();
   });
 
-  it('falls back to a generic title when the question is not listed', () => {
-    expect(planChatStage([reply({})], 'a', diff)?.title).toBe('Question from the chat');
+  test('falls back to a generic title when the question is not listed', ({ expect }) => {
+    expect(planChatStage([reply({})], 'a', diff())?.title).toBe('Question from the chat');
   });
 });
 
@@ -78,7 +90,7 @@ function entry(message: ChatMessageView): ChatEntry {
 
 function ask(content: string): ChatEntry {
   return entry({
-    ...base,
+    ...base(),
     id: 'q',
     role: 'user',
     content,
@@ -90,7 +102,7 @@ function ask(content: string): ChatEntry {
 
 function reply(overrides: Partial<ChatMessageView>): ChatEntry {
   return entry({
-    ...base,
+    ...base(),
     id: 'a',
     role: 'assistant',
     content: 'Because.',

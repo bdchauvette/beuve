@@ -1,24 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { describeUraItem } from './describe-ura-item.ts';
 import { createUraItemView } from './testing/create-ura-item-view.ts';
 
 describe('describeUraItem', () => {
-  it('labels a line note by where it sits on the current head', () => {
+  test('labels a line note by where it sits on the current head', ({ expect }) => {
     const item = createUraItemView({
       placement: {
         kind: 'current',
         anchor: { kind: 'lines', path: 'src/b.ts', startLine: 7, endLine: 8 },
       },
     });
-    expect(describeUraItem(item)).toEqual({
+    expect(describeUraItem(item)).toStrictEqual({
       severity: 'Issue',
       anchor: 'src/b.ts:7-8',
       origin: 'human',
     });
   });
 
-  it('labels single lines, files, the whole change and each origin', () => {
+  test('labels single lines, files, the whole change and each origin', ({ expect }) => {
     const single = createUraItemView({
       anchor: { kind: 'lines', path: 'a.ts', startLine: 2, endLine: 2 },
       placement: {
@@ -51,7 +53,7 @@ describe('describeUraItem', () => {
     expect(describeUraItem(change).anchor).toBe('whole change');
   });
 
-  it('keeps the original anchor of an outdated item and says why', () => {
+  test('keeps the original anchor of an outdated item and says why', ({ expect }) => {
     const item = createUraItemView({ placement: { kind: 'outdated', reason: 'lines-changed' } });
     expect(describeUraItem(item)).toMatchObject({
       anchor: 'src/a.ts:3-4',

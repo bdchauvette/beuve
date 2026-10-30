@@ -1,55 +1,59 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type { ChatReviewView } from '#contract/ipc-contract.ts';
 
 import { describeChatReview } from './describe-chat-review.ts';
 
-const review: ChatReviewView = {
-  findings: [
-    {
-      path: 'src/a.ts',
-      startLine: 12,
-      endLine: 12,
-      severity: 'risk',
-      category: 'error-handling',
-      title: 'Swallowed error',
-      body: 'The catch drops it.',
-      confidence: 0.834,
-      check: 'confirmed',
+function review(): ChatReviewView {
+  return {
+    findings: [
+      {
+        path: 'src/a.ts',
+        startLine: 12,
+        endLine: 12,
+        severity: 'risk',
+        category: 'error-handling',
+        title: 'Swallowed error',
+        body: 'The catch drops it.',
+        confidence: 0.834,
+        check: 'confirmed',
+      },
+      {
+        path: 'src/b.ts',
+        startLine: 3,
+        endLine: 9,
+        severity: 'info',
+        category: 'scope-creep',
+        title: 'Unrelated rename',
+        body: '',
+        confidence: 0.5,
+        check: 'unconfirmed',
+      },
+    ],
+    dropped: {
+      unknownFile: 1,
+      outsideDiff: 1,
+      lowConfidence: 1,
+      duplicate: 0,
+      overLimit: 0,
+      unconfirmed: 2,
     },
-    {
-      path: 'src/b.ts',
-      startLine: 3,
-      endLine: 9,
-      severity: 'info',
-      category: 'scope-creep',
-      title: 'Unrelated rename',
-      body: '',
-      confidence: 0.5,
-      check: 'unconfirmed',
-    },
-  ],
-  dropped: {
-    unknownFile: 1,
-    outsideDiff: 1,
-    lowConfidence: 1,
-    duplicate: 0,
-    overLimit: 0,
-    unconfirmed: 2,
-  },
-  pathScope: [],
-  fileCount: 3,
-  verification: 'verified',
-};
+    pathScope: [],
+    fileCount: 3,
+    verification: 'verified',
+  };
+}
 
 describe('describeChatReview', () => {
-  it('sums up files, findings and drops, and labels each finding', () => {
-    const labels = describeChatReview(review);
+  test('sums up files, findings and drops, and labels each finding', ({ expect }) => {
+    const labels = describeChatReview(review());
     expect(labels.summary).toBe(
       '3 files · 2 findings · 2 dropped as unconfirmed · 2 off the diff · 1 below the bar',
     );
     expect(labels.note).toBeUndefined();
-    expect(labels.findings).toEqual([
+    expect(labels.findings).toStrictEqual([
       {
         severity: 'Risk',
         category: 'error handling',
@@ -69,13 +73,15 @@ describe('describeChatReview', () => {
     ]);
   });
 
-  it('keeps the line short for a clean review and notes reuse or a failed check', () => {
+  test('keeps the line short for a clean review and notes reuse or a failed check', ({
+    expect,
+  }) => {
     const clean = {
-      ...review,
+      ...review(),
       findings: [],
       fileCount: 1,
       dropped: {
-        ...review.dropped,
+        ...review().dropped,
         unknownFile: 0,
         outsideDiff: 0,
         lowConfidence: 0,

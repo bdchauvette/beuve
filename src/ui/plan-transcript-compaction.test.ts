@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type { ChatMessageView } from '#contract/ipc-contract.ts';
 
@@ -24,14 +26,14 @@ function message(id: string, role: ChatMessageView['role']): ChatEntry {
 }
 
 describe('planTranscriptCompaction', () => {
-  it('folds nothing without a summary', () => {
-    expect(planTranscriptCompaction([message('q', 'user')])).toEqual({
+  test('folds nothing without a summary', ({ expect }) => {
+    expect(planTranscriptCompaction([message('q', 'user')])).toStrictEqual({
       boundary: -1,
       compactedMessages: 0,
     });
   });
 
-  it('folds every message before the latest summary, older summaries included', () => {
+  test('folds every message before the latest summary, older summaries included', ({ expect }) => {
     const entries: ChatEntry[] = [
       message('q1', 'user'),
       message('a1', 'assistant'),
@@ -41,6 +43,6 @@ describe('planTranscriptCompaction', () => {
       message('s2', 'summary'),
       message('q3', 'user'),
     ];
-    expect(planTranscriptCompaction(entries)).toEqual({ boundary: 5, compactedMessages: 4 });
+    expect(planTranscriptCompaction(entries)).toStrictEqual({ boundary: 5, compactedMessages: 4 });
   });
 });

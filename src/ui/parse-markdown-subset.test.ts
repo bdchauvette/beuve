@@ -1,14 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parseMarkdownSubset } from './parse-markdown-subset.ts';
 
 describe('parseMarkdownSubset', () => {
-  it('splits paragraphs and parses inline code, bold, italics and link text', () => {
+  test('splits paragraphs and parses inline code, bold, italics and link text', ({ expect }) => {
     expect(
       parseMarkdownSubset(
         'A **bad** `split` call,\nsee [docs](https://x.test) and *why*.\n\nNext.',
       ),
-    ).toEqual([
+    ).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
@@ -27,12 +29,12 @@ describe('parseMarkdownSubset', () => {
     ]);
   });
 
-  it('parses lists with continuation lines, headings and fenced code', () => {
+  test('parses lists with continuation lines, headings and fenced code', ({ expect }) => {
     expect(
       parseMarkdownSubset(
         '## Risk\nSteps:\n- empty `input`\n  reaches it\n1. second\n```ts\nconst a = 1;\n```',
       ),
-    ).toEqual([
+    ).toStrictEqual([
       { kind: 'paragraph', spans: [{ kind: 'strong', text: 'Risk' }] },
       { kind: 'paragraph', spans: [{ kind: 'text', text: 'Steps:' }] },
       {
@@ -50,11 +52,11 @@ describe('parseMarkdownSubset', () => {
     ]);
   });
 
-  it('keeps HTML and unclosed markup as literal text', () => {
-    expect(parseMarkdownSubset('<img src=x onerror=alert(1)> **open')).toEqual([
+  test('keeps HTML and unclosed markup as literal text', ({ expect }) => {
+    expect(parseMarkdownSubset('<img src=x onerror=alert(1)> **open')).toStrictEqual([
       { kind: 'paragraph', spans: [{ kind: 'text', text: '<img src=x onerror=alert(1)> **open' }] },
     ]);
-    expect(parseMarkdownSubset('```\nunterminated')).toEqual([
+    expect(parseMarkdownSubset('```\nunterminated')).toStrictEqual([
       { kind: 'code', text: 'unterminated' },
     ]);
   });

@@ -1,29 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { moveUraItem } from './move-ura-item.ts';
 
-const all = new Set(['a', 'b', 'c', 'd']);
+function all(): Set<string> {
+  return new Set(['a', 'b', 'c', 'd']);
+}
 
 describe('moveUraItem', () => {
-  it('swaps an item with its neighbour in either direction', () => {
-    expect(moveUraItem(['a', 'b', 'c'], 'b', 1, all)).toEqual(['a', 'c', 'b']);
-    expect(moveUraItem(['a', 'b', 'c'], 'b', -1, all)).toEqual(['b', 'a', 'c']);
+  test('swaps an item with its neighbour in either direction', ({ expect }) => {
+    expect(moveUraItem(['a', 'b', 'c'], 'b', 1, all())).toStrictEqual(['a', 'c', 'b']);
+    expect(moveUraItem(['a', 'b', 'c'], 'b', -1, all())).toStrictEqual(['b', 'a', 'c']);
   });
 
-  it('stays put at the ends and for unknown or unmovable items', () => {
-    expect(moveUraItem(['a', 'b'], 'b', 1, all)).toEqual(['a', 'b']);
-    expect(moveUraItem(['a', 'b'], 'a', -1, all)).toEqual(['a', 'b']);
-    expect(moveUraItem(['a', 'b'], 'z', 1, all)).toEqual(['a', 'b']);
-    expect(moveUraItem(['a', 'b'], 'a', 1, new Set(['b']))).toEqual(['a', 'b']);
+  test('stays put at the ends and for unknown or unmovable items', ({ expect }) => {
+    expect(moveUraItem(['a', 'b'], 'b', 1, all())).toStrictEqual(['a', 'b']);
+    expect(moveUraItem(['a', 'b'], 'a', -1, all())).toStrictEqual(['a', 'b']);
+    expect(moveUraItem(['a', 'b'], 'z', 1, all())).toStrictEqual(['a', 'b']);
+    expect(moveUraItem(['a', 'b'], 'a', 1, new Set(['b']))).toStrictEqual(['a', 'b']);
   });
 
-  it('skips items that are not movable, leaving them in place', () => {
-    expect(moveUraItem(['a', 'x', 'b', 'c'], 'a', 1, new Set(['a', 'b', 'c']))).toEqual([
+  test('skips items that are not movable, leaving them in place', ({ expect }) => {
+    expect(moveUraItem(['a', 'x', 'b', 'c'], 'a', 1, new Set(['a', 'b', 'c']))).toStrictEqual([
       'b',
       'x',
       'a',
       'c',
     ]);
-    expect(moveUraItem(['a', 'x'], 'a', 1, new Set(['a']))).toEqual(['a', 'x']);
+    expect(moveUraItem(['a', 'x'], 'a', 1, new Set(['a']))).toStrictEqual(['a', 'x']);
   });
 });

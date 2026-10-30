@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { planHunkSteps } from './plan-hunk-steps.ts';
 
 describe('planHunkSteps', () => {
-  it('steps to the first changed run of each hunk, deletions first', () => {
+  test('steps to the first changed run of each hunk, deletions first', ({ expect }) => {
     expect(
       planHunkSteps([
         {
@@ -30,14 +32,16 @@ describe('planHunkSteps', () => {
           hunkContent: [{ type: 'change', additions: 5, deletions: 0 }],
         },
       ]),
-    ).toEqual([
+    ).toStrictEqual([
       { side: 'additions', start: 13, end: 14 },
       { side: 'deletions', start: 42, end: 43 },
       { side: 'additions', start: 1, end: 5 },
     ]);
   });
 
-  it('selects the head side of a replacement when split, keeping pure deletions left', () => {
+  test('selects the head side of a replacement when split, keeping pure deletions left', ({
+    expect,
+  }) => {
     const hunks = [
       {
         additionStart: 40,
@@ -53,18 +57,22 @@ describe('planHunkSteps', () => {
         hunkContent: [{ type: 'change', additions: 0, deletions: 3 }],
       },
     ] as const;
-    expect(planHunkSteps(hunks, 'split')).toEqual([
+    expect(planHunkSteps(hunks, 'split')).toStrictEqual([
       { side: 'additions', start: 41, end: 41 },
       { side: 'deletions', start: 61, end: 63 },
     ]);
-    expect(planHunkSteps(hunks, 'unified')[0]).toEqual({ side: 'deletions', start: 42, end: 43 });
+    expect(planHunkSteps(hunks, 'unified')[0]).toStrictEqual({
+      side: 'deletions',
+      start: 42,
+      end: 43,
+    });
   });
 
-  it('falls back to the first head line of a hunk without changes', () => {
+  test('falls back to the first head line of a hunk without changes', ({ expect }) => {
     expect(
       planHunkSteps([
         { additionStart: 7, deletionStart: 7, hunkContent: [{ type: 'context', lines: 2 }] },
       ]),
-    ).toEqual([{ side: 'additions', start: 7, end: 7 }]);
+    ).toStrictEqual([{ side: 'additions', start: 7, end: 7 }]);
   });
 });

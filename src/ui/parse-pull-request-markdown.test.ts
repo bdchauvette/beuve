@@ -1,14 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import { parsePullRequestMarkdown } from './parse-pull-request-markdown.ts';
 
 describe('parsePullRequestMarkdown', () => {
-  it('turns markdown and bare https links into link spans, keeping punctuation outside', () => {
+  test('turns markdown and bare https links into link spans, keeping punctuation outside', ({
+    expect,
+  }) => {
     expect(
       parsePullRequestMarkdown(
         'Fixes [the bug](https://github.com/o/r/issues/1). See https://github.com/o/r/pull/2.',
       ),
-    ).toEqual([
+    ).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
@@ -26,12 +30,12 @@ describe('parsePullRequestMarkdown', () => {
     ]);
   });
 
-  it('keeps other schemes, code and emphasis-looking URLs safe', () => {
+  test('keeps other schemes, code and emphasis-looking URLs safe', ({ expect }) => {
     expect(
       parsePullRequestMarkdown(
         '[x](javascript:void) and https://github.com/o/r_a_b\n\n```\nhttps://github.com/in/code\n```',
       ),
-    ).toEqual([
+    ).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
@@ -44,8 +48,8 @@ describe('parsePullRequestMarkdown', () => {
     ]);
   });
 
-  it('lists, headings and code spans pass through', () => {
-    expect(parsePullRequestMarkdown('## REQ-1\n- `a` works\n- **b** too')).toEqual([
+  test('lists, headings and code spans pass through', ({ expect }) => {
+    expect(parsePullRequestMarkdown('## REQ-1\n- `a` works\n- **b** too')).toStrictEqual([
       { kind: 'paragraph', spans: [{ kind: 'strong', text: 'REQ-1' }] },
       {
         kind: 'list',

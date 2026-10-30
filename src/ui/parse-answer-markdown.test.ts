@@ -1,44 +1,50 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { test } from './testing/test.ts';
 
 import type { ChatCitationView } from '#contract/ipc-contract.ts';
 
 import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
 
-const a: ChatCitationView = { path: 'src/a.ts', startLine: 12, endLine: 13 };
-const snake: ChatCitationView = { path: 'src/my_file_name.ts', startLine: 3, endLine: 3 };
+function a(): ChatCitationView {
+  return { path: 'src/a.ts', startLine: 12, endLine: 13 };
+}
+function snake(): ChatCitationView {
+  return { path: 'src/my_file_name.ts', startLine: 3, endLine: 3 };
+}
 
 describe('parseAnswerMarkdown', () => {
-  it('turns exactly the listed markers of a final answer into citation spans', () => {
+  test('turns exactly the listed markers of a final answer into citation spans', ({ expect }) => {
     const blocks = parseAnswerMarkdown(
       'It trims [[src/a.ts:12-13]] but not [[src/a.ts:1-2]] or [[nope]].',
-      [a],
+      [a()],
       'final',
     );
-    expect(blocks).toEqual([
+    expect(blocks).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
           { kind: 'text', text: 'It trims ' },
-          { kind: 'citation', citation: a },
+          { kind: 'citation', citation: a() },
           { kind: 'text', text: ' but not [[src/a.ts:1-2]] or [[nope]].' },
         ],
       },
     ]);
   });
 
-  it('keeps underscores in a cited path from becoming emphasis', () => {
+  test('keeps underscores in a cited path from becoming emphasis', ({ expect }) => {
     const [block] = parseAnswerMarkdown(
       'See _this_ and [[src/my_file_name.ts:3-3]] and _that_.',
-      [snake],
+      [snake()],
       'final',
     );
-    expect(block).toEqual({
+    expect(block).toStrictEqual({
       kind: 'paragraph',
       spans: [
         { kind: 'text', text: 'See ' },
         { kind: 'emphasis', text: 'this' },
         { kind: 'text', text: ' and ' },
-        { kind: 'citation', citation: snake },
+        { kind: 'citation', citation: snake() },
         { kind: 'text', text: ' and ' },
         { kind: 'emphasis', text: 'that' },
         { kind: 'text', text: '.' },
@@ -46,7 +52,9 @@ describe('parseAnswerMarkdown', () => {
     });
   });
 
-  it('leaves markers in code and in emphasis literal, in blocks, lists and fences', () => {
+  test('leaves markers in code and in emphasis literal, in blocks, lists and fences', ({
+    expect,
+  }) => {
     const marker = '[[src/a.ts:12-13]]';
     const blocks = parseAnswerMarkdown(
       [
@@ -58,10 +66,10 @@ describe('parseAnswerMarkdown', () => {
         marker,
         '```',
       ].join('\n'),
-      [a],
+      [a()],
       'final',
     );
-    expect(blocks).toEqual([
+    expect(blocks).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
@@ -77,7 +85,7 @@ describe('parseAnswerMarkdown', () => {
         items: [
           [
             { kind: 'text', text: 'item ' },
-            { kind: 'citation', citation: a },
+            { kind: 'citation', citation: a() },
           ],
         ],
       },
@@ -85,10 +93,12 @@ describe('parseAnswerMarkdown', () => {
     ]);
   });
 
-  it('dims every well-formed marker of a streaming answer and hides one still being written', () => {
+  test('dims every well-formed marker of a streaming answer and hides one still being written', ({
+    expect,
+  }) => {
     expect(
-      parseAnswerMarkdown('Look at [[src/zzz.ts:1-1]] and [[src/a.ts:1', [a], 'streaming'),
-    ).toEqual([
+      parseAnswerMarkdown('Look at [[src/zzz.ts:1-1]] and [[src/a.ts:1', [a()], 'streaming'),
+    ).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
@@ -98,19 +108,19 @@ describe('parseAnswerMarkdown', () => {
         ],
       },
     ]);
-    expect(parseAnswerMarkdown('ends with [[', [], 'streaming')).toEqual([
+    expect(parseAnswerMarkdown('ends with [[', [], 'streaming')).toStrictEqual([
       { kind: 'paragraph', spans: [{ kind: 'text', text: 'ends with' }] },
     ]);
   });
 
-  it('never lets model text forge a placeholder', () => {
-    const blocks = parseAnswerMarkdown('x 0 y [[src/a.ts:12-13]]', [a], 'final');
-    expect(blocks).toEqual([
+  test('never lets model text forge a placeholder', ({ expect }) => {
+    const blocks = parseAnswerMarkdown('x 0 y [[src/a.ts:12-13]]', [a()], 'final');
+    expect(blocks).toStrictEqual([
       {
         kind: 'paragraph',
         spans: [
           { kind: 'text', text: 'x 0 y ' },
-          { kind: 'citation', citation: a },
+          { kind: 'citation', citation: a() },
         ],
       },
     ]);
