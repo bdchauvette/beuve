@@ -45,6 +45,11 @@ import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { readClaudeStatus } from './chat/read-claude-status.ts';
+import { createModelRegistryStore } from './models/create-model-registry-store.ts';
+import { createModelServices } from './models/create-model-services.ts';
+import { createSecretStore } from './models/create-secret-store.ts';
+import type { SecretCipher } from './models/create-secret-store.ts';
+import type { ModelResolverDeps } from './models/resolve-language-model.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import { createSheetServices } from './sheets/create-sheet-services.ts';
 import { createRemoteServices } from './remote/create-remote-services.ts';
@@ -78,6 +83,19 @@ export interface MainServicesOptions {
   readonly lsp?: LspMultiplexerOptions;
   /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
+  /**
+   * The model registry (ADR 0070): `settingsPath` holds it (in memory without), `secretsPath`
+   * the encrypted API keys, `cipher` Electron's `safeStorage` (keys can't be stored without it),
+   * `bundledClaudeCodePath` the packaged Claude Code binary and `agentSdk` test settings.
+   */
+  readonly models?: {
+    readonly settingsPath?: string;
+    readonly secretsPath?: string;
+    readonly cipher?: SecretCipher;
+    readonly bundledClaudeCodePath?: string;
+    readonly hasBundledClaudeCode?: boolean;
+    readonly agentSdk?: ModelResolverDeps['agentSdk'];
+  };
   /**
    * The editor launcher (ADR 0033): `settingsPath` is the JSON file holding the preferred editor
    * (in memory without it), `platform` replaces the real machine. Tests must pass a fake platform.
@@ -175,10 +193,25 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     git: context.git,
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
+  const registry = createModelRegistryStore(options.models?.settingsPath);
+  const secrets = createSecretStore({
+    ...(options.models?.secretsPath !== undefined && { filePath: options.models.secretsPath }),
+    ...(options.models?.cipher !== undefined && { cipher: options.models.cipher }),
+  });
   const chat = createChatServices({
     context,
     impact,
     worktrees,
+    models: {
+      registry,
+      secrets,
+      claude: options.claude ?? {},
+      logger,
+      ...(options.models?.bundledClaudeCodePath !== undefined && {
+        bundledClaudeCodePath: options.models.bundledClaudeCodePath,
+      }),
+      ...(options.models?.agentSdk !== undefined && { agentSdk: options.models.agentSdk }),
+    },
     ...(options.claude !== undefined && { claude: options.claude }),
     intentFor: (sessionId) => gh.services?.intentFor(sessionId),
   });
@@ -257,6 +290,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       status: async (): Promise<IpcResult<ClaudeStatusView>> =>
         ok(await readClaudeStatus(options.claude ?? {})),
     },
+    models: createModelServices({
+      registry,
+      secrets,
+      testModel: chat.testModel,
+      hasBundledClaudeCode: options.models?.hasBundledClaudeCode ?? false,
+      logger,
+    }),
     mcpTools: createMcpTools({
       context,
       impact,

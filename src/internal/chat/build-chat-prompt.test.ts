@@ -147,6 +147,40 @@ describe('buildChatPrompt', () => {
     expect(built.prompt).toContain('- logo.png (binary)');
   });
 
+  test('sends the change as a cached first message and the question as the second', ({
+    expect,
+  }) => {
+    const built = buildChatPrompt(createChatQuestion(), budget());
+    expect(built.messages.map((message) => [message.role, message.cache === true])).toStrictEqual([
+      ['user', true],
+      ['user', false],
+    ]);
+    expect(built.messages[0]?.content.startsWith('# Change under review')).toBe(true);
+    expect(built.messages[1]?.content).toContain("## The reviewer's question");
+    expect(built.prompt).toBe(built.messages.map((message) => message.content).join('\n'));
+  });
+
+  test('never points a model without tools at the worktree', ({ expect }) => {
+    const small: ChatPromptBudget = { ...budget(), maxChars: 6000, maxFileChars: 2500 };
+    const question = createChatQuestion({
+      files: [bigFile('src/huge.ts', 10, 30), bigFile('src/last.ts', 1, 400)],
+    });
+    for (const task of [
+      undefined,
+      { kind: 'review', pathScope: [], maxFindings: 5 },
+      { kind: 'abstract' },
+    ] as const) {
+      const built = buildChatPrompt({ ...question, ...(task !== undefined && { task }) }, small, {
+        tools: false,
+      });
+      const text = `${built.system}\n${built.prompt}`;
+      expect(text).not.toMatch(/\bRead\b|Grep|Glob|working directory is/u);
+      expect(built.system).toContain('You cannot read files');
+    }
+    const withTools = buildChatPrompt(question, small);
+    expect(`${withTools.system}\n${withTools.prompt}`).toMatch(/Read src\/huge\.ts for the rest/u);
+  });
+
   test('drops the oldest turns first, with a notice, and truncates an oversized turn', ({
     expect,
   }) => {
@@ -199,7 +233,7 @@ describe('buildChatPrompt', () => {
 describe('buildChatPrompt with selections and a summary', () => {
   const head = createChatQuestion().headSha;
 
-  test('puts the selections first, numbered as in the file, and names them in the question', ({
+  test('puts the selections in the request after the cached change, numbered as in the file', ({
     expect,
   }) => {
     const built = buildChatPrompt(
@@ -234,9 +268,11 @@ describe('buildChatPrompt with selections and a summary', () => {
       budget(),
     );
     const { prompt } = built;
-    const selected = prompt.indexOf('## Selected by the reviewer');
-    expect(selected).toBeGreaterThan(-1);
-    expect(selected).toBeLessThan(prompt.indexOf('## Diff'));
+    const [change, request] = built.messages;
+    expect(change?.cache).toBe(true);
+    expect(change?.content).toContain('## Diff');
+    expect(change?.content).not.toContain('## Selected by the reviewer');
+    expect(request?.content.startsWith('## Selected by the reviewer')).toBe(true);
     expect(prompt).toContain(`### Selection 1: src/a.ts:9-11 (head ${head.slice(0, 12)})`);
     expect(prompt).toContain(' 9  const v9 = 0;\n10  const v10 = 1;\n11  const v11 = 2;\n');
     expect(prompt).toContain('### Selection 2: base:src/a.ts:10 (base ');

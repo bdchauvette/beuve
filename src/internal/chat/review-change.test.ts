@@ -11,6 +11,7 @@ import { reviewChange } from './review-change.ts';
 import type { ReviewProgress } from './review-change.ts';
 import type { ReviewModel, ReviewModelOutput, ReviewModelRequest } from './review-model.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import { promptTextOf } from './testing/prompt-text-of.ts';
 import { test } from './testing/test.ts';
 
 function finding(overrides: Partial<ModelFinding>): ModelFinding {
@@ -103,10 +104,13 @@ describe('reviewChange', () => {
     expect(content).toContain('2 files: 1 finding, 1 dropped as unconfirmed.');
     expect(content).toContain('[[src/a.ts:12-12]]');
     expect(seen[0]?.system).toContain("beuve's preliminary reviewer");
-    expect(seen[0]?.prompt).toContain('Review the whole change');
-    expect(seen[0]?.prompt).not.toContain("## The reviewer's question");
-    expect(checked[0]?.prompt).toContain('## Finding 2: src/b.ts:2-2');
+    expect(promptTextOf(seen[0])).toContain('Review the whole change');
+    expect(promptTextOf(seen[0])).not.toContain("## The reviewer's question");
+    expect(promptTextOf(checked[0])).toContain('## Finding 2: src/b.ts:2-2');
     expect(progress).toStrictEqual(['reviewing', 'verifying']);
+    expect(seen[0]?.messages[0]?.cache).toBe(true);
+    expect(seen[0]?.effort).toBeUndefined();
+    expect(checked[0]?.effort).toBe('low');
   });
 
   test('skips the pass without a verifier, and keeps findings unchecked when it fails', async ({

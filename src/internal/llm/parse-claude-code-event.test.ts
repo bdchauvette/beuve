@@ -26,9 +26,21 @@ describe('parseClaudeCodeEvent', () => {
       },
       { kind: 'rate-limit', status: 'allowed', resetsAt: 1_793_224_800 },
       { kind: 'message-start' },
-      { kind: 'tool-use', tools: ['Glob'] },
-      { kind: 'tool-use', tools: ['Read'] },
-      { kind: 'tool-use', tools: ['StructuredOutput'] },
+      {
+        kind: 'tool-use',
+        uses: [{ id: 'toolu_fixture2', tool: 'Glob', input: { pattern: '**/a.ts' } }],
+      },
+      { kind: 'tool-result', results: [{ id: 'toolu_fixture2', isError: false }] },
+      {
+        kind: 'tool-use',
+        uses: [{ id: 'toolu_fixture5', tool: 'Read', input: { file_path: '/work/repo/a.ts' } }],
+      },
+      { kind: 'tool-result', results: [{ id: 'toolu_fixture5', isError: false }] },
+      {
+        kind: 'tool-use',
+        uses: [{ id: 'toolu_fixture8', tool: 'StructuredOutput', input: { value: 1 } }],
+      },
+      { kind: 'tool-result', results: [{ id: 'toolu_fixture8', isError: false }] },
       {
         kind: 'result',
         result: {
@@ -65,7 +77,9 @@ describe('parseClaudeCodeEvent', () => {
         apiKeySource: 'none',
       },
       { kind: 'message-start' },
+      { kind: 'block-start', index: 0, blockType: 'text' },
       { kind: 'text-delta', text: 'hi there' },
+      { kind: 'block-stop', index: 0 },
       {
         kind: 'result',
         result: {
@@ -107,6 +121,30 @@ describe('parseClaudeCodeEvent', () => {
       },
     });
     expect(parseClaudeCodeEvent(inputDelta)).toStrictEqual({ kind: 'other' });
+  });
+
+  test("reads a subagent's tool use and results as other", ({ expect }) => {
+    const nested = { parent_tool_use_id: 'toolu_parent' };
+    expect(
+      parseClaudeCodeEvent(
+        JSON.stringify({
+          type: 'assistant',
+          ...nested,
+          message: { content: [{ type: 'tool_use', id: 't', name: 'Read', input: {} }] },
+        }),
+      ),
+    ).toStrictEqual({ kind: 'other' });
+    expect(
+      parseClaudeCodeEvent(
+        JSON.stringify({
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 't', is_error: true }] },
+        }),
+      ),
+    ).toStrictEqual({ kind: 'tool-result', results: [{ id: 't', isError: true }] });
+    expect(
+      parseClaudeCodeEvent(JSON.stringify({ type: 'user', message: { content: 'hello' } })),
+    ).toStrictEqual({ kind: 'other' });
   });
 
   test('rejects lines that are not stream-json events', ({ expect }) => {

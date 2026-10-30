@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import type {
   ChatAskedView,
   ChatAskRequest,
@@ -15,6 +19,8 @@ import type {
   ChatMessageUpdatedView,
   ImpactFindingView,
   IpcResult,
+  ModelRole,
+  ModelTestView,
 } from '#contract/ipc-contract.ts';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import { askQuestion } from '#internal/chat/ask-question.ts';
@@ -59,7 +65,9 @@ import type { ClaudeCodeSettings } from './claude-code-settings.ts';
 import { describeChatError } from './describe-chat-error.ts';
 import { chatFailureFromModelError } from './chat-failure-from-model-error.ts';
 import { resolveChatMentions } from './resolve-chat-mentions.ts';
-import { resolveLanguageModel } from './resolve-language-model.ts';
+import { describeModelError } from '../models/describe-model-error.ts';
+import { resolveLanguageModel } from '../models/resolve-language-model.ts';
+import type { ModelResolverDeps, ResolvedModel } from '../models/resolve-language-model.ts';
 import { chatMessageViewFrom } from './chat-message-view-from.ts';
 import { chatQuestionFrom } from './chat-question-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
@@ -86,6 +94,11 @@ export interface ChatServices {
   readonly onDelta: (listener: (event: ChatDeltaView) => void) => () => void;
   /** Subscribes to `chat:message-updated` events; returns the unsubscribe function. */
   readonly onMessageUpdated: (listener: (event: ChatMessageUpdatedView) => void) => () => void;
+  /**
+   * Settings' Test (ADR 0070): one tiny request to a registry entry, queued like a question
+   * (ADR 0057) in a queue of its own, in an empty scratch directory. Never rejects.
+   */
+  readonly testModel: (entryId: string) => Promise<ModelTestView>;
   /** Stops every request and waits until their Claude Code processes are gone. */
   readonly dispose: () => Promise<void>;
 }
@@ -94,7 +107,10 @@ export interface ChatServicesOptions {
   readonly context: SessionContext;
   readonly impact: Pick<ImpactServices, 'getImpact'>;
   readonly worktrees: Pick<SessionWorktrees, 'ensure'>;
+  /** Request timeouts; how the CLI entry runs is in `models.claude`. */
   readonly claude?: ClaudeCodeSettings;
+  /** The model registry each role resolves through (ADR 0070). */
+  readonly models: ModelResolverDeps;
   /** The session's stated intent (a pull request's title and body), put in question prompts. */
   readonly intentFor?: (sessionId: string) => string | undefined;
   /** Least time between stores of the streaming preview. Defaults to 1 second. */
@@ -117,6 +133,16 @@ interface AnswerJob {
   readonly wasQueued: boolean;
   /** The raw answer streamed so far. */
   streamed: string;
+}
+
+/** Settings' Test of one registry entry; `settle` answers its `models:test` call. */
+interface ProbeJob {
+  readonly kind: 'probe';
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly entryId: string;
+  readonly controller: AbortController;
+  readonly settle: (view: ModelTestView) => void;
 }
 
 /** A `/compact`; `settle` answers its `chat:compact` call. */
@@ -162,7 +188,7 @@ interface Prepared {
 export function createChatServices(options: ChatServicesOptions): ChatServices {
   /** Why a request was stopped; the `AbortSignal` reason. `cleared` also means nothing is stored. */
   type AbortReason = 'cancelled' | 'head-changed' | 'cleared' | 'app-quit';
-  type Job = AnswerJob | CompactJob;
+  type Job = AnswerJob | CompactJob | ProbeJob;
 
   const { context, impact, worktrees } = options;
   const { db, logger } = context;
@@ -201,6 +227,15 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   /** Settles a request that never ran: an answer is stored as `cancelled`, a compaction answered. */
   const drop = (job: Job, shouldStore: boolean): void => {
     job.controller.abort('cancelled');
+    if (job.kind === 'probe') {
+      job.settle({
+        outcome: 'failed',
+        elapsedMs: 0,
+        errorKind: 'cancelled',
+        message: 'Cancelled.',
+      });
+      return;
+    }
     if (job.kind === 'compact') {
       job.settle(ok({ outcome: 'cancelled' }));
       return;
@@ -214,8 +249,13 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
   };
 
+  const resolve = async (role: ModelRole): Promise<Result<ResolvedModel, Outcome>> => {
+    const resolved = await resolveLanguageModel({ role }, options.models);
+    return resolved.ok ? resolved : err(outcomeFrom(resolved.error));
+  };
+
   const prepare = async (
-    job: Job,
+    job: AnswerJob | CompactJob,
     options: { readonly withImpact: boolean },
   ): Promise<Result<Prepared, Outcome>> => {
     const isAborted = (): boolean => job.controller.signal.aborted;
@@ -319,7 +359,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
-    return askModel(job, input);
+    return askModel(job, input, 'chat');
   };
 
   /** `/summarize` (ADR 0056): from the diff and the code only, never the stated intent. */
@@ -338,19 +378,20 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
-    return askModel(job, input);
+    return askModel(job, input, 'summarize');
   };
 
   const askModel = async (
     job: AnswerJob,
     input: ReturnType<typeof chatQuestionFrom>,
+    role: ModelRole,
   ): Promise<Outcome> => {
-    const model = await resolveLanguageModel(claude, logger);
+    const model = await resolve(role);
     if (!model.ok) {
-      return { status: 'failed', code: 'not-installed' };
+      return model.error;
     }
     const asked = await askQuestion<ModelError>(input, {
-      model: model.value,
+      model: model.value.model,
       signal: job.controller.signal,
       onDelta: streamInto(job),
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
@@ -416,23 +457,30 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (input.files.length === 0) {
       return { status: 'failed', code: 'nothing-to-review' };
     }
-    const model = await resolveLanguageModel(claude, logger, command.effort);
-    const verifier =
-      command.verify === false ? undefined : await resolveLanguageModel(claude, logger, 'low');
-    if (!model.ok || verifier?.ok === false) {
-      return { status: 'failed', code: 'not-installed' };
+    const model = await resolve('review');
+    if (!model.ok) {
+      return model.error;
     }
+    const verifier = command.verify === false ? undefined : await resolve('verify');
+    if (verifier?.ok === false) {
+      return verifier.error;
+    }
+    const { name } = model.value;
     let toolUses = 0;
     const onProgress = (event: ReviewProgress): void => {
       switch (event.kind) {
         case 'reviewing': {
-          progress(`Claude Code is reviewing ${plural(event.files, 'file')}`);
+          progress(`${name} is reviewing ${plural(event.files, 'file')}`);
           return;
         }
         case 'model': {
-          if (event.progress.kind === 'tool-use') {
+          if (event.progress.kind === 'tool-start') {
             toolUses += 1;
-            progress(`Claude Code is reading the worktree (${plural(toolUses, 'tool call')})`);
+            progress(
+              `${name} is reading the worktree (${plural(toolUses, 'tool call')}): ${event.progress.description}`,
+            );
+          } else if (toolUses === 0 && event.progress.kind === 'thinking') {
+            progress(`${name} is thinking`);
           }
           return;
         }
@@ -443,8 +491,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       }
     };
     const reviewed = await reviewChange<ModelError>(input, {
-      model: model.value,
-      ...(verifier?.ok === true && { verifier: verifier.value }),
+      model: model.value.model,
+      ...(verifier?.ok === true && { verifier: verifier.value.model }),
+      ...(command.effort !== undefined && { effort: command.effort }),
+      verifierEffort: 'low',
       signal: job.controller.signal,
       onProgress,
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
@@ -558,9 +608,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!prepared.ok) {
       return failed(prepared.error);
     }
-    const model = await resolveLanguageModel(claude, logger);
+    const model = await resolve('compact');
     if (!model.ok) {
-      return failed({ status: 'failed', code: 'not-installed' });
+      return failed(model.error);
     }
     const question = chatQuestionFrom({
       diff: prepared.value.diff,
@@ -583,7 +633,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         turns,
       },
       {
-        model: model.value,
+        model: model.value.model,
         signal: job.controller.signal,
         ...(claude.timeout !== undefined && { timeout: claude.timeout }),
       },
@@ -614,8 +664,56 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       : err({ code: 'not-found', message: 'no such session' });
   };
 
+  /** Settings' Test: "ok" through the entry's adapter, in a scratch directory, timed. */
+  const runProbe = async (job: ProbeJob): Promise<void> => {
+    const stopwatch = new Stopwatch();
+    const failed = (error: ModelError): ModelTestView => ({
+      outcome: 'failed',
+      elapsedMs: elapsedMilliseconds(stopwatch),
+      errorKind: error.kind,
+      message: describeModelError(error),
+    });
+    let directory: string | undefined;
+    try {
+      const resolved = await resolveLanguageModel({ entryId: job.entryId }, options.models);
+      if (!resolved.ok) {
+        job.settle(failed(resolved.error));
+        return;
+      }
+      directory = await mkdtemp(path.join(os.tmpdir(), 'beuve-model-test-'));
+      const answered = await resolved.value.model.runText({
+        system: 'This is a connection test. Reply with the single word: ok',
+        messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+        cwd: directory,
+        timeout: Temporal.Duration.from({ minutes: 2 }),
+        signal: job.controller.signal,
+      });
+      job.settle(
+        answered.ok
+          ? {
+              outcome: 'ok',
+              elapsedMs: elapsedMilliseconds(stopwatch),
+              model: answered.value.model,
+            }
+          : failed(answered.error),
+      );
+    } catch (error: unknown) {
+      logger.error('model test failed unexpectedly', { error });
+      job.settle(failed({ kind: 'invalid-output', reason: 'internal error' }));
+    } finally {
+      if (directory !== undefined) {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  };
+
   const queue = new KeyedQueue<string, Job>(
-    async (job) => (job.kind === 'answer' ? runAnswer(job) : runCompaction(job)),
+    async (job) =>
+      job.kind === 'answer'
+        ? runAnswer(job)
+        : job.kind === 'compact'
+          ? runCompaction(job)
+          : runProbe(job),
     options.maxQueued ?? 10,
   );
 
@@ -847,6 +945,27 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
     observeHead,
 
+    testModel: async (entryId): Promise<ModelTestView> => {
+      if (isDisposed || queue.isFull(probeQueue)) {
+        return {
+          outcome: 'failed',
+          elapsedMs: 0,
+          errorKind: 'refused',
+          message: isDisposed ? 'beuve is quitting.' : 'Too many tests are waiting.',
+        };
+      }
+      const settled = Promise.withResolvers<ModelTestView>();
+      queue.enqueue(probeQueue, {
+        kind: 'probe',
+        sessionId: probeQueue,
+        headSha: '',
+        entryId,
+        controller: new AbortController(),
+        settle: settled.resolve,
+      });
+      return settled.promise;
+    },
+
     onDelta: (listener): (() => void) => {
       deltaListeners.add(listener);
       return (): void => {
@@ -876,12 +995,23 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 }
 
+/** The queue key of Settings' model tests, which no session id can equal (ADR 0070). */
+const probeQueue = '\0settings:model-test';
+
 /** A model failure as an answer's outcome; a cancellation keeps what streamed (ADR 0031). */
 function outcomeFrom(error: ModelError): Outcome {
   const failed = chatFailureFromModelError(error);
   return failed.kind === 'cancelled'
     ? { status: 'cancelled' }
     : { status: 'failed', code: failed.code };
+}
+
+/** Whole milliseconds since `stopwatch` started, for a view. */
+function elapsedMilliseconds(stopwatch: Stopwatch): number {
+  return stopwatch
+    .elapsed()
+    .round({ smallestUnit: 'millisecond', roundingMode: 'halfExpand' })
+    .total('milliseconds');
 }
 
 /** Waits for `promise` and ignores how it ended. */

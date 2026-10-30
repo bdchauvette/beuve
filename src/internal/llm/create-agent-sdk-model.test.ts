@@ -42,7 +42,7 @@ function worktree(directory: string): { readonly cwd: string; readonly secret: s
 function textRequest(cwd: string, overrides: Partial<TextModelRequest> = {}): TextModelRequest {
   return {
     system: 'Answer briefly.',
-    prompt: 'What does src/greet.ts export?',
+    messages: [{ role: 'user', content: 'What does src/greet.ts export?' }],
     cwd,
     timeout: Temporal.Duration.from({ seconds: 30 }),
     ...overrides,
@@ -105,7 +105,11 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     expect(output.costUsd).toBeGreaterThan(0);
     expect(output.usage).toMatchObject({ inputTokens: 100, outputTokens: 20 });
     expect(streamed).toStrictEqual([{ kind: 'append', text: 'It exports greeting.' }]);
-    expect(progress).toStrictEqual([{ kind: 'started', model: 'claude-opus-5-5' }]);
+    expect(progress).toStrictEqual([
+      { kind: 'started', model: 'claude-opus-5-5' },
+      { kind: 'text-start' },
+      { kind: 'text-end' },
+    ]);
 
     const [sent] = messageRequests(api);
     expect(sent?.headers['x-api-key']).toBe('sk-ant-test-key');
@@ -165,7 +169,13 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
             streamed.push(event);
           },
           onProgress: (event) => {
-            tools.push(event.kind === 'tool-use' ? event.tool : event.kind);
+            tools.push(
+              event.kind === 'tool-start'
+                ? event.description
+                : event.kind === 'tool-end'
+                  ? `${event.tool} ${event.ok ? 'ok' : 'failed'}`
+                  : event.kind,
+            );
           },
         }),
       ),
@@ -176,7 +186,13 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       { kind: 'reset' },
       { kind: 'append', text: 'It says hello world.' },
     ]);
-    expect(tools).toStrictEqual(['started', 'Read', 'Grep']);
+    expect(tools.filter((entry) => !entry.startsWith('text-'))).toStrictEqual([
+      'started',
+      'read src/greet.ts',
+      'grep hello',
+      'Read ok',
+      'Grep ok',
+    ]);
     const results = JSON.stringify(lastToolResults(api));
     expect(results).toContain('hello world');
     expect(results).toContain('greet.ts');

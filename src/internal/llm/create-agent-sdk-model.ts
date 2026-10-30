@@ -13,16 +13,18 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
-import type { ClaudeCodeEffort } from './build-claude-code-args.ts';
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import { claudeCodeEventFrom } from './claude-code-event-from.ts';
-import type { ClaudeCodeResult } from './claude-code-event-from.ts';
+import { ClaudeCodeStreamReader } from './claude-code-stream-reader.ts';
 import { createClaudeCodeEnvironment } from './create-claude-code-environment.ts';
+import { flattenModelMessages } from './flatten-model-messages.ts';
 import { jsonSchemaFrom } from './json-schema-from.ts';
 import type {
   BaseModelRequest,
   LanguageModel,
+  ModelCapabilities,
+  ModelEffort,
   ModelError,
   ModelOutput,
   ModelRequest,
@@ -36,8 +38,10 @@ export interface AgentSdkModelOptions {
   readonly apiKey: string;
   /** Defaults to `claude-opus-5-5`. */
   readonly model?: string;
-  /** Sent as the API's `output_config.effort`. Defaults to `high`. */
-  readonly effort?: ClaudeCodeEffort;
+  /** Sent as the API's `output_config.effort`. Defaults to `high`; a request's own wins. */
+  readonly effort?: ModelEffort;
+  /** The configured model's context window, for prompt budgets. Unknown when omitted. */
+  readonly contextWindowTokens?: number;
   /** Claude Code stops with `error_max_turns` after this many model turns. Defaults to 100. */
   readonly maxTurns?: number;
   /** Claude Code stops with `error_max_budget_usd` past this estimated spend. */
@@ -57,7 +61,7 @@ export interface AgentSdkModelOptions {
 }
 
 const defaultModel = 'claude-opus-5-5';
-const defaultEffort: ClaudeCodeEffort = 'high';
+const defaultEffort: ModelEffort = 'high';
 const defaultMaxTurns = 100;
 const stderrTailChars = 4096;
 
@@ -89,7 +93,14 @@ const lockdownArgs: Record<string, null> = Object.fromEntries(
  * `runText` takes the result text and, with `onText`, streams its deltas.
  */
 export function createAgentSdkModel(options: AgentSdkModelOptions): LanguageModel {
+  const capabilities: ModelCapabilities = {
+    tools: true,
+    structuredOutput: 'native',
+    contextWindowTokens: options.contextWindowTokens,
+    streaming: true,
+  };
   return {
+    capabilities,
     run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
       runStructured(request, options),
     runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
@@ -169,8 +180,8 @@ async function runAgent(
   const stopwatch = new Stopwatch();
   options.logger?.debug('agent-sdk: starting', {
     cwd: request.cwd,
-    model: options.model ?? defaultModel,
-    promptChars: request.prompt.length,
+    model: request.model ?? options.model ?? defaultModel,
+    promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
     systemChars: request.system.length,
   });
   try {
@@ -241,71 +252,29 @@ async function execute(
   request.signal?.addEventListener('abort', onAbort, { once: true });
 
   let stderr = '';
-  let model: string | undefined;
-  let apiKeySource: string | undefined;
-  let result: ClaudeCodeResult | undefined;
-  let rateLimit: ClaudeCodeOutcome['rateLimit'];
-  let invalidLine: string | undefined;
-  let hasStreamedText = false;
   let failure: unknown;
-
+  const reader = new ClaudeCodeStreamReader({
+    cwd: request.cwd,
+    ...(request.onProgress !== undefined && { onProgress: request.onProgress }),
+    ...(mode.onText !== undefined && { onText: mode.onText }),
+  });
   let conversation: Query | undefined;
   const onMessage = (message: unknown): void => {
     const event = claudeCodeEventFrom(message);
-    switch (event.kind) {
-      case 'init': {
-        model = event.model;
-        apiKeySource = event.apiKeySource;
-        if (apiKeySource === 'ANTHROPIC_API_KEY') {
-          request.onProgress?.({ kind: 'started', model });
-        } else {
-          terminate('wrong-credential');
-        }
-        break;
-      }
-      case 'tool-use': {
-        for (const tool of event.tools) {
-          request.onProgress?.({ kind: 'tool-use', tool });
-        }
-        break;
-      }
-      case 'refusal-fallback': {
-        model = event.model;
-        break;
-      }
-      case 'message-start': {
-        if (hasStreamedText) {
-          hasStreamedText = false;
-          mode.onText?.({ kind: 'reset' });
-        }
-        break;
-      }
-      case 'text-delta': {
-        hasStreamedText = true;
-        mode.onText?.({ kind: 'append', text: event.text });
-        break;
-      }
-      case 'rate-limit': {
-        rateLimit = event.status === 'allowed' ? rateLimit : event;
-        break;
-      }
-      case 'result': {
-        result = event.result;
-        break;
-      }
-      case 'invalid': {
-        invalidLine ??= event.reason;
-        break;
-      }
-      case 'other': {
-        break;
-      }
+    reader.read(event);
+    if (event.kind !== 'init') {
+      return;
+    }
+    if (event.apiKeySource === 'ANTHROPIC_API_KEY') {
+      request.onProgress?.({ kind: 'started', model: reader.model });
+    } else {
+      terminate('wrong-credential');
     }
   };
   try {
     // Throws at once, not from the iterator, when the platform's Claude Code binary is missing.
     conversation = query({
-      prompt: request.prompt,
+      prompt: flattenModelMessages(request.messages),
       options: sdkOptions(request, options, mode, configDir, controller, (chunk) => {
         stderr = (stderr + chunk).slice(-stderrTailChars);
       }),
@@ -334,19 +303,19 @@ async function execute(
     case 'wrong-credential': {
       return err({
         kind: 'not-authenticated',
-        message: `Claude Code did not authenticate with the API key (source: ${apiKeySource ?? 'unknown'}).`,
+        message: `Claude Code did not authenticate with the API key (source: ${reader.apiKeySource ?? 'unknown'}).`,
       });
     }
     case undefined: {
       break;
     }
   }
-  if (failure !== undefined && result === undefined) {
+  if (failure !== undefined && reader.result === undefined) {
     return err(failedToRun(failure, stderr, options));
   }
   return ok({
-    outcome: { exitCode: 0, signal: undefined, stderr, result, rateLimit, invalidLine },
-    model,
+    outcome: reader.outcome({ exitCode: 0, signal: undefined, stderr }),
+    model: reader.model,
   });
 }
 
@@ -373,8 +342,8 @@ function sdkOptions(
         CLAUDE_CODE_MAX_RETRIES: String(options.maxRetries),
       }),
     }),
-    model: options.model ?? defaultModel,
-    effort: options.effort ?? defaultEffort,
+    model: request.model ?? options.model ?? defaultModel,
+    effort: request.effort ?? options.effort ?? defaultEffort,
     maxTurns: options.maxTurns ?? defaultMaxTurns,
     ...(options.maxBudgetUsd !== undefined && { maxBudgetUsd: options.maxBudgetUsd }),
     ...(options.pathToClaudeCodeExecutable !== undefined && {

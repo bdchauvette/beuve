@@ -11,6 +11,8 @@ import { err } from '#x/result/err.ts';
 
 import { createSessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 import { waitUntil } from '../testing/wait-until.ts';
+import { createModelRegistryStore } from '../models/create-model-registry-store.ts';
+import { createSecretStore } from '../models/create-secret-store.ts';
 import { createChatServices } from './create-chat-services.ts';
 import { test } from './testing/test.ts';
 import { waitForSettled } from './testing/wait-for-settled.ts';
@@ -544,7 +546,7 @@ describe(
       const stdin = call?.stdin ?? '';
       const selected = stdin.indexOf('## Selected by the reviewer');
       expect(selected).toBeGreaterThan(-1);
-      expect(selected).toBeLessThan(stdin.indexOf('## Diff'));
+      expect(selected).toBeGreaterThan(stdin.indexOf('## Diff'));
       expect(stdin).toContain(
         `### Selection 1: feature.rs:1-2 (head ${review.headSha.slice(0, 12)})`,
       );
@@ -792,6 +794,12 @@ describe(
           git: { logger: logger.logger },
         }),
         claude: claude.settings,
+        models: {
+          registry: createModelRegistryStore(),
+          secrets: createSecretStore({}),
+          claude: claude.settings,
+          logger: logger.logger,
+        },
         intentFor: () => 'AUTHOR-CLAIM: this change makes everything faster.',
       });
       const updates: ChatMessageView[] = [];

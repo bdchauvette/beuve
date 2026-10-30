@@ -7,6 +7,7 @@ import type { Result } from '#x/result/result.ts';
 import { askQuestion } from './ask-question.ts';
 import type { ChatDelta, ChatModel, ChatModelOutput, ChatModelRequest } from './chat-model.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import { promptTextOf } from './testing/prompt-text-of.ts';
 import { test } from './testing/test.ts';
 
 interface FakeError {
@@ -59,7 +60,7 @@ describe('askQuestion', () => {
       cwd: '/work/repo',
       timeout: Temporal.Duration.from({ minutes: 5 }),
     });
-    expect(seen[0]?.prompt).toContain('Why does parse trim the first part?');
+    expect(promptTextOf(seen[0])).toContain('Why does parse trim the first part?');
     expect(seen[0]?.system).toContain('[[path:start-end]]');
     expect(result).toMatchObject({
       ok: true,

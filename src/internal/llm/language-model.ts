@@ -9,24 +9,61 @@ import type { Result } from '#x/result/result.ts';
  * subset it needs, and main passes an adapter in.
  */
 export interface LanguageModel {
+  /** What this configured model can do; consumers size prompts and pick instructions from it. */
+  readonly capabilities: ModelCapabilities;
   /** A structured answer that already matches `outputSchema` (the preliminary review). */
   readonly run: <T>(request: ModelRequest<T>) => Promise<Result<ModelOutput<T>, ModelError>>;
   /** A free-form Markdown answer (Q&A chat), optionally streamed as it is written. */
   readonly runText: (request: TextModelRequest) => Promise<Result<ModelOutput<string>, ModelError>>;
 }
 
+/**
+ * What a configured model can do (ADR 0070). `structuredOutput` is `native` when the backend
+ * constrains the answer to the schema itself, `prompted` when the schema travels in the prompt
+ * and only validation enforces it. `contextWindowTokens` is `undefined` when unknown.
+ */
+export interface ModelCapabilities {
+  /** Whether the model may read the worktree with read-only tools. */
+  readonly tools: boolean;
+  readonly structuredOutput: 'native' | 'prompted';
+  readonly contextWindowTokens: number | undefined;
+  readonly maxOutputTokens?: number;
+  /** Whether `onText` receives the answer as it is written. */
+  readonly streaming: boolean;
+}
+
+/** How hard the model thinks: Claude Code's `--effort` levels (2.1.312). */
+export type ModelEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/**
+ * One turn of the conversation sent to the model. `cache` marks the end of the stable prefix
+ * (the change and its diff, which repeat across questions at one head): an adapter that can
+ * cache prompts caches up to and including the last message so marked. Adapters that take a
+ * single prompt flatten the messages ({@link flattenModelMessages}).
+ */
+export interface ModelMessage {
+  readonly role: 'user' | 'assistant';
+  /** Never logged above debug level. */
+  readonly content: string;
+  readonly cache?: boolean;
+}
+
 /** What every run needs, whatever the shape of its answer. */
 export interface BaseModelRequest {
   /** Instructions appended to the backend's own system prompt. Not secret, but not logged at info. */
   readonly system: string;
-  /** The user turn: the diff and context. Never logged above debug level. */
-  readonly prompt: string;
+  /** The conversation, oldest first; the last message is the user's. */
+  readonly messages: readonly ModelMessage[];
   /** Absolute directory the model may read (the session worktree). It must never be written. */
   readonly cwd: string;
   readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal;
   /** Coarse progress for a status line. Carries no prompt or file content. */
   readonly onProgress?: (progress: ModelProgress) => void;
+  /** Overrides the configured effort for this request. */
+  readonly effort?: ModelEffort;
+  /** Overrides the configured model for this request. */
+  readonly model?: string;
 }
 
 export interface ModelRequest<T> extends BaseModelRequest {
@@ -46,9 +83,23 @@ export interface TextModelRequest extends BaseModelRequest {
 export type TextStreamEvent =
   { readonly kind: 'append'; readonly text: string } | { readonly kind: 'reset' };
 
+/**
+ * Coarse progress of a run, for a status line (ADR 0070). A tool's `description` names what it
+ * looks at (`read src/auth.ts:1-40`, `grep validate(`), never what it found; `summary` is set
+ * only when the backend reports a short, content-free one.
+ */
 export type ModelProgress =
   | { readonly kind: 'started'; readonly model: string | undefined }
-  | { readonly kind: 'tool-use'; readonly tool: string };
+  | { readonly kind: 'thinking'; readonly summary?: string }
+  | {
+      readonly kind: 'tool-start';
+      readonly id: string;
+      readonly tool: string;
+      readonly description: string;
+    }
+  | { readonly kind: 'tool-end'; readonly id: string; readonly tool: string; readonly ok: boolean }
+  | { readonly kind: 'text-start' }
+  | { readonly kind: 'text-end' };
 
 export interface ModelOutput<T> {
   readonly value: T;
@@ -76,6 +127,13 @@ export interface ModelUsage {
 export type ModelError =
   | { readonly kind: 'invalid-request'; readonly reason: string }
   | { readonly kind: 'not-installed'; readonly command: string }
+  /** The executable runs but is older than the version the adapter needs. */
+  | {
+      readonly kind: 'unsupported-version';
+      readonly command: string;
+      readonly version: string;
+      readonly required: string;
+    }
   | { readonly kind: 'not-authenticated'; readonly message: string }
   | {
       readonly kind: 'rate-limited';

@@ -59,4 +59,12 @@ export const invokeChannels = Object.freeze([
   'trace:list-trust',
   'trace:remove-trust',
   'claude:status',
+  'models:list',
+  'models:save',
+  'models:remove',
+  'models:set-role',
+  'models:set-key',
+  'models:remove-key',
+  'models:list-remote',
+  'models:test',
 ] as const satisfies readonly InvokeChannel[]);

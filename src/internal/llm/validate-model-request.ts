@@ -2,13 +2,13 @@ import path from 'node:path';
 
 import type { BaseModelRequest, ModelError } from './language-model.ts';
 
-/** Linux caps one argv string at 128 KiB; the system prompt and schema travel as arguments. */
+/** Linux caps one argv string at 128 KiB; Claude Code's system prompt and schema are arguments. */
 const maxArgumentChars = 100_000;
 
 /**
- * Why a request can't be sent to Claude Code, or `undefined`: `cwd` must be absolute, no field may
- * hold a NUL byte, the system prompt plus `schemaChars` of JSON Schema must fit one argument, and
- * the timeout must be positive.
+ * Why a request can't be sent, or `undefined`: `cwd` must be absolute, the conversation must end
+ * with a user turn, no field may hold a NUL byte, the system prompt plus `schemaChars` of JSON
+ * Schema must fit one argument (Claude Code's limit), and the timeout must be positive.
  */
 export function validateModelRequest(
   request: BaseModelRequest,
@@ -17,7 +17,15 @@ export function validateModelRequest(
   if (!path.isAbsolute(request.cwd)) {
     return { kind: 'invalid-request', reason: 'cwd must be absolute' };
   }
-  if ([request.cwd, request.system, request.prompt].some((text) => text.includes('\0'))) {
+  if (request.messages.length === 0 || request.messages.at(-1)?.role !== 'user') {
+    return { kind: 'invalid-request', reason: 'the last message must be the user turn' };
+  }
+  const texts = [
+    request.cwd,
+    request.system,
+    ...request.messages.map((message) => message.content),
+  ];
+  if (texts.some((text) => text.includes('\0'))) {
     return { kind: 'invalid-request', reason: 'the request contains a NUL byte' };
   }
   if (request.system.length + schemaChars > maxArgumentChars) {

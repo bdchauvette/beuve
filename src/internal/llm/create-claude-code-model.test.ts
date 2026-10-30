@@ -57,7 +57,7 @@ function request(
 ): ModelRequest<Echo> {
   return {
     system: 'Review carefully.',
-    prompt: 'diff --git a/x b/x\n'.repeat(10_000),
+    messages: [{ role: 'user', content: 'diff --git a/x b/x\n'.repeat(10_000) }],
     cwd: directory,
     outputSchema: echoSchema(),
     timeout: Temporal.Duration.from({ milliseconds: 10_000 }),
@@ -82,7 +82,7 @@ describe('createClaudeCodeModel', () => {
       ),
     );
     const { value } = outcome;
-    expect(value.stdin).toBe(request(directory).prompt);
+    expect(value.stdin).toBe(request(directory).messages[0]?.content);
     expect(value.cwd).toBe(directory);
     expect(value.envKeys).toStrictEqual(['HOME', 'PATH']);
     expect(value.args).toContain('--print');
@@ -103,7 +103,7 @@ describe('createClaudeCodeModel', () => {
     });
     expect(progress).toStrictEqual([
       { kind: 'started', model: 'fake-model-1' },
-      { kind: 'tool-use', tool: 'Read' },
+      { kind: 'tool-start', id: 'tool-0', tool: 'Read', description: 'read' },
     ]);
   });
 
@@ -113,7 +113,7 @@ describe('createClaudeCodeModel', () => {
     tempDir: directory,
   }) => {
     const outcome = await model(script, directory, 'text-result').run(
-      request(directory, { prompt: 'small' }),
+      request(directory, { messages: [{ role: 'user', content: 'small' }] }),
     );
     expect(outcome).toMatchObject({ ok: true, value: { value: { stdin: 'small' } } });
   });
@@ -157,6 +157,29 @@ describe('createClaudeCodeModel', () => {
         stderr: 'fake claude crashed',
       },
     });
+  });
+
+  test('stops a run that is not on the Claude Code login, as --bare would make it', async ({
+    expect,
+    fakeClaude: script,
+    tempDir: directory,
+  }) => {
+    const progress: ModelProgress[] = [];
+    const outcome = await model(script, directory, 'api-key').run(
+      request(directory, {
+        onProgress: (event) => {
+          progress.push(event);
+        },
+      }),
+    );
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'not-authenticated',
+        message: expect.stringContaining('credential source: ANTHROPIC_API_KEY') as string,
+      },
+    });
+    expect(progress).toStrictEqual([]);
   });
 
   test('recognizes a missing login, a rate limit and a spent budget', async ({
@@ -345,7 +368,7 @@ function textRequest(
 ): TextModelRequest {
   return {
     system: 'Answer questions.',
-    prompt: 'What does parse do?',
+    messages: [{ role: 'user', content: 'What does parse do?' }],
     cwd: directory,
     timeout: Temporal.Duration.from({ milliseconds: 10_000 }),
     ...overrides,

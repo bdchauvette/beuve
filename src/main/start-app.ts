@@ -8,6 +8,7 @@ import type { Logger } from '#x/log/create-logger.ts';
 
 import type { CommandId } from '#contract/command-catalog.ts';
 import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
+import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 
@@ -177,7 +178,8 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
 
   registerIpcHandlers(ipcMain, withSettingsBroadcast(handlers, announceSettingsChanged), {
     pages: [
-      { url: pathToFileURL(options.indexHtmlPath).href, channels: 'all' },
+      // Everything but the model registry, which only the Settings window may touch (ADR 0070).
+      { url: pathToFileURL(options.indexHtmlPath).href, channels: mainWindowInvokeChannels },
       { url: pathToFileURL(options.sheetHtmlPath).href, channels: sheetInvokeChannels },
       { url: pathToFileURL(options.settingsHtmlPath).href, channels: settingsInvokeChannels },
     ],

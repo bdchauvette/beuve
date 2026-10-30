@@ -14,6 +14,7 @@ import type {
   TraceTrustEntryView,
 } from '#contract/ipc-contract.ts';
 
+import './beuve-model-settings.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 
@@ -343,9 +344,8 @@ export class BeuveSettingsView extends LitElement {
   }
 
   /**
-   * One row per provider, read-only for now. When a provider gains a key (an API key for a Claude
-   * adapter, a GitHub token), its row gets a write-only field here; the key is stored by main with
-   * `safeStorage` and never comes back to this page (ADR 0068).
+   * One row per provider, read-only. API keys for models are entered write-only under Models
+   * (ADR 0070); main stores them with `safeStorage` and never sends them back to this page.
    */
   private renderAccounts(): TemplateResult {
     const github = this.github === undefined ? undefined : describeGithubAuth(this.github);
@@ -417,7 +417,9 @@ export class BeuveSettingsView extends LitElement {
     const { display } = this;
     return html`
       ${display === undefined ? nothing : html`${this.renderReview(display)} ${this.renderDiff(display)}`}
-      ${this.renderAccounts()} ${this.renderTrust()}
+      ${this.renderAccounts()}
+      <beuve-model-settings .api=${this.api}></beuve-model-settings>
+      ${this.renderTrust()}
       ${this.error === '' ? nothing : html`<p class="error" role="alert">${this.error}</p>`}
     `;
   }

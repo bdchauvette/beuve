@@ -1771,6 +1771,118 @@ export type ClaudeStatusView =
     }
   | { readonly kind: 'missing'; readonly message: string };
 
+/** What a configured model is used for (ADR 0070); each role names one registry entry. */
+export type ModelRole = 'chat' | 'review' | 'verify' | 'summarize' | 'compact';
+
+/** The adapters a registry entry can configure (ADR 0069, 0070, 0071). */
+export type ModelKind = 'claude-code-cli' | 'claude-agent-sdk' | 'openai-compatible';
+
+/** How hard a model thinks: Claude Code's `--effort` levels. */
+export type ModelEffortView = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/**
+ * Which Claude Code the Agent SDK runs: the user's installed `claude` (`path`, or found as the
+ * chat finds it when omitted) or the binary packaged with beuve.
+ */
+export type ModelExecutableView =
+  { readonly source: 'installed'; readonly path?: string } | { readonly source: 'bundled' };
+
+/**
+ * One model as the Settings window edits it. Main assigns `id` to a new entry. API keys are never
+ * part of an entry: they are set and removed through their own write-only channels.
+ */
+export type ModelEntryInput = {
+  readonly id?: string;
+  readonly label: string;
+  /** The default effort; `/review --effort` and the verification pass override it per request. */
+  readonly effort?: ModelEffortView;
+  /** Prompt budgets derive from it (ADR 0070). */
+  readonly contextWindowTokens?: number;
+} & (
+  | { readonly kind: 'claude-code-cli'; readonly model?: string }
+  | {
+      readonly kind: 'claude-agent-sdk';
+      readonly model?: string;
+      readonly executable: ModelExecutableView;
+    }
+  | {
+      readonly kind: 'openai-compatible';
+      readonly model: string;
+      /** The API root, e.g. `http://localhost:11434/v1`. */
+      readonly baseUrl: string;
+      /** Read-only file tools over the worktree (ADR 0071). */
+      readonly tools: boolean;
+    }
+);
+
+/** A stored entry, with what the Settings window shows about it. */
+export type ModelEntryView = ModelEntryInput & {
+  readonly id: string;
+  /** Whether an API key is stored for it; the key itself never leaves main. */
+  readonly hasApiKey: boolean;
+  /** An OpenAI-compatible base URL that is not this machine: the diff leaves it (ADR 0071). */
+  readonly isRemote: boolean;
+  /** The built-in entry, which can be edited but not removed. */
+  readonly isDefault: boolean;
+};
+
+/** `models:list` and every registry change: the entries, the roles and how keys are stored. */
+export interface ModelRegistryView {
+  readonly entries: readonly ModelEntryView[];
+  readonly roles: Readonly<Record<ModelRole, string>>;
+  /**
+   * `os`: the system keychain or keyring encrypts keys; `basic`: Electron found no keyring and
+   * uses a fixed key (Linux without libsecret); `unavailable`: keys can't be stored.
+   */
+  readonly keyStorage: 'os' | 'basic' | 'unavailable';
+  /** Whether a Claude Code binary is packaged with this build for the Agent SDK. */
+  readonly hasBundledClaudeCode: boolean;
+}
+
+export interface SaveModelRequest {
+  readonly entry: ModelEntryInput;
+}
+
+export interface ModelIdRequest {
+  readonly id: string;
+}
+
+export interface SetModelRoleRequest {
+  readonly role: ModelRole;
+  readonly id: string;
+}
+
+/** Write-only: the key goes to main's encrypted store and never comes back. */
+export interface SetModelKeyRequest {
+  readonly id: string;
+  readonly apiKey: string;
+}
+
+/** `models:list-remote`: the models an OpenAI-compatible server offers, using `id`'s key if set. */
+export interface ListRemoteModelsRequest {
+  readonly baseUrl: string;
+  readonly id?: string;
+}
+
+export interface RemoteModelsView {
+  readonly models: readonly string[];
+}
+
+/** `models:test`: one tiny request through the chat's queue, like a question. */
+export type ModelTestView =
+  | {
+      readonly outcome: 'ok';
+      readonly elapsedMs: number;
+      readonly model: string | undefined;
+    }
+  | {
+      readonly outcome: 'failed';
+      readonly elapsedMs: number;
+      /** The model port's error kind (`not-authenticated`, `rate-limited`, `timeout`, …). */
+      readonly errorKind: string;
+      readonly message: string;
+    };
+
 /** Every invoke response is a `Result`, so expected failures never surface as rejected promises. */
 export type IpcResult<T> = Result<T, IpcError>;
 
@@ -1992,6 +2104,32 @@ export interface InvokeChannelMap {
     readonly request: undefined;
     readonly response: IpcResult<ClaudeStatusView>;
   };
+  'models:list': { readonly request: undefined; readonly response: IpcResult<ModelRegistryView> };
+  'models:save': {
+    readonly request: SaveModelRequest;
+    readonly response: IpcResult<ModelRegistryView>;
+  };
+  'models:remove': {
+    readonly request: ModelIdRequest;
+    readonly response: IpcResult<ModelRegistryView>;
+  };
+  'models:set-role': {
+    readonly request: SetModelRoleRequest;
+    readonly response: IpcResult<ModelRegistryView>;
+  };
+  'models:set-key': {
+    readonly request: SetModelKeyRequest;
+    readonly response: IpcResult<ModelRegistryView>;
+  };
+  'models:remove-key': {
+    readonly request: ModelIdRequest;
+    readonly response: IpcResult<ModelRegistryView>;
+  };
+  'models:list-remote': {
+    readonly request: ListRemoteModelsRequest;
+    readonly response: IpcResult<RemoteModelsView>;
+  };
+  'models:test': { readonly request: ModelIdRequest; readonly response: IpcResult<ModelTestView> };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -2058,7 +2196,22 @@ export type SettingsInvokeChannel =
   | 'claude:status'
   | 'trace:list-trust'
   | 'trace:remove-trust'
-  | 'menu:set-state';
+  | 'menu:set-state'
+  | SettingsOnlyInvokeChannel;
+
+/**
+ * The model registry's channels (ADR 0070): only the Settings window may call them, never the
+ * main window or a sheet, so a compromised review page can't swap the model or test a key.
+ */
+export type SettingsOnlyInvokeChannel =
+  | 'models:list'
+  | 'models:save'
+  | 'models:remove'
+  | 'models:set-role'
+  | 'models:set-key'
+  | 'models:remove-key'
+  | 'models:list-remote'
+  | 'models:test';
 
 /** The API the Settings preload exposes as `window.beuve`: invoke only, settings channels only. */
 export interface SettingsApi {

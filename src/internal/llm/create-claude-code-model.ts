@@ -12,17 +12,19 @@ import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { buildClaudeCodeArgs } from './build-claude-code-args.ts';
-import type { ClaudeCodeEffort } from './build-claude-code-args.ts';
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
+import { ClaudeCodeStreamReader } from './claude-code-stream-reader.ts';
 import { createClaudeCodeEnvironment } from './create-claude-code-environment.ts';
+import { flattenModelMessages } from './flatten-model-messages.ts';
 import { jsonSchemaFrom } from './json-schema-from.ts';
 import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
 import { validateModelRequest } from './validate-model-request.ts';
-import type { ClaudeCodeResult } from './claude-code-event-from.ts';
 import type {
   BaseModelRequest,
   LanguageModel,
+  ModelCapabilities,
+  ModelEffort,
   ModelError,
   ModelOutput,
   ModelRequest,
@@ -35,9 +37,12 @@ export interface ClaudeCodeModelOptions {
   readonly command?: string;
   /** Arguments before Claude Code's own, e.g. a script when `command` is a Node binary. */
   readonly leadingArgs?: readonly string[];
+  /** The default model and effort; a request's own override them. */
   readonly model?: string;
-  readonly effort?: ClaudeCodeEffort;
+  readonly effort?: ModelEffort;
   readonly maxBudgetUsd?: number;
+  /** The configured model's context window, for prompt budgets. Unknown when omitted. */
+  readonly contextWindowTokens?: number;
   /** Where the allow-listed environment is taken from. Defaults to `process.env`. */
   readonly inheritedEnv?: Readonly<Record<string, string | undefined>>;
   /** Added to the environment as is (e.g. a provider switch the user configured). */
@@ -53,6 +58,14 @@ const defaultMaxOutputBytes = 32 * 1024 * 1024;
 const stderrTailChars = 4096;
 
 /**
+ * The credential sources a run on the user's own Claude Code login reports in its init event.
+ * `none` is a claude.ai (subscription or Console) login: no API key is involved. Anything else
+ * (an API key, an `apiKeyHelper`) is not the user's login, which is what `--print` gives if it
+ * ever defaults to `--bare` (ADR 0070), so such a run is stopped as `not-authenticated`.
+ */
+const loginSources = new Set(['none']);
+
+/**
  * A {@link LanguageModel} that drives the user's installed Claude Code CLI headless (ADR 0019,
  * 0030), so the user's own Claude Code login authenticates and beuve never handles credentials.
  * Each run is one `claude --print` process: no shell, an allow-listed environment, `cwd` = the
@@ -61,7 +74,14 @@ const stderrTailChars = 4096;
  * `--json-schema`; `runText` takes the final text and, with `onText`, streams its deltas.
  */
 export function createClaudeCodeModel(options: ClaudeCodeModelOptions = {}): LanguageModel {
+  const capabilities: ModelCapabilities = {
+    tools: true,
+    structuredOutput: 'native',
+    contextWindowTokens: options.contextWindowTokens,
+    streaming: true,
+  };
   return {
+    capabilities,
     run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
       runStructured(request, options),
     runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
@@ -128,12 +148,14 @@ async function runClaudeCode(
   if (request.signal?.aborted === true) {
     return err({ kind: 'cancelled' });
   }
+  const model = request.model ?? options.model;
+  const effort = request.effort ?? options.effort;
   const args = buildClaudeCodeArgs({
     system: request.system,
     ...(mode.jsonSchema !== undefined && { jsonSchema: mode.jsonSchema }),
     ...(mode.onText !== undefined && { streamText: true }),
-    ...(options.model !== undefined && { model: options.model }),
-    ...(options.effort !== undefined && { effort: options.effort }),
+    ...(model !== undefined && { model }),
+    ...(effort !== undefined && { effort }),
     ...(options.maxBudgetUsd !== undefined && { maxBudgetUsd: options.maxBudgetUsd }),
   });
   const command = options.command ?? 'claude';
@@ -141,7 +163,7 @@ async function runClaudeCode(
   options.logger?.debug('claude-code: starting', {
     command,
     cwd: request.cwd,
-    promptChars: request.prompt.length,
+    promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
     systemChars: request.system.length,
   });
 
@@ -157,7 +179,7 @@ async function runClaudeCode(
     options.logger?.info('claude-code: run failed', { duration, error: run.error.kind });
     return run;
   }
-  const { outcome, model } = run.value;
+  const { outcome, model: reported } = run.value;
   const classified = classifyClaudeCodeOutcome(
     outcome,
     mode.jsonSchema === undefined ? 'text' : 'json',
@@ -173,7 +195,7 @@ async function runClaudeCode(
   const { result } = classified.value;
   return ok({
     value: classified.value.value,
-    model,
+    model: reported,
     turns: result.turns,
     costUsd: result.costUsd,
     duration,
@@ -224,7 +246,7 @@ async function execute(
     }
   };
 
-  type Termination = 'timeout' | 'cancelled' | 'output-too-large';
+  type Termination = 'timeout' | 'cancelled' | 'output-too-large' | 'wrong-credential';
   let termination: Termination | undefined;
   let killTimer: NodeJS.Timeout | undefined;
   const terminate = (reason: Termination): void => {
@@ -248,60 +270,25 @@ async function execute(
   };
   request.signal?.addEventListener('abort', onAbort, { once: true });
 
-  let model: string | undefined;
-  let result: ClaudeCodeResult | undefined;
-  let rateLimit: ClaudeCodeOutcome['rateLimit'];
-  let invalidLine: string | undefined;
-  let hasStreamedText = false;
+  const reader = new ClaudeCodeStreamReader({
+    cwd: request.cwd,
+    ...(request.onProgress !== undefined && { onProgress: request.onProgress }),
+    ...(onText !== undefined && { onText }),
+  });
   const onLine = (text: string): void => {
-    if (text.trim() === '') {
+    if (termination === 'wrong-credential' || text.trim() === '') {
       return;
     }
     const event = parseClaudeCodeEvent(text);
-    switch (event.kind) {
-      case 'init': {
-        model = event.model;
-        request.onProgress?.({ kind: 'started', model });
-        break;
-      }
-      case 'tool-use': {
-        for (const tool of event.tools) {
-          request.onProgress?.({ kind: 'tool-use', tool });
-        }
-        break;
-      }
-      case 'message-start': {
-        if (hasStreamedText) {
-          hasStreamedText = false;
-          onText?.({ kind: 'reset' });
-        }
-        break;
-      }
-      case 'refusal-fallback': {
-        model = event.model;
-        break;
-      }
-      case 'text-delta': {
-        hasStreamedText = true;
-        onText?.({ kind: 'append', text: event.text });
-        break;
-      }
-      case 'rate-limit': {
-        rateLimit = event.status === 'allowed' ? rateLimit : event;
-        break;
-      }
-      case 'result': {
-        result = event.result;
-        break;
-      }
-      case 'invalid': {
-        invalidLine ??= event.reason;
-        break;
-      }
-      case 'other': {
-        break;
-      }
+    reader.read(event);
+    if (event.kind !== 'init') {
+      return;
     }
+    if (event.apiKeySource !== undefined && !loginSources.has(event.apiKeySource)) {
+      terminate('wrong-credential');
+      return;
+    }
+    request.onProgress?.({ kind: 'started', model: reader.model });
   };
 
   let pending = '';
@@ -325,7 +312,7 @@ async function execute(
     stderr = (stderr + chunk).slice(-stderrTailChars);
   });
 
-  child.stdin.end(request.prompt);
+  child.stdin.end(flattenModelMessages(request.messages));
 
   const { exitCode, signal } = await new Promise<{
     exitCode: number | undefined;
@@ -350,6 +337,14 @@ async function execute(
     case 'output-too-large': {
       return err({ kind: 'output-too-large', maxBytes: maxOutputBytes });
     }
+    case 'wrong-credential': {
+      return err({
+        kind: 'not-authenticated',
+        message:
+          `Claude Code did not use your Claude Code login (credential source: ${reader.apiKeySource ?? 'unknown'}). ` +
+          'beuve runs Claude Code with your own login only; check that `claude` works in a terminal.',
+      });
+    }
     case undefined: {
       break;
     }
@@ -357,7 +352,7 @@ async function execute(
   if (pending !== '') {
     onLine(pending);
   }
-  return ok({ outcome: { exitCode, signal, stderr, result, rateLimit, invalidLine }, model });
+  return ok({ outcome: reader.outcome({ exitCode, signal, stderr }), model: reader.model });
 }
 
 async function spawnClaude(

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Err } from '#x/result/result.ts';
+import { hasControlCharacters } from '#x/text/has-control-characters.ts';
 
 import { commandCatalog } from '#contract/command-catalog.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
@@ -63,8 +64,14 @@ import type {
   UraOrderView,
   UraStagedView,
   UraVerdictStateView,
+  ModelRegistryView,
+  ModelTestView,
+  RemoteModelsView,
 } from '#contract/ipc-contract.ts';
+import { modelRoles } from '#contract/model-roles.ts';
 import type { MainServices } from '../main-services.ts';
+import { modelEntryInputFrom } from '../models/model-entry-input-from.ts';
+import { modelEntrySchema } from '../models/model-entry-schema.ts';
 
 /** What the handlers need from Electron itself; tests pass a stub. */
 export interface IpcPlatform {
@@ -102,6 +109,29 @@ export type IpcHandlers = {
 };
 
 const noRequest = z.undefined();
+const httpScheme = /^https?:\/\//u;
+const modelId = z.string().min(1).max(80);
+const modelIdRequest = z.strictObject({ id: modelId });
+const saveModelRequest = z.strictObject({ entry: modelEntrySchema });
+const modelRoleRequest = z.strictObject({ role: z.enum(modelRoles), id: modelId });
+const modelKeyRequest = z.strictObject({
+  id: modelId,
+  apiKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(4096)
+    .refine((value) => !hasControlCharacters(value) && !value.includes(' ')),
+});
+const listRemoteModelsRequest = z.strictObject({
+  baseUrl: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .refine((value) => httpScheme.test(value)),
+  id: modelId.optional(),
+});
 const sessionId = z.string().min(1).max(200);
 const sessionRequest = z.strictObject({ sessionId });
 const reviewRequest = z.strictObject({ sessionId, ignoreWhitespace: z.boolean().optional() });
@@ -856,6 +886,52 @@ export function createIpcHandlers(
     'claude:status': async (request): Promise<IpcResult<ClaudeStatusView>> => {
       const parsed = noRequest.safeParse(request);
       return parsed.success ? services.claude.status() : invalid(parsed.error);
+    },
+    'models:list': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = noRequest.safeParse(request);
+      return parsed.success ? services.models.list() : invalid(parsed.error);
+    },
+    'models:save': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = saveModelRequest.safeParse(request);
+      return parsed.success
+        ? services.models.save(modelEntryInputFrom(parsed.data.entry))
+        : invalid(parsed.error);
+    },
+    'models:remove': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = modelIdRequest.safeParse(request);
+      return parsed.success ? services.models.remove(parsed.data.id) : invalid(parsed.error);
+    },
+    'models:set-role': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = modelRoleRequest.safeParse(request);
+      return parsed.success
+        ? services.models.setRole(parsed.data.role, parsed.data.id)
+        : invalid(parsed.error);
+    },
+    'models:set-key': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = modelKeyRequest.safeParse(request);
+      // Never echo the request: a validation message could quote the key.
+      return parsed.success
+        ? services.models.setKey(parsed.data.id, parsed.data.apiKey)
+        : err({
+            code: 'invalid-request',
+            message: 'expected { id, apiKey } with a key of 1 to 4096 printable characters',
+          });
+    },
+    'models:remove-key': async (request): Promise<IpcResult<ModelRegistryView>> => {
+      const parsed = modelIdRequest.safeParse(request);
+      return parsed.success ? services.models.removeKey(parsed.data.id) : invalid(parsed.error);
+    },
+    'models:list-remote': async (request): Promise<IpcResult<RemoteModelsView>> => {
+      const parsed = listRemoteModelsRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { baseUrl, id } = parsed.data;
+      return services.models.listRemote({ baseUrl, ...(id !== undefined && { id }) });
+    },
+    'models:test': async (request): Promise<IpcResult<ModelTestView>> => {
+      const parsed = modelIdRequest.safeParse(request);
+      return parsed.success ? services.models.test(parsed.data.id) : invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

@@ -22,6 +22,8 @@ import path from 'node:path';
  * - `not-logged-in`: an error result asking to `/login`, exit 1.
  * - `rate-limited`: a rejected rate-limit event and a 429 error result, exit 1.
  * - `budget`: an `error_max_budget_usd` result, exit 1.
+ * - `api-key`: an init reporting `ANTHROPIC_API_KEY` as the credential (what `--bare` would
+ *   give), then a successful result after 5 seconds.
  * - `hang`: starts a child that also hangs, records both pids, and never exits.
  * - `stubborn`: like `hang`, but ignores SIGTERM.
  * - `flood`: writes megabytes of `stream_event` lines.
@@ -135,6 +137,11 @@ process.stdin.on('end', () => {
       result({ subtype: 'success', is_error: true, api_error_status: 429,
         result: 'API Error: Request rejected (429)' });
       process.exitCode = 1;
+      break;
+    }
+    case 'api-key': {
+      emit({ type: 'system', subtype: 'init', model: 'fake-model-1', apiKeySource: 'ANTHROPIC_API_KEY' });
+      setTimeout(() => result({ result: 'billed to a key', structured_output: {} }), 5000);
       break;
     }
     case 'budget': {

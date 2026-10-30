@@ -1,4 +1,5 @@
 import type { SettingsInvokeChannel } from './ipc-contract.ts';
+import { settingsOnlyInvokeChannels } from './settings-only-invoke-channels.ts';
 
 /** Every channel the Settings window may invoke (ADR 0068), for its preload and for main. */
 export const settingsInvokeChannels = Object.freeze([
@@ -11,4 +12,5 @@ export const settingsInvokeChannels = Object.freeze([
   'trace:list-trust',
   'trace:remove-trust',
   'menu:set-state',
+  ...settingsOnlyInvokeChannels,
 ] as const satisfies readonly SettingsInvokeChannel[]);

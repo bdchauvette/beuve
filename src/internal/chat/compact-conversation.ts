@@ -6,6 +6,7 @@ import { buildCompactionPrompt } from './build-compaction-prompt.ts';
 import type { ChatCompaction, CompactionBudget } from './build-compaction-prompt.ts';
 import type { Citation } from './chat-message.ts';
 import type { ChatModel } from './chat-model.ts';
+import { compactionBudgetFrom } from './compaction-budget-from.ts';
 import { parseCitations } from './parse-citations.ts';
 import { citablePathsFrom } from './citable-paths-from.ts';
 import { validateCitations } from './validate-citations.ts';
@@ -14,6 +15,7 @@ import type { DroppedCitation } from './validate-citations.ts';
 export interface CompactConversationDeps<E> {
   readonly model: ChatModel<E>;
   readonly signal?: AbortSignal;
+  /** Defaults to {@link compactionBudgetFrom} the model's capabilities. */
   readonly budget?: CompactionBudget;
   /** Defaults to 3 minutes. */
   readonly timeout?: Temporal.Duration;
@@ -32,13 +34,6 @@ export interface ChatSummary {
 export type CompactionError<E> =
   { readonly kind: 'nothing-to-compact' } | { readonly kind: 'model'; readonly error: E };
 
-const defaultBudget: CompactionBudget = {
-  maxTurnsChars: 120_000,
-  maxTurnChars: 12_000,
-  maxSummaryChars: 16_000,
-  maxListedFiles: 200,
-};
-
 /**
  * Condenses a conversation into one note with the model (ADR 0047), read-only in the head
  * worktree, and validates its citations as answers' are (ADR 0031). Refuses when there is no turn
@@ -51,10 +46,14 @@ export async function compactConversation<E>(
   if (input.turns.length === 0) {
     return err({ kind: 'nothing-to-compact' });
   }
-  const built = buildCompactionPrompt(input, deps.budget ?? defaultBudget);
+  const built = buildCompactionPrompt(
+    input,
+    deps.budget ?? compactionBudgetFrom(deps.model.capabilities),
+    { tools: deps.model.capabilities?.tools ?? true },
+  );
   const output = await deps.model.runText({
     system: built.system,
-    prompt: built.prompt,
+    messages: [{ role: 'user', content: built.prompt }],
     cwd: input.worktreePath,
     timeout: deps.timeout ?? Temporal.Duration.from({ minutes: 3 }),
     ...(deps.signal !== undefined && { signal: deps.signal }),

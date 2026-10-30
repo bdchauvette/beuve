@@ -3,6 +3,11 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { writeFakeGh } from '#internal/auth/testing/write-fake-gh.ts';
+import { startFakeOpenAiApi } from '#internal/llm/testing/start-fake-open-ai-api.ts';
+import type {
+  FakeOpenAiApi,
+  FakeOpenAiOptions,
+} from '#internal/llm/testing/start-fake-open-ai-api.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import { countingSessionDeps } from '#internal/session/testing/counting-session-deps.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
@@ -41,6 +46,7 @@ export interface FakeClaude {
  * - `claudeScript` (worker): the fake `claude` script, written once.
  * - `fakeClaude`: {@link FakeClaude}.
  * - `fakeGhScript` (worker): the fake `gh` script, written once.
+ * - `openAiApi`: starts fake OpenAI-compatible servers, each closed after the test.
  */
 export const test = baseTest
   .extend('db', ({ db }): DatabaseSync => {
@@ -85,4 +91,20 @@ export const test = baseTest
       scripted: (script, name = 'chat'): ScriptedClaude =>
         createScriptedClaude(claudeScript, home, name, script),
     };
-  });
+  })
+  .extend(
+    'openAiApi',
+    ({}, { onCleanup }): ((options?: FakeOpenAiOptions) => Promise<FakeOpenAiApi>) => {
+      const started: FakeOpenAiApi[] = [];
+      onCleanup(() => {
+        for (const api of started) {
+          api.close();
+        }
+      });
+      return async (options): Promise<FakeOpenAiApi> => {
+        const api = await startFakeOpenAiApi(options);
+        started.push(api);
+        return api;
+      };
+    },
+  );

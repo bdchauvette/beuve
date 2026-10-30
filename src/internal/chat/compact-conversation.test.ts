@@ -10,6 +10,7 @@ import type { CommitSha } from './chat-message.ts';
 import type { ChatQuestion } from './chat-question.ts';
 import { compactConversation } from './compact-conversation.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
+import { promptTextOf } from './testing/prompt-text-of.ts';
 import { test } from './testing/test.ts';
 
 function fakeModel(
@@ -80,9 +81,9 @@ describe('compactConversation', () => {
     const [request] = seen;
     expect(request?.cwd).toBe('/work/repo');
     expect(request?.system).toContain('**Asked**, **Concluded**, **Open questions**, **Places**');
-    expect(request?.prompt).toContain('Earlier: b.ts is new.');
-    expect(request?.prompt).toContain('Why does «selection 1: src/a.ts:12-13» trim?');
-    expect(request?.prompt).toContain('- modified src/a.ts');
+    expect(promptTextOf(request)).toContain('Earlier: b.ts is new.');
+    expect(promptTextOf(request)).toContain('Why does «selection 1: src/a.ts:12-13» trim?');
+    expect(promptTextOf(request)).toContain('- modified src/a.ts');
   });
 
   test('drops the oldest turns past the budget and says so', async ({ expect }) => {
@@ -96,10 +97,10 @@ describe('compactConversation', () => {
       budget: { maxTurnsChars: 1000, maxTurnChars: 500, maxSummaryChars: 100, maxListedFiles: 1 },
     });
     expect(result).toMatchObject({ ok: true, value: { omittedTurns: 4 } });
-    expect(seen[0]?.prompt).toContain('[beuve: 4 older turns omitted for size]');
-    expect(seen[0]?.prompt).toContain('question 5');
-    expect(seen[0]?.prompt).not.toContain('question 1 ');
-    expect(seen[0]?.prompt).toContain('[beuve: 1 more files]');
+    expect(promptTextOf(seen[0])).toContain('[beuve: 4 older turns omitted for size]');
+    expect(promptTextOf(seen[0])).toContain('question 5');
+    expect(promptTextOf(seen[0])).not.toContain('question 1 ');
+    expect(promptTextOf(seen[0])).toContain('[beuve: 1 more files]');
   });
 
   test('refuses with nothing to compact and passes model failures through', async ({ expect }) => {

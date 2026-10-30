@@ -17,6 +17,9 @@ export function chatFailureFromModelError(error: ModelError): ChatFailure {
     case 'timeout': {
       return { kind: 'failed', code: error.kind };
     }
+    case 'unsupported-version': {
+      return { kind: 'failed', code: 'not-installed' };
+    }
     case 'invalid-request':
     case 'invalid-output':
     case 'output-too-large':

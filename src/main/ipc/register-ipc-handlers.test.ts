@@ -3,6 +3,8 @@ import { describe } from 'vitest';
 
 import { invokeChannels } from '#contract/invoke-channels.ts';
 import type { InvokeChannel } from '#contract/ipc-contract.ts';
+import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
+import { settingsOnlyInvokeChannels } from '#contract/settings-only-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 import { ok } from '#x/result/ok.ts';
@@ -44,6 +46,22 @@ function eventFrom(url: string, isTopLevel = true): IpcMainInvokeEvent {
 }
 
 describe('registerIpcHandlers', () => {
+  test('keeps the model registry out of the main window', async ({ expect, logger }) => {
+    const registered = new Map<string, Registered>();
+    const main = 'file:///app/dist/ui/index.html';
+    registerIpcHandlers(fakeIpcMain(registered), handlersAnsweringOk(), {
+      pages: [{ url: main, channels: mainWindowInvokeChannels }],
+      logger: logger.logger,
+    });
+    const call = async (channel: InvokeChannel): Promise<unknown> =>
+      registered.get(channel)?.(eventFrom(main), undefined);
+    const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
+    await expect(call('chat:ask')).resolves.toStrictEqual(ok('chat:ask'));
+    for (const channel of settingsOnlyInvokeChannels) {
+      await expect(call(channel)).resolves.toStrictEqual(refused);
+    }
+  });
+
   test('lets the main page call everything and a sheet only the sheet channels', async ({
     expect,
     logger,
@@ -89,6 +107,7 @@ describe('registerIpcHandlers', () => {
     await expect(call('display:set')).resolves.toStrictEqual(ok('display:set'));
     await expect(call('trace:remove-trust')).resolves.toStrictEqual(ok('trace:remove-trust'));
     await expect(call('menu:set-state')).resolves.toStrictEqual(ok({ webContentsId: 7 }));
+    await expect(call('models:set-key')).resolves.toStrictEqual(ok('models:set-key'));
     for (const channel of [
       'session:get-review',
       'ura:create',

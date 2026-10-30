@@ -7,7 +7,7 @@ import type { ChatPromptBudget, ChatPromptReport } from './build-chat-prompt.ts'
 import type { Citation } from './chat-message.ts';
 import type { ChatDelta, ChatModel, ChatModelProgress } from './chat-model.ts';
 import type { ChatQuestion } from './chat-question.ts';
-import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
+import { chatPromptBudgetFrom } from './chat-prompt-budget-from.ts';
 import { parseCitations } from './parse-citations.ts';
 import { citablePathsFrom } from './citable-paths-from.ts';
 import { validateCitations } from './validate-citations.ts';
@@ -20,6 +20,7 @@ export interface AskQuestionDeps<E> {
   /** The answer as it streams, when the adapter streams. */
   readonly onDelta?: (delta: ChatDelta) => void;
   readonly onProgress?: (progress: ChatModelProgress) => void;
+  /** Defaults to {@link chatPromptBudgetFrom} the model's capabilities. */
   readonly budget?: ChatPromptBudget;
   /** Defaults to 5 minutes. */
   readonly timeout?: Temporal.Duration;
@@ -50,7 +51,8 @@ export type ChatError<E> =
 /**
  * Answers one read-only question about a reviewed change (Zone 4, ADR 0031), or runs `/summarize`
  * (a `task` of kind `abstract`, ADR 0056, which needs no question): builds the bounded
- * prompt, asks the model in the head worktree, and validates the answer's citations against the
+ * prompt, sized to the model's context window and worded for whether it has tools (ADR 0070),
+ * asks the model in the head worktree, and validates the answer's citations against the
  * diff's and the worktree's files. Pure apart from the model port. Persisting the transcript,
  * one question in flight per session and cancellation are main's job.
  */
@@ -58,7 +60,7 @@ export async function askQuestion<E>(
   input: ChatQuestion,
   deps: AskQuestionDeps<E>,
 ): Promise<Result<ChatAnswer, ChatError<E>>> {
-  const budget = deps.budget ?? defaultChatPromptBudget;
+  const budget = deps.budget ?? chatPromptBudgetFrom(deps.model.capabilities);
   const question = input.question.trim();
   if (question === '' && input.task === undefined) {
     return err({ kind: 'empty-question' });
@@ -66,10 +68,12 @@ export async function askQuestion<E>(
   if (input.task === undefined && question.length > budget.maxQuestionChars) {
     return err({ kind: 'question-too-long', maxChars: budget.maxQuestionChars });
   }
-  const built = buildChatPrompt(input, budget);
+  const built = buildChatPrompt(input, budget, {
+    tools: deps.model.capabilities?.tools ?? true,
+  });
   const output = await deps.model.runText({
     system: built.system,
-    prompt: built.prompt,
+    messages: built.messages,
     cwd: input.worktreePath,
     timeout: deps.timeout ?? Temporal.Duration.from({ minutes: 5 }),
     ...(deps.signal !== undefined && { signal: deps.signal }),

@@ -495,6 +495,103 @@ describe('createIpcHandlers for menus and the Settings window', () => {
   });
 });
 
+describe('createIpcHandlers for the model registry', () => {
+  test('validates every models channel in main and never echoes a key', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const record = async (...args: unknown[]): Promise<{ ok: true; value: never }> => {
+      calls.push(args);
+      await Promise.resolve();
+      return ok(undefined as never);
+    };
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        models: {
+          list: record,
+          save: record,
+          remove: record,
+          setRole: record,
+          setKey: record,
+          removeKey: record,
+          listRemote: record,
+          test: record,
+        },
+      },
+      appInfo(),
+    );
+    const leaked = await handlers['models:set-key']({ id: 'a', apiKey: 'sk-LEAK\0', extra: 1 });
+    expect(leaked).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    expect(JSON.stringify(leaked)).not.toContain('LEAK');
+    await expectInvalid(expect, handlers['models:list']({}));
+    await expectInvalid(
+      expect,
+      handlers['models:save']({
+        entry: {
+          kind: 'openai-compatible',
+          label: 'x',
+          model: 'm',
+          baseUrl: 'file:///etc',
+          tools: false,
+        },
+      }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['models:save']({
+        entry: {
+          kind: 'openai-compatible',
+          label: 'x',
+          model: 'm',
+          baseUrl: 'https://u:p@h/v1',
+          tools: false,
+        },
+      }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['models:save']({
+        entry: {
+          kind: 'claude-agent-sdk',
+          label: 'x',
+          executable: { source: 'installed', path: 'claude' },
+        },
+      }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['models:save']({
+        entry: { kind: 'claude-code-cli', label: 'x', command: '/bin/sh' },
+      }),
+    );
+    await expectInvalid(expect, handlers['models:set-role']({ role: 'admin', id: 'a' }));
+    await expectInvalid(expect, handlers['models:list-remote']({ baseUrl: 'ftp://x' }));
+    await expectInvalid(expect, handlers['models:test']({}));
+    expect(calls).toStrictEqual([]);
+    await handlers['models:save']({
+      entry: {
+        kind: 'claude-agent-sdk',
+        label: '  Key  ',
+        executable: { source: 'installed' },
+        effort: 'high',
+      },
+    });
+    await handlers['models:set-key']({ id: 'a', apiKey: ' sk-ok ' });
+    await handlers['models:set-role']({ role: 'verify', id: 'a' });
+    expect(calls).toStrictEqual([
+      [
+        {
+          kind: 'claude-agent-sdk',
+          label: 'Key',
+          executable: { source: 'installed' },
+          effort: 'high',
+        },
+      ],
+      ['a', 'sk-ok'],
+      ['verify', 'a'],
+    ]);
+  });
+});
+
 describe('createIpcHandlers for the chat', () => {
   const mention = {
     path: 'src/discounts.ts',
@@ -1022,6 +1119,16 @@ function stubServices(
       ...github,
     },
     claude: { status: notWired },
+    models: {
+      list: notWired,
+      save: notWired,
+      remove: notWired,
+      setRole: notWired,
+      setKey: notWired,
+      removeKey: notWired,
+      listRemote: notWired,
+      test: notWired,
+    },
     mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,
     dispose: doNothing,

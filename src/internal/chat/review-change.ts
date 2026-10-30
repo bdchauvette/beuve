@@ -6,10 +6,10 @@ import type { ChatError } from './ask-question.ts';
 import { buildChatPrompt } from './build-chat-prompt.ts';
 import type { ChatPromptBudget } from './build-chat-prompt.ts';
 import type { Citation } from './chat-message.ts';
-import type { ChatModelProgress } from './chat-model.ts';
+import type { ChatEffort, ChatModelProgress } from './chat-model.ts';
+import { chatPromptBudgetFrom } from './chat-prompt-budget-from.ts';
 import type { ChatQuestion } from './chat-question.ts';
 import type { ChatFinding, ChatReview } from './chat-review.ts';
-import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
 import { findingOutputSchema } from './finding-output-schema.ts';
 import type { ModelFinding } from './finding-output-schema.ts';
 import type { ReviewModel } from './review-model.ts';
@@ -25,7 +25,12 @@ export interface ReviewChangeDeps<E> {
   readonly verifier?: ReviewModel<E>;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: ReviewProgress) => void;
+  /** Defaults to {@link chatPromptBudgetFrom} the first pass's model. */
   readonly budget?: ChatPromptBudget;
+  /** The first pass's effort (`/review --effort`); the model's own when omitted. */
+  readonly effort?: ChatEffort;
+  /** The verification pass's effort; defaults to `low` (ADR 0055). */
+  readonly verifierEffort?: ChatEffort;
   /** Defaults to 12. */
   readonly maxFindings?: number;
   /** Defaults to 0.3. */
@@ -72,15 +77,20 @@ export async function reviewChange<E>(
     return ok(assemble([], emptyDrops, pathScope, input.files.length, 'skipped'));
   }
 
-  const built = buildChatPrompt({ ...input, task }, deps.budget ?? defaultChatPromptBudget);
+  const built = buildChatPrompt(
+    { ...input, task },
+    deps.budget ?? chatPromptBudgetFrom(deps.model.capabilities),
+    { tools: deps.model.capabilities?.tools ?? true },
+  );
   deps.onProgress?.({ kind: 'reviewing', files: input.files.length });
   const output = await deps.model.run({
     system: built.system,
-    prompt: built.prompt,
+    messages: built.messages,
     cwd: input.worktreePath,
     outputSchema: findingOutputSchema,
     timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
+    ...(deps.effort !== undefined && { effort: deps.effort }),
     onProgress: (progress) => deps.onProgress?.({ kind: 'model', progress }),
   });
   if (!output.ok) {
@@ -110,9 +120,11 @@ export async function reviewChange<E>(
       baseSha: input.baseSha,
       headSha: input.headSha,
       worktreePath: input.worktreePath,
+      files: input.files,
     },
     {
       model: deps.verifier,
+      effort: deps.verifierEffort ?? 'low',
       timeout: remaining,
       ...(deps.signal !== undefined && { signal: deps.signal }),
     },

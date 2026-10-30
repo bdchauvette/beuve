@@ -22,6 +22,7 @@ import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
+import type { ModelServices } from './models/create-model-services.ts';
 import type { RemoteServices } from './remote/create-remote-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
@@ -59,7 +60,7 @@ export interface MainServices {
   readonly flow: FlowServices;
   readonly editor: EditorServices;
   readonly display: DisplayServices;
-  readonly chat: Omit<ChatServices, 'observeHead'>;
+  readonly chat: Omit<ChatServices, 'observeHead' | 'testModel'>;
   readonly ura: Omit<
     UraServices,
     'observeHead' | 'readAgentReview' | 'compileArtifact' | 'listPostings' | 'recordPostings'
@@ -68,6 +69,8 @@ export interface MainServices {
   readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;
   /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };
+  /** The model registry, its keys and Test, for the Settings window only (ADR 0070). */
+  readonly models: ModelServices;
   readonly mcpTools: McpToolServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;

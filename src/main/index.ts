@@ -1,7 +1,9 @@
 import path from 'node:path';
 import process from 'node:process';
 
-import { app, BrowserWindow, shell } from 'electron';
+import { existsSync } from 'node:fs';
+
+import { app, BrowserWindow, safeStorage, shell } from 'electron';
 
 import { createLogger } from '#x/log/create-logger.ts';
 
@@ -62,6 +64,24 @@ async function launch(): Promise<void> {
           }),
         },
         display: { settingsPath },
+        models: {
+          settingsPath,
+          secretsPath: path.join(userData, 'model-secrets.json'),
+          cipher: {
+            isAvailable: async () => safeStorage.isAsyncEncryptionAvailable(),
+            encrypt: async (plainText) => safeStorage.encryptStringAsync(plainText),
+            decrypt: async (encrypted) => {
+              const decrypted = await safeStorage.decryptStringAsync(encrypted);
+              return decrypted.result;
+            },
+            backend: () =>
+              process.platform === 'linux' &&
+              safeStorage.getSelectedStorageBackend() === 'basic_text'
+                ? 'basic'
+                : 'os',
+          },
+          ...bundledClaudeCode(),
+        },
         trace: { settingsPath, temporaryDirectory: path.join(userData, 'trace') },
         github: {
           settingsPath,
@@ -84,6 +104,27 @@ async function launch(): Promise<void> {
     logger.error('startup failed', { error });
     app.exit(1);
   }
+}
+
+/**
+ * The Claude Code binary packaged for the Agent SDK's Bundled option (ADR 0069, 0070), unpacked
+ * from the archive so it can run. Unpackaged, the SDK finds its own in `node_modules`.
+ */
+function bundledClaudeCode(): { bundledClaudeCodePath?: string; hasBundledClaudeCode: boolean } {
+  if (!app.isPackaged) {
+    return { hasBundledClaudeCode: true };
+  }
+  const binary = path.join(
+    process.resourcesPath,
+    'app.asar.unpacked',
+    'node_modules',
+    '@anthropic-ai',
+    `claude-agent-sdk-${process.platform}-${process.arch}`,
+    process.platform === 'win32' ? 'claude.exe' : 'claude',
+  );
+  return existsSync(binary)
+    ? { bundledClaudeCodePath: binary, hasBundledClaudeCode: true }
+    : { hasBundledClaudeCode: false };
 }
 
 function focusExistingWindow(): void {

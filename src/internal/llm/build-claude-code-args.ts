@@ -1,5 +1,4 @@
-/** Claude Code's `--effort` levels, as `claude --help` lists them (2.1.312). */
-export type ClaudeCodeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+import type { ModelEffort } from './language-model.ts';
 
 export interface ClaudeCodeArgsOptions {
   /** Appended to Claude Code's own system prompt. */
@@ -10,7 +9,8 @@ export interface ClaudeCodeArgsOptions {
   readonly streamText?: boolean;
   /** An alias (`sonnet`, `opus`) or full model name; Claude Code's default when omitted. */
   readonly model?: string;
-  readonly effort?: ClaudeCodeEffort;
+  /** Claude Code's `--effort` levels, as `claude --help` lists them (2.1.312). */
+  readonly effort?: ModelEffort;
   /** Claude Code stops with `error_max_budget_usd` past this estimated spend. */
   readonly maxBudgetUsd?: number;
 }

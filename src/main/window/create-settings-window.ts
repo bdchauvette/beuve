@@ -34,8 +34,8 @@ export function createSettingsWindow(options: SettingsWindowOptions): SettingsWi
       }
       const parent = BrowserWindow.getFocusedWindow() ?? undefined;
       const window = new BrowserWindow({
-        width: 560,
-        height: 720,
+        width: 620,
+        height: 780,
         useContentSize: true,
         resizable: false,
         minimizable: false,
