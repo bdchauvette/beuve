@@ -1,37 +1,31 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { openRepository } from './open-repository.ts';
+import { test } from './testing/test.ts';
 
 describe('openRepository', () => {
-  let repo: TestRepository;
-  beforeEach(() => {
-    repo = createTestRepository();
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('finds the top level from a subdirectory and reports the git version', async () => {
+  test('finds the top level from a subdirectory and reports the git version', async ({
+    expect,
+    repo,
+  }) => {
     const nested = path.join(repo.directory, 'a', 'b');
     mkdirSync(nested, { recursive: true });
     const opened = await openRepository(nested);
     expect(opened).toMatchObject({ ok: true, value: { root: repo.directory } });
-    if (!opened.ok) {
-      return;
-    }
-    expect(opened.value.version.major).toBeGreaterThanOrEqual(2);
-    await expect(opened.value.run(['rev-parse', '--show-prefix'])).resolves.toEqual({
+    const openedValue = okValueFrom(opened);
+    expect(openedValue.version.major).toBeGreaterThanOrEqual(2);
+    await expect(openedValue.run(['rev-parse', '--show-prefix'])).resolves.toStrictEqual({
       ok: true,
       value: '\n',
     });
   });
 
-  it('rejects relative paths and non-repositories', async () => {
+  test('rejects relative paths and non-repositories', async ({ expect, repo }) => {
     await expect(openRepository('repo')).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },
@@ -42,11 +36,11 @@ describe('openRepository', () => {
     });
   });
 
-  it('refuses a git older than the supported minimum', async () => {
+  test('refuses a git older than the supported minimum', async ({ expect, repo }) => {
     const fake = path.join(repo.scratch(), 'old-git');
     writeFileSync(fake, '#!/bin/sh\necho "git version 2.20.1"\n');
     chmodSync(fake, 0o755);
-    await expect(openRepository(repo.directory, { gitBinary: fake })).resolves.toEqual({
+    await expect(openRepository(repo.directory, { gitBinary: fake })).resolves.toStrictEqual({
       ok: false,
       error: {
         kind: 'unsupported-git-version',

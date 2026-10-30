@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { EditorOpenResponse, IpcResult } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { createLogger } from '#x/log/create-logger.ts';
 import type { Result } from '#x/result/result.ts';

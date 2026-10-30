@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { IpcResult, UraItemView } from '#contract/ipc-contract.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import type { ChatFinding } from '#internal/chat/chat-review.ts';

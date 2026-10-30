@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseGitVersion } from './parse-git-version.ts';
+import { test } from './testing/test.ts';
 
 describe('parseGitVersion', () => {
-  it('parses plain, vendor-suffixed and two-part versions', () => {
-    expect(parseGitVersion('git version 2.43.0\n')).toEqual({
+  test('parses plain, vendor-suffixed and two-part versions', ({ expect }) => {
+    expect(parseGitVersion('git version 2.43.0\n')).toStrictEqual({
       major: 2,
       minor: 43,
       patch: 0,
@@ -18,7 +19,7 @@ describe('parseGitVersion', () => {
     expect(parseGitVersion('git version 3.0')).toMatchObject({ major: 3, minor: 0, patch: 0 });
   });
 
-  it('rejects other programs', () => {
+  test('rejects other programs', ({ expect }) => {
     expect(parseGitVersion('hg version 6')).toBeUndefined();
   });
 });

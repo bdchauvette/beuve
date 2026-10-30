@@ -1,30 +1,19 @@
 import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { diffObjects } from './diff-objects.ts';
-import { openRepository } from './open-repository.ts';
-import type { GitRepository } from './open-repository.ts';
+import { test } from './testing/test.ts';
 
 describe('diffObjects', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  beforeEach(async () => {
-    repo = createTestRepository();
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('diffs two commits into parsed files with patch text', async () => {
+  test('diffs two commits into parsed files with patch text', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('kept.txt', 'one\ntwo\n');
     repo.write('space name.txt', 'x\n');
     const from = repo.commit('from');
@@ -39,12 +28,15 @@ describe('diffObjects', () => {
         { status: 'modified', path: 'space name.txt' },
       ],
     });
-    if (result.ok) {
-      expect(result.value[0]?.patch.startsWith('diff --git a/kept.txt b/kept.txt\n')).toBe(true);
-    }
+    const resultValue = okValueFrom(result);
+    expect(resultValue[0]?.patch.startsWith('diff --git a/kept.txt b/kept.txt\n')).toBe(true);
   });
 
-  it('ignores all whitespace on request, keeping head line numbers', async () => {
+  test('ignores all whitespace on request, keeping head line numbers', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('code.py', 'a\nif x:\n  y=1\nz\n');
     repo.write('spaces.txt', 'one\n');
     const from = repo.commit('from');
@@ -58,17 +50,19 @@ describe('diffObjects', () => {
       ok: true,
       value: [{ path: 'code.py', hunks: [{ newStart: 2, newCount: 4 }] }],
     });
-    if (!ignored.ok) {
-      return;
-    }
+    const ignoredValue = okValueFrom(ignored);
 
-    expect(ignored.value).toHaveLength(1);
-    expect(ignored.value[0]?.hunks[0]?.lines.filter((line) => line.kind !== 'context')).toEqual([
-      { kind: 'added', content: 'new', newLine: 5, noNewline: false },
-    ]);
+    expect(ignoredValue).toHaveLength(1);
+    expect(
+      ignoredValue[0]?.hunks[0]?.lines.filter((line) => line.kind !== 'context'),
+    ).toStrictEqual([{ kind: 'added', content: 'new', newLine: 5, noNewline: false }]);
   });
 
-  it('limits to literal paths and controls context', async () => {
+  test('limits to literal paths and controls context', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('a.txt', '1\n2\n3\n4\n5\n');
     repo.write('*.txt', 'star\n');
     const from = repo.commit('from');
@@ -85,7 +79,11 @@ describe('diffObjects', () => {
     });
   });
 
-  it('never runs textconv or external diff programs from repository config', async () => {
+  test('never runs textconv or external diff programs from repository config', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     const marker = path.join(repo.scratch(), 'ran');
     const program = path.join(repo.scratch(), 'program');
     writeFileSync(program, `#!/bin/sh\ntouch '${marker}'\necho converted\n`);

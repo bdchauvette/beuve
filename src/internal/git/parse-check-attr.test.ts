@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseCheckAttr } from './parse-check-attr.ts';
+import { test } from './testing/test.ts';
 
 function output(...rows: (readonly [string, string, string])[]): string {
   return rows.map((row) => `${row.join('\0')}\0`).join('');
 }
 
 describe('parseCheckAttr', () => {
-  it('reads linguist-generated set, true, unset and false', () => {
+  test('reads linguist-generated set, true, unset and false', ({ expect }) => {
     const parsed = parseCheckAttr(
       output(
         ['a.js', 'linguist-generated', 'set'],
@@ -16,7 +17,7 @@ describe('parseCheckAttr', () => {
         ['d.js', 'linguist-generated', 'false'],
       ),
     );
-    expect(Object.fromEntries(parsed)).toEqual({
+    expect(Object.fromEntries(parsed)).toStrictEqual({
       'a.js': { generated: true },
       'b.js': { generated: true },
       'c.js': { generated: false },
@@ -24,7 +25,7 @@ describe('parseCheckAttr', () => {
     });
   });
 
-  it('reads -diff and ignores a diff driver or an unspecified attribute', () => {
+  test('reads -diff and ignores a diff driver or an unspecified attribute', ({ expect }) => {
     const parsed = parseCheckAttr(
       output(
         ['x.bin', 'linguist-generated', 'unspecified'],
@@ -34,17 +35,17 @@ describe('parseCheckAttr', () => {
         ['z.ts', 'diff', 'unspecified'],
       ),
     );
-    expect(Object.fromEntries(parsed)).toEqual({ 'x.bin': { diff: false } });
+    expect(Object.fromEntries(parsed)).toStrictEqual({ 'x.bin': { diff: false } });
   });
 
-  it('merges both attributes of one path and keeps odd paths intact', () => {
+  test('merges both attributes of one path and keeps odd paths intact', ({ expect }) => {
     const parsed = parseCheckAttr(
       output(['dir/a b\nc.ts', 'linguist-generated', 'set'], ['dir/a b\nc.ts', 'diff', 'unset']),
     );
-    expect(parsed.get('dir/a b\nc.ts')).toEqual({ generated: true, diff: false });
+    expect(parsed.get('dir/a b\nc.ts')).toStrictEqual({ generated: true, diff: false });
   });
 
-  it('reads empty or truncated output as nothing', () => {
+  test('reads empty or truncated output as nothing', ({ expect }) => {
     expect(parseCheckAttr('').size).toBe(0);
     expect(parseCheckAttr('a.js\0linguist-generated').size).toBe(0);
   });

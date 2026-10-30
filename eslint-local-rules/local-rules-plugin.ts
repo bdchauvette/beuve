@@ -1,8 +1,12 @@
 import { enforceInternalUtils } from './enforce-internal-utils.ts';
+import { expectFromTestContext } from './expect-from-test-context.ts';
 import { enforceSingleNamedExport } from './enforce-single-named-export.ts';
 import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-syntax.ts';
 import { exportNameMatchesFilename } from './export-name-matches-filename.ts';
 import { noBarrelFiles } from './no-barrel-files.ts';
+import { noModuleMocking } from './no-module-mocking.ts';
+import { noModuleScopeBindings } from './no-module-scope-bindings.ts';
+import { requireSequentialFakeTime } from './require-sequential-fake-time.ts';
 
 /**
  * Typed as loosely as typescript-eslint types its own plugin: ESLint's and typescript-eslint's
@@ -18,8 +22,12 @@ const plugin = {
     'enforce-internal-utils': enforceInternalUtils,
     'enforce-single-named-export': enforceSingleNamedExport,
     'enforce-top-level-function-syntax': enforceTopLevelFunctionSyntax,
+    'expect-from-test-context': expectFromTestContext,
     'export-name-matches-filename': exportNameMatchesFilename,
     'no-barrel-files': noBarrelFiles,
+    'no-module-mocking': noModuleMocking,
+    'no-module-scope-bindings': noModuleScopeBindings,
+    'require-sequential-fake-time': requireSequentialFakeTime,
   },
 };
 

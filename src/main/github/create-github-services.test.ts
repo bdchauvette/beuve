@@ -17,7 +17,7 @@ import { writeFakeGh } from '#internal/auth/testing/write-fake-gh.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import type { FakeGhScenario } from '#internal/auth/testing/write-fake-gh.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { createFakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
 import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
 import type { SessionDeps } from '#internal/session/session.ts';

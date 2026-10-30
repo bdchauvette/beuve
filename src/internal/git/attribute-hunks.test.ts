@@ -1,88 +1,90 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { attributeHunks } from './attribute-hunks.ts';
 import { diffObjects } from './diff-objects.ts';
 import { listRangeCommits } from './list-range-commits.ts';
 import type { CommitSha } from './object-id.ts';
-import { openRepository } from './open-repository.ts';
 import type { GitRepository } from './open-repository.ts';
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
+import type { TestRepository } from './testing/test-repository.ts';
+import { test } from './testing/test.ts';
 
 describe('attributeHunks', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  let base: CommitSha;
-  let content: string[];
-  beforeEach(async () => {
-    repo = createTestRepository();
-    content = Array.from({ length: 40 }, (_, index) => `line ${String(index + 1)}`);
-    repo.write('app.txt', text(content));
-    base = repo.commit('base');
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  const edit = (change: (lines: string[]) => string[], message: string): CommitSha => {
-    content = change(content);
-    repo.write('app.txt', text(content));
-    return repo.commit(message);
-  };
-
-  const attribute = async (
-    head: CommitSha,
-    from: CommitSha = base,
-  ): Promise<ReturnType<typeof attributeHunks>> => {
-    const commits = await listRangeCommits(git, { base, head });
-    const files = await diffObjects(git, from, head, { contextLines: 1 });
-    if (!commits.ok || !files.ok) {
-      throw new Error('git failed');
-    }
-    return attributeHunks(files.value, commits.value.commits);
-  };
-
-  it('follows lines shifted by later commits and gives rewritten lines to the rewriter', async () => {
+  test('follows lines shifted by later commits and gives rewritten lines to the rewriter', async ({
+    expect,
+    repo,
+    repository,
+  }) => {
+    const { edit, attribute } = appFile(repo, repository);
     const bottom = edit((lines) => lines.with(29, 'bottom edit'), 'edit the bottom');
     const top = edit((lines) => ['new 1', 'new 2', 'new 3', ...lines], 'insert at the top');
     const rewrite = edit((lines) => lines.with(32, 'bottom rewritten'), 'rewrite the bottom');
     const removal = edit((lines) => lines.toSpliced(15, 2), 'remove two lines');
-    const head = removal;
 
-    const [file] = await attribute(head);
-    expect(file?.commits).toEqual([bottom, top, rewrite, removal]);
-    expect(file?.hunks).toEqual([[top], [removal], [rewrite]]);
+    const [file] = await attribute(removal);
+    expect(file?.commits).toStrictEqual([bottom, top, rewrite, removal]);
+    expect(file?.hunks).toStrictEqual([[top], [removal], [rewrite]]);
   });
 
-  it('attributes an interdiff hunk to the commit that produced its new lines', async () => {
+  test('attributes an interdiff hunk to the commit that produced its new lines', async ({
+    expect,
+    repo,
+    repository,
+  }) => {
+    const { edit, attribute } = appFile(repo, repository);
     const first = edit((lines) => lines.with(4, 'first'), 'first');
     edit((lines) => lines.with(19, 'second'), 'second');
     const fixup = edit((lines) => lines.with(19, 'second, fixed'), 'fixup');
 
     const [file] = await attribute(fixup, first);
-    expect(file?.hunks).toEqual([[fixup]]);
+    expect(file?.hunks).toStrictEqual([[fixup]]);
   });
 
-  it('follows a rename', async () => {
+  test('follows a rename', async ({ expect, repo, repository }) => {
+    const { base, edit } = appFile(repo, repository);
     const edited = edit((lines) => lines.with(9, 'edited'), 'edit');
     repo.git('mv', 'app.txt', 'main.txt');
     const renamed = repo.commit('rename');
 
-    const files = await diffObjects(git, base, renamed);
-    const commits = await listRangeCommits(git, { base, head: renamed });
-    if (!files.ok || !commits.ok) {
-      throw new Error('git failed');
-    }
-    const [file] = attributeHunks(files.value, commits.value.commits);
-    expect(file?.commits).toEqual([edited, renamed]);
-    expect(file?.hunks).toEqual([[edited]]);
+    const files = okValueFrom(await diffObjects(repository, base, renamed));
+    const { commits } = okValueFrom(await listRangeCommits(repository, { base, head: renamed }));
+    const [file] = attributeHunks(files, commits);
+    expect(file?.commits).toStrictEqual([edited, renamed]);
+    expect(file?.hunks).toStrictEqual([[edited]]);
   });
 });
+
+interface AppFile {
+  /** The commit adding `app.txt` with lines `line 1` … `line 40`. */
+  readonly base: CommitSha;
+  /** Rewrites `app.txt`'s lines with `change` and commits. */
+  readonly edit: (change: (lines: string[]) => string[], message: string) => CommitSha;
+  /** `attributeHunks` for `from..head` (context 1) over the commits `base..head`. */
+  readonly attribute: (
+    head: CommitSha,
+    from?: CommitSha,
+  ) => Promise<ReturnType<typeof attributeHunks>>;
+}
+
+function appFile(repo: TestRepository, git: GitRepository): AppFile {
+  let content = Array.from({ length: 40 }, (_, index) => `line ${String(index + 1)}`);
+  repo.write('app.txt', text(content));
+  const base = repo.commit('base');
+  return {
+    base,
+    edit: (change, message): CommitSha => {
+      content = change(content);
+      repo.write('app.txt', text(content));
+      return repo.commit(message);
+    },
+    attribute: async (head, from = base): Promise<ReturnType<typeof attributeHunks>> => {
+      const { commits } = okValueFrom(await listRangeCommits(git, { base, head }));
+      const files = okValueFrom(await diffObjects(git, from, head, { contextLines: 1 }));
+      return attributeHunks(files, commits);
+    },
+  };
+}
 
 function text(lines: readonly string[]): string {
   return `${lines.join('\n')}\n`;

@@ -2,37 +2,28 @@ import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { createLogger } from '#x/log/create-logger.ts';
 
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
 import { runGit } from './run-git.ts';
+import { test } from './testing/test.ts';
 
 describe('runGit', () => {
-  let repo: TestRepository;
-  beforeEach(() => {
-    repo = createTestRepository();
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('returns stdout with quotepath off', async () => {
+  test('returns stdout with quotepath off', async ({ expect, repo }) => {
     repo.write('ünï code.txt', 'x');
     repo.commit('first');
     const result = await runGit({ cwd: repo.directory, args: ['ls-files'] });
-    expect(result).toEqual({ ok: true, value: 'ünï code.txt\n' });
+    expect(result).toStrictEqual({ ok: true, value: 'ünï code.txt\n' });
   });
 
-  it('classifies a directory outside any repository', async () => {
+  test('classifies a directory outside any repository', async ({ expect, repo }) => {
     const outside = repo.scratch();
     const result = await runGit({ cwd: outside, args: ['status'] });
     expect(result).toMatchObject({ ok: false, error: { kind: 'not-a-repository', path: outside } });
   });
 
-  it('classifies a missing cwd and a missing git binary', async () => {
+  test('classifies a missing cwd and a missing git binary', async ({ expect, repo }) => {
     const missing = path.join(repo.scratch(), 'nope');
     await expect(runGit({ cwd: missing, args: ['status'] })).resolves.toMatchObject({
       ok: false,
@@ -40,13 +31,13 @@ describe('runGit', () => {
     });
     await expect(
       runGit({ cwd: repo.directory, args: ['status'], gitBinary: '/nonexistent/git' }),
-    ).resolves.toEqual({
+    ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'git-not-found', gitBinary: '/nonexistent/git' },
     });
   });
 
-  it('reports failures with exit code and stderr', async () => {
+  test('reports failures with exit code and stderr', async ({ expect, repo }) => {
     const result = await runGit({ cwd: repo.directory, args: ['cat-file', '-t', 'deadbeef'] });
     expect(result).toMatchObject({
       ok: false,
@@ -58,7 +49,7 @@ describe('runGit', () => {
     });
   });
 
-  it('times out slow commands and caps output', async () => {
+  test('times out slow commands and caps output', async ({ expect, repo }) => {
     const slow = path.join(repo.scratch(), 'slow-git');
     writeFileSync(slow, '#!/bin/sh\nsleep 5\n');
     chmodSync(slow, 0o755);
@@ -76,7 +67,7 @@ describe('runGit', () => {
     });
   });
 
-  it('rejects relative directories and NUL bytes before spawning', async () => {
+  test('rejects relative directories and NUL bytes before spawning', async ({ expect, repo }) => {
     await expect(runGit({ cwd: 'relative', args: ['status'] })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },
@@ -87,24 +78,31 @@ describe('runGit', () => {
     });
   });
 
-  it('ignores inherited GIT_* variables that would redirect git', async () => {
-    const other = createTestRepository();
-    const saved = process.env['GIT_DIR'];
-    try {
-      process.env['GIT_DIR'] = path.join(other.directory, '.git');
-      const result = await runGit({ cwd: repo.directory, args: ['rev-parse', '--show-toplevel'] });
-      expect(result).toEqual({ ok: true, value: `${repo.directory}\n` });
-    } finally {
-      if (saved === undefined) {
-        delete process.env['GIT_DIR'];
-      } else {
-        process.env['GIT_DIR'] = saved;
+  // Sets process.env, which every git process spawned meanwhile would inherit.
+  test(
+    'ignores inherited GIT_* variables that would redirect git',
+    { concurrent: false },
+    async ({ expect, repo, repositories }) => {
+      const other = repositories.create();
+      const saved = process.env['GIT_DIR'];
+      try {
+        process.env['GIT_DIR'] = path.join(other.directory, '.git');
+        const result = await runGit({
+          cwd: repo.directory,
+          args: ['rev-parse', '--show-toplevel'],
+        });
+        expect(result).toStrictEqual({ ok: true, value: `${repo.directory}\n` });
+      } finally {
+        if (saved === undefined) {
+          delete process.env['GIT_DIR'];
+        } else {
+          process.env['GIT_DIR'] = saved;
+        }
       }
-      other.cleanup();
-    }
-  });
+    },
+  );
 
-  it('disables repository-configured fsmonitor commands', async () => {
+  test('disables repository-configured fsmonitor commands', async ({ expect, repo }) => {
     const marker = path.join(repo.scratch(), 'fsmonitor-ran');
     const hook = path.join(repo.scratch(), 'fsmonitor');
     writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`);
@@ -116,7 +114,7 @@ describe('runGit', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it('logs each invocation at debug level', async () => {
+  test('logs each invocation at debug level', async ({ expect, repo }) => {
     const lines: string[] = [];
     const logger = createLogger('git', {
       level: 'debug',

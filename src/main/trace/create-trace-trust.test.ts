@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 
 import { createTraceTrust } from './create-trace-trust.ts';
 

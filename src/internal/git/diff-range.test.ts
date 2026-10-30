@@ -1,27 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { diffRange } from './diff-range.ts';
-import { openRepository } from './open-repository.ts';
-import type { GitRepository } from './open-repository.ts';
+import { test } from './testing/test.ts';
 
 describe('diffRange', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  beforeEach(async () => {
-    repo = createTestRepository();
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('shows only the branch’s changes since its fork point, like a pull request', async () => {
+  test('shows only the branch’s changes since its fork point, like a pull request', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('shared.txt', 'base\n');
     const fork = repo.commit('base');
     repo.git('switch', '--quiet', '--create', 'topic');
@@ -40,8 +29,7 @@ describe('diffRange', () => {
         files: [{ status: 'added', path: 'feature.txt' }],
       },
     });
-    if (result.ok) {
-      expect(result.value.files).toHaveLength(1);
-    }
+    const resultValue = okValueFrom(result);
+    expect(resultValue.files).toHaveLength(1);
   });
 });

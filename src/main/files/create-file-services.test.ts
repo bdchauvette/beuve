@@ -6,7 +6,7 @@ import type { IpcResult } from '#contract/ipc-contract.ts';
 import { isVersionAtLeast } from '#internal/git/is-version-at-least.ts';
 import { parseGitVersion } from '#internal/git/parse-git-version.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
 import { createLogger } from '#x/log/create-logger.ts';
 

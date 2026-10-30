@@ -1,6 +1,6 @@
 # 0013. Shared test helpers live in `testing/` directories
 
-- Status: Accepted
+- Status: Accepted; amended by [0058](0058-test-fixtures-concurrency-and-test-lint-rules.md) (`src/testing/`, fixtures)
 - Date: 2026-10-28
 
 ## Context

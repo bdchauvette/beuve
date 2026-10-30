@@ -15,7 +15,7 @@ import type {
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
-import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
+import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { writeFakeClaude } from '#internal/llm/testing/write-fake-claude.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { createLogger } from '#x/log/create-logger.ts';

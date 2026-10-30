@@ -1,5 +1,6 @@
 import e18e from '@e18e/eslint-plugin';
 import js from '@eslint/js';
+import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import { configs as litConfigs } from 'eslint-plugin-lit';
 import n from 'eslint-plugin-n';
@@ -11,6 +12,7 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+import { convertedTestDirs } from './converted-test-dirs.ts';
 import { localRulesPlugin } from './eslint-local-rules/local-rules-plugin.ts';
 
 const uiFiles = ['src/ui/**/*.ts'];
@@ -23,6 +25,7 @@ const entrypointFiles = [
   'src/main/impact/testing/scripted-impact-worker.ts',
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
+const convertedTestFiles = convertedTestDirs.map((directory) => `${directory}/*.test.ts`);
 
 export default defineConfig(
   globalIgnores(['dist/', 'out/', 'coverage/']),
@@ -80,6 +83,8 @@ export default defineConfig(
       'security/detect-object-injection': 'off',
       // A review tool reads arbitrary repository paths by design; every fs call would fire.
       'security/detect-non-literal-fs-filename': 'off',
+      // Vitest fixtures must destructure their first parameter, even when they use nothing.
+      'no-empty-pattern': ['error', { allowObjectPatternsAsParameters: true }],
     },
   },
 
@@ -131,6 +136,100 @@ export default defineConfig(
     extends: [wcConfigs['flat/best-practice'], litConfigs['flat/recommended']],
     languageOptions: { globals: globals.browser },
     settings: { wc: { elementBaseClasses: ['LitElement'] } },
+  },
+
+  {
+    name: 'beuve/converted-tests',
+    // ADR 0058. Directories join `convertedTestDirs` as they are converted.
+    files: convertedTestFiles,
+    plugins: { vitest },
+    settings: { vitest: { vitestImports: [/(^#|\/)testing\/test\.ts$/u] } },
+    rules: {
+      ...vitest.configs.recommended.rules,
+      'vitest/consistent-test-it': ['error', { fn: 'test', withinDescribe: 'test' }],
+      'vitest/consistent-vitest-vi': ['error', { fn: 'vi' }],
+      'vitest/hoisted-apis-on-top': 'error',
+      'vitest/max-nested-describe': ['error', { max: 2 }],
+      'vitest/no-alias-methods': 'error',
+      'vitest/no-commented-out-tests': 'error',
+      'vitest/no-conditional-expect': 'error',
+      'vitest/no-conditional-in-test': 'error',
+      'vitest/no-conditional-tests': 'error',
+      'vitest/no-disabled-tests': 'error',
+      'vitest/no-duplicate-hooks': 'error',
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-hooks': 'error',
+      'vitest/no-mocks-import': 'error',
+      'vitest/no-restricted-vi-methods': [
+        'error',
+        {
+          mock: 'Inject the dependency instead of mocking the module (ADR 0058).',
+          doMock: 'Inject the dependency instead of mocking the module (ADR 0058).',
+          unmock: 'Modules are never mocked (ADR 0058).',
+          doUnmock: 'Modules are never mocked (ADR 0058).',
+          hoisted: 'Modules are never mocked, so nothing needs hoisting (ADR 0058).',
+          importActual: 'Modules are never mocked (ADR 0058).',
+          importMock: 'Modules are never mocked (ADR 0058).',
+          resetModules: 'Modules are never mocked (ADR 0058).',
+          stubGlobal: 'Globals are shared by concurrent tests; inject the dependency (ADR 0058).',
+          stubEnv: 'process.env is shared by concurrent tests; inject the environment (ADR 0058).',
+        },
+      ],
+      'vitest/no-standalone-expect': 'error',
+      'vitest/no-test-prefixes': 'error',
+      'vitest/no-test-return-statement': 'error',
+      'vitest/no-unneeded-async-expect-function': 'error',
+      'vitest/prefer-comparison-matcher': 'error',
+      'vitest/prefer-each': 'error',
+      'vitest/prefer-equality-matcher': 'error',
+      'vitest/prefer-expect-resolves': 'error',
+      'vitest/prefer-mock-promise-shorthand': 'error',
+      'vitest/prefer-spy-on': 'error',
+      'vitest/prefer-strict-equal': 'error',
+      'vitest/prefer-to-be': 'error',
+      'vitest/prefer-to-be-object': 'error',
+      'vitest/prefer-to-contain': 'error',
+      'vitest/prefer-to-have-length': 'error',
+      'vitest/prefer-todo': 'error',
+      'vitest/prefer-vi-mocked': 'error',
+      'vitest/require-awaited-expect-poll': 'error',
+      'vitest/require-local-test-context-for-concurrent-snapshots': 'error',
+      'vitest/require-to-throw-message': 'error',
+      'vitest/valid-expect-in-promise': 'error',
+      'vitest/valid-title': 'error',
+      // Regex literals stay inside the test: module-scope bindings are banned in tests.
+      'e18e/prefer-static-regex': 'off',
+      'local/expect-from-test-context': 'error',
+      'local/no-module-mocking': 'error',
+      'local/no-module-scope-bindings': 'error',
+      'local/require-sequential-fake-time': ['error', { fixtures: ['clock'] }],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'vitest',
+              importNames: [
+                'beforeAll',
+                'beforeEach',
+                'afterAll',
+                'afterEach',
+                'aroundAll',
+                'aroundEach',
+                'onTestFailed',
+                'onTestFinished',
+              ],
+              message: 'Set up and tear down in fixtures (`test.extend`, ADR 0058).',
+            },
+            {
+              name: 'vitest',
+              importNames: ['test', 'it'],
+              message: "Import `test` from the nearest `testing/test.ts` (or '#testing/test.ts').",
+            },
+          ],
+        },
+      ],
+    },
   },
 
   {

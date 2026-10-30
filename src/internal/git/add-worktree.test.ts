@@ -1,30 +1,19 @@
 import { chmodSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { addWorktree } from './add-worktree.ts';
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
-import { openRepository } from './open-repository.ts';
-import type { GitRepository } from './open-repository.ts';
+import { test } from './testing/test.ts';
 
 describe('addWorktree', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  beforeEach(async () => {
-    repo = createTestRepository();
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('checks a commit out detached under the root, idempotently', async () => {
+  test('checks a commit out detached under the root, idempotently', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('a.txt', 'one\n');
     const commit = repo.commit('one');
     repo.write('a.txt', 'two\n');
@@ -36,17 +25,15 @@ describe('addWorktree', () => {
       ok: true,
       value: { head: commit, checkout: { kind: 'detached' } },
     });
-    if (!added.ok) {
-      return;
-    }
-    expect(added.value.path.startsWith(root)).toBe(true);
-    expect(path.basename(added.value.path)).toBe(commit);
-    expect(readFileSync(path.join(added.value.path, 'a.txt'), 'utf8')).toBe('one\n');
+    const addedValue = okValueFrom(added);
+    expect(addedValue.path.startsWith(root)).toBe(true);
+    expect(path.basename(addedValue.path)).toBe(commit);
+    expect(readFileSync(path.join(addedValue.path, 'a.txt'), 'utf8')).toBe('one\n');
 
-    await expect(addWorktree(git, { root, commit })).resolves.toEqual(added);
+    await expect(addWorktree(git, { root, commit })).resolves.toStrictEqual(added);
   });
 
-  it('does not run repository hooks', async () => {
+  test('does not run repository hooks', async ({ expect, repo, repository: git }) => {
     const commit = repo.commit('one');
     const marker = path.join(repo.scratch(), 'hook-ran');
     repo.write('.git/hooks/post-checkout', `#!/bin/sh\ntouch '${marker}'\n`);
@@ -57,38 +44,40 @@ describe('addWorktree', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it('reports a worktree at the planned path that moved to another commit', async () => {
+  test('reports a worktree at the planned path that moved to another commit', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     const first = repo.commit('one');
     const second = repo.commit('two');
     const root = repo.scratch();
-    const added = await addWorktree(git, { root, commit: first });
-    if (!added.ok) {
-      throw new Error(added.error.kind);
-    }
-    repo.git('-C', added.value.path, 'checkout', '--quiet', '--detach', second);
+    const added = okValueFrom(await addWorktree(git, { root, commit: first }));
+    repo.git('-C', added.path, 'checkout', '--quiet', '--detach', second);
     await expect(addWorktree(git, { root, commit: first })).resolves.toMatchObject({
       ok: false,
-      error: { kind: 'worktree-conflict', path: added.value.path },
+      error: { kind: 'worktree-conflict', path: added.path },
     });
   });
 
-  it('checks a worktree out again when its directory was deleted behind git', async () => {
+  test('checks a worktree out again when its directory was deleted behind git', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('a.txt', 'one\n');
     const commit = repo.commit('one');
     const root = repo.scratch();
-    const added = await addWorktree(git, { root, commit });
-    if (!added.ok) {
-      throw new Error(added.error.kind);
-    }
-    rmSync(added.value.path, { recursive: true, force: true });
+    const added = okValueFrom(await addWorktree(git, { root, commit }));
+    rmSync(added.path, { recursive: true, force: true });
     await expect(addWorktree(git, { root, commit })).resolves.toMatchObject({
       ok: true,
-      value: { path: added.value.path, head: commit },
+      value: { path: added.path, head: commit },
     });
-    expect(readFileSync(path.join(added.value.path, 'a.txt'), 'utf8')).toBe('one\n');
+    expect(readFileSync(path.join(added.path, 'a.txt'), 'utf8')).toBe('one\n');
   });
 
-  it('requires an absolute root', async () => {
+  test('requires an absolute root', async ({ expect, repo, repository: git }) => {
     const commit = repo.commit('one');
     await expect(addWorktree(git, { root: 'relative', commit })).resolves.toMatchObject({
       ok: false,

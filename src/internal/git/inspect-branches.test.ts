@@ -1,47 +1,37 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
+
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { inspectBranches } from './inspect-branches.ts';
 import { openRepository } from './open-repository.ts';
 import type { GitRepository } from './open-repository.ts';
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
+import type { TestRepository } from './testing/test-repository.ts';
+import type { TestRepositories } from './testing/test.ts';
+import { test } from './testing/test.ts';
 
 describe('inspectBranches', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-
-  beforeEach(async () => {
-    repo = createTestRepository();
-    repo.write('a.txt', 'a\n');
-    repo.git('add', '--all');
-    repo.git('commit', '--quiet', '--message', 'base', '--date', '2026-01-01T00:00:00Z');
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('lists branches newest first, with the current branch and main as the default base', async () => {
+  test('lists branches newest first, with the current branch and main as the default base', async ({
+    expect,
+    repositories,
+  }) => {
+    const { repo, git } = await datedBase(repositories);
     repo.git('switch', '--quiet', '--create', 'feature');
     repo.write('b.txt', 'b\n');
     repo.commit('feature');
     const inspected = await inspectBranches(git);
     expect(inspected.ok).toBe(true);
-    if (!inspected.ok) {
-      return;
-    }
-    expect(inspected.value.current).toBe('feature');
-    expect(inspected.value.defaultBase).toBe('main');
-    expect(inspected.value.branches.map((branch) => branch.name)).toEqual(['feature', 'main']);
-    expect(inspected.value.branches.every((branch) => !branch.isRemote)).toBe(true);
+    const inspectedValue = okValueFrom(inspected);
+    expect(inspectedValue.current).toBe('feature');
+    expect(inspectedValue.defaultBase).toBe('main');
+    expect(inspectedValue.branches.map((branch) => branch.name)).toStrictEqual(['feature', 'main']);
+    expect(inspectedValue.branches.every((branch) => !branch.isRemote)).toBe(true);
   });
 
-  it('prefers origin/HEAD and leaves remote HEAD symrefs out', async () => {
+  test('prefers origin/HEAD and leaves remote HEAD symrefs out', async ({
+    expect,
+    repositories,
+  }) => {
+    const { repo, git } = await datedBase(repositories);
     const head = repo.git('rev-parse', 'HEAD');
     repo.git('update-ref', 'refs/remotes/origin/trunk', head);
     repo.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
@@ -52,12 +42,28 @@ describe('inspectBranches', () => {
         inspected.value.branches
           .map((branch) => branch.name)
           .toSorted((a, b) => a.localeCompare(b)),
-    ).toEqual(['main', 'origin/trunk']);
+    ).toStrictEqual(['main', 'origin/trunk']);
   });
 
-  it('has no current branch on a detached head', async () => {
+  test('has no current branch on a detached head', async ({ expect, repositories }) => {
+    const { repo, git } = await datedBase(repositories);
     repo.git('switch', '--quiet', '--detach');
     const inspected = await inspectBranches(git);
     expect(inspected.ok && inspected.value.current).toBeUndefined();
   });
 });
+
+/** A repository whose `main` has one commit, `base`, dated 2026-01-01 (a template). */
+async function datedBase(
+  repositories: TestRepositories,
+): Promise<{ readonly repo: TestRepository; readonly git: GitRepository }> {
+  const { repo } = repositories.fromTemplate({
+    name: 'inspect-branches: dated base',
+    build: (template): void => {
+      template.write('a.txt', 'a\n');
+      template.git('add', '--all');
+      template.git('commit', '--quiet', '--message', 'base', '--date', '2026-01-01T00:00:00Z');
+    },
+  });
+  return { repo, git: okValueFrom(await openRepository(repo.directory)) };
+}

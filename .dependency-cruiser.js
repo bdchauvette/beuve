@@ -50,6 +50,17 @@ export default {
       to: { dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'npm-bundled'] },
     },
     {
+      name: 'shared-testing-is-leaf',
+      severity: 'error',
+      comment:
+        'src/testing (ADR 0058) holds domain-free fixtures: Node built-ins, vitest, src/x, src/sqlite and itself only.',
+      from: { path: '^src/testing/' },
+      to: {
+        pathNot: ['^src/(testing|x|sqlite)/', '^node_modules/vitest/'],
+        dependencyTypesNot: ['core'],
+      },
+    },
+    {
       name: 'contract-is-leaf',
       severity: 'error',
       comment: 'src/contract (ADR 0011) may import only itself and src/x: no npm, no built-ins.',
@@ -113,8 +124,9 @@ export default {
     {
       name: 'no-dev-deps-in-src',
       severity: 'error',
-      comment: 'Application code may not use devDependencies (electron is provided at runtime).',
-      from: { path: '^src/', pathNot: '\\.test\\.ts$' },
+      comment:
+        'Application code may not use devDependencies (electron is provided at runtime); src/testing may use vitest.',
+      from: { path: '^src/', pathNot: ['\\.test\\.ts$', '^src/testing/'] },
       to: {
         dependencyTypes: ['npm-dev'],
         dependencyTypesNot: ['type-only'],

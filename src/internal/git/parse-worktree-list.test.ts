@@ -1,23 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseWorktreeList } from './parse-worktree-list.ts';
-
-const sha = 'bf80669e332dc67a7c7f708cc431bcca4b28479c';
+import { test } from './testing/test.ts';
 
 describe('parseWorktreeList', () => {
-  it('parses main, detached, locked and prunable worktrees', () => {
+  test('parses main, detached, locked and prunable worktrees', ({ expect }) => {
     const output = [
       '/repo',
-      `HEAD ${sha}`,
+      `HEAD ${sha()}`,
       'branch refs/heads/main',
       '',
       '/wt/review one',
-      `HEAD ${sha}`,
+      `HEAD ${sha()}`,
       'detached',
       'locked',
       '',
       '/wt/gone',
-      `HEAD ${sha}`,
+      `HEAD ${sha()}`,
       'detached',
       'locked reason with\nnewline',
       'prunable gitdir file points to non-existent location',
@@ -26,24 +25,24 @@ describe('parseWorktreeList', () => {
     ]
       .map((field, index) => (index === 0 || field.startsWith('/') ? `worktree ${field}` : field))
       .join('\0');
-    expect(parseWorktreeList(output)).toEqual([
+    expect(parseWorktreeList(output)).toStrictEqual([
       {
         path: '/repo',
-        head: sha,
+        head: sha(),
         checkout: { kind: 'branch', ref: 'refs/heads/main' },
         locked: undefined,
         prunable: undefined,
       },
       {
         path: '/wt/review one',
-        head: sha,
+        head: sha(),
         checkout: { kind: 'detached' },
         locked: { reason: '' },
         prunable: undefined,
       },
       {
         path: '/wt/gone',
-        head: sha,
+        head: sha(),
         checkout: { kind: 'detached' },
         locked: { reason: 'reason with\nnewline' },
         prunable: { reason: 'gitdir file points to non-existent location' },
@@ -51,7 +50,9 @@ describe('parseWorktreeList', () => {
     ]);
   });
 
-  it('handles bare repositories, unborn branches and a missing final terminator', () => {
+  test('handles bare repositories, unborn branches and a missing final terminator', ({
+    expect,
+  }) => {
     const output = [
       'worktree /bare.git',
       'bare',
@@ -66,8 +67,12 @@ describe('parseWorktreeList', () => {
     ]);
   });
 
-  it('rejects records without a worktree path', () => {
-    expect(parseWorktreeList(`HEAD ${sha}\0detached\0\0`)).toBeUndefined();
-    expect(parseWorktreeList('')).toEqual([]);
+  test('rejects records without a worktree path', ({ expect }) => {
+    expect(parseWorktreeList(`HEAD ${sha()}\0detached\0\0`)).toBeUndefined();
+    expect(parseWorktreeList('')).toStrictEqual([]);
   });
 });
+
+function sha(): string {
+  return 'bf80669e332dc67a7c7f708cc431bcca4b28479c';
+}

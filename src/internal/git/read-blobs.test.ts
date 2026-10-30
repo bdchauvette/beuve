@@ -1,27 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
-import { createTestRepository } from './testing/create-test-repository.ts';
-import type { TestRepository } from './testing/create-test-repository.ts';
-import { openRepository } from './open-repository.ts';
-import type { GitRepository } from './open-repository.ts';
 import { readBlobs } from './read-blobs.ts';
+import { test } from './testing/test.ts';
 
 describe('readBlobs', () => {
-  let repo: TestRepository;
-  let git: GitRepository;
-  beforeEach(async () => {
-    repo = createTestRepository();
-    const opened = await openRepository(repo.directory);
-    if (!opened.ok) {
-      throw new Error(opened.error.kind);
-    }
-    git = opened.value;
-  });
-  afterEach(() => {
-    repo.cleanup();
-  });
-
-  it('reads text, flags binary, oversized, missing and non-blob objects', async () => {
+  test('reads text, flags binary, oversized, missing and non-blob objects', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
     repo.write('a.ts', 'export const a = "é";\n');
     repo.write('empty.txt', '');
     repo.write('image.bin', new Uint8Array([0x89, 0x50, 0x00, 0x01, 0x0a]));
@@ -47,20 +34,24 @@ describe('readBlobs', () => {
     );
     expect(result.ok).toBe(true);
     const contents = result.ok ? result.value : new Map();
-    expect(contents.get(blob('a.ts'))).toEqual({
+    expect(contents.get(blob('a.ts'))).toStrictEqual({
       kind: 'text',
       text: 'export const a = "é";\n',
       size: 23,
     });
-    expect(contents.get(blob('empty.txt'))).toEqual({ kind: 'text', text: '', size: 0 });
-    expect(contents.get(blob('image.bin'))).toEqual({ kind: 'binary', size: 5 });
-    expect(contents.get(blob('big.txt'))).toEqual({ kind: 'too-large', size: 200, limit: 100 });
-    expect(contents.get(missing)).toEqual({ kind: 'missing' });
-    expect(contents.get(tree)).toEqual({ kind: 'not-a-blob', type: 'tree' });
-    expect(contents.get(commit)).toEqual({ kind: 'submodule' });
+    expect(contents.get(blob('empty.txt'))).toStrictEqual({ kind: 'text', text: '', size: 0 });
+    expect(contents.get(blob('image.bin'))).toStrictEqual({ kind: 'binary', size: 5 });
+    expect(contents.get(blob('big.txt'))).toStrictEqual({
+      kind: 'too-large',
+      size: 200,
+      limit: 100,
+    });
+    expect(contents.get(missing)).toStrictEqual({ kind: 'missing' });
+    expect(contents.get(tree)).toStrictEqual({ kind: 'not-a-blob', type: 'tree' });
+    expect(contents.get(commit)).toStrictEqual({ kind: 'submodule' });
   });
 
-  it('reads many blobs in one pass, byte-exact', async () => {
+  test('reads many blobs in one pass, byte-exact', async ({ expect, repo, repository: git }) => {
     const texts = Array.from({ length: 300 }, (_, index) =>
       `line ${String(index)}\n`.repeat(index),
     );
@@ -83,11 +74,14 @@ describe('readBlobs', () => {
     }
   });
 
-  it('refuses abbreviated ids and needs no git for an empty request', async () => {
-    expect(await readBlobs(git, [{ objectId: 'abc123' }])).toMatchObject({
+  test('refuses abbreviated ids and needs no git for an empty request', async ({
+    expect,
+    repository: git,
+  }) => {
+    await expect(readBlobs(git, [{ objectId: 'abc123' }])).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },
     });
-    expect(await readBlobs(git, [])).toEqual({ ok: true, value: new Map() });
+    await expect(readBlobs(git, [])).resolves.toStrictEqual({ ok: true, value: new Map() });
   });
 });

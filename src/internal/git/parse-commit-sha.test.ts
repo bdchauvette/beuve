@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe } from 'vitest';
 
 import { parseCommitSha } from './parse-commit-sha.ts';
+import { test } from './testing/test.ts';
 
 describe('parseCommitSha', () => {
-  it('accepts full SHA-1 and SHA-256 names only', () => {
+  test('accepts full SHA-1 and SHA-256 names only', ({ expect }) => {
     expect(parseCommitSha('a'.repeat(40))).toBe('a'.repeat(40));
     expect(parseCommitSha('0123456789abcdef'.repeat(4))).toHaveLength(64);
     expect(parseCommitSha('abc123')).toBeUndefined();

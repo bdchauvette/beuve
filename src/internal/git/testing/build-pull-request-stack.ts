@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import type { CommitSha } from '../object-id.ts';
-import type { TestRepository } from './create-test-repository.ts';
+import { setLine } from './set-line.ts';
+import type { TestRepository } from './test-repository.ts';
 
 /**
  * Three stacked pull requests on `main`, each editing its own file so stack operations stay clean:
@@ -26,12 +24,8 @@ export interface PullRequestStack {
 }
 
 export function buildPullRequestStack(repo: TestRepository): PullRequestStack {
-  const setLine = (file: string, line: number, content: string): void => {
-    const current = readFileSync(path.join(repo.directory, file), 'utf8').split('\n');
-    repo.write(file, current.with(line - 1, content).join('\n'));
-  };
   const commitLine = (file: string, line: number, content: string, message: string): CommitSha => {
-    setLine(file, line, content);
+    setLine(repo, file, line, content);
     return repo.commit(message);
   };
 
@@ -52,5 +46,14 @@ export function buildPullRequestStack(repo: TestRepository): PullRequestStack {
   ];
   repo.git('switch', '--quiet', '--create', 'pr3');
   const pr3 = [commitLine('c.txt', 10, 'pr3-c10', 'pr3: c10')];
-  return { root, pr1, pr2, pr3, setLine, commitLine };
+  return {
+    root,
+    pr1,
+    pr2,
+    pr3,
+    setLine: (file, line, content): void => {
+      setLine(repo, file, line, content);
+    },
+    commitLine,
+  };
 }
