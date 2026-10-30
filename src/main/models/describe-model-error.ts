@@ -1,10 +1,11 @@
 import type { ModelError } from '#internal/llm/language-model.ts';
+import { formatDuration } from '#x/time/format-duration.ts';
 
 /**
  * A sentence for a model failure in the Settings window (ADR 0070): what went wrong and what to
  * do. It never contains a prompt or a key; server messages are quoted as they came, cut short.
  */
-export function describeModelError(error: ModelError): string {
+export function describeModelError(error: ModelError, locale?: Intl.LocalesArgument): string {
   switch (error.kind) {
     case 'invalid-request': {
       return `The request was refused before it was sent: ${error.reason}.`;
@@ -25,10 +26,7 @@ export function describeModelError(error: ModelError): string {
       return `Rate-limited${error.resetsAt === undefined ? '' : ` until ${error.resetsAt}`}: ${short(error.message)}`;
     }
     case 'timeout': {
-      const seconds = error.timeout
-        .round({ smallestUnit: 'second', roundingMode: 'halfExpand' })
-        .total('seconds');
-      return `No answer within ${String(seconds)} seconds.`;
+      return `No answer within ${formatDuration(error.timeout, locale)}.`;
     }
     case 'cancelled': {
       return 'Cancelled.';

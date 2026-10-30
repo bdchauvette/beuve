@@ -1,6 +1,7 @@
 import type { TraceFailureKind } from '#contract/ipc-contract.ts';
 import type { TraceError } from '#internal/trace/trace-error.ts';
 import { tailOf } from '#x/text/tail-of.ts';
+import { formatDuration } from '#x/time/format-duration.ts';
 
 export interface TraceFailureText {
   readonly failure: TraceFailureKind;
@@ -13,7 +14,11 @@ const outputTailChars = 1200;
  * What the reviewer or agent is told when a probe produced no trace. `stopReason` says why a
  * cancelled run was stopped.
  */
-export function describeTraceError(error: TraceError, stopReason: string): TraceFailureText {
+export function describeTraceError(
+  error: TraceError,
+  stopReason: string,
+  locale?: Intl.LocalesArgument,
+): TraceFailureText {
   switch (error.kind) {
     case 'untrusted': {
       return {
@@ -42,7 +47,7 @@ export function describeTraceError(error: TraceError, stopReason: string): Trace
     case 'timeout': {
       return {
         failure: 'timeout',
-        message: `The tests took longer than ${String(error.timeout.round({ largestUnit: 'second', smallestUnit: 'second', roundingMode: 'halfExpand' }).seconds)} s and were stopped.`,
+        message: `The tests took longer than ${formatDuration(error.timeout, locale)} and were stopped.`,
       };
     }
     case 'cancelled': {

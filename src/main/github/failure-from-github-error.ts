@@ -3,6 +3,8 @@ import type { AuthError } from '#internal/auth/auth-error.ts';
 import type { GithubError } from '#internal/github/github-error.ts';
 import type { PostReviewError } from '#internal/github/post-pull-request-review.ts';
 
+import { formatDuration } from '#x/time/format-duration.ts';
+
 import { describeAuthError } from './describe-auth-error.ts';
 import { githubFailure } from './github-failure.ts';
 
@@ -13,13 +15,14 @@ import { githubFailure } from './github-failure.ts';
 export function failureFromGithubError(
   error: GithubError<AuthError> | PostReviewError<AuthError>,
   subject: string,
+  locale?: Intl.LocalesArgument,
 ): GithubFailureView {
   switch (error.kind) {
     case 'credentials': {
       const auth = error.error;
       return githubFailure(
         'not-signed-in',
-        describeAuthError(auth),
+        describeAuthError(auth, locale),
         'remedy' in auth ? auth.remedy : undefined,
       );
     }
@@ -74,7 +77,10 @@ export function failureFromGithubError(
     case 'timeout':
     case 'invalid-request':
     case 'unexpected-shape': {
-      return githubFailure('github-failed', `GitHub request failed: ${describeTransport(error)}`);
+      return githubFailure(
+        'github-failed',
+        `GitHub request failed: ${describeTransport(error, locale)}`,
+      );
     }
   }
 }
@@ -84,6 +90,7 @@ function describeTransport(
     GithubError<AuthError>,
     { kind: 'unexpected-status' | 'network' | 'timeout' | 'invalid-request' | 'unexpected-shape' }
   >,
+  locale: Intl.LocalesArgument | undefined,
 ): string {
   switch (error.kind) {
     case 'unexpected-status': {
@@ -93,7 +100,7 @@ function describeTransport(
       return error.message;
     }
     case 'timeout': {
-      return `no answer within ${String(error.timeout.round({ largestUnit: 'second', smallestUnit: 'second', roundingMode: 'halfExpand' }).seconds)} s`;
+      return `no answer within ${formatDuration(error.timeout, locale)}`;
     }
     case 'invalid-request': {
       return error.reason;

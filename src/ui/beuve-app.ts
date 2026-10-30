@@ -103,7 +103,7 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
 import { applyTraceStatus } from './apply-trace-status.ts';
-import { formatDuration } from './format-duration.ts';
+import { formatIsoDuration } from './format-iso-duration.ts';
 import type { TraceState } from './trace-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
@@ -1592,7 +1592,7 @@ export class BeuveApp extends LitElement {
     this.trace = next;
     if (next?.status === 'ready') {
       const tests = next.result.timelines.length;
-      const took = formatDuration(next.result.duration);
+      const took = formatIsoDuration(next.result.duration);
       this.showNotice({
         tone: next.note === undefined ? 'info' : 'error',
         text:

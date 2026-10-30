@@ -12,6 +12,7 @@ import { describeAuthError } from './describe-auth-error.ts';
 export function describeAuthStatus(
   host: string,
   described: Result<CredentialDescription, AuthError>,
+  locale?: Intl.LocalesArgument,
 ): GithubAuthStatusView {
   if (described.ok) {
     const { account } = described.value;
@@ -29,7 +30,7 @@ export function describeAuthStatus(
     kind: 'signed-out',
     host,
     reason: error.kind,
-    message: describeAuthError(error),
+    message: describeAuthError(error, locale),
     ...('remedy' in error && { remedy: error.remedy }),
   };
 }

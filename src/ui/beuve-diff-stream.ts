@@ -61,7 +61,7 @@ import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
-import { formatDuration } from './format-duration.ts';
+import { formatIsoDuration } from './format-iso-duration.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
@@ -1362,7 +1362,7 @@ export class BeuveDiffStream extends LitElement {
     const count = impact.totals.findings;
     return html`<span
       class="impact ${count > 0 ? 'warning' : ''}"
-      title="ImpactGate computed in ${formatDuration(impact.compute)}"
+      title="ImpactGate computed in ${formatIsoDuration(impact.compute)}"
       >ImpactGate:
       ${count === 0 ? 'no findings' : `${String(count)} ${count === 1 ? 'finding' : 'findings'}`}</span
     >`;

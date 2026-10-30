@@ -1,6 +1,6 @@
 import type { TraceEntryView, TraceResultView, TraceTimelineView } from '#contract/ipc-contract.ts';
 
-import { formatDuration } from './format-duration.ts';
+import { formatIsoDuration } from './format-iso-duration.ts';
 
 /** How a row reads at a glance: what happened and how it went. */
 export type TraceRowTone = 'neutral' | 'taken' | 'skipped' | 'danger';
@@ -38,14 +38,17 @@ export interface TraceCase {
 const maxArgsChars = 140;
 
 /** Groups a probe's timelines per test case and renders each step as a row. Pure. */
-export function planTraceTimeline(result: TraceResultView): TraceCase[] {
+export function planTraceTimeline(
+  result: TraceResultView,
+  locale?: Intl.LocalesArgument,
+): TraceCase[] {
   return result.timelines.map((timeline, index) => {
     const rows = timeline.entries.map((entry) => rowFrom(entry, result));
     return {
       key: `${String(index)}:${timeline.file}:${timeline.titles.join('\0')}`,
       title: timeline.titles.length === 0 ? 'Outside any test' : timeline.titles.join(' › '),
       status: timeline.status,
-      duration: formatDuration(timeline.duration),
+      duration: formatIsoDuration(timeline.duration, locale),
       failure: firstLine(timeline.failure ?? ''),
       rows,
       hunkRows: rows.filter((row) => row.inHunk).length,

@@ -64,9 +64,11 @@ describe('describeAuthStatus', () => {
       ),
     ).toMatchObject({ kind: 'signed-out', reason: 'cli-not-installed' });
     const timeout = Temporal.Duration.from({ seconds: 10 });
-    expect(describeAuthStatus('ghe.example.com', err({ kind: 'timeout', timeout }))).toMatchObject({
+    expect(
+      describeAuthStatus('ghe.example.com', err({ kind: 'timeout', timeout }), 'en'),
+    ).toMatchObject({
       reason: 'timeout',
-      message: 'gh did not answer within 10 s.',
+      message: 'gh did not answer within 10s.',
     });
   });
 });

@@ -10,7 +10,7 @@ describe('planTraceTimeline', () => {
   test('groups timelines per test case with status, duration and a one-line failure', ({
     expect,
   }) => {
-    const cases = planTraceTimeline(createTraceResultView());
+    const cases = planTraceTimeline(createTraceResultView(), 'en');
     expect(
       cases.map(({ title, status, duration, failure, dropped }) => ({
         title,
@@ -23,14 +23,14 @@ describe('planTraceTimeline', () => {
       {
         title: 'clamp › caps high values',
         status: 'passed',
-        duration: '3 ms',
+        duration: '3ms',
         failure: '',
         dropped: 0,
       },
       {
         title: 'clamp › never reaches it',
         status: 'failed',
-        duration: '1.2 s',
+        duration: '1s 200ms',
         failure: 'AssertionError: expected 1 to be 2',
         dropped: 4,
       },
