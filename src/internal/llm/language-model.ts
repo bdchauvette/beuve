@@ -60,6 +60,16 @@ export interface ModelOutput<T> {
   readonly duration: Temporal.Duration;
   /** Tool calls the backend refused under the read-only policy. */
   readonly deniedToolUses: number;
+  /** Tokens across every request of the run, when the backend reports them. */
+  readonly usage?: ModelUsage;
+}
+
+/** Token counts summed over a run's requests (and, after a refusal fallback, every attempt). */
+export interface ModelUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadInputTokens: number;
+  readonly cacheCreationInputTokens: number;
 }
 
 /** Why a model run produced no usable output. Every variant is an expected failure. */
@@ -76,8 +86,16 @@ export type ModelError =
   | { readonly kind: 'cancelled' }
   | { readonly kind: 'output-too-large'; readonly maxBytes: number }
   | { readonly kind: 'invalid-output'; readonly reason: string }
-  /** The backend ran but reported an error result (budget exhausted, execution error, …). */
-  | { readonly kind: 'model-failed'; readonly reason: string; readonly message: string }
+  /**
+   * The backend ran but reported an error result (budget exhausted, execution error, a refusal
+   * with no fallback, …), with the API's HTTP `status` when one caused it.
+   */
+  | {
+      readonly kind: 'model-failed';
+      readonly reason: string;
+      readonly message: string;
+      readonly status?: number;
+    }
   | {
       readonly kind: 'process-failed';
       readonly exitCode: number | undefined;

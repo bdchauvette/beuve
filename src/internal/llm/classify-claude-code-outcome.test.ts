@@ -4,7 +4,7 @@ import { test } from './testing/test.ts';
 
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
-import type { ClaudeCodeResult } from './parse-claude-code-event.ts';
+import type { ClaudeCodeResult } from './claude-code-event-from.ts';
 
 function success(): ClaudeCodeResult {
   return {
@@ -18,6 +18,7 @@ function success(): ClaudeCodeResult {
     costUsd: 0,
     duration: Temporal.Duration.from({ milliseconds: 1 }),
     deniedToolUses: 0,
+    usage: undefined,
   };
 }
 

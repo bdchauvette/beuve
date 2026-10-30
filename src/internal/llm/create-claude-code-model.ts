@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { stat } from 'node:fs/promises';
-import path from 'node:path';
 import process from 'node:process';
 
 import { z } from 'zod';
@@ -17,8 +16,10 @@ import type { ClaudeCodeEffort } from './build-claude-code-args.ts';
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import type { ClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
 import { createClaudeCodeEnvironment } from './create-claude-code-environment.ts';
+import { jsonSchemaFrom } from './json-schema-from.ts';
 import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
-import type { ClaudeCodeResult } from './parse-claude-code-event.ts';
+import { validateModelRequest } from './validate-model-request.ts';
+import type { ClaudeCodeResult } from './claude-code-event-from.ts';
 import type {
   BaseModelRequest,
   LanguageModel,
@@ -50,8 +51,6 @@ export interface ClaudeCodeModelOptions {
 
 const defaultMaxOutputBytes = 32 * 1024 * 1024;
 const stderrTailChars = 4096;
-/** Linux caps one argv string at 128 KiB; the system prompt and schema travel as arguments. */
-const maxArgumentChars = 100_000;
 
 /**
  * A {@link LanguageModel} that drives the user's installed Claude Code CLI headless (ADR 0019,
@@ -74,11 +73,11 @@ async function runStructured<T>(
   request: ModelRequest<T>,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<ModelOutput<T>, ModelError>> {
-  const jsonSchema = jsonSchemaFrom(request.outputSchema);
-  if (jsonSchema === undefined) {
+  const schema = jsonSchemaFrom(request.outputSchema);
+  if (schema === undefined) {
     return err({ kind: 'invalid-request', reason: 'the output schema has no JSON Schema form' });
   }
-  const answer = await runClaudeCode(request, options, { jsonSchema });
+  const answer = await runClaudeCode(request, options, { jsonSchema: JSON.stringify(schema) });
   if (!answer.ok) {
     return answer;
   }
@@ -122,7 +121,7 @@ async function runClaudeCode(
   options: ClaudeCodeModelOptions,
   mode: OutputMode,
 ): Promise<Result<ModelOutput<unknown>, ModelError>> {
-  const invalid = validateRequest(request, mode.jsonSchema ?? '');
+  const invalid = validateModelRequest(request, mode.jsonSchema?.length ?? 0);
   if (invalid !== undefined) {
     return err(invalid);
   }
@@ -179,6 +178,7 @@ async function runClaudeCode(
     costUsd: result.costUsd,
     duration,
     deniedToolUses: result.deniedToolUses,
+    ...(result.usage !== undefined && { usage: result.usage }),
   });
 }
 
@@ -190,32 +190,6 @@ function logFinished(output: ModelOutput<unknown>, options: ClaudeCodeModelOptio
     costUsd: output.costUsd,
     deniedToolUses: output.deniedToolUses,
   });
-}
-
-/** Without the `$schema` dialect key, which Claude Code's structured output doesn't need. */
-function jsonSchemaFrom(schema: z.ZodType): string | undefined {
-  try {
-    const json = Object.entries(z.toJSONSchema(schema)).filter(([key]) => key !== '$schema');
-    return JSON.stringify(Object.fromEntries(json));
-  } catch {
-    return undefined;
-  }
-}
-
-function validateRequest(request: BaseModelRequest, jsonSchema: string): ModelError | undefined {
-  if (!path.isAbsolute(request.cwd)) {
-    return { kind: 'invalid-request', reason: 'cwd must be absolute' };
-  }
-  if ([request.cwd, request.system, request.prompt].some((text) => text.includes('\0'))) {
-    return { kind: 'invalid-request', reason: 'the request contains a NUL byte' };
-  }
-  if (request.system.length + jsonSchema.length > maxArgumentChars) {
-    return { kind: 'invalid-request', reason: 'the system prompt and schema are too long' };
-  }
-  if (request.timeout.sign <= 0) {
-    return { kind: 'invalid-request', reason: 'timeout must be positive' };
-  }
-  return undefined;
 }
 
 interface Execution {
@@ -301,6 +275,10 @@ async function execute(
           hasStreamedText = false;
           onText?.({ kind: 'reset' });
         }
+        break;
+      }
+      case 'refusal-fallback': {
+        model = event.model;
         break;
       }
       case 'text-delta': {

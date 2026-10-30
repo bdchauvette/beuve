@@ -2,7 +2,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { ClaudeCodeResult } from './parse-claude-code-event.ts';
+import type { ClaudeCodeResult } from './claude-code-event-from.ts';
 import type { ModelError } from './language-model.ts';
 
 /** What a finished `claude` process left behind, after the stream was read. */
@@ -101,7 +101,12 @@ function failedResult(result: ClaudeCodeResult, outcome: ClaudeCodeOutcome): Mod
             }),
     };
   }
-  return { kind: 'model-failed', reason: result.subtype, message };
+  return {
+    kind: 'model-failed',
+    reason: result.subtype,
+    message,
+    ...(status !== undefined && { status }),
+  };
 }
 
 function parseResultText(text: string | undefined): Result<unknown, ModelError> {

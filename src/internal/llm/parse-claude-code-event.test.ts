@@ -3,7 +3,7 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
-import type { ClaudeCodeEvent } from './parse-claude-code-event.ts';
+import type { ClaudeCodeEvent } from './claude-code-event-from.ts';
 import { claudeCodeStreamFixture } from './testing/claude-code-stream-fixture.ts';
 import { claudeCodeTextStreamFixture } from './testing/claude-code-text-stream-fixture.ts';
 
@@ -22,6 +22,7 @@ describe('parseClaudeCodeEvent', () => {
         model: 'claude-sonnet-5-5',
         version: '2.1.312',
         tools: ['Glob', 'Grep', 'Read', 'StructuredOutput'],
+        apiKeySource: 'none',
       },
       { kind: 'rate-limit', status: 'allowed', resetsAt: 1_793_224_800 },
       { kind: 'message-start' },
@@ -41,6 +42,7 @@ describe('parseClaudeCodeEvent', () => {
           costUsd: expect.closeTo(0.0270372, 12) as number,
           duration: Temporal.Duration.from({ milliseconds: 7915 }),
           deniedToolUses: 0,
+          usage: undefined,
         },
       },
     ]);
@@ -60,6 +62,7 @@ describe('parseClaudeCodeEvent', () => {
         model: 'claude-haiku-5-5',
         version: '2.1.312',
         tools: ['Glob', 'Grep', 'Read'],
+        apiKeySource: 'none',
       },
       { kind: 'message-start' },
       { kind: 'text-delta', text: 'hi there' },
@@ -76,6 +79,7 @@ describe('parseClaudeCodeEvent', () => {
           costUsd: expect.closeTo(7.7363e-4, 12) as number,
           duration: Temporal.Duration.from({ milliseconds: 9217 }),
           deniedToolUses: 0,
+          usage: undefined,
         },
       },
     ]);

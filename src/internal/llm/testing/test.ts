@@ -3,15 +3,27 @@ import path from 'node:path';
 
 import { test as baseTest } from '#testing/test.ts';
 
+import { startFakeMessagesApi } from './start-fake-messages-api.ts';
+import type { FakeMessagesApi } from './start-fake-messages-api.ts';
 import { writeFakeClaude } from './write-fake-claude.ts';
 
 /**
  * `#testing/test.ts` with the fake `claude` CLI (ADR 0058): `fakeClaude` (worker) is the path of
  * the script {@link writeFakeClaude} wrote once into the worker's `tempRoot`. Run it with
  * `process.execPath`; a test keeps its pid and script files in its own `tempDir`.
+ * `messagesApi` is a fresh {@link startFakeMessagesApi} server, closed after the test, for the
+ * Agent SDK adapter's real Claude Code to talk to.
  */
-export const test = baseTest.extend('fakeClaude', { scope: 'worker' }, ({ tempRoot }): string => {
-  const directory = path.join(tempRoot, 'fake-claude');
-  mkdirSync(directory, { recursive: true });
-  return writeFakeClaude(directory);
-});
+export const test = baseTest
+  .extend('fakeClaude', { scope: 'worker' }, ({ tempRoot }): string => {
+    const directory = path.join(tempRoot, 'fake-claude');
+    mkdirSync(directory, { recursive: true });
+    return writeFakeClaude(directory);
+  })
+  .extend('messagesApi', async ({}, { onCleanup }): Promise<FakeMessagesApi> => {
+    const api = await startFakeMessagesApi();
+    onCleanup(() => {
+      api.close();
+    });
+    return api;
+  });
