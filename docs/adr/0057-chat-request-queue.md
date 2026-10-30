@@ -1,6 +1,6 @@
 # 0057. Chat requests queue per session in main
 
-- Status: Accepted; supersedes the "refused, not queued" rule of [0032](0032-chat-wiring-one-answer-per-session.md), amends [0047](0047-chat-compaction.md)
+- Status: Accepted; supersedes the "refused, not queued" rule of [0032](0032-chat-wiring-one-answer-per-session.md), amends [0047](0047-chat-compaction.md); statuses and channels amended by [0072](0072-chat-message-parts-and-stream-protocol.md)
 - Date: 2026-10-30
 
 ## Context

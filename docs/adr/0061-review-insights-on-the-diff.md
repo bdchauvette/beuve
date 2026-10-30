@@ -1,6 +1,6 @@
 # 0061. `/review` findings also show as quiet insights on the diff lines
 
-- Status: Accepted; amends [0055](0055-review-folded-into-chat-with-verification.md) (findings "no longer appear on the diff lines"); merge key amended by [0063](0063-one-review-target-for-every-line-action.md)
+- Status: Accepted; amends [0055](0055-review-folded-into-chat-with-verification.md) (findings "no longer appear on the diff lines"); merge key amended by [0063](0063-one-review-target-for-every-line-action.md); channels amended by [0072](0072-chat-message-parts-and-stream-protocol.md)
 - Date: 2026-10-30
 
 ## Context
