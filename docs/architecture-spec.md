@@ -43,7 +43,7 @@ D. Minimal runtime dependencies: build small transparent utilities in `src/x/` (
 
 E. Modular monolith: `src/internal/` and `src/x/` with `#internal/*` and `#x/*` aliases, dependency-cruiser enforcing isolation and acyclicity.
 
-_Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec calls `src/pkg/` is now `src/x/` (alias `#x/*`), grouped by general domain, e.g. `#x/log/create-logger.ts`. Read `pkg` as `x` throughout._
+_Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec calls `src/pkg/` is now `src/x/` (alias `#x/*`), grouped by general domain, e.g. `#x/log/create-logger.ts`. Read `pkg` as `x` throughout. Technology-specific shared code (git primitives, JSON-RPC, release tooling, SQLite helpers) lives in `src/git`, `src/jsonrpc`, `src/release` and `src/sqlite` (aliases `#git/*`, `#jsonrpc/*`, `#release/*`, `#sqlite/*`); `src/x` is limited to standard-library-like utilities (ADR 0002, second amendment)._
 
 ## 3. Directory structure
 

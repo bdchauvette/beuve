@@ -12,7 +12,8 @@ export default {
     {
       name: 'domain-isolation',
       severity: 'error',
-      comment: 'A domain may import only itself and #x/*; coordinate through src/main.',
+      comment:
+        'A domain may import only itself and the shared directories (#x/*, #git/*, ...); coordinate through src/main.',
       from: { path: '^src/internal/([^/]+)/' },
       to: { path: '^src/internal/', pathNot: '^src/internal/$1/' },
     },
@@ -28,6 +29,24 @@ export default {
       severity: 'error',
       comment: 'src/x has zero external dependencies.',
       from: { path: '^src/x/', pathNot: '\\.test\\.ts$' },
+      to: { dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'npm-bundled'] },
+    },
+    {
+      name: 'shared-dirs-are-leaves',
+      severity: 'error',
+      comment:
+        'src/git, src/jsonrpc, src/release and src/sqlite (ADR 0002) may import only Node built-ins, src/x and themselves, never one another.',
+      from: { path: '^src/(git|jsonrpc|release|sqlite)/', pathNot: '\\.test\\.ts$' },
+      to: {
+        pathNot: ['^src/x/', '^src/$1/'],
+        dependencyTypesNot: ['core'],
+      },
+    },
+    {
+      name: 'shared-dirs-no-npm',
+      severity: 'error',
+      comment: 'The shared directories have zero external dependencies.',
+      from: { path: '^src/(git|jsonrpc|release|sqlite)/', pathNot: '\\.test\\.ts$' },
       to: { dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'npm-bundled'] },
     },
     {
@@ -105,7 +124,7 @@ export default {
     {
       name: 'not-to-unresolvable',
       severity: 'error',
-      comment: 'Every import must resolve, including #internal/* and #x/* aliases.',
+      comment: 'Every import must resolve, including the package.json `imports` aliases.',
       from: {},
       to: { couldNotResolve: true },
     },

@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { encodeIcns } from '../src/x/image/encode-icns.ts';
-import type { IcnsEntry } from '../src/x/image/encode-icns.ts';
-import { encodePng } from '../src/x/image/encode-png.ts';
-import type { RgbaImage } from '../src/x/image/encode-png.ts';
+import { encodeIcns } from './lib/image/encode-icns.ts';
+import type { IcnsEntry } from './lib/image/encode-icns.ts';
+import { encodePng } from './lib/image/encode-png.ts';
+import type { RgbaImage } from './lib/image/encode-png.ts';
 
 /** A colour layer: a signed distance (negative inside) in 1024-unit icon space. */
 interface Layer {

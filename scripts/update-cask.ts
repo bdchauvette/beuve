@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 
-import { updateCask } from '../src/x/release/update-cask.ts';
+import { updateCask } from '../src/release/update-cask.ts';
 
 updateCaskFile();
 

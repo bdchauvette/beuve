@@ -2,7 +2,7 @@ import { chatMigrations } from '#internal/chat/chat-migrations.ts';
 import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
-import type { Migration } from '#x/sqlite/run-migrations.ts';
+import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
  * Every domain's migrations in the fixed order they run (ADR 0006). A domain whose tables

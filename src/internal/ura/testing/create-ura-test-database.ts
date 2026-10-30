@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { openDatabase } from '#x/sqlite/open-database.ts';
-import { runMigrations } from '#x/sqlite/run-migrations.ts';
+import { openDatabase } from '#sqlite/open-database.ts';
+import { runMigrations } from '#sqlite/run-migrations.ts';
 
 import { uraMigrations } from '../ura-migrations.ts';
 

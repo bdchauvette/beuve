@@ -2,8 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { describe, expect, it } from 'vitest';
 
-import { openDatabase } from '#x/sqlite/open-database.ts';
-import { runMigrations } from '#x/sqlite/run-migrations.ts';
+import { openDatabase } from '#sqlite/open-database.ts';
+import { runMigrations } from '#sqlite/run-migrations.ts';
 
 import { createSession } from './create-session.ts';
 import { findSessionBySource } from './find-session-by-source.ts';

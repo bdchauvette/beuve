@@ -11,7 +11,11 @@
   },
   "imports": {
     "#contract/*": "./src/contract/*",
+    "#git/*": "./src/git/*",
     "#internal/*": "./src/internal/*",
+    "#jsonrpc/*": "./src/jsonrpc/*",
+    "#release/*": "./src/release/*",
+    "#sqlite/*": "./src/sqlite/*",
     "#x/*": "./src/x/*"
   },
   "scripts": {

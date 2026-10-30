@@ -3,7 +3,7 @@ import type { SQLOutputValue } from 'node:sqlite';
 import { err } from '#x/result/err.ts';
 import type { Result } from '#x/result/result.ts';
 
-import { isCommitSha } from '#x/git/is-commit-sha.ts';
+import { isCommitSha } from '#git/is-commit-sha.ts';
 import { isIsoTimestamp } from '#x/time/is-iso-timestamp.ts';
 import { isUuid } from '#x/text/is-uuid.ts';
 import type {

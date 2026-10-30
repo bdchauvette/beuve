@@ -5,7 +5,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { SessionError, UnreviewedSession } from './session.ts';
-import { sqliteErrorCode } from '#x/sqlite/sqlite-error-code.ts';
+import { sqliteErrorCode } from '#sqlite/sqlite-error-code.ts';
 
 const uniqueViolation = 2067;
 

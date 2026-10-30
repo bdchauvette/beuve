@@ -3,10 +3,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
-import { withTransaction } from '#x/sqlite/with-transaction.ts';
+import { withTransaction } from '#sqlite/with-transaction.ts';
 
 import type { Checkpoint, SessionError } from './session.ts';
-import { sqliteErrorCode } from '#x/sqlite/sqlite-error-code.ts';
+import { sqliteErrorCode } from '#sqlite/sqlite-error-code.ts';
 
 const foreignKeyViolation = 787;
 

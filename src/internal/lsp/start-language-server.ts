@@ -4,8 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-import { JsonRpcConnection } from '#x/jsonrpc/json-rpc-connection.ts';
-import type { JsonRpcHandlerOutcome, JsonRpcRequestError } from '#x/jsonrpc/json-rpc-connection.ts';
+import { JsonRpcConnection } from '#jsonrpc/json-rpc-connection.ts';
+import type { JsonRpcHandlerOutcome, JsonRpcRequestError } from '#jsonrpc/json-rpc-connection.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';

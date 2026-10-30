@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import { withTransaction } from '#x/sqlite/with-transaction.ts';
+import { withTransaction } from '#sqlite/with-transaction.ts';
 
 import type { UraPosting } from './ura-posting.ts';
 

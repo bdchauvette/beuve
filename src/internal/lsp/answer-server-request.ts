@@ -1,4 +1,4 @@
-import type { JsonRpcHandlerOutcome } from '#x/jsonrpc/json-rpc-connection.ts';
+import type { JsonRpcHandlerOutcome } from '#jsonrpc/json-rpc-connection.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
