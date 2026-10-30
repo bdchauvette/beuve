@@ -4,6 +4,7 @@ import { customElement, state } from 'lit/decorators.js';
 
 import type {
   AppInfo,
+  BeuveApi,
   CallHierarchyView,
   ChatCitationView,
   ChatCommandRequest,
@@ -111,6 +112,7 @@ import { runSheetAction } from './run-sheet-action.ts';
 import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
 import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
+import type { ChatStreamSubscribe } from './text-part-stream.ts';
 
 const impactGrace = Temporal.Duration.from({ milliseconds: 1500 });
 
@@ -387,6 +389,10 @@ export class BeuveApp extends LitElement {
       ...(source !== undefined && { repoPath: source.repoPath }),
     });
   };
+
+  /** `chat:stream` for the drawer's streaming Markdown (ADR 0073); none without the bridge. */
+  private readonly subscribeChatStream: ChatStreamSubscribe | undefined =
+    subscribeChatStreamOf(beuveBridge());
 
   private readonly onOpenLink = (event: CustomEvent<{ url: string }>): void => {
     void this.openLink(event.detail.url);
@@ -3029,7 +3035,9 @@ export class BeuveApp extends LitElement {
       .diffPaths=${this.diffPaths()}
       .stagedMessageIds=${this.stagedMessageIds()}
       .stagedFindings=${this.stagedFindings()}
+      .subscribeChatStream=${this.subscribeChatStream}
       ?hasSession=${this.review !== undefined}
+      @beuve-open-link=${this.onOpenLink}
       @beuve-chat-submit=${this.onChatSubmit}
       @beuve-chat-escape=${this.onChatEscape}
       @beuve-chat-cancel=${this.onChatCancel}
@@ -3285,6 +3293,13 @@ const nothingSelected =
   'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
 
 /** Whether the focus, through shadow roots, is in a field that takes typing. */
+/** The bridge's `chat:stream` subscription, as `textPartStream` takes it. */
+function subscribeChatStreamOf(bridge: BeuveApi | undefined): ChatStreamSubscribe | undefined {
+  return bridge === undefined
+    ? undefined
+    : (listener): (() => void) => bridge.on('chat:stream', listener);
+}
+
 function isTextFocused(): boolean {
   let element: Element | null = document.activeElement;
   while (

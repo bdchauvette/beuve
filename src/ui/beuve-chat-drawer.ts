@@ -1,4 +1,4 @@
-import { css, html, LitElement, nothing } from 'lit';
+import { css, html, LitElement, nothing, render } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -11,11 +11,14 @@ import type {
   ChatReviewView,
 } from '#contract/ipc-contract.ts';
 
+import './beuve-sheet-code.ts';
 import type { DraftPart, DraftState } from './chat-draft.ts';
 import type { ChatEntry, MessageChatEntry } from './chat-entry.ts';
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 import { describeChatReview } from './describe-chat-review.ts';
 import type { FindingLabels } from './describe-chat-review.ts';
+import { citationMarker } from './citation-marker.ts';
+import type { MarkdownRenderers } from './create-markdown-nodes.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeMention } from './describe-mention.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
@@ -25,10 +28,13 @@ import { serializeChatDraft } from './serialize-chat-draft.ts';
 import { chatTextFrom } from './chat-text-from.ts';
 import { draftPartsFrom } from './draft-parts-from.ts';
 import { isActiveRequest } from './is-active-request.ts';
-import { parseAnswerMarkdown } from './parse-answer-markdown.ts';
+import { MarkdownView } from './markdown-view.ts';
 import { planMessageParts } from './plan-message-parts.ts';
 import type { MessageBlock, StepPart } from './plan-message-parts.ts';
-import type { AnswerBlock, AnswerSpan } from './parse-answer-markdown.ts';
+import type { MarkdownBlock } from './markdown-tree.ts';
+import { snippetPathFrom } from './snippet-path-from.ts';
+import { textPartStream } from './text-part-stream.ts';
+import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /** Questions carry at most this many mentions (ADR 0046); main refuses more. */
@@ -43,7 +49,7 @@ const maxMentions = 8;
  * one at the caret; it is atomic (Backspace removes it whole; ←/→ select it and Enter shows its
  * lines). The box's DOM is a projection of a {@link DraftPart} model, read back with
  * `textContent` only, never `innerHTML`. The transcript shows the questions with their chips, the
- * answers (streamed live, then rendered as a safe Markdown subset with a pill for each citation),
+ * answers (Markdown rendered as it streams, ADR 0073, with a pill for each validated citation),
  * `/review` answers as a list of findings (severity, category, confidence, whether a second pass
  * confirmed it, a pill and a Stage button each), `/summarize` answers as a calm block, `/compact`
  * summaries with everything before the latest folded under a divider, and the commands' results. Nothing typed here can change the worktree. Presentational: emits
@@ -114,36 +120,112 @@ export class BeuveChatDrawer extends LitElement {
         border-left-color: var(--beuve-accent);
       }
 
-      .answer .text > :first-child {
+      .text > :first-child {
         margin-top: 0;
       }
 
-      .answer p,
-      .answer ul {
+      .text :is(p, ul, ol, blockquote, pre, hr, .table, .code-block) {
         margin: var(--beuve-space-1) 0 0;
       }
 
-      .answer ul {
+      .text :is(h1, h2, h3, h4, h5, h6) {
+        margin: var(--beuve-space-2) 0 0;
+        font-size: 1em;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .text h1 {
+        font-size: 1.15em;
+      }
+
+      .text h2 {
+        font-size: 1.08em;
+      }
+
+      .text :is(ul, ol) {
         padding-left: var(--beuve-space-4);
       }
 
-      .answer code,
-      .answer pre {
+      .text li > :is(p, ul, ol):first-child,
+      .text li > :is(ul, ol) {
+        margin-top: 0;
+      }
+
+      .text blockquote {
+        margin-left: 0;
+        padding-left: var(--beuve-space-2);
+        border-left: 2px solid var(--beuve-border);
+        color: var(--beuve-text-muted);
+      }
+
+      .text hr {
+        border: none;
+        border-top: 1px solid var(--beuve-border);
+      }
+
+      .text a {
+        color: var(--beuve-accent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+
+      .text code,
+      .text pre {
         font: var(--beuve-font-mono);
       }
 
-      .answer code {
+      .text code {
         padding: 0 2px;
         border-radius: 3px;
         background: var(--beuve-surface-sunken);
       }
 
-      .answer pre {
-        margin: var(--beuve-space-1) 0 0;
-        padding: var(--beuve-space-1) var(--beuve-space-2);
+      .text pre,
+      .text .code-block {
         overflow-x: auto;
         border-radius: 4px;
+        background: var(--beuve-code-bg, var(--beuve-surface-sunken));
+      }
+
+      .text pre {
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        color: var(--beuve-code-text, inherit);
+        white-space: pre;
+      }
+
+      .text .code-block {
+        border: 1px solid var(--beuve-border);
+      }
+
+      .text .table {
+        overflow-x: auto;
+      }
+
+      .text table {
+        border-collapse: collapse;
+        font: inherit;
+      }
+
+      .text :is(th, td) {
+        padding: 2px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        text-align: start;
+        vertical-align: top;
+      }
+
+      .text th {
         background: var(--beuve-surface-sunken);
+        font-weight: 600;
+      }
+
+      .text .align-center {
+        text-align: center;
+      }
+
+      .text .align-right {
+        text-align: end;
       }
 
       .marker {
@@ -337,8 +419,11 @@ export class BeuveChatDrawer extends LitElement {
         font-weight: 600;
       }
 
-      .finding .text p,
-      .finding .text ul {
+      .finding-title .text > p {
+        margin: 0;
+      }
+
+      .finding .text :is(p, ul, ol) {
         margin: 2px 0 0;
       }
 
@@ -356,26 +441,6 @@ export class BeuveChatDrawer extends LitElement {
 
       .abstract .label {
         margin-bottom: var(--beuve-space-1);
-      }
-
-      .abstract p,
-      .abstract ul {
-        margin: var(--beuve-space-1) 0 0;
-      }
-
-      .abstract .text > :first-child {
-        margin-top: 0;
-      }
-
-      .abstract ul {
-        padding-left: var(--beuve-space-4);
-      }
-
-      .abstract code {
-        padding: 0 2px;
-        border-radius: 3px;
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
       }
 
       .queue {
@@ -472,23 +537,6 @@ export class BeuveChatDrawer extends LitElement {
         margin-bottom: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
-      }
-
-      .summary p,
-      .summary ul {
-        margin: var(--beuve-space-1) 0 0;
-      }
-
-      .summary .text > :first-child {
-        margin-top: 0;
-      }
-
-      .summary ul {
-        padding-left: var(--beuve-space-4);
-      }
-
-      .summary code {
-        font: var(--beuve-font-mono);
       }
 
       button.divider {
@@ -645,8 +693,23 @@ export class BeuveChatDrawer extends LitElement {
     if (button === undefined) {
       return;
     }
-    const { action, messageId = '', partId, finding, path = '', start, end } = button.dataset;
+    const {
+      action,
+      messageId = '',
+      partId,
+      finding,
+      path = '',
+      start,
+      end,
+      url = '',
+    } = button.dataset;
     switch (action) {
+      case 'link': {
+        // A link in an answer never navigates the window; main opens what it allows (ADR 0040).
+        event.preventDefault();
+        this.emit('beuve-open-link', { url });
+        return;
+      }
       case 'cancel': {
         this.emit('beuve-chat-cancel', { messageId });
         return;
@@ -696,6 +759,12 @@ export class BeuveChatDrawer extends LitElement {
   private selectedChip: HTMLElement | undefined;
   /** Questions whose answers wait in the queue, to those answers' ids; kept with the transcript. */
   private queued: ReadonlyMap<string, string> = new Map();
+  /**
+   * The transcript's rendered Markdown by key (ADR 0073), kept across renders so that streamed
+   * blocks and highlighted code stay as they are; views a render no longer uses are dropped.
+   */
+  private readonly markdownViews = new Map<string, MarkdownEntry>();
+  private renderedMarkdown = new Set<string>();
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   @property({ attribute: false }) accessor transcript: readonly ChatEntry[] = [];
@@ -703,6 +772,8 @@ export class BeuveChatDrawer extends LitElement {
   @property({ type: Boolean }) accessor hasSession = false;
   /** Head-side paths of the reviewed diff; a citation to any other file is marked as outside it. */
   @property({ attribute: false }) accessor diffPaths: ReadonlySet<string> = new Set();
+  /** `chat:stream` (ADR 0072), from which a running answer's text parts stream; absent, they re-render. */
+  @property({ attribute: false }) accessor subscribeChatStream: ChatStreamSubscribe | undefined;
   /** Ids of answers already staged in the review dock. */
   @property({ attribute: false }) accessor stagedMessageIds: ReadonlySet<string> = new Set();
   /** `/review` findings already staged, as `messageId:index`. */
@@ -1096,16 +1167,10 @@ export class BeuveChatDrawer extends LitElement {
     const { part } = block;
     switch (part.kind) {
       case 'text': {
-        const blocks = parseAnswerMarkdown(
-          part.text,
-          message.citations,
-          isActiveRequest(message) ? 'streaming' : 'final',
-        );
-        return blocks.length === 0
-          ? html``
-          : html`<div class="text" data-part-id=${part.id}>
-              ${blocks.map((item) => this.renderBlock(item))}
-            </div>`;
+        const live = isActiveRequest(message)
+          ? { messageId: message.id, partId: part.id }
+          : undefined;
+        return html`${this.markdownFor(`${message.id}:${part.id}`, part.text, message.citations, live)}`;
       }
       case 'error': {
         return html`<div class="status error" role="alert">${part.message}</div>`;
@@ -1208,7 +1273,11 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   private renderSummary(message: ChatMessageView): TemplateResult {
-    const blocks = parseAnswerMarkdown(chatTextFrom(message.parts), message.citations, 'final');
+    const text = this.markdownFor(
+      `${message.id}:summary`,
+      chatTextFrom(message.parts),
+      message.citations,
+    );
     return html`<div class="entry summary" role="group" aria-label="Conversation summary">
       <div
         class="label"
@@ -1216,7 +1285,7 @@ export class BeuveChatDrawer extends LitElement {
       >
         Conversation summary
       </div>
-      <div class="text">${blocks.map((block) => this.renderBlock(block))}</div>
+      ${text}
     </div>`;
   }
 
@@ -1236,42 +1305,96 @@ export class BeuveChatDrawer extends LitElement {
     </button>`;
   }
 
-  private renderBlock(block: AnswerBlock): TemplateResult {
-    switch (block.kind) {
-      case 'paragraph': {
-        return html`<p>${block.spans.map((span) => this.renderSpan(span))}</p>`;
+  /**
+   * The rendered Markdown of `source` under `key` (ADR 0073). The text part of a running request
+   * (`live`) streams: its deltas come from `chat:stream` through `textPartStream`, starting from
+   * the text it has, so finished blocks render once and only the open tail changes. Anything else,
+   * a streamed part once its message ends included, is shown whole through the same parser with
+   * a pill for each of `citations`; an unchanged render is skipped.
+   */
+  private markdownFor(
+    key: string,
+    source: string,
+    citations: readonly ChatCitationView[],
+    live?: { readonly messageId: string; readonly partId: string },
+  ): HTMLElement {
+    this.renderedMarkdown.add(key);
+    const entry = this.markdownViews.get(key) ?? this.createMarkdownEntry(key);
+    const subscribe = this.subscribeChatStream;
+    if (live !== undefined && subscribe !== undefined) {
+      if (entry.stream === undefined) {
+        const controller = new AbortController();
+        entry.stream = controller;
+        entry.shown = undefined;
+        const text = textPartStream(subscribe, {
+          ...live,
+          initialText: source,
+          signal: controller.signal,
+        });
+        void entry.view.stream(text, this.markdownRenderers([], 'streaming'), controller.signal);
       }
-      case 'list': {
-        return html`<ul>
-          ${block.items.map((item) => html`<li>${item.map((span) => this.renderSpan(span))}</li>`)}
-        </ul>`;
-      }
-      case 'code': {
-        return html`<pre>${block.text}</pre>`;
-      }
+      return entry.view.element;
     }
+    entry.stream?.abort();
+    entry.stream = undefined;
+    const { shown } = entry;
+    if (
+      shown?.source !== source ||
+      shown.citations !== citations ||
+      shown.diffPaths !== this.diffPaths
+    ) {
+      entry.view.show(
+        source,
+        this.markdownRenderers(citations, live === undefined ? 'final' : 'streaming'),
+      );
+      entry.shown = { source, citations, diffPaths: this.diffPaths };
+    }
+    return entry.view.element;
   }
 
-  private renderSpan(span: AnswerSpan): TemplateResult | string {
-    switch (span.kind) {
-      case 'text': {
-        return span.text;
-      }
-      case 'code': {
-        return html`<code>${span.text}</code>`;
-      }
-      case 'strong': {
-        return html`<strong>${span.text}</strong>`;
-      }
-      case 'emphasis': {
-        return html`<em>${span.text}</em>`;
-      }
-      case 'marker': {
-        return html`<span class="marker">${span.text}</span>`;
-      }
-      case 'citation': {
-        return this.renderPill(span.citation);
-      }
+  private createMarkdownEntry(key: string): MarkdownEntry {
+    const element = document.createElement('div');
+    element.className = 'text';
+    const entry: MarkdownEntry = {
+      view: new MarkdownView(element, () => {
+        this.scrollToEnd();
+      }),
+    };
+    this.markdownViews.set(key, entry);
+    return entry;
+  }
+
+  /**
+   * How an answer's citations and code render: while it streams every well-formed marker is
+   * dimmed, once it is final a marker of `citations` is a pill and any other one is text
+   * (ADR 0031). A closed fence is highlighted like a sheet; an open one is plain text.
+   */
+  private markdownRenderers(
+    citations: readonly ChatCitationView[],
+    mode: 'final' | 'streaming',
+  ): MarkdownRenderers {
+    const known = new Map(citations.map((citation) => [citationMarker(citation), citation]));
+    return {
+      marker: (text): Node => {
+        const citation = known.get(text);
+        if (mode === 'streaming') {
+          return markerNode(text);
+        }
+        if (citation === undefined) {
+          return document.createTextNode(text);
+        }
+        const pill = document.createDocumentFragment();
+        render(this.renderPill(citation), pill);
+        return pill;
+      },
+      code: codeBlockNode,
+    };
+  }
+
+  private scrollToEnd(): void {
+    const body = this.renderRoot.querySelector('.body');
+    if (body !== null) {
+      body.scrollTop = body.scrollHeight;
     }
   }
 
@@ -1350,9 +1473,8 @@ export class BeuveChatDrawer extends LitElement {
       startLine: finding.startLine,
       endLine: finding.endLine,
     };
-    const isStaged = this.stagedFindings.has(`${messageId}:${String(index)}`);
-    const title = parseAnswerMarkdown(finding.title, [], 'final');
-    const body = parseAnswerMarkdown(finding.body, [], 'final');
+    const key = `${messageId}:${String(index)}`;
+    const isStaged = this.stagedFindings.has(key);
     return html`<li class="finding" data-finding=${`${messageId}:${String(index)}`}>
       <div class="finding-head">
         <span class="severity ${finding.severity}">${labels?.severity}</span>
@@ -1362,14 +1484,8 @@ export class BeuveChatDrawer extends LitElement {
           ${finding.check === 'confirmed' ? '✓ confirmed' : labels?.check}
         </span>
       </div>
-      <div class="finding-title">
-        ${title.flatMap((block) => (block.kind === 'paragraph' ? block.spans : [])).map((span) => this.renderSpan(span))}
-      </div>
-      ${
-        body.length === 0
-          ? nothing
-          : html`<div class="text">${body.map((block) => this.renderBlock(block))}</div>`
-      }
+      <div class="finding-title">${this.markdownFor(`${key}:title`, finding.title, [])}</div>
+      ${finding.body.trim() === '' ? nothing : this.markdownFor(`${key}:body`, finding.body, [])}
       <div class="status">
         ${this.renderPill(citation)}
         <button
@@ -1390,7 +1506,11 @@ export class BeuveChatDrawer extends LitElement {
 
   /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
   private renderAbstract(message: ChatMessageView): TemplateResult {
-    const blocks = parseAnswerMarkdown(chatTextFrom(message.parts), message.citations, 'final');
+    const text = this.markdownFor(
+      `${message.id}:abstract`,
+      chatTextFrom(message.parts),
+      message.citations,
+    );
     return html`<div class="entry abstract" role="group" aria-label="Summary of the change">
       <div
         class="label"
@@ -1398,7 +1518,7 @@ export class BeuveChatDrawer extends LitElement {
       >
         Summary of the change · from the diff
       </div>
-      <div class="text">${blocks.map((block) => this.renderBlock(block))}</div>
+      ${text}
       ${this.renderStageButton(message.id, 'Stage this summary as a comment in the review dock')}
     </div>`;
   }
@@ -1511,6 +1631,7 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   override render(): TemplateResult {
+    this.renderedMarkdown = new Set();
     return html`
       <div class="body" @keydown=${this.onBodyKeyDown}>
         ${
@@ -1560,10 +1681,26 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    const body = this.renderRoot.querySelector('.body');
-    if (body !== null && changed.has('transcript')) {
-      body.scrollTop = body.scrollHeight;
+    for (const [key, entry] of this.markdownViews) {
+      if (this.renderedMarkdown.has(key)) {
+        continue;
+      }
+
+      entry.stream?.abort();
+      this.markdownViews.delete(key);
     }
+    if (changed.has('transcript')) {
+      this.scrollToEnd();
+    }
+  }
+
+  override disconnectedCallback(): void {
+    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
+    super.disconnectedCallback();
+    for (const entry of this.markdownViews.values()) {
+      entry.stream?.abort();
+    }
+    this.markdownViews.clear();
   }
 }
 
@@ -1614,9 +1751,52 @@ function startedLabel(message: ChatMessageView): string {
       return 'Summarizing the change…';
     }
     default: {
-      return 'Asking Claude Code…';
+      // Main names the configured model in the status's activity once it has resolved it.
+      return 'Asking…';
     }
   }
+}
+
+/** A rendered Markdown text of the transcript. */
+interface MarkdownEntry {
+  readonly view: MarkdownView;
+  /** Stops the text part's stream; set while it streams, and after, until the message ends. */
+  stream?: AbortController | undefined;
+  /** What {@link MarkdownView.show} last rendered, so an unchanged render is skipped. */
+  shown?:
+    | {
+        readonly source: string;
+        readonly citations: readonly ChatCitationView[];
+        readonly diffPaths: ReadonlySet<string>;
+      }
+    | undefined;
+}
+
+/** A citation marker of an answer still streaming: shown dimmed until it is validated. */
+function markerNode(text: string): Node {
+  const marker = document.createElement('span');
+  marker.className = 'marker';
+  marker.textContent = text;
+  return marker;
+}
+
+/** A fenced block: highlighted once closed (ADR 0025's Alabaster themes), plain while open. */
+function codeBlockNode(block: Extract<MarkdownBlock, { kind: 'code' }>): Element {
+  if (!block.closed) {
+    const pre = document.createElement('pre');
+    pre.className = 'open';
+    pre.textContent = block.text;
+    return pre;
+  }
+  const code = document.createElement('beuve-sheet-code');
+  code.compact = true;
+  code.path = snippetPathFrom(block.info);
+  code.contents = block.text;
+  code.cacheKey = `chat\0${block.text}`;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'code-block';
+  wrapper.append(code);
+  return wrapper;
 }
 
 declare global {

@@ -33,7 +33,9 @@ const themeNames = { light: 'beuve-light', dark: 'beuve-dark' } as const;
  * beuve's Alabaster themes (ADR 0025), line numbers on, read-only. The gutter shows the change's
  * marks, staged notes and find hits (`sheetGutterCssFrom`); `selected` is the line cursor or the
  * jump's range. Emits `beuve-sheet-token` for a clicked token and `beuve-sheet-select` for
- * lines selected by mouse. The library is a lazy chunk, as in the diff cards.
+ * lines selected by mouse. The library is a lazy chunk, as in the diff cards. `compact` is a
+ * chat answer's fenced code (ADR 0073): no line numbers, selection or token clicks, and the plain
+ * text until the library has loaded, so the block keeps its height.
  */
 @customElement('beuve-sheet-code')
 export class BeuveSheetCode extends LitElement {
@@ -56,7 +58,7 @@ export class BeuveSheetCode extends LitElement {
       --diffs-bg-hover-override: var(--beuve-surface-sunken);
     }
 
-    .failed {
+    .plain {
       margin: 0;
       padding: var(--beuve-space-3);
       font: var(--beuve-font-mono);
@@ -82,17 +84,29 @@ export class BeuveSheetCode extends LitElement {
   @property({ attribute: false }) accessor matchLines: readonly number[] = [];
   @property({ attribute: false }) accessor currentMatchLine: number | undefined;
   @property({ attribute: false }) accessor selected: SheetSelectDetail | undefined;
+  /** A snippet in the chat: highlighted text only, nothing to click or select by line. */
+  @property({ type: Boolean }) accessor compact = false;
 
   @state() accessor library: typeof Diffs | undefined;
   @state() accessor hasFailed = false;
 
   private createView(library: typeof Diffs): File {
-    return new library.File({
+    const options = {
       theme: themeNames,
       themeType: 'system',
       preferredHighlighter: 'shiki-js',
       disableFileHeader: true,
       overflow: 'scroll',
+    } as const;
+    if (this.compact) {
+      return new library.File({
+        ...options,
+        disableLineNumbers: true,
+        lineHoverHighlight: 'disabled',
+      });
+    }
+    return new library.File({
+      ...options,
       lineHoverHighlight: 'number',
       enableLineSelection: true,
       onLineSelected: (range: SelectedLineRange | null): void => {
@@ -154,6 +168,8 @@ export class BeuveSheetCode extends LitElement {
     void loadDiffs()
       .then((library) => {
         this.library = library;
+        // Moved in the DOM, it was cleaned up when it left: render it again.
+        this.requestUpdate();
       })
       .catch(() => {
         this.hasFailed = true;
@@ -200,6 +216,9 @@ export class BeuveSheetCode extends LitElement {
         containerWrapper: container,
       });
     }
+    if (this.compact) {
+      return;
+    }
     if (changed.has('selected') || changed.has('library') || changed.has('cacheKey')) {
       const { selected } = this;
       this.view.setSelectedLines(
@@ -211,8 +230,8 @@ export class BeuveSheetCode extends LitElement {
   }
 
   override render(): TemplateResult {
-    return this.hasFailed
-      ? html`<pre class="failed">${this.contents}</pre>`
+    return this.hasFailed || (this.compact && this.library === undefined)
+      ? html`<pre class="plain">${this.contents}</pre>`
       : html`<div class="code"></div>`;
   }
 }
