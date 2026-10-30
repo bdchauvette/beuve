@@ -2,7 +2,18 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "lib": ["es2024", "esnext.disposable", "esnext.temporal", "esnext.date", "dom", "dom.iterable"],
+    "lib": [
+      "es2025",
+      "esnext.array",
+      "esnext.collection",
+      "esnext.error",
+      "esnext.typedarrays",
+      "esnext.disposable",
+      "esnext.temporal",
+      "esnext.date",
+      "dom",
+      "dom.iterable"
+    ],
     "types": []
   },
   "include": ["."],

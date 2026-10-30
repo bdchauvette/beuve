@@ -113,6 +113,14 @@ export default defineConfig(
   e18e.configs.recommended,
 
   {
+    name: 'beuve/modern-apis',
+    rules: {
+      // Iterator.zip is missing on Node 26, where tests run (ADR 0079).
+      'unicorn/prefer-iterator-zip': 'off',
+    },
+  },
+
+  {
     name: 'beuve/typescript',
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },

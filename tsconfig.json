@@ -2,7 +2,16 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "es2024",
-    "lib": ["es2024", "esnext.disposable", "esnext.temporal", "esnext.date"],
+    "lib": [
+      "es2025",
+      "esnext.array",
+      "esnext.collection",
+      "esnext.error",
+      "esnext.typedarrays",
+      "esnext.disposable",
+      "esnext.temporal",
+      "esnext.date"
+    ],
     "types": ["node"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
