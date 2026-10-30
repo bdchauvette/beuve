@@ -1,6 +1,6 @@
 # Writing tests
 
-How beuve's tests are written (ADR 0058 for tests, ADR 0059 for time). Directories listed in `converted-test-dirs.ts` follow these rules and lint enforces them; the others are being converted and still use hooks. `src/internal/git` and `src/internal/session` are the reference examples.
+How beuve's tests are written (ADR 0058 for tests, ADR 0059 for time). Every test follows these rules and lint enforces them. `src/internal/git` and `src/internal/session` are the reference examples; `src/main` shows services, fake CLIs and per-directory `testing/test.ts` files.
 
 ## The rules
 
@@ -140,9 +140,9 @@ test(
 
 Elapsed time is different from wall time. Code measures it with `new Stopwatch()` (`#x/time/stopwatch.ts`; ADR 0059, amended 2026-10-30), a monotonic clock that the `clock` fixture and `vi.useFakeTimers` do not fake. Use `clock` only for wall time. To control elapsed time, pass a fake clock to the stopwatch: `new Stopwatch({ now: () => fake.nanoseconds })` where `now` returns monotonic nanoseconds as a bigint, or pass the measured `Temporal.Duration` into a function that decides from it. Code that creates its own stopwatch is tested with real, short durations and margins (a 4 s budget against a 5 s minimum for the "spent" branch). Options that take durations are `Temporal.Duration` values: `{ timeout: Temporal.Duration.from({ milliseconds: 50 }) }`.
 
-## Converting a directory
+## Writing a new test directory
 
 1. Move shared setup into fixtures in the directory's `testing/test.ts` (or reuse the ones above). File-specific setup with state becomes a top-level function the test calls with its fixtures (see `attribute-hunks.test.ts`, `find-stack-fork-point.test.ts`).
-2. Replace module-level constants with functions or values inside the tests, `it` with `test`, `it.each` with `test.for`, `toEqual` with `toStrictEqual`, `if (!x.ok) throw` with `okValueFrom`.
-3. Mark tests that fake time or set `process.env` `{ concurrent: false }`; replace injected clocks with the `clock` fixture.
-4. Add the directory to `converted-test-dirs.ts`, then run `npm run check`. Run the directory's tests a few times: concurrency finds shared state that a single run misses.
+2. Use functions instead of module-level constants, `test` (not `it`), `test.for` (not `test.each`), `toStrictEqual`, and `okValueFrom` instead of `if (!x.ok) throw`.
+3. Mark tests that fake time or set `process.env` `{ concurrent: false }`; the code reads `Temporal.Now`, and tests use the `clock` fixture.
+4. Run `npm run check`, and the directory's tests a few times (`npx vitest run --project concurrent <dir>`): concurrency finds shared state that a single run misses. Process-heavy tests (a language server or a Vitest process each) give their `describe` a generous `timeout` and, if they still starve each other, `{ concurrent: false }`.

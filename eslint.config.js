@@ -12,7 +12,6 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-import { convertedTestDirs } from './converted-test-dirs.ts';
 import { localRulesPlugin } from './eslint-local-rules/local-rules-plugin.ts';
 
 const uiFiles = ['src/ui/**/*.ts'];
@@ -25,7 +24,6 @@ const entrypointFiles = [
   'src/main/impact/testing/scripted-impact-worker.ts',
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
-const convertedTestFiles = convertedTestDirs.map((directory) => `${directory}/*.test.ts`);
 const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => ({
   name,
   importNames: ['execFileSync', 'execSync', 'spawnSync'],
@@ -147,7 +145,7 @@ export default defineConfig(
 
   {
     name: 'beuve/time',
-    // ADR 0059: Temporal only. Applies to shipped code, scripts and converted tests.
+    // ADR 0059: Temporal only. Applies to shipped code, scripts and tests.
     files: timedFiles,
     ignores: testFiles,
     rules: {
@@ -157,8 +155,8 @@ export default defineConfig(
   },
 
   {
-    name: 'beuve/time-in-converted-tests',
-    files: convertedTestFiles,
+    name: 'beuve/time-in-tests',
+    files: testFiles,
     rules: {
       'local/no-date': 'error',
       'local/no-time-number-arithmetic': 'error',
@@ -175,9 +173,9 @@ export default defineConfig(
   },
 
   {
-    name: 'beuve/converted-tests',
-    // ADR 0058. Directories join `convertedTestDirs` as they are converted.
-    files: convertedTestFiles,
+    name: 'beuve/tests',
+    // ADR 0058.
+    files: testFiles,
     plugins: { vitest },
     settings: { vitest: { vitestImports: [/(^#|\/)testing\/test\.ts$/u] } },
     rules: {

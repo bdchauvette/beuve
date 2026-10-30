@@ -42,7 +42,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 
 ## Tests
 
-Conventions and examples: `docs/testing.md` (ADR 0058; time: ADR 0059). Directories in `converted-test-dirs.ts` must follow them; convert a directory whole and add it there.
+Conventions and examples: `docs/testing.md` (ADR 0058; time: ADR 0059). Every test follows them and lint enforces it.
 
 - Vitest, colocated: `foo-bar.ts` is tested by `foo-bar.test.ts` in the same directory. Dev, tests and CI run on Node 26 (`.node-version`, ADR 0060); shipped code runs on Electron's Node 24.
 - Import `test` from the nearest `testing/test.ts` (`#testing/test.ts` for domain-free fixtures: `tempDir`, `db`, `logger`, `clock`; `#internal/git/testing/test.ts` adds `repo`, `repository`, `repositories` with worker-built templates). Take `expect` and every fixture from the context: `test('…', async ({ expect, repo }) => …)`.
