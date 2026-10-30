@@ -14,6 +14,11 @@ import type { ImpactRunner } from './create-impact-worker.ts';
 import { slimImpactView } from './slim-impact-view.ts';
 import { toImpactView } from './to-impact-view.ts';
 
+const headMoved: IpcError = {
+  code: 'stale-review',
+  message: 'ImpactGate was cancelled: the head moved',
+};
+
 /** ImpactGate for the renderer and the MCP tool. */
 export interface ImpactServices {
   /** The full view: every changed function of every file. For MCP and main-side consumers. */
@@ -36,7 +41,8 @@ export interface ImpactServicesOptions {
  * Computes ImpactGate over the same diff `session:get-review` shows, separately from it so parsing
  * never delays the review, and in a worker thread so it never blocks main (ADR 0053). Reports are
  * cached per diff (session, reviewed-from head, base, head); concurrent requests for the same diff
- * share one computation, failures are not cached, and a head change cancels the old computation.
+ * share one computation, failures are not cached, and a head change cancels the old computation,
+ * including one still loading its diff when the head moved.
  */
 export function createImpactServices(options: ImpactServicesOptions): ImpactServices {
   const { context, runner } = options;
@@ -46,6 +52,8 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
   );
 
   const slimmed = new WeakMap<ImpactView, ImpactView>();
+  let observations = 0;
+  const lastObserved = new Map<string, { readonly sequence: number; readonly headSha: string }>();
 
   const compute = async (
     sessionId: string,
@@ -61,7 +69,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     if (!run.ok) {
       return err(
         run.error.kind === 'cancelled'
-          ? { code: 'stale-review', message: 'ImpactGate was cancelled: the head moved' }
+          ? headMoved
           : { code: 'internal', message: `ImpactGate failed: ${run.error.message}` },
       );
     }
@@ -87,9 +95,18 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
   };
 
   const getImpact = async ({ sessionId }: GetImpactRequest): Promise<IpcResult<ImpactView>> => {
+    const requestedAt = observations;
     const diff = await loadReviewDiff(context, sessionId);
     if (!diff.ok) {
       return diff;
+    }
+    const moved = lastObserved.get(sessionId);
+    if (
+      moved !== undefined &&
+      moved.sequence > requestedAt &&
+      moved.headSha !== diff.value.refreshed.session.headSha
+    ) {
+      return err(headMoved);
     }
     const key = cacheKey(sessionId, diff.value);
     const cached = cache.get(key);
@@ -121,6 +138,7 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
       return ok(cached);
     },
     observeHead: (sessionId, headSha): void => {
+      lastObserved.set(sessionId, { sequence: ++observations, headSha });
       const prefix = `${sessionId}\0`;
       for (const [key, job] of running) {
         if (key.startsWith(prefix) && job.headSha !== headSha) {

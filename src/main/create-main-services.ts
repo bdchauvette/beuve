@@ -31,6 +31,7 @@ import type { GithubServices } from './github/create-github-services.ts';
 import { createImpactServices } from './impact/create-impact-services.ts';
 import type { ImpactServices } from './impact/create-impact-services.ts';
 import { createImpactWorker } from './impact/create-impact-worker.ts';
+import type { ImpactRunner } from './impact/create-impact-worker.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
@@ -61,6 +62,8 @@ export interface MainServicesOptions {
    * tests and `node` run the TypeScript source beside `create-impact-worker.ts`.
    */
   readonly impactWorkerUrl?: URL | string;
+  /** Replaces the ImpactGate worker outright, so tests can hold a computation in flight. */
+  readonly impactRunner?: ImpactRunner;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
   /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
@@ -140,12 +143,14 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         : undefined,
   );
   const parser = createSyntaxParser(options.syntax);
-  const impactRunner = createImpactWorker({
-    logger,
-    workerUrl: options.impactWorkerUrl,
-    wasmDirectory: options.syntax?.wasmDirectory,
-    maxSourceLength: options.syntax?.maxSourceLength,
-  });
+  const impactRunner =
+    options.impactRunner ??
+    createImpactWorker({
+      logger,
+      workerUrl: options.impactWorkerUrl,
+      wasmDirectory: options.syntax?.wasmDirectory,
+      maxSourceLength: options.syntax?.maxSourceLength,
+    });
   const impact = createImpactServices({ context, runner: impactRunner });
   heads.impact = impact;
   const multiplexer = createLspMultiplexer({

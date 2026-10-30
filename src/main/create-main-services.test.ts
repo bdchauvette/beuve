@@ -1,7 +1,6 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,9 +9,13 @@ import { buildPullRequestStack } from '#internal/git/testing/build-pull-request-
 import { createTestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { TestRepository } from '#internal/git/testing/create-test-repository.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
+import type { ImpactReport } from '#internal/impact/impact-report.ts';
 import { createLogger } from '#x/log/create-logger.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { createMainServices } from './create-main-services.ts';
+import { createImpactWorker } from './impact/create-impact-worker.ts';
+import type { ImpactRunFailure, ImpactRunner } from './impact/create-impact-worker.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 
@@ -573,6 +576,7 @@ describe(
     let db: DatabaseSync;
     let services: MainServices;
     let sessionId: string;
+    const runner = createHoldableImpactRunner();
 
     beforeAll(async () => {
       repo = createTestRepository();
@@ -582,6 +586,7 @@ describe(
         logger: silentLogger(),
         deps: steppingDeps(),
         worktreeRoot: path.join(repo.scratch(), 'worktrees'),
+        impactRunner: runner.runner,
       });
       repo.write('README.md', '# large\n');
       repo.commit('base');
@@ -628,16 +633,66 @@ describe(
     it('cancels the computation when the session head moves', async () => {
       advance(repo, 'src/first.ts');
       value(await services.sessions.getReview({ sessionId }));
+      const held = runner.hold();
       const computing = services.impact.getImpact({ sessionId });
-      await delay(150);
+      await held.started;
       advance(repo, 'src/second.ts');
       value(await services.sessions.getReview({ sessionId }));
       expect(await computing).toMatchObject({ ok: false, error: { code: 'stale-review' } });
       const moved = value(await services.impact.getImpact({ sessionId }));
       expect(moved.files.map((file) => file.path)).toContain('src/second.ts');
     });
+
+    it('does not answer a request whose diff was loading when the head moved', async () => {
+      const loading = services.impact.getImpact({ sessionId });
+      services.impact.observeHead(sessionId, 'f'.repeat(40));
+      expect(await loading).toMatchObject({ ok: false, error: { code: 'stale-review' } });
+    });
   },
 );
+
+interface HoldableImpactRunner {
+  readonly runner: ImpactRunner;
+  /** The next run waits until its signal aborts; `started` settles once that run has begun. */
+  readonly hold: () => { readonly started: Promise<undefined> };
+}
+
+/** The real worker, except that a held run is parked in the runner instead of racing the test. */
+function createHoldableImpactRunner(): HoldableImpactRunner {
+  const real = createImpactWorker({ logger: silentLogger() });
+  let onStart: (() => void) | undefined;
+  return {
+    runner: {
+      run: async (sources, signal): Promise<Result<ImpactReport, ImpactRunFailure>> => {
+        if (onStart === undefined) {
+          return real.run(sources, signal);
+        }
+        const started = onStart;
+        onStart = undefined;
+        started();
+        const parked = Promise.withResolvers<Result<ImpactReport, ImpactRunFailure>>();
+        const cancel = (): void => {
+          parked.resolve({ ok: false, error: { kind: 'cancelled' } });
+        };
+        if (signal?.aborted === true) {
+          cancel();
+        }
+        signal?.addEventListener('abort', cancel, { once: true });
+        return parked.promise;
+      },
+      dispose: (): void => {
+        real.dispose();
+      },
+    },
+    hold: (): { readonly started: Promise<undefined> } => {
+      const started = Promise.withResolvers<undefined>();
+      onStart = (): void => {
+        started.resolve(undefined);
+      };
+      return { started: started.promise };
+    },
+  };
+}
 
 /** Twenty functions with branching, so a file has real work for the parser and the metrics. */
 function largeModule(seed: number): string {
