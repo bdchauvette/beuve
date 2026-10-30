@@ -2,6 +2,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { GitRepository } from './open-repository.ts';
 
 /** A local or remote-tracking branch, by its short name (`main`, `origin/main`). */
@@ -34,14 +35,17 @@ export async function inspectBranches(
   repository: GitRepository,
   limit = 200,
 ): Promise<Result<BranchInspection, GitError>> {
-  const listed = await repository.run([
-    'for-each-ref',
-    '--sort=-committerdate',
-    `--count=${String(limit)}`,
-    `--format=%(refname)${fieldSeparator}%(committerdate:iso-strict)${fieldSeparator}%(symref)`,
-    'refs/heads',
-    'refs/remotes',
-  ]);
+  const listed = await repository[gitRunner].run(
+    [
+      'for-each-ref',
+      '--sort=-committerdate',
+      `--count=${String(limit)}`,
+      `--format=%(refname)${fieldSeparator}%(committerdate:iso-strict)${fieldSeparator}%(symref)`,
+      'refs/heads',
+      'refs/remotes',
+    ],
+    { policy: { kind: 'read' } },
+  );
   if (!listed.ok) {
     return listed;
   }
@@ -73,7 +77,9 @@ async function readSymbolicRef(
   repository: GitRepository,
   ref: string,
 ): Promise<string | undefined> {
-  const read = await repository.run(['symbolic-ref', '--quiet', '--short', ref]);
+  const read = await repository[gitRunner].run(['symbolic-ref', '--quiet', '--short', ref], {
+    policy: { kind: 'read' },
+  });
   const name = read.ok ? read.value.trim() : '';
   return name === '' ? undefined : name;
 }

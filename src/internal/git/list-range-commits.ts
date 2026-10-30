@@ -4,6 +4,7 @@ import type { Result } from '#x/result/result.ts';
 
 import type { DiffFile } from './diff-model.ts';
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
@@ -72,14 +73,17 @@ export async function listRangeCommits(
     `^${range.base}`,
     '--',
   ];
-  const log = await repository.run(args);
+  const log = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!log.ok) {
     return log;
   }
   if (log.value === '') {
     return ok({ commits: [], truncated: false });
   }
-  const patchIds = await repository.exec(['patch-id', '--stable'], { input: log.value });
+  const patchIds = await repository[gitRunner].exec(['patch-id', '--stable'], {
+    policy: { kind: 'read' },
+    input: log.value,
+  });
   if (!patchIds.ok) {
     return patchIds;
   }

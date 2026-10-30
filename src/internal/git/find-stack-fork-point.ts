@@ -3,6 +3,7 @@ import type { Result } from '#x/result/result.ts';
 
 import { findMergeBase } from './find-merge-base.ts';
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
@@ -93,15 +94,18 @@ async function listFirstParents(
   head: CommitSha,
   options: StackForkPointOptions,
 ): Promise<Result<readonly CommitSha[], GitError>> {
-  const output = await repository.run([
-    'rev-list',
-    '--first-parent',
-    `--max-count=${String(options.maxCommits ?? 200)}`,
-    '--end-of-options',
-    head,
-    `^${mergeBase}`,
-    '--',
-  ]);
+  const output = await repository[gitRunner].run(
+    [
+      'rev-list',
+      '--first-parent',
+      `--max-count=${String(options.maxCommits ?? 200)}`,
+      '--end-of-options',
+      head,
+      `^${mergeBase}`,
+      '--',
+    ],
+    { policy: { kind: 'read' } },
+  );
   return output.ok
     ? ok(
         output.value
@@ -119,12 +123,10 @@ async function findNewestUpstream(
   mergeBase: CommitSha,
   commits: readonly CommitSha[],
 ): Promise<Result<number, GitError>> {
-  const baseTree = await repository.run([
-    'rev-parse',
-    '--verify',
-    '--end-of-options',
-    base + '^{tree}',
-  ]);
+  const baseTree = await repository[gitRunner].run(
+    ['rev-parse', '--verify', '--end-of-options', base + '^{tree}'],
+    { policy: { kind: 'read' } },
+  );
   if (!baseTree.ok) {
     return baseTree;
   }

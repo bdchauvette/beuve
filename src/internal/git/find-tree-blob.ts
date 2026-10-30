@@ -2,6 +2,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import type { TreeBlob } from './list-tree-blobs.ts';
@@ -18,7 +19,7 @@ export async function findTreeBlob(
   commit: CommitSha,
   path: string,
 ): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
-  const output = await repository.exec(
+  const output = await repository[gitRunner].exec(
     [
       'ls-tree',
       '-z',
@@ -28,7 +29,7 @@ export async function findTreeBlob(
       '--',
       path,
     ],
-    {},
+    { policy: { kind: 'read' } },
   );
   if (!output.ok) {
     return output;

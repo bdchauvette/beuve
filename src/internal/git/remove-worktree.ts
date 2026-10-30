@@ -5,6 +5,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { GitRepository } from './open-repository.ts';
 
 export interface RemoveWorktreeOptions {
@@ -12,7 +13,14 @@ export interface RemoveWorktreeOptions {
   readonly force?: boolean;
 }
 
-/** Removes a linked worktree and its administrative files. Never the main worktree. */
+/** Deleting a large checkout can take longer than git's default timeout. */
+const removalTimeout = Temporal.Duration.from({ minutes: 10 });
+
+/**
+ * Removes a linked worktree and its administrative files. Never the main worktree. `atomic`
+ * (ADR 0079): a removal stopped halfway would leave the worktree registered with files missing,
+ * which an add would then hand out as is, so an abort lets it finish and reports `aborted`.
+ */
 export async function removeWorktree(
   repository: GitRepository,
   worktreePath: string,
@@ -33,12 +41,9 @@ export async function removeWorktree(
     });
   }
   const force = options.force === true ? ['--force'] : [];
-  const removed = await repository.run([
-    'worktree',
-    'remove',
-    ...force,
-    '--end-of-options',
-    worktreePath,
-  ]);
+  const removed = await repository[gitRunner].exec(
+    ['worktree', 'remove', ...force, '--end-of-options', worktreePath],
+    { policy: { kind: 'atomic' }, timeout: removalTimeout },
+  );
   return removed.ok ? ok(undefined) : removed;
 }

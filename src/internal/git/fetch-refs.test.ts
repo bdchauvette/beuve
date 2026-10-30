@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -8,6 +9,8 @@ import { fetchRefs } from './fetch-refs.ts';
 import { openRepository } from './open-repository.ts';
 import type { GitRepository } from './open-repository.ts';
 import { resolveRevision } from './resolve-revision.ts';
+import { startHoldServer } from './testing/start-hold-server.ts';
+import { writeHoldScript } from './testing/write-hold-script.ts';
 import type { TestRepository } from './testing/test-repository.ts';
 import type { TestRepositories } from './testing/test.ts';
 import { test } from './testing/test.ts';
@@ -54,6 +57,39 @@ describe('fetchRefs', () => {
     ).resolves.toBe('');
   });
 
+  test('an aborted fetch leaves no lock or temporary pack, and the next one succeeds', async ({
+    expect,
+    repositories,
+    closing,
+    signal,
+  }) => {
+    const { upstream, clone, git, bare } = await withRemote(repositories);
+    const server = closing(await startHoldServer(signal));
+    const uploadPack = writeHoldScript(upstream.scratch(), 'upload-pack', server.port, {
+      kind: 'upload-pack',
+    });
+    await clone.git('remote', 'add', 'slow', bare);
+    await clone.git('config', 'remote.slow.uploadpack', uploadPack.command);
+    const spec = ['+refs/heads/main:refs/beuve/pr/7/base'];
+    const controller = new AbortController();
+    const fetching = fetchRefs(git, 'slow', spec, {
+      signal: AbortSignal.any([signal, controller.signal]),
+    });
+    const held = await server.next();
+    controller.abort();
+    await expect(fetching).resolves.toMatchObject({ ok: false, error: { kind: 'aborted' } });
+    await expect(held.ended).resolves.toBeDefined();
+    await expect(leftovers(clone)).resolves.toStrictEqual([]);
+    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
+      ok: true,
+      value: undefined,
+    });
+    await expect(resolveRevision(git, 'refs/beuve/pr/7/base')).resolves.toStrictEqual({
+      ok: true,
+      value: await upstream.git('rev-parse', 'main'),
+    });
+  });
+
   test('refuses destinations outside refs/beuve/, option-like remotes and unsafe refs', async ({
     expect,
     repositories,
@@ -98,6 +134,14 @@ interface WithRemote {
 }
 
 /** `upstream` pushes `main` to the bare repository `bare`; `clone` has it as `origin`, unfetched. */
+/** Lock files and temporary packs anywhere under `.git`. */
+async function leftovers(repo: TestRepository): Promise<readonly string[]> {
+  const entries = await readdir(path.join(repo.directory, '.git'), { recursive: true });
+  return entries.filter(
+    (entry) => entry.endsWith('.lock') || path.basename(entry).startsWith('tmp_'),
+  );
+}
+
 async function withRemote(repositories: TestRepositories): Promise<WithRemote> {
   const upstream = await repositories.create();
   upstream.write('a.txt', 'a\n');

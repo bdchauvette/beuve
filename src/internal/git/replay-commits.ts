@@ -3,6 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import { isVersionAtLeast } from './is-version-at-least.ts';
 import type { CommitSha, TreeSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
@@ -55,12 +56,10 @@ export async function replayCommits(
   if (outcome !== undefined) {
     return ok(outcome);
   }
-  const tree = await repository.run([
-    'rev-parse',
-    '--verify',
-    '--end-of-options',
-    onto + '^{tree}',
-  ]);
+  const tree = await repository[gitRunner].run(
+    ['rev-parse', '--verify', '--end-of-options', onto + '^{tree}'],
+    { policy: { kind: 'read' } },
+  );
   return tree.ok ? ok({ kind: 'clean', tree: tree.value.trim() as TreeSha }) : tree;
 }
 
@@ -82,7 +81,7 @@ async function wrapTree(
     '--end-of-options',
     tree,
   ];
-  const output = await repository.run(args);
+  const output = await repository[gitRunner].run(args, { policy: { kind: 'owned-write' } });
   if (!output.ok) {
     return output;
   }

@@ -4,6 +4,7 @@ import type { Result } from '#x/result/result.ts';
 
 import type { DiffFile } from './diff-model.ts';
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha, TreeSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import { parseUnifiedDiff } from './parse-unified-diff.ts';
@@ -56,7 +57,7 @@ export async function diffObjects(
     '--',
     ...(options.paths ?? []),
   ];
-  const output = await repository.run(args);
+  const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!output.ok) {
     return output;
   }

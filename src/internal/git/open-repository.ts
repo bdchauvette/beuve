@@ -11,38 +11,22 @@ import { isVersionAtLeast } from './is-version-at-least.ts';
 import { parseGitVersion } from './parse-git-version.ts';
 import type { GitVersion } from './parse-git-version.ts';
 import { execGit } from './exec-git.ts';
+import { gitRunner } from './git-runner.ts';
+import type { GitRunner } from './git-runner.ts';
+import type { InterruptionPolicy } from './interruption-policy.ts';
 import { runGit } from './run-git.ts';
 
 /** The absolute top-level directory of a non-bare repository's main worktree, as git reports it. */
 export type RepositoryPath = Brand<string, 'RepositoryPath'>;
 
-/** An opened repository: where it is, which git serves it, and a runner bound to it. */
+/**
+ * An opened repository: where it is and which git serves it. Its raw runner is keyed by
+ * {@link gitRunner}, which only the git domain's typed operations import (ADR 0079).
+ */
 export interface GitRepository {
   readonly root: RepositoryPath;
   readonly version: GitVersion;
-  /** Runs git in `root` with the hardening and limits this repository was opened with. */
-  readonly run: (
-    args: readonly string[],
-    options?: GitRunOptions,
-  ) => Promise<Result<string, GitError>>;
-  /** Like `run`, with `input` on stdin and raw stdout, for byte-exact output such as blobs. */
-  readonly exec: (
-    args: readonly string[],
-    options: GitExecOptions,
-  ) => Promise<Result<Buffer, GitError>>;
-}
-
-export interface GitRunOptions {
-  /** Kills git when it aborts (`aborted`), together with the repository's own signal. */
-  readonly signal?: AbortSignal | undefined;
-}
-
-export interface GitExecOptions extends GitRunOptions {
-  readonly input?: string;
-  /** Overrides the repository's output cap for this call. */
-  readonly maxBufferBytes?: number;
-  /** Overrides the repository's timeout for this call, e.g. for a network fetch. */
-  readonly timeout?: Temporal.Duration;
+  readonly [gitRunner]: GitRunner;
 }
 
 export interface OpenRepositoryOptions {
@@ -78,11 +62,13 @@ export async function openRepository(
   const runIn = async (
     cwd: string,
     args: readonly string[],
+    policy: InterruptionPolicy,
     signal?: AbortSignal,
   ): Promise<Result<string, GitError>> =>
-    runGit({ ...options, cwd, args, signal: signalFor(signal) });
+    runGit({ ...options, cwd, args, policy, signal: signalFor(signal) });
 
-  const versionOutput = await runIn(directory, ['--version'], options.signal);
+  const read: InterruptionPolicy = { kind: 'read' };
+  const versionOutput = await runIn(directory, ['--version'], read, options.signal);
   if (!versionOutput.ok) {
     return versionOutput;
   }
@@ -95,16 +81,14 @@ export async function openRepository(
     return err({ kind: 'unsupported-git-version', found: version, required });
   }
 
-  const topLevel = await runIn(directory, ['rev-parse', '--show-toplevel'], options.signal);
+  const topLevel = await runIn(directory, ['rev-parse', '--show-toplevel'], read, options.signal);
   if (!topLevel.ok) {
     return topLevel;
   }
   const root = topLevel.value.trim() as RepositoryPath;
-  return ok({
-    root,
-    version,
+  const runner: GitRunner = {
     run: async (args, runOptions): Promise<Result<string, GitError>> =>
-      runIn(root, args, runOptions?.signal),
+      runIn(root, args, runOptions.policy, runOptions.signal),
     exec: async (args, execOptions): Promise<Result<Buffer, GitError>> =>
       execGit({
         ...options,
@@ -113,5 +97,6 @@ export async function openRepository(
         args,
         signal: signalFor(execOptions.signal),
       }),
-  });
+  };
+  return ok({ root, version, [gitRunner]: runner });
 }

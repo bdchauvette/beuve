@@ -3,6 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { GitRepository } from './open-repository.ts';
 
 export interface FetchRefsOptions {
@@ -26,6 +27,10 @@ const ownedPrefix = 'refs/beuve/';
  * a timeout. Destinations must lie under `refs/beuve/`, so a fetch never moves the user's branches
  * or remote-tracking refs.
  * Credentials come from the user's own git configuration; git never prompts.
+ *
+ * `owned-write` (ADR 0079): it writes objects and `refs/beuve/` only, and on the SIGTERM an abort
+ * sends, git removes its ref locks and temporary packs itself. Refs a stopped fetch did update
+ * are caches its callers verify against the API before use, so nothing more needs undoing.
  */
 export async function fetchRefs(
   repository: GitRepository,
@@ -50,7 +55,8 @@ export async function fetchRefs(
     remote,
     ...refspecs,
   ];
-  const fetched = await repository.exec(args, {
+  const fetched = await repository[gitRunner].exec(args, {
+    policy: { kind: 'owned-write' },
     timeout: options.timeout ?? defaultTimeout,
     signal: options.signal,
   });

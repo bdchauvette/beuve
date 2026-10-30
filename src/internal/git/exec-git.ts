@@ -11,6 +11,7 @@ import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import type { GitError } from './git-error.ts';
+import type { InterruptionPolicy } from './interruption-policy.ts';
 
 /** One git invocation. `args` start at the subcommand; hardening options are prepended. */
 export interface GitRequest {
@@ -25,7 +26,9 @@ export interface GitRequest {
   readonly maxBufferBytes?: number;
   /** Written to git's stdin, which is then closed. */
   readonly input?: string;
-  /** Kills git when it aborts; the request then fails with `aborted`. */
+  /** What an abort of `signal` does: SIGTERM (`read`, `owned-write`) or nothing until git exits (`atomic`). */
+  readonly policy: InterruptionPolicy;
+  /** Interrupts git as `policy` says; the request then fails with `aborted`. */
   readonly signal?: AbortSignal | undefined;
   readonly logger?: Logger;
 }
@@ -61,12 +64,19 @@ const hardeningArgs = [
  * Runs git directly (never through a shell) and returns its raw stdout. Inherited `GIT_*`
  * variables are dropped so the caller's environment can't redirect git to another repository,
  * prompts and pagers are disabled, and messages are forced to the C locale so failures can be
- * classified. Never rejects.
+ * classified. An abort is handled as `request.policy` says (ADR 0079); either way the call
+ * resolves only once git has exited, so its own cleanup is done. Git is only ever stopped with
+ * SIGTERM, never SIGKILL, so it always removes its lock files. Never rejects.
  */
 export async function execGit(request: GitRequest): Promise<Result<Buffer, GitError>> {
   const invalid = validateRequest(request);
   if (invalid !== undefined) {
     return err(invalid);
+  }
+  const { policy, signal } = request;
+  const isAborted = (): boolean => signal?.aborted === true;
+  if (isAborted()) {
+    return err({ kind: 'aborted', args: request.args });
   }
   const gitBinary = request.gitBinary ?? 'git';
   const timeout = request.timeout ?? defaultTimeout;
@@ -77,7 +87,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     timeout,
     maxBufferBytes,
     input: request.input,
-    signal: request.signal,
+    signal: policy.kind === 'atomic' ? undefined : signal,
   });
   request.logger?.debug('git', {
     args: request.args,
@@ -85,6 +95,12 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     duration: stopwatch.elapsed(),
     exitCode: outcome.error === null ? 0 : outcome.error.code,
   });
+  if (outcome.error?.code === 'ABORT_ERR' && policy.kind === 'owned-write') {
+    await policy.cleanup?.();
+  }
+  if (policy.kind === 'atomic' && isAborted()) {
+    return err({ kind: 'aborted', args: request.args });
+  }
   return outcome.error === null
     ? ok(outcome.stdout)
     : err(
@@ -125,27 +141,39 @@ async function execute(
     readonly signal: AbortSignal | undefined;
   },
 ): Promise<ExecOutcome> {
-  return new Promise((resolve) => {
-    const child = execFile(
-      file,
-      args,
-      {
-        cwd: options.cwd,
-        env: hardenedEnvironment(),
-        timeout: options.timeout.total('milliseconds'),
-        maxBuffer: options.maxBufferBytes,
-        encoding: 'buffer',
-        windowsHide: true,
-        shell: false,
-        ...(options.signal !== undefined && { signal: options.signal }),
-      },
-      (error, stdout, stderr): void => {
-        resolve({ error, stdout, stderr: stderr.toString('utf8') });
-      },
-    );
-    child.stdin?.on('error', ignoreBrokenPipe);
-    child.stdin?.end(options.input);
-  });
+  const finished = Promise.withResolvers<ExecOutcome>();
+  const child = execFile(
+    file,
+    args,
+    {
+      cwd: options.cwd,
+      env: hardenedEnvironment(),
+      timeout: options.timeout.total('milliseconds'),
+      killSignal: 'SIGTERM',
+      maxBuffer: options.maxBufferBytes,
+      encoding: 'buffer',
+      windowsHide: true,
+      shell: false,
+      ...(options.signal !== undefined && { signal: options.signal }),
+    },
+    (error, stdout, stderr): void => {
+      finished.resolve({ error, stdout, stderr: stderr.toString('utf8') });
+    },
+  );
+  // On an abort, execFile answers as soon as it has sent the signal; git may still be removing
+  // its lock files. A child that never started (no pid) has nothing to wait for.
+  const exited =
+    child.pid === undefined
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          child.once('exit', () => {
+            resolve();
+          });
+        });
+  child.stdin?.on('error', ignoreBrokenPipe);
+  child.stdin?.end(options.input);
+  const [outcome] = await Promise.all([finished.promise, exited]);
+  return outcome;
 }
 
 function hardenedEnvironment(): NodeJS.ProcessEnv {

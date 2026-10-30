@@ -3,6 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import { isObjectId } from './is-object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 
@@ -95,7 +96,10 @@ async function checkObjects(
   objectIds: readonly string[],
 ): Promise<Result<readonly ObjectInfo[], GitError>> {
   const args = ['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)', '--buffer'];
-  const output = await repository.exec(args, { input: lines(objectIds) });
+  const output = await repository[gitRunner].exec(args, {
+    policy: { kind: 'read' },
+    input: lines(objectIds),
+  });
   if (!output.ok) {
     return output;
   }
@@ -153,7 +157,8 @@ async function readContents(
   }
   const args = ['cat-file', '--batch', '--buffer'];
   const total = infos.reduce((sum, info) => sum + info.size + headerAllowanceBytes, 0);
-  const output = await repository.exec(args, {
+  const output = await repository[gitRunner].exec(args, {
+    policy: { kind: 'read' },
     input: lines(infos.map((info) => info.objectId)),
     maxBufferBytes: total + 1024,
   });

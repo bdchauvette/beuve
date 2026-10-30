@@ -14,6 +14,7 @@ import type {
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
+import { readPathStatus } from '#internal/git/read-path-status.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
@@ -207,15 +208,8 @@ async function readWorkingFileState(
   if (!(await isPresent(file))) {
     return 'missing';
   }
-  const status = await repository.run([
-    '--literal-pathspecs',
-    'status',
-    '--porcelain',
-    '--untracked-files=no',
-    '--',
-    relative,
-  ]);
-  return status.ok && status.value.trim() === '' ? 'clean' : 'modified';
+  const status = await readPathStatus(repository, relative);
+  return status.ok ? status.value : 'modified';
 }
 
 async function isPresent(file: string): Promise<boolean> {

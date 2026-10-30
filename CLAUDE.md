@@ -19,6 +19,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - `src/x` holds only what could plausibly join the JavaScript standard library (ADR 0002 amendment) and imports only Node built-ins and other `src/x` modules. Each of `src/git`, `src/jsonrpc`, `src/release`, `src/sqlite` imports only Node built-ins, `src/x` and itself. Zero npm dependencies in all of them. Script-only helpers live in `scripts/lib/`.
 - `src/ui` and `src/preload` never import `src/main` or `src/internal`.
 - Nothing imports an entrypoint (`src/*/index.ts`). No other `index.ts` files exist.
+- Git runs only through the typed operations in `src/internal/git`, and each git command declares an interruption policy: `read`, `owned-write` or `atomic` (ADR 0079).
 - dependency-cruiser enforces all of this (`npm run deps`); type-only imports count.
 
 ## Files and exports

@@ -5,6 +5,7 @@ import { describe } from 'vitest';
 
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { gitRunner } from './git-runner.ts';
 import { openRepository } from './open-repository.ts';
 import { test } from './testing/test.ts';
 
@@ -21,7 +22,10 @@ describe('openRepository', () => {
     const openedValue = okValueFrom(opened);
     expect(openedValue.version.major).toBeGreaterThanOrEqual(2);
     await expect(
-      openedValue.run(['rev-parse', '--show-prefix'], { signal }),
+      openedValue[gitRunner].run(['rev-parse', '--show-prefix'], {
+        policy: { kind: 'read' },
+        signal,
+      }),
     ).resolves.toStrictEqual({
       ok: true,
       value: '\n',
@@ -37,16 +41,22 @@ describe('openRepository', () => {
     const opened = okValueFrom(
       await openRepository(repo.directory, { signal: AbortSignal.any([signal, opening.signal]) }),
     );
-    await expect(opened.run(['status'], { signal: AbortSignal.abort() })).resolves.toStrictEqual({
+    await expect(
+      opened[gitRunner].run(['status'], { policy: { kind: 'read' }, signal: AbortSignal.abort() }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'aborted', args: ['status'] },
     });
     opening.abort();
-    await expect(opened.run(['status'], { signal })).resolves.toStrictEqual({
+    await expect(
+      opened[gitRunner].run(['status'], { policy: { kind: 'read' }, signal }),
+    ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'aborted', args: ['status'] },
     });
-    await expect(opened.exec(['status'], { signal })).resolves.toMatchObject({
+    await expect(
+      opened[gitRunner].exec(['status'], { policy: { kind: 'read' }, signal }),
+    ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'aborted' },
     });

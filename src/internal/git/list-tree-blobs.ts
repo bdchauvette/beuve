@@ -2,6 +2,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 
@@ -23,7 +24,7 @@ export async function listTreeBlobs(
   repository: GitRepository,
   commit: CommitSha,
 ): Promise<Result<readonly TreeBlob[], GitError>> {
-  const output = await repository.exec(
+  const output = await repository[gitRunner].exec(
     [
       'ls-tree',
       '-r',
@@ -32,7 +33,7 @@ export async function listTreeBlobs(
       '--end-of-options',
       commit,
     ],
-    { maxBufferBytes: maxListingBytes },
+    { policy: { kind: 'read' }, maxBufferBytes: maxListingBytes },
   );
   if (!output.ok) {
     return output;

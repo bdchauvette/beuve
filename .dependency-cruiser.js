@@ -18,6 +18,14 @@ export default {
       to: { path: '^src/internal/', pathNot: '^src/internal/$1/' },
     },
     {
+      name: 'git-only-through-typed-operations',
+      severity: 'error',
+      comment:
+        'Only the git domain runs git itself; everything else calls a typed operation, which declares its interruption policy (ADR 0079).',
+      from: { pathNot: '^src/internal/git/' },
+      to: { path: '^src/internal/git/(exec-git|run-git|git-runner)\\.ts$' },
+    },
+    {
       name: 'x-is-leaf',
       severity: 'error',
       comment: 'src/x may import only Node built-ins and other src/x modules.',

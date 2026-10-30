@@ -4,6 +4,7 @@ import type { Result } from '#x/result/result.ts';
 
 import { findMergeBase } from './find-merge-base.ts';
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import { isObjectId } from './is-object-id.ts';
 import { isVersionAtLeast } from './is-version-at-least.ts';
 import type { CommitSha, TreeSha } from './object-id.ts';
@@ -27,7 +28,8 @@ export type ReplayOutcome =
  * Synthesizes, without touching any worktree or ref, the tree that replaying `from..to` onto `onto`
  * would produce: a three-way merge of `onto` and `to` with `from` as the base, via
  * `git merge-tree --write-tree`. Git 2.40 accepts the explicit base; 2.38–2.39 can only merge with
- * the computed merge-base, so they're used only when that already equals `from`.
+ * the computed merge-base, so they're used only when that already equals `from`. `owned-write`
+ * (ADR 0079): a stopped merge leaves only unreferenced objects, which gc drops.
  */
 export async function replayChanges(
   repository: GitRepository,
@@ -58,7 +60,7 @@ export async function replayChanges(
     request.onto,
     request.to,
   ];
-  const output = await repository.run(args);
+  const output = await repository[gitRunner].run(args, { policy: { kind: 'owned-write' } });
   if (output.ok) {
     return parseMergeTreeOutput(args, output.value, false);
   }

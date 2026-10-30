@@ -3,6 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import { isVersionAtLeast } from './is-version-at-least.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
@@ -26,9 +27,9 @@ export async function readDiffAttributes(
   if (paths.length === 0) {
     return ok(new Map());
   }
-  const output = await repository.exec(
+  const output = await repository[gitRunner].exec(
     ['check-attr', `--source=${commit}`, '-z', '--stdin', 'linguist-generated', 'diff'],
-    { input: paths.map((path) => `${path}\0`).join('') },
+    { policy: { kind: 'read' }, input: paths.map((path) => `${path}\0`).join('') },
   );
   return output.ok ? ok(parseCheckAttr(output.value.toString('utf8'))) : output;
 }

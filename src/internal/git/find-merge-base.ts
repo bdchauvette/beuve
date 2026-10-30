@@ -3,6 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
@@ -17,7 +18,7 @@ export async function findMergeBase(
   right: CommitSha,
 ): Promise<Result<CommitSha, GitError>> {
   const args = ['merge-base', '--end-of-options', left, right];
-  const output = await repository.run(args);
+  const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!output.ok) {
     const { error } = output;
     return error.kind === 'command-failed' && error.exitCode === 1 && error.stderr === ''
