@@ -53,3 +53,4 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - Don't use top-level `await` in `src/main/index.ts` before the app is ready: Electron waits for the ESM entry to finish loading before emitting `ready`, so `await app.whenReady()` there deadlocks. Use `app.once('ready', …)` or an async function.
 - The preload is bundled as CommonJS (`dist/preload/index.cjs`) and runs sandboxed: only `electron`'s renderer APIs are available.
 - The renderer CSP in `src/ui/index.html` is strict (`default-src 'none'`). Widen it deliberately, with an ADR.
+- Every model call is a chat request (ADR 0055–0057): add an LLM feature as a chat command that goes through the per-session queue in `src/main/chat`, not as a new service, table or channel.

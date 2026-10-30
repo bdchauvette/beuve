@@ -1,6 +1,6 @@
 # 0019. Review model port, and Claude Code CLI as the first adapter
 
-- Status: Accepted (adapter moved to the llm domain by [0030](0030-llm-domain-and-structural-model-ports.md))
+- Status: Partly superseded by [0055](0055-review-folded-into-chat-with-verification.md): the adapter decisions stand (moved to the llm domain by [0030](0030-llm-domain-and-structural-model-ports.md)); the review domain, its persistence and `runPreliminaryReview` are gone
 - Date: 2026-10-28
 
 ## Context
@@ -22,3 +22,7 @@ The preliminary agentic review (spec 5B) needs an LLM that can read the worktree
 - beuve depends on a CLI it doesn't ship. Flags may change between versions; the argv builder is one pure, tested function, and the stream parser ignores unknown events.
 - macOS GUI apps get a minimal `PATH`, so main should resolve `claude` (or let the user set its path) and pass it as `command`.
 - Each run costs a process start of about a second, plus the model's time. Quality depends on the model following the schema, which Claude Code enforces through its structured-output tool, and on the rules in the prompt. Validation keeps output anchored to the diff, but it can't judge whether an insight is right.
+
+## Amendment 2026-10-30: the review domain is folded into the chat
+
+ADR 0055 makes `/review` a chat request. The port, the Claude Code adapter, its flags, process handling and error mapping are unchanged. The `review` domain, `review_runs` and `agent_insights` are removed. `buildReviewPrompt` gives way to the chat's prompt builder with a review task (same budget rules, shared fencing), `validateInsights` lives on as the chat domain's `validateFindings` (same rules), and insights are now findings stored with their answer.

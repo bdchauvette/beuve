@@ -1,6 +1,6 @@
 # 0025. Diff cards: Alabaster-style themes, curated grammars and lazy mounting
 
-- Status: Accepted; layout, the ImpactGate banner and `e` amended by [0042](0042-diff-display-modes-whitespace-variant-and-impact-chip.md) and [0043](0043-inline-edits-become-suggestions.md); highlighting, heights and giant cards by [0050](0050-stable-card-props-cached-heights-and-worker-highlighting.md)–[0052](0052-collapsed-cards-lockfiles-large-and-generated-files.md)
+- Status: Accepted; insight annotations removed by [0055](0055-review-folded-into-chat-with-verification.md); layout, the ImpactGate banner and `e` amended by [0042](0042-diff-display-modes-whitespace-variant-and-impact-chip.md) and [0043](0043-inline-edits-become-suggestions.md); highlighting, heights and giant cards by [0050](0050-stable-card-props-cached-heights-and-worker-highlighting.md)–[0052](0052-collapsed-cards-lockfiles-large-and-generated-files.md)
 - Date: 2026-10-28
 
 ## Context
@@ -20,3 +20,7 @@ ADR 0018 chose `@pierre/diffs` for Zone 2 and fixed the CSP delta, the placement
 ## Consequences
 
 Diffs read like Alabaster: what's colored means something, and the four rules are easy to remember. Synthetic 300-file review (900 hunks), measured in Electron under Xvfb: cards appear within about 0.3 s and the first highlighted rows about 1.0 s after the review is requested (2.4 s before ImpactGate was deferred). 10 cards are mounted at any time while scrolling the full 224 000 px stream, about 7 600 elements across shadow roots, JS heap 12 to 21 MiB, worst frame 60 ms. Without unmounting, all 300 stayed mounted, at about 104 000 elements. A grammar outside the curated list needs a line in `highlighted-languages.ts` (and its scopes checked against the theme test). The JS regex engine can't run a few grammars exactly as oniguruma would; those render with small mistakes rather than failing. The first card pays for loading Shiki and its grammar, about 0.2 to 0.6 s. Interdiffs render the same patch text with nothing special. Inline edit (`e`) is still out of scope.
+
+## Amendment 2026-10-30: no insight annotations
+
+ADR 0055 removes agent insights from the cards. Line annotations now carry staged URA markers and the composer only (`to-head-side-annotations.ts`, formerly `to-insight-annotations.ts`); `beuve-agent-insight` is gone. The violet the insights used is the `--beuve-violet` token.

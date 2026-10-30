@@ -1,6 +1,6 @@
 # 0032. Chat wiring: one answer per session, refused not queued; staging and persistence rules
 
-- Status: Accepted; completes [0031](0031-read-only-qa-chat.md) (a compaction occupies the session too, [0047](0047-chat-compaction.md))
+- Status: Partly superseded by [0057](0057-chat-request-queue.md) (requests queue instead of being refused); completes [0031](0031-read-only-qa-chat.md) (a compaction occupies the session too, [0047](0047-chat-compaction.md))
 - Date: 2026-10-28
 
 ## Context
@@ -23,3 +23,7 @@ ADR 0031 left some questions of the main and UI wiring open: what happens to a q
 - A crash can leave an unfinished answer shown as stopped, with the text up to the last stored preview.
 - An answer whose only citations are outside the diff stages on the whole change, which the dock shows.
 - `ura:create` accepts a `chat-answer` origin from the renderer; the message id isn't checked against `chat_messages`, because the URA domain doesn't know the chat domain's table.
+
+## Amendment 2026-10-30: queued, not refused
+
+ADR 0057 replaces "one answer per session, refused, not queued": a question asked while another runs is stored `queued` and runs in its turn, and Cancel stops only that one. The persistence, staging, pill and renderer-state rules stand; a `queued` row with no job is settled as `cancelled` like a `streaming` one.

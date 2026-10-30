@@ -1,6 +1,6 @@
 # 0047. `/compact`: a summary message as the chat's compaction boundary
 
-- Status: Accepted; amends [0031](0031-read-only-qa-chat.md)
+- Status: Accepted; amends [0031](0031-read-only-qa-chat.md); queues instead of refusing since [0057](0057-chat-request-queue.md)
 - Date: 2026-10-29
 
 ## Context
@@ -22,3 +22,7 @@ Long conversations stay cheap and keep their conclusions, and the reviewer can s
 ## Amendment 2026-10-29: migrations squashed
 
 Squashed into `chat-0001-initial` (ADR 0006); the schema described here is unchanged, and no upgrade step exists. The `summary` role is part of the original `chat_messages` CHECK.
+
+## Amendment 2026-10-30: compaction queues
+
+`/compact` waits its turn in the session's queue (ADR 0057) instead of refusing questions or being refused; questions asked while it runs are queued behind it. `chat:cancel { sessionId }` cancels it, running or waiting.

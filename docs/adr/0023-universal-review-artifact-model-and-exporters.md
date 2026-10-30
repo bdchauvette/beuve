@@ -1,6 +1,6 @@
 # 0023. Universal Review Artifact: item model, anchoring and exporters
 
-- Status: Accepted
+- Status: Accepted; origins amended by [0055](0055-review-folded-into-chat-with-verification.md)
 - Date: 2026-10-28
 
 ## Context
@@ -33,3 +33,7 @@ Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchan
 ## Amendment 2026-10-29: the Markdown exporter is dropped
 
 `renderUraMarkdown`, the `markdown` export target, the `text/markdown` media type and the dock's "Copy Markdown" button are removed. Agent JSON, agent XML and GitHub remain.
+
+## Amendment 2026-10-30: no agent-insight origin
+
+ADR 0055 removes agent insights. The origin `agent-insight` and `insight_id` are gone; a staged `/review` finding is a `chat-answer` origin with a 0-based `finding` index (`chat_finding`, one item per answer and finding). Agent findings still never block on their own: risk and warning become `issue`, info `nit`.

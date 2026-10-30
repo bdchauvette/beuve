@@ -1,6 +1,6 @@
 # 0027. The URA dock: wiring, keyboard grammar, clipboard path and outdated items
 
-- Status: Accepted; GitHub posting amended by [0039](0039-posting-reviews-and-posted-items.md)
+- Status: Accepted; GitHub posting amended by [0039](0039-posting-reviews-and-posted-items.md); insight promotion replaced by finding staging in [0055](0055-review-folded-into-chat-with-verification.md)
 - Date: 2026-10-28
 
 ## Context
@@ -24,3 +24,7 @@ ADR 0023 built the URA domain (items, re-anchoring, exporters) but nothing reach
 ## Consequences
 
 The dock, the diff markers and MCP agree on placement because all of them compute it from git at read time, at the cost of one zero-context diff per older head (cached). Stale views are safe: a note keeps the head it was written against. Text entry can't trigger shortcuts, but any new text field must sit in a component that stops keydown propagation or rely on the shell's input/textarea/select check. The dock's verdict choice is lost on reload, and agents don't see it until it is persisted. Copying needs a round trip through main. Outdated items need a human decision, and the dock lists them until one is made.
+
+## Amendment 2026-10-30: findings, not insights
+
+`ura:promote-insight` and `y` are gone (ADR 0055). `ura:stage-review-finding { messageId, finding }` stages a `/review` finding read from its stored answer, idempotently, restaging a withdrawn item, the way promotion did; withdrawing it changes nothing else, since findings have no status of their own. Staged findings show as ordinary markers.

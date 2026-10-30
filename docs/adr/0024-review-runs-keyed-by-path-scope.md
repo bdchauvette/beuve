@@ -1,6 +1,6 @@
 # 0024. Review runs are keyed by path scope; statuses survive reruns
 
-- Status: Accepted
+- Status: Superseded by [0055](0055-review-folded-into-chat-with-verification.md); the reuse rule (same head and normalized path scope, effort not part of it, `--fresh` reruns) survives over the transcript
 - Date: 2026-10-28
 
 ## Context

@@ -1,6 +1,6 @@
 # 0022. Opt-in preliminary review, run from a chat command
 
-- Status: Accepted; run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md); promotion stages a URA item since [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md)
+- Status: Superseded by [0055](0055-review-folded-into-chat-with-verification.md) (opt-in from the chat, the grammar and how `claude` is found still hold); run keying, attach rules and `--fresh` statuses amended by [0024](0024-review-runs-keyed-by-path-scope.md); promotion stages a URA item since [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md)
 - Date: 2026-10-28
 
 ## Context
@@ -22,3 +22,7 @@ Spec 5B runs the preliminary agentic review automatically on session load. ADR 0
 - Superseded by ADR 0024: runs are stored per (head, path scope), a request attaches only to a run with the same scope, and `--fresh` keeps the old insights' statuses.
 - Refreshing the head before `review:run` answers costs a few git spawns. In exchange, attach and reuse are decided against the right head.
 - Tests drive the review domain's fake `claude` (`review` mode), never the real CLI. A logged-out or rate-limited real CLI is mapped from texts that aren't a documented interface (ADR 0019).
+
+## Amendment 2026-10-30: superseded by ADR 0055
+
+`/review` is now a chat request whose answer lists the findings in the transcript; `review:*` channels, `review:progress`, the insight blocks in the file cards and the `]`/`[`/`y`/`d` keys are gone. Still true: nothing runs until the reviewer types `/review`, the drawer says what leaves the machine, the `/review` grammar (now with `--no-verify`), and the order in which `claude` is looked up (code in `src/main/chat/resolve-claude-command.ts`).

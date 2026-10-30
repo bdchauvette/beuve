@@ -1,6 +1,6 @@
 # 0030. An `llm` domain for the model port and Claude Code adapter; consumers declare structural ports
 
-- Status: Accepted; amends [0019](0019-review-model-port-and-claude-code-cli-adapter.md)
+- Status: Accepted; amends [0019](0019-review-model-port-and-claude-code-cli-adapter.md); the review domain's port moved to the chat by [0055](0055-review-folded-into-chat-with-verification.md)
 - Date: 2026-10-28
 
 ## Context
@@ -20,3 +20,7 @@ ADR 0019 put the model port (`ReviewModel`, `ModelError`) and the Claude Code CL
 - Adding a backend (Agent SDK, API key, Bedrock) means one adapter in `llm`. Review and chat don't change.
 - A structural port can drift from `LanguageModel` without either domain noticing. Main's calls are what check it: `runPreliminaryReview` is called with the adapter in `create-review-services.ts`, and `src/main/chat/ask-question-with-claude-code.test.ts` passes it to `askQuestion`.
 - A domain test can't use the fake `claude`, because domain isolation applies to tests. Review and chat tests use in-domain fakes of their port, and tests in `src/main` cover the adapter end to end.
+
+## Amendment 2026-10-30: one consumer
+
+With the review folded into the chat (ADR 0055), the chat domain declares both structural ports: `ChatModel` (`runText`) and `ReviewModel` (`run`, for `/review` and its verification pass). `reviewChange` is called with the adapter in `src/main/chat/create-chat-services.ts`, which is what checks the port. Resolving `claude` moved to `src/main/chat/`.
