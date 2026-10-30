@@ -1,7 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe } from 'vitest';
 
@@ -12,6 +11,7 @@ import { createClaudeCodeModel } from '#internal/llm/create-claude-code-model.ts
 import type { LanguageModel } from '#internal/llm/language-model.ts';
 
 import { test } from '../testing/test.ts';
+import { waitUntil } from '../testing/wait-until.ts';
 
 /** The chat domain driven through the real Claude Code adapter and the fake `claude` (ADR 0031). */
 describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30_000 }, () => {
@@ -61,14 +61,19 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
 
   test('cancels a slow answer', async ({ expect, tempDir, claudeScript }) => {
     const controller = new AbortController();
+    const deltas: ChatDelta[] = [];
     const running = askQuestion(createChatQuestion({ worktreePath: tempDir }), {
       model: fakeModel(claudeScript, tempDir, 'chat', 'slow', {
+        preamble: 'Looking.',
         chunks: ['a', 'b', 'c'],
-        delayMs: 5000,
+        delayMs: 600_000,
       }),
+      onDelta: (delta) => {
+        deltas.push(delta);
+      },
       signal: controller.signal,
     });
-    await delay(300);
+    await waitUntil(() => deltas.length > 0, 'the answer to start streaming');
     controller.abort();
     await expect(running).resolves.toStrictEqual({
       ok: false,

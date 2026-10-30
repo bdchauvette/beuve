@@ -1,4 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -98,7 +97,13 @@ describe(
       fakeClaude,
       startChat,
     }) => {
-      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 120 });
+      // The first answer streams its preamble at once and holds its chunks far longer than the test,
+      // so it is provably running until cancelled; later runs read the rescripted, instant answer.
+      const claude = fakeClaude.scripted({
+        preamble: 'Looking.',
+        chunks: ['a', 'b', 'c'],
+        delayMs: 600_000,
+      });
       const { chat, sessionId, deltas, updates, settled } = await startChat(claude.settings);
       const first = okValueFrom(await chat.ask({ sessionId, question: 'First?' }));
       const second = okValueFrom(await chat.ask({ sessionId, question: 'Second?' }));
@@ -124,9 +129,13 @@ describe(
       ]);
 
       await waitUntil(
-        () => deltas.some(({ messageId, text }) => messageId === first.answer.id && text === 'a'),
+        () =>
+          deltas.some(
+            ({ messageId, text }) => messageId === first.answer.id && text === 'Looking.',
+          ),
         'the first answer to stream',
       );
+      claude.rescript(['a', 'b', 'c'], 0);
       expect(okValueFrom(chat.cancel({ messageId: first.answer.id }))).toStrictEqual({
         cancelled: true,
       });
@@ -135,7 +144,7 @@ describe(
       });
       await expect(settled(first.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
-        content: 'a',
+        content: '',
       });
       await expect(settled(third.answer.id)).resolves.toMatchObject({
         status: 'cancelled',
@@ -238,7 +247,7 @@ describe(
       fakeClaude,
       startChat,
     }) => {
-      const claude = fakeClaude.scripted({ chunks: ['x'], delayMs: 200 });
+      const claude = fakeClaude.scripted({ chunks: ['x'], delayMs: 600_000 });
       const { services, chat, sessionId } = await startChat(claude.settings);
       const review = okValueFrom(await services.sessions.getReview({ sessionId }));
       const mention = { path: 'feature.rs', side: 'head', sha: review.headSha } as const;
@@ -266,9 +275,9 @@ describe(
       fakeClaude,
       startChat,
     }) => {
-      // The running answer must outlast the asks below on a slow runner; /clear stops it.
-      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 5000 });
-      const { chat, sessionId, updates } = await startChat(claude.settings);
+      // The running answer holds its chunks until /clear stops it, however slow the runner.
+      const claude = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 600_000 });
+      const { chat, sessionId, updates, settled } = await startChat(claude.settings);
       const running = okValueFrom(await chat.ask({ sessionId, question: 'Running?' }));
       const queued = [];
       for (let index = 0; index < 10; index += 1) {
@@ -290,10 +299,16 @@ describe(
       expect(later.answer.status).toBe('queued');
 
       expect(okValueFrom(chat.clear({ sessionId }))).toStrictEqual({ removed: 4 });
-      await delay(400);
-      expect(claude.calls().length).toBeLessThanOrEqual(1);
+      // The queue is FIFO: had 'Later?' survived /clear, it would run before this sentinel.
+      claude.rescript(['ok'], 0);
+      const sentinel = okValueFrom(await chat.ask({ sessionId, question: 'Sentinel?' }));
+      await settled(sentinel.answer.id);
+      expect(claude.calls().some(({ stdin }) => stdin.includes('Later?'))).toBe(false);
       expect(updates.filter(({ id }) => id === later.answer.id)).toStrictEqual([]);
-      expect(okValueFrom(chat.list({ sessionId })).messages).toStrictEqual([]);
+      expect(okValueFrom(chat.list({ sessionId })).messages.map(({ id }) => id)).toStrictEqual([
+        sentinel.question.id,
+        sentinel.answer.id,
+      ]);
       expect(queued).toHaveLength(10);
     });
 
@@ -471,7 +486,7 @@ describe(
       expect(okValueFrom(first.chat.clear({ sessionId }))).toStrictEqual({ removed: 2 });
       expect(okValueFrom(first.chat.list({ sessionId })).messages).toStrictEqual([]);
 
-      const slow = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 500 }, 'slow');
+      const slow = fakeClaude.scripted({ chunks: ['a', 'b', 'c'], delayMs: 600_000 }, 'slow');
       await first.services.dispose();
       const { chat, updates, settled } = await startChat(slow.settings);
       const streaming = okValueFrom(await chat.ask({ sessionId, question: 'Slow?' }));
@@ -490,7 +505,7 @@ describe(
       fakeClaude,
       startChat,
     }) => {
-      const claude = fakeClaude.scripted({ chunks: ['a', 'b'], delayMs: 2000 });
+      const claude = fakeClaude.scripted({ chunks: ['a', 'b'], delayMs: 600_000 });
       const { services, chat, sessionId, deltas, settled } = await startChat(claude.settings);
       const asked = okValueFrom(await chat.ask({ sessionId, question: 'Slow?' }));
       await waitUntil(() => deltas.length > 0, 'the answer to start streaming');
@@ -686,14 +701,14 @@ describe(
       const { chat, sessionId, settled } = await startChat(claude.settings);
       const first = okValueFrom(await chat.ask({ sessionId, question: 'Something?' }));
       await settled(first.answer.id);
-      claude.rescript(['a', 'b', 'c'], 1000);
+      claude.rescript(['a', 'b', 'c'], 600_000);
       const running = chat.compact({ sessionId });
       await waitUntil(() => claude.calls().length >= 2, 'the compaction to start');
       const next = okValueFrom(await chat.ask({ sessionId, question: 'Now?' }));
       expect(next.answer.status).toBe('queued');
+      claude.rescript(['Later.'], 0);
       expect(okValueFrom(chat.cancel({ sessionId }))).toStrictEqual({ cancelled: true });
       expect(okValueFrom(await running)).toStrictEqual({ outcome: 'cancelled' });
-      claude.rescript(['Later.'], 0);
       await expect(settled(next.answer.id)).resolves.toMatchObject({
         status: 'complete',
         content: 'Later.',
