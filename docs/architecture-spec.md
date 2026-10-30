@@ -81,7 +81,7 @@ ADR 0044 overrides the geometry below: the diff stream and one tabbed sidebar (Z
 
 ## 5. Key components and workflows
 
-A. Keyboard: `j`/`k` step hunks or files; `Space` expand/collapse; `Tab`/`Shift+Tab` cycle zones; `c` chat; `f` tree mode; `p` call-stack peek (`textDocument/incomingCalls`); `Shift+p` control-flow graph; `r` trace probe (Vitest); `e` inline edit; `m` stage into URA; `o` open in IDE.
+A. Keyboard (superseded by ADR 0068: every command is a menu item with a chorded shortcut, no bare letters; this list is the original intent): `j`/`k` step hunks or files; `Space` expand/collapse; `Tab`/`Shift+Tab` cycle zones; `c` chat; `f` tree mode; `p` call-stack peek (`textDocument/incomingCalls`); `Shift+p` control-flow graph; `r` trace probe (Vitest); `e` inline edit; `m` stage into URA; `o` open in IDE.
 
 B. Preliminary agentic review: on session init and worktree checkout, a background worker analyzes the interdiff and ImpactGate metrics and emits insights (edge cases, security, type mismatches) rendered as purple badges. `y` promotes to URA, `d` dismisses.
 

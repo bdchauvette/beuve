@@ -1,6 +1,6 @@
 # 0067. Sheets: whole files pinned to a commit, definition jumps and permalinks
 
-- Status: Accepted
+- Status: Accepted; amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
 - Date: 2026-10-30
 
 ## Context
@@ -19,3 +19,7 @@ Reviewers asked to jump from a line of the diff to the definition of what it use
 ## Consequences
 
 Reviewers can lay several drafts of a file side by side and follow definitions through them without leaving the review, and a sheet means the same thing tomorrow as when it was printed. Nothing in a sheet can change a file. A sheet at an older commit costs a checkout until the next start, and its first jump waits for a language server to load that checkout. The marks follow the file's path, so a renamed file shows as added. Line-level highlighting stands in for the exact token range. Permalinks to unpushed commits are dead until pushed, which the reviewer accepts in return for links that never move. Sheet windows add a page, a preload and six channels to the security review surface; adding a channel to sheets means adding it to `sheetInvokeChannels` deliberately.
+
+## Amendment 2026-10-30: keys and menus (ADR 0068)
+
+The sheet keys are menu commands now: Go to Definition ⌘B / Ctrl+B, Type Definition ⇧⌘B, Back and Forward ⌘[ ⌘] / Alt+← →, Copy GitHub Permalink ⇧⌘C, Open on GitHub (menu only), Find Next ⌘G, and Next/Previous Change over the change marks; in the sheet itself ↑/↓, Home/End and Esc. Sheets have a menu bar (hidden until Alt on Linux), and `sheetInvokeChannels` adds `menu:set-state` and `menu:context`.

@@ -1,6 +1,6 @@
 # 0064. Reviewed marks per file, carried over by diff identity
 
-- Status: Accepted; UI decided below (2026-10-30)
+- Status: Accepted; UI decided below (2026-10-30); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
 - Date: 2026-10-30
 
 ## Context
@@ -20,3 +20,7 @@ A checkpoint (ADR 0009, 0012) signs off on a whole head. Reviewers also read fil
 ## Consequences
 
 The mark follows the change, so most pushes reopen few files. A coincidence (the same lines removed and added again) keeps a mark, and a change only in context lines keeps it too; both are deliberate: the reviewer judged the lines that changed. A mark made in one scope and read in another can read `changed-since` for an unchanged file when the scope's diff differs; the reviewer re-ticks it. Marks are local to this machine like the rest of the session.
+
+## Amendment 2026-10-30: keys (ADR 0068)
+
+File Reviewed is ⌘D / Ctrl+D (Review ▸ File Reviewed, the file header's and tree row's context menu, or the check on a reviewed card's header); it toggles and never moves on. Skip Reviewed Files is in Go and the Settings window, and applies to Next/Previous Change and Next/Previous File.

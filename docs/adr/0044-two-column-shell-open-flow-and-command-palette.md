@@ -1,6 +1,6 @@
 # 0044. Two-column shell, one open flow, and a command palette over one command registry
 
-- Status: Accepted
+- Status: Accepted; amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
 - Date: 2026-10-29
 
 ## Context
@@ -23,3 +23,7 @@ Spec section 4 lays out four zones side by side, each under a 32 px uppercase ti
 ## Consequences
 
 Each zone gains about 32 px of height and the diff gains the width of a column. The chat reads beside the diff, so a citation scrolls the diff while the answer stays visible. The tree and the staged review can't be seen at once; the staged count in the tab label and ⌘P for files make up for most of it. Opening a known pull request is one paste and Enter; resuming is ⌘O, Enter. A pull request whose repository has no earlier session needs the clone chosen once. Running commands from the palette dispatches a synthetic key in the zone, so zone shortcuts keep a single implementation, at the cost of the palette depending on the zones' key grammar. New chat commands and keys must add a registry entry, and the registry test fails until they do.
+
+## Amendment 2026-10-30: menus and chords (ADR 0068)
+
+The single-key shortcuts of this ADR (`1`/`2`/`3`, `c`, `\`, `f`, `?`, Tab and Shift+Tab for zones) are replaced by menu commands with chords (⌘1–3, ⌘L, ⌃⌘S / F9, View ▸ Changed Files Only, Help ▸ Keyboard Shortcuts, ⌃Tab / F6 for regions), and Tab moves focus normally again. The command registry splits into the static catalog in `src/contract/command-catalog.ts`, which main builds the menus from, and the renderer's behaviours per id; the palette runs a command by id instead of dispatching a synthetic key, which removes the cost this ADR accepted. The status bar names the focused region without keys, and the titlebar's ⌘K hint is a "Search or run a command" button.
