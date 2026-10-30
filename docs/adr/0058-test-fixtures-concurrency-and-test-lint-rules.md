@@ -47,7 +47,7 @@ A test's timeout starts when its test starts. Tests in a file run concurrently i
 
 - `TestRepository.git` and `commit` are async (`execFile`, no shell) and resolve to the same values; `RepositoryTemplate.build`, `repositories.create`, `repositories.fromTemplate` and the `repo` fixture return promises. The template cache stores the build promise, so concurrent tests share one build.
 - `no-restricted-imports` bans `execFileSync`, `execSync` and `spawnSync` in converted test files and in `testing/` directories.
-- Raising `testTimeout` or capping `maxConcurrency` would hide this; neither is used.
+- Async alone was not enough: with 3 CPUs and 3 CPU-burners, 4 of 8 tests in the file still timed out at 5 s, because the work is CPU-bound git and every concurrent test's timer covers all the others' work. The `concurrent` project therefore sets `maxConcurrency` to half of `os.availableParallelism()` (at least 1): 1 on a 3-vCPU runner, 2 on this 4-core container. With it, 6 of 6 runs of `src/internal/git` passed under that load. `testTimeout` stays at 5 s.
 
 ## Consequences
 

@@ -1,9 +1,13 @@
+import os from 'node:os';
+
 import { configDefaults, defineConfig } from 'vitest/config';
 
 import { convertedTestDirs } from './converted-test-dirs.ts';
 
 const allTests = ['src/**/*.test.ts', 'eslint-local-rules/**/*.test.ts', 'scripts/**/*.test.ts'];
 const convertedTests = convertedTestDirs.map((directory) => `${directory}/*.test.ts`);
+
+const maxConcurrency = Math.max(1, Math.floor(os.availableParallelism() / 2));
 
 export default defineConfig({
   test: {
@@ -18,6 +22,9 @@ export default defineConfig({
           include: convertedTests,
           sequence: { concurrent: true },
           isolate: false,
+          // Tests are mostly CPU-bound (git processes), so running more of a file's tests at once
+          // than there are CPUs only makes each one's timeout cover the others' work (ADR 0058).
+          maxConcurrency,
         },
       },
       {
