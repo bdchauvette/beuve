@@ -23,3 +23,22 @@ beuve requires a system git and pays a process spawn per operation, but gets git
 ## Amendment 2026-10-30: stacks and commit pairs
 
 ADR 0054 replaces the merge-base with a stack-aware fork point (a parent already on the base, or a reviewed base still under the head) for full reviews, interdiffs and checkpoints, and, when the range replay conflicts, retries by replaying the paired reviewed commits one by one before falling back.
+
+## Amendment 2026-10-30: the CLI over a git library, revisited
+
+Using the Claude Agent SDK rather than driving `claude` ourselves (ADR 0069) raised the question again for git. The cases differ: the SDK is the supported embedding of the same program, while libgit2 (nodegit, es-git), isomorphic-git and wasm builds are reimplementations of git. The decision stands, for these reasons:
+
+- **Fidelity.** A review tool must show what `git diff` shows. The CLI is the user's own git: their config and `includeIf`, `.gitattributes`, LFS, partial clones, sparse checkouts and the exact rename and merge heuristics. A library that differs in a corner is a correctness bug in the review.
+- **Coverage.** beuve relies on `merge-tree --write-tree --merge-base` (this ADR), `patch-id` (ADR 0054) and full worktree management (ADR 0020). libgit2 has no `patch-id`, no `merge-tree --write-tree` and partial worktree support. isomorphic-git has none of them and is slow on large repositories.
+- **Transport and credentials.** `fetch` through the CLI uses the user's SSH agent, `~/.ssh/config`, credential helpers and `gh` integration. A library brings its own transport and authentication, which is a common source of failures.
+- **Cancellation.** Killing a process is clean, and git removes its lock files and temporary files on `SIGTERM`. A libgit2 call runs on a native thread and can only be interrupted where it offers a progress callback, and many operations offer none. The interruption policies of ADR 0079 depend on the process boundary.
+- **Isolation.** A crash, hang or memory blow-up in git stays in a child process with a timeout and an output cap. A native addon shares the main process.
+- **Packaging.** No native addon to rebuild for each Electron ABI and architecture (ADR 0004).
+
+We accept the costs:
+
+- A process spawn per operation, which costs more on macOS than on Linux.
+- Parsing text output, which stays contained in the typed operations of `src/internal/git`. Callers never see raw output.
+- A minimum system git of 2.36.
+
+If spawning shows up as a real cost, the remedy is to batch requests through long-lived git processes, such as `cat-file --batch-command` for object reads, not to switch to a library. Revisit this decision only if a library gains `merge-tree`, `patch-id` and worktree parity and becomes the reference implementation, or if beuve has to run where no system git exists.
