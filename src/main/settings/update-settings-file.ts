@@ -1,13 +1,15 @@
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+
+import { writeFileAtomic } from '#x/fs/write-file-atomic.ts';
 
 import { readSettingsFile } from './read-settings-file.ts';
 
 const queues = new Map<string, Promise<void>>();
 
 /**
- * Rewrites the settings file with `update` applied to its current contents, atomically (a
- * temporary file, then a rename). Updates to one file run one after another, so two writers
+ * Rewrites the settings file with `update` applied to its current contents, atomically and
+ * owner-only (0600, `writeFileAtomic`). Updates to one file run one after another, so two writers
  * (the editor preference, remembered clone paths) never drop each other's keys.
  */
 export async function updateSettingsFile(
@@ -22,10 +24,10 @@ export async function updateSettingsFile(
       // The previous writer reports its own failure.
     }
     const contents = update(await readSettingsFile(filePath));
-    await mkdir(path.dirname(filePath), { recursive: true });
-    const temporary = `${filePath}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(contents, undefined, 2)}\n`);
-    await rename(temporary, filePath);
+    await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    await writeFileAtomic(filePath, `${JSON.stringify(contents, undefined, 2)}\n`, {
+      mode: 0o600,
+    });
   };
   const current = write();
   queues.set(filePath, current);

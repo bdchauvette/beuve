@@ -34,6 +34,12 @@ const blockingProcessImports = ['node:child_process', 'child_process'].map((name
   message:
     'Synchronous child processes block the worker, so concurrent tests cannot overlap and every test timeout covers the whole file. Use `execFile` from `node:child_process` through `promisify` (ADR 0058).',
 }));
+const renameImports = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => ({
+  name,
+  importNames: ['rename', 'renameSync'],
+  message:
+    'Replace a file through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`): a unique temporary name created exclusively with its mode, fsync, rename, fsync of the directory (ADR 0081).',
+}));
 const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
 const staticOrStandalone =
   'Name a standalone or static conversion `yFrom(x)` or `Y.fromX(x)`, not `toY`; `toY()` is for instance methods (ADR 0062, CLAUDE.md "Conversion naming").';
@@ -379,6 +385,15 @@ export default defineConfig(
           ],
         },
       ],
+    },
+  },
+
+  {
+    name: 'beuve/atomic-file-writes',
+    files: ['src/**/*.ts'],
+    ignores: [...uiFiles, ...testFiles, '**/testing/**', 'src/x/fs/write-file-atomic.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: renameImports }],
     },
   },
 

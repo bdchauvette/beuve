@@ -1,4 +1,4 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -18,9 +18,17 @@ describe('loadMcpToken', () => {
     expect(contents.trim()).toMatch(/^[\w-]{43}$/u);
   });
 
-  test('replaces a malformed token', async ({ expect, tempDir, signal }) => {
-    await writeFile(path.join(tempDir, 'mcp-token'), 'short\n', { mode: 0o644, signal });
+  test('replaces a malformed, loose token with an owner-only one', async ({
+    expect,
+    tempDir,
+    signal,
+  }) => {
+    const file = path.join(tempDir, 'mcp-token');
+    await writeFile(file, 'short\n', { mode: 0o644, signal });
     const loaded = await loadMcpToken(tempDir);
     expect(loaded.ok && loaded.value !== 'short').toBe(true);
+    const { mode } = await stat(file);
+    expect(mode & 0o777).toBe(0o600);
+    await expect(readdir(tempDir)).resolves.toStrictEqual(['mcp-token']);
   });
 });

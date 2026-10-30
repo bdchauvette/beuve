@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeFileAtomic } from '#x/fs/write-file-atomic.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -52,10 +53,8 @@ export function createSecretStore(options: {
       await settled(previous);
       const secrets = update(await readSecrets(filePath));
       const next = { version: 1, secrets };
-      await mkdir(path.dirname(filePath), { recursive: true });
-      const temporary = `${filePath}.tmp`;
-      await writeFile(temporary, `${JSON.stringify(next, undefined, 2)}\n`, { mode: 0o600 });
-      await rename(temporary, filePath);
+      await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+      await writeFileAtomic(filePath, `${JSON.stringify(next, undefined, 2)}\n`, { mode: 0o600 });
     };
     const current = run();
     writes = settled(current);

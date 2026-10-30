@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -16,6 +16,8 @@ describe('updateSettingsFile', () => {
       updateSettingsFile(file, (current) => ({ ...current, c: 3 })),
     ]);
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({ a: 1, b: 2, c: 3 });
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(path.dirname(file))).toStrictEqual(['settings.json']);
   });
 
   test('reads a malformed file as empty', async ({ expect, tempDir }) => {

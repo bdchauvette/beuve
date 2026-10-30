@@ -1,7 +1,8 @@
-import { chmod, rename, rm, writeFile } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { errorFrom } from '#x/error/error-from.ts';
+import { writeFileAtomic } from '#x/fs/write-file-atomic.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -34,9 +35,6 @@ export async function writeMcpDiscovery(
 }
 
 async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDiscovery> {
-  const temporary = `${file}.${String(discovery.pid)}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(discovery, undefined, 2)}\n`, { mode: 0o600 });
-  await chmod(temporary, 0o600);
-  await rename(temporary, file);
+  await writeFileAtomic(file, `${JSON.stringify(discovery, undefined, 2)}\n`, { mode: 0o600 });
   return async (): Promise<void> => rm(file, { force: true });
 }
