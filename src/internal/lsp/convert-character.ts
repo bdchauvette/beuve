@@ -1,6 +1,12 @@
 import type { PositionEncoding } from './lsp-protocol.ts';
 import { positionEncodings } from './position-encodings.ts';
 
+/** The encoding positions are written in, and the one to re-express them in. */
+export interface EncodingChange {
+  readonly from: PositionEncoding;
+  readonly to: PositionEncoding;
+}
+
 /**
  * Re-expresses a column of `lineText` (terminator excluded) from one position encoding in another.
  * A column past the end of the line clamps to the end, as LSP specifies; one that falls inside a
@@ -9,8 +15,7 @@ import { positionEncodings } from './position-encodings.ts';
 export function convertCharacter(
   lineText: string,
   character: number,
-  from: PositionEncoding,
-  to: PositionEncoding,
+  { from, to }: EncodingChange,
 ): number {
   let source = 0;
   let target = 0;
@@ -23,7 +28,7 @@ export function convertCharacter(
     }
     source += sourceUnits;
     target += unitsOf(codePoint, to);
-    index += codePoint > 0xff_ff ? 2 : 1;
+    index += unitsOf(codePoint, positionEncodings.utf16);
   }
   return target;
 }

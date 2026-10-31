@@ -12,9 +12,9 @@ describe('findServerCommand', () => {
     expect,
     tempDir: directory,
   }) => {
-    executable(directory, 'first/srv', 0o644);
-    const second = executable(directory, 'second/srv');
-    executable(directory, 'on-path/srv');
+    executable(path.join(directory, 'first/srv'), 0o644);
+    const second = executable(path.join(directory, 'second/srv'));
+    executable(path.join(directory, 'on-path/srv'));
     const result = await findServerCommand({
       serverId: 's',
       command: 'srv',
@@ -28,7 +28,7 @@ describe('findServerCommand', () => {
     expect,
     tempDir: directory,
   }) => {
-    const onPath = executable(directory, 'on-path/srv');
+    const onPath = executable(path.join(directory, 'on-path/srv'));
     const pathVariable = ['relative', path.join(directory, 'on-path')].join(path.delimiter);
     await expect(
       findServerCommand({ serverId: 's', command: 'srv', searchDirectories: [], pathVariable }),
@@ -50,7 +50,7 @@ describe('findServerCommand', () => {
     expect,
     tempDir: directory,
   }) => {
-    const absolute = executable(directory, 'bin/srv');
+    const absolute = executable(path.join(directory, 'bin/srv'));
     await expect(
       findServerCommand({
         serverId: 's',
@@ -70,8 +70,7 @@ describe('findServerCommand', () => {
   });
 });
 
-function executable(directory: string, relative: string, mode = 0o755): string {
-  const file = path.join(directory, relative);
+function executable(file: string, mode = 0o755): string {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, '#!/bin/sh\n');
   chmodSync(file, mode);

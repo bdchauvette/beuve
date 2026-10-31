@@ -28,7 +28,7 @@ function parseSymbol(value: unknown): LspDocumentSymbol | undefined {
   if (typeof name !== 'string' || typeof kind !== 'number') {
     return undefined;
   }
-  const detailField = typeof detail === 'string' ? { detail } : {};
+  const detailField = detailFrom(detail);
   if (isLspRange(range) && isLspRange(selectionRange)) {
     return {
       name,
@@ -53,4 +53,11 @@ function parseSymbol(value: unknown): LspDocumentSymbol | undefined {
     }
   }
   return undefined;
+}
+
+function detailFrom(detail: unknown): Pick<LspDocumentSymbol, 'detail'> {
+  if (typeof detail === 'string') {
+    return { detail };
+  }
+  return {};
 }

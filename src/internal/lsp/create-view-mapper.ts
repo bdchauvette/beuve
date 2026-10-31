@@ -52,12 +52,10 @@ const severities: Readonly<Record<number, DiagnosticSeverity>> = {
  */
 export function createViewMapper(context: ViewMapperContext): ViewMapper {
   const range = (uri: string, value: LspRange): Range => {
-    return convertRange(
-      value,
-      context.lines(normalizeUri(uri)),
-      context.encoding,
-      positionEncodings.utf16,
-    );
+    return convertRange(value, context.lines(normalizeUri(uri)), {
+      from: context.encoding,
+      to: positionEncodings.utf16,
+    });
   };
 
   const location = (value: LspLocation): LocationView => {
@@ -84,8 +82,8 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
     diagnostic: (uri, value): DiagnosticView => {
       return {
         range: range(uri, value.range),
-        severity: value.severity === undefined ? undefined : severities[value.severity],
-        code: value.code === undefined ? undefined : String(value.code),
+        severity: severityOf(value),
+        code: codeOf(value),
         source: value.source,
         message: value.message,
         tags: (value.tags ?? [])
@@ -109,7 +107,7 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
         id,
         name: item.name,
         kind: symbolKindName(item.kind),
-        detail: item.detail === '' ? undefined : item.detail,
+        detail: detailOf(item),
         file: fileReferenceFrom(context.root, item.uri),
         range: range(item.uri, item.range),
         selectionRange: range(item.uri, item.selectionRange),
@@ -117,4 +115,26 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
     },
     symbol,
   };
+}
+
+function severityOf(diagnostic: LspDiagnostic): DiagnosticSeverity | undefined {
+  if (diagnostic.severity === undefined) {
+    return undefined;
+  }
+  return severities[diagnostic.severity];
+}
+
+function codeOf(diagnostic: LspDiagnostic): string | undefined {
+  if (diagnostic.code === undefined) {
+    return undefined;
+  }
+  return String(diagnostic.code);
+}
+
+/** A server's detail, where an empty one means none. */
+function detailOf(item: LspCallHierarchyItem): string | undefined {
+  if (item.detail === '') {
+    return undefined;
+  }
+  return item.detail;
 }

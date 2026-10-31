@@ -6,7 +6,7 @@ import type { LspLocation } from './lsp-protocol.ts';
  * (whose `targetSelectionRange` is used). Malformed entries are dropped.
  */
 export function parseLocations(value: unknown): LspLocation[] {
-  const entries: unknown[] = Array.isArray(value) ? value : [value];
+  const entries: unknown[] = [value].flat();
   return entries.flatMap((entry: unknown) => {
     if (typeof entry !== 'object' || entry === null) {
       return [];

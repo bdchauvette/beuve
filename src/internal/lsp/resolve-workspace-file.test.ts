@@ -75,10 +75,13 @@ describe('resolveWorkspaceRoot and resolveWorkspaceFile', () => {
   });
 });
 
+interface Workspace {
+  readonly parent: string;
+  readonly root: WorkspaceRoot;
+}
+
 /** A repository reached through a symlink, a file next to it, and the resolved root. */
-async function workspace(
-  tempDir: string,
-): Promise<{ readonly parent: string; readonly root: WorkspaceRoot }> {
+async function workspace(tempDir: string): Promise<Workspace> {
   mkdirSync(path.join(tempDir, 'repo', 'src'), { recursive: true });
   writeFileSync(path.join(tempDir, 'repo', 'src', 'a b.ts'), 'x');
   writeFileSync(path.join(tempDir, 'outside.ts'), 'x');

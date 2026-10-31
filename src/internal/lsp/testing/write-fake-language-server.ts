@@ -15,6 +15,9 @@ export function writeFakeLanguageServer(directory: string): string {
   return file;
 }
 
+/** How the fake server behaves: normally, or by failing `initialize`. */
+export type FakeServerMode = 'normal' | 'fail-initialize';
+
 const source = String.raw`
 const mode = process.argv[2] ?? 'normal';
 let buffer = Buffer.alloc(0);

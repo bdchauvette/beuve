@@ -12,6 +12,7 @@ import { startLanguageServer } from './start-language-server.ts';
 import type { LanguageServer } from './start-language-server.ts';
 import { positionEncodings } from './position-encodings.ts';
 import { pollUntil } from './testing/poll-until.ts';
+import type { FakeServerMode } from './testing/write-fake-language-server.ts';
 import { test } from './testing/test.ts';
 
 describe('startLanguageServer', { timeout: 20_000 }, () => {
@@ -21,7 +22,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
     fakeServerScript: script,
     signal,
   }) => {
-    const server = okValueFrom(await start(directory, script, 'normal'));
+    const server = okValueFrom(await start({ directory, script }, 'normal'));
     expect(server.capabilities).toMatchObject({
       positionEncoding: positionEncodings.utf8,
       callHierarchy: true,
@@ -50,14 +51,12 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
     tempDir: directory,
     fakeServerScript: script,
   }) => {
-    const started = await start(directory, script, 'fail-initialize');
+    const started = await start({ directory, script }, 'fail-initialize');
     expect(started).toMatchObject({
       ok: false,
       error: { kind: 'server-start-failed', serverId: 'fake' },
     });
-    expect(started.ok ? '' : JSON.stringify(started.error)).toContain(
-      'fake server refuses to start',
-    );
+    expect(JSON.stringify(started)).toContain('fake server refuses to start');
   });
 
   test('reports an executable that cannot be spawned', async ({
@@ -66,7 +65,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
     fakeServerScript: script,
   }) => {
     await expect(
-      start(directory, script, 'normal', path.join(directory, 'missing')),
+      start({ directory, script }, 'normal', path.join(directory, 'missing')),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'server-start-failed', message: expect.stringContaining('ENOENT') as unknown },
@@ -74,7 +73,7 @@ describe('startLanguageServer', { timeout: 20_000 }, () => {
   });
 });
 
-function definition(script: string, mode: string): ServerDefinition {
+function definition(script: string, mode: FakeServerMode): ServerDefinition {
   return {
     id: 'fake',
     command: process.execPath,
@@ -85,10 +84,15 @@ function definition(script: string, mode: string): ServerDefinition {
   };
 }
 
+/** The test's directory, the server's root, and the fake server script. */
+interface FakeServerPlace {
+  readonly directory: string;
+  readonly script: string;
+}
+
 async function start(
-  directory: string,
-  script: string,
-  mode: string,
+  { directory, script }: FakeServerPlace,
+  mode: FakeServerMode,
   commandPath = process.execPath,
 ): ReturnType<typeof startLanguageServer> {
   return startLanguageServer({

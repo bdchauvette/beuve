@@ -35,10 +35,17 @@ export interface LspDiagnostic {
   readonly message: string;
   /** 1 unnecessary, 2 deprecated. */
   readonly tags?: readonly number[];
-  readonly relatedInformation?: readonly {
-    readonly location: LspLocation;
-    readonly message: string;
-  }[];
+  readonly relatedInformation?: readonly LspRelatedInformation[];
+}
+
+export interface LspRelatedInformation {
+  readonly location: LspLocation;
+  readonly message: string;
+}
+
+export interface WorkspaceFolder {
+  readonly uri: string;
+  readonly name: string;
 }
 
 export interface LspCallHierarchyItem {

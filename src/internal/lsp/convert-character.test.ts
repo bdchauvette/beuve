@@ -29,7 +29,7 @@ describe('convertCharacter', () => {
       for (const to of encodings()) {
         const expected = boundaries()[to];
         const actual = boundaries()[from].map((column) => {
-          return convertCharacter(line(), column, from, to);
+          return convertCharacter(line(), column, { from: from, to: to });
         });
         expect(actual, `${from} -> ${to}`).toStrictEqual(expected);
       }
@@ -37,19 +37,33 @@ describe('convertCharacter', () => {
   });
 
   test('snaps columns inside a character to its start', ({ expect }) => {
-    expect(convertCharacter(line(), 4, positionEncodings.utf16, positionEncodings.utf8)).toBe(6);
-    expect(convertCharacter(line(), 8, positionEncodings.utf8, positionEncodings.utf16)).toBe(3);
-    expect(convertCharacter(line(), 2, positionEncodings.utf8, positionEncodings.utf32)).toBe(1);
+    expect(
+      convertCharacter(line(), 4, { from: positionEncodings.utf16, to: positionEncodings.utf8 }),
+    ).toBe(6);
+    expect(
+      convertCharacter(line(), 8, { from: positionEncodings.utf8, to: positionEncodings.utf16 }),
+    ).toBe(3);
+    expect(
+      convertCharacter(line(), 2, { from: positionEncodings.utf8, to: positionEncodings.utf32 }),
+    ).toBe(1);
   });
 
   test('clamps columns past the end of the line', ({ expect }) => {
-    expect(convertCharacter(line(), 99, positionEncodings.utf16, positionEncodings.utf8)).toBe(11);
-    expect(convertCharacter('', 5, positionEncodings.utf8, positionEncodings.utf16)).toBe(0);
+    expect(
+      convertCharacter(line(), 99, { from: positionEncodings.utf16, to: positionEncodings.utf8 }),
+    ).toBe(11);
+    expect(
+      convertCharacter('', 5, { from: positionEncodings.utf8, to: positionEncodings.utf16 }),
+    ).toBe(0);
   });
 
   test('counts a lone surrogate as one UTF-16 unit and three UTF-8 bytes', ({ expect }) => {
     const lone = 'x\u{D800}y';
-    expect(convertCharacter(lone, 2, positionEncodings.utf16, positionEncodings.utf8)).toBe(4);
-    expect(convertCharacter(lone, 4, positionEncodings.utf8, positionEncodings.utf16)).toBe(2);
+    expect(
+      convertCharacter(lone, 2, { from: positionEncodings.utf16, to: positionEncodings.utf8 }),
+    ).toBe(4);
+    expect(
+      convertCharacter(lone, 4, { from: positionEncodings.utf8, to: positionEncodings.utf16 }),
+    ).toBe(2);
   });
 });

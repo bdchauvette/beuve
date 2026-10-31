@@ -2,9 +2,11 @@ import type { JsonRpcHandlerOutcome } from '#jsonrpc/json-rpc-connection.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { WorkspaceFolder } from './lsp-protocol.ts';
+
 export interface ServerRequestContext {
   readonly settings: Readonly<Record<string, unknown>>;
-  readonly workspaceFolders: readonly { readonly uri: string; readonly name: string }[];
+  readonly workspaceFolders: readonly WorkspaceFolder[];
 }
 
 const methodNotFound = -32_601;
@@ -56,16 +58,21 @@ function configurationItems(params: unknown): (string | undefined)[] {
   }
   const { items } = params;
   if (Array.isArray(items)) {
-    return items.map((item: unknown) => {
-      return typeof item === 'object' &&
-        item !== null &&
-        'section' in item &&
-        typeof item.section === 'string'
-        ? item.section
-        : undefined;
-    });
+    return items.map((item: unknown) => sectionOf(item));
   }
   return [];
+}
+
+function sectionOf(item: unknown): string | undefined {
+  if (
+    typeof item === 'object' &&
+    item !== null &&
+    'section' in item &&
+    typeof item.section === 'string'
+  ) {
+    return item.section;
+  }
+  return undefined;
 }
 
 function lookUp(settings: Readonly<Record<string, unknown>>, section: string | undefined): unknown {

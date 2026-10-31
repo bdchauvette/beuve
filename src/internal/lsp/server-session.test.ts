@@ -86,7 +86,13 @@ function isAtLeast(duration: Temporal.Duration, milliseconds: number): boolean {
   return Temporal.Duration.compare(duration, Temporal.Duration.from({ milliseconds })) >= 0;
 }
 
-function content(name: string, text: string): DocumentContent {
+/** A document at `/workspace/<name>`. */
+interface TestDocument {
+  readonly name: string;
+  readonly text: string;
+}
+
+function content({ name, text }: TestDocument): DocumentContent {
   return {
     uri: `file:///workspace/${name}`,
     absolutePath: `/workspace/${name}`,
@@ -124,10 +130,19 @@ describe('ServerSession', () => {
   test('opens, changes and closes documents with increasing versions', ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    expect(session.sync(content('a.ts', 'one'))).toMatchObject({ version: 1, changed: true });
-    expect(session.sync(content('a.ts', 'one'))).toMatchObject({ version: 1, changed: false });
-    expect(session.sync(content('a.ts', 'two'))).toMatchObject({ version: 2, changed: true });
-    expect(session.sync(content('a.ts', 'two'), { recheck: true })).toMatchObject({
+    expect(session.sync(content({ name: 'a.ts', text: 'one' }))).toMatchObject({
+      version: 1,
+      changed: true,
+    });
+    expect(session.sync(content({ name: 'a.ts', text: 'one' }))).toMatchObject({
+      version: 1,
+      changed: false,
+    });
+    expect(session.sync(content({ name: 'a.ts', text: 'two' }))).toMatchObject({
+      version: 2,
+      changed: true,
+    });
+    expect(session.sync(content({ name: 'a.ts', text: 'two' }), { recheck: true })).toMatchObject({
       version: 3,
       changed: true,
     });
@@ -148,10 +163,10 @@ describe('ServerSession', () => {
     const fake = createFakeServer();
     const options: ServerSessionOptions = { maxOpenDocuments: 2 };
     const session = new ServerSession(fake.server, options);
-    session.sync(content('a.ts', 'a'));
-    session.sync(content('b.ts', 'b'));
-    session.sync(content('a.ts', 'a'));
-    session.sync(content('c.ts', 'c'));
+    session.sync(content({ name: 'a.ts', text: 'a' }));
+    session.sync(content({ name: 'b.ts', text: 'b' }));
+    session.sync(content({ name: 'a.ts', text: 'a' }));
+    session.sync(content({ name: 'c.ts', text: 'c' }));
     expect(session.openDocuments.map((document) => document.absolutePath)).toStrictEqual([
       '/workspace/a.ts',
       '/workspace/c.ts',
@@ -167,7 +182,7 @@ describe('ServerSession', () => {
   }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    const document = session.sync(content('a.ts', 'x'));
+    const document = session.sync(content({ name: 'a.ts', text: 'x' }));
     later(() => {
       publish(fake, ['syntax pass']);
     }, 5);
@@ -184,8 +199,8 @@ describe('ServerSession', () => {
   }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    session.sync(content('a.ts', 'v1'));
-    const document = session.sync(content('a.ts', 'v2'));
+    session.sync(content({ name: 'a.ts', text: 'v1' }));
+    const document = session.sync(content({ name: 'a.ts', text: 'v2' }));
     fake.push('$/progress', { token: 't', value: { kind: 'begin', title: 'Loading' } });
     publish(fake, ['old'], 1);
     later(() => {
@@ -205,9 +220,9 @@ describe('ServerSession', () => {
   }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    session.sync(content('a.ts', 'x'));
+    session.sync(content({ name: 'a.ts', text: 'x' }));
     publish(fake, []);
-    const document = session.sync(content('a.ts', 'x'), { recheck: true });
+    const document = session.sync(content({ name: 'a.ts', text: 'x' }), { recheck: true });
     await expect(session.diagnostics(document, wait())).resolves.toStrictEqual(
       ok({ diagnostics: [], freshness: 'assumed-unchanged' }),
     );
@@ -216,7 +231,7 @@ describe('ServerSession', () => {
   test('times out when a newly opened document never gets a report', async ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    const document = session.sync(content('a.ts', 'x'));
+    const document = session.sync(content({ name: 'a.ts', text: 'x' }));
     await expect(
       session.diagnostics(document, {
         ...wait(),
@@ -241,7 +256,7 @@ describe('ServerSession', () => {
       return;
     });
     const session = new ServerSession(fake.server);
-    const document = session.sync(content('a.ts', 'x'));
+    const document = session.sync(content({ name: 'a.ts', text: 'x' }));
     await expect(session.diagnostics(document, wait())).resolves.toMatchObject({
       ok: true,
       value: { freshness: 'fresh', diagnostics: [{ message: 'pulled' }] },
@@ -251,7 +266,7 @@ describe('ServerSession', () => {
   test('fails a diagnostics wait as soon as the server exits', async ({ expect }) => {
     const fake = createFakeServer();
     const session = new ServerSession(fake.server);
-    const document = session.sync(content('a.ts', 'x'));
+    const document = session.sync(content({ name: 'a.ts', text: 'x' }));
     later(() => {
       fake.exit({ exitCode: 1, signal: undefined, expected: false });
     }, 10);

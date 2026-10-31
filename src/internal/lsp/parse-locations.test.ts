@@ -2,12 +2,10 @@ import { describe } from 'vitest';
 
 import { test } from '#testing/test.ts';
 
+import type { LspRange } from './lsp-protocol.ts';
 import { parseLocations } from './parse-locations.ts';
 
-function rangeOf(line: number): {
-  start: { line: number; character: number };
-  end: { line: number; character: number };
-} {
+function rangeOf(line: number): LspRange {
   return { start: { line, character: 1 }, end: { line, character: 2 } };
 }
 

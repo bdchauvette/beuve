@@ -36,6 +36,11 @@ export interface DocumentContent {
   readonly stamp: FileStamp;
 }
 
+export interface SyncOptions {
+  /** Send unchanged text again under a new version. */
+  readonly recheck?: boolean;
+}
+
 export interface DiagnosticsWait {
   /** Give up waiting and report what arrived. */
   readonly timeout: Temporal.Duration;
@@ -120,9 +125,14 @@ export class ServerSession {
       if (typeof uri !== 'string') {
         return;
       }
-      const version =
-        'version' in params && typeof params.version === 'number' ? params.version : undefined;
-      const diagnostics = 'diagnostics' in params ? parseDiagnostics(params.diagnostics) : [];
+      let version: number | undefined;
+      if ('version' in params && typeof params.version === 'number') {
+        version = params.version;
+      }
+      let diagnostics: LspDiagnostic[] = [];
+      if ('diagnostics' in params) {
+        diagnostics = parseDiagnostics(params.diagnostics);
+      }
       this.#sequence += 1;
       this.#reports.set(normalizeUri(uri), {
         diagnostics,
@@ -271,11 +281,12 @@ export class ServerSession {
         return ok({ diagnostics: previous, freshness: 'assumed-unchanged' });
       }
       const untilDeadline = wait.timeout.subtract(elapsed);
-      const untilWake = isCurrent
-        ? wait.quiet.subtract(report.received.elapsed())
-        : hasPriorReport
-          ? wait.grace.subtract(elapsed)
-          : untilDeadline;
+      let untilWake = untilDeadline;
+      if (isCurrent) {
+        untilWake = wait.quiet.subtract(report.received.elapsed());
+      } else if (hasPriorReport) {
+        untilWake = wait.grace.subtract(elapsed);
+      }
       await this.#nextEvent(shorterOf(untilDeadline, longerOf(untilWake, minimumWait)));
     }
   }
@@ -286,11 +297,7 @@ export class ServerSession {
   }
 
   /** Documents currently open, least recently used first. */
-  get openDocuments(): readonly {
-    readonly uri: string;
-    readonly absolutePath: string;
-    readonly stamp: FileStamp;
-  }[] {
+  get openDocuments(): readonly Pick<DocumentContent, 'uri' | 'absolutePath' | 'stamp'>[] {
     return Array.from(this.#documents.values(), ({ uri, absolutePath, stamp }) => {
       return {
         uri,
@@ -328,7 +335,7 @@ export class ServerSession {
    * is sent again under a new version, which makes push-diagnostics servers re-check it against
    * dependencies that changed on disk. Marks the document most recently used.
    */
-  sync(content: DocumentContent, options: { readonly recheck?: boolean } = {}): SyncedDocument {
+  sync(content: DocumentContent, options: SyncOptions = {}): SyncedDocument {
     this.#lastActivity = new Stopwatch();
     const key = normalizeUri(content.uri);
     const existing = this.#documents.get(key);

@@ -1,6 +1,7 @@
 import { convertCharacter } from './convert-character.ts';
+import type { EncodingChange } from './convert-character.ts';
 import type { LineIndex } from './line-index.ts';
-import type { LspRange, PositionEncoding } from './lsp-protocol.ts';
+import type { LspPosition, LspRange } from './lsp-protocol.ts';
 
 /**
  * Re-expresses `range` from one position encoding in another using the document's lines. Without
@@ -9,20 +10,16 @@ import type { LspRange, PositionEncoding } from './lsp-protocol.ts';
 export function convertRange(
   range: LspRange,
   lines: LineIndex | undefined,
-  from: PositionEncoding,
-  to: PositionEncoding,
+  encodings: EncodingChange,
 ): LspRange {
-  if (lines === undefined || from === to) {
+  if (lines === undefined || encodings.from === encodings.to) {
     return range;
   }
-  const convert = (line: number, character: number): { line: number; character: number } => {
+  const convert = ({ line, character }: LspPosition): LspPosition => {
     return {
       line,
-      character: convertCharacter(lines.lineText(line), character, from, to),
+      character: convertCharacter(lines.lineText(line), character, encodings),
     };
   };
-  return {
-    start: convert(range.start.line, range.start.character),
-    end: convert(range.end.line, range.end.character),
-  };
+  return { start: convert(range.start), end: convert(range.end) };
 }

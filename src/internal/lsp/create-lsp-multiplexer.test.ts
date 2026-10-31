@@ -16,6 +16,7 @@ import type { CallHierarchyNode } from './lsp-model.ts';
 import type { ServerDefinition } from './server-definition.ts';
 import { pollUntil } from './testing/poll-until.ts';
 import { test } from './testing/test.ts';
+import type { FakeServerMode } from './testing/write-fake-language-server.ts';
 
 describe('createLspMultiplexer with typescript-language-server', { timeout: 60_000 }, () => {
   test('reports the type error in a file once diagnostics settle', async ({
@@ -47,13 +48,15 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     const clean = okValueFrom(await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }));
     expect(clean).toMatchObject({ freshness: 'fresh', diagnostics: [] });
 
-    project.write('src/broken.ts', 'export const answer: number = 42;\n');
+    project.write({ 'src/broken.ts': 'export const answer: number = 42;\n' });
     const fixed = okValueFrom(
       await lsp.getDiagnostics({ root: project.root, path: 'src/broken.ts' }),
     );
     expect(fixed.diagnostics).toStrictEqual([]);
 
-    project.write('src/c.ts', 'export function c(n: string): number {\n  return n.length;\n}\n');
+    project.write({
+      'src/c.ts': 'export function c(n: string): number {\n  return n.length;\n}\n',
+    });
     const dependent = okValueFrom(
       await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }),
     );
@@ -61,7 +64,7 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     const broken = okValueFrom(await lsp.getDiagnostics({ root: project.root, path: 'src/b.ts' }));
     expect(broken.diagnostics.map((diagnostic) => diagnostic.code)).toStrictEqual(['2345']);
 
-    project.write('src/c.ts', 'export function c(n: number): number {\n  return n * 2;\n}\n');
+    project.write({ 'src/c.ts': 'export function c(n: number): number {\n  return n * 2;\n}\n' });
     const restored = okValueFrom(
       await lsp.getDiagnostics({ root: project.root, path: 'src/b.ts' }),
     );
@@ -349,7 +352,7 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
       servers: [{ ...fakeServer(fakeServerScript, 'normal'), command: 'planted-server' }],
       environment: { PATH: '' },
     });
-    project.write('node_modules/.bin/planted-server', '#!/bin/sh\nexit 1\n');
+    project.write({ 'node_modules/.bin/planted-server': '#!/bin/sh\nexit 1\n' });
     closing(lsp);
     const result = await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' });
     expect(result).toMatchObject({
@@ -359,7 +362,7 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
   });
 });
 
-function fakeServer(script: string, mode: string): ServerDefinition {
+function fakeServer(script: string, mode: FakeServerMode): ServerDefinition {
   return {
     id: 'fake',
     command: process.execPath,

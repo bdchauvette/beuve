@@ -24,12 +24,18 @@ export function badgeCallHierarchyNode(
     return 'external';
   }
   const first = node.range.start.line + 1;
-  const last =
-    node.range.end.line +
-    (node.range.end.character === 0 && node.range.end.line > node.range.start.line ? 0 : 1);
+  const last = lastLineOf(node.range);
   const spans = changed.get(node.file.path) ?? [];
   if (spans.some((span) => span.startLine <= last && span.endLine >= first)) {
     return 'modified';
   }
   return 'untouched';
+}
+
+/** The 1-based last line of `range`: one that ends at column 0 of a later line ends the line before. */
+function lastLineOf({ start, end }: CallHierarchyNode['range']): number {
+  if (end.character === 0 && end.line > start.line) {
+    return end.line;
+  }
+  return end.line + 1;
 }

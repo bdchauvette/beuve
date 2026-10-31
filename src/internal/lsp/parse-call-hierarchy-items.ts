@@ -37,9 +37,16 @@ export function parseCallHierarchyItems(
     const fromRanges = fields['fromRanges'];
     return {
       item,
-      fromRanges: Array.isArray(fromRanges) ? fromRanges.filter((range) => isLspRange(range)) : [],
+      fromRanges: rangesFrom(fromRanges),
     };
   });
+}
+
+function rangesFrom(value: unknown): LspRange[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((range) => isLspRange(range));
 }
 
 function isCallHierarchyItem(value: unknown): value is LspCallHierarchyItem {

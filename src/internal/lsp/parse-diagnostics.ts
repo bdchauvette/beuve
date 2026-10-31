@@ -1,5 +1,9 @@
 import { isLspRange } from './is-lsp-range.ts';
-import type { LspDiagnostic, LspDiagnosticSeverity, LspLocation } from './lsp-protocol.ts';
+import type {
+  LspDiagnostic,
+  LspDiagnosticSeverity,
+  LspRelatedInformation,
+} from './lsp-protocol.ts';
 
 /** Keeps the well-formed diagnostics in a server array, normalising optional fields. */
 export function parseDiagnostics(value: unknown): LspDiagnostic[] {
@@ -42,7 +46,7 @@ function isSeverity(value: unknown): value is LspDiagnosticSeverity {
   return [1, 2, 3, 4].includes(value as number);
 }
 
-function parseRelated(value: unknown): { location: LspLocation; message: string }[] {
+function parseRelated(value: unknown): LspRelatedInformation[] {
   if (typeof value !== 'object' || value === null) {
     return [];
   }

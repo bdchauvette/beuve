@@ -42,7 +42,7 @@ import { resolveWorkspaceRoot } from './resolve-workspace-root.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import type { ServerDefinition } from './server-definition.ts';
 import { ServerSession } from './server-session.ts';
-import type { FileStamp, SyncedDocument } from './server-session.ts';
+import type { DocumentContent, FileStamp, SyncedDocument } from './server-session.ts';
 import type { ServerExit } from './start-language-server.ts';
 import { startLanguageServer } from './start-language-server.ts';
 import { typescriptServerDefinition } from './typescript-server-definition.ts';
@@ -182,10 +182,11 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const startSession = async (entry: ServerEntry): Promise<Result<ServerSession, LspError>> => {
     const { definition, root } = entry;
     const environment = options.environment ?? process.env;
-    const searchDirectories = [
-      ...(options.trustWorkspaceBinaries === true ? [path.join(root, 'node_modules', '.bin')] : []),
-      ...(options.searchDirectories ?? []),
-    ];
+    const searchDirectories: string[] = [];
+    if (options.trustWorkspaceBinaries === true) {
+      searchDirectories.push(path.join(root, 'node_modules', '.bin'));
+    }
+    searchDirectories.push(...(options.searchDirectories ?? []));
     const command = await findServerCommand({
       serverId: definition.id,
       command: definition.command,
@@ -288,10 +289,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     return current.starting;
   };
 
-  const readDocument = async (
-    absolutePath: string,
-    displayPath: string,
-  ): Promise<Result<{ text: string; stamp: FileStamp }, LspError>> => {
+  const readDocument = async ({
+    absolutePath,
+    displayPath,
+  }: DocumentPaths): Promise<Result<Pick<DocumentContent, 'text' | 'stamp'>, LspError>> => {
     try {
       // One open, then the handle's own size and text (ADR 0082): a file swapped in between
       // can't be read past the size check.
@@ -342,7 +343,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         continue;
       }
       const definition = definitionFor(resolved.value);
-      const content = await readDocument(document.absolutePath, document.absolutePath);
+      const content = await readDocument({
+        absolutePath: document.absolutePath,
+        displayPath: document.absolutePath,
+      });
       if (definition === undefined || !content.ok) {
         session.close(document.uri);
         continue;
@@ -372,7 +376,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (definition === undefined) {
       return err({ kind: 'unsupported-language', path: file.value.relativePath });
     }
-    const content = await readDocument(file.value.absolutePath, file.value.relativePath);
+    const content = await readDocument({
+      absolutePath: file.value.absolutePath,
+      displayPath: file.value.relativePath,
+    });
     if (!content.ok) {
       return content;
     }
@@ -405,12 +412,21 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   ): Promise<ViewMapper> => {
     const encoding = session.server.capabilities.positionEncoding;
     const lines = new Map<string, LineIndex>();
+    const linesOf = async (uri: string): Promise<LineIndex | undefined> => {
+      const open = session.linesOf(uri);
+      if (open !== undefined) {
+        return open;
+      }
+      const text = await readInsideRoot(root, uri, maxFileBytes);
+      if (text === undefined) {
+        return undefined;
+      }
+      return new LineIndex(text);
+    };
     if (encoding !== positionEncodings.utf16) {
       const distinct = new Set(uris.map((value) => normalizeUri(value)));
       for (const uri of distinct) {
-        const open = session.linesOf(uri);
-        const text = open === undefined ? await readInsideRoot(root, uri, maxFileBytes) : undefined;
-        const index = open ?? (text === undefined ? undefined : new LineIndex(text));
+        const index = await linesOf(uri);
         if (index !== undefined) {
           lines.set(uri, index);
         }
@@ -419,28 +435,16 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     return createViewMapper({ root, encoding, lines: (uri) => lines.get(uri) });
   };
 
-  const requireCapability = (
-    opened: { readonly session: ServerSession; readonly entry: ServerEntry },
-    capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
-  ): Result<undefined, LspError> => {
-    if (opened.session.server.capabilities[capability]) {
-      return ok(undefined);
-    }
-    return err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
-  };
-
   const nodesFrom = async (
-    session: ServerSession,
-    entry: ServerEntry,
+    { session, entry }: ServedFile,
     edges: readonly LspCallHierarchyEdge[],
     callSiteUri: string | undefined,
   ): Promise<CallHierarchyCall[]> => {
     const uris = edges.map((edge) => edge.item.uri);
-    const mapper = await mapperFor(
-      session,
-      entry.root,
-      callSiteUri === undefined ? uris : [...uris, callSiteUri],
-    );
+    if (callSiteUri !== undefined) {
+      uris.push(callSiteUri);
+    }
+    const mapper = await mapperFor(session, entry.root, uris);
     return edges.map((edge) => {
       const id = randomUUID();
       nodes.set(id, { entry, item: edge.item });
@@ -464,50 +468,48 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (!session.ok) {
       return session;
     }
-    const capable = requireCapability(
-      { session: session.value, entry: handle.entry },
-      'callHierarchy',
-    );
+    const served: ServedFile = { session: session.value, entry: handle.entry };
+    const capable = requireCapability(served, 'callHierarchy');
     if (!capable.ok) {
       return capable;
     }
     await refreshOpenDocuments(session.value, handle.entry.root);
-    const method =
-      direction === 'incoming' ? 'callHierarchy/incomingCalls' : 'callHierarchy/outgoingCalls';
+    const { method, shape } = callDirections[direction];
     const result = await session.value.request(method, { item: handle.item });
     if (!result.ok) {
       return result;
     }
-    const edges = parseCallHierarchyItems(result.value, direction === 'incoming' ? 'from' : 'to');
-    return ok(
-      await nodesFrom(
-        session.value,
-        handle.entry,
-        edges,
-        direction === 'incoming' ? undefined : handle.item.uri,
-      ),
-    );
+    const edges = parseCallHierarchyItems(result.value, shape);
+    let callSiteUri: string | undefined;
+    if (direction === 'outgoing') {
+      callSiteUri = handle.item.uri;
+    }
+    return ok(await nodesFrom(served, edges, callSiteUri));
   };
 
-  const idleTimer =
-    idleTimeout.sign > 0
-      ? setInterval(() => {
-          for (const entry of entries.values()) {
-            const { session } = entry;
-            if (session === undefined || Temporal.Duration.compare(session.idle, idleTimeout) < 0) {
-              continue;
-            }
+  const stopIdleServers = (): void => {
+    for (const entry of entries.values()) {
+      const { session } = entry;
+      if (session === undefined || Temporal.Duration.compare(session.idle, idleTimeout) < 0) {
+        continue;
+      }
 
-            entry.session = undefined;
-            logger?.info('lsp: stopping idle server', {
-              serverId: entry.definition.id,
-              root: entry.root,
-            });
-            void session.dispose();
-          }
-        }, shorterOf(idleTimeout, idleTimerPeriod).total('milliseconds'))
-      : undefined;
-  idleTimer?.unref();
+      entry.session = undefined;
+      logger?.info('lsp: stopping idle server', {
+        serverId: entry.definition.id,
+        root: entry.root,
+      });
+      void session.dispose();
+    }
+  };
+  let idleTimer: ReturnType<typeof setInterval> | undefined;
+  if (idleTimeout.sign > 0) {
+    idleTimer = setInterval(
+      stopIdleServers,
+      shorterOf(idleTimeout, idleTimerPeriod).total('milliseconds'),
+    );
+    idleTimer.unref();
+  }
 
   return {
     getDiagnostics: async (request): Promise<Result<DiagnosticsReport, LspError>> => {
@@ -559,7 +561,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         return result;
       }
       const edges = parseCallHierarchyItems(result.value, 'items');
-      const calls = await nodesFrom(session, entry, edges, undefined);
+      const calls = await nodesFrom({ session, entry }, edges, undefined);
       return ok(calls.map((call) => call.node));
     },
 
@@ -598,16 +600,13 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (!opened.ok) {
         return opened;
       }
-      const isType = request.kind === 'type-definition';
-      const capable = requireCapability(opened.value, isType ? 'typeDefinition' : 'definition');
+      const { capability, method } = definitionKinds[request.kind ?? 'definition'];
+      const capable = requireCapability(opened.value, capability);
       if (!capable.ok) {
         return capable;
       }
       const { session, entry } = opened.value;
-      const result = await session.request(
-        isType ? 'textDocument/typeDefinition' : 'textDocument/definition',
-        positionParams(opened.value, request.position),
-      );
+      const result = await session.request(method, positionParams(opened.value, request.position));
       if (!result.ok) {
         return result;
       }
@@ -644,8 +643,14 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         clearInterval(idleTimer);
       }
       const stopping = Array.from(entries.values(), async (entry) => {
-        const started = entry.starting === undefined ? undefined : await entry.starting;
-        const session = entry.session ?? (started?.ok === true ? started.value : undefined);
+        let started: Result<ServerSession, LspError> | undefined;
+        if (entry.starting !== undefined) {
+          started = await entry.starting;
+        }
+        let session = entry.session;
+        if (session === undefined && started?.ok === true) {
+          session = started.value;
+        }
         entry.session = undefined;
         await session?.dispose();
       });
@@ -653,6 +658,35 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       nodes.clear();
     },
   };
+}
+
+/** An opened file's session and the server entry it belongs to. */
+type ServedFile = Pick<OpenedFile, 'session' | 'entry'>;
+
+/** Where to read a document from, and how errors name it. */
+interface DocumentPaths {
+  readonly absolutePath: string;
+  readonly displayPath: string;
+}
+
+const callDirections = {
+  incoming: { method: 'callHierarchy/incomingCalls', shape: 'from' },
+  outgoing: { method: 'callHierarchy/outgoingCalls', shape: 'to' },
+} as const;
+
+const definitionKinds = {
+  definition: { capability: 'definition', method: 'textDocument/definition' },
+  'type-definition': { capability: 'typeDefinition', method: 'textDocument/typeDefinition' },
+} as const;
+
+function requireCapability(
+  opened: ServedFile,
+  capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
+): Result<undefined, LspError> {
+  if (opened.session.server.capabilities[capability]) {
+    return ok(undefined);
+  }
+  return err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
 }
 
 function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
@@ -664,15 +698,13 @@ function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duratio
 
 function positionParams(opened: OpenedFile, position: Position): Record<string, unknown> {
   const encoding = opened.session.server.capabilities.positionEncoding;
-  const character =
-    encoding === positionEncodings.utf16
-      ? position.character
-      : convertCharacter(
-          opened.document.lines.lineText(position.line),
-          position.character,
-          positionEncodings.utf16,
-          encoding,
-        );
+  let { character } = position;
+  if (encoding !== positionEncodings.utf16) {
+    character = convertCharacter(opened.document.lines.lineText(position.line), character, {
+      from: positionEncodings.utf16,
+      to: encoding,
+    });
+  }
   return {
     textDocument: { uri: opened.document.uri },
     position: { line: position.line, character },

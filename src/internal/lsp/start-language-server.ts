@@ -14,7 +14,7 @@ import type { Result } from '#x/result/result.ts';
 import { answerServerRequest } from './answer-server-request.ts';
 import { clientCapabilities } from './client-capabilities.ts';
 import type { LspError } from './lsp-error.ts';
-import type { LspServerCapabilities } from './lsp-protocol.ts';
+import type { LspServerCapabilities, WorkspaceFolder } from './lsp-protocol.ts';
 import { parseServerCapabilities } from './parse-server-capabilities.ts';
 import type { WorkspaceRoot } from './resolve-workspace-root.ts';
 import type { ServerDefinition } from './server-definition.ts';
@@ -120,7 +120,11 @@ export async function startLanguageServer(
         signal: signal ?? undefined,
         expected: isExpected,
       };
-      logger?.[isExpected ? 'debug' : 'warn']('lsp: server exited', { serverId, root, ...exit });
+      if (isExpected) {
+        logger?.debug('lsp: server exited', { serverId, root, ...exit });
+      } else {
+        logger?.warn('lsp: server exited', { serverId, root, ...exit });
+      }
       resolve(exit);
     });
   });
@@ -208,7 +212,10 @@ export async function startLanguageServer(
   const initialized = await initialize(connection, options, workspaceFolders);
   if (!initialized.ok) {
     await shutdown();
-    const message = `${initialized.error}${stderrTail === '' ? '' : `\n${stderrTail.trim()}`}`;
+    let message = initialized.error;
+    if (stderrTail !== '') {
+      message += `\n${stderrTail.trim()}`;
+    }
     return err({ kind: 'server-start-failed', serverId, message });
   }
   logger?.info('lsp: server started', { serverId, root, pid: child.pid });
@@ -270,7 +277,7 @@ async function spawnServer(
 async function initialize(
   connection: JsonRpcConnection,
   options: StartLanguageServerOptions,
-  workspaceFolders: readonly { uri: string; name: string }[],
+  workspaceFolders: readonly WorkspaceFolder[],
 ): Promise<Result<LspServerCapabilities, string>> {
   const { definition, root } = options;
   const result = await connection.request(

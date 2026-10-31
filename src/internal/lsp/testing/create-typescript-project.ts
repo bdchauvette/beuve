@@ -6,22 +6,22 @@ import path from 'node:path';
 export interface TypescriptProject {
   /** Real path of the project root. */
   readonly root: string;
-  /** Writes a file relative to the root, creating parent directories. */
-  readonly write: (file: string, content: string) => void;
+  /** Writes files, by path relative to the root, creating parent directories. */
+  readonly write: (files: Readonly<Record<string, string>>) => void;
 }
 
 /** Creates the project in a new directory under `parent` (the system temporary directory by default). */
 export function createTypescriptProject(parent: string = os.tmpdir()): TypescriptProject {
   const created = mkdtempSync(path.join(parent, 'beuve-lsp-'));
   const root = realpathSync(created);
-  const write = (file: string, content: string): void => {
-    const target = path.join(root, file);
-    mkdirSync(path.dirname(target), { recursive: true });
-    writeFileSync(target, content);
+  const write = (files: Readonly<Record<string, string>>): void => {
+    for (const [file, content] of Object.entries(files)) {
+      const target = path.join(root, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, content);
+    }
   };
-  for (const [file, content] of Object.entries(typescriptProjectFiles)) {
-    write(file, content);
-  }
+  write(typescriptProjectFiles);
   return { root, write };
 }
 
