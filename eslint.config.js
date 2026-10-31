@@ -276,6 +276,21 @@ export default defineConfig(
   },
 
   {
+    // ADR 0086 phase 2, area by area: the domains, their testing/ directories and tests are clean.
+    name: 'beuve/style-rules-phase-2-internal',
+    files: ['src/internal/**/*.ts'],
+    rules: {
+      'local/no-ternary-outside-templates': 'error',
+      'no-nested-ternary': 'error',
+      'local/arrow-body-braces': 'error',
+      'local/no-inline-object-type-in-signature': 'error',
+      'local/no-same-type-positional-params': 'error',
+      curly: ['error', 'all'],
+      '@typescript-eslint/max-params': ['error', { max: 3 }],
+    },
+  },
+
+  {
     name: 'beuve/conversion-naming',
     // ADR 0062.
     files: nodeFiles,
