@@ -39,11 +39,19 @@ export function updateChatAnswer(
       JSON.stringify(update.parts),
       JSON.stringify(update.citations ?? []),
       update.status,
-      update.review === undefined ? '' : JSON.stringify(update.review),
+      reviewText(update.review),
       id,
     );
   if (Number(changed.changes) === 1) {
     return ok(undefined);
   }
   return err({ kind: 'message-not-found', id });
+}
+
+/** The stored review: its JSON, or `''` (stored as NULL) for none. */
+function reviewText(review: ChatReview | undefined): string {
+  if (review === undefined) {
+    return '';
+  }
+  return JSON.stringify(review);
 }

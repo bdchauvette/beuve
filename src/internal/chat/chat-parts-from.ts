@@ -12,8 +12,12 @@ export function chatPartsFrom(text: string, mentions: readonly ChatMention[] = [
   let rest = '';
   for (const piece of text.split(mentionToken)) {
     const index = mentionIndexOf(piece);
-    const mention = index === undefined ? undefined : mentions[index];
-    if (index === undefined || mention === undefined) {
+    if (index === undefined) {
+      rest += piece;
+      continue;
+    }
+    const mention = mentions[index];
+    if (mention === undefined) {
       rest += piece;
       continue;
     }

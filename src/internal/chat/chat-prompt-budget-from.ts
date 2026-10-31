@@ -7,6 +7,18 @@ const charsPerToken = 3.5;
 const minChars = 12_000;
 const maxChars = 600_000;
 
+/** The least each scaled limit gets, so a question and a small diff stay usable. */
+const floors = {
+  maxFileChars: 4000,
+  maxQuestionChars: 2000,
+  maxFocusChars: 1000,
+  maxIntentChars: 1000,
+  maxHistoryChars: 2000,
+  maxSelectionChars: 3000,
+  maxSelectionFileChars: 2000,
+  maxSummaryChars: 1500,
+} as const satisfies Partial<Record<keyof ChatPromptBudget, number>>;
+
 /**
  * The prompt budget for a model (ADR 0070): {@link defaultChatPromptBudget} when its context
  * window is unknown, otherwise a share of the window, a quarter for a model with tools (the rest
@@ -21,24 +33,27 @@ export function chatPromptBudgetFrom(
   if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) {
     return defaultChatPromptBudget;
   }
-  const share = capabilities?.tools === false ? 0.5 : 0.25;
+  let share = 0.25;
+  if (capabilities?.tools === false) {
+    share = 0.5;
+  }
   const total = Math.min(maxChars, Math.max(minChars, Math.floor(tokens * share * charsPerToken)));
   const scale = total / defaultChatPromptBudget.maxChars;
-  const scaled = (value: number, floor: number): number => {
-    return Math.max(floor, Math.floor(value * scale));
-  };
   const base = defaultChatPromptBudget;
+  const scaled = (limit: keyof typeof floors): number => {
+    return Math.max(floors[limit], Math.floor(base[limit] * scale));
+  };
   return {
     maxChars: total,
-    maxFileChars: scaled(base.maxFileChars, 4000),
-    maxQuestionChars: scaled(base.maxQuestionChars, 2000),
-    maxFocusChars: scaled(base.maxFocusChars, 1000),
-    maxIntentChars: scaled(base.maxIntentChars, 1000),
-    maxHistoryChars: scaled(base.maxHistoryChars, 2000),
+    maxFileChars: scaled('maxFileChars'),
+    maxQuestionChars: scaled('maxQuestionChars'),
+    maxFocusChars: scaled('maxFocusChars'),
+    maxIntentChars: scaled('maxIntentChars'),
+    maxHistoryChars: scaled('maxHistoryChars'),
     maxHistoryTurns: base.maxHistoryTurns,
     maxImpactFindings: base.maxImpactFindings,
-    maxSelectionChars: scaled(base.maxSelectionChars, 3000),
-    maxSelectionFileChars: scaled(base.maxSelectionFileChars, 2000),
-    maxSummaryChars: scaled(base.maxSummaryChars, 1500),
+    maxSelectionChars: scaled('maxSelectionChars'),
+    maxSelectionFileChars: scaled('maxSelectionFileChars'),
+    maxSummaryChars: scaled('maxSummaryChars'),
   };
 }

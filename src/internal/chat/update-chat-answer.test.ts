@@ -107,12 +107,7 @@ function sessionId(): SessionId {
   return '11111111-1111-4111-8111-111111111111' as SessionId;
 }
 
-function base(): {
-  sessionId: SessionId;
-  headSha: CommitSha;
-  citations: [];
-  createdAt: string;
-} {
+function base(): Pick<ChatMessage, 'sessionId' | 'headSha' | 'citations' | 'createdAt'> {
   return {
     sessionId: sessionId(),
     headSha: 'c'.repeat(40) as CommitSha,

@@ -15,12 +15,15 @@ export function appendChatMessage(
   db: DatabaseSync,
   message: ChatMessage,
 ): Result<void, Extract<ChatStoreError, { kind: 'session-not-found' | 'duplicate-message' }>> {
-  const status = message.role === 'assistant' ? message.status : 'done';
-  const kind = message.role === 'assistant' ? message.kind : 'answer';
-  const review =
-    message.role === 'assistant' && message.review !== undefined
-      ? JSON.stringify(message.review)
-      : '';
+  let status = 'done';
+  let kind = 'answer';
+  let review = '';
+  if (message.role === 'assistant') {
+    ({ status, kind } = message);
+    if (message.review !== undefined) {
+      review = JSON.stringify(message.review);
+    }
+  }
   try {
     db.prepare(
       `INSERT INTO chat_messages (id, session_id, head_sha, role, parts, citations, status, kind,

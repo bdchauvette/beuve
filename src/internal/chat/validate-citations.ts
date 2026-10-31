@@ -37,18 +37,17 @@ export function validateCitations(
   parsed: ParsedCitations,
   scope: CitationScope,
 ): ValidatedAnswer {
-  const root = scope.worktreePath;
-  const prefix = root === undefined ? undefined : root.endsWith('/') ? root : `${root}/`;
+  const prefix = directoryPrefix(scope.worktreePath);
   const citations: Citation[] = [];
   const seen = new Set<string>();
   const dropped: DroppedCitation[] = [];
   let content = '';
   let cursor = 0;
   for (const marker of parsed.markers) {
-    const path =
-      prefix !== undefined && marker.path.startsWith(prefix)
-        ? marker.path.slice(prefix.length)
-        : marker.path;
+    let { path } = marker;
+    if (prefix !== undefined && path.startsWith(prefix)) {
+      path = path.slice(prefix.length);
+    }
     const lines = `${String(marker.startLine)}-${String(marker.endLine)}`;
     content += answer.slice(cursor, marker.index);
     cursor = marker.index + marker.length;
@@ -59,7 +58,7 @@ export function validateCitations(
         endLine: marker.endLine,
         reason: 'unknown-path',
       });
-      content += path.includes('`') ? `${path}:${lines}` : `\`${path}:${lines}\``;
+      content += codeSpan(`${path}:${lines}`);
       continue;
     }
     content += `[[${path}:${lines}]]`;
@@ -72,4 +71,20 @@ export function validateCitations(
   }
   content += answer.slice(cursor);
   return { content, citations, dropped, malformed: parsed.malformed };
+}
+
+/** The worktree path with a trailing `/`, for stripping it from absolute citations. */
+function directoryPrefix(root: string | undefined): string | undefined {
+  if (root === undefined || root.endsWith('/')) {
+    return root;
+  }
+  return `${root}/`;
+}
+
+/** `text` as inline code, or as it is when a backtick in it would break the span. */
+function codeSpan(text: string): string {
+  if (text.includes('`')) {
+    return text;
+  }
+  return `\`${text}\``;
 }

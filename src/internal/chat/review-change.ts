@@ -73,11 +73,22 @@ export async function reviewChange<E>(
   const timeout = deps.timeout ?? Temporal.Duration.from({ minutes: 10 });
   const stopwatch = new Stopwatch();
   const maxFindings = deps.maxFindings ?? 12;
-  const pathScope = input.task?.kind === 'review' ? input.task.pathScope : [];
+  let pathScope: readonly string[] = [];
+  if (input.task?.kind === 'review') {
+    ({ pathScope } = input.task);
+  }
   const task = { kind: 'review', pathScope, maxFindings } as const;
   const textFiles = input.files.filter((file) => !file.binary && file.status !== 'deleted');
   if (textFiles.length === 0) {
-    return ok(assemble([], emptyDrops, pathScope, input.files.length, 'skipped'));
+    return ok(
+      assemble({
+        findings: [],
+        dropped: emptyDrops,
+        pathScope,
+        fileCount: input.files.length,
+        verification: 'skipped',
+      }),
+    );
   }
 
   const built = buildChatPrompt(
@@ -108,13 +119,25 @@ export async function reviewChange<E>(
   const drops = { ...validated.dropped, unconfirmed: 0 };
   if (deps.verifier === undefined || validated.findings.length === 0) {
     return ok(
-      assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'skipped'),
+      assemble({
+        findings: unchecked(validated.findings),
+        dropped: drops,
+        pathScope,
+        fileCount: input.files.length,
+        verification: 'skipped',
+      }),
     );
   }
   const remaining = timeout.subtract(stopwatch.elapsed());
   if (Temporal.Duration.compare(remaining, minVerify) < 0) {
     return ok(
-      assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'),
+      assemble({
+        findings: unchecked(validated.findings),
+        dropped: drops,
+        pathScope,
+        fileCount: input.files.length,
+        verification: 'failed',
+      }),
     );
   }
 
@@ -142,18 +165,24 @@ export async function reviewChange<E>(
       return err({ kind: 'model', error: verdicts.error });
     }
     return ok(
-      assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'),
+      assemble({
+        findings: unchecked(validated.findings),
+        dropped: drops,
+        pathScope,
+        fileCount: input.files.length,
+        verification: 'failed',
+      }),
     );
   }
   const kept = applyVerdicts(validated.findings, verdicts.value);
   return ok(
-    assemble(
-      kept,
-      { ...drops, unconfirmed: validated.findings.length - kept.length },
+    assemble({
+      findings: kept,
+      dropped: { ...drops, unconfirmed: validated.findings.length - kept.length },
       pathScope,
-      input.files.length,
-      'verified',
-    ),
+      fileCount: input.files.length,
+      verification: 'verified',
+    }),
   );
 }
 
@@ -181,20 +210,16 @@ function applyVerdicts(
     if (verdict === 'refuted') {
       return [];
     }
-    return [{ ...finding, check: verdict === 'confirmed' ? 'confirmed' : 'unconfirmed' }];
+    if (verdict === 'confirmed') {
+      return [{ ...finding, check: 'confirmed' }];
+    }
+    return [{ ...finding, check: 'unconfirmed' }];
   });
 }
 
-function assemble(
-  findings: readonly ChatFinding[],
-  dropped: ChatReview['dropped'],
-  pathScope: readonly string[],
-  fileCount: number,
-  verification: ChatReview['verification'],
-): ReviewedChange {
-  const review: ChatReview = { findings, dropped, pathScope, fileCount, verification };
+function assemble(review: ChatReview): ReviewedChange {
   const citations: Citation[] = [];
-  for (const finding of findings) {
+  for (const finding of review.findings) {
     const isCited = citations.some((citation) => {
       return (
         citation.path === finding.path &&

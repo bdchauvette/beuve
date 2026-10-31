@@ -118,13 +118,7 @@ describe('chatHistoryFrom', () => {
   });
 });
 
-function base(): {
-  id: ChatMessageId;
-  sessionId: SessionId;
-  headSha: CommitSha;
-  citations: [];
-  createdAt: string;
-} {
+function base(): Pick<ChatMessage, 'id' | 'sessionId' | 'headSha' | 'citations' | 'createdAt'> {
   return {
     id: '00000000-0000-4000-8000-000000000001' as ChatMessageId,
     sessionId: '11111111-1111-4111-8111-111111111111' as SessionId,

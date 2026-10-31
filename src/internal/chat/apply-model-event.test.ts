@@ -6,10 +6,13 @@ import type { ChatPartEvent } from './chat-part-event.ts';
 import { test } from './testing/test.ts';
 
 /** Folds `events` from a fresh run; gives the final state and every part event in order. */
-function fold(events: readonly ModelStreamEvent[]): {
+/** A run's final parts, and every part event it emitted. */
+interface Folded {
   readonly state: StreamedParts;
   readonly emitted: ChatPartEvent[];
-} {
+}
+
+function fold(events: readonly ModelStreamEvent[]): Folded {
   let state: StreamedParts = { parts: [], nextId: 1, tools: {} };
   const emitted: ChatPartEvent[] = [];
   for (const event of events) {

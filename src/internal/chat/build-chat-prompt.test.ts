@@ -7,7 +7,13 @@ import { defaultChatPromptBudget } from './default-chat-prompt-budget.ts';
 import { createChatQuestion } from './testing/create-chat-question.ts';
 import { test } from './testing/test.ts';
 
-function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
+/** How many hunks a generated file has, and how many added lines each. */
+interface FileShape {
+  readonly hunks: number;
+  readonly linesPerHunk: number;
+}
+
+function bigFile(path: string, { hunks, linesPerHunk }: FileShape): ChatFile {
   const body = Array.from({ length: hunks }, (_, hunk) => {
     return [
       `@@ -${String(hunk * 100 + 1)},1 +${String(hunk * 100 + 1)},${String(linesPerHunk)} @@`,
@@ -123,9 +129,9 @@ describe('buildChatPrompt', () => {
     const small: ChatPromptBudget = { ...budget(), maxChars: 6000, maxFileChars: 2500 };
     const question = createChatQuestion({
       files: [
-        bigFile('src/huge.ts', 10, 30),
-        bigFile('src/next.ts', 1, 40),
-        bigFile('src/last.ts', 1, 200),
+        bigFile('src/huge.ts', { hunks: 10, linesPerHunk: 30 }),
+        bigFile('src/next.ts', { hunks: 1, linesPerHunk: 40 }),
+        bigFile('src/last.ts', { hunks: 1, linesPerHunk: 200 }),
         { path: 'logo.png', status: 'added', binary: true, patch: 'Binary files differ\n' },
       ],
     });
@@ -167,7 +173,10 @@ describe('buildChatPrompt', () => {
   test('never points a model without tools at the worktree', ({ expect }) => {
     const small: ChatPromptBudget = { ...budget(), maxChars: 6000, maxFileChars: 2500 };
     const question = createChatQuestion({
-      files: [bigFile('src/huge.ts', 10, 30), bigFile('src/last.ts', 1, 400)],
+      files: [
+        bigFile('src/huge.ts', { hunks: 10, linesPerHunk: 30 }),
+        bigFile('src/last.ts', { hunks: 1, linesPerHunk: 400 }),
+      ],
     });
     for (const task of [
       undefined,
@@ -190,7 +199,7 @@ describe('buildChatPrompt', () => {
   }) => {
     const turns: ChatTurn[] = Array.from({ length: 30 }, (_, index) => {
       return {
-        role: index % 2 === 0 ? 'user' : 'assistant',
+        role: roleAt(index),
         content: `turn ${String(index)}`,
       };
     });
@@ -255,7 +264,7 @@ describe('buildChatPrompt with selections and a summary', () => {
             endLine: 11,
             totalLines: 40,
             isWholeFile: false,
-            lines: lines(9, 3),
+            lines: lines({ from: 9, count: 3 }),
           },
           {
             kind: 'lines',
@@ -304,7 +313,7 @@ describe('buildChatPrompt with selections and a summary', () => {
     };
     const built = buildChatPrompt(
       createChatQuestion({
-        files: [bigFile('src/huge.ts', 10, 80)],
+        files: [bigFile('src/huge.ts', { hunks: 10, linesPerHunk: 80 })],
         selections: [
           {
             kind: 'lines',
@@ -315,7 +324,7 @@ describe('buildChatPrompt with selections and a summary', () => {
             endLine: 300,
             totalLines: 300,
             isWholeFile: true,
-            lines: lines(1, 300),
+            lines: lines({ from: 1, count: 300 }),
           },
           {
             kind: 'lines',
@@ -326,7 +335,7 @@ describe('buildChatPrompt with selections and a summary', () => {
             endLine: 2,
             totalLines: 3,
             isWholeFile: false,
-            lines: lines(1, 2),
+            lines: lines({ from: 1, count: 2 }),
           },
         ],
       }),
@@ -366,10 +375,24 @@ describe('buildChatPrompt with selections and a summary', () => {
   });
 });
 
-function lines(from: number, count: number): string[] {
+/** `count` generated lines, named from `v<from>`. */
+interface GeneratedLines {
+  readonly from: number;
+  readonly count: number;
+}
+
+function lines({ from, count }: GeneratedLines): string[] {
   return Array.from({ length: count }, (_, index) => {
     return `const v${String(from + index)} = ${String(index)};`;
   });
+}
+
+/** Turns alternate, the reviewer first. */
+function roleAt(index: number): ChatTurn['role'] {
+  if (index % 2 === 0) {
+    return 'user';
+  }
+  return 'assistant';
 }
 
 function budget(): ChatPromptBudget {

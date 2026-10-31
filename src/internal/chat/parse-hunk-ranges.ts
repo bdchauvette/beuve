@@ -20,12 +20,15 @@ export function parseHunkRanges(patch: string): HeadRange[] {
       continue;
     }
     const start = Number(match[1]);
-    const count = match[2] === undefined || match[2] === '' ? 1 : Number(match[2]);
-    ranges.push(
-      count === 0
-        ? { start: Math.max(start, 1), end: Math.max(start, 1) }
-        : { start, end: start + count - 1 },
-    );
+    let count = 1;
+    if (match[2] !== undefined && match[2] !== '') {
+      count = Number(match[2]);
+    }
+    if (count === 0) {
+      ranges.push({ start: Math.max(start, 1), end: Math.max(start, 1) });
+    } else {
+      ranges.push({ start, end: start + count - 1 });
+    }
   }
   return ranges;
 }

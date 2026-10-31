@@ -5,12 +5,12 @@ import type { ChatReview } from './chat-review.ts';
  * finding with its `[[path:start-end]]` citation. Pure.
  */
 export function reviewMarkdownFrom(review: ChatReview): string {
-  const count = `${String(review.findings.length)} ${review.findings.length === 1 ? 'finding' : 'findings'}`;
-  const unconfirmed =
-    review.dropped.unconfirmed === 0
-      ? ''
-      : `, ${String(review.dropped.unconfirmed)} dropped as unconfirmed`;
-  const header = `**Review** of ${String(review.fileCount)} ${review.fileCount === 1 ? 'file' : 'files'}: ${count}${unconfirmed}.`;
+  const count = counted(review.findings.length, 'finding');
+  let unconfirmed = '';
+  if (review.dropped.unconfirmed > 0) {
+    unconfirmed = `, ${String(review.dropped.unconfirmed)} dropped as unconfirmed`;
+  }
+  const header = `**Review** of ${counted(review.fileCount, 'file')}: ${count}${unconfirmed}.`;
   const items = review.findings.map((finding) => {
     return (
       `- **${finding.severity}, ${finding.category}** ${finding.title} ` +
@@ -19,5 +19,16 @@ export function reviewMarkdownFrom(review: ChatReview): string {
       finding.body.replaceAll(/\s+/gu, ' ')
     );
   });
-  return [header, ...(items.length === 0 ? [] : ['', ...items])].join('\n');
+  if (items.length === 0) {
+    return header;
+  }
+  return [header, '', ...items].join('\n');
+}
+
+/** `1 file`, `3 files`. */
+function counted(count: number, noun: string): string {
+  if (count === 1) {
+    return `1 ${noun}`;
+  }
+  return `${String(count)} ${noun}s`;
 }

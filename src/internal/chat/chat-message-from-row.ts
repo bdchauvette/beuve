@@ -61,7 +61,10 @@ export function chatMessageFromRow(
     createdAt: created_at,
   };
   if (role === 'user' || role === 'system-notice' || role === 'summary') {
-    const allowed = role === 'user' ? questionPartKinds : textPartKinds;
+    let allowed = textPartKinds;
+    if (role === 'user') {
+      allowed = questionPartKinds;
+    }
     if (parsedParts.some((part) => !allowed.has(part.kind))) {
       return corrupt(`a ${role} has a part it can't have`);
     }

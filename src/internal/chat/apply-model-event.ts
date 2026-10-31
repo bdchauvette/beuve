@@ -2,6 +2,12 @@ import type { ChatPart } from './chat-message.ts';
 import type { ChatDelta, ChatModelProgress } from './chat-model.ts';
 import type { ChatPartEvent } from './chat-part-event.ts';
 
+/** The parts after an event, and the part events it caused. */
+export interface AppliedEvent {
+  readonly state: StreamedParts;
+  readonly events: readonly ChatPartEvent[];
+}
+
 /**
  * An answer's parts while its request runs (ADR 0072). Plain data; a run starts from
  * `{ parts: [], nextId: 1, tools: {} }`.
@@ -30,10 +36,7 @@ export type ModelStreamEvent =
  * discards the text written so far (the port's final answer is the last turn's); `stop` ends
  * whatever is open, a running tool as `stopped`. `started` changes no part. Pure.
  */
-export function applyModelEvent(
-  state: StreamedParts,
-  event: ModelStreamEvent,
-): { readonly state: StreamedParts; readonly events: readonly ChatPartEvent[] } {
+export function applyModelEvent(state: StreamedParts, event: ModelStreamEvent): AppliedEvent {
   let { parts, nextId, openText, tools } = state;
   const events: ChatPartEvent[] = [];
 
@@ -113,10 +116,13 @@ export function applyModelEvent(
             Object.entries(tools).filter(([toolId]) => toolId !== progress.id),
           );
           end(id, (part) => {
-            if (part.kind === 'tool-call') {
-              return { ...part, state: progress.ok ? 'done' : 'failed' };
+            if (part.kind !== 'tool-call') {
+              return part;
             }
-            return part;
+            if (progress.ok) {
+              return { ...part, state: 'done' };
+            }
+            return { ...part, state: 'failed' };
           });
           break;
         }

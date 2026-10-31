@@ -100,7 +100,7 @@ export async function resolveChatMentions(
     if (content?.kind !== 'text') {
       return refuse(`${mention.path} could not be read at ${mention.side} ${sha.slice(0, 8)}.`);
     }
-    const excerpt = excerptLines(content.text, mention.startLine, mention.endLine);
+    const excerpt = excerptLines(content.text, mention);
     if (!excerpt.ok) {
       return refuse(
         `${formatMention(mention)} starts past the end of the file (${String(excerpt.error.totalLines)} lines).`,

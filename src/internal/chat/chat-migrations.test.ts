@@ -8,7 +8,7 @@ import { runMigrations } from '#sqlite/run-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
-import type { SessionId } from './chat-message.ts';
+import type { ChatMessage, SessionId } from './chat-message.ts';
 import { chatMigrations } from './chat-migrations.ts';
 import { listChatMessages } from './list-chat-messages.ts';
 import { test } from './testing/test.ts';
@@ -85,8 +85,7 @@ describe('chatMigrations', () => {
 describe('chat-0002-message-parts', () => {
   test('moves stored messages into parts and renames the statuses', ({ expect, closing }) => {
     const db = closing(openDatabase(':memory:'));
-    const [initial] = chatMigrations;
-    runMigrations(db, [sessionsStub(), ...(initial === undefined ? [] : [initial])]);
+    runMigrations(db, [sessionsStub(), ...chatMigrations.slice(0, 1)]);
     db.prepare('INSERT INTO sessions (id) VALUES (?);').run(sessionId());
     const old = db.prepare(
       `INSERT INTO chat_messages (id, session_id, head_sha, role, content, mentions, status,
@@ -159,7 +158,7 @@ describe('chat-0002-message-parts', () => {
       listed.map((message) => {
         return {
           role: message.role,
-          status: 'status' in message ? message.status : undefined,
+          status: statusOf(message),
           parts: message.parts,
         };
       }),
@@ -221,4 +220,11 @@ function head(): string {
 
 function at(): string {
   return '2026-10-28T12:00:00.000Z';
+}
+
+function statusOf(message: ChatMessage): string | undefined {
+  if ('status' in message) {
+    return message.status;
+  }
+  return undefined;
 }

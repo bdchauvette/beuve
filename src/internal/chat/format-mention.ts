@@ -11,12 +11,18 @@ export interface MentionPlace {
  * whole file), prefixed with `base:` for the base side. Pure.
  */
 export function formatMention(mention: MentionPlace): string {
-  const { path, side, startLine, endLine } = mention;
-  const lines =
-    startLine === undefined || endLine === undefined
-      ? ''
-      : startLine === endLine
-        ? `:${String(startLine)}`
-        : `:${String(startLine)}-${String(endLine)}`;
-  return `${side === 'base' ? 'base:' : ''}${path}${lines}`;
+  const { path, side } = mention;
+  return `${sidePrefixes[side]}${path}${linesOf(mention)}`;
+}
+
+const sidePrefixes = { head: '', base: 'base:' } as const;
+
+function linesOf({ startLine, endLine }: MentionPlace): string {
+  if (startLine === undefined || endLine === undefined) {
+    return '';
+  }
+  if (startLine === endLine) {
+    return `:${String(startLine)}`;
+  }
+  return `:${String(startLine)}-${String(endLine)}`;
 }

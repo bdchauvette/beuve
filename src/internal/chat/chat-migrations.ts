@@ -93,9 +93,9 @@ function migrateToParts(db: DatabaseSync): void {
       String(row['role']),
       JSON.stringify(partsOfRow(row)),
       String(row['citations']),
-      status === 'complete' ? 'done' : status === 'failed' ? 'error' : status,
+      renamedStatuses[status] ?? status,
       String(row['kind']),
-      typeof row['review'] === 'string' ? row['review'] : '',
+      textOrEmpty(row['review']),
       String(row['created_at']),
     );
   }
@@ -112,16 +112,22 @@ function partsOfRow(row: Record<string, SQLOutputValue>): object[] {
     parts.push({ ...part, id: `p${String(parts.length + 1)}` });
   };
   const content = String(row['content']);
-  const review = typeof row['review'] === 'string' ? jsonOf(row['review']) : undefined;
+  let review: unknown;
+  if (typeof row['review'] === 'string') {
+    review = jsonOf(row['review']);
+  }
   if (row['role'] === 'user') {
-    const mentions = jsonOf(String(row['mentions']));
-    const listed = Array.isArray(mentions) ? (mentions as unknown[]) : [];
+    const listed = listOf(jsonOf(String(row['mentions'])));
     const named = new Set<number>();
     let text = '';
     for (const piece of content.split(mentionTokenSplit)) {
       const index = mentionTokenPattern.exec(piece)?.[1];
-      const mention = index === undefined ? undefined : listed[Number(index) - 1];
-      if (index === undefined || mention === undefined) {
+      if (index === undefined) {
+        text += piece;
+        continue;
+      }
+      const mention = listed[Number(index) - 1];
+      if (mention === undefined) {
         text += piece;
         continue;
       }
@@ -173,4 +179,24 @@ function timestampPattern(): string {
 
 function digits(count: number): string {
   return '[0-9]'.repeat(count);
+}
+
+/** chat-0002 renamed two statuses; the rest stay. */
+const renamedStatuses: Readonly<Partial<Record<string, string>>> = {
+  complete: 'done',
+  failed: 'error',
+};
+
+function textOrEmpty(value: SQLOutputValue | undefined): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return '';
+}
+
+function listOf(value: unknown): readonly unknown[] {
+  if (Array.isArray(value)) {
+    return value as unknown[];
+  }
+  return [];
 }

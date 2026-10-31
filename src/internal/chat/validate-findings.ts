@@ -50,12 +50,16 @@ export function validateFindings(
   const candidates: { finding: ModelFinding; order: number; index: number }[] = [];
   for (const [index, finding] of raw.entries()) {
     const filePath = normalizePath(finding.path, input.worktreePath);
-    const file = filePath === undefined ? undefined : hunksByPath.get(filePath);
-    if (filePath === undefined || file === undefined) {
+    if (filePath === undefined) {
       drops.unknownFile += 1;
       continue;
     }
-    const range = clampToHunks(finding.startLine, finding.endLine, file.ranges);
+    const file = hunksByPath.get(filePath);
+    if (file === undefined) {
+      drops.unknownFile += 1;
+      continue;
+    }
+    const range = clampToHunks(finding, file.ranges);
     if (range === undefined) {
       drops.outsideDiff += 1;
       continue;
@@ -133,13 +137,17 @@ function normalizePath(raw: string, worktreePath: string | undefined): string | 
   return trimmed.replace(leadingDotSlashes, '');
 }
 
+/** A finding's lines inside the hunks, and whether that cut them. */
+interface ClampedRange extends HeadRange {
+  readonly isClamped: boolean;
+}
+
 function clampToHunks(
-  lineStart: number,
-  lineEnd: number,
+  { startLine, endLine }: Pick<ModelFinding, 'startLine' | 'endLine'>,
   ranges: readonly HeadRange[],
-): { start: number; end: number; isClamped: boolean } | undefined {
-  const low = Math.min(lineStart, lineEnd);
-  const high = Math.max(lineStart, lineEnd);
+): ClampedRange | undefined {
+  const low = Math.min(startLine, endLine);
+  const high = Math.max(startLine, endLine);
   const touched = ranges.filter((range) => range.start <= high && range.end >= low);
   const first = touched[0];
   const last = touched.at(-1);

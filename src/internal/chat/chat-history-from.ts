@@ -24,11 +24,10 @@ export function chatHistoryFrom(messages: readonly ChatMessage[]): ChatTurn[] {
       ];
     }
     if (message.role === 'assistant' && message.status === 'done') {
-      const content =
-        message.review === undefined
-          ? chatTextFrom(message.parts)
-          : reviewMarkdownFrom(message.review);
-      return [{ role: 'assistant', content }];
+      if (message.review === undefined) {
+        return [{ role: 'assistant', content: chatTextFrom(message.parts) }];
+      }
+      return [{ role: 'assistant', content: reviewMarkdownFrom(message.review) }];
     }
     return [];
   });
