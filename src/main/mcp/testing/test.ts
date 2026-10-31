@@ -16,13 +16,19 @@ export const test = baseTest
   .extend('mcpToken', (): string => 'test-token-0123456789abcdefghijklmnopqrstuvwxyz')
   .extend('mcpServer', async ({ mcpToken, logger }, { onCleanup }): Promise<McpServerHandle> => {
     const services: McpToolServices = {
-      getLspDiagnostics: async () => notImplemented(),
+      getLspDiagnostics: async () => {
+        return notImplemented();
+      },
       runImpactCheck: async () => {
         await Promise.resolve();
         return ok({ breaches: [] });
       },
-      runTraceProbe: async () => notImplemented(),
-      readHumanReview: async () => notImplemented(),
+      runTraceProbe: async () => {
+        return notImplemented();
+      },
+      readHumanReview: async () => {
+        return notImplemented();
+      },
     };
     const handle = okValueFrom(
       await startMcpServer({

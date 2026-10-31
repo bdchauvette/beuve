@@ -24,7 +24,9 @@ export const test = baseTest
     return repo;
   })
   .extend('traceDirectory', ({ tempDir }): string => path.join(tempDir, 'trace'))
-  .extend('traceEvents', (): TraceStatusView[] => [])
+  .extend('traceEvents', (): TraceStatusView[] => {
+    return [];
+  })
   .extend('services', ({ createServices, traceDirectory, traceEvents }): MainServices => {
     const services = createServices({
       trace: {
@@ -45,16 +47,20 @@ export const test = baseTest
     });
     return okValueFrom(created).id;
   })
-  .extend('settledTrace', ({ traceEvents }): SettledTrace => async () => {
-    await waitUntil(
-      () => traceEvents.some((event) => event.state !== 'running'),
-      'the trace to settle',
-      Temporal.Duration.from({ seconds: 45 }),
-      Temporal.Duration.from({ milliseconds: 25 }),
-    );
-    const last = traceEvents.findLast((event) => event.state !== 'running');
-    if (last === undefined) {
-      throw new Error('no final status');
-    }
-    return last;
+  .extend('settledTrace', ({ traceEvents }): SettledTrace => {
+    return async () => {
+      await waitUntil(
+        () => {
+          return traceEvents.some((event) => event.state !== 'running');
+        },
+        'the trace to settle',
+        Temporal.Duration.from({ seconds: 45 }),
+        Temporal.Duration.from({ milliseconds: 25 }),
+      );
+      const last = traceEvents.findLast((event) => event.state !== 'running');
+      if (last === undefined) {
+        throw new Error('no final status');
+      }
+      return last;
+    };
   });

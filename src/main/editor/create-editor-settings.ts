@@ -27,7 +27,9 @@ export function createEditorSettings(filePath?: string): EditorSettings {
       if (filePath === undefined) {
         return;
       }
-      await updateSettingsFile(filePath, (current) => ({ ...current, preferredEditor: editorId }));
+      await updateSettingsFile(filePath, (current) => {
+        return { ...current, preferredEditor: editorId };
+      });
     },
   };
 }

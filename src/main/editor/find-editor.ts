@@ -29,9 +29,9 @@ export function findEditor(
   const onPath = (probe.env.PATH ?? '')
     .split(path.delimiter)
     .filter((directory) => path.isAbsolute(directory))
-    .flatMap((directory) =>
-      definition.executables.map((executable) => path.join(directory, executable)),
-    );
+    .flatMap((directory) => {
+      return definition.executables.map((executable) => path.join(directory, executable));
+    });
   const known = definition.knownPaths.flatMap((file) => expandHome(file, home));
   const candidates = [...onPath, ...known];
   for (const candidate of candidates) {

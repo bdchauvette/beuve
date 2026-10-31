@@ -286,7 +286,9 @@ function manager(
     root,
     logger,
     git,
-    storedHead: (sessionId) => heads.get(sessionId),
+    storedHead: (sessionId) => {
+      return heads.get(sessionId);
+    },
   });
   return { worktrees, heads };
 }

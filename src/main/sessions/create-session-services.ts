@@ -55,20 +55,30 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
     ...(options.onHeadMoved !== undefined && { onHeadMoved: options.onHeadMoved }),
   };
   return {
-    list: (): IpcResult<readonly SessionSummary[]> => listSummaries(context),
-    createLocal: async (request): Promise<IpcResult<SessionSummary>> =>
-      createLocalSession(context, request),
-    getReview: async ({ sessionId, ignoreWhitespace }, call = {}): Promise<IpcResult<ReviewView>> =>
-      loadReview(context, sessionId, {
+    list: (): IpcResult<readonly SessionSummary[]> => {
+      return listSummaries(context);
+    },
+    createLocal: async (request): Promise<IpcResult<SessionSummary>> => {
+      return createLocalSession(context, request);
+    },
+    getReview: async (
+      { sessionId, ignoreWhitespace },
+      call = {},
+    ): Promise<IpcResult<ReviewView>> => {
+      return loadReview(context, sessionId, {
         ignoreWhitespace: ignoreWhitespace === true,
         signal: call.signal,
-      }),
-    markReviewed: async (request): Promise<IpcResult<SessionSummary>> =>
-      markReviewed(context, request),
-    setFileReviewed: async (request): Promise<IpcResult<SetFileReviewedResponse>> =>
-      setFileReviewed(context, request),
-    inspectRepository: async (request): Promise<IpcResult<RepositoryInspectionView>> =>
-      inspectRepository(context, request),
+      });
+    },
+    markReviewed: async (request): Promise<IpcResult<SessionSummary>> => {
+      return markReviewed(context, request);
+    },
+    setFileReviewed: async (request): Promise<IpcResult<SetFileReviewedResponse>> => {
+      return setFileReviewed(context, request);
+    },
+    inspectRepository: async (request): Promise<IpcResult<RepositoryInspectionView>> => {
+      return inspectRepository(context, request);
+    },
   };
 }
 

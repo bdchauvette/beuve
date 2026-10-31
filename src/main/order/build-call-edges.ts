@@ -38,7 +38,11 @@ export async function buildCallEdges(
     .filter((file) => file.status !== 'deleted' && paths.has(headPathOf(file)))
     .filter((file) => isImportSource(headPathOf(file)))
     .slice(0, maxFiles)
-    .flatMap((file) => firstAddedLines(file).map((line) => ({ path: headPathOf(file), line })));
+    .flatMap((file) => {
+      return firstAddedLines(file).map((line) => {
+        return { path: headPathOf(file), line };
+      });
+    });
   const seen = new Set<string>();
   const edges: DependencyEdge[] = [];
   let answered = 0;

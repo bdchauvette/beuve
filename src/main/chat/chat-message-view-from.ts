@@ -11,11 +11,13 @@ export function chatMessageViewFrom(message: ChatMessage): ChatMessageView {
     headSha: message.headSha,
     role: message.role,
     parts: message.parts.map((part) => chatPartViewFrom(part)),
-    citations: message.citations.map(({ path, startLine, endLine }) => ({
-      path,
-      startLine,
-      endLine,
-    })),
+    citations: message.citations.map(({ path, startLine, endLine }) => {
+      return {
+        path,
+        startLine,
+        endLine,
+      };
+    }),
     createdAt: message.createdAt,
   };
   if (message.role !== 'assistant') {

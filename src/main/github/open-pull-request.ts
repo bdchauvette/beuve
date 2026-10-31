@@ -81,7 +81,9 @@ export async function openPullRequest(
     repository: repository.value,
     remote: remote.name,
     pullRequest: fetched.value,
-    refetch: async () => fetchPullRequest(context.clients, ref, signal),
+    refetch: async () => {
+      return fetchPullRequest(context.clients, ref, signal);
+    },
     logger: context.session.logger,
     signal,
   });

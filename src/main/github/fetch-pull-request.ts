@@ -15,9 +15,9 @@ export async function fetchPullRequest(
   ref: PullRequestRef,
   signal?: AbortSignal,
 ): Promise<Result<PullRequest, GithubFailureView>> {
-  const fetched = await clients.withClient(ref.host, async (client) =>
-    getPullRequest(client, ref, { signal }),
-  );
+  const fetched = await clients.withClient(ref.host, async (client) => {
+    return getPullRequest(client, ref, { signal });
+  });
   if (!fetched.ok) {
     return err(
       failureFromGithubError(fetched.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),

@@ -11,9 +11,15 @@ describe('updateSettingsFile', () => {
   test('keeps every key when writers overlap', async ({ expect, tempDir }) => {
     const file = path.join(tempDir, 'nested', 'settings.json');
     await Promise.all([
-      updateSettingsFile(file, (current) => ({ ...current, a: 1 })),
-      updateSettingsFile(file, (current) => ({ ...current, b: 2 })),
-      updateSettingsFile(file, (current) => ({ ...current, c: 3 })),
+      updateSettingsFile(file, (current) => {
+        return { ...current, a: 1 };
+      }),
+      updateSettingsFile(file, (current) => {
+        return { ...current, b: 2 };
+      }),
+      updateSettingsFile(file, (current) => {
+        return { ...current, c: 3 };
+      }),
     ]);
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({ a: 1, b: 2, c: 3 });
     expect(statSync(file).mode & 0o777).toBe(0o600);

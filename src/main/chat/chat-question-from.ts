@@ -47,15 +47,17 @@ export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
   const paths = new Set(files.map((file) => file.path));
   const findings = parts.impactFindings
     ?.filter((finding) => paths.has(finding.path))
-    .map(({ path, functionName, startLine, endLine, value, limit, trend }) => ({
-      path,
-      functionName,
-      startLine,
-      endLine,
-      value,
-      limit,
-      trend,
-    }));
+    .map(({ path, functionName, startLine, endLine, value, limit, trend }) => {
+      return {
+        path,
+        functionName,
+        startLine,
+        endLine,
+        value,
+        limit,
+        trend,
+      };
+    });
   return {
     sessionId: diff.refreshed.session.id,
     baseSha: diff.baseSha,
@@ -95,9 +97,9 @@ function isSelected(file: ChatFile, prefixes: readonly string[]): boolean {
     return true;
   }
   const candidates = [file.path, file.previousPath].filter((path) => path !== undefined);
-  return prefixes.some((prefix) =>
-    candidates.some((path) => path === prefix || path.startsWith(`${prefix}/`)),
-  );
+  return prefixes.some((prefix) => {
+    return candidates.some((path) => path === prefix || path.startsWith(`${prefix}/`));
+  });
 }
 
 function focusFrom(focus: ChatFocusRequest): ChatFocus {

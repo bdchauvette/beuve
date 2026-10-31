@@ -66,19 +66,23 @@ export function createModelServices(options: ModelServicesOptions): ModelService
   const [defaultEntry] = defaultModelRegistry.entries;
   const defaultId = defaultEntry?.id ?? 'claude-code';
 
-  const view = async (current: ModelRegistry): Promise<ModelRegistryView> => ({
-    entries: await Promise.all(
-      current.entries.map(async (entry): Promise<ModelEntryView> => ({
-        ...withoutKeyRef(entry),
-        hasApiKey: entry.apiKeyRef !== undefined && (await secrets.has(entry.apiKeyRef)),
-        isRemote: entry.kind === 'openai-compatible' && !isLoopbackUrl(entry.baseUrl),
-        isDefault: entry.id === defaultId,
-      })),
-    ),
-    roles: current.roles,
-    keyStorage: await secrets.status(),
-    hasBundledClaudeCode: options.hasBundledClaudeCode,
-  });
+  const view = async (current: ModelRegistry): Promise<ModelRegistryView> => {
+    return {
+      entries: await Promise.all(
+        current.entries.map(async (entry): Promise<ModelEntryView> => {
+          return {
+            ...withoutKeyRef(entry),
+            hasApiKey: entry.apiKeyRef !== undefined && (await secrets.has(entry.apiKeyRef)),
+            isRemote: entry.kind === 'openai-compatible' && !isLoopbackUrl(entry.baseUrl),
+            isDefault: entry.id === defaultId,
+          };
+        }),
+      ),
+      roles: current.roles,
+      keyStorage: await secrets.status(),
+      hasBundledClaudeCode: options.hasBundledClaudeCode,
+    };
+  };
 
   const changed = async (
     change: (current: ModelRegistry) => Result<ModelRegistry, string>,
@@ -93,7 +97,9 @@ export function createModelServices(options: ModelServicesOptions): ModelService
   };
 
   return {
-    list: async (): Promise<IpcResult<ModelRegistryView>> => ok(await view(await registry.read())),
+    list: async (): Promise<IpcResult<ModelRegistryView>> => {
+      return ok(await view(await registry.read()));
+    },
 
     save: async (input): Promise<IpcResult<ModelRegistryView>> => {
       if (
@@ -130,7 +136,9 @@ export function createModelServices(options: ModelServicesOptions): ModelService
           entries:
             existing === undefined
               ? [...current.entries, entry]
-              : current.entries.map((candidate) => (candidate.id === id ? entry : candidate)),
+              : current.entries.map((candidate) => {
+                  return candidate.id === id ? entry : candidate;
+                }),
         });
       });
     },
@@ -147,10 +155,9 @@ export function createModelServices(options: ModelServicesOptions): ModelService
           return err(`no model named ${id}`);
         }
         const roles = Object.fromEntries(
-          Object.entries(current.roles).map(([role, used]) => [
-            role,
-            used === id ? defaultId : used,
-          ]),
+          Object.entries(current.roles).map(([role, used]) => {
+            return [role, used === id ? defaultId : used];
+          }),
         ) as Record<ModelRole, string>;
         return ok({ entries: current.entries.filter((entry) => entry.id !== id), roles });
       });
@@ -160,12 +167,13 @@ export function createModelServices(options: ModelServicesOptions): ModelService
       return result;
     },
 
-    setRole: async (role, id): Promise<IpcResult<ModelRegistryView>> =>
-      changed((current) =>
-        current.entries.some((entry) => entry.id === id)
+    setRole: async (role, id): Promise<IpcResult<ModelRegistryView>> => {
+      return changed((current) => {
+        return current.entries.some((entry) => entry.id === id)
           ? ok({ ...current, roles: { ...current.roles, [role]: id } })
-          : err(`no model named ${id}`),
-      ),
+          : err(`no model named ${id}`);
+      });
+    },
 
     setKey: async (id, apiKey): Promise<IpcResult<ModelRegistryView>> => {
       const current = await registry.read();
@@ -184,29 +192,29 @@ export function createModelServices(options: ModelServicesOptions): ModelService
         return err({ code: 'unsupported', message: stored.error });
       }
       logger.info('model key stored', { id });
-      return changed((latest) =>
-        ok({
+      return changed((latest) => {
+        return ok({
           ...latest,
-          entries: latest.entries.map((candidate) =>
-            candidate.id === id ? { ...candidate, apiKeyRef: keyRefFor(id) } : candidate,
-          ),
-        }),
-      );
+          entries: latest.entries.map((candidate) => {
+            return candidate.id === id ? { ...candidate, apiKeyRef: keyRefFor(id) } : candidate;
+          }),
+        });
+      });
     },
 
     removeKey: async (id): Promise<IpcResult<ModelRegistryView>> => {
       await secrets.remove(keyRefFor(id));
       logger.info('model key removed', { id });
-      return changed((current) =>
-        current.entries.some((entry) => entry.id === id)
+      return changed((current) => {
+        return current.entries.some((entry) => entry.id === id)
           ? ok({
               ...current,
-              entries: current.entries.map((entry) =>
-                entry.id === id ? withoutKeyRef(entry) : entry,
-              ),
+              entries: current.entries.map((entry) => {
+                return entry.id === id ? withoutKeyRef(entry) : entry;
+              }),
             })
-          : err(`no model named ${id}`),
-      );
+          : err(`no model named ${id}`);
+      });
     },
 
     listRemote: async ({ baseUrl, id }): Promise<IpcResult<RemoteModelsView>> => {

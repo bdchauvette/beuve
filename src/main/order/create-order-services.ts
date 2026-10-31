@@ -105,9 +105,9 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
     if (mode === 'path') {
       return { mode, edges: [] };
     }
-    const hasSource = review.files.some(
-      (file) => primary.has(headPathOf(file)) && isImportSource(headPathOf(file)),
-    );
+    const hasSource = review.files.some((file) => {
+      return primary.has(headPathOf(file)) && isImportSource(headPathOf(file));
+    });
     if (!hasSource) {
       return { mode: 'path', edges: [], fallback: { kind: 'no-source-files' } };
     }
@@ -152,10 +152,12 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
           ignoring.ok ? ignoring.value.files.map((file) => headPathOf(file)) : [],
         ),
       };
-      const classified = diff.value.files.map((file) => ({
-        path: headPathOf(file),
-        mechanical: classifyReviewFile(headPathOf(file), fileFactsFrom(file, evidence)),
-      }));
+      const classified = diff.value.files.map((file) => {
+        return {
+          path: headPathOf(file),
+          mechanical: classifyReviewFile(headPathOf(file), fileFactsFrom(file, evidence)),
+        };
+      });
       const primary = new Set(
         classified.filter((file) => file.mechanical === undefined).map((file) => file.path),
       );
@@ -168,12 +170,14 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
         mode: plan.mode,
         ...(plan.fallback !== undefined && { fallback: plan.fallback }),
         paths: groups.flatMap((group) => group.paths),
-        groups: groups.map((group) => ({
-          id: group.id,
-          label: group.label,
-          paths: group.paths,
-          ...(group.reasons !== undefined && { reasons: group.reasons }),
-        })),
+        groups: groups.map((group) => {
+          return {
+            id: group.id,
+            label: group.label,
+            paths: group.paths,
+            ...(group.reasons !== undefined && { reasons: group.reasons }),
+          };
+        }),
       });
     },
   };

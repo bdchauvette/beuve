@@ -31,17 +31,21 @@ export const test = baseTest
     const { repo } = await repositories.fromTemplate(editorBranchTemplate());
     return repo;
   })
-  .extend('editorState', (): EditorState => ({
-    spawned: [],
-    opened: [],
-    installed: ['/bin/zed'],
-    spawnError: undefined,
-  }))
+  .extend('editorState', (): EditorState => {
+    return {
+      spawned: [],
+      opened: [],
+      installed: ['/bin/zed'],
+      spawnError: undefined,
+    };
+  })
   .extend('services', ({ createServices, editorState }): MainServices => {
     const platform: EditorPlatform = {
       platform: 'darwin',
       env: { PATH: '/bin', HOME: '/home/me' },
-      exists: (file) => editorState.installed.includes(file),
+      exists: (file) => {
+        return editorState.installed.includes(file);
+      },
       spawn: async (command, args): Promise<Result<void, string>> => {
         editorState.spawned.push({ command, args });
         await Promise.resolve();
@@ -62,9 +66,8 @@ export const test = baseTest
     });
     return okValueFrom(created).id;
   })
-  .extend(
-    'openInEditor',
-    ({ services, sessionId }): OpenInEditor =>
-      async (file, line = 2) =>
-        okValueFrom(await services.editor.open({ sessionId, path: file, line })),
-  );
+  .extend('openInEditor', ({ services, sessionId }): OpenInEditor => {
+    return async (file, line = 2) => {
+      return okValueFrom(await services.editor.open({ sessionId, path: file, line }));
+    };
+  });

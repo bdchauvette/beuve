@@ -226,5 +226,7 @@ async function featureHead(repo: TestRepository): Promise<string> {
 }
 
 function states(review: ReviewView): [string, string | undefined][] {
-  return review.files.map((file) => [file.path, file.reviewed]);
+  return review.files.map((file) => {
+    return [file.path, file.reviewed];
+  });
 }

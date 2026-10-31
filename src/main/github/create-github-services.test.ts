@@ -517,10 +517,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     const { api, callsFile, writeScenario } = world;
     const sessionId = await opened();
     // Opening looks the stack up in the background; let it finish before rotating the token.
-    await waitUntil(
-      () => api.log.some((entry) => entry.includes('base=feature')),
-      'the stack lookup',
-    );
+    await waitUntil(() => {
+      return api.log.some((entry) => entry.includes('base=feature'));
+    }, 'the stack lookup');
     writeScenario({
       hosts: { 'github.com': { token: 'gho_rotated', login: 'reviewer' } },
       callsFile,
@@ -584,7 +583,9 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       types.push(event.type);
     });
     okValueFrom(await services.chat.ask({ sessionId, question: 'Why 42?' }));
-    await waitUntil(() => types.includes('message'), 'the answer to end');
+    await waitUntil(() => {
+      return types.includes('message');
+    }, 'the answer to end');
     const [call] = world.claude.calls();
     expect(call?.stdin).toContain("## The author's stated intent");
     expect(call?.stdin).toContain('Make the answer right\n\nREQ-1: the answer is 42.');
@@ -690,7 +691,9 @@ function racingFetch(
       }
       return fetch(url, init);
     },
-    pullGets: () => pullGets,
+    pullGets: (): number => {
+      return pullGets;
+    },
   };
 }
 

@@ -69,20 +69,25 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
   const detectAll = (): readonly {
     definition: EditorDefinition;
     found: FoundEditor | undefined;
-  }[] =>
-    editorDefinitions.map((definition) => ({
-      definition,
-      found: findEditor(definition, platform),
-    }));
+  }[] => {
+    return editorDefinitions.map((definition) => {
+      return {
+        definition,
+        found: findEditor(definition, platform),
+      };
+    });
+  };
 
   const settingsView = async (): Promise<EditorSettingsView> => {
     const preferred = await settings.read();
     const detected = detectAll();
-    const editors: EditorChoiceView[] = detected.map(({ definition, found }) => ({
-      id: definition.id,
-      name: definition.name,
-      installed: found !== undefined,
-    }));
+    const editors: EditorChoiceView[] = detected.map(({ definition, found }) => {
+      return {
+        id: definition.id,
+        name: definition.name,
+        installed: found !== undefined,
+      };
+    });
     return { ...(preferred !== undefined && { preferred }), editors };
   };
 
@@ -175,7 +180,9 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         line: request.line,
       });
     },
-    getSettings: async (): Promise<IpcResult<EditorSettingsView>> => ok(await settingsView()),
+    getSettings: async (): Promise<IpcResult<EditorSettingsView>> => {
+      return ok(await settingsView());
+    },
     setPreferred: async ({ editorId }): Promise<IpcResult<EditorSettingsView>> => {
       if (!isEditorId(editorId)) {
         return err({ code: 'invalid-request', message: 'unknown editor' });

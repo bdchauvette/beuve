@@ -22,15 +22,17 @@ export function menuItemStatesFrom(
   const checked = new Set<string>(state.checked);
   const isTyping = conditions.has('text-focus');
   return new Map(
-    catalog.map((command) => [
-      command.id,
-      {
-        enabled:
-          command.windows.includes(kind) &&
-          (command.when ?? []).every((condition) => conditions.has(condition)) &&
-          !(isTyping && command.textConflict === true),
-        checked: command.toggle !== undefined && checked.has(command.id),
-      },
-    ]),
+    catalog.map((command) => {
+      return [
+        command.id,
+        {
+          enabled:
+            command.windows.includes(kind) &&
+            (command.when ?? []).every((condition) => conditions.has(condition)) &&
+            !(isTyping && command.textConflict === true),
+          checked: command.toggle !== undefined && checked.has(command.id),
+        },
+      ];
+    }),
   );
 }

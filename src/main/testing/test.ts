@@ -63,8 +63,13 @@ export const test = baseTest
   .extend(
     'nodeRuntime',
     { scope: 'worker' },
-    async (): Promise<Result<NodeRuntime, NodeRuntimeError>> =>
-      resolveNodeRuntime({ packaged: false, resourcesPath: '', pathVariable: process.env['PATH'] }),
+    async (): Promise<Result<NodeRuntime, NodeRuntimeError>> => {
+      return resolveNodeRuntime({
+        packaged: false,
+        resourcesPath: '',
+        pathVariable: process.env['PATH'],
+      });
+    },
   )
   .extend(
     'createServices',
@@ -103,8 +108,9 @@ export const test = baseTest
     mkdirSync(home);
     return {
       script: claudeScript,
-      scripted: (script, name = 'chat'): ScriptedClaude =>
-        createScriptedClaude(claudeScript, home, name, script),
+      scripted: (script, name = 'chat'): ScriptedClaude => {
+        return createScriptedClaude(claudeScript, home, name, script);
+      },
     };
   })
   .extend(

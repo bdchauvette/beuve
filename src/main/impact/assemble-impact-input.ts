@@ -49,9 +49,11 @@ export async function assembleImpactInput(
     }
     candidates.push({ file, ...sides(file) });
   }
-  const requests = candidates.flatMap(({ base, head }) =>
-    [base, head].flatMap((side) => (side.kind === 'blob' ? [side.request] : [])),
-  );
+  const requests = candidates.flatMap(({ base, head }) => {
+    return [base, head].flatMap((side) => {
+      return side.kind === 'blob' ? [side.request] : [];
+    });
+  });
   const blobs = await readBlobs(repository, requests);
   if (!blobs.ok) {
     return blobs;

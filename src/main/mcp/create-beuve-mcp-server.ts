@@ -33,8 +33,9 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       inputSchema: { path, sessionId },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> =>
-      toolResultFrom(await services.getLspDiagnostics(input)),
+    async (input): Promise<CallToolResult> => {
+      return toolResultFrom(await services.getLspDiagnostics(input));
+    },
   );
 
   server.registerTool(
@@ -52,7 +53,9 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> => toolResultFrom(await services.runImpactCheck(input)),
+    async (input): Promise<CallToolResult> => {
+      return toolResultFrom(await services.runImpactCheck(input));
+    },
   );
 
   server.registerTool(
@@ -92,7 +95,9 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
           ),
       },
     },
-    async (input): Promise<CallToolResult> => toolResultFrom(await services.runTraceProbe(input)),
+    async (input): Promise<CallToolResult> => {
+      return toolResultFrom(await services.runTraceProbe(input));
+    },
   );
 
   server.registerTool(
@@ -116,8 +121,9 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
       inputSchema: { sessionId },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> =>
-      documentResultFrom(await services.readHumanReview(input)),
+    async (input): Promise<CallToolResult> => {
+      return documentResultFrom(await services.readHumanReview(input));
+    },
   );
 
   return server;

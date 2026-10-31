@@ -14,9 +14,9 @@ export interface ReviewFileEvidence {
 /** The facts the classifier needs about one file of the plain diff. Pure. */
 export function fileFactsFrom(file: DiffFile, evidence: ReviewFileEvidence): FileFacts {
   const path = headPathOf(file);
-  const hasChangedLines = file.hunks.some((hunk) =>
-    hunk.lines.some((line) => line.kind !== 'context'),
-  );
+  const hasChangedLines = file.hunks.some((hunk) => {
+    return hunk.lines.some((line) => line.kind !== 'context');
+  });
   return {
     isGenerated: evidence.generated.has(path),
     isWhitespaceOnly:

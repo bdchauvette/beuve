@@ -27,15 +27,21 @@ export function carryOverReviewMarks(
   if (!marks.ok) {
     return sessionFailure(context.logger, marks.error);
   }
-  const idByPath = new Map(identified.map((file) => [headPathOf(file), fileDiffIdFrom(file)]));
+  const idByPath = new Map(
+    identified.map((file) => {
+      return [headPathOf(file), fileDiffIdFrom(file)];
+    }),
+  );
   return ok(
     carryOverFileMarks(
       marks.value,
-      shown.map((file) => ({
-        path: headPathOf(file),
-        oldPath: 'oldPath' in file ? file.oldPath : undefined,
-        diffId: idByPath.get(headPathOf(file)) ?? fileDiffIdFrom(file),
-      })),
+      shown.map((file) => {
+        return {
+          path: headPathOf(file),
+          oldPath: 'oldPath' in file ? file.oldPath : undefined,
+          diffId: idByPath.get(headPathOf(file)) ?? fileDiffIdFrom(file),
+        };
+      }),
     ),
   );
 }

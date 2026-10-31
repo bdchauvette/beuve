@@ -111,8 +111,12 @@ export const test = baseTest
       claude,
     };
   })
-  .extend('updates', (): PullRequestUpdatedView[] => [])
-  .extend('ciEvents', (): CiStatusChangedView[] => [])
+  .extend('updates', (): PullRequestUpdatedView[] => {
+    return [];
+  })
+  .extend('ciEvents', (): CiStatusChangedView[] => {
+    return [];
+  })
   .extend(
     'recreate',
     ({ world, createServices, fakeGhScript, tempDir, updates, ciEvents }): RecreateServices => {
@@ -125,7 +129,9 @@ export const test = baseTest
               leadingArgs: [fakeGhScript, world.scenarioFile],
               inheritedEnv: { PATH: process.env['PATH'], HOME: tempDir },
             }),
-            fetch: async (url, init) => world.api.fetch(url, init),
+            fetch: async (url, init) => {
+              return world.api.fetch(url, init);
+            },
             polling: { scheduled: false },
           },
         });
@@ -167,24 +173,25 @@ export const test = baseTest
       return services;
     },
   )
-  .extend(
-    'openPull',
-    ({ services, signal }): OpenPull =>
-      async (repoPath) =>
-        okValueFrom(
-          await services.github.openPullRequest(
-            {
-              ref: 'https://github.com/octo-org/hello-world/pull/7/files',
-              ...(repoPath !== undefined && { repoPath }),
-            },
-            { signal },
-          ),
+  .extend('openPull', ({ services, signal }): OpenPull => {
+    return async (repoPath) => {
+      return okValueFrom(
+        await services.github.openPullRequest(
+          {
+            ref: 'https://github.com/octo-org/hello-world/pull/7/files',
+            ...(repoPath !== undefined && { repoPath }),
+          },
+          { signal },
         ),
-  )
-  .extend('opened', ({ world, openPull }): (() => Promise<string>) => async () => {
-    const result = await openPull(world.clone.directory);
-    if (result.kind !== 'opened') {
-      throw new Error(`${result.failure}: ${result.message}`);
-    }
-    return result.session.id;
+      );
+    };
+  })
+  .extend('opened', ({ world, openPull }): (() => Promise<string>) => {
+    return async () => {
+      const result = await openPull(world.clone.directory);
+      if (result.kind !== 'opened') {
+        throw new Error(`${result.failure}: ${result.message}`);
+      }
+      return result.session.id;
+    };
   });

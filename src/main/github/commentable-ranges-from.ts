@@ -16,7 +16,9 @@ export function commentableRangesFrom(
     }
     const spans = file.hunks
       .filter((hunk) => hunk.newCount > 0)
-      .map((hunk) => ({ start: hunk.newStart, end: hunk.newStart + hunk.newCount - 1 }));
+      .map((hunk) => {
+        return { start: hunk.newStart, end: hunk.newStart + hunk.newCount - 1 };
+      });
     const path = 'newPath' in file ? file.newPath : file.path;
     if (spans.length > 0) {
       ranges.set(path, spans);

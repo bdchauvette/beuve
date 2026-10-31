@@ -15,9 +15,13 @@ import type { Result } from '#x/result/result.ts';
 export function bindModelTree(model: LanguageModel, tree: SandboxTree): LanguageModel {
   return {
     capabilities: model.capabilities,
-    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
-      model.run({ ...request, tree }),
-    runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
-      model.runText({ ...request, tree }),
+    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> => {
+      return model.run({ ...request, tree });
+    },
+    runText: async (
+      request: TextModelRequest,
+    ): Promise<Result<ModelOutput<string>, ModelError>> => {
+      return model.runText({ ...request, tree });
+    },
   };
 }

@@ -357,8 +357,9 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
         sheets: {
           getFile: notWired,
           getHead: notWired,
-          checkOpen: async (request): Promise<IpcResult<{ readonly opened: true }>> =>
-            request.path === 'src/a.ts' ? sheetChecked() : notFound(),
+          checkOpen: async (request): Promise<IpcResult<{ readonly opened: true }>> => {
+            return request.path === 'src/a.ts' ? sheetChecked() : notFound();
+          },
         },
       },
       appInfo(),
@@ -470,8 +471,12 @@ describe('createIpcHandlers for menus and the Settings window', () => {
         setState: (webContentsId, state): void => {
           states.push({ webContentsId, state });
         },
-        popup: () => true,
-        runMainCommand: (_webContentsId, id) => id === 'settings',
+        popup: () => {
+          return true;
+        },
+        runMainCommand: (_webContentsId, id) => {
+          return id === 'settings';
+        },
       },
     });
     const sender = { webContentsId: 3 };
@@ -675,7 +680,9 @@ describe('createIpcHandlers for the chat', () => {
       {
         sessionId: 's1',
         question: 'why?',
-        mentions: Array.from({ length: 9 }, (_, index) => ({ ...mention, startLine: index + 1 })),
+        mentions: Array.from({ length: 9 }, (_, index) => {
+          return { ...mention, startLine: index + 1 };
+        }),
       },
       { sessionId: 's1', question: '/review', command: { kind: 'review', pathPrefixes: ['/etc'] } },
       { sessionId: 's1', question: '/review', command: { kind: 'review', pathPrefixes: ['../x'] } },
@@ -1138,7 +1145,9 @@ function stubServices(
       cancel: notWiredError,
       compact: notWired,
       clear: notWiredError,
-      onStream: () => doNothingSync,
+      onStream: (): (() => void) => {
+        return doNothingSync;
+      },
       dispose: doNothing,
     },
     ura: {
@@ -1151,7 +1160,9 @@ function stubServices(
       stageImpactFinding: notWired,
       setVerdict: notWiredError,
       export: notWired,
-      onChanged: () => doNothingSync,
+      onChanged: (): (() => void) => {
+        return doNothingSync;
+      },
     },
     trace: {
       run: notWired,
@@ -1160,7 +1171,9 @@ function stubServices(
       setTrust: notWired,
       listTrust: notWired,
       removeTrust: notWired,
-      onStatus: () => doNothingSync,
+      onStatus: (): (() => void) => {
+        return doNothingSync;
+      },
       dispose: doNothing,
     },
     github: {
@@ -1172,8 +1185,12 @@ function stubServices(
       openLink: notWired,
       pollNow: doNothing,
       setForeground: doNothingSync,
-      onPullRequestUpdated: () => doNothingSync,
-      onCiStatus: () => doNothingSync,
+      onPullRequestUpdated: (): (() => void) => {
+        return doNothingSync;
+      },
+      onCiStatus: (): (() => void) => {
+        return doNothingSync;
+      },
       dispose: doNothingSync,
       ...github,
     },

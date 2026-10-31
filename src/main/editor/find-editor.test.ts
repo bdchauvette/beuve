@@ -14,7 +14,9 @@ function fakeProbe(
   return {
     platform: 'linux',
     env: { PATH: '/usr/bin:/home/me/bin:relative', HOME: '/home/me' },
-    exists: (file) => present.has(file),
+    exists: (file): boolean => {
+      return present.has(file);
+    },
     ...overrides,
   };
 }

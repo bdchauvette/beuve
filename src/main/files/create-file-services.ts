@@ -102,7 +102,11 @@ export function createFileServices(options: FileServicesOptions): FileServices {
       const sides = [blobId(file, 'old'), blobId(file, 'new')];
       const blobs = await readBlobs(
         diff.value.refreshed.repository,
-        sides.filter((objectId) => objectId !== undefined).map((objectId) => ({ objectId })),
+        sides
+          .filter((objectId) => objectId !== undefined)
+          .map((objectId) => {
+            return { objectId };
+          }),
       );
       if (!blobs.ok) {
         return gitFailure(context.logger, blobs.error);
@@ -143,8 +147,9 @@ export function createFileServices(options: FileServicesOptions): FileServices {
 
 function attributeListsFrom(read: ReadonlyMap<string, DiffAttributes>): AttributeLists {
   const entries = [...read];
-  const where = (isListed: (value: DiffAttributes) => boolean): string[] =>
-    entries.filter(([, value]) => isListed(value)).map(([path]) => path);
+  const where = (isListed: (value: DiffAttributes) => boolean): string[] => {
+    return entries.filter(([, value]) => isListed(value)).map(([path]) => path);
+  };
   return {
     generated: where((value) => value.generated === true),
     notGenerated: where((value) => value.generated === false),

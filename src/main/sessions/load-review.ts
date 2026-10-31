@@ -41,10 +41,12 @@ export async function loadReview(
     scope,
     baseSha,
     headSha: refreshed.session.headSha,
-    files: files.map((file, index) => ({
-      ...diffFileViewFrom(file),
-      reviewed: carried.value.states[index] ?? 'no',
-    })),
+    files: files.map((file, index) => {
+      return {
+        ...diffFileViewFrom(file),
+        reviewed: carried.value.states[index] ?? 'no',
+      };
+    }),
     reviewProgress: {
       total: carried.value.counts.total,
       reviewed: carried.value.counts.reviewed,
@@ -83,7 +85,14 @@ function pairingViewsFrom(
     return {
       path: 'newPath' in file ? file.newPath : file.path,
       pairIds: [...(attributed?.commits ?? [])],
-      hunkPairIds: (attributed?.hunks ?? file.hunks.map(() => [])).map((shas) => [...shas]),
+      hunkPairIds: (
+        attributed?.hunks ??
+        file.hunks.map(() => {
+          return [];
+        })
+      ).map((shas) => {
+        return [...shas];
+      }),
     };
   });
   return {

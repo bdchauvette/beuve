@@ -37,8 +37,8 @@ export function createGithubClients(options: GithubClientsOptions): GithubClient
   const clientFor = (
     host: string,
     used: { token: GithubToken | undefined },
-  ): Result<GithubClient<AuthError>, string> =>
-    createGithubClient<AuthError>({
+  ): Result<GithubClient<AuthError>, string> => {
+    return createGithubClient<AuthError>({
       host,
       getToken: async (forHost) => {
         const token = await options.credentials.getToken({ host: forHost });
@@ -51,6 +51,7 @@ export function createGithubClients(options: GithubClientsOptions): GithubClient
       ...(options.apiBase !== undefined && { apiBase: options.apiBase }),
       logger: options.logger,
     });
+  };
 
   return {
     credentials: options.credentials,

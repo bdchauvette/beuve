@@ -19,10 +19,9 @@ const httpUrl = z
     );
   }, 'must be an http or https URL without credentials');
 
-const absolutePath = text(4096).refine(
-  (value) => path.isAbsolute(value),
-  'must be an absolute path',
-);
+const absolutePath = text(4096).refine((value) => {
+  return path.isAbsolute(value);
+}, 'must be an absolute path');
 
 const installed = z.strictObject({
   source: z.literal('installed'),
@@ -71,5 +70,7 @@ function text(max: number): z.ZodString {
     .trim()
     .min(1)
     .max(max)
-    .refine((value) => !hasControlCharacters(value), 'control characters are not allowed');
+    .refine((value) => {
+      return !hasControlCharacters(value);
+    }, 'control characters are not allowed');
 }

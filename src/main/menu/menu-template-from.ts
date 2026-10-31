@@ -51,10 +51,12 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
   const isMac = platform === 'mac';
   const roles = roleItemsFor(platform, options.isPackaged);
   const placed = catalog
-    .map((command) => ({ command, place: placeOfCommand(command, platform) }))
-    .filter(
-      (entry): entry is { command: CatalogCommand; place: MenuPlace } => entry.place !== undefined,
-    );
+    .map((command) => {
+      return { command, place: placeOfCommand(command, platform) };
+    })
+    .filter((entry): entry is { command: CatalogCommand; place: MenuPlace } => {
+      return entry.place !== undefined;
+    });
   const menus = topMenus
     .filter((menu) => isMac || menu !== 'app')
     .map((menu): MenuTemplateItem => {
@@ -65,13 +67,15 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
       ]);
       const sections = [...groups]
         .toSorted((left, right) => left - right)
-        .map((group) => [
-          ...(extra[group] ?? []),
-          ...itemsOf(
-            placed.filter(({ place }) => place.menu === menu && place.group === group),
-            platform,
-          ),
-        ]);
+        .map((group) => {
+          return [
+            ...(extra[group] ?? []),
+            ...itemsOf(
+              placed.filter(({ place }) => place.menu === menu && place.group === group),
+              platform,
+            ),
+          ];
+        });
       const submenu = joinMenuSections(sections);
       const label = isMac ? topLabels[menu].replace('&', '') : topLabels[menu];
       if (isMac && menu === 'window') {
@@ -104,16 +108,18 @@ function itemsOf(
     seen.add(place.submenu);
     const members = entries.filter((entry) => entry.place.submenu === place.submenu);
     const subgroups = [...new Set(members.map((entry) => entry.place.subgroup ?? 0))].toSorted(
-      (left, right) => left - right,
+      (left, right) => {
+        return left - right;
+      },
     );
     items.push({
       label: place.submenu,
       submenu: joinMenuSections(
-        subgroups.map((subgroup) =>
-          members
+        subgroups.map((subgroup) => {
+          return members
             .filter((entry) => (entry.place.subgroup ?? 0) === subgroup)
-            .flatMap((entry) => commandItems(entry.command, platform)),
-        ),
+            .flatMap((entry) => commandItems(entry.command, platform));
+        }),
       ),
     });
   }
@@ -131,12 +137,14 @@ function commandItems(command: CatalogCommand, platform: KeyPlatform): MenuTempl
       ...(command.toggle !== undefined && { type: command.toggle }),
       ...(primary !== undefined && { accelerator: primary }),
     },
-    ...alternates.map((accelerator, index): MenuTemplateItem => ({
-      id: `${command.id}~${String(index + 1)}`,
-      label,
-      accelerator,
-      visible: false,
-    })),
+    ...alternates.map((accelerator, index): MenuTemplateItem => {
+      return {
+        id: `${command.id}~${String(index + 1)}`,
+        label,
+        accelerator,
+        visible: false,
+      };
+    }),
   ];
 }
 
@@ -161,17 +169,20 @@ function mnemonicLabel(label: string, taken: Set<string>): string {
   // eslint-disable-next-line @typescript-eslint/no-misused-spread -- see above.
   const characters = [...label];
   const indexes = characters.map((_character, index) => index);
-  const starts = indexes.filter(
-    (index) =>
-      isLetter(characters[index] ?? '') && (index === 0 || !isLetter(characters[index - 1] ?? '')),
-  );
-  const rest = indexes.filter(
-    (index) => isLetter(characters[index] ?? '') && !starts.includes(index),
-  );
-  const chosen = [...starts, ...rest].find(
-    (index) => !taken.has((characters[index] ?? '').toLowerCase()),
-  );
-  const escaped = characters.map((character) => (character === '&' ? '&&' : character));
+  const starts = indexes.filter((index) => {
+    return (
+      isLetter(characters[index] ?? '') && (index === 0 || !isLetter(characters[index - 1] ?? ''))
+    );
+  });
+  const rest = indexes.filter((index) => {
+    return isLetter(characters[index] ?? '') && !starts.includes(index);
+  });
+  const chosen = [...starts, ...rest].find((index) => {
+    return !taken.has((characters[index] ?? '').toLowerCase());
+  });
+  const escaped = characters.map((character) => {
+    return character === '&' ? '&&' : character;
+  });
   if (chosen === undefined) {
     return escaped.join('');
   }

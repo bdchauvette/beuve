@@ -137,9 +137,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       const untilReset = Temporal.Now.instant()
         .until(Temporal.Instant.from(error.resetAt))
         .add({ seconds: 1 });
-      const [, clamped = interval] = [interval, untilReset, maxBackoff].toSorted((a, b) =>
-        Temporal.Duration.compare(a, b),
-      );
+      const [, clamped = interval] = [interval, untilReset, maxBackoff].toSorted((a, b) => {
+        return Temporal.Duration.compare(a, b);
+      });
       return clamped;
     }
     let backoff = interval;
@@ -155,12 +155,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   /** Reads the reviews and review requests; keeps the old ones when GitHub does not answer. */
   const readReviews = async (state: PollState, ref: PullRequestRef): Promise<void> => {
     const [reviews, requests] = await Promise.all([
-      context.clients.withClient(ref.host, async (client) =>
-        getPullRequestReviews(client, ref, { signal: disposal.signal }),
-      ),
-      context.clients.withClient(ref.host, async (client) =>
-        getReviewRequests(client, ref, { signal: disposal.signal }),
-      ),
+      context.clients.withClient(ref.host, async (client) => {
+        return getPullRequestReviews(client, ref, { signal: disposal.signal });
+      }),
+      context.clients.withClient(ref.host, async (client) => {
+        return getReviewRequests(client, ref, { signal: disposal.signal });
+      }),
     ]);
     if (reviews.ok && requests.ok) {
       state.reviews = reviews.value;
@@ -217,7 +217,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       repository: repository.value,
       remote: remote.name,
       pullRequest,
-      refetch: async () => fetchPullRequest(context.clients, ref, disposal.signal),
+      refetch: async () => {
+        return fetchPullRequest(context.clients, ref, disposal.signal);
+      },
       logger,
       signal: disposal.signal,
     });
@@ -269,12 +271,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     if (state.headSeen !== undefined && state.headSeen !== session.headSha) {
       state.prEtag = undefined;
     }
-    const pulled = await context.clients.withClient(host, async (client) =>
-      getPullRequest(client, ref, {
+    const pulled = await context.clients.withClient(host, async (client) => {
+      return getPullRequest(client, ref, {
         ...(state.prEtag !== undefined && { etag: state.prEtag }),
         signal: disposal.signal,
-      }),
-    );
+      });
+    });
     if (!pulled.ok) {
       logger.info('github poll: pull request unavailable', { kind: pulled.error.kind });
       return failed(state, pulled.error);
@@ -284,9 +286,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     if (pulled.value.kind === 'modified') {
       const pullRequest = pulled.value.value;
       savePullRequest(context.session.db, ref, pullRequest);
-      const stack = await context.clients.withClient(host, async (client) =>
-        findPullRequestStack(client, pullRequest, disposal.signal),
-      );
+      const stack = await context.clients.withClient(host, async (client) => {
+        return findPullRequestStack(client, pullRequest, disposal.signal);
+      });
       if (stack.ok) {
         state.stack = stackViewFrom(host, stack.value);
       }
@@ -306,13 +308,13 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       state.ciSha = headSha;
       delete state.ciEtags;
     }
-    const ci = await context.clients.withClient(host, async (client) =>
-      getCiStatus(
+    const ci = await context.clients.withClient(host, async (client) => {
+      return getCiStatus(
         client,
         { owner, repo, sha: headSha },
         { ...(state.ciEtags !== undefined && { etags: state.ciEtags }), signal: disposal.signal },
-      ),
-    );
+      );
+    });
     if (!ci.ok) {
       logger.info('github poll: CI status unavailable', { kind: ci.error.kind });
       return failed(state, ci.error);

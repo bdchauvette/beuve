@@ -62,7 +62,9 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
     expect(answer.review?.findings).toMatchObject([{ startLine: 2, check: 'confirmed' }]);
     expect(answer.review?.verification).toBe('verified');
     expect(
-      claude.calls().filter((call) => call.args.some((arg) => arg.includes('"verdicts"'))),
+      claude.calls().filter((call) => {
+        return call.args.some((arg) => arg.includes('"verdicts"'));
+      }),
     ).toStrictEqual([]);
 
     const [request] = api.requests;

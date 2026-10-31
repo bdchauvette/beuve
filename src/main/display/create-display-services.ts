@@ -43,25 +43,30 @@ const defaults: Required<DiffDisplayView> = {
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
   let remembered: Required<DiffDisplayView> = defaults;
-  const read = async (): Promise<Required<DiffDisplayView>> =>
-    filePath === undefined ? remembered : displayFrom(await readSettingsFile(filePath));
+  const read = async (): Promise<Required<DiffDisplayView>> => {
+    return filePath === undefined ? remembered : displayFrom(await readSettingsFile(filePath));
+  };
   return {
-    get: async (): Promise<IpcResult<DiffDisplayView>> => ok(await read()),
+    get: async (): Promise<IpcResult<DiffDisplayView>> => {
+      return ok(await read());
+    },
     set: async (request): Promise<IpcResult<DiffDisplayView>> => {
       const next = { ...(await read()), ...request };
       remembered = next;
       if (filePath !== undefined) {
-        await updateSettingsFile(filePath, (current) => ({
-          ...current,
-          diffLayout: next.layout,
-          ignoreWhitespace: next.ignoreWhitespace,
-          sidebarSide: next.sidebarSide,
-          showGenerated: next.showGenerated,
-          showInsights: next.showInsights,
-          reviewOrder: next.reviewOrder,
-          skipReviewed: next.skipReviewed,
-          sheets: next.sheets,
-        }));
+        await updateSettingsFile(filePath, (current) => {
+          return {
+            ...current,
+            diffLayout: next.layout,
+            ignoreWhitespace: next.ignoreWhitespace,
+            sidebarSide: next.sidebarSide,
+            showGenerated: next.showGenerated,
+            showInsights: next.showInsights,
+            reviewOrder: next.reviewOrder,
+            skipReviewed: next.skipReviewed,
+            sheets: next.sheets,
+          };
+        });
       }
       return ok(next);
     },

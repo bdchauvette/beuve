@@ -51,7 +51,9 @@ describe('createClaudeCodeVersionCheck', () => {
     tempDir,
   }) => {
     const missing = path.join(tempDir, 'nowhere', 'claude');
-    const { check, runs } = countingCheck(() => err({ kind: 'not-installed', command: missing }));
+    const { check, runs } = countingCheck(() => {
+      return err({ kind: 'not-installed', command: missing });
+    });
     const cached = createClaudeCodeVersionCheck(check);
     await cached(missing);
     await cached(missing);

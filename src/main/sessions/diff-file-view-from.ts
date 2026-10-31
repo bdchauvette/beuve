@@ -20,13 +20,15 @@ export function diffFileViewFrom(file: DiffFile): DiffFileView {
     additions,
     deletions,
     binary: file.binary,
-    hunks: file.hunks.map(({ oldStart, oldCount, newStart, newCount, header }) => ({
-      oldStart,
-      oldCount,
-      newStart,
-      newCount,
-      header,
-    })),
+    hunks: file.hunks.map(({ oldStart, oldCount, newStart, newCount, header }) => {
+      return {
+        oldStart,
+        oldCount,
+        newStart,
+        newCount,
+        header,
+      };
+    }),
     patch: file.patch,
     ...blobSha('oldBlobSha', file.oldObject),
     ...blobSha('newBlobSha', file.newObject),

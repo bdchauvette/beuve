@@ -77,7 +77,9 @@ async function launch(): Promise<void> {
         editor: {
           settingsPath,
           platform: createSystemEditorPlatform({
-            openExternal: async (url) => shell.openExternal(url),
+            openExternal: async (url) => {
+              return shell.openExternal(url);
+            },
             ...(editorLaunchLog !== undefined && { launchLog: editorLaunchLog }),
           }),
         },
@@ -86,17 +88,22 @@ async function launch(): Promise<void> {
           settingsPath,
           secretsPath: path.join(userData, 'model-secrets.json'),
           cipher: {
-            isAvailable: async () => safeStorage.isAsyncEncryptionAvailable(),
-            encrypt: async (plainText) => safeStorage.encryptStringAsync(plainText),
+            isAvailable: async () => {
+              return safeStorage.isAsyncEncryptionAvailable();
+            },
+            encrypt: async (plainText) => {
+              return safeStorage.encryptStringAsync(plainText);
+            },
             decrypt: async (encrypted) => {
               const decrypted = await safeStorage.decryptStringAsync(encrypted);
               return decrypted.result;
             },
-            backend: () =>
-              process.platform === 'linux' &&
-              safeStorage.getSelectedStorageBackend() === 'basic_text'
+            backend: () => {
+              return process.platform === 'linux' &&
+                safeStorage.getSelectedStorageBackend() === 'basic_text'
                 ? 'basic'
-                : 'os',
+                : 'os';
+            },
           },
           ...bundledClaudeCode(),
         },
@@ -104,7 +111,9 @@ async function launch(): Promise<void> {
         shell: { openExternal: async (url) => shell.openExternal(url) },
         github: {
           settingsPath,
-          openExternal: async (url) => shell.openExternal(url),
+          openExternal: async (url) => {
+            return shell.openExternal(url);
+          },
           ...(githubApiBase !== undefined && { apiBase: githubApiBase }),
         },
         syntax: { wasmDirectory: path.join(import.meta.dirname, 'wasm') },

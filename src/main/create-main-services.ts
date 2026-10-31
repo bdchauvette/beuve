@@ -196,10 +196,11 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         gh.services?.watch(isPull ? id : undefined);
       },
     ),
-    (summary) =>
-      summary.source.kind === 'github-pull-request'
+    (summary) => {
+      return summary.source.kind === 'github-pull-request'
         ? gh.services?.badgeFor(summary.source)
-        : undefined,
+        : undefined;
+    },
   );
   const parser = createSyntaxParser(options.syntax);
   const impactRunner =
@@ -249,7 +250,9 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       ...(options.models?.agentSdk !== undefined && { agentSdk: options.models.agentSdk }),
     },
     ...(options.claude !== undefined && { claude: options.claude }),
-    intentFor: (sessionId) => gh.services?.intentFor(sessionId),
+    intentFor: (sessionId) => {
+      return gh.services?.intentFor(sessionId);
+    },
   });
   heads.chat = chat;
   const ura = createUraServices({ context, impact });
@@ -284,7 +287,9 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       openExternal: options.github.openExternal,
     }),
     ...(options.github?.polling !== undefined && { polling: options.github.polling }),
-    openSessionId: () => open.sessionId,
+    openSessionId: () => {
+      return open.sessionId;
+    },
   });
   gh.services = github;
   const files = createFileServices({ context });
@@ -329,8 +334,9 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     trace,
     github,
     claude: {
-      status: async (): Promise<IpcResult<ClaudeStatusView>> =>
-        ok(await readClaudeStatus(options.claude ?? {})),
+      status: async (): Promise<IpcResult<ClaudeStatusView>> => {
+        return ok(await readClaudeStatus(options.claude ?? {}));
+      },
     },
     models: createModelServices({
       registry,
@@ -346,16 +352,20 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       ura,
       trace,
       github,
-      openSessionId: () => open.sessionId,
+      openSessionId: () => {
+        return open.sessionId;
+      },
     }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
       await worktrees.prune(
         stored.ok
-          ? stored.value.map((session) => ({
-              repoPath: session.source.repoPath,
-              headSha: session.headSha,
-            }))
+          ? stored.value.map((session) => {
+              return {
+                repoPath: session.source.repoPath,
+                headSha: session.headSha,
+              };
+            })
           : [],
       );
     },
@@ -390,8 +400,9 @@ function trackOpenSession(
   };
   return {
     ...sessions,
-    getReview: async (request, call): Promise<IpcResult<ReviewView>> =>
-      remember(await sessions.getReview(request, call)),
+    getReview: async (request, call): Promise<IpcResult<ReviewView>> => {
+      return remember(await sessions.getReview(request, call));
+    },
   };
 }
 

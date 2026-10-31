@@ -32,8 +32,9 @@ export interface McpToolsOptions {
  */
 export function createMcpTools(options: McpToolsOptions): McpToolServices {
   const { context, impact, lsp, ura, trace, github, openSessionId } = options;
-  const sessionFor = (requested: string | undefined): Result<string, string> =>
-    resolveSessionId(context, requested, openSessionId());
+  const sessionFor = (requested: string | undefined): Result<string, string> => {
+    return resolveSessionId(context, requested, openSessionId());
+  };
   return {
     runImpactCheck: async ({ sessionId, paths }): Promise<McpToolOutcome> => {
       const id = sessionFor(sessionId);

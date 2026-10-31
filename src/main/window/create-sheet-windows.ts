@@ -82,7 +82,9 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
       void window.loadFile(options.sheetHtmlPath, { query: queryFrom(request) });
     },
     closeAll: (): void => {
-      const windows = Array.from(open.values(), (siblings) => [...siblings]).flat();
+      const windows = Array.from(open.values(), (siblings) => {
+        return [...siblings];
+      }).flat();
       for (const window of windows) {
         window.close();
       }

@@ -27,13 +27,16 @@ export async function buildImportEdges(
   files: readonly DiffFile[],
   paths: ReadonlySet<string>,
 ): Promise<Result<readonly DependencyEdge[], GitError>> {
-  const sources = files.filter(
-    (file) =>
-      file.status !== 'deleted' && paths.has(headPathOf(file)) && isImportSource(headPathOf(file)),
-  );
+  const sources = files.filter((file) => {
+    return (
+      file.status !== 'deleted' && paths.has(headPathOf(file)) && isImportSource(headPathOf(file))
+    );
+  });
   const requests = sources
     .filter((file) => file.newObject !== undefined)
-    .map((file) => ({ objectId: file.newObject ?? '', mode: newModeOf(file) }));
+    .map((file) => {
+      return { objectId: file.newObject ?? '', mode: newModeOf(file) };
+    });
   const blobs = await readBlobs(repository, requests);
   if (!blobs.ok) {
     return blobs;
@@ -45,9 +48,9 @@ export async function buildImportEdges(
       continue;
     }
     const dependent = headPathOf(file);
-    const parsed = await parse({ path: dependent, text: content.text }, (root) =>
-      extractModuleReferences(root).map((reference) => reference.specifier),
-    );
+    const parsed = await parse({ path: dependent, text: content.text }, (root) => {
+      return extractModuleReferences(root).map((reference) => reference.specifier);
+    });
     const specifiers = parsed.ok ? new Set(parsed.value) : new Set<string>();
     for (const specifier of specifiers) {
       const dependency = resolve({ specifier, fromPath: dependent });

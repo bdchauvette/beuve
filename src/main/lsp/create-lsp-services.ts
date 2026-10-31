@@ -159,11 +159,9 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     if (!symbols.ok) {
       return fail(symbols.error);
     }
-    const span = spans
-      .get(file)
-      ?.find(
-        (candidate) => candidate.startLine <= request.line && candidate.endLine >= request.line,
-      );
+    const span = spans.get(file)?.find((candidate) => {
+      return candidate.startLine <= request.line && candidate.endLine >= request.line;
+    });
     const symbol =
       findEnclosingSymbol(symbols.value, line) ??
       (span === undefined ? undefined : findFirstCallable(symbols.value, line, span.endLine - 1));
@@ -212,8 +210,9 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     lineText: string,
     target: LocationView,
   ): Promise<Result<readonly LocationView[], LspError>> => {
-    const outside = (locations: readonly LocationView[]): LocationView[] =>
-      locations.filter((next) => next.file.kind !== 'workspace' || next.file.path !== file);
+    const outside = (locations: readonly LocationView[]): LocationView[] => {
+      return locations.filter((next) => next.file.kind !== 'workspace' || next.file.path !== file);
+    };
     const again = await multiplexer.definition({ root, path: file, position: target.range.start });
     if (!again.ok || outside(again.value).length > 0) {
       return again.ok ? ok(outside(again.value)) : again;
@@ -347,8 +346,9 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       const key = `${request.sessionId}\0${headSha}`;
       const answer = (
         calls: Result<readonly CallHierarchyCallView[], IpcError>,
-      ): IpcResult<CallHierarchyView> =>
-        calls.ok ? ok({ headSha, direction: request.direction, calls: calls.value }) : calls;
+      ): IpcResult<CallHierarchyView> => {
+        return calls.ok ? ok({ headSha, direction: request.direction, calls: calls.value }) : calls;
+      };
       const cachedSpans = spansByHead.get(key);
       if (cachedSpans !== undefined && request.nodeId !== undefined) {
         return answer(await expand(request.nodeId, request.direction, cachedSpans));

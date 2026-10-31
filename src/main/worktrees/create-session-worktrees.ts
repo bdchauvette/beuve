@@ -146,11 +146,13 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         await mkdir(options.root, { recursive: true, mode: 0o700 });
         return realpath(options.root);
       })(),
-      (cause): GitError => ({
-        kind: 'invalid-argument',
-        argument: options.root,
-        reason: errorFrom(cause).message,
-      }),
+      (cause): GitError => {
+        return {
+          kind: 'invalid-argument',
+          argument: options.root,
+          reason: errorFrom(cause).message,
+        };
+      },
     );
     const resolved = await canonicalRoot;
     if (!resolved.ok) {
@@ -299,13 +301,15 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         return planned;
       }
       const path = planned.value;
-      const entry = entries.getOrInsertComputed(path, () => ({
-        path,
-        repository: own.value,
-        leases: 0,
-        steps: 0,
-        tail: Promise.resolve(),
-      }));
+      const entry = entries.getOrInsertComputed(path, () => {
+        return {
+          path,
+          repository: own.value,
+          leases: 0,
+          steps: 0,
+          tail: Promise.resolve(),
+        };
+      });
       entry.leases += 1;
       const lease = leaseOn(entry, commit);
       const granted = serially(entry, async () => grant(entry, root.value, claim, commit));

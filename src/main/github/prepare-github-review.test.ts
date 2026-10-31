@@ -135,7 +135,11 @@ function holdCompile(ura: UraServices): {
     release: (): void => {
       gate.resolve(undefined);
     },
-    compiledAt: (): readonly string[] => heads,
-    compiledFrom: (): readonly (string | undefined)[] => bases,
+    compiledAt: (): readonly string[] => {
+      return heads;
+    },
+    compiledFrom: (): readonly (string | undefined)[] => {
+      return bases;
+    },
   };
 }

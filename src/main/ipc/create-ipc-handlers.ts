@@ -152,10 +152,9 @@ const inspectRepositoryRequest = z.strictObject({
     .string()
     .min(1)
     .max(4096)
-    .refine(
-      (value) => value.startsWith('/') || windowsDrivePath.test(value),
-      'expected an absolute path',
-    ),
+    .refine((value) => {
+      return value.startsWith('/') || windowsDrivePath.test(value);
+    }, 'expected an absolute path'),
 });
 const chooseFolderRequest = z.strictObject({
   title: z.string().max(200).optional(),
@@ -190,7 +189,9 @@ const sheetPath = z
   .string()
   .min(1)
   .max(4096)
-  .refine((value) => normalizePathPrefix(value) === value, 'expected a repository-relative path');
+  .refine((value) => {
+    return normalizePathPrefix(value) === value;
+  }, 'expected a repository-relative path');
 const character = z.number().int().min(0).max(10_000_000);
 
 const definitionRequest = z.strictObject({
@@ -209,7 +210,9 @@ const sheetRange = z
     endLine: z.number().int().min(1).max(10_000_000),
     endCharacter: character,
   })
-  .refine((range) => range.endLine >= range.startLine, 'endLine comes before startLine');
+  .refine((range) => {
+    return range.endLine >= range.startLine;
+  }, 'endLine comes before startLine');
 
 const openSheetRequest = z.strictObject({
   sessionId,
@@ -228,12 +231,12 @@ const permalinkRequest = z
     startLine: z.number().int().min(1).max(10_000_000).optional(),
     endLine: z.number().int().min(1).max(10_000_000).optional(),
   })
-  .refine(
-    (request) =>
+  .refine((request) => {
+    return (
       request.endLine === undefined ||
-      (request.startLine !== undefined && request.endLine >= request.startLine),
-    'endLine needs a startLine before it',
-  );
+      (request.startLine !== undefined && request.endLine >= request.startLine)
+    );
+  }, 'endLine needs a startLine before it');
 
 const flowGraphRequest = z.strictObject({
   sessionId,
@@ -292,7 +295,9 @@ const uraAnchor = z.discriminatedUnion('kind', [
       startLine: line,
       endLine: line,
     })
-    .refine((anchor) => anchor.endLine >= anchor.startLine, 'endLine comes before startLine'),
+    .refine((anchor) => {
+      return anchor.endLine >= anchor.startLine;
+    }, 'endLine comes before startLine'),
   z.strictObject({ kind: z.literal('file'), path: repositoryPath }),
   z.strictObject({ kind: z.literal('change') }),
 ]);
@@ -359,16 +364,18 @@ const chatMention = z
     endLine: line.optional(),
     sha: commitSha,
   })
+  .refine((mention) => {
+    return (mention.startLine === undefined) === (mention.endLine === undefined);
+  }, 'give both lines or neither')
   .refine(
-    (mention) => (mention.startLine === undefined) === (mention.endLine === undefined),
-    'give both lines or neither',
-  )
-  .refine(
-    (mention) =>
-      mention.startLine === undefined ||
-      mention.endLine === undefined ||
-      (mention.endLine >= mention.startLine &&
-        mention.endLine - mention.startLine < maxMentionSpan),
+    (mention) => {
+      return (
+        mention.startLine === undefined ||
+        mention.endLine === undefined ||
+        (mention.endLine >= mention.startLine &&
+          mention.endLine - mention.startLine < maxMentionSpan)
+      );
+    },
     `expected startLine <= endLine, at most ${String(maxMentionSpan)} lines`,
   );
 
@@ -411,7 +418,9 @@ const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => 
 const commandId = z
   .string()
   .max(64)
-  .refine((id) => catalogIds.has(id), 'expected a catalog command')
+  .refine((id) => {
+    return catalogIds.has(id);
+  }, 'expected a catalog command')
   .transform((id) => id as CommandId);
 const menuStateRequest = z.strictObject({
   conditions: z.array(z.enum(menuConditions)).max(menuConditions.length),
@@ -511,12 +520,12 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { sessionId: id, ignoreWhitespace } = parsed.data;
-      return scoped(sender, 'review', async (options) =>
-        services.sessions.getReview(
+      return scoped(sender, 'review', async (options) => {
+        return services.sessions.getReview(
           { sessionId: id, ...(ignoreWhitespace !== undefined && { ignoreWhitespace }) },
           options,
-        ),
-      );
+        );
+      });
     },
     'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = markReviewedRequest.safeParse(request);
@@ -534,19 +543,19 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { sessionId: id, mode } = parsed.data;
-      return scoped(sender, 'order', async (options) =>
-        services.order.getOrder(
+      return scoped(sender, 'order', async (options) => {
+        return services.order.getOrder(
           mode === undefined ? { sessionId: id } : { sessionId: id, mode },
           options,
-        ),
-      );
+        );
+      });
     },
     'session:get-impact': async (request, sender): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success
-        ? scoped(sender, 'impact', async (options) =>
-            services.impact.getImpactForRenderer(parsed.data, options),
-          )
+        ? scoped(sender, 'impact', async (options) => {
+            return services.impact.getImpactForRenderer(parsed.data, options);
+          })
         : invalid(parsed.error);
     },
     'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
@@ -565,9 +574,9 @@ export function createIpcHandlers(
     ): Promise<IpcResult<FileAttributesView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success
-        ? scoped(sender, 'file-attributes', async (options) =>
-            services.files.getFileAttributes(parsed.data, options),
-          )
+        ? scoped(sender, 'file-attributes', async (options) => {
+            return services.files.getFileAttributes(parsed.data, options);
+          })
         : invalid(parsed.error);
     },
     'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
@@ -612,17 +621,17 @@ export function createIpcHandlers(
     'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
       const parsed = sheetFileRequest.safeParse(request);
       return parsed.success
-        ? scoped(sender, 'sheet-file', async (options) =>
-            services.sheets.getFile(parsed.data, options),
-          )
+        ? scoped(sender, 'sheet-file', async (options) => {
+            return services.sheets.getFile(parsed.data, options);
+          })
         : invalid(parsed.error);
     },
     'sheet:get-head': async (request, sender): Promise<IpcResult<SheetHeadView>> => {
       const parsed = sessionRequest.safeParse(request);
       return parsed.success
-        ? scoped(sender, 'sheet-head', async (options) =>
-            services.sheets.getHead(parsed.data, options),
-          )
+        ? scoped(sender, 'sheet-head', async (options) => {
+            return services.sheets.getHead(parsed.data, options);
+          })
         : invalid(parsed.error);
     },
     'remote:permalink': async (request): Promise<IpcResult<PermalinkView>> => {
@@ -752,12 +761,14 @@ export function createIpcHandlers(
         }),
         ...(mentions !== undefined &&
           mentions.length > 0 && {
-            mentions: mentions.map(({ path, side, startLine, endLine, sha }) => ({
-              path,
-              side,
-              ...(startLine !== undefined && endLine !== undefined && { startLine, endLine }),
-              sha,
-            })),
+            mentions: mentions.map(({ path, side, startLine, endLine, sha }) => {
+              return {
+                path,
+                side,
+                ...(startLine !== undefined && endLine !== undefined && { startLine, endLine }),
+                sha,
+              };
+            }),
           }),
       });
     },
@@ -824,11 +835,12 @@ export function createIpcHandlers(
       return scoped(
         sender,
         'open-pull-request',
-        async (options) =>
-          services.github.openPullRequest(
+        async (options) => {
+          return services.github.openPullRequest(
             { ref, ...(repoPath !== undefined && { repoPath }) },
             options,
-          ),
+          );
+        },
         id,
       );
     },

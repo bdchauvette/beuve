@@ -22,9 +22,9 @@ async function registryWith(
   roles: Partial<Record<'chat' | 'review' | 'verify' | 'summarize' | 'compact', string>> = {},
 ): Promise<ModelRegistryStore> {
   const registry = createModelRegistryStore();
-  await registry.update((current) =>
-    ok({ entries: [...current.entries, ...entries], roles: { ...current.roles, ...roles } }),
-  );
+  await registry.update((current) => {
+    return ok({ entries: [...current.entries, ...entries], roles: { ...current.roles, ...roles } });
+  });
   return registry;
 }
 

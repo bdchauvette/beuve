@@ -145,8 +145,8 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
   };
 
   return {
-    run: async (sources, signal) =>
-      new Promise((resolve) => {
+    run: async (sources, signal): Promise<Result<ImpactReport, ImpactRunFailure>> => {
+      return new Promise((resolve) => {
         if (isDisposed || signal?.aborted === true) {
           resolve(cancelled);
           return;
@@ -165,7 +165,8 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
         );
         queue.push(job);
         pump();
-      }),
+      });
+    },
     dispose: (): void => {
       isDisposed = true;
       retire();

@@ -159,7 +159,9 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   });
   // The renderer's own clipboard needs a permission the hardened session denies (ADR 0027).
   const platform = {
-    writeClipboard: async (text: string): Promise<void> => clipboard.writeText(text),
+    writeClipboard: async (text: string): Promise<void> => {
+      return clipboard.writeText(text);
+    },
     chooseFolder: async (picker: {
       readonly title?: string;
       readonly defaultPath?: string;

@@ -53,15 +53,17 @@ describe(
       expect(result.functions).toStrictEqual([
         { index: 0, name: 'clamp', startLine: 1, endLine: 9 },
       ]);
-      expect(result.timelines.map((timeline) => [timeline.titles, timeline.status])).toStrictEqual([
+      expect(
+        result.timelines.map((timeline) => {
+          return [timeline.titles, timeline.status];
+        }),
+      ).toStrictEqual([
         [['clamp', 'caps high values'], 'passed'],
         [['clamp', 'keeps values in range'], 'passed'],
       ]);
-      const capped = result.timelines[0]?.entries.map((entry) => [
-        entry.kind,
-        entry.line,
-        entry.inHunk,
-      ]);
+      const capped = result.timelines[0]?.entries.map((entry) => {
+        return [entry.kind, entry.line, entry.inHunk];
+      });
       expect(capped).toStrictEqual([
         ['enter', 1, false],
         ['branch', 2, false],
@@ -143,10 +145,9 @@ describe(
         ok: false,
         error: { code: 'refused' },
       });
-      await waitUntil(
-        () => traceEvents.some((event) => event.state === 'running'),
-        'the probe to start',
-      );
+      await waitUntil(() => {
+        return traceEvents.some((event) => event.state === 'running');
+      }, 'the probe to start');
       expect(okValueFrom(services.trace.cancel({ sessionId }))).toStrictEqual({ cancelled: true });
       await expect(settledTrace()).resolves.toMatchObject({
         state: 'failed',
@@ -166,10 +167,9 @@ describe(
     }) => {
       okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
       okValueFrom(await services.trace.run({ sessionId, path: 'src/hang.ts', line: 2 }));
-      await waitUntil(
-        () => traceEvents.some((event) => event.state === 'running'),
-        'the probe to start',
-      );
+      await waitUntil(() => {
+        return traceEvents.some((event) => event.state === 'running');
+      }, 'the probe to start');
       repo.write('src/extra.ts', 'export const extra = 1;\n');
       await repo.commit('push');
       okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));

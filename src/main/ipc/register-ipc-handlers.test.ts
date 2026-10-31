@@ -29,11 +29,14 @@ function fakeIpcMain(registered: Map<string, Registered>): IpcMain {
 
 function handlersAnsweringOk(): IpcHandlers {
   return Object.fromEntries(
-    invokeChannels.map((channel) => [
-      channel,
-      (_request: unknown, sender?: { readonly webContentsId: number }): unknown =>
-        channel === 'menu:set-state' ? ok(sender) : ok(channel),
-    ]),
+    invokeChannels.map((channel) => {
+      return [
+        channel,
+        (_request: unknown, sender?: { readonly webContentsId: number }): unknown => {
+          return channel === 'menu:set-state' ? ok(sender) : ok(channel);
+        },
+      ];
+    }),
   ) as unknown as IpcHandlers;
 }
 
@@ -53,8 +56,9 @@ describe('registerIpcHandlers', () => {
       pages: [{ url: main, channels: mainWindowInvokeChannels }],
       logger: logger.logger,
     });
-    const call = async (channel: InvokeChannel): Promise<unknown> =>
-      registered.get(channel)?.(eventFrom(main), undefined);
+    const call = async (channel: InvokeChannel): Promise<unknown> => {
+      return registered.get(channel)?.(eventFrom(main), undefined);
+    };
     const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
     await expect(call('chat:ask')).resolves.toStrictEqual(ok('chat:ask'));
     for (const channel of settingsOnlyInvokeChannels) {
@@ -76,8 +80,13 @@ describe('registerIpcHandlers', () => {
       ],
       logger: logger.logger,
     });
-    const call = async (url: string, channel: InvokeChannel, isTopLevel = true): Promise<unknown> =>
-      registered.get(channel)?.(eventFrom(url, isTopLevel), undefined);
+    const call = async (
+      url: string,
+      channel: InvokeChannel,
+      isTopLevel = true,
+    ): Promise<unknown> => {
+      return registered.get(channel)?.(eventFrom(url, isTopLevel), undefined);
+    };
     const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
     await expect(call(`${main}?x=1#y`, 'ura:create')).resolves.toStrictEqual(ok('ura:create'));
     await expect(call(`${sheet}?session=s&sha=a`, 'sheet:get-file')).resolves.toStrictEqual(
@@ -101,8 +110,9 @@ describe('registerIpcHandlers', () => {
       pages: [{ url: settings, channels: settingsInvokeChannels }],
       logger: logger.logger,
     });
-    const call = async (channel: InvokeChannel): Promise<unknown> =>
-      registered.get(channel)?.(eventFrom(settings), undefined);
+    const call = async (channel: InvokeChannel): Promise<unknown> => {
+      return registered.get(channel)?.(eventFrom(settings), undefined);
+    };
     const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
     await expect(call('display:set')).resolves.toStrictEqual(ok('display:set'));
     await expect(call('trace:remove-trust')).resolves.toStrictEqual(ok('trace:remove-trust'));

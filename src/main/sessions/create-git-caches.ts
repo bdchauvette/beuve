@@ -73,7 +73,9 @@ export function createGitCaches(options: GitCachesOptions = {}): GitCaches {
   });
   const owned = {
     objectReaders,
-    [Symbol.asyncDispose]: async (): Promise<void> => objectReaders[Symbol.asyncDispose](),
+    [Symbol.asyncDispose]: async (): Promise<void> => {
+      return objectReaders[Symbol.asyncDispose]();
+    },
   };
   if (options.enabled === false) {
     return {
@@ -109,7 +111,9 @@ export function createGitCaches(options: GitCachesOptions = {}): GitCaches {
 
 function uncached<V>(): SharedCache<V> {
   return {
-    get: async (_key, compute, call = {}): Promise<V | 'aborted'> => compute(call.signal),
+    get: async (_key, compute, call = {}): Promise<V | 'aborted'> => {
+      return compute(call.signal);
+    },
     delete: (): void => {
       // Nothing is kept.
     },
@@ -121,5 +125,9 @@ function isOk(result: Result<unknown, unknown>): boolean {
 }
 
 function rangeDiffWeightOf(result: Result<RangeDiff, IpcError>): number {
-  return result.ok ? result.value.files.reduce((sum, file) => sum + 4 * file.patch.length, 0) : 0;
+  return result.ok
+    ? result.value.files.reduce((sum, file) => {
+        return sum + 4 * file.patch.length;
+      }, 0)
+    : 0;
 }

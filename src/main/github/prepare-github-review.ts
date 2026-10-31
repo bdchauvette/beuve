@@ -93,10 +93,13 @@ export async function prepareGithubReview(
   const options = { commentableRanges: commentableRangesFrom(diff.value.files) };
   const unposted: UraArtifact = { ...artifact.value, entries: fresh };
   const payload = buildGithubReview(unposted, options);
-  const entries = fresh.map((entry) => ({
-    entry,
-    inline: buildGithubReview({ ...artifact.value, entries: [entry] }, options).comments.length > 0,
-  }));
+  const entries = fresh.map((entry) => {
+    return {
+      entry,
+      inline:
+        buildGithubReview({ ...artifact.value, entries: [entry] }, options).comments.length > 0,
+    };
+  });
   return ok({
     ref: { host: source.host, owner: source.owner, repo: source.repo, number: source.number },
     payload,

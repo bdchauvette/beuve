@@ -74,7 +74,9 @@ export async function resolveChatMentions(
   }
   const blobs = await readBlobs(
     repository,
-    objectIds.map((objectId) => ({ objectId })),
+    objectIds.map((objectId) => {
+      return { objectId };
+    }),
     { maxBlobBytes },
   );
   if (!blobs.ok) {

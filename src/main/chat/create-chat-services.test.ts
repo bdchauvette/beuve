@@ -59,9 +59,9 @@ describe(
         citations: [{ path: 'feature.rs', startLine: 1, endLine: 2 }],
       });
       expect(
-        events.flatMap((event) =>
-          event.type === 'status' ? [[event.status, event.activity]] : [],
-        ),
+        events.flatMap((event) => {
+          return event.type === 'status' ? [[event.status, event.activity]] : [];
+        }),
       ).toStrictEqual([
         ['submitted', 'Asking Claude Code'],
         ['streaming', undefined],
@@ -71,15 +71,15 @@ describe(
         ['streaming', 'Claude Code is writing'],
       ]);
       expect(
-        events.flatMap((event) =>
-          event.type === 'status'
+        events.flatMap((event) => {
+          return event.type === 'status'
             ? []
             : [
                 'text' in event
                   ? [event.type, event.text]
                   : [event.type, 'part' in event ? event.part.id : ''],
-              ],
-        ),
+              ];
+        }),
       ).toStrictEqual([
         ['part-start', 'p1'],
         ['text-delta', 'Looking.'],
@@ -94,7 +94,11 @@ describe(
       expect(events.every(({ messageId }) => messageId === asked.answer.id)).toBe(true);
 
       const listed = okValueFrom(chat.list({ sessionId }));
-      expect(listed.messages.map(({ id, role, status }) => [id, role, status])).toStrictEqual([
+      expect(
+        listed.messages.map(({ id, role, status }) => {
+          return [id, role, status];
+        }),
+      ).toStrictEqual([
         [asked.question.id, 'user', 'done'],
         [asked.answer.id, 'assistant', 'done'],
       ]);
@@ -163,16 +167,15 @@ describe(
         'queued',
       ]);
 
-      await waitUntil(
-        () =>
-          events.some(
-            (event) =>
-              event.messageId === first.answer.id &&
-              event.type === 'part-end' &&
-              event.part.kind === 'tool-call',
-          ),
-        'the first answer to read',
-      );
+      await waitUntil(() => {
+        return events.some((event) => {
+          return (
+            event.messageId === first.answer.id &&
+            event.type === 'part-end' &&
+            event.part.kind === 'tool-call'
+          );
+        });
+      }, 'the first answer to read');
       claude.rescript(['a', 'b', 'c'], 0);
       expect(okValueFrom(chat.cancel({ messageId: first.answer.id }))).toStrictEqual({
         cancelled: true,
@@ -189,23 +192,25 @@ describe(
         parts: [],
       });
       expect(textOf(await settled(fourth.answer.id))).toBe('abc');
-      const started = events.flatMap((event) =>
-        event.type === 'status' && event.status === 'submitted' && event.activity === undefined
+      const started = events.flatMap((event) => {
+        return event.type === 'status' &&
+          event.status === 'submitted' &&
+          event.activity === undefined
           ? event.messageId
-          : [],
-      );
-      const finished = updates.flatMap(({ id, status }) => (status === 'done' ? id : []));
+          : [];
+      });
+      const finished = updates.flatMap(({ id, status }) => {
+        return status === 'done' ? id : [];
+      });
       expect([started, finished]).toStrictEqual([
         [second.answer.id, fourth.answer.id],
         [second.answer.id, fourth.answer.id],
       ]);
-      const asked = claude
-        .calls()
-        .map(({ stdin }) =>
-          ['First?', 'Second?', 'Third?', 'Fourth?'].findLast((question) =>
-            stdin.includes(question),
-          ),
-        );
+      const asked = claude.calls().map(({ stdin }) => {
+        return ['First?', 'Second?', 'Third?', 'Fourth?'].findLast((question) => {
+          return stdin.includes(question);
+        });
+      });
       expect(asked).toStrictEqual(['First?', 'Second?', 'Fourth?']);
       expect(claude.calls()[2]?.stdin).toContain('abc');
     });
@@ -237,13 +242,11 @@ describe(
         'queued',
         'queued',
       ]);
-      await waitUntil(
-        () =>
-          events.some(
-            (event) => event.messageId === running.answer.id && event.type === 'text-delta',
-          ),
-        'the running answer to stream',
-      );
+      await waitUntil(() => {
+        return events.some((event) => {
+          return event.messageId === running.answer.id && event.type === 'text-delta';
+        });
+      }, 'the running answer to stream');
 
       await repo.git('switch', '--quiet', 'feature');
       repo.write('more.rs', 'pub fn more() {}\n');
@@ -254,7 +257,9 @@ describe(
       // The queue drop is synchronous with the head refresh. A queued request that was merely left to
       // start would still be queued here, and cancelled only once `prepare` saw the moved head.
       const statuses = new Map(
-        okValueFrom(chat.list({ sessionId })).messages.map(({ id, status }) => [id, status]),
+        okValueFrom(chat.list({ sessionId })).messages.map(({ id, status }) => {
+          return [id, status];
+        }),
       );
       expect(statuses.get(waiting.answer.id)).toBe('cancelled');
       expect(statuses.get(compaction.answer.id)).toBe('cancelled');
@@ -401,7 +406,9 @@ describe(
         },
       });
       expect(
-        reviewed.parts.map((part) => [part.kind, 'description' in part ? part.description : '']),
+        reviewed.parts.map((part) => {
+          return [part.kind, 'description' in part ? part.description : ''];
+        }),
       ).toStrictEqual([
         ['tool-call', 'grep feature'],
         ['tool-call', 'read feature.rs:1-3'],
@@ -411,7 +418,9 @@ describe(
       ]);
       expect(reviewed.parts.at(-1)).toStrictEqual({ kind: 'finding', id: 'p5', finding: 0 });
       expect(
-        events.flatMap((event) => (event.type === 'status' ? (event.activity ?? []) : [])),
+        events.flatMap((event) => {
+          return event.type === 'status' ? (event.activity ?? []) : [];
+        }),
       ).toStrictEqual(
         expect.arrayContaining([
           'Checking 2 findings against the code',
@@ -564,7 +573,9 @@ describe(
       const claude = fakeClaude.scripted({ chunks: ['a', 'b'], delayMs: 600_000 });
       const { services, chat, sessionId, events, settled } = await startChat(claude.settings);
       const asked = okValueFrom(await chat.ask({ sessionId, question: 'Slow?' }));
-      await waitUntil(() => events.length > 0, 'the answer to start streaming');
+      await waitUntil(() => {
+        return events.length > 0;
+      }, 'the answer to start streaming');
       await services.dispose();
       await expect(settled(asked.answer.id)).resolves.toMatchObject({ status: 'cancelled' });
       await expect(chat.ask({ sessionId, question: 'Too late?' })).resolves.toMatchObject({
@@ -596,7 +607,9 @@ describe(
       );
       expect(textOf(asked.question)).toBe('Why [[@1]] and not [[@2]]?');
       expect(
-        asked.question.parts.flatMap((part) => (part.kind === 'mention' ? [part.mention] : [])),
+        asked.question.parts.flatMap((part) => {
+          return part.kind === 'mention' ? [part.mention] : [];
+        }),
       ).toStrictEqual(mentions);
       await settled(asked.answer.id);
 
@@ -769,7 +782,9 @@ describe(
       await settled(first.answer.id);
       claude.rescript(['a', 'b', 'c'], 600_000);
       const running = chat.compact({ sessionId });
-      await waitUntil(() => claude.calls().length >= 2, 'the compaction to start');
+      await waitUntil(() => {
+        return claude.calls().length >= 2;
+      }, 'the compaction to start');
       const next = okValueFrom(await chat.ask({ sessionId, question: 'Now?' }));
       expect(next.answer.status).toBe('queued');
       claude.rescript(['Later.'], 0);
@@ -875,7 +890,9 @@ describe(
           root: path.join(tempDir, 'chat-worktrees'),
           logger: logger.logger,
           git: { logger: logger.logger },
-          storedHead: (id) => okValueFrom(loadSession(context, id)).headSha,
+          storedHead: (id) => {
+            return okValueFrom(loadSession(context, id)).headSha;
+          },
         }),
         claude: claude.settings,
         models: {
@@ -884,7 +901,9 @@ describe(
           claude: claude.settings,
           logger: logger.logger,
         },
-        intentFor: () => 'AUTHOR-CLAIM: this change makes everything faster.',
+        intentFor: () => {
+          return 'AUTHOR-CLAIM: this change makes everything faster.';
+        },
       });
       const updates: ChatMessageView[] = [];
       chat.onStream((event) => {

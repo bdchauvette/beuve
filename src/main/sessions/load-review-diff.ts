@@ -245,7 +245,9 @@ async function diffInterdiff(
       ignoreWhitespace: isIgnoringWhitespace,
       pairedCommits: (usablePairs?.pairs ?? [])
         .filter((pair) => pair.kind === 'unchanged' || pair.kind === 'modified')
-        .map((pair) => ({ parent: pair.previous.parent, commit: pair.previous.sha })),
+        .map((pair) => {
+          return { parent: pair.previous.parent, commit: pair.previous.sha };
+        }),
     },
   );
   if (!interdiff.ok) {

@@ -40,7 +40,9 @@ export interface AppMenus {
 
 const emptyState: MenuStateRequest = { conditions: [], checked: [] };
 const byId: ReadonlyMap<string, CatalogCommand> = new Map(
-  commandCatalog.map((command) => [command.id, command]),
+  commandCatalog.map((command) => {
+    return [command.id, command];
+  }),
 );
 
 /**

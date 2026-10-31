@@ -21,7 +21,9 @@ export function createFakeCipher(
       await Promise.resolve();
       return flip(encrypted).toString('utf8');
     },
-    backend: (): 'os' | 'basic' => options.backend ?? 'os',
+    backend: (): 'os' | 'basic' => {
+      return options.backend ?? 'os';
+    },
   };
 }
 

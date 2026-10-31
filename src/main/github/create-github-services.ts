@@ -167,8 +167,10 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
           void (async (): Promise<void> => {
             const stack = await options.clients.withClient(
               session.source.kind === 'github-pull-request' ? session.source.host : 'github.com',
-              // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
-              async (client) => findPullRequestStack(client, pullRequest),
+              async (client) => {
+                // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
+                return findPullRequestStack(client, pullRequest);
+              },
             );
             if (stack.ok && session.source.kind === 'github-pull-request') {
               poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));

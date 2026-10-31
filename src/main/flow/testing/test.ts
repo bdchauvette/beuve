@@ -25,12 +25,14 @@ export const test = baseTest
     });
     return okValueFrom(created).id;
   })
-  .extend('graphAt', ({ services, sessionId }): GraphAt => async (line) => {
-    const response = okValueFrom(
-      await services.flow.getGraph({ sessionId, path: 'src/flow.ts', line }),
-    );
-    if (response.kind !== 'graph') {
-      throw new Error(`no graph: ${response.failure}: ${response.message}`);
-    }
-    return response.graph;
+  .extend('graphAt', ({ services, sessionId }): GraphAt => {
+    return async (line) => {
+      const response = okValueFrom(
+        await services.flow.getGraph({ sessionId, path: 'src/flow.ts', line }),
+      );
+      if (response.kind !== 'graph') {
+        throw new Error(`no graph: ${response.failure}: ${response.message}`);
+      }
+      return response.graph;
+    };
   });

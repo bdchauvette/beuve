@@ -9,11 +9,13 @@ export function ciStatusViewFrom(status: CiStatus): CiStatusView {
     overall: status.rollup.overall,
     counts: { ...status.rollup.counts },
     checks: status.checks
-      .map((check) => ({
-        name: check.name,
-        bucket: check.bucket,
-        ...(check.url !== undefined && { url: check.url }),
-      }))
+      .map((check) => {
+        return {
+          name: check.name,
+          bucket: check.bucket,
+          ...(check.url !== undefined && { url: check.url }),
+        };
+      })
       .toSorted((left, right) => order[left.bucket] - order[right.bucket]),
     isTruncated: status.isTruncated,
   };

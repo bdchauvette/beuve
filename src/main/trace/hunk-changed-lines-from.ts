@@ -10,11 +10,11 @@ export function hunkChangedLinesFrom(
   file: Pick<DiffFile, 'hunks'> | undefined,
   line: number,
 ): Set<number> {
-  const hunk = file?.hunks.find(
-    (candidate) =>
-      line >= candidate.newStart &&
-      line <= candidate.newStart + Math.max(candidate.newCount, 1) - 1,
-  );
+  const hunk = file?.hunks.find((candidate) => {
+    return (
+      line >= candidate.newStart && line <= candidate.newStart + Math.max(candidate.newCount, 1) - 1
+    );
+  });
   const lines = hunk === undefined ? new Set<number>() : flowChangedLinesFrom({ hunks: [hunk] });
   lines.add(line);
   return lines;

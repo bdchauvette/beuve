@@ -36,5 +36,7 @@ export async function writeMcpDiscovery(
 
 async function write(file: string, discovery: McpDiscovery): Promise<RemoveMcpDiscovery> {
   await writeFileAtomic(file, `${JSON.stringify(discovery, undefined, 2)}\n`, { mode: 0o600 });
-  return async (): Promise<void> => rm(file, { force: true });
+  return async (): Promise<void> => {
+    return rm(file, { force: true });
+  };
 }

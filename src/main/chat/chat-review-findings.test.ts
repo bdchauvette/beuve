@@ -48,10 +48,14 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
     const verifiedUpdate = await settled(verified.answer.id);
     await settled(scoped.answer.id);
 
-    const listed = okValueFrom(chat.list({ sessionId })).messages.filter(
-      ({ answerKind }) => answerKind === 'review',
-    );
-    expect(listed.map(({ headSha: head, status }) => [head, status])).toStrictEqual([
+    const listed = okValueFrom(chat.list({ sessionId })).messages.filter(({ answerKind }) => {
+      return answerKind === 'review';
+    });
+    expect(
+      listed.map(({ headSha: head, status }) => {
+        return [head, status];
+      }),
+    ).toStrictEqual([
       [headSha, 'done'],
       [headSha, 'done'],
     ]);

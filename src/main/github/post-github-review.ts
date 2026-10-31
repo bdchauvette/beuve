@@ -33,9 +33,9 @@ export async function postGithubReview(
     return 'code' in error ? err(error) : ok(error);
   }
   const { ref, payload, entries, preview } = prepared.value;
-  const posted = await context.clients.withClient(ref.host, async (client) =>
-    postPullRequestReview(client, { ref, payload }, { onRejectedComments: 'move-to-body' }),
-  );
+  const posted = await context.clients.withClient(ref.host, async (client) => {
+    return postPullRequestReview(client, { ref, payload }, { onRejectedComments: 'move-to-body' });
+  });
   if (!posted.ok) {
     context.session.logger.info('github: review not posted', { kind: posted.error.kind });
     return ok(
@@ -47,15 +47,17 @@ export async function postGithubReview(
   const postedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
   ura.recordPostings(
     preview.sessionId,
-    entries.map(({ entry, inline }): UraPosting => ({
-      itemId: entry.item.id,
-      sessionId: preview.sessionId as SessionId,
-      target: 'github',
-      url: htmlUrl,
-      headSha: preview.headSha as CommitSha,
-      placement: inline && !wereAllMoved ? 'inline' : 'body',
-      postedAt,
-    })),
+    entries.map(({ entry, inline }): UraPosting => {
+      return {
+        itemId: entry.item.id,
+        sessionId: preview.sessionId as SessionId,
+        target: 'github',
+        url: htmlUrl,
+        headSha: preview.headSha as CommitSha,
+        placement: inline && !wereAllMoved ? 'inline' : 'body',
+        postedAt,
+      };
+    }),
   );
   return ok({
     ...preview,

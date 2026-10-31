@@ -46,7 +46,9 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
     expect(
       deltas
         .slice(2)
-        .map((delta) => (delta.kind === 'append' ? delta.text : ''))
+        .map((delta) => {
+          return delta.kind === 'append' ? delta.text : '';
+        })
         .join(''),
     ).toBe(`It trims [[${tempDir}/src/a.ts:12-13]] and [[src/zzz.ts:1]].`);
   });
@@ -81,7 +83,9 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
       },
       signal: controller.signal,
     });
-    await waitUntil(() => deltas.length > 0, 'the answer to start streaming');
+    await waitUntil(() => {
+      return deltas.length > 0;
+    }, 'the answer to start streaming');
     controller.abort();
     await expect(running).resolves.toStrictEqual({
       ok: false,

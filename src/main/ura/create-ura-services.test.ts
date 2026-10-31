@@ -162,7 +162,11 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
 
     const listed = okValueFrom(await services.ura.list({ sessionId }));
     expect(listed.headSha).toBe(newHead);
-    const byId = new Map(listed.items.map((item) => [item.id, item]));
+    const byId = new Map(
+      listed.items.map((item) => {
+        return [item.id, item];
+      }),
+    );
     expect(byId.get(shifted.id)).toMatchObject({
       headSha: oldHead,
       anchor: { startLine: 5, endLine: 6 },
@@ -625,11 +629,13 @@ function storeReview(
     role: 'assistant',
     kind: 'review',
     status: 'done',
-    parts: findings.map((_, finding) => ({
-      kind: 'finding',
-      id: `p${String(finding + 1)}`,
-      finding,
-    })),
+    parts: findings.map((_, finding) => {
+      return {
+        kind: 'finding',
+        id: `p${String(finding + 1)}`,
+        finding,
+      };
+    }),
     review: {
       findings,
       dropped: {

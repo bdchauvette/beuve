@@ -40,8 +40,9 @@ export function createSecretStore(options: {
 }): SecretStore {
   const { filePath, cipher } = options;
   let writes: Promise<unknown> = Promise.resolve();
-  const isUsable = async (): Promise<boolean> =>
-    filePath !== undefined && cipher !== undefined && (await cipher.isAvailable());
+  const isUsable = async (): Promise<boolean> => {
+    return filePath !== undefined && cipher !== undefined && (await cipher.isAvailable());
+  };
   const change = async (
     update: (secrets: Record<string, string>) => Record<string, string>,
   ): Promise<void> => {
@@ -61,8 +62,9 @@ export function createSecretStore(options: {
     await current;
   };
   return {
-    status: async (): Promise<'os' | 'basic' | 'unavailable'> =>
-      cipher !== undefined && (await isUsable()) ? cipher.backend() : 'unavailable',
+    status: async (): Promise<'os' | 'basic' | 'unavailable'> => {
+      return cipher !== undefined && (await isUsable()) ? cipher.backend() : 'unavailable';
+    },
     has: async (ref): Promise<boolean> => {
       const secrets = await readSecrets(filePath);
       return secrets[ref] !== undefined;
@@ -85,13 +87,15 @@ export function createSecretStore(options: {
       }
       const bytes = await cipher.encrypt(secret);
       const encrypted = bytes.toBase64();
-      await change((secrets) => ({ ...secrets, [ref]: encrypted }));
+      await change((secrets) => {
+        return { ...secrets, [ref]: encrypted };
+      });
       return ok(undefined);
     },
     remove: async (ref): Promise<void> => {
-      await change((secrets) =>
-        Object.fromEntries(Object.entries(secrets).filter(([key]) => key !== ref)),
-      );
+      await change((secrets) => {
+        return Object.fromEntries(Object.entries(secrets).filter(([key]) => key !== ref));
+      });
     },
   };
 }

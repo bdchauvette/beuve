@@ -40,8 +40,9 @@ describe('flow:get-graph (integration: git + Tree-sitter, no Electron)', () => {
   });
 
   test('reports typed failures instead of rejecting', async ({ expect, services, sessionId }) => {
-    const failure = async (file: string, line: number): Promise<FlowGraphResponse> =>
-      okValueFrom(await services.flow.getGraph({ sessionId, path: file, line }));
+    const failure = async (file: string, line: number): Promise<FlowGraphResponse> => {
+      return okValueFrom(await services.flow.getGraph({ sessionId, path: file, line }));
+    };
     await expect(failure('src/flow.ts', 39)).resolves.toMatchObject({
       kind: 'failed',
       failure: 'no-function-at-line',
@@ -64,10 +65,9 @@ describe('flow:get-graph (integration: git + Tree-sitter, no Electron)', () => {
   });
 
   test('refuses a function too big to draw', async ({ expect, services, sessionId, repo }) => {
-    const body = Array.from(
-      { length: 120 },
-      (_, index) => `  if (a === ${String(index)}) { a += 1; }`,
-    );
+    const body = Array.from({ length: 120 }, (_, index) => {
+      return `  if (a === ${String(index)}) { a += 1; }`;
+    });
     await repo.git('switch', '--quiet', 'feature');
     repo.write(
       'src/big.ts',

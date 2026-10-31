@@ -300,8 +300,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     },
   ): Promise<Result<Prepared, Outcome>> => {
     const isAborted = (): boolean => job.controller.signal.aborted;
-    const unavailable = (): Result<never, Outcome> =>
-      err({ status: 'failed', code: 'chat-unavailable' });
+    const unavailable = (): Result<never, Outcome> => {
+      return err({ status: 'failed', code: 'chat-unavailable' });
+    };
     const diff = await loadReviewDiff(context, job.sessionId, { signal: job.controller.signal });
     if (isAborted()) {
       return err({ status: 'cancelled' });
@@ -359,7 +360,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       worktreePath: worktree?.path,
       worktreePaths: paths.ok ? new Set(paths.value) : undefined,
       findings,
-      bind: (model): LanguageModel => bindModelTree(model, tree),
+      bind: (model): LanguageModel => {
+        return bindModelTree(model, tree);
+      },
       [Symbol.dispose]: (): void => {
         worktree?.[Symbol.dispose]();
       },
@@ -690,8 +693,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const condense = async (job: CompactJob): Promise<IpcResult<ChatCompactedView>> => {
-    const failed = (outcome: Outcome): IpcResult<ChatCompactedView> =>
-      ok(
+    const failed = (outcome: Outcome): IpcResult<ChatCompactedView> => {
+      return ok(
         outcome.status === 'failed'
           ? {
               outcome: 'failed',
@@ -700,6 +703,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
             }
           : { outcome: 'cancelled' },
       );
+    };
     const stored = listChatMessages(db, job.sessionId as SessionId);
     if (!stored.ok) {
       logger.error('chat history is corrupt', { error: stored.error });
@@ -778,12 +782,14 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
    */
   const runProbe = async (job: ProbeJob): Promise<void> => {
     const stopwatch = new Stopwatch();
-    const failed = (error: ModelError): ModelTestView => ({
-      outcome: 'failed',
-      elapsedMs: elapsedMilliseconds(stopwatch),
-      errorKind: error.kind,
-      message: describeModelError(error),
-    });
+    const failed = (error: ModelError): ModelTestView => {
+      return {
+        outcome: 'failed',
+        elapsedMs: elapsedMilliseconds(stopwatch),
+        errorKind: error.kind,
+        message: describeModelError(error),
+      };
+    };
     const probe = async (): Promise<ModelTestView> => {
       const resolved = await resolveLanguageModel({ entryId: job.entryId }, options.models);
       if (!resolved.ok) {
@@ -809,20 +815,19 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
   };
 
-  const queue = new KeyedQueue<string, Job>(
-    async (job) =>
-      job.kind === 'answer'
-        ? runAnswer(job)
-        : job.kind === 'compact'
-          ? runCompaction(job)
-          : runProbe(job),
-    options.maxQueued ?? 10,
-  );
+  const queue = new KeyedQueue<string, Job>(async (job) => {
+    return job.kind === 'answer'
+      ? runAnswer(job)
+      : job.kind === 'compact'
+        ? runCompaction(job)
+        : runProbe(job);
+  }, options.maxQueued ?? 10);
 
-  const jobOfMessage = (messageId: string): AnswerJob | undefined =>
-    queue
+  const jobOfMessage = (messageId: string): AnswerJob | undefined => {
+    return queue
       .all()
       .find((job): job is AnswerJob => job.kind === 'answer' && job.assistant.id === messageId);
+  };
 
   /** An unfinished answer no job is writing (the app died) is shown, and stored, as cancelled. */
   const settleOrphan = (message: ChatMessage): ChatMessage => {
@@ -868,15 +873,16 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     return turn;
   };
 
-  const queueFull = (): Result<never, { code: 'refused'; message: string }> =>
-    err({
+  const queueFull = (): Result<never, { code: 'refused'; message: string }> => {
+    return err({
       code: 'refused',
       message: `${String(options.maxQueued ?? 10)} requests are already waiting. Wait, cancel one or clear the queue.`,
     });
+  };
 
   return {
-    ask: async (request): Promise<IpcResult<ChatAskedView>> =>
-      inOrder(async (): Promise<IpcResult<ChatAskedView>> => {
+    ask: async (request): Promise<IpcResult<ChatAskedView>> => {
+      return inOrder(async (): Promise<IpcResult<ChatAskedView>> => {
         if (isDisposed) {
           return err({ code: 'not-wired', message: 'beuve is quitting' });
         }
@@ -949,7 +955,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           question: chatMessageViewFrom(question),
           answer: chatMessageViewFrom(assistant),
         });
-      }),
+      });
+    },
 
     list: ({ sessionId }): IpcResult<ChatListView> => {
       const session = loadSession(context, sessionId);
@@ -972,12 +979,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       const job =
         'messageId' in request
           ? jobOfMessage(request.messageId)
-          : queue
-              .all()
-              .find(
-                (candidate) =>
-                  candidate.kind === 'compact' && candidate.sessionId === request.sessionId,
-              );
+          : queue.all().find((candidate) => {
+              return candidate.kind === 'compact' && candidate.sessionId === request.sessionId;
+            });
       if (job === undefined) {
         return ok({ cancelled: false });
       }
@@ -1027,9 +1031,9 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       const id = session.value.id;
       const waiting = queue.remove(id, () => true);
       if (queuedOnly === true) {
-        const messages = waiting.flatMap((job) =>
-          job.kind === 'answer' ? [job.question.id, job.assistant.id] : [],
-        );
+        const messages = waiting.flatMap((job) => {
+          return job.kind === 'answer' ? [job.question.id, job.assistant.id] : [];
+        });
         for (const job of waiting) {
           drop(job, false);
         }
@@ -1167,15 +1171,16 @@ function findReview(
   job: AnswerJob,
   pathScope: readonly string[],
 ): Outcome | undefined {
-  const earlier = messages.findLast(
-    (message) =>
+  const earlier = messages.findLast((message) => {
+    return (
       message.role === 'assistant' &&
       message.kind === 'review' &&
       message.status === 'done' &&
       message.headSha === job.headSha &&
       message.review !== undefined &&
-      hasSameScope(message.review.pathScope, pathScope),
-  );
+      hasSameScope(message.review.pathScope, pathScope)
+    );
+  });
   if (earlier?.role !== 'assistant' || earlier.review === undefined) {
     return undefined;
   }

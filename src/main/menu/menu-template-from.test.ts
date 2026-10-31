@@ -48,15 +48,15 @@ describe('menuTemplateFrom', () => {
       const items = flatten(
         menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }),
       );
-      const keyed = commandCatalog.filter(
-        (command) => acceleratorsFor(command, platform).length > 0,
-      );
+      const keyed = commandCatalog.filter((command) => {
+        return acceleratorsFor(command, platform).length > 0;
+      });
       expect(
         keyed.filter((command) => placeOfCommand(command, platform) === undefined),
       ).toStrictEqual([]);
-      const placed = commandCatalog.filter(
-        (command) => placeOfCommand(command, platform) !== undefined,
-      );
+      const placed = commandCatalog.filter((command) => {
+        return placeOfCommand(command, platform) !== undefined;
+      });
       for (const command of placed) {
         expect(items.filter((item) => item.id === command.id)).toHaveLength(1);
       }
@@ -155,9 +155,9 @@ describe('menuTemplateFrom', () => {
       command('c', { menu: 'go', group: 1, submenu: 'More' }),
       command('d', { menu: 'go', group: 1, submenu: 'More', subgroup: 2 }),
     ];
-    const go = menuTemplateFrom({ catalog, platform: 'mac', isPackaged: true }).find(
-      (item) => item.label === 'Go',
-    );
+    const go = menuTemplateFrom({ catalog, platform: 'mac', isPackaged: true }).find((item) => {
+      return item.label === 'Go';
+    });
     expect(go?.submenu).toStrictEqual([
       { id: 'a', label: 'a' },
       { type: 'separator' },
@@ -195,9 +195,9 @@ describe('contextMenuTemplateFrom', () => {
 
   test('offers the editing roles in a text field', ({ expect }) => {
     expect(
-      contextMenuTemplateFrom(commandCatalog, 'text', 'linux').map(
-        (item) => item.role ?? item.type,
-      ),
+      contextMenuTemplateFrom(commandCatalog, 'text', 'linux').map((item) => {
+        return item.role ?? item.type;
+      }),
     ).toStrictEqual(['undo', 'redo', 'separator', 'cut', 'copy', 'paste', 'selectAll']);
   });
 
@@ -209,21 +209,23 @@ describe('contextMenuTemplateFrom', () => {
 });
 
 function topLabels(platform: KeyPlatform): (string | undefined)[] {
-  return menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }).map(
-    (item) => item.label ?? item.role,
-  );
+  return menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }).map((item) => {
+    return item.label ?? item.role;
+  });
 }
 
 function linuxRoles(isPackaged: boolean): (string | undefined)[] {
   return flatten(menuTemplateFrom({ catalog: commandCatalog, platform: 'linux', isPackaged })).map(
-    (item) => item.role,
+    (item) => {
+      return item.role;
+    },
   );
 }
 
 function catalogKeys(platform: KeyPlatform): string[] {
-  return commandCatalog.flatMap((command) =>
-    acceleratorsFor(command, platform).map((key) => normalized(key)),
-  );
+  return commandCatalog.flatMap((command) => {
+    return acceleratorsFor(command, platform).map((key) => normalized(key));
+  });
 }
 
 /** Super chords, workspace switching, IBus and the menus' own Alt access keys. */
@@ -239,7 +241,9 @@ function isLinuxReserved(key: string): boolean {
 }
 
 function flatten(items: readonly MenuTemplateItem[]): MenuTemplateItem[] {
-  return items.flatMap((item) => [item, ...flatten(item.submenu ?? [])]);
+  return items.flatMap((item) => {
+    return [item, ...flatten(item.submenu ?? [])];
+  });
 }
 
 /** Modifiers in a fixed order, `Cmd`/`Ctrl` and the rest as written, so equal chords compare equal. */

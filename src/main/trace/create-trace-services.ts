@@ -380,14 +380,14 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
 
   return {
     run: async (request): Promise<IpcResult<TraceRunStartedView>> => {
-      const echo = (
-        job: Job,
-      ): { sessionId: string; runId: string; path: string; line: number } => ({
-        sessionId: job.sessionId,
-        runId: job.runId,
-        path: request.path,
-        line: request.line,
-      });
+      const echo = (job: Job): { sessionId: string; runId: string; path: string; line: number } => {
+        return {
+          sessionId: job.sessionId,
+          runId: job.runId,
+          path: request.path,
+          line: request.line,
+        };
+      };
       const launched = await launch(request, (job, testFiles) => {
         notify({ ...echo(job), state: 'running', testFiles });
       });
@@ -440,11 +440,13 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       return ok(trusted ? await trust.grant(repository) : await trust.revoke(repository));
     },
 
-    listTrust: async (): Promise<IpcResult<readonly TraceTrustEntryView[]>> =>
-      ok(await trust.list()),
+    listTrust: async (): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
+      return ok(await trust.list());
+    },
 
-    removeTrust: async ({ repositoryPath }): Promise<IpcResult<readonly TraceTrustEntryView[]>> =>
-      ok(await trust.remove(repositoryPath)),
+    removeTrust: async ({ repositoryPath }): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
+      return ok(await trust.remove(repositoryPath));
+    },
 
     observeHead: (sessionId, headSha): void => {
       const job = jobs.get(sessionId);

@@ -232,7 +232,11 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
       skippedCommits: 2,
     });
     expect(fileSummary(retargeted)).toStrictEqual([['b.txt', 'modified', 1, 1]]);
-    expect(retargeted.commitPairs?.map(({ kind, subject }) => [kind, subject])).toStrictEqual([
+    expect(
+      retargeted.commitPairs?.map(({ kind, subject }) => {
+        return [kind, subject];
+      }),
+    ).toStrictEqual([
       ['unchanged', 'pr2: b5'],
       ['unchanged', 'pr2: b20'],
       ['added', 'pr2: b25'],
@@ -304,7 +308,11 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
         }),
       ]);
       expect(impact.findings[0]?.value).toBeGreaterThan(15);
-      expect(impact.files.map((file) => [file.path, file.status])).toStrictEqual([
+      expect(
+        impact.files.map((file) => {
+          return [file.path, file.status];
+        }),
+      ).toStrictEqual([
         ['notes.md', 'skipped'],
         ['src/auth.ts', 'analyzed'],
         ['src/broken.ts', 'analyzed'],
@@ -352,13 +360,15 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories }) => {
       const { sessionId, headSha } = await openTypescriptSession(services, repositories);
-      const request = (): CallHierarchyRequest => ({
-        sessionId,
-        expectedHeadSha: headSha,
-        path: 'src/handler.ts',
-        line: 1,
-        direction: 'incoming',
-      });
+      const request = (): CallHierarchyRequest => {
+        return {
+          sessionId,
+          expectedHeadSha: headSha,
+          path: 'src/handler.ts',
+          line: 1,
+          direction: 'incoming',
+        };
+      };
       const hierarchy = okValueFrom(
         await services.lsp.callHierarchy({
           sessionId,
@@ -375,7 +385,9 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
         startLine: 1,
       });
       const callers = hierarchy.calls
-        .map((call) => [call.node.name, call.node.badge, call.callSiteLines] as const)
+        .map((call) => {
+          return [call.node.name, call.node.badge, call.callSiteLines] as const;
+        })
         .toSorted(([a], [b]) => a.localeCompare(b));
       expect(callers).toStrictEqual([
         ['handleAuth', 'modified', [8]],
@@ -392,9 +404,11 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
           nodeId: handler?.node.id ?? '',
         }),
       );
-      expect(outer.calls.map((call) => [call.node.name, call.node.badge])).toStrictEqual([
-        ['serve', 'untouched'],
-      ]);
+      expect(
+        outer.calls.map((call) => {
+          return [call.node.name, call.node.badge];
+        }),
+      ).toStrictEqual([['serve', 'untouched']]);
       await expect(
         services.lsp.callHierarchy({
           sessionId,
@@ -700,7 +714,9 @@ async function upstreamAdvances(repo: TestRepository): Promise<string> {
 }
 
 function fileSummary(review: ReviewView): [string, string, number, number][] {
-  return review.files.map((file) => [file.path, file.status, file.additions, file.deletions]);
+  return review.files.map((file) => {
+    return [file.path, file.status, file.additions, file.deletions];
+  });
 }
 
 describe('createMainServices (integration: ImpactGate in a worker thread)', () => {
@@ -852,8 +868,8 @@ function createHoldableImpactRunner(logger: Logger): HoldableImpactRunner {
 
 /** Twenty functions with branching, so a file has real work for the parser and the metrics. */
 function largeModule(seed: number): string {
-  return Array.from({ length: 20 }, (_, index) =>
-    [
+  return Array.from({ length: 20 }, (_, index) => {
+    return [
       `export function task${String(seed)}x${String(index)}(input: number[], limit: number): number {`,
       '  let total = 0;',
       '  for (const value of input) {',
@@ -866,8 +882,8 @@ function largeModule(seed: number): string {
       '  return total;',
       '}',
       '',
-    ].join('\n'),
-  ).join('\n');
+    ].join('\n');
+  }).join('\n');
 }
 
 async function advance(repo: TestRepository, file: string): Promise<void> {

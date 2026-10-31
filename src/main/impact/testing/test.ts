@@ -10,7 +10,9 @@ export type CreateRunner = (workerUrl?: URL) => ImpactRunner;
  * the test) and `scriptedWorkerUrl` is the scripted worker beside this file.
  */
 export const test = baseTest
-  .extend('scriptedWorkerUrl', (): URL => new URL('scripted-impact-worker.ts', import.meta.url))
+  .extend('scriptedWorkerUrl', (): URL => {
+    return new URL('scripted-impact-worker.ts', import.meta.url);
+  })
   .extend('createRunner', ({ logger }, { onCleanup }): CreateRunner => {
     const runners: ImpactRunner[] = [];
     onCleanup(() => {

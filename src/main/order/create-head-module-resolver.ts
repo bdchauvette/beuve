@@ -22,12 +22,14 @@ export async function createHeadModuleResolver(
   if (!tree.ok) {
     return tree;
   }
-  const configBlobs = tree.value.filter(
-    (blob) => configPattern.test(blob.path) && !blob.path.includes('node_modules/'),
-  );
+  const configBlobs = tree.value.filter((blob) => {
+    return configPattern.test(blob.path) && !blob.path.includes('node_modules/');
+  });
   const contents = await readBlobs(
     repository,
-    configBlobs.map(({ objectId }) => ({ objectId })),
+    configBlobs.map(({ objectId }) => {
+      return { objectId };
+    }),
   );
   if (!contents.ok) {
     return contents;

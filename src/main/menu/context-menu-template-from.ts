@@ -33,9 +33,9 @@ export function contextMenuTemplateFrom(
       [{ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }],
     ]);
   }
-  const chosen = catalog.filter(
-    (command) => (command.context as readonly string[] | undefined)?.includes(kind) === true,
-  );
+  const chosen = catalog.filter((command) => {
+    return (command.context as readonly string[] | undefined)?.includes(kind) === true;
+  });
   const sectionOf = (command: CatalogCommand): number => {
     const place = placeOfCommand(command, platform);
     return place === undefined
@@ -43,14 +43,16 @@ export function contextMenuTemplateFrom(
       : menuOrder.indexOf(place.menu) * 100 + place.group;
   };
   const sections = [...new Set(chosen.map((command) => sectionOf(command)))].toSorted(
-    (left, right) => left - right,
+    (left, right) => {
+      return left - right;
+    },
   );
   return joinMenuSections(
-    sections.map((section) =>
-      chosen
+    sections.map((section) => {
+      return chosen
         .filter((command) => sectionOf(command) === section)
-        .map((command) => contextItem(command, platform)),
-    ),
+        .map((command) => contextItem(command, platform));
+    }),
   );
 }
 

@@ -79,11 +79,15 @@ async function expectSameReview(
       services.order.getOrder({ sessionId, mode: 'imports' }, { signal }),
       services.files.getFileAttributes({ sessionId }, { signal }),
       services.files.getTree({ sessionId }, { signal }),
-      Promise.all(paths.map(async (path) => services.files.getFilePair({ sessionId, path }))),
       Promise.all(
-        paths.map(async (path) =>
-          services.sheets.getFile({ sessionId, sha: headSha, path }, { signal }),
-        ),
+        paths.map(async (path) => {
+          return services.files.getFilePair({ sessionId, path });
+        }),
+      ),
+      Promise.all(
+        paths.map(async (path) => {
+          return services.sheets.getFile({ sessionId, sha: headSha, path }, { signal });
+        }),
       ),
     ]);
     return [review, ignoring, order, attributes, tree, pairs, sheets];

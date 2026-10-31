@@ -99,8 +99,12 @@ function heldRunner(): ImpactRunner & { readonly started: () => Promise<HeldRun>
       });
       return done.promise;
     },
-    dispose: (): void => undefined,
-    started: async (): Promise<HeldRun> => started.promise,
+    dispose: (): void => {
+      // The held runner owns nothing.
+    },
+    started: async (): Promise<HeldRun> => {
+      return started.promise;
+    },
   };
 }
 

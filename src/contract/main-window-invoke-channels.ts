@@ -4,7 +4,7 @@ import { settingsOnlyInvokeChannels } from './settings-only-invoke-channels.ts';
 
 /** The channels the main window may invoke: every one but the Settings window's own (ADR 0070). */
 export const mainWindowInvokeChannels: readonly InvokeChannel[] = Object.freeze(
-  invokeChannels.filter(
-    (channel) => !(settingsOnlyInvokeChannels as readonly string[]).includes(channel),
-  ),
+  invokeChannels.filter((channel) => {
+    return !(settingsOnlyInvokeChannels as readonly string[]).includes(channel);
+  }),
 );

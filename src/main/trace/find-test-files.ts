@@ -35,13 +35,15 @@ export async function findTestFiles(
     return tree;
   }
   const scripts = tree.value
-    .filter(
-      (blob) => scriptPattern.test(blob.path) && !blob.path.split('/').includes('node_modules'),
-    )
+    .filter((blob) => {
+      return scriptPattern.test(blob.path) && !blob.path.split('/').includes('node_modules');
+    })
     .slice(0, maxScripts);
   const blobs = await readBlobs(
     repository,
-    scripts.map(({ objectId }) => ({ objectId })),
+    scripts.map(({ objectId }) => {
+      return { objectId };
+    }),
     { maxBlobBytes: maxScriptBytes },
   );
   if (!blobs.ok) {

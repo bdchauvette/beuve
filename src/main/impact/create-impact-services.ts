@@ -102,7 +102,9 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
         headSha: diff.refreshed.session.headSha,
         report,
         skipped: input.value.skipped,
-        order: diff.files.map((file) => ('newPath' in file ? file.newPath : file.path)),
+        order: diff.files.map((file) => {
+          return 'newPath' in file ? file.newPath : file.path;
+        }),
         compute,
       }),
     );

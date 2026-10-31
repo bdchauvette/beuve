@@ -107,8 +107,8 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     const sessionId = await startReview(repo, services);
     const queried: string[] = [];
     const heads = new Set<string>();
-    const orderWith = (callHierarchy: OrderServicesOptions['callHierarchy']): OrderServices =>
-      createOrderServices({
+    const orderWith = (callHierarchy: OrderServicesOptions['callHierarchy']): OrderServices => {
+      return createOrderServices({
         context: {
           db,
           deps,
@@ -119,8 +119,11 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
         parse: createSyntaxParser().parse,
         callHierarchy,
         getFileAttributes: services.files.getFileAttributes,
-        defaultMode: async () => later('path'),
+        defaultMode: async () => {
+          return later('path');
+        },
       });
+    };
 
     const answering = orderWith(async (request) => {
       queried.push(`${request.path}:${String(request.line)}`);
@@ -145,12 +148,12 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect(queried).toContain('src/shared.ts:1');
     expect([...heads]).toStrictEqual([await repo.git('rev-parse', 'feature')]);
 
-    const noServer = orderWith(async () =>
-      later({
+    const noServer = orderWith(async () => {
+      return later({
         ok: false,
         error: { code: 'unsupported', message: 'no language server for this file' },
-      }),
-    );
+      });
+    });
     const fallen = okValueFrom(await noServer.getOrder({ sessionId, mode: 'calls' }, { signal }));
     expect(fallen).toMatchObject({
       requestedMode: 'calls',
@@ -159,7 +162,9 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     });
     expect(fallen.paths.indexOf('src/shared.ts')).toBeLessThan(fallen.paths.indexOf('src/app.ts'));
 
-    const quiet = orderWith(async (request) => later(okCalls(request.expectedHeadSha, [])));
+    const quiet = orderWith(async (request) => {
+      return later(okCalls(request.expectedHeadSha, []));
+    });
     expect(
       okValueFrom(await quiet.getOrder({ sessionId, mode: 'calls' }, { signal })),
     ).toMatchObject({

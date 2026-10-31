@@ -37,12 +37,12 @@ describe('createModelRegistryStore', () => {
     const file = path.join(tempDir, 'settings.json');
     writeFileSync(file, JSON.stringify({ preferredEditor: 'zed' }));
     const store = createModelRegistryStore(file);
-    const saved = await store.update((current) =>
-      ok({
+    const saved = await store.update((current) => {
+      return ok({
         entries: [...current.entries, ollama()],
         roles: { ...current.roles, verify: 'openai-1' },
-      }),
-    );
+      });
+    });
     expect(saved.ok).toBe(true);
     const onDisk = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
     expect(onDisk['preferredEditor']).toBe('zed');

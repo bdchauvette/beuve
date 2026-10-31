@@ -15,7 +15,9 @@ export function traceResultViewFrom(
     path: result.path,
     headSha: context.headSha,
     testFiles: context.testFiles,
-    functions: result.functions.map((fn) => ({ ...fn })),
+    functions: result.functions.map((fn) => {
+      return { ...fn };
+    }),
     timelines: result.timelines.map((timeline) => timelineViewFrom(timeline)),
     duration: result.duration.toString({ smallestUnit: 'millisecond' }),
   };

@@ -58,8 +58,9 @@ function startChat(createServices: CreateServices, repo: TestRepository): StartC
         headRef: 'feature',
       }),
     );
-    const settled = async (messageId: string): Promise<ChatMessageView> =>
-      waitForSettled(updates, messageId);
+    const settled = async (messageId: string): Promise<ChatMessageView> => {
+      return waitForSettled(updates, messageId);
+    };
     return { services, chat: services.chat, sessionId: id, events, updates, settled };
   };
 }

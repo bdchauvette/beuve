@@ -36,8 +36,8 @@ describe('openAppDatabase', () => {
   });
 
   test('closes the database and rethrows when a migration fails', ({ expect }) => {
-    expect(() =>
-      openAppDatabase(':memory:', [...appMigrations, { id: 'broken', up: 'NOT SQL;' }]),
-    ).toThrow('syntax error');
+    expect(() => {
+      return openAppDatabase(':memory:', [...appMigrations, { id: 'broken', up: 'NOT SQL;' }]);
+    }).toThrow('syntax error');
   });
 });

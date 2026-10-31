@@ -158,13 +158,14 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     sessionId: string,
     headSha: string,
     items: readonly UraItem[],
-  ): UraVerdictChoice =>
-    settleVerdictChoice(db, sessionId as SessionId, {
+  ): UraVerdictChoice => {
+    return settleVerdictChoice(db, sessionId as SessionId, {
       headSha,
       stagedSeverities: items
         .filter((item) => item.status.kind === 'staged')
         .map((item) => item.severity),
     });
+  };
 
   const changed = (sessionId: string): void => {
     const items = listUraItems(db, sessionId as SessionId);
@@ -197,9 +198,9 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   };
 
   const mappingsFor = async (head: Head, items: readonly UraItem[]): Promise<LineMapping[]> => {
-    const older = [...new Set(items.map((item) => item.headSha as string))].filter(
-      (sha) => sha !== head.headSha,
-    );
+    const older = [...new Set(items.map((item) => item.headSha as string))].filter((sha) => {
+      return sha !== head.headSha;
+    });
     const built = await Promise.all(older.map(async (sha) => mappingFor(head, sha)));
     return built.filter((mapping) => mapping !== undefined);
   };
@@ -209,7 +210,11 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     items: readonly UraItem[],
   ): Promise<(item: UraItem) => UraPlacementView> => {
     const built = await mappingsFor(head, items);
-    const byHead = new Map(built.map((mapping) => [mapping.fromHeadSha, mapping] as const));
+    const byHead = new Map(
+      built.map((mapping) => {
+        return [mapping.fromHeadSha, mapping] as const;
+      }),
+    );
     return (item: UraItem): UraPlacementView => {
       if (item.headSha === head.headSha) {
         return { kind: 'current', anchor: item.anchor };
@@ -221,10 +226,13 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     };
   };
 
-  const postingsFor = (sessionId: string): ReadonlyMap<string, UraPosting> =>
-    new Map(
-      listUraPostings(db, sessionId as SessionId).map((posting) => [posting.itemId, posting]),
+  const postingsFor = (sessionId: string): ReadonlyMap<string, UraPosting> => {
+    return new Map(
+      listUraPostings(db, sessionId as SessionId).map((posting) => {
+        return [posting.itemId, posting];
+      }),
     );
+  };
 
   const headOf = async (sessionId: string): Promise<IpcResult<Head>> => {
     const loaded = loadSession(context, sessionId);
@@ -250,8 +258,9 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return ok(uraItemViewFrom(item, place(item), postingsFor(item.sessionId).get(item.id)));
   };
 
-  const stored = <T>(result: StoreResult<T>): IpcResult<T> =>
-    result.ok ? result : uraFailure(logger, result.error);
+  const stored = <T>(result: StoreResult<T>): IpcResult<T> => {
+    return result.ok ? result : uraFailure(logger, result.error);
+  };
 
   /** Inserts a promoted or staged item; a repeat returns the existing one, restaged if withdrawn. */
   const stageOnce = (item: UraItem): StoreResult<{ item: UraItem; created: boolean }> => {
@@ -371,9 +380,9 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       }
       const place = await placer(head.value, items.value);
       const postings = postingsFor(head.value.sessionId);
-      const views = items.value.map((item) =>
-        uraItemViewFrom(item, place(item), postings.get(item.id)),
-      );
+      const views = items.value.map((item) => {
+        return uraItemViewFrom(item, place(item), postings.get(item.id));
+      });
       return ok({
         sessionId: head.value.sessionId,
         headSha: head.value.headSha,
@@ -511,9 +520,9 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       if (!report.ok) {
         return report;
       }
-      const finding = report.value.findings.find(
-        (candidate) => candidate.path === path && candidate.functionName === functionName,
-      );
+      const finding = report.value.findings.find((candidate) => {
+        return candidate.path === path && candidate.functionName === functionName;
+      });
       if (finding === undefined) {
         return err({
           code: 'not-found',
@@ -575,9 +584,13 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     compileArtifact: async (
       sessionId,
       { headSha, baseTip, verdict },
-    ): Promise<IpcResult<UraArtifact>> => compile(sessionId, verdict, { headSha, baseTip }),
+    ): Promise<IpcResult<UraArtifact>> => {
+      return compile(sessionId, verdict, { headSha, baseTip });
+    },
 
-    listPostings: (sessionId): readonly UraPosting[] => listUraPostings(db, sessionId as SessionId),
+    listPostings: (sessionId): readonly UraPosting[] => {
+      return listUraPostings(db, sessionId as SessionId);
+    },
 
     recordPostings: (sessionId, postings): void => {
       recordUraPostings(db, postings);

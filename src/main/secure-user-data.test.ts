@@ -28,7 +28,9 @@ describe('secureUserData (ADR 0082)', () => {
     await expect(
       Promise.all(
         ['.', 'worktrees', 'trace', 'beuve.db', 'settings.json', 'model-secrets.json'].map(
-          async (name) => permissionsOf(userData, name),
+          async (name) => {
+            return permissionsOf(userData, name);
+          },
         ),
       ),
     ).resolves.toStrictEqual([0o700, 0o700, 0o700, 0o600, 0o600, 0o600]);

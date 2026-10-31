@@ -26,14 +26,16 @@ describe('withSettingsBroadcast', () => {
 
 function handlersAnswering(): IpcHandlers {
   return Object.fromEntries(
-    invokeChannels.map((channel) => [
-      channel,
-      async (request: unknown): Promise<unknown> => {
-        await Promise.resolve();
-        return (request as { repositoryPath?: string } | undefined)?.repositoryPath === 'refuse'
-          ? err({ code: 'refused', message: 'no' })
-          : ok(channel);
-      },
-    ]),
+    invokeChannels.map((channel) => {
+      return [
+        channel,
+        async (request: unknown): Promise<unknown> => {
+          await Promise.resolve();
+          return (request as { repositoryPath?: string } | undefined)?.repositoryPath === 'refuse'
+            ? err({ code: 'refused', message: 'no' })
+            : ok(channel);
+        },
+      ];
+    }),
   ) as unknown as IpcHandlers;
 }

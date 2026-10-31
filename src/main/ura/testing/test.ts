@@ -33,17 +33,16 @@ export const test = baseTest
     });
     return okValueFrom(created).id;
   })
-  .extend(
-    'note',
-    ({ services, sessionId }): StageNote =>
-      async (startLine, endLine, title) =>
-        okValueFrom(
-          await services.ura.create({
-            sessionId,
-            anchor: { kind: 'lines', path: 'src/app.ts', startLine, endLine },
-            severity: 'issue',
-            title,
-            body: 'Body',
-          }),
-        ),
-  );
+  .extend('note', ({ services, sessionId }): StageNote => {
+    return async (startLine, endLine, title) => {
+      return okValueFrom(
+        await services.ura.create({
+          sessionId,
+          anchor: { kind: 'lines', path: 'src/app.ts', startLine, endLine },
+          severity: 'issue',
+          title,
+          body: 'Body',
+        }),
+      );
+    };
+  });
