@@ -160,9 +160,9 @@ describe('GitObjectReader', () => {
     const commit = await repo.commit('many');
     await using objectsReader = reader(repo);
     const read = await Promise.all(
-      names.map(async (name) =>
-        objectsReader.read({ kind: 'path', commit, path: treePath(name) }, { signal }),
-      ),
+      names.map(async (name) => {
+        return objectsReader.read({ kind: 'path', commit, path: treePath(name) }, { signal });
+      }),
     );
     expect(
       read.map((result) => {
@@ -295,7 +295,14 @@ describe('GitObjectReader', () => {
       idleTimeout: Temporal.Duration.from({ seconds: 0 }),
     });
     okValueFrom(await objectsReader.info({ kind: 'object', oid: text }, { signal }));
-    await expect.poll(() => objectsReader.stats.isRunning, { timeout: 5000 }).toBe(false);
+    await expect
+      .poll(
+        () => {
+          return objectsReader.stats.isRunning;
+        },
+        { timeout: 5000 },
+      )
+      .toBe(false);
     okValueFrom(await objectsReader.info({ kind: 'object', oid: text }, { signal }));
     expect(objectsReader.stats.starts).toBe(2);
   });

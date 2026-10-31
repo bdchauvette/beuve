@@ -135,8 +135,9 @@ export async function startLanguageServer(
     cancelMethod: '$/cancelRequest',
     defaultTimeout: options.requestTimeout ?? Temporal.Duration.from({ seconds: 15 }),
     ...(logger !== undefined && { logger }),
-    onRequest: (method, params): JsonRpcHandlerOutcome =>
-      answerServerRequest(method, params, { settings, workspaceFolders }),
+    onRequest: (method, params): JsonRpcHandlerOutcome => {
+      return answerServerRequest(method, params, { settings, workspaceFolders });
+    },
     onNotification: (method, params): void => {
       if (method === 'window/logMessage' || method === 'window/showMessage') {
         logger?.debug('lsp: server message', { serverId, method, params });

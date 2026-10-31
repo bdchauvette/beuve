@@ -100,12 +100,13 @@ describe('parseClaudeCodeEvent', () => {
   });
 
   test("ignores a subagent's stream events and deltas that carry no text", ({ expect }) => {
-    const delta = (fields: object): string =>
-      JSON.stringify({
+    const delta = (fields: object): string => {
+      return JSON.stringify({
         type: 'stream_event',
         event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'x' } },
         ...fields,
       });
+    };
     expect(parseClaudeCodeEvent(delta({ parent_tool_use_id: 'toolu_1' }))).toStrictEqual({
       kind: 'other',
     });

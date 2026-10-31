@@ -9,20 +9,20 @@ import { loadTestLanguage } from './testing/load-test-language.ts';
 describe('ecmascriptRules', () => {
   test('names only node types and fields the grammars have', async ({ expect }) => {
     const grammars = await Promise.all(
-      (['typescript', 'tsx', 'javascript'] as const).map(async (language) =>
-        loadTestLanguage(language),
-      ),
+      (['typescript', 'tsx', 'javascript'] as const).map(async (language) => {
+        return loadTestLanguage(language);
+      }),
     );
     const { types, fields } = referenced(ecmascriptRules);
-    const missingTypes = types.filter((type) =>
-      grammars.every((grammar) => !grammar.types.has(type)),
-    );
-    const missingFields = fields.filter((field) =>
-      grammars.every((grammar) => !grammar.fields.has(field)),
-    );
-    const grammarSpecific = types.filter((type) =>
-      grammars.some((grammar) => !grammar.types.has(type)),
-    );
+    const missingTypes = types.filter((type) => {
+      return grammars.every((grammar) => !grammar.types.has(type));
+    });
+    const missingFields = fields.filter((field) => {
+      return grammars.every((grammar) => !grammar.fields.has(field));
+    });
+    const grammarSpecific = types.filter((type) => {
+      return grammars.some((grammar) => !grammar.types.has(type));
+    });
 
     expect(missingTypes).toStrictEqual([]);
     expect(missingFields).toStrictEqual([]);

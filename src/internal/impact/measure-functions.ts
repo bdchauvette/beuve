@@ -100,9 +100,9 @@ function visit(frame: Frame, rules: LanguageRules, tallies: Tally[]): readonly F
 function startTally(frame: Frame, rule: FunctionRule): Tally {
   const { node } = frame;
   const ownName = rule.nameField === undefined ? undefined : fieldText(node, rule.nameField);
-  const modifier = node.children.find(
-    (child) => !child.isNamed && (rule.nameModifiers ?? []).includes(child.type),
-  );
+  const modifier = node.children.find((child) => {
+    return !child.isNamed && (rule.nameModifiers ?? []).includes(child.type);
+  });
   const base = frame.name ?? ownName ?? anonymous;
   const simpleName = modifier === undefined ? base : `${modifier.type} ${base}`;
   return {
@@ -135,16 +135,18 @@ function visitConstruct(
       }
       owner.maxNesting = Math.max(owner.maxNesting, level + 1);
       const nested = new Set(rule.nestedFields.map((field) => node.childForFieldName(field)?.id));
-      return childFrames(frame, rules, {}, (child) => ({
-        level: nested.has(child.id) ? level + 1 : level,
-      }));
+      return childFrames(frame, rules, {}, (child) => {
+        return {
+          level: nested.has(child.id) ? level + 1 : level,
+        };
+      });
     }
     case 'else': {
       owner.cognitive += 1;
       owner.maxNesting = Math.max(owner.maxNesting, level + 1);
-      return childFrames(frame, rules, {}, (child) =>
-        child.type === rule.continues ? { continuation: true } : { level: level + 1 },
-      );
+      return childFrames(frame, rules, {}, (child) => {
+        return child.type === rule.continues ? { continuation: true } : { level: level + 1 };
+      });
     }
     case 'case': {
       owner.cyclomatic += node.childForFieldName(rule.valueField) === null ? 0 : 1;
@@ -178,21 +180,25 @@ function childFrames(
   frame: Frame,
   rules: LanguageRules,
   shared: Partial<Pick<Frame, 'owner' | 'level' | 'scope' | 'inSequence'>>,
-  perChild: (child: ImpactNode) => Partial<Pick<Frame, 'level' | 'continuation'>> = () => ({}),
+  perChild: (child: ImpactNode) => Partial<Pick<Frame, 'level' | 'continuation'>> = () => {
+    return {};
+  },
 ): readonly Frame[] {
   const { node } = frame;
   const naming = namesFor(node, rules.namers[node.type]);
-  return node.children.map((child) => ({
-    node: child,
-    owner: shared.owner ?? frame.owner,
-    level: shared.level ?? frame.level,
-    scope: shared.scope ?? frame.scope,
-    name: child.id === naming.valueId ? naming.name : frame.childName,
-    childName: child.id === naming.argumentsId ? naming.name : undefined,
-    inSequence: shared.inSequence ?? false,
-    continuation: false,
-    ...perChild(child),
-  }));
+  return node.children.map((child) => {
+    return {
+      node: child,
+      owner: shared.owner ?? frame.owner,
+      level: shared.level ?? frame.level,
+      scope: shared.scope ?? frame.scope,
+      name: child.id === naming.valueId ? naming.name : frame.childName,
+      childName: child.id === naming.argumentsId ? naming.name : undefined,
+      inSequence: shared.inSequence ?? false,
+      continuation: false,
+      ...perChild(child),
+    };
+  });
 }
 
 interface Naming {

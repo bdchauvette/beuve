@@ -39,12 +39,12 @@ export function attentionFrom(input: AttentionInput): Attention {
     return { turn: 'unknown', reasons: [`the pull request is ${input.state}`] };
   }
   const decisions = latestDecisions(input);
-  const blocking = decisions.filter(
-    (review) => review.verdict === 'changes-requested' && review.commitSha === input.headSha,
-  );
-  const stale = decisions.filter(
-    (review) => review.verdict === 'changes-requested' && review.commitSha !== input.headSha,
-  );
+  const blocking = decisions.filter((review) => {
+    return review.verdict === 'changes-requested' && review.commitSha === input.headSha;
+  });
+  const stale = decisions.filter((review) => {
+    return review.verdict === 'changes-requested' && review.commitSha !== input.headSha;
+  });
   const authorReasons = [
     ...(input.isDraft ? ['it is a draft'] : []),
     ...blocking.map((review) => `${review.reviewer} requested changes`),
@@ -70,9 +70,9 @@ export function attentionFrom(input: AttentionInput): Attention {
   if (reviewerReasons.length > 0) {
     return { turn: isViewerReviewer ? 'you' : 'reviewers', reasons: reviewerReasons };
   }
-  const isApproved = decisions.some(
-    (review) => review.verdict === 'approved' && review.commitSha === input.headSha,
-  );
+  const isApproved = decisions.some((review) => {
+    return review.verdict === 'approved' && review.commitSha === input.headSha;
+  });
   if (isApproved && input.ci === 'success') {
     return {
       turn: input.viewer === input.author ? 'you' : 'author',
@@ -90,9 +90,9 @@ function latestDecisions(input: AttentionInput): PullRequestReview[] {
       latest.set(review.reviewer, review);
     }
   }
-  return input.reviews.filter(
-    (review) => latest.get(review.reviewer) === review && review.verdict !== 'dismissed',
-  );
+  return input.reviews.filter((review) => {
+    return latest.get(review.reviewer) === review && review.verdict !== 'dismissed';
+  });
 }
 
 function failingReason(count: number | undefined): string {

@@ -36,7 +36,9 @@ describe('createTraceRecorder summaries', () => {
     expect(preview({ a: { b: { c: 1 } } })).toBe('{ a: { b: [Object] } }');
     expect(preview([[[1]]])).toBe('[[[Array(1)]]]');
     const wide = Object.fromEntries(
-      Array.from({ length: 5 }, (_, index) => [`key${String(index)}`, 'v'.repeat(50)]),
+      Array.from({ length: 5 }, (_, index) => {
+        return [`key${String(index)}`, 'v'.repeat(50)];
+      }),
     );
     expect(preview(wide)).toHaveLength(defaultRecorderLimits.maxPreviewLength);
   });

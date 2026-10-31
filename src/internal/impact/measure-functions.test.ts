@@ -270,11 +270,19 @@ async function metricsOf(
   language: TestLanguage = 'typescript',
 ): Promise<ReadonlyMap<string, FunctionMetrics>> {
   const { functions } = measureFunctions(await parseTestSource(source, language), ecmascriptRules);
-  return new Map(functions.map(({ name, metrics }) => [name, metrics]));
+  return new Map(
+    functions.map(({ name, metrics }) => {
+      return [name, metrics];
+    }),
+  );
 }
 
 function cognitive(metrics: ReadonlyMap<string, FunctionMetrics>): Record<string, number> {
-  return Object.fromEntries(Array.from(metrics, ([name, { cognitive: value }]) => [name, value]));
+  return Object.fromEntries(
+    Array.from(metrics, ([name, { cognitive: value }]) => {
+      return [name, value];
+    }),
+  );
 }
 
 type TestNode = ImpactNode & { readonly field?: string };
@@ -302,8 +310,10 @@ function nodeBuilder(): NodeBuilder {
       startPosition: { row: startRow, column: 0 },
       endPosition: { row: endRow, column: 0 },
       children,
-      // eslint-disable-next-line unicorn/no-null -- the interface mirrors tree-sitter, which returns null
-      childForFieldName: (name) => children.find((child) => child.field === name) ?? null,
+      childForFieldName: (name): TestNode | null => {
+        // eslint-disable-next-line unicorn/no-null -- the interface mirrors tree-sitter, which returns null
+        return children.find((child) => child.field === name) ?? null;
+      },
       ...(field !== undefined && { field }),
     };
   };

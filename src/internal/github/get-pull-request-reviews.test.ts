@@ -14,31 +14,33 @@ describe('getPullRequestReviews', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client, requests } = fakeGithub(() => ({
-      status: 200,
-      body: JSON.stringify([
-        {
-          user: { login: 'rita' },
-          state: 'CHANGES_REQUESTED',
-          commit_id: 'a',
-          submitted_at: '2026-10-01T10:00:00Z',
-        },
-        {
-          user: { login: 'rita' },
-          state: 'APPROVED',
-          commit_id: 'b',
-          submitted_at: '2026-10-02T10:00:00Z',
-        },
-        { user: { login: 'vic' }, state: 'PENDING', commit_id: 'b' },
-        { state: 'COMMENTED', submitted_at: '2026-10-03T10:00:00Z', user: noUser() },
-        {
-          user: { login: 'vic' },
-          state: 'SOMETHING_NEW',
-          commit_id: 'b',
-          submitted_at: '2026-10-03T10:00:00Z',
-        },
-      ]),
-    }));
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 200,
+        body: JSON.stringify([
+          {
+            user: { login: 'rita' },
+            state: 'CHANGES_REQUESTED',
+            commit_id: 'a',
+            submitted_at: '2026-10-01T10:00:00Z',
+          },
+          {
+            user: { login: 'rita' },
+            state: 'APPROVED',
+            commit_id: 'b',
+            submitted_at: '2026-10-02T10:00:00Z',
+          },
+          { user: { login: 'vic' }, state: 'PENDING', commit_id: 'b' },
+          { state: 'COMMENTED', submitted_at: '2026-10-03T10:00:00Z', user: noUser() },
+          {
+            user: { login: 'vic' },
+            state: 'SOMETHING_NEW',
+            commit_id: 'b',
+            submitted_at: '2026-10-03T10:00:00Z',
+          },
+        ]),
+      };
+    });
     const result = await getPullRequestReviews(client, ref(), { signal });
     expect(requests[0]?.url).toBe(
       'https://api.github.com/repos/octo-org/hello-world/pulls/7/reviews?per_page=100',
@@ -69,7 +71,9 @@ describe('getPullRequestReviews', () => {
   });
 
   test('reports a body of the wrong shape', async ({ expect, fakeGithub, signal }) => {
-    const { client } = fakeGithub(() => ({ status: 200, body: { not: 'a list' } }));
+    const { client } = fakeGithub(() => {
+      return { status: 200, body: { not: 'a list' } };
+    });
     await expect(getPullRequestReviews(client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
@@ -79,10 +83,12 @@ describe('getPullRequestReviews', () => {
 
 describe('getReviewRequests', () => {
   test('lists requested users and teams', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub(() => ({
-      status: 200,
-      body: { users: [{ login: 'vic' }], teams: [{ slug: 'platform' }] },
-    }));
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 200,
+        body: { users: [{ login: 'vic' }], teams: [{ slug: 'platform' }] },
+      };
+    });
     await expect(getReviewRequests(client, ref(), { signal })).resolves.toStrictEqual({
       ok: true,
       value: { users: ['vic'], teams: ['platform'] },
@@ -97,12 +103,16 @@ describe('getReviewRequests', () => {
     fakeGithub,
     signal,
   }) => {
-    const wrong = fakeGithub(() => ({ status: 200, body: [] }));
+    const wrong = fakeGithub(() => {
+      return { status: 200, body: [] };
+    });
     await expect(getReviewRequests(wrong.client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
     });
-    const missing = fakeGithub(() => ({ status: 404, body: { message: 'Not Found' } }));
+    const missing = fakeGithub(() => {
+      return { status: 404, body: { message: 'Not Found' } };
+    });
     await expect(getReviewRequests(missing.client, ref(), { signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-found' },

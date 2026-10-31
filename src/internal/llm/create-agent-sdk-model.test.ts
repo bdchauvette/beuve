@@ -62,9 +62,9 @@ function lastToolResults(api: FakeMessagesApi): unknown[] {
   }[];
   const user = messages.findLast((message) => message.role === 'user');
   return Array.isArray(user?.content)
-    ? user.content.filter(
-        (block: { type?: string }) => typeof block === 'object' && block.type === 'tool_result',
-      )
+    ? user.content.filter((block: { type?: string }) => {
+        return typeof block === 'object' && block.type === 'tool_result';
+      })
     : [];
 }
 
@@ -336,7 +336,9 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
       { kind: 'message', content: [{ type: 'text', text: 'Done.' }], stopReason: 'end_turn' },
     );
     const lowercase = z.array(
-      z.string().refine((name) => name === name.toLowerCase(), 'lowercase'),
+      z.string().refine((name) => {
+        return name === name.toLowerCase();
+      }, 'lowercase'),
     );
     await expect(
       model(api, tempDir).run({

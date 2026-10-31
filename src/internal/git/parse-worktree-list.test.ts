@@ -23,7 +23,9 @@ describe('parseWorktreeList', () => {
       '',
       '',
     ]
-      .map((field, index) => (index === 0 || field.startsWith('/') ? `worktree ${field}` : field))
+      .map((field, index) => {
+        return index === 0 || field.startsWith('/') ? `worktree ${field}` : field;
+      })
       .join('\0');
     expect(parseWorktreeList(output)).toStrictEqual([
       {

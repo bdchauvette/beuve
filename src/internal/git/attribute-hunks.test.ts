@@ -17,10 +17,18 @@ describe('attributeHunks', () => {
     repository,
   }) => {
     const { edit, attribute } = await appFile(repo, repository);
-    const bottom = await edit((lines) => lines.with(29, 'bottom edit'), 'edit the bottom');
-    const top = await edit((lines) => ['new 1', 'new 2', 'new 3', ...lines], 'insert at the top');
-    const rewrite = await edit((lines) => lines.with(32, 'bottom rewritten'), 'rewrite the bottom');
-    const removal = await edit((lines) => lines.toSpliced(15, 2), 'remove two lines');
+    const bottom = await edit((lines) => {
+      return lines.with(29, 'bottom edit');
+    }, 'edit the bottom');
+    const top = await edit((lines) => {
+      return ['new 1', 'new 2', 'new 3', ...lines];
+    }, 'insert at the top');
+    const rewrite = await edit((lines) => {
+      return lines.with(32, 'bottom rewritten');
+    }, 'rewrite the bottom');
+    const removal = await edit((lines) => {
+      return lines.toSpliced(15, 2);
+    }, 'remove two lines');
 
     const [file] = await attribute(removal);
     expect(file?.commits).toStrictEqual([bottom, top, rewrite, removal]);
@@ -33,9 +41,15 @@ describe('attributeHunks', () => {
     repository,
   }) => {
     const { edit, attribute } = await appFile(repo, repository);
-    const first = await edit((lines) => lines.with(4, 'first'), 'first');
-    await edit((lines) => lines.with(19, 'second'), 'second');
-    const fixup = await edit((lines) => lines.with(19, 'second, fixed'), 'fixup');
+    const first = await edit((lines) => {
+      return lines.with(4, 'first');
+    }, 'first');
+    await edit((lines) => {
+      return lines.with(19, 'second');
+    }, 'second');
+    const fixup = await edit((lines) => {
+      return lines.with(19, 'second, fixed');
+    }, 'fixup');
 
     const [file] = await attribute(fixup, first);
     expect(file?.hunks).toStrictEqual([[fixup]]);
@@ -43,7 +57,9 @@ describe('attributeHunks', () => {
 
   test('follows a rename', async ({ expect, repo, repository }) => {
     const { base, edit } = await appFile(repo, repository);
-    const edited = await edit((lines) => lines.with(9, 'edited'), 'edit');
+    const edited = await edit((lines) => {
+      return lines.with(9, 'edited');
+    }, 'edit');
     await repo.git('mv', 'app.txt', 'main.txt');
     const renamed = await repo.commit('rename');
 

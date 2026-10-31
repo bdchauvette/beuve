@@ -15,10 +15,12 @@ export function convertRange(
   if (lines === undefined || from === to) {
     return range;
   }
-  const convert = (line: number, character: number): { line: number; character: number } => ({
-    line,
-    character: convertCharacter(lines.lineText(line), character, from, to),
-  });
+  const convert = (line: number, character: number): { line: number; character: number } => {
+    return {
+      line,
+      character: convertCharacter(lines.lineText(line), character, from, to),
+    };
+  };
   return {
     start: convert(range.start.line, range.start.character),
     end: convert(range.end.line, range.end.character),

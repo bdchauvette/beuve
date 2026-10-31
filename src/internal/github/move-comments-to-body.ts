@@ -9,7 +9,9 @@ import type { ReviewComment, ReviewPayload } from './review-payload.ts';
  */
 export function moveCommentsToBody(
   payload: ReviewPayload,
-  shouldMove: (comment: ReviewComment, index: number) => boolean = (): boolean => true,
+  shouldMove: (comment: ReviewComment, index: number) => boolean = (): boolean => {
+    return true;
+  },
 ): ReviewPayload {
   const kept: ReviewComment[] = [];
   const moved: string[] = [];

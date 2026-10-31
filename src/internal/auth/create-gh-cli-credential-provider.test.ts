@@ -43,11 +43,12 @@ function fake(
     cwd: directory,
     timeout,
   });
-  const calls = (): { args: string[]; envKeys: string[]; cwd: string }[] =>
-    readFileSync(callsFile, 'utf8')
+  const calls = (): { args: string[]; envKeys: string[]; cwd: string }[] => {
+    return readFileSync(callsFile, 'utf8')
       .split('\n')
       .filter((line) => line !== '')
       .map((line) => JSON.parse(line) as { args: string[]; envKeys: string[]; cwd: string });
+  };
   return { provider, calls };
 }
 

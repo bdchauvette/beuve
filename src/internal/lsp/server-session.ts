@@ -290,11 +290,13 @@ export class ServerSession {
     readonly absolutePath: string;
     readonly stamp: FileStamp;
   }[] {
-    return Array.from(this.#documents.values(), ({ uri, absolutePath, stamp }) => ({
-      uri,
-      absolutePath,
-      stamp,
-    }));
+    return Array.from(this.#documents.values(), ({ uri, absolutePath, stamp }) => {
+      return {
+        uri,
+        absolutePath,
+        stamp,
+      };
+    });
   }
 
   /** Whether a request or diagnostics wait is running. */

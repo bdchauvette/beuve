@@ -25,9 +25,9 @@ export function findFunctionAt(
     ) {
       found = visit;
     }
-    const inside = visit.node.children.filter(
-      (child) => child.startPosition.row <= row && row <= child.endPosition.row,
-    );
+    const inside = visit.node.children.filter((child) => {
+      return child.startPosition.row <= row && row <= child.endPosition.row;
+    });
     for (const child of inside.toReversed()) {
       pending.push({ node: child, depth: visit.depth + 1 });
     }

@@ -19,10 +19,12 @@ const requestsSchema = z
     users: z.array(userSchema),
     teams: z.array(teamSchema),
   })
-  .transform((raw): ReviewRequests => ({
-    users: raw.users.map((user) => user.login),
-    teams: raw.teams.map((team) => team.slug),
-  }));
+  .transform((raw): ReviewRequests => {
+    return {
+      users: raw.users.map((user) => user.login),
+      teams: raw.teams.map((team) => team.slug),
+    };
+  });
 
 /** `GET /repos/{o}/{r}/pulls/{n}/requested_reviewers`: who has been asked to review and not yet has. */
 export async function getReviewRequests<E>(

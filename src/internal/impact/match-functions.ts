@@ -22,7 +22,11 @@ export function matchFunctions(
   base: readonly FunctionMeasurement[],
   head: readonly FunctionMeasurement[],
 ): readonly FunctionPair[] {
-  const baseByName = new Map(base.map((measurement) => [measurement.name, measurement]));
+  const baseByName = new Map(
+    base.map((measurement) => {
+      return [measurement.name, measurement];
+    }),
+  );
   const matchedNames = new Set(
     head.map((measurement) => measurement.name).filter((name) => baseByName.has(name)),
   );
@@ -31,7 +35,11 @@ export function matchFunctions(
     if (matchedNames.has(measurement.name) || measurement.bodyLength < minRenameBodyLength) {
       continue;
     }
-    unmatchedBodies.getOrInsertComputed(measurement.bodyHash, () => []).push(measurement);
+    unmatchedBodies
+      .getOrInsertComputed(measurement.bodyHash, () => {
+        return [];
+      })
+      .push(measurement);
   }
   const renamedFrom = new Set<FunctionMeasurement>();
   const pairs: FunctionPair[] = head.map((measurement): FunctionPair => {

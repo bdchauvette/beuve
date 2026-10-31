@@ -61,7 +61,9 @@ export async function readBlobs(
   }
   const objects = repository[gitRunner].objects;
   const read = await Promise.all(
-    Array.from(pending, async (oid) => objects.read({ kind: 'object', oid }, { maxBytes: limit })),
+    Array.from(pending, async (oid) => {
+      return objects.read({ kind: 'object', oid }, { maxBytes: limit });
+    }),
   );
   for (const [index, objectId] of [...pending].entries()) {
     const result = read[index];

@@ -23,8 +23,9 @@ export function checkpointFromRow(
   const baseSha = row['checkpoint_base_sha'];
   const headSha = row['checkpoint_head_sha'];
   const createdAt = row['checkpoint_created_at'];
-  const corrupt = (reason: string): Result<Checkpoint, CorruptRow> =>
-    err({ kind: 'corrupt-row', table: 'checkpoints', id: String(id), reason });
+  const corrupt = (reason: string): Result<Checkpoint, CorruptRow> => {
+    return err({ kind: 'corrupt-row', table: 'checkpoints', id: String(id), reason });
+  };
 
   if (typeof id !== 'string' || !isUuid(id)) {
     return corrupt('id is not a UUID');

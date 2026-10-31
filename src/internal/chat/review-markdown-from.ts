@@ -11,12 +11,13 @@ export function reviewMarkdownFrom(review: ChatReview): string {
       ? ''
       : `, ${String(review.dropped.unconfirmed)} dropped as unconfirmed`;
   const header = `**Review** of ${String(review.fileCount)} ${review.fileCount === 1 ? 'file' : 'files'}: ${count}${unconfirmed}.`;
-  const items = review.findings.map(
-    (finding) =>
+  const items = review.findings.map((finding) => {
+    return (
       `- **${finding.severity}, ${finding.category}** ${finding.title} ` +
       `[[${finding.path}:${String(finding.startLine)}-${String(finding.endLine)}]] ` +
       `(confidence ${finding.confidence.toFixed(2)}, ${finding.check}): ` +
-      finding.body.replaceAll(/\s+/gu, ' '),
-  );
+      finding.body.replaceAll(/\s+/gu, ' ')
+    );
+  });
   return [header, ...(items.length === 0 ? [] : ['', ...items])].join('\n');
 }

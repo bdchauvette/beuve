@@ -22,8 +22,12 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
     'addressed_sha',
     'addressed_by',
   ];
-  // eslint-disable-next-line unicorn/no-null -- SQLite returns NULL columns as null
-  const nulls = Object.fromEntries(nullable.map((column) => [column, null]));
+  const nulls = Object.fromEntries(
+    nullable.map((column) => {
+      // eslint-disable-next-line unicorn/no-null -- SQLite returns NULL columns as null
+      return [column, null];
+    }),
+  );
   return {
     ...nulls,
     position: 0,

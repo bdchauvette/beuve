@@ -78,47 +78,52 @@ export async function openRepository(
   if (!path.isAbsolute(directory)) {
     return err({ kind: 'invalid-argument', argument: directory, reason: 'path must be absolute' });
   }
-  const signalFor = (own: AbortSignal | undefined): AbortSignal | undefined =>
-    own === undefined || options.signal === undefined || own === options.signal
+  const signalFor = (own: AbortSignal | undefined): AbortSignal | undefined => {
+    return own === undefined || options.signal === undefined || own === options.signal
       ? (own ?? options.signal)
       : AbortSignal.any([options.signal, own]);
+  };
   const runIn = async (
     cwd: string,
     args: readonly string[],
     policy: InterruptionPolicy,
     signal?: AbortSignal,
-  ): Promise<Result<string, GitError>> =>
-    runGit({ ...options, cwd, args, policy, signal: signalFor(signal) });
+  ): Promise<Result<string, GitError>> => {
+    return runGit({ ...options, cwd, args, policy, signal: signalFor(signal) });
+  };
 
   const probed =
     options.probe === undefined
-      ? await probeRepository(directory, async (cwd, args) =>
-          runIn(cwd, args, { kind: 'read' }, options.signal),
-        )
+      ? await probeRepository(directory, async (cwd, args) => {
+          return runIn(cwd, args, { kind: 'read' }, options.signal);
+        })
       : ok(options.probe);
   if (!probed.ok) {
     return probed;
   }
   const { root, version } = probed.value;
   const runner: GitRunner = {
-    run: async (args, runOptions): Promise<Result<string, GitError>> =>
-      runIn(root, args, runOptions.policy, runOptions.signal),
-    exec: async (args, execOptions): Promise<Result<Buffer, GitError>> =>
-      execGit({
+    run: async (args, runOptions): Promise<Result<string, GitError>> => {
+      return runIn(root, args, runOptions.policy, runOptions.signal);
+    },
+    exec: async (args, execOptions): Promise<Result<Buffer, GitError>> => {
+      return execGit({
         ...options,
         ...execOptions,
         cwd: root,
         args,
         signal: signalFor(execOptions.signal),
-      }),
-    stream: async (args, streamOptions): Promise<Result<'complete' | 'stopped', GitError>> =>
-      streamGit({
+      });
+    },
+    stream: async (args, streamOptions): Promise<Result<'complete' | 'stopped', GitError>> => {
+      return streamGit({
         ...options,
         ...streamOptions,
         cwd: root,
         args,
         signal: signalFor(streamOptions.signal),
-      }),
+      });
+    },
     objects: boundObjectReads(root, options, signalFor),
   };
   return ok({ root, version, [gitRunner]: runner });
@@ -146,10 +151,12 @@ function boundObjectReads(
     return own;
   };
   return {
-    info: async (spec, readOptions = {}): Promise<Result<ObjectLookup, GitError>> =>
-      reader().info(spec, { ...readOptions, signal: signalFor(readOptions.signal) }),
-    read: async (spec, readOptions = {}): Promise<Result<ObjectContent, GitError>> =>
-      reader().read(spec, { ...readOptions, signal: signalFor(readOptions.signal) }),
+    info: async (spec, readOptions = {}): Promise<Result<ObjectLookup, GitError>> => {
+      return reader().info(spec, { ...readOptions, signal: signalFor(readOptions.signal) });
+    },
+    read: async (spec, readOptions = {}): Promise<Result<ObjectContent, GitError>> => {
+      return reader().read(spec, { ...readOptions, signal: signalFor(readOptions.signal) });
+    },
   };
 }
 

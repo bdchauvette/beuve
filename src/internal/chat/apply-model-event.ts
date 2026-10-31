@@ -56,7 +56,9 @@ export function applyModelEvent(
   const endReasoning = (): void => {
     const open = openReasoning(parts);
     if (open !== undefined) {
-      end(open.id, () => ({ ...open, state: 'done' }));
+      end(open.id, () => {
+        return { ...open, state: 'done' };
+      });
     }
   };
   const endText = (): void => {
@@ -110,9 +112,11 @@ export function applyModelEvent(
           tools = Object.fromEntries(
             Object.entries(tools).filter(([toolId]) => toolId !== progress.id),
           );
-          end(id, (part) =>
-            part.kind === 'tool-call' ? { ...part, state: progress.ok ? 'done' : 'failed' } : part,
-          );
+          end(id, (part) => {
+            return part.kind === 'tool-call'
+              ? { ...part, state: progress.ok ? 'done' : 'failed' }
+              : part;
+          });
           break;
         }
         case 'text-start': {
@@ -147,9 +151,11 @@ export function applyModelEvent(
         start({ kind: 'text', id: openText, text: '' });
       }
       const id = openText;
-      parts = parts.map((part) =>
-        part.id === id && part.kind === 'text' ? { ...part, text: part.text + delta.text } : part,
-      );
+      parts = parts.map((part) => {
+        return part.id === id && part.kind === 'text'
+          ? { ...part, text: part.text + delta.text }
+          : part;
+      });
       events.push({ type: 'text-delta', partId: id, text: delta.text });
       break;
     }
@@ -157,7 +163,9 @@ export function applyModelEvent(
       endReasoning();
       endText();
       for (const id of Object.values(tools)) {
-        end(id, (part) => (part.kind === 'tool-call' ? { ...part, state: 'stopped' } : part));
+        end(id, (part) => {
+          return part.kind === 'tool-call' ? { ...part, state: 'stopped' } : part;
+        });
       }
       tools = {};
       break;
@@ -173,8 +181,7 @@ export function applyModelEvent(
 function openReasoning(
   parts: readonly ChatPart[],
 ): Extract<ChatPart, { kind: 'reasoning' }> | undefined {
-  return parts.findLast(
-    (part): part is Extract<ChatPart, { kind: 'reasoning' }> =>
-      part.kind === 'reasoning' && part.state === 'running',
-  );
+  return parts.findLast((part): part is Extract<ChatPart, { kind: 'reasoning' }> => {
+    return part.kind === 'reasoning' && part.state === 'running';
+  });
 }

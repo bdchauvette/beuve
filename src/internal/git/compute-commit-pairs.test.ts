@@ -130,9 +130,9 @@ async function rangeDiff(
   );
   const log = await repo.git('log', '--format=%h %s', `${next.base}..${next.head}`);
   const subjects = new Map(
-    log
-      .split('\n')
-      .map((line) => [line.slice(0, line.indexOf(' ')), line.slice(line.indexOf(' ') + 1)]),
+    log.split('\n').map((line) => {
+      return [line.slice(0, line.indexOf(' ')), line.slice(line.indexOf(' ') + 1)];
+    }),
   );
   return output.split('\n').map((line) => {
     const match = /^\s*\S+:\s+\S+ ([=!<>]) \s*\S+:\s+(\S+) (.*)$/u.exec(line);

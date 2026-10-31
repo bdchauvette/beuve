@@ -8,6 +8,7 @@ export const testUraIds = {
   laterHeadSha: 'b'.repeat(40) as CommitSha,
   baseSha: 'c'.repeat(40) as CommitSha,
   messageId: '33333333-3333-4333-8333-333333333333',
-  itemId: (n: number): UraItemId =>
-    `00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as UraItemId,
+  itemId: (n: number): UraItemId => {
+    return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as UraItemId;
+  },
 } as const;

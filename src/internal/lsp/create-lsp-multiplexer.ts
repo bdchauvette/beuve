@@ -255,9 +255,9 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return entry.starting;
     }
     const restartWindow = options.restartWindow ?? Temporal.Duration.from({ minutes: 5 });
-    entry.crashes = entry.crashes.filter(
-      (crash) => Temporal.Duration.compare(crash.elapsed(), restartWindow) <= 0,
-    );
+    entry.crashes = entry.crashes.filter((crash) => {
+      return Temporal.Duration.compare(crash.elapsed(), restartWindow) <= 0;
+    });
     if (entry.crashes.length > (options.maxRestarts ?? 3)) {
       return err({
         kind: 'server-exited',
@@ -422,10 +422,11 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const requireCapability = (
     opened: { readonly session: ServerSession; readonly entry: ServerEntry },
     capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
-  ): Result<undefined, LspError> =>
-    opened.session.server.capabilities[capability]
+  ): Result<undefined, LspError> => {
+    return opened.session.server.capabilities[capability]
       ? ok(undefined)
       : err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
+  };
 
   const nodesFrom = async (
     session: ServerSession,
@@ -523,17 +524,17 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (!settled.ok) {
         return settled;
       }
-      const related = settled.value.diagnostics.flatMap((diagnostic) =>
-        (diagnostic.relatedInformation ?? []).map((item) => item.location.uri),
-      );
+      const related = settled.value.diagnostics.flatMap((diagnostic) => {
+        return (diagnostic.relatedInformation ?? []).map((item) => item.location.uri);
+      });
       const mapper = await mapperFor(session, entry.root, [document.uri, ...related]);
       return ok({
         path: file.relativePath,
         serverId: entry.definition.id,
         freshness: settled.value.freshness,
-        diagnostics: settled.value.diagnostics.map((diagnostic) =>
-          mapper.diagnostic(document.uri, diagnostic),
-        ),
+        diagnostics: settled.value.diagnostics.map((diagnostic) => {
+          return mapper.diagnostic(document.uri, diagnostic);
+        }),
       });
     },
 
@@ -561,11 +562,13 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return ok(calls.map((call) => call.node));
     },
 
-    incomingCalls: async (nodeId): Promise<Result<readonly CallHierarchyCall[], LspError>> =>
-      expand(nodeId, 'incoming'),
+    incomingCalls: async (nodeId): Promise<Result<readonly CallHierarchyCall[], LspError>> => {
+      return expand(nodeId, 'incoming');
+    },
 
-    outgoingCalls: async (nodeId): Promise<Result<readonly CallHierarchyCall[], LspError>> =>
-      expand(nodeId, 'outgoing'),
+    outgoingCalls: async (nodeId): Promise<Result<readonly CallHierarchyCall[], LspError>> => {
+      return expand(nodeId, 'outgoing');
+    },
 
     documentSymbols: async (request): Promise<Result<readonly DocumentSymbolView[], LspError>> => {
       const opened = await openFile(request);

@@ -128,8 +128,9 @@ export function buildChatPrompt(
   const head = [opening + intent.text, impact.text, '## Diff', ''].join('\n');
 
   const reserve = Math.min(
-    question.files.reduce((sum, file) => sum + file.path.length + omissionLineChars, 0) +
-      omissionHeaderChars,
+    question.files.reduce((sum, file) => {
+      return sum + file.path.length + omissionLineChars;
+    }, 0) + omissionHeaderChars,
     Math.floor(budget.maxChars / 5),
   );
   let remaining = budget.maxChars - head.length - selections.text.length - tail.length - reserve;
@@ -225,12 +226,13 @@ function renderImpact(
   }
   const shown = findings.slice(0, max);
   const omitted = findings.length - shown.length;
-  const lines = shown.map(
-    (finding) =>
+  const lines = shown.map((finding) => {
+    return (
       `- ${finding.path}:${String(finding.startLine)}-${String(finding.endLine)} ` +
       `\`${finding.functionName}\`: cognitive complexity ${String(finding.value)} ` +
-      `(limit ${String(finding.limit)}, ${finding.trend})`,
-  );
+      `(limit ${String(finding.limit)}, ${finding.trend})`
+    );
+  });
   return {
     text: [
       '## ImpactGate findings (changed functions over the cognitive complexity limit)',
@@ -297,9 +299,9 @@ function renderTurn(turn: ChatTurn, maxChars: number): { text: string; truncated
   const note = isTruncated
     ? `[beuve: turn truncated; first ${String(maxChars)} of ${String(content.length)} characters shown]\n`
     : '';
-  const attached = (turn.mentions ?? []).map(
-    (mention, index) => `[beuve: selection ${String(index + 1)} was ${formatMention(mention)}]\n`,
-  );
+  const attached = (turn.mentions ?? []).map((mention, index) => {
+    return `[beuve: selection ${String(index + 1)} was ${formatMention(mention)}]\n`;
+  });
   return {
     text: `${heading}\n\n${fenceUntrusted(shown, 'markdown')}\n${note}${attached.join('')}`,
     truncated: isTruncated,
@@ -492,9 +494,9 @@ function renderSelection(
     : '';
   const heading = `### Selection ${String(number)}: ${formatMention(placeFrom(selection))} (${commit}${whole})\n\n`;
   const width = String(selection.endLine).length;
-  const numbered = selection.lines.map(
-    (line, offset) => `${String(selection.startLine + offset).padStart(width)}  ${line}\n`,
-  );
+  const numbered = selection.lines.map((line, offset) => {
+    return `${String(selection.startLine + offset).padStart(width)}  ${line}\n`;
+  });
   const block = fenceUntrusted(numbered.join(''), 'text');
   if (heading.length + block.length + 2 <= limit) {
     return { text: `${heading}${block}\n\n`, truncated: false };
@@ -567,7 +569,9 @@ function renderFile(file: ChatFile, limit: number, hasTools: boolean): FileSecti
   if (included === 0) {
     return undefined;
   }
-  const omittedChars = hunks.slice(included).reduce((sum, hunk) => sum + hunk.length, 0);
+  const omittedChars = hunks.slice(included).reduce((sum, hunk) => {
+    return sum + hunk.length;
+  }, 0);
   const note =
     `[beuve: hunks ${String(included + 1)}-${String(hunks.length)} of ${String(hunks.length)} ` +
     `(${String(omittedChars)} characters) omitted for size${hasTools ? `; Read ${file.path} for the rest` : ''}]\n`;

@@ -42,7 +42,9 @@ export function selectTests(input: SelectTestsInput): TestSelection[] {
   const stem = stemOf(changedPath);
   const named = tests
     .filter((file) => stemOf(file) === stem)
-    .map((file) => ({ path: file, reason: 'name' as const, distance: 0 }));
+    .map((file) => {
+      return { path: file, reason: 'name' as const, distance: 0 };
+    });
   const imported = tests
     .filter((file) => distances.has(file) && stemOf(file) !== stem)
     .map((file) => {
@@ -54,17 +56,19 @@ export function selectTests(input: SelectTestsInput): TestSelection[] {
       };
     });
   const directory = path.posix.dirname(changedPath);
-  const nameRank = (file: string): number =>
-    (distances.get(file) === 1 ? 0 : 2) + (closeness(directory, file) > 0 ? 0 : 1);
-  const byName = named.toSorted(
-    (left, right) =>
+  const nameRank = (file: string): number => {
+    return (distances.get(file) === 1 ? 0 : 2) + (closeness(directory, file) > 0 ? 0 : 1);
+  };
+  const byName = named.toSorted((left, right) => {
+    return (
       nameRank(left.path) - nameRank(right.path) ||
       closeness(directory, right.path) - closeness(directory, left.path) ||
-      left.path.localeCompare(right.path),
-  );
-  const byImports = imported.toSorted(
-    (left, right) => left.distance - right.distance || left.path.localeCompare(right.path),
-  );
+      left.path.localeCompare(right.path)
+    );
+  });
+  const byImports = imported.toSorted((left, right) => {
+    return left.distance - right.distance || left.path.localeCompare(right.path);
+  });
   return [...byName, ...byImports].slice(0, maxFiles);
 }
 
@@ -95,7 +99,11 @@ function importDistances(
   const importers = new Map<string, string[]>();
   for (const [file, targets] of imports) {
     for (const target of targets) {
-      importers.getOrInsertComputed(target, () => []).push(file);
+      importers
+        .getOrInsertComputed(target, () => {
+          return [];
+        })
+        .push(file);
     }
   }
   const distances = new Map<string, number>([[changedPath, 0]]);

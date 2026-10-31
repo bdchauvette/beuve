@@ -23,7 +23,9 @@ describe('listTreeBlobs', () => {
     expect(listedValue.map((blob) => blob.path)).toStrictEqual(['main.ts', 'src/a b/ü.ts']);
     const blobs = await readBlobs(
       git,
-      listedValue.map(({ objectId }) => ({ objectId })),
+      listedValue.map(({ objectId }) => {
+        return { objectId };
+      }),
     );
     expect(blobs.ok && blobs.value.get(listedValue[1]?.objectId ?? '')).toMatchObject({
       kind: 'text',

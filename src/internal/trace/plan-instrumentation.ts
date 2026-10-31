@@ -191,9 +191,9 @@ function readParameters(
     rule.parametersField === undefined ? undefined : node.childForFieldName(rule.parametersField);
   const list =
     lone === undefined || lone === null
-      ? (declared?.children ?? []).filter(
-          (child) => child.isNamed && !rules.skipped.includes(child.type),
-        )
+      ? (declared?.children ?? []).filter((child) => {
+          return child.isNamed && !rules.skipped.includes(child.type);
+        })
       : [lone];
   const read: { name: string; value: string }[] = [];
   for (const parameter of list) {
@@ -327,10 +327,9 @@ function planConstruct(
         inHunk: isTouched(builder, node.startPosition.row, node.endPosition.row),
       });
       const method = kind === 'return' ? 'returns' : 'throws';
-      const value = node.children.find(
-        (child, position) =>
-          position > 0 && child.isNamed && !builder.rules.skipped.includes(child.type),
-      );
+      const value = node.children.find((child, position) => {
+        return position > 0 && child.isNamed && !builder.rules.skipped.includes(child.type);
+      });
       if (value === undefined) {
         const [keyword] = node.children;
         const text = ` ${recorder}.${method}(${frame},${String(probe.id)},undefined)`;
@@ -363,9 +362,9 @@ function planSwitch(
   const cases = node.childForFieldName(rule.bodyField)?.children ?? [];
   for (const clause of cases) {
     const caseRule = rule.cases[clause.type];
-    const delimiter = clause.children.find(
-      (child) => !child.isNamed && child.type === rule.caseDelimiter,
-    );
+    const delimiter = clause.children.find((child) => {
+      return !child.isNamed && child.type === rule.caseDelimiter;
+    });
     if (caseRule === undefined || delimiter === undefined) {
       continue;
     }

@@ -52,11 +52,13 @@ export const test = baseTest
     };
   })
   .extend('repo', async ({ repositories }): Promise<TestRepository> => repositories.create())
-  .extend('repository', async ({ repo, signal }): Promise<GitRepository> =>
-    okValueFrom(await openRepository(repo.directory, { signal })),
-  );
+  .extend('repository', async ({ repo, signal }): Promise<GitRepository> => {
+    return okValueFrom(await openRepository(repo.directory, { signal }));
+  });
 
 const emptyRepository: RepositoryTemplate<undefined> = {
   name: 'empty',
-  build: (): undefined => undefined,
+  build: (): undefined => {
+    return;
+  },
 };

@@ -34,7 +34,9 @@ const importConditions = ['types', 'import', 'node', 'default', 'require'];
  */
 export function createModuleResolver(input: ModuleResolverInput): ModuleResolver {
   const configs = new Map<string, ModuleConfig>(
-    Array.from(input.configs, ([file, text]) => [file, parseModuleConfig(text)]),
+    Array.from(input.configs, ([file, text]) => {
+      return [file, parseModuleConfig(text)];
+    }),
   );
   const isFile = (candidate: string): boolean => input.paths.has(candidate);
   const probe = (base: string): string | undefined => probeFile(base, isFile);

@@ -126,10 +126,13 @@ export function planDefinitionProbes(text: string, character?: number): readonly
       .map((token) => tokens[tokens.indexOf(token) + 1]?.start),
   );
   const isCall = (token: ProbeToken): boolean => callFollows.test(text.slice(token.end));
-  const rank = (token: ProbeToken): number =>
-    declared.has(token.start) ? 2 : isCall(token) ? 0 : 1;
+  const rank = (token: ProbeToken): number => {
+    return declared.has(token.start) ? 2 : isCall(token) ? 0 : 1;
+  };
   return candidates
-    .map((token, index) => ({ token, index }))
+    .map((token, index) => {
+      return { token, index };
+    })
     .toSorted((left, right) => rank(left.token) - rank(right.token) || left.index - right.index)
     .slice(0, maxProbes)
     .map(({ token }) => token);
@@ -138,11 +141,13 @@ export function planDefinitionProbes(text: string, character?: number): readonly
 /** Identifiers outside string literals and `//` or `/*` comments. */
 function identifiersOf(text: string): ProbeToken[] {
   const code = blankLiteralsAndComments(text);
-  return Array.from(code.matchAll(identifierPattern), (match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-    text: match[0],
-  }));
+  return Array.from(code.matchAll(identifierPattern), (match) => {
+    return {
+      start: match.index,
+      end: match.index + match[0].length,
+      text: match[0],
+    };
+  });
 }
 
 function blankLiteralsAndComments(text: string): string {

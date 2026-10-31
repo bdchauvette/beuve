@@ -29,8 +29,9 @@ type CorruptRow = Extract<ChatStoreError, { kind: 'corrupt-row' }>;
 export function chatMessageFromRow(
   row: Record<string, SQLOutputValue>,
 ): Result<ChatMessage, CorruptRow> {
-  const corrupt = (reason: string): Result<ChatMessage, CorruptRow> =>
-    err({ kind: 'corrupt-row', table: 'chat_messages', id: String(row['id']), reason });
+  const corrupt = (reason: string): Result<ChatMessage, CorruptRow> => {
+    return err({ kind: 'corrupt-row', table: 'chat_messages', id: String(row['id']), reason });
+  };
   const { id, session_id, head_sha, role, parts, citations, status, kind, review, created_at } =
     row;
 

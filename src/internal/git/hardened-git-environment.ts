@@ -7,9 +7,9 @@ import process from 'node:process';
  * locale so failures can be classified.
  */
 export function hardenedGitEnvironment(): NodeJS.ProcessEnv {
-  const inherited = Object.entries(process.env).filter(
-    ([key]) => !key.toUpperCase().startsWith('GIT_'),
-  );
+  const inherited = Object.entries(process.env).filter(([key]) => {
+    return !key.toUpperCase().startsWith('GIT_');
+  });
   return {
     ...Object.fromEntries(inherited),
     GIT_TERMINAL_PROMPT: '0',

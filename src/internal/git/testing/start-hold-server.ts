@@ -81,7 +81,13 @@ export async function startHoldServer(signal: AbortSignal): Promise<HoldServer> 
     // eslint-disable-next-line local/forward-abort-signal -- closing is what an abort does here.
     await once(server, 'close');
   };
-  signal.addEventListener('abort', () => void close(), { once: true });
+  signal.addEventListener(
+    'abort',
+    () => {
+      void close();
+    },
+    { once: true },
+  );
   server.listen(0, '127.0.0.1');
   await once(server, 'listening', { signal });
   return {

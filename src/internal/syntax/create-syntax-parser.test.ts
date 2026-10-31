@@ -7,18 +7,19 @@ import { test } from './testing/test.ts';
 describe('createSyntaxParser', () => {
   test('parses TypeScript, TSX and JavaScript by path', async ({ expect }) => {
     const parser = createSyntaxParser();
-    const typescript = await parser.parse('a.ts', 'function f(a: number): void {}', (root) =>
-      root.namedChildren.map((node) => node.type),
-    );
-    const tsx = await parser.parse('a.tsx', 'const x = <div a={1} />;', (root, language) => ({
-      language,
-      hasJsx: root.text.includes('<div'),
-      types: shape(root),
-    }));
-    const javascript = await parser.parse('a.mjs', 'class A { m() {} }', (root, language) => [
-      language,
-      root.namedChildren[0]?.childForFieldName('name')?.text,
-    ]);
+    const typescript = await parser.parse('a.ts', 'function f(a: number): void {}', (root) => {
+      return root.namedChildren.map((node) => node.type);
+    });
+    const tsx = await parser.parse('a.tsx', 'const x = <div a={1} />;', (root, language) => {
+      return {
+        language,
+        hasJsx: root.text.includes('<div'),
+        types: shape(root),
+      };
+    });
+    const javascript = await parser.parse('a.mjs', 'class A { m() {} }', (root, language) => {
+      return [language, root.namedChildren[0]?.childForFieldName('name')?.text];
+    });
 
     expect(typescript).toStrictEqual({ ok: true, value: ['function_declaration'] });
     expect(tsx.ok && tsx.value.language).toBe('tsx');
@@ -28,10 +29,12 @@ describe('createSyntaxParser', () => {
 
   test('reports positions and syntax errors without failing', async ({ expect }) => {
     const parser = createSyntaxParser();
-    const parsed = await parser.parse('a.ts', '\n\nfunction (', (root) => ({
-      hasError: root.hasError,
-      start: root.namedChildren[0]?.startPosition,
-    }));
+    const parsed = await parser.parse('a.ts', '\n\nfunction (', (root) => {
+      return {
+        hasError: root.hasError,
+        start: root.namedChildren[0]?.startPosition,
+      };
+    });
     expect(parsed).toStrictEqual({
       ok: true,
       value: { hasError: true, start: { row: 2, column: 0 } },

@@ -28,7 +28,9 @@ describe('streamGit', () => {
         cwd: repo.directory,
         args: ['log', '--all', '--format=%H', '--no-walk=unsorted', 'HEAD'],
         policy: { kind: 'read' },
-        onStdout: () => 'stop',
+        onStdout: () => {
+          return 'stop';
+        },
         signal,
       }),
     ).resolves.toStrictEqual({ ok: true, value: 'stopped' });
@@ -40,7 +42,9 @@ describe('streamGit', () => {
         cwd: repo.directory,
         args: ['rev-parse', '--verify', 'no-such-ref'],
         policy: { kind: 'read' },
-        onStdout: () => 'more',
+        onStdout: () => {
+          return 'more';
+        },
         signal,
       }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'command-failed', exitCode: 128 } });
@@ -50,7 +54,9 @@ describe('streamGit', () => {
         args: ['status'],
         policy: { kind: 'read' },
         signal: AbortSignal.abort(),
-        onStdout: () => 'more',
+        onStdout: () => {
+          return 'more';
+        },
       }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'aborted' } });
     await expect(
@@ -59,7 +65,9 @@ describe('streamGit', () => {
         args: ['status'],
         gitBinary: `${tempDir}/no-such-git`,
         policy: { kind: 'read' },
-        onStdout: () => 'more',
+        onStdout: () => {
+          return 'more';
+        },
         signal,
       }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'git-not-found' } });
@@ -68,7 +76,9 @@ describe('streamGit', () => {
         cwd: 'relative',
         args: [],
         policy: { kind: 'read' },
-        onStdout: () => 'more',
+        onStdout: () => {
+          return 'more';
+        },
         signal,
       }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'invalid-argument' } });

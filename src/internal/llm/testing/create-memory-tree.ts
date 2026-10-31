@@ -40,7 +40,9 @@ export function createMemoryTree(entries: Readonly<Record<string, MemoryEntry>>)
       : { kind: 'bytes', bytes };
   };
   const grep = (query: SandboxGrepQuery): GrepAnswer => {
-    const fold = (text: string): string => (query.ignoreCase ? text.toLowerCase() : text);
+    const fold = (text: string): string => {
+      return query.ignoreCase ? text.toLowerCase() : text;
+    };
     const matches: SandboxGrepMatch[] = [];
     for (const file of paths) {
       const isInScope =
@@ -63,9 +65,15 @@ export function createMemoryTree(entries: Readonly<Record<string, MemoryEntry>>)
   };
   /* eslint-disable @typescript-eslint/require-await -- the port is async; the fake answers at once. */
   return {
-    files: async (): Promise<readonly SandboxFile[]> => files,
-    read: async (file, maxBytes): Promise<SandboxBytes> => read(file, maxBytes),
-    grep: async (query): Promise<GrepAnswer> => grep(query),
+    files: async (): Promise<readonly SandboxFile[]> => {
+      return files;
+    },
+    read: async (file, maxBytes): Promise<SandboxBytes> => {
+      return read(file, maxBytes);
+    },
+    grep: async (query): Promise<GrepAnswer> => {
+      return grep(query);
+    },
   };
   /* eslint-enable @typescript-eslint/require-await */
 }

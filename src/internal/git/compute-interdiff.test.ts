@@ -140,14 +140,18 @@ function lines(content: readonly string[]): string {
 
 /** Each file's path with its changed lines, `-`/`+` prefixed. */
 function summary(files: readonly DiffFile[]): [string, string[]][] {
-  return files.map((file) => [
-    'path' in file ? file.path : file.newPath,
-    file.hunks.flatMap((hunk) =>
-      hunk.lines
-        .filter((line) => line.kind !== 'context')
-        .map((line) => `${line.kind === 'added' ? '+' : '-'}${line.content}`),
-    ),
-  ]);
+  return files.map((file) => {
+    return [
+      'path' in file ? file.path : file.newPath,
+      file.hunks.flatMap((hunk) => {
+        return hunk.lines
+          .filter((line) => line.kind !== 'context')
+          .map((line) => {
+            return `${line.kind === 'added' ? '+' : '-'}${line.content}`;
+          });
+      }),
+    ];
+  });
 }
 
 function appLines(): readonly string[] {

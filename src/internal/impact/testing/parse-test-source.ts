@@ -25,7 +25,9 @@ export async function parseTestSource(
   language: TestLanguage = 'typescript',
 ): Promise<ImpactNode> {
   state.runtime ??= Parser.init({
-    locateFile: () => require.resolve('web-tree-sitter/web-tree-sitter.wasm'),
+    locateFile: () => {
+      return require.resolve('web-tree-sitter/web-tree-sitter.wasm');
+    },
   });
   await state.runtime;
   let loading = languages.get(language);

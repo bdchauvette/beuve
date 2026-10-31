@@ -53,8 +53,9 @@ export function selectSessions(
 
 function sessionFromRow(row: Row): Result<Session, CorruptRow> {
   const { id, head_sha: headSha, created_at: createdAt, updated_at: updatedAt } = row;
-  const corrupt = (reason: string): Result<Session, CorruptRow> =>
-    err({ kind: 'corrupt-row', table: 'sessions', id: String(id), reason });
+  const corrupt = (reason: string): Result<Session, CorruptRow> => {
+    return err({ kind: 'corrupt-row', table: 'sessions', id: String(id), reason });
+  };
 
   if (typeof id !== 'string' || !isUuid(id)) {
     return corrupt('id is not a UUID');

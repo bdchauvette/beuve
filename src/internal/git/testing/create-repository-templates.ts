@@ -60,7 +60,9 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
       cpSync(source.directory, path.join(home, 'repo'), {
         recursive: true,
         mode: constants.COPYFILE_FICLONE,
-        filter: (entry): boolean => !isGitLockFile(entry),
+        filter: (entry): boolean => {
+          return !isGitLockFile(entry);
+        },
       });
       return { repo: openTestRepository(home, signal), value: source.value as T };
     },

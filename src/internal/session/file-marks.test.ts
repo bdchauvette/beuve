@@ -19,11 +19,9 @@ test('setFileMark stores a mark and replaces the one for the same path', ({ expe
   setFileMark(db, mark(session.id, 'src/b.ts', 'b'));
   setFileMark(db, { ...mark(session.id, 'src/a.ts', 'c'), headSha: sha('2') });
   expect(
-    okValueFrom(listFileMarks(db, session.id)).map(({ path, diffId, headSha }) => [
-      path,
-      diffId[0],
-      headSha[0],
-    ]),
+    okValueFrom(listFileMarks(db, session.id)).map(({ path, diffId, headSha }) => {
+      return [path, diffId[0], headSha[0]];
+    }),
   ).toStrictEqual([
     ['src/a.ts', 'c', '2'],
     ['src/b.ts', 'b', '1'],

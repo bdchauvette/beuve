@@ -63,12 +63,13 @@ describe('fileDiffIdFrom', () => {
     const executable = okValueFrom(
       parseUnifiedDiff('diff --git a/a.sh b/a.sh\nold mode 100644\nnew mode 100755\n'),
     )[0];
-    const binary = (newObject: string): DiffFile | undefined =>
-      okValueFrom(
+    const binary = (newObject: string): DiffFile | undefined => {
+      return okValueFrom(
         parseUnifiedDiff(
           `diff --git a/b.bin b/b.bin\nindex 1111111..${newObject} 100644\nBinary files a/b.bin and b/b.bin differ\n`,
         ),
       )[0];
+    };
     const first = binary('2222222');
     const second = binary('3333333');
     expect(executable === undefined ? '' : fileDiffIdFrom(executable)).not.toBe(
@@ -82,7 +83,9 @@ describe('fileDiffIdFrom', () => {
 
 /** A one-hunk patch: lines starting with `-` or `+` are changes, the rest context. */
 function modified(path: string, lines: readonly string[], start = 1): DiffFile {
-  const body = lines.map((line) => (/^[-+]/u.test(line) ? line : ` ${line}`));
+  const body = lines.map((line) => {
+    return /^[-+]/u.test(line) ? line : ` ${line}`;
+  });
   const removed = body.filter((line) => !line.startsWith('+')).length;
   const added = body.filter((line) => !line.startsWith('-')).length;
   const patch = [

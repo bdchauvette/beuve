@@ -96,9 +96,9 @@ function renderTurn(turn: ChatTurn, maxChars: number): string {
   const heading = turn.role === 'user' ? '### Reviewer' : '### You';
   const content = expandMentionTokens(turn.content, turn.mentions ?? []);
   const shown = content.length > maxChars ? `${content.slice(0, maxChars)}\n[beuve: cut]` : content;
-  const attached = (turn.mentions ?? []).map(
-    (mention, index) => `[beuve: selection ${String(index + 1)} was ${formatMention(mention)}]\n`,
-  );
+  const attached = (turn.mentions ?? []).map((mention, index) => {
+    return `[beuve: selection ${String(index + 1)} was ${formatMention(mention)}]\n`;
+  });
   return `${heading}\n\n${fenceUntrusted(shown, 'markdown')}\n${attached.join('')}`;
 }
 

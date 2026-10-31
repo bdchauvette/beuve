@@ -100,10 +100,12 @@ function publish(fake: FakeServer, messages: readonly string[], version?: number
   fake.push('textDocument/publishDiagnostics', {
     uri: 'file:///workspace/a.ts',
     ...(version !== undefined && { version }),
-    diagnostics: messages.map((message) => ({
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-      message,
-    })),
+    diagnostics: messages.map((message) => {
+      return {
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        message,
+      };
+    }),
   });
 }
 
@@ -224,8 +226,8 @@ describe('ServerSession', () => {
   });
 
   test('pulls diagnostics when the server supports it', async ({ expect }) => {
-    const fake = createFakeServer({ pullDiagnostics: true }, (method) =>
-      method === 'textDocument/diagnostic'
+    const fake = createFakeServer({ pullDiagnostics: true }, (method) => {
+      return method === 'textDocument/diagnostic'
         ? {
             kind: 'full',
             items: [
@@ -235,8 +237,8 @@ describe('ServerSession', () => {
               },
             ],
           }
-        : undefined,
-    );
+        : undefined;
+    });
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));
     await expect(session.diagnostics(document, wait())).resolves.toMatchObject({

@@ -4,12 +4,11 @@ import { grammars } from './grammars.ts';
 import type { SyntaxLanguage } from './grammars.ts';
 
 const languageByExtension: ReadonlyMap<string, SyntaxLanguage> = new Map(
-  languageIds().flatMap((language) =>
-    grammars[language].extensions.map((extension): [string, SyntaxLanguage] => [
-      extension,
-      language,
-    ]),
-  ),
+  languageIds().flatMap((language) => {
+    return grammars[language].extensions.map((extension): [string, SyntaxLanguage] => {
+      return [extension, language];
+    });
+  }),
 );
 
 /** The language of a repository path, by extension (case-insensitive), or `undefined`. */

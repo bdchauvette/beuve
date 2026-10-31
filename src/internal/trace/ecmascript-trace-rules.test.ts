@@ -9,9 +9,9 @@ describe('ecmascriptTraceRules', () => {
   test('names only node types and fields the grammars have', async ({ expect }) => {
     const rules = ecmascriptTraceRules;
     const grammars = await Promise.all(
-      (['typescript', 'tsx', 'javascript'] as const).map(async (language) =>
-        loadTestLanguage(language),
-      ),
+      (['typescript', 'tsx', 'javascript'] as const).map(async (language) => {
+        return loadTestLanguage(language);
+      }),
     );
     const types = [
       ...Object.keys(rules.functions),
@@ -33,11 +33,13 @@ describe('ecmascriptTraceRules', () => {
       rules.nameField,
       ...Object.values(rules.namers),
       ...Object.values(rules.parameters.wrappers),
-      ...Object.values(rules.functions).flatMap((rule) => [
-        rule.bodyField,
-        ...(rule.parametersField === undefined ? [] : [rule.parametersField]),
-        ...(rule.parameterField === undefined ? [] : [rule.parameterField]),
-      ]),
+      ...Object.values(rules.functions).flatMap((rule) => {
+        return [
+          rule.bodyField,
+          ...(rule.parametersField === undefined ? [] : [rule.parametersField]),
+          ...(rule.parameterField === undefined ? [] : [rule.parameterField]),
+        ];
+      }),
     ];
     for (const rule of Object.values(rules.constructs)) {
       fields.push(
@@ -50,14 +52,18 @@ describe('ecmascriptTraceRules', () => {
       }
 
       types.push(...Object.keys(rule.cases), rule.caseDelimiter);
-      fields.push(...Object.values(rule.cases).flatMap((item) => item.valueField ?? []));
+      fields.push(
+        ...Object.values(rule.cases).flatMap((item) => {
+          return item.valueField ?? [];
+        }),
+      );
     }
-    const missingTypes = types.filter((type) =>
-      grammars.every((grammar) => !grammar.types.has(type)),
-    );
-    const missingFields = fields.filter((field) =>
-      grammars.every((grammar) => !grammar.fields.has(field)),
-    );
+    const missingTypes = types.filter((type) => {
+      return grammars.every((grammar) => !grammar.types.has(type));
+    });
+    const missingFields = fields.filter((field) => {
+      return grammars.every((grammar) => !grammar.fields.has(field));
+    });
     expect({ missingTypes, missingFields }).toStrictEqual({ missingTypes: [], missingFields: [] });
   });
 });

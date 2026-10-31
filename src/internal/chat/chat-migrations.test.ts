@@ -156,11 +156,13 @@ describe('chat-0002-message-parts', () => {
     ]);
     const listed = okValueFrom(listChatMessages(db, sessionId() as SessionId));
     expect(
-      listed.map((message) => ({
-        role: message.role,
-        status: 'status' in message ? message.status : undefined,
-        parts: message.parts,
-      })),
+      listed.map((message) => {
+        return {
+          role: message.role,
+          status: 'status' in message ? message.status : undefined,
+          parts: message.parts,
+        };
+      }),
     ).toStrictEqual([
       {
         role: 'user',

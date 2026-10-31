@@ -8,12 +8,12 @@ import { createChatQuestion } from './testing/create-chat-question.ts';
 import { test } from './testing/test.ts';
 
 function bigFile(path: string, hunks: number, linesPerHunk: number): ChatFile {
-  const body = Array.from({ length: hunks }, (_, hunk) =>
-    [
+  const body = Array.from({ length: hunks }, (_, hunk) => {
+    return [
       `@@ -${String(hunk * 100 + 1)},1 +${String(hunk * 100 + 1)},${String(linesPerHunk)} @@`,
       ...Array.from({ length: linesPerHunk }, (_, line) => `+line ${String(hunk)}.${String(line)}`),
-    ].join('\n'),
-  ).join('\n');
+    ].join('\n');
+  }).join('\n');
   return {
     path,
     status: 'modified',
@@ -151,7 +151,11 @@ describe('buildChatPrompt', () => {
     expect,
   }) => {
     const built = buildChatPrompt(createChatQuestion(), budget());
-    expect(built.messages.map((message) => [message.role, message.cache === true])).toStrictEqual([
+    expect(
+      built.messages.map((message) => {
+        return [message.role, message.cache === true];
+      }),
+    ).toStrictEqual([
       ['user', true],
       ['user', false],
     ]);
@@ -184,10 +188,12 @@ describe('buildChatPrompt', () => {
   test('drops the oldest turns first, with a notice, and truncates an oversized turn', ({
     expect,
   }) => {
-    const turns: ChatTurn[] = Array.from({ length: 30 }, (_, index) => ({
-      role: index % 2 === 0 ? 'user' : 'assistant',
-      content: `turn ${String(index)}`,
-    }));
+    const turns: ChatTurn[] = Array.from({ length: 30 }, (_, index) => {
+      return {
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `turn ${String(index)}`,
+      };
+    });
     const limited = buildChatPrompt(createChatQuestion({ history: turns }), budget());
     expect(limited.report.omittedTurns).toBe(10);
     expect(limited.prompt).toContain(
@@ -361,10 +367,9 @@ describe('buildChatPrompt with selections and a summary', () => {
 });
 
 function lines(from: number, count: number): string[] {
-  return Array.from(
-    { length: count },
-    (_, index) => `const v${String(from + index)} = ${String(index)};`,
-  );
+  return Array.from({ length: count }, (_, index) => {
+    return `const v${String(from + index)} = ${String(index)};`;
+  });
 }
 
 function budget(): ChatPromptBudget {

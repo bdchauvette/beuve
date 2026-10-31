@@ -16,9 +16,17 @@ export function renderAgentReviewXml(artifact: UraArtifact): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<beuve-review${attributes({ schema: review.schema, verdict: review.verdict, 'verdict-source': review.verdictSource })}>`,
     ...changeElement(review).map((line) => indent + line),
-    `${indent}<counts${attributes(Object.fromEntries(uraSeverities.map((severity) => [severity, review.counts[severity]])))}/>`,
+    `${indent}<counts${attributes(
+      Object.fromEntries(
+        uraSeverities.map((severity) => {
+          return [severity, review.counts[severity]];
+        }),
+      ),
+    )}/>`,
     review.items.length === 0 ? `${indent}<items/>` : `${indent}<items>`,
-    ...review.items.flatMap((item) => itemElement(item).map((line) => indent.repeat(2) + line)),
+    ...review.items.flatMap((item) => {
+      return itemElement(item).map((line) => indent.repeat(2) + line);
+    }),
     ...(review.items.length === 0 ? [] : [`${indent}</items>`]),
     '</beuve-review>',
   ];

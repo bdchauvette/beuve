@@ -59,9 +59,9 @@ interface Exit {
   readonly output: string;
 }
 
-const configNames = ['vitest.config', 'vite.config'].flatMap((name) =>
-  ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => `${name}${extension}`),
-);
+const configNames = ['vitest.config', 'vite.config'].flatMap((name) => {
+  return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => `${name}${extension}`);
+});
 const outputTailLength = 8192;
 
 /**

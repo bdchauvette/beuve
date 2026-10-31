@@ -12,7 +12,9 @@ describe('createGithubClient', () => {
   test('refuses a host that is not a hostname', ({ expect }) => {
     const created = createGithubClient({
       host: 'https://github.com',
-      getToken: async () => settle(ok({ reveal: (): string => 'unused' })),
+      getToken: async () => {
+        return settle(ok({ reveal: (): string => 'unused' }));
+      },
     });
     expect(created.ok).toBe(false);
   });
@@ -22,11 +24,13 @@ describe('createGithubClient', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client, requests } = fakeGithub(() => ({
-      status: 200,
-      body: { a: 1 },
-      headers: { etag: '"e1"', link: '<https://api.github.com/x?page=2>; rel="next"' },
-    }));
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 200,
+        body: { a: 1 },
+        headers: { etag: '"e1"', link: '<https://api.github.com/x?page=2>; rel="next"' },
+      };
+    });
     const response = await client.send({ method: 'GET', path: '/x', signal });
     expect(response).toStrictEqual(
       ok({
@@ -45,7 +49,12 @@ describe('createGithubClient', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client, requests } = fakeGithub(() => ({ status: 200 }), { token: undefined });
+    const { client, requests } = fakeGithub(
+      () => {
+        return { status: 200 };
+      },
+      { token: undefined },
+    );
     await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'credentials', error: 'no-token' },
@@ -54,10 +63,12 @@ describe('createGithubClient', () => {
   });
 
   test('returns 304 as a success without a body', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub(() => ({
-      status: 304,
-      headers: { etag: '"e1"' },
-    }));
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 304,
+        headers: { etag: '"e1"' },
+      };
+    });
     const response = await client.send({ method: 'GET', path: '/x', etag: '"e1"', signal });
     expect(response).toStrictEqual(
       ok({ status: 304, body: undefined, etag: '"e1"', link: undefined }),
@@ -66,10 +77,12 @@ describe('createGithubClient', () => {
   });
 
   test('classifies error statuses', async ({ expect, fakeGithub, signal }) => {
-    const { client } = fakeGithub(() => ({
-      status: 401,
-      body: { message: 'Bad credentials' },
-    }));
+    const { client } = fakeGithub(() => {
+      return {
+        status: 401,
+        body: { message: 'Bad credentials' },
+      };
+    });
     await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'unauthorized', message: 'Bad credentials' },
@@ -81,7 +94,9 @@ describe('createGithubClient', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client } = fakeGithub(() => ({ status: 200, body: '<html>proxy login</html>' }));
+    const { client } = fakeGithub(() => {
+      return { status: 200, body: '<html>proxy login</html>' };
+    });
     await expect(client.send({ method: 'GET', path: '/x', signal })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unexpected-shape' },
@@ -99,14 +114,17 @@ describe('createGithubClient', () => {
 
     const slow = createGithubClient({
       host: 'github.com',
-      getToken: async () => settle(ok({ reveal: (): string => 't' })),
+      getToken: async () => {
+        return settle(ok({ reveal: (): string => 't' }));
+      },
       timeout: Temporal.Duration.from({ milliseconds: 50 }),
-      fetch: async (_url, init) =>
-        new Promise<Response>((_resolve, reject) => {
+      fetch: async (_url, init) => {
+        return new Promise<Response>((_resolve, reject) => {
           init.signal?.addEventListener('abort', () => {
             reject(new DOMException('aborted', 'TimeoutError'));
           });
-        }),
+        });
+      },
     });
     await expect(
       okValueFrom(slow).send({ method: 'GET', path: '/x', signal }),
@@ -120,8 +138,12 @@ describe('createGithubClient', () => {
     const logged: LogFields[] = [];
     const created = createGithubClient({
       host: 'github.com',
-      getToken: async () => settle(ok({ reveal: (): string => 'gho_secretvalue' })),
-      fetch: async () => settle(new Response('{}', { status: 200 })),
+      getToken: async () => {
+        return settle(ok({ reveal: (): string => 'gho_secretvalue' }));
+      },
+      fetch: async () => {
+        return settle(new Response('{}', { status: 200 }));
+      },
       logger: {
         debug: (_message, fields = {}) => {
           logged.push(fields);

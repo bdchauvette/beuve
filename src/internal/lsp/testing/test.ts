@@ -21,9 +21,9 @@ import { writeFakeLanguageServer } from './write-fake-language-server.ts';
  */
 export const test = baseTest
   .extend('typescriptProject', ({ tempDir }): TypescriptProject => createTypescriptProject(tempDir))
-  .extend('fakeServerScript', { scope: 'worker' }, ({ tempRoot }): string =>
-    writeFakeLanguageServer(mkdtempSync(path.join(tempRoot, 'fake-lsp-'))),
-  )
+  .extend('fakeServerScript', { scope: 'worker' }, ({ tempRoot }): string => {
+    return writeFakeLanguageServer(mkdtempSync(path.join(tempRoot, 'fake-lsp-')));
+  })
   .extend('typescriptWorkspace', ({ tempDir }, { onCleanup }): TypescriptWorkspace => {
     const workspace = createTypescriptWorkspace(tempDir);
     onCleanup(async () => {

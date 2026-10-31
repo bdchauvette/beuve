@@ -173,9 +173,9 @@ describe('runImpactCheck', () => {
       parse,
     );
     expect(
-      report.files.map(
-        (file) => file.status === 'analyzed' && file.functions.map(({ change }) => change),
-      ),
+      report.files.map((file) => {
+        return file.status === 'analyzed' && file.functions.map(({ change }) => change);
+      }),
     ).toStrictEqual([['added'], ['removed']]);
     expect(report.cognitiveMax).toBe(15);
   });
@@ -201,7 +201,9 @@ describe('runImpactCheck', () => {
     expect(file).toMatchObject({ status: 'analyzed', path: 'm.ts', previousPath: 'n.ts' });
     expect(
       file?.status === 'analyzed' &&
-        file.functions.map(({ name, change, inDiff }) => [name, change, inDiff]),
+        file.functions.map(({ name, change, inDiff }) => {
+          return [name, change, inDiff];
+        }),
     ).toStrictEqual([['a', 'unchanged', true]]);
   });
 

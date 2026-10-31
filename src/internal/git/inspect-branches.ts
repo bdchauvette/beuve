@@ -53,7 +53,10 @@ export async function inspectBranches(
   const current = await readSymbolicRef(repository, 'HEAD');
   const originHead = await readSymbolicRef(repository, 'refs/remotes/origin/HEAD');
   const defaultBase =
-    originHead ?? ['main', 'master'].find((name) => branches.some((b) => b.name === name));
+    originHead ??
+    ['main', 'master'].find((name) => {
+      return branches.some((b) => b.name === name);
+    });
   return ok({
     ...(current !== undefined && { current }),
     ...(defaultBase !== undefined && { defaultBase }),

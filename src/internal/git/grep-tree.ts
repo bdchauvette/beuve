@@ -77,7 +77,9 @@ export async function grepTree(
   const streamed = await repository[gitRunner].stream(args, {
     policy: { kind: 'read' },
     signal: query.signal,
-    onStdout: (chunk) => parser.push(chunk),
+    onStdout: (chunk) => {
+      return parser.push(chunk);
+    },
   });
   if (!streamed.ok) {
     const { error } = streamed;

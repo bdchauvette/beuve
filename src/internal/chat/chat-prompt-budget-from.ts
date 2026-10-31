@@ -24,8 +24,9 @@ export function chatPromptBudgetFrom(
   const share = capabilities?.tools === false ? 0.5 : 0.25;
   const total = Math.min(maxChars, Math.max(minChars, Math.floor(tokens * share * charsPerToken)));
   const scale = total / defaultChatPromptBudget.maxChars;
-  const scaled = (value: number, floor: number): number =>
-    Math.max(floor, Math.floor(value * scale));
+  const scaled = (value: number, floor: number): number => {
+    return Math.max(floor, Math.floor(value * scale));
+  };
   const base = defaultChatPromptBudget;
   return {
     maxChars: total,

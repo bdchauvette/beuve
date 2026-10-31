@@ -44,10 +44,12 @@ function offDiff(): { status: number; body: unknown } {
 
 describe('postPullRequestReview', () => {
   test('posts the payload() as one submitted review', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub(() => ({
-      status: 200,
-      body: githubFixtures.review,
-    }));
+    const { client, requests } = fakeGithub(() => {
+      return {
+        status: 200,
+        body: githubFixtures.review,
+      };
+    });
     const result = await postPullRequestReview(client, ref(), payload(), { signal });
     expect(requests[0]).toMatchObject({
       method: 'POST',
@@ -70,13 +72,15 @@ describe('postPullRequestReview', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client } = fakeGithub(() => ({
-      status: 422,
-      body: {
-        message: 'Unprocessable Entity',
-        errors: ['Can not request changes on your own pull request'],
-      },
-    }));
+    const { client } = fakeGithub(() => {
+      return {
+        status: 422,
+        body: {
+          message: 'Unprocessable Entity',
+          errors: ['Can not request changes on your own pull request'],
+        },
+      };
+    });
     await expect(
       postPullRequestReview(client, ref(), payload(), { signal }),
     ).resolves.toStrictEqual({
@@ -116,9 +120,9 @@ describe('postPullRequestReview', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client, requests } = fakeGithub((_request, index) =>
-      index === 0 ? offDiff() : { status: 200, body: githubFixtures.review },
-    );
+    const { client, requests } = fakeGithub((_request, index) => {
+      return index === 0 ? offDiff() : { status: 200, body: githubFixtures.review };
+    });
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',
       signal,
@@ -128,8 +132,8 @@ describe('postPullRequestReview', () => {
   });
 
   test('moves only the comments GitHub names', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub((_request, index) =>
-      index === 0
+    const { client, requests } = fakeGithub((_request, index) => {
+      return index === 0
         ? {
             status: 422,
             body: {
@@ -144,8 +148,8 @@ describe('postPullRequestReview', () => {
               ],
             },
           }
-        : { status: 200, body: githubFixtures.review },
-    );
+        : { status: 200, body: githubFixtures.review };
+    });
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',
       signal,
@@ -161,13 +165,15 @@ describe('postPullRequestReview', () => {
     fakeGithub,
     signal,
   }) => {
-    const { client } = fakeGithub(() => ({
-      status: 422,
-      body: {
-        message: 'Validation Failed',
-        errors: [{ resource: 'PullRequestReview', field: 'commit_id', code: 'invalid' }],
-      },
-    }));
+    const { client } = fakeGithub(() => {
+      return {
+        status: 422,
+        body: {
+          message: 'Validation Failed',
+          errors: [{ resource: 'PullRequestReview', field: 'commit_id', code: 'invalid' }],
+        },
+      };
+    });
     await expect(
       postPullRequestReview(client, ref(), { ...payload(), comments: [] }, { signal }),
     ).resolves.toMatchObject({
@@ -177,10 +183,12 @@ describe('postPullRequestReview', () => {
   });
 
   test('passes other errors through', async ({ expect, fakeGithub, signal }) => {
-    const { client } = fakeGithub(() => ({
-      status: 403,
-      body: { message: 'Resource not accessible by integration' },
-    }));
+    const { client } = fakeGithub(() => {
+      return {
+        status: 403,
+        body: { message: 'Resource not accessible by integration' },
+      };
+    });
     await expect(
       postPullRequestReview(client, ref(), payload(), { signal }),
     ).resolves.toMatchObject({

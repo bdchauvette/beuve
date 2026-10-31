@@ -281,9 +281,12 @@ async function stackScenario(repositories: TestRepositories): Promise<StackScena
     setLine(repo, file, line, content);
     return await repo.commit(message);
   };
-  const sha = async (revision: string): Promise<CommitSha> =>
-    (await repo.git('rev-parse', revision)) as CommitSha;
-  const reviewedPr2 = (): ReviewRange => ({ base: at(stack.pr1, 1), head: at(stack.pr2, 1) });
+  const sha = async (revision: string): Promise<CommitSha> => {
+    return (await repo.git('rev-parse', revision)) as CommitSha;
+  };
+  const reviewedPr2 = (): ReviewRange => {
+    return { base: at(stack.pr1, 1), head: at(stack.pr2, 1) };
+  };
 
   /** Squash-merges pr1 into main, adds an unrelated main commit, and returns main's tip. */
   const squashMergePr1 = async (): Promise<CommitSha> => {
@@ -313,7 +316,9 @@ async function stackScenario(repositories: TestRepositories): Promise<StackScena
       await computeInterdiff(git, previous, next, {
         pairedCommits: pairs.pairs
           .filter((pair) => pair.kind === 'unchanged' || pair.kind === 'modified')
-          .map((pair) => ({ parent: pair.previous.parent, commit: pair.previous.sha })),
+          .map((pair) => {
+            return { parent: pair.previous.parent, commit: pair.previous.sha };
+          }),
       }),
     );
     return {
@@ -361,12 +366,16 @@ function cleanInterdiffFiles(pair: CommitPair | undefined): readonly DiffFile[] 
 }
 
 function summary(files: readonly DiffFile[]): [string, string[]][] {
-  return files.map((file) => [
-    'path' in file ? file.path : file.newPath,
-    file.hunks.flatMap((hunk) =>
-      hunk.lines
-        .filter((line) => line.kind !== 'context')
-        .map((line) => `${line.kind === 'added' ? '+' : '-'}${line.content}`),
-    ),
-  ]);
+  return files.map((file) => {
+    return [
+      'path' in file ? file.path : file.newPath,
+      file.hunks.flatMap((hunk) => {
+        return hunk.lines
+          .filter((line) => line.kind !== 'context')
+          .map((line) => {
+            return `${line.kind === 'added' ? '+' : '-'}${line.content}`;
+          });
+      }),
+    ];
+  });
 }

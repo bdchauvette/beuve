@@ -44,9 +44,9 @@ export function pairCommits<C extends PairableCommit>(
   };
 
   for (const [nextIndex, commit] of next.entries()) {
-    const previousIndex = previous.findIndex(
-      (candidate, index) => !partnerOfPrevious.has(index) && isSamePatch(candidate, commit),
-    );
+    const previousIndex = previous.findIndex((candidate, index) => {
+      return !partnerOfPrevious.has(index) && isSamePatch(candidate, commit);
+    });
     if (previousIndex !== -1) {
       link(previousIndex, nextIndex);
     }
@@ -71,11 +71,14 @@ export function pairCommits<C extends PairableCommit>(
       }
     }
   }
-  const distance = (candidate: { i: number; j: number }): number =>
-    Math.abs(candidate.i / Math.max(previous.length, 1) - candidate.j / Math.max(next.length, 1));
-  candidates.sort(
-    (a, b) => b.score - a.score || distance(a) - distance(b) || a.j - b.j || a.i - b.i,
-  );
+  const distance = (candidate: { i: number; j: number }): number => {
+    return Math.abs(
+      candidate.i / Math.max(previous.length, 1) - candidate.j / Math.max(next.length, 1),
+    );
+  };
+  candidates.sort((a, b) => {
+    return b.score - a.score || distance(a) - distance(b) || a.j - b.j || a.i - b.i;
+  });
   for (const candidate of candidates) {
     if (partnerOfPrevious.has(candidate.i) || partnerOfNext.has(candidate.j)) {
       continue;

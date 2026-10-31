@@ -18,7 +18,9 @@ function mapper(): ViewMapper {
   return createViewMapper({
     root: '/w' as WorkspaceRoot,
     encoding: positionEncodings.utf8,
-    lines: (key) => (key === uri() ? lines : undefined),
+    lines: (key) => {
+      return key === uri() ? lines : undefined;
+    },
   });
 }
 

@@ -71,7 +71,9 @@ describe('getCiStatus', () => {
   });
 
   test('is not-modified when both endpoints answer 304', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub(() => ({ status: 304 }));
+    const { client, requests } = fakeGithub(() => {
+      return { status: 304 };
+    });
     const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-1"' },
       signal,
@@ -85,9 +87,9 @@ describe('getCiStatus', () => {
   });
 
   test('refetches both when one of them changed', async ({ expect, fakeGithub, signal }) => {
-    const { client, requests } = fakeGithub((request, index) =>
-      index < 2 && request.url.includes('/status') ? { status: 304 } : ci(request),
-    );
+    const { client, requests } = fakeGithub((request, index) => {
+      return index < 2 && request.url.includes('/status') ? { status: 304 } : ci(request);
+    });
     const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-0"' },
       signal,
@@ -98,8 +100,8 @@ describe('getCiStatus', () => {
 
   test('drops the check-runs ETag when they span pages', async ({ expect, fakeGithub, signal }) => {
     const page2 = `https://api.github.com/repositories/1/commits/${githubFixtures.headSha}/check-runs?page=2`;
-    const { client } = fakeGithub((request) =>
-      request.url === page2
+    const { client } = fakeGithub((request) => {
+      return request.url === page2
         ? {
             status: 200,
             body: { total_count: 4, check_runs: [githubFixtures.checkRuns.check_runs[0]] },
@@ -110,8 +112,8 @@ describe('getCiStatus', () => {
               body: githubFixtures.checkRuns,
               headers: { etag: '"c"', link: `<${page2}>; rel="next"` },
             }
-          : ci(request),
-    );
+          : ci(request);
+    });
     const result = await getCiStatus(client, commit(), { signal });
     expect(
       result.ok && result.value.kind === 'modified' && result.value.etags.checkRuns,
@@ -130,16 +132,18 @@ describe('summarizeCiStatus', () => {
     });
     const check = (
       bucket: 'pending' | 'success' | 'failure' | 'neutral',
-    ): Parameters<typeof summarizeCiStatus>[0][number] => ({
-      source: 'check-run',
-      name: bucket,
-      status: 'completed',
-      conclusion: bucket,
-      bucket,
-      url: undefined,
-      startedAt: undefined,
-      completedAt: undefined,
-    });
+    ): Parameters<typeof summarizeCiStatus>[0][number] => {
+      return {
+        source: 'check-run',
+        name: bucket,
+        status: 'completed',
+        conclusion: bucket,
+        bucket,
+        url: undefined,
+        startedAt: undefined,
+        completedAt: undefined,
+      };
+    };
     expect(summarizeCiStatus([check('neutral')]).overall).toBe('neutral');
     expect(summarizeCiStatus([check('neutral'), check('success')]).overall).toBe('success');
     expect(summarizeCiStatus([check('success'), check('pending')]).overall).toBe('pending');

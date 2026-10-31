@@ -84,7 +84,11 @@ export async function postPullRequestReview<E>(
   const failed = first.error.failedCommentIndexes;
   const fallback = moveCommentsToBody(
     payload,
-    failed === undefined ? undefined : (_comment, index): boolean => failed.includes(index),
+    failed === undefined
+      ? undefined
+      : (_comment, index): boolean => {
+          return failed.includes(index);
+        },
   );
   const second = await submit(client, ref, fallback, options.signal);
   return second.ok
@@ -127,7 +131,9 @@ function classifyRejection<E>(
   payload: ReviewPayload,
 ): PostReviewError<E> {
   const messages = [error.message, ...error.errors.map((detail) => describeDetail(detail))].filter(
-    (text) => text !== '',
+    (text) => {
+      return text !== '';
+    },
   );
   if (messages.some((text) => ownPullRequest.test(text))) {
     return {

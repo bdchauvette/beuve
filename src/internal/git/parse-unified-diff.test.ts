@@ -15,7 +15,11 @@ import { test } from './testing/test.ts';
 describe('parseUnifiedDiff', () => {
   test('parses every file of a mixed real-world patch', ({ expect }) => {
     const files = parsed(mixedPatch());
-    expect(files.map((file) => [file.status, pathOf(file)])).toStrictEqual([
+    expect(
+      files.map((file) => {
+        return [file.status, pathOf(file)];
+      }),
+    ).toStrictEqual([
       ['added', 'añadido.txt'],
       ['modified', 'blob.bin'],
       ['modified', 'crlf.txt'],
@@ -43,7 +47,11 @@ describe('parseUnifiedDiff', () => {
 
   test('reads multiple hunks and their section headings', ({ expect }) => {
     const multi = file(mixedPatch(), 'multi.txt');
-    expect(multi.hunks.map((hunk) => [hunk.header, hunk.oldStart, hunk.newStart])).toStrictEqual([
+    expect(
+      multi.hunks.map((hunk) => {
+        return [hunk.header, hunk.oldStart, hunk.newStart];
+      }),
+    ).toStrictEqual([
       ['@@ -2,7 +2,7 @@', 2, 2],
       ['@@ -32,7 +32,7 @@', 32, 32],
     ]);
@@ -175,7 +183,9 @@ describe('parseUnifiedDiff', () => {
     );
     // A removed line "-- a/elsewhere" and an added line "++ b/elsewhere", then context.
     expect(
-      parsed(tricky)[0]?.hunks[0]?.lines.map((line) => [line.kind, line.content]),
+      parsed(tricky)[0]?.hunks[0]?.lines.map((line) => {
+        return [line.kind, line.content];
+      }),
     ).toStrictEqual([
       ['removed', '-- a/elsewhere'],
       ['added', '++ b/elsewhere'],

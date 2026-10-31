@@ -14,9 +14,9 @@ export function normalizePathScope(prefixes: readonly string[]): readonly string
     }
   }
   const sorted = [...cleaned].toSorted(compareCodeUnits);
-  return sorted.filter((prefix) =>
-    sorted.every((other) => other === prefix || !prefix.startsWith(`${other}/`)),
-  );
+  return sorted.filter((prefix) => {
+    return sorted.every((other) => other === prefix || !prefix.startsWith(`${other}/`));
+  });
 }
 
 function compareCodeUnits(left: string, right: string): number {

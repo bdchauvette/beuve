@@ -114,7 +114,11 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     );
 
     const { timelines } = okValueFrom(result);
-    expect(timelines.map((timeline) => [timeline.titles, timeline.status])).toStrictEqual([
+    expect(
+      timelines.map((timeline) => {
+        return [timeline.titles, timeline.status];
+      }),
+    ).toStrictEqual([
       [['clamp', 'caps high values'], 'passed'],
       [['clamp', 'keeps values in range'], 'passed'],
       [['clamp', 'never calls clamp'], 'passed'],
@@ -323,8 +327,8 @@ function refusalRunner(fixtures: VitestFixtures): {
   readonly run: RefusalRun;
 } {
   const fixture = fixtures.create({ 'src/a.test.ts': '' });
-  const run: RefusalRun = async (overrides) =>
-    runnerFor(fixture, {}).run({
+  const run: RefusalRun = async (overrides) => {
+    return runnerFor(fixture, {}).run({
       trusted: true,
       worktree: fixture.worktree,
       dependencyRoot: fixture.dependencyRoot,
@@ -333,6 +337,7 @@ function refusalRunner(fixtures: VitestFixtures): {
       timeout: Temporal.Duration.from({ milliseconds: 1000 }),
       ...overrides,
     });
+  };
   return { fixture, run };
 }
 

@@ -86,8 +86,9 @@ export function createOpenAiCompatibleModel(options: OpenAiCompatibleModelOption
   };
   return {
     capabilities,
-    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
-      runStructured(request, options),
+    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> => {
+      return runStructured(request, options);
+    },
     runText: async (
       request: TextModelRequest,
     ): Promise<Result<ModelOutput<string>, ModelError>> => {
@@ -236,7 +237,9 @@ async function converse(
       : request.system;
   const wire: WireMessage[] = [
     { role: 'system', content: system },
-    ...request.messages.map(({ role, content }): WireMessage => ({ role, content })),
+    ...request.messages.map(({ role, content }): WireMessage => {
+      return { role, content };
+    }),
   ];
   const maxTurns = sandbox === undefined ? 1 : (options.maxTurns ?? defaultMaxTurns);
   let usage: ModelUsage | undefined;
@@ -509,17 +512,16 @@ async function readWhole(
     listeners.onText(content);
     listeners.onProgress?.({ kind: 'text-end' });
   }
-  const calls = (message.tool_calls ?? []).map(
-    (call, index) =>
-      [
-        call.index ?? index,
-        {
-          id: call.id ?? '',
-          name: call.function?.name ?? '',
-          arguments: call.function?.arguments ?? '',
-        },
-      ] as const,
-  );
+  const calls = (message.tool_calls ?? []).map((call, index) => {
+    return [
+      call.index ?? index,
+      {
+        id: call.id ?? '',
+        name: call.function?.name ?? '',
+        arguments: call.function?.arguments ?? '',
+      },
+    ] as const;
+  });
   return ok({
     content,
     toolCalls: toolCallsFrom(calls),
@@ -534,11 +536,13 @@ function toolCallsFrom(
   return calls
     .toSorted(([left], [right]) => left - right)
     .filter(([, call]) => call.name !== '')
-    .map(([index, call]) => ({
-      id: call.id === '' ? `call_${String(index)}` : call.id,
-      type: 'function',
-      function: { name: call.name, arguments: call.arguments },
-    }));
+    .map(([index, call]) => {
+      return {
+        id: call.id === '' ? `call_${String(index)}` : call.id,
+        type: 'function',
+        function: { name: call.name, arguments: call.arguments },
+      };
+    });
 }
 
 function usageFrom(usage: z.infer<typeof usageShape>): ModelUsage | undefined {

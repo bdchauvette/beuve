@@ -354,8 +354,9 @@ function isRealPath(path: string | undefined): path is string {
  * name the same file, so the line splits evenly.
  */
 function headerPathPair(text: string): readonly [string, string] | undefined {
-  const strip = (side: string | undefined, prefix: string): string | undefined =>
-    side?.startsWith(prefix) === true ? side.slice(prefix.length) : undefined;
+  const strip = (side: string | undefined, prefix: string): string | undefined => {
+    return side?.startsWith(prefix) === true ? side.slice(prefix.length) : undefined;
+  };
   const pair = splitHeaderPaths(text);
   const oldPath = strip(unquoteGitPath(pair?.[0] ?? ''), 'a/');
   const newPath = strip(unquoteGitPath(pair?.[1] ?? ''), 'b/');

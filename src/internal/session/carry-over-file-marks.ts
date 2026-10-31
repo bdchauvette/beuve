@@ -42,7 +42,11 @@ export function carryOverFileMarks(
   marks: readonly MarkedFile[],
   files: readonly MarkableFile[],
 ): CarriedMarks {
-  const unclaimed = new Map(marks.map((mark) => [mark.path, mark]));
+  const unclaimed = new Map(
+    marks.map((mark) => {
+      return [mark.path, mark];
+    }),
+  );
   const claims: (MarkedFile | undefined)[] = files.map((file) => claim(unclaimed, file.path));
   for (const [index, file] of files.entries()) {
     if (file.oldPath !== undefined) {
@@ -59,8 +63,9 @@ export function carryOverFileMarks(
     }
     return mark.diffId === file.diffId ? 'yes' : 'changed-since';
   });
-  const countOf = (state: FileReviewState): number =>
-    states.filter((candidate) => candidate === state).length;
+  const countOf = (state: FileReviewState): number => {
+    return states.filter((candidate) => candidate === state).length;
+  };
   return {
     states,
     counts: {

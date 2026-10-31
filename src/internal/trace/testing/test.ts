@@ -12,6 +12,10 @@ export interface VitestFixtures {
  * `#testing/test.ts` with trace fixtures (ADR 0058): `vitestFixtures.create(files)` makes a
  * throwaway Vitest project inside the test's `tempDir`, removed with it.
  */
-export const test = baseTest.extend('vitestFixtures', ({ tempDir }): VitestFixtures => ({
-  create: (files): VitestFixture => createVitestFixture(files, tempDir),
-}));
+export const test = baseTest.extend('vitestFixtures', ({ tempDir }): VitestFixtures => {
+  return {
+    create: (files): VitestFixture => {
+      return createVitestFixture(files, tempDir);
+    },
+  };
+});

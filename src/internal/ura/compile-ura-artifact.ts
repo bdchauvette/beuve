@@ -43,7 +43,9 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
   const mappings = new Map(
     input.lineMappings
       .filter((mapping) => mapping.toHeadSha === summary.headSha)
-      .map((mapping) => [mapping.fromHeadSha, mapping] as const),
+      .map((mapping) => {
+        return [mapping.fromHeadSha, mapping] as const;
+      }),
   );
   const place = (item: UraItem): UraPlacement => {
     if (item.headSha === summary.headSha) {
@@ -65,7 +67,9 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
       : { value: input.verdict, source: 'chosen', derived };
   return ok({
     summary,
-    entries: staged.map((item) => ({ item, placement: place(item) })),
+    entries: staged.map((item) => {
+      return { item, placement: place(item) };
+    }),
     verdict,
   });
 }

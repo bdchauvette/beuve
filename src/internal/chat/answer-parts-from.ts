@@ -37,11 +37,13 @@ export function answerPartsFrom(streamed: StreamedParts, ending: AnswerEnding): 
       const kept = state.parts.filter((part) => part.kind !== 'text');
       return [
         ...kept,
-        ...Array.from({ length: ending.count }, (_, finding): ChatPart => ({
-          kind: 'finding',
-          id: newId(),
-          finding,
-        })),
+        ...Array.from({ length: ending.count }, (_, finding): ChatPart => {
+          return {
+            kind: 'finding',
+            id: newId(),
+            finding,
+          };
+        }),
       ];
     }
     case 'error': {

@@ -68,16 +68,18 @@ const statusSchema = z
     created_at: z.string(),
     updated_at: z.string(),
   })
-  .transform((raw): CiCheck => ({
-    source: 'status',
-    name: raw.context,
-    status: raw.state === 'pending' ? 'queued' : 'completed',
-    conclusion: raw.state === 'pending' ? undefined : raw.state,
-    bucket: raw.state === 'error' ? 'failure' : raw.state,
-    url: raw.target_url ?? undefined,
-    startedAt: raw.created_at,
-    completedAt: raw.state === 'pending' ? undefined : raw.updated_at,
-  }));
+  .transform((raw): CiCheck => {
+    return {
+      source: 'status',
+      name: raw.context,
+      status: raw.state === 'pending' ? 'queued' : 'completed',
+      conclusion: raw.state === 'pending' ? undefined : raw.state,
+      bucket: raw.state === 'error' ? 'failure' : raw.state,
+      url: raw.target_url ?? undefined,
+      startedAt: raw.created_at,
+      completedAt: raw.state === 'pending' ? undefined : raw.updated_at,
+    };
+  });
 
 const combinedStatusSchema = z
   .object({ statuses: z.array(statusSchema) })
@@ -204,7 +206,9 @@ async function fetchAllPagesWithEtag<E>(
   const rest = await fetchAllPages(
     client,
     { method: 'GET', path: next, ...(request.signal !== undefined && { signal: request.signal }) },
-    (body) => decodeWith(checkRunsPageSchema, body),
+    (body) => {
+      return decodeWith(checkRunsPageSchema, body);
+    },
     9,
   );
   if (!rest.ok) {

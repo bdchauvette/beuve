@@ -68,10 +68,10 @@ async function referencesIn(
   path: string,
   source: string,
 ): Promise<readonly (readonly [string, string, boolean])[]> {
-  const parsed = await createSyntaxParser().parse(path, source, (root) =>
-    extractModuleReferences(root).map(
-      ({ specifier, kind, isTypeOnly }) => [specifier, kind, isTypeOnly] as const,
-    ),
-  );
+  const parsed = await createSyntaxParser().parse(path, source, (root) => {
+    return extractModuleReferences(root).map(({ specifier, kind, isTypeOnly }) => {
+      return [specifier, kind, isTypeOnly] as const;
+    });
+  });
   return parsed.ok ? parsed.value : [];
 }

@@ -54,9 +54,9 @@ export function openTestRepository(home: string, signal?: AbortSignal): TestRepo
 }
 
 function testEnvironment(home: string): NodeJS.ProcessEnv {
-  const inherited = Object.entries(process.env).filter(
-    ([key]) => !key.toUpperCase().startsWith('GIT_'),
-  );
+  const inherited = Object.entries(process.env).filter(([key]) => {
+    return !key.toUpperCase().startsWith('GIT_');
+  });
   return {
     ...Object.fromEntries(inherited),
     HOME: home,

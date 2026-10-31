@@ -201,11 +201,13 @@ function toolUseFrom(json: unknown): ClaudeCodeEvent {
   }
   const uses = (parsed.data.message.content ?? [])
     .filter((block) => block.type === 'tool_use')
-    .map((block, index): ClaudeCodeToolUse => ({
-      id: block.id ?? `tool-${String(index)}`,
-      tool: block.name ?? 'unknown',
-      input: block.input,
-    }));
+    .map((block, index): ClaudeCodeToolUse => {
+      return {
+        id: block.id ?? `tool-${String(index)}`,
+        tool: block.name ?? 'unknown',
+        input: block.input,
+      };
+    });
   return uses.length === 0 ? { kind: 'other' } : { kind: 'tool-use', uses };
 }
 
@@ -221,7 +223,9 @@ function toolResultFrom(json: unknown): ClaudeCodeEvent {
   }
   const results = content
     .filter((block) => block.type === 'tool_result' && block.tool_use_id !== undefined)
-    .map((block) => ({ id: block.tool_use_id ?? '', isError: block.is_error === true }));
+    .map((block) => {
+      return { id: block.tool_use_id ?? '', isError: block.is_error === true };
+    });
   return results.length === 0 ? { kind: 'other' } : { kind: 'tool-result', results };
 }
 

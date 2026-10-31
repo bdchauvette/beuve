@@ -112,10 +112,12 @@ async function canonicalRoot(root: string): Promise<Result<string, GitError>> {
       await mkdir(root, { recursive: true, mode: 0o700 });
       return realpath(root);
     })(),
-    (cause): GitError => ({
-      kind: 'invalid-argument',
-      argument: root,
-      reason: errorFrom(cause).message,
-    }),
+    (cause): GitError => {
+      return {
+        kind: 'invalid-argument',
+        argument: root,
+        reason: errorFrom(cause).message,
+      };
+    },
   );
 }

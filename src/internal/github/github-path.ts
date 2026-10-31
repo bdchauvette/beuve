@@ -7,9 +7,7 @@ export function githubPath(
   strings: TemplateStringsArray,
   ...values: readonly (string | number)[]
 ): string {
-  return strings.reduce(
-    (path, text, index) =>
-      path + text + (index < values.length ? encodeURIComponent(String(values[index])) : ''),
-    '',
-  );
+  return strings.reduce((path, text, index) => {
+    return path + text + (index < values.length ? encodeURIComponent(String(values[index])) : '');
+  }, '');
 }

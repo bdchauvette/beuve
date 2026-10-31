@@ -31,7 +31,11 @@ export class ObjectReaderPool implements AsyncDisposable {
 
   /** Each root's reader statistics, for tests and diagnostics. */
   get stats(): ReadonlyMap<string, ObjectReaderStats> {
-    return new Map(Array.from(this.#readers, ([root, reader]) => [root, reader.stats]));
+    return new Map(
+      Array.from(this.#readers, ([root, reader]) => {
+        return [root, reader.stats];
+      }),
+    );
   }
 
   /** The reader for `root`, started lazily; `undefined` once the pool is disposed. */

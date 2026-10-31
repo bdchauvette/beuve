@@ -14,8 +14,9 @@ describe('readBlobs', () => {
     repo.write('image.bin', new Uint8Array([0x89, 0x50, 0x00, 0x01, 0x0a]));
     repo.write('big.txt', 'x'.repeat(200));
     const commit = await repo.commit('files');
-    const blob = async (file: string): Promise<string> =>
-      await repo.git('rev-parse', `${commit}:${file}`);
+    const blob = async (file: string): Promise<string> => {
+      return await repo.git('rev-parse', `${commit}:${file}`);
+    };
     const tree = await repo.git('show', '--no-patch', '--format=%T', commit);
     const missing = 'f'.repeat(40);
 
@@ -57,9 +58,9 @@ describe('readBlobs', () => {
   });
 
   test('reads many blobs in one pass, byte-exact', async ({ expect, repo, repository: git }) => {
-    const texts = Array.from({ length: 300 }, (_, index) =>
-      `line ${String(index)}\n`.repeat(index),
-    );
+    const texts = Array.from({ length: 300 }, (_, index) => {
+      return `line ${String(index)}\n`.repeat(index);
+    });
     for (const [index, text] of texts.entries()) {
       repo.write(`f${String(index)}.txt`, text);
     }
@@ -68,7 +69,9 @@ describe('readBlobs', () => {
     const ids = listing.split('\n').map((row) => row.split(' ') as [string, string]);
     const result = await readBlobs(
       git,
-      ids.map(([objectId]) => ({ objectId })),
+      ids.map(([objectId]) => {
+        return { objectId };
+      }),
     );
     expect(result.ok).toBe(true);
     for (const [objectId, file] of ids) {

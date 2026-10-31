@@ -112,16 +112,22 @@ class ControlFlowBuilder {
   private finish(name: string, functionNode: FlowSyntaxNode): ControlFlowGraph {
     const reachable = this.reachableFromEntry();
     const kept = this.drafts.filter((draft) => reachable.has(draft.id) || draft.id === this.exitId);
-    const renumbered = new Map(kept.map((draft, index) => [draft.id, index]));
-    const nodes: FlowGraphNode[] = kept.map((draft, index) => ({
-      id: index,
-      kind: draft.kind,
-      label:
-        draft.statements > 1 ? `${draft.label} (+${String(draft.statements - 1)})` : draft.label,
-      startLine: draft.startLine,
-      endLine: draft.endLine,
-      changed: this.touchesChange(draft),
-    }));
+    const renumbered = new Map(
+      kept.map((draft, index) => {
+        return [draft.id, index];
+      }),
+    );
+    const nodes: FlowGraphNode[] = kept.map((draft, index) => {
+      return {
+        id: index,
+        kind: draft.kind,
+        label:
+          draft.statements > 1 ? `${draft.label} (+${String(draft.statements - 1)})` : draft.label,
+        startLine: draft.startLine,
+        endLine: draft.endLine,
+        changed: this.touchesChange(draft),
+      };
+    });
     const edges: FlowGraphEdge[] = [];
     for (const edge of this.edges) {
       const from = renumbered.get(edge.from);
@@ -499,9 +505,9 @@ class ControlFlowBuilder {
     for (const source of sources) {
       this.addEdge(source, scope.finallyId, 'finally');
     }
-    const isKnown = scope.abrupt.some(
-      (other) => other.kind === request.kind && other.label === request.label,
-    );
+    const isKnown = scope.abrupt.some((other) => {
+      return other.kind === request.kind && other.label === request.label;
+    });
     if (!isKnown) {
       scope.abrupt.push(request);
     }
@@ -521,7 +527,11 @@ class ControlFlowBuilder {
       if (!isNamed && scope.kind === 'label') {
         return false;
       }
-      scope.breaks.push(...sources.map((from): Pending => ({ from, kind: 'break' })));
+      scope.breaks.push(
+        ...sources.map((from): Pending => {
+          return { from, kind: 'break' };
+        }),
+      );
       return true;
     }
     if (request.kind === 'continue' && scope.continueTo !== undefined) {

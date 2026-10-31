@@ -9,9 +9,9 @@ import type { ChatPart } from './chat-message.ts';
 export function streamedPartsFrom(parts: readonly ChatPart[]): StreamedParts {
   const highest = Math.max(0, ...parts.map((part) => Number(part.id.slice(1)) || 0));
   const tools = Object.fromEntries(
-    parts.flatMap((part) =>
-      part.kind === 'tool-call' && part.state === 'running' ? [[part.id, part.id]] : [],
-    ),
+    parts.flatMap((part) => {
+      return part.kind === 'tool-call' && part.state === 'running' ? [[part.id, part.id]] : [];
+    }),
   );
   return { parts, nextId: highest + 1, tools };
 }

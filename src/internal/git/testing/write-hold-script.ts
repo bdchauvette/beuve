@@ -49,8 +49,9 @@ export function writeHoldScript(
   chmodSync(command, 0o755);
   return {
     command,
-    terminations: (): readonly string[] =>
-      existsSync(marker) ? readFileSync(marker, 'utf8').trim().split('\n') : [],
+    terminations: (): readonly string[] => {
+      return existsSync(marker) ? readFileSync(marker, 'utf8').trim().split('\n') : [];
+    },
   };
 }
 

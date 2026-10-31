@@ -115,8 +115,9 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     functionText: method(Function.prototype, 'toString') as Text,
     symbolText: method(Symbol.prototype, 'toString') as Text,
   };
-  const call = <T>(method: ((this: unknown) => T) | undefined, target: unknown): T | undefined =>
-    method === undefined ? undefined : Reflect.apply(method, target, []);
+  const call = <T>(method: ((this: unknown) => T) | undefined, target: unknown): T | undefined => {
+    return method === undefined ? undefined : Reflect.apply(method, target, []);
+  };
   /** A foreign Date as an ISO instant with milliseconds, through Temporal (ADR 0059). */
   const isoFromDate = (value: unknown): string | undefined => {
     const instant = call(intrinsics.instantFromDate, value);
@@ -133,8 +134,9 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     }
   };
 
-  const clip = (text: string, length: number): string =>
-    text.length <= length ? text : `${text.slice(0, Math.max(0, length - 1))}…`;
+  const clip = (text: string, length: number): string => {
+    return text.length <= length ? text : `${text.slice(0, Math.max(0, length - 1))}…`;
+  };
   const quote = (text: string): string => JSON.stringify(clip(text, limits.maxStringLength));
   const dataValue = (target: object, key: PropertyKey): { value: unknown } | undefined => {
     const descriptor = Object.getOwnPropertyDescriptor(target, key);
@@ -316,8 +318,9 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       }
     }
   };
-  const typeName = (type: 'array' | 'map' | 'set'): string =>
-    ({ array: 'Array', map: 'Map', set: 'Set' })[type];
+  const typeName = (type: 'array' | 'map' | 'set'): string => {
+    return { array: 'Array', map: 'Map', set: 'Set' }[type];
+  };
   const containerSize = (target: object, type: 'array' | 'map' | 'set' | 'object'): number => {
     switch (type) {
       case 'array': {
@@ -335,10 +338,11 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       }
     }
   };
-  const enumerableKeys = (target: object): PropertyKey[] =>
-    Reflect.ownKeys(target).filter(
-      (key) => Object.getOwnPropertyDescriptor(target, key)?.enumerable === true,
-    );
+  const enumerableKeys = (target: object): PropertyKey[] => {
+    return Reflect.ownKeys(target).filter((key) => {
+      return Object.getOwnPropertyDescriptor(target, key)?.enumerable === true;
+    });
+  };
   const property = (target: object, key: PropertyKey, depth: number, seen: Set<object>): string => {
     const descriptor = Object.getOwnPropertyDescriptor(target, key);
     if (descriptor === undefined) {

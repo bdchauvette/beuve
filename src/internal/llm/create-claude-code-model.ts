@@ -86,10 +86,14 @@ export function createClaudeCodeModel(options: ClaudeCodeModelOptions = {}): Lan
   };
   return {
     capabilities,
-    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
-      runStructured(request, options),
-    runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
-      runText(request, options),
+    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> => {
+      return runStructured(request, options);
+    },
+    runText: async (
+      request: TextModelRequest,
+    ): Promise<Result<ModelOutput<string>, ModelError>> => {
+      return runText(request, options);
+    },
   };
 }
 
@@ -174,7 +178,9 @@ async function runClaudeCode(
   options.logger?.debug('claude-code: starting', {
     command,
     cwd: request.cwd,
-    promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
+    promptChars: request.messages.reduce((sum, message) => {
+      return sum + message.content.length;
+    }, 0),
     systemChars: request.system.length,
   });
 

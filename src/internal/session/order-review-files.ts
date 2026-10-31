@@ -44,13 +44,12 @@ export function orderReviewFiles(
 ): readonly OrderedGroup[] {
   const primary = files.filter((file) => file.mechanical === undefined).map((file) => file.path);
   const mechanical = files
-    .filter(
-      (file): file is OrderableFile & { readonly mechanical: MechanicalReason } =>
-        file.mechanical !== undefined,
-    )
-    .toSorted(
-      (a, b) => reasonRank[a.mechanical] - reasonRank[b.mechanical] || comparePaths(a.path, b.path),
-    );
+    .filter((file): file is OrderableFile & { readonly mechanical: MechanicalReason } => {
+      return file.mechanical !== undefined;
+    })
+    .toSorted((a, b) => {
+      return reasonRank[a.mechanical] - reasonRank[b.mechanical] || comparePaths(a.path, b.path);
+    });
   const groups: OrderedGroup[] = [];
   if (primary.length > 0) {
     groups.push({
@@ -73,7 +72,11 @@ export function orderReviewFiles(
 function dependenciesFirst(paths: readonly string[], edges: readonly DependencyEdge[]): string[] {
   const sorted = paths.toSorted(comparePaths);
   const members = new Set(sorted);
-  const dependenciesOf = new Map<string, string[]>(sorted.map((path) => [path, []]));
+  const dependenciesOf = new Map<string, string[]>(
+    sorted.map((path) => {
+      return [path, []];
+    }),
+  );
   for (const { dependent, dependency } of edges) {
     if (dependent !== dependency && members.has(dependent) && members.has(dependency)) {
       dependenciesOf.get(dependent)?.push(dependency);

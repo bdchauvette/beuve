@@ -10,8 +10,8 @@ export function summarizeCiStatus(checks: readonly CiCheck[]): CiRollup {
   for (const check of checks) {
     counts[check.bucket] += 1;
   }
-  const overall = (['failure', 'pending', 'success', 'neutral'] as const).find(
-    (bucket) => counts[bucket] > 0,
-  );
+  const overall = (['failure', 'pending', 'success', 'neutral'] as const).find((bucket) => {
+    return counts[bucket] > 0;
+  });
   return { overall: overall ?? 'none', counts };
 }

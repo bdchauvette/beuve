@@ -25,8 +25,14 @@ export function listFileMarks(
   const marks: FileMark[] = [];
   for (const row of rows) {
     const { path, diff_id: diffId, head_sha: headSha, marked_at: markedAt } = row;
-    const corrupt = (reason: string): Result<FileMark[], CorruptRow> =>
-      err({ kind: 'corrupt-row', table: 'file_marks', id: `${sessionId}/${String(path)}`, reason });
+    const corrupt = (reason: string): Result<FileMark[], CorruptRow> => {
+      return err({
+        kind: 'corrupt-row',
+        table: 'file_marks',
+        id: `${sessionId}/${String(path)}`,
+        reason,
+      });
+    };
     if (typeof path !== 'string' || path === '') {
       return corrupt('path is not a non-empty string');
     }

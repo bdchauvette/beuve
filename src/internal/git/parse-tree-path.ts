@@ -26,7 +26,9 @@ export function parseTreePath(text: string): TreePath | undefined {
     return undefined;
   }
   const segments = text.split('/');
-  return segments.every((segment) => !['', '.', '..'].includes(segment))
+  return segments.every((segment) => {
+    return !['', '.', '..'].includes(segment);
+  })
     ? (text as TreePath)
     : undefined;
 }

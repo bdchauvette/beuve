@@ -48,16 +48,19 @@ export async function findPullRequestStack<E>(
         query: { state: 'open', per_page: 100, ...query },
         ...(signal !== undefined && { signal }),
       },
-      (body) => decodeWith(pageSchema, body),
+      (body) => {
+        return decodeWith(pageSchema, body);
+      },
       3,
     );
     return pages.ok
       ? ok(
-          pages.value.items.filter(
-            (candidate) =>
+          pages.value.items.filter((candidate) => {
+            return (
               candidate.number !== pullRequest.number &&
-              candidate.head.repository?.fullName === repository.fullName,
-          ),
+              candidate.head.repository?.fullName === repository.fullName
+            );
+          }),
         )
       : pages;
   };

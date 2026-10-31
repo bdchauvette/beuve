@@ -12,12 +12,17 @@ const maxChars = 80;
 export function describeToolUse(tool: string, input: unknown, cwd?: string): string {
   const fields =
     typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
-  const text = (key: string): string | undefined =>
-    typeof fields[key] === 'string' ? fields[key] : undefined;
-  const count = (key: string): number | undefined =>
-    typeof fields[key] === 'number' && Number.isSafeInteger(fields[key]) ? fields[key] : undefined;
-  const shown = (file: string | undefined): string =>
-    file === undefined ? '' : cwd === undefined ? file : relativeTo(cwd, file);
+  const text = (key: string): string | undefined => {
+    return typeof fields[key] === 'string' ? fields[key] : undefined;
+  };
+  const count = (key: string): number | undefined => {
+    return typeof fields[key] === 'number' && Number.isSafeInteger(fields[key])
+      ? fields[key]
+      : undefined;
+  };
+  const shown = (file: string | undefined): string => {
+    return file === undefined ? '' : cwd === undefined ? file : relativeTo(cwd, file);
+  };
   let description: string;
   switch (tool.toLowerCase()) {
     case 'read':

@@ -22,8 +22,9 @@ export function parseSuggestedPatch(
   text: string,
   anchor: UraAnchor,
 ): Result<SuggestedPatch, PatchError> {
-  const invalid = (reason: string): Result<SuggestedPatch, PatchError> =>
-    err({ kind: 'invalid-patch', reason });
+  const invalid = (reason: string): Result<SuggestedPatch, PatchError> => {
+    return err({ kind: 'invalid-patch', reason });
+  };
   if (anchor.kind === 'change') {
     return invalid('a patch needs a file or line anchor');
   }
@@ -175,10 +176,11 @@ function checkPlacement(hunks: readonly PatchHunk[], anchor: UraAnchor): string 
   if (anchor.kind !== 'lines') {
     return undefined;
   }
-  const isInside = (region: ChangeRegion): boolean =>
-    region.removed === 0
+  const isInside = (region: ChangeRegion): boolean => {
+    return region.removed === 0
       ? region.before >= anchor.startLine - 1 && region.before <= anchor.endLine
       : region.before + 1 >= anchor.startLine && region.before + region.removed <= anchor.endLine;
+  };
   return regions.every((region) => isInside(region))
     ? undefined
     : `the patch changes lines outside ${String(anchor.startLine)}–${String(anchor.endLine)}`;

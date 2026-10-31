@@ -82,8 +82,10 @@ const deniedTools = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSe
  * auth, but it drops Grep and Glob, so the credential is checked from the init event instead.)
  */
 const lockdownArgs: Record<string, null> = Object.fromEntries(
-  // eslint-disable-next-line unicorn/no-null -- the SDK passes a flag without a value as null.
-  ['safe-mode', 'restricted', 'disable-slash-commands'].map((flag) => [flag, null]),
+  ['safe-mode', 'restricted', 'disable-slash-commands'].map((flag) => {
+    // eslint-disable-next-line unicorn/no-null -- the SDK passes a flag without a value as null.
+    return [flag, null];
+  }),
 );
 
 /**
@@ -106,10 +108,14 @@ export function createAgentSdkModel(options: AgentSdkModelOptions): LanguageMode
   };
   return {
     capabilities,
-    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> =>
-      runStructured(request, options),
-    runText: async (request: TextModelRequest): Promise<Result<ModelOutput<string>, ModelError>> =>
-      runText(request, options),
+    run: async <T>(request: ModelRequest<T>): Promise<Result<ModelOutput<T>, ModelError>> => {
+      return runStructured(request, options);
+    },
+    runText: async (
+      request: TextModelRequest,
+    ): Promise<Result<ModelOutput<string>, ModelError>> => {
+      return runText(request, options);
+    },
   };
 }
 
@@ -193,7 +199,9 @@ async function runAgent(
   options.logger?.debug('agent-sdk: starting', {
     cwd: request.cwd,
     model: request.model ?? options.model ?? defaultModel,
-    promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
+    promptChars: request.messages.reduce((sum, message) => {
+      return sum + message.content.length;
+    }, 0),
     systemChars: request.system.length,
   });
   const run = await execute({ ...request, cwd }, options, mode, configDir.path);

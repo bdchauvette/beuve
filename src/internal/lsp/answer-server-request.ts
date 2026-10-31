@@ -56,14 +56,14 @@ function configurationItems(params: unknown): (string | undefined)[] {
   }
   const { items } = params;
   return Array.isArray(items)
-    ? items.map((item: unknown) =>
-        typeof item === 'object' &&
-        item !== null &&
-        'section' in item &&
-        typeof item.section === 'string'
+    ? items.map((item: unknown) => {
+        return typeof item === 'object' &&
+          item !== null &&
+          'section' in item &&
+          typeof item.section === 'string'
           ? item.section
-          : undefined,
-      )
+          : undefined;
+      })
     : [];
 }
 

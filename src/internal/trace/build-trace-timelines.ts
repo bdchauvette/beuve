@@ -31,7 +31,9 @@ export function buildTraceTimelines(
     const file = record.test?.file ?? '';
     const titles = record.test?.titles ?? [];
     const key = keyOf(file, titles);
-    const group = groups.getOrInsertComputed(key, () => ({ file, titles, events: [], dropped: 0 }));
+    const group = groups.getOrInsertComputed(key, () => {
+      return { file, titles, events: [], dropped: 0 };
+    });
     group.events.push(...record.events);
     group.dropped += record.dropped;
   }
@@ -74,8 +76,9 @@ function keyOf(file: string, titles: readonly string[]): string {
 function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]): TraceEntry[] {
   const frames = new Map<number, Frame>();
   const entries: TraceEntry[] = [];
-  const probeOf = (id: number | undefined): Probe | undefined =>
-    id === undefined ? undefined : plan.probes[id];
+  const probeOf = (id: number | undefined): Probe | undefined => {
+    return id === undefined ? undefined : plan.probes[id];
+  };
   const ordered = events.toSorted((left, right) => left.seq - right.seq);
   for (const event of ordered) {
     if (event.kind === 'enter') {
@@ -87,7 +90,9 @@ function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]
       const frame = { fn: probe.fn, depth: parent === undefined ? 0 : parent.depth + 1 };
       frames.set(event.frame, frame);
       const names = probe.parameters ?? [];
-      const args = event.args.map((value, index) => ({ name: names[index] ?? '?', value }));
+      const args = event.args.map((value, index) => {
+        return { name: names[index] ?? '?', value };
+      });
       entries.push({ ...base(event.seq, probe, frame), kind: 'enter', args });
       continue;
     }

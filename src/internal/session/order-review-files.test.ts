@@ -81,10 +81,9 @@ describe('orderReviewFiles', () => {
   });
 
   test('walks a long chain without recursing', ({ expect }) => {
-    const names = Array.from(
-      { length: 20_000 },
-      (_, index) => `f${String(index).padStart(5, '0')}.ts`,
-    );
+    const names = Array.from({ length: 20_000 }, (_, index) => {
+      return `f${String(index).padStart(5, '0')}.ts`;
+    });
     const chain = names.slice(1).map((name, index) => edge(names[index] ?? '', name));
     const [changes] = orderReviewFiles(
       names.map((name) => file(name)),

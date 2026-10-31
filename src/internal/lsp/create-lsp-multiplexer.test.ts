@@ -117,9 +117,11 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
       { start: { line: 3, character: 9 }, end: { line: 3, character: 10 } },
     ]);
     const fromB = okValueFrom(await lsp.outgoingCalls(requireNode(fromA[0]?.node).id));
-    expect(fromB.map((call) => [call.node.name, call.node.file])).toStrictEqual([
-      ['c', { kind: 'workspace', path: 'src/c.ts' }],
-    ]);
+    expect(
+      fromB.map((call) => {
+        return [call.node.name, call.node.file];
+      }),
+    ).toStrictEqual([['c', { kind: 'workspace', path: 'src/c.ts' }]]);
   });
 
   test('keeps UTF-16 columns exact after astral characters in a CRLF file', async ({
@@ -213,7 +215,9 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
       [{ root: 'relative/root', path: 'a.ts' }, 'invalid-root'],
     ] as const;
     const kinds = await Promise.all(
-      cases.map(async ([request]) => errorKindOf(await lsp.getDiagnostics(request))),
+      cases.map(async ([request]) => {
+        return errorKindOf(await lsp.getDiagnostics(request));
+      }),
     );
     expect(kinds).toStrictEqual(cases.map(([, kind]) => kind));
     await expect(lsp.incomingCalls('no-such-node')).resolves.toStrictEqual({
@@ -230,9 +234,9 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     const [running] = lsp.status();
     expect(running).toMatchObject({ state: 'running', restarts: 0 });
     process.kill(requirePid(running?.pid), 'SIGKILL');
-    await waitUntil('the crashed server to be noticed', () =>
-      lsp.status().every((status) => status.state !== 'running'),
-    );
+    await waitUntil('the crashed server to be noticed', () => {
+      return lsp.status().every((status) => status.state !== 'running');
+    });
     const report = okValueFrom(await lsp.getDiagnostics({ root: project.root, path: 'src/a.ts' }));
     expect(report.diagnostics).toStrictEqual([]);
     expect(lsp.status()).toMatchObject([{ state: 'running', restarts: 1 }]);
@@ -305,10 +309,9 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     const request = { root: project.root, path: 'src/a.ts' };
     okValueFrom(await lsp.getDiagnostics(request));
     const pid = requirePid(lsp.status()[0]?.pid);
-    await waitUntil(
-      'the idle server to stop',
-      async () => lsp.status().length === 0 && !(await isAlive(pid)),
-    );
+    await waitUntil('the idle server to stop', async () => {
+      return lsp.status().length === 0 && !(await isAlive(pid));
+    });
     okValueFrom(await lsp.getDiagnostics(request));
     expect(lsp.status()).toMatchObject([{ state: 'running', restarts: 0 }]);
   });
@@ -424,5 +427,7 @@ async function waitUntil(
   description: string,
   isSatisfied: () => boolean | Promise<boolean>,
 ): Promise<void> {
-  await pollUntil(description, async () => ((await isSatisfied()) ? true : undefined));
+  await pollUntil(description, async () => {
+    return (await isSatisfied()) ? true : undefined;
+  });
 }

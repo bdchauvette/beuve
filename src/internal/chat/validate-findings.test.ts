@@ -48,7 +48,11 @@ describe('validateFindings', () => {
       input,
       limits(),
     );
-    expect(result.findings.map((kept) => [kept.path, kept.startLine, kept.title])).toStrictEqual([
+    expect(
+      result.findings.map((kept) => {
+        return [kept.path, kept.startLine, kept.title];
+      }),
+    ).toStrictEqual([
       ['src/a.ts', 12, 'Empty input'],
       ['src/b.ts', 2, 'Dot slash'],
       ['src/b.ts', 3, 'Absolute'],

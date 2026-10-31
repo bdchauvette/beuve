@@ -20,7 +20,11 @@ describe('listRangeCommits', () => {
     const listed = await listRangeCommits(git, { base, head: second });
     expect(listed).toMatchObject({ ok: true, value: { truncated: false } });
     const commits = listed.ok ? listed.value.commits : [];
-    expect(commits.map(({ sha, parent, subject }) => [sha, parent, subject])).toStrictEqual([
+    expect(
+      commits.map(({ sha, parent, subject }) => {
+        return [sha, parent, subject];
+      }),
+    ).toStrictEqual([
       [first, base, 'diff --git looks like a header: 1:  abc = 2: def'],
       [empty, first, 'nothing'],
       [second, empty, 'add b'],

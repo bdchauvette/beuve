@@ -28,8 +28,9 @@ type Row = Record<string, SQLOutputValue>;
  * `corrupt-row` error rather than a cast.
  */
 export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
-  const corrupt = (reason: string): Result<UraItem, CorruptRow> =>
-    err({ kind: 'corrupt-row', table: 'ura_items', id: String(row['id']), reason });
+  const corrupt = (reason: string): Result<UraItem, CorruptRow> => {
+    return err({ kind: 'corrupt-row', table: 'ura_items', id: String(row['id']), reason });
+  };
   const { id, session_id, head_sha, severity, title, body, patch, created_at, updated_at } = row;
   if (!isUuid(id) || !isUuid(session_id)) {
     return corrupt('id or session_id is not a UUID');

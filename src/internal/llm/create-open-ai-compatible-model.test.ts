@@ -64,11 +64,11 @@ describe('createOpenAiCompatibleModel', () => {
       deniedToolUses: 0,
       usage: { inputTokens: 10, outputTokens: 4, cacheReadInputTokens: 2 },
     });
-    expect(text.map((event) => (event.kind === 'append' ? event.text : '|'))).toStrictEqual([
-      'It ',
-      'adds a ',
-      'parser.',
-    ]);
+    expect(
+      text.map((event) => {
+        return event.kind === 'append' ? event.text : '|';
+      }),
+    ).toStrictEqual(['It ', 'adds a ', 'parser.']);
     expect(progress).toStrictEqual([
       { kind: 'started', model: 'qwen-test' },
       { kind: 'thinking' },

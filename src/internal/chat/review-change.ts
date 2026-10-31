@@ -94,7 +94,9 @@ export async function reviewChange<E>(
     timeout,
     ...(deps.signal !== undefined && { signal: deps.signal }),
     ...(deps.effort !== undefined && { effort: deps.effort }),
-    onProgress: (progress) => deps.onProgress?.({ kind: 'model', pass: 'review', progress }),
+    onProgress: (progress) => {
+      return deps.onProgress?.({ kind: 'model', pass: 'review', progress });
+    },
   });
   if (!output.ok) {
     return err({ kind: 'model', error: output.error });
@@ -129,7 +131,9 @@ export async function reviewChange<E>(
       model: deps.verifier,
       effort: deps.verifierEffort ?? 'low',
       timeout: remaining,
-      onProgress: (progress) => deps.onProgress?.({ kind: 'model', pass: 'verify', progress }),
+      onProgress: (progress) => {
+        return deps.onProgress?.({ kind: 'model', pass: 'verify', progress });
+      },
       ...(deps.signal !== undefined && { signal: deps.signal }),
     },
   );
@@ -160,7 +164,9 @@ const emptyDrops: ChatReview['dropped'] = {
 };
 
 function unchecked(findings: readonly ModelFinding[]): ChatFinding[] {
-  return findings.map((finding) => ({ ...finding, check: 'unchecked' }));
+  return findings.map((finding) => {
+    return { ...finding, check: 'unchecked' };
+  });
 }
 
 function applyVerdicts(
@@ -186,12 +192,13 @@ function assemble(
   const review: ChatReview = { findings, dropped, pathScope, fileCount, verification };
   const citations: Citation[] = [];
   for (const finding of findings) {
-    const isCited = citations.some(
-      (citation) =>
+    const isCited = citations.some((citation) => {
+      return (
         citation.path === finding.path &&
         citation.startLine === finding.startLine &&
-        citation.endLine === finding.endLine,
-    );
+        citation.endLine === finding.endLine
+      );
+    });
     if (!isCited) {
       citations.push({
         path: finding.path,

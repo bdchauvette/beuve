@@ -90,10 +90,12 @@ describe('compactConversation', () => {
 
   test('drops the oldest turns past the budget and says so', async ({ expect, signal }) => {
     const seen: ChatModelRequest[] = [];
-    const turns = Array.from({ length: 6 }, (_, index) => ({
-      role: 'user' as const,
-      content: `question ${String(index)} ${'x'.repeat(400)}`,
-    }));
+    const turns = Array.from({ length: 6 }, (_, index) => {
+      return {
+        role: 'user' as const,
+        content: `question ${String(index)} ${'x'.repeat(400)}`,
+      };
+    });
     const result = await compactConversation(compaction({ turns }), {
       model: fakeModel(ok('**Asked**\n- things'), seen),
       budget: { maxTurnsChars: 1000, maxTurnChars: 500, maxSummaryChars: 100, maxListedFiles: 1 },

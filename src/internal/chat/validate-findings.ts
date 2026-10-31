@@ -90,22 +90,24 @@ export function validateFindings(
     });
   }
 
-  const ranked = candidates.toSorted(
-    (a, b) =>
+  const ranked = candidates.toSorted((a, b) => {
+    return (
       severityRank(b.finding.severity) - severityRank(a.finding.severity) ||
       b.finding.confidence - a.finding.confidence ||
-      a.index - b.index,
-  );
+      a.index - b.index
+    );
+  });
   const kept = ranked.slice(0, Math.max(0, limits.maxFindings));
   drops.overLimit = ranked.length - kept.length;
   const findings = kept
-    .toSorted(
-      (a, b) =>
+    .toSorted((a, b) => {
+      return (
         a.order - b.order ||
         a.finding.startLine - b.finding.startLine ||
         a.finding.endLine - b.finding.endLine ||
-        a.index - b.index,
-    )
+        a.index - b.index
+      );
+    })
     .map((candidate) => candidate.finding);
   return { findings, dropped: drops, clamped };
 }

@@ -28,9 +28,9 @@ describe('convertCharacter', () => {
     for (const from of encodings()) {
       for (const to of encodings()) {
         const expected = boundaries()[to];
-        const actual = boundaries()[from].map((column) =>
-          convertCharacter(line(), column, from, to),
-        );
+        const actual = boundaries()[from].map((column) => {
+          return convertCharacter(line(), column, from, to);
+        });
         expect(actual, `${from} -> ${to}`).toStrictEqual(expected);
       }
     }

@@ -80,7 +80,9 @@ export async function startFakeOpenAiApi(options: FakeOpenAiOptions = {}): Promi
         response.end(
           JSON.stringify({
             object: 'list',
-            data: options.models.map((id) => ({ id, object: 'model' })),
+            data: options.models.map((id) => {
+              return { id, object: 'model' };
+            }),
           }),
         );
         return;

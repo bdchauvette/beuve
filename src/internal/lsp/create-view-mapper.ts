@@ -51,54 +51,67 @@ const severities: Readonly<Record<number, DiagnosticSeverity>> = {
  * the root and not open) are passed through unconverted.
  */
 export function createViewMapper(context: ViewMapperContext): ViewMapper {
-  const range = (uri: string, value: LspRange): Range =>
-    convertRange(
+  const range = (uri: string, value: LspRange): Range => {
+    return convertRange(
       value,
       context.lines(normalizeUri(uri)),
       context.encoding,
       positionEncodings.utf16,
     );
+  };
 
-  const location = (value: LspLocation): LocationView => ({
-    file: fileReferenceFrom(context.root, value.uri),
-    range: range(value.uri, value.range),
-  });
+  const location = (value: LspLocation): LocationView => {
+    return {
+      file: fileReferenceFrom(context.root, value.uri),
+      range: range(value.uri, value.range),
+    };
+  };
 
-  const symbol = (uri: string, value: LspDocumentSymbol): DocumentSymbolView => ({
-    name: value.name,
-    kind: symbolKindName(value.kind),
-    detail: value.detail,
-    range: range(uri, value.range),
-    selectionRange: range(uri, value.selectionRange),
-    children: (value.children ?? []).map((child) => symbol(uri, child)),
-  });
+  const symbol = (uri: string, value: LspDocumentSymbol): DocumentSymbolView => {
+    return {
+      name: value.name,
+      kind: symbolKindName(value.kind),
+      detail: value.detail,
+      range: range(uri, value.range),
+      selectionRange: range(uri, value.selectionRange),
+      children: (value.children ?? []).map((child) => symbol(uri, child)),
+    };
+  };
 
   return {
     range,
     location,
-    diagnostic: (uri, value): DiagnosticView => ({
-      range: range(uri, value.range),
-      severity: value.severity === undefined ? undefined : severities[value.severity],
-      code: value.code === undefined ? undefined : String(value.code),
-      source: value.source,
-      message: value.message,
-      tags: (value.tags ?? [])
-        .filter((tag) => tag === 1 || tag === 2)
-        .map((tag) => (tag === 1 ? 'unnecessary' : 'deprecated')),
-      related: (value.relatedInformation ?? []).map((related) => ({
-        location: location(related.location),
-        message: related.message,
-      })),
-    }),
-    node: (id, item): CallHierarchyNode => ({
-      id,
-      name: item.name,
-      kind: symbolKindName(item.kind),
-      detail: item.detail === '' ? undefined : item.detail,
-      file: fileReferenceFrom(context.root, item.uri),
-      range: range(item.uri, item.range),
-      selectionRange: range(item.uri, item.selectionRange),
-    }),
+    diagnostic: (uri, value): DiagnosticView => {
+      return {
+        range: range(uri, value.range),
+        severity: value.severity === undefined ? undefined : severities[value.severity],
+        code: value.code === undefined ? undefined : String(value.code),
+        source: value.source,
+        message: value.message,
+        tags: (value.tags ?? [])
+          .filter((tag) => tag === 1 || tag === 2)
+          .map((tag) => {
+            return tag === 1 ? 'unnecessary' : 'deprecated';
+          }),
+        related: (value.relatedInformation ?? []).map((related) => {
+          return {
+            location: location(related.location),
+            message: related.message,
+          };
+        }),
+      };
+    },
+    node: (id, item): CallHierarchyNode => {
+      return {
+        id,
+        name: item.name,
+        kind: symbolKindName(item.kind),
+        detail: item.detail === '' ? undefined : item.detail,
+        file: fileReferenceFrom(context.root, item.uri),
+        range: range(item.uri, item.range),
+        selectionRange: range(item.uri, item.selectionRange),
+      };
+    },
     symbol,
   };
 }

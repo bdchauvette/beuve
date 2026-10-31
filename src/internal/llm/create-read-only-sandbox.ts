@@ -259,18 +259,21 @@ export function createReadOnlySandbox(
       pattern: input.pattern,
       ignoreCase: input.ignore_case === true,
       ...(scopePath !== '' && { scope: scopePath }),
-      accept: (file) =>
-        files?.byPath.get(file)?.mode !== symlinkMode &&
-        (matcher === undefined || matcher.test(file) || matcher.test(path.posix.basename(file))),
+      accept: (file) => {
+        return (
+          files?.byPath.get(file)?.mode !== symlinkMode &&
+          (matcher === undefined || matcher.test(file) || matcher.test(path.posix.basename(file)))
+        );
+      },
       maxMatches: caps.maxMatches,
       maxLineChars,
     });
     if (found === undefined) {
       return { output: 'the grep call failed', denied: false };
     }
-    const lines = found.matches.map(
-      (match) => `${match.path}:${String(match.line)}: ${match.text}`,
-    );
+    const lines = found.matches.map((match) => {
+      return `${match.path}:${String(match.line)}: ${match.text}`;
+    });
     return {
       output:
         lines.length === 0
@@ -409,7 +412,11 @@ const definitions: readonly SandboxToolDefinition[] = [
 ];
 
 function listingFrom(files: readonly SandboxFile[]): Listing {
-  const byPath = new Map(files.map((file) => [file.path, file]));
+  const byPath = new Map(
+    files.map((file) => {
+      return [file.path, file];
+    }),
+  );
   const directories = new Set<string>(['']);
   for (const file of files) {
     for (

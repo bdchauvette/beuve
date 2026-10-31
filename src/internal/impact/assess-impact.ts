@@ -41,17 +41,18 @@ export function assessImpact(
   files: readonly MeasuredFile[],
   config: ImpactConfig = defaultImpactConfig,
 ): ImpactReport {
-  const population = files.flatMap((file) =>
-    file.status === 'measured'
+  const population = files.flatMap((file) => {
+    return file.status === 'measured'
       ? (file.head?.functions ?? []).map(({ metrics }) => metrics.cognitive)
-      : [],
-  );
+      : [];
+  });
   const rank = createPercentileRank(population);
   const assessed = files.map((file) => assessFile(file, rank, config));
   const findings = assessed.flatMap((assessment) => assessment.findings);
   const entries = assessed.flatMap((assessment) => assessment.entries);
-  const count = (...changes: FunctionImpact['change'][]): number =>
-    entries.filter((entry) => changes.includes(entry.change)).length;
+  const count = (...changes: FunctionImpact['change'][]): number => {
+    return entries.filter((entry) => changes.includes(entry.change)).length;
+  };
   return {
     cognitiveMax: config.cognitiveMax,
     population: population.length,
@@ -85,9 +86,12 @@ function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileA
   const head = file.head?.functions ?? [];
   const isHeadChanged = createLineMatcher(file.changedLines.head);
   const isBaseChanged = createLineMatcher(file.changedLines.base);
-  const isInDiff = (pair: FunctionPair): boolean =>
-    (pair.kind !== 'added' && isBaseChanged(pair.base.startLine, pair.base.endLine)) ||
-    (pair.kind !== 'removed' && isHeadChanged(pair.head.startLine, pair.head.endLine));
+  const isInDiff = (pair: FunctionPair): boolean => {
+    return (
+      (pair.kind !== 'added' && isBaseChanged(pair.base.startLine, pair.base.endLine)) ||
+      (pair.kind !== 'removed' && isHeadChanged(pair.head.startLine, pair.head.endLine))
+    );
+  };
   const entries = matchFunctions(base, head)
     .map((pair) => impactFrom(pair, isInDiff(pair), rank))
     .filter((entry) => entry.change !== 'unchanged' || entry.inDiff);

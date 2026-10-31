@@ -111,7 +111,9 @@ export function createFakeGithubApi(owner = 'octo-org', repo = 'hello-world'): F
     rejectCommentPaths: new Set(),
     reviews: [],
     log: [],
-    handle: (request) => handle(api, request),
+    handle: (request) => {
+      return handle(api, request);
+    },
     fetch: async (url, init): Promise<Response> => {
       await Promise.resolve();
       if (!url.startsWith(`${apiRoot}/`)) {
@@ -156,20 +158,26 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
     const listed = api.submittedReviews.get(pull.number) ?? [];
     return conditional(
       request,
-      listed.map((entry, index) => ({
-        id: index + 1,
-        user: { login: entry.reviewer },
-        state: entry.state,
-        commit_id: entry.commitSha,
-        submitted_at: entry.state === 'PENDING' ? jsonNull : entry.submittedAt,
-      })),
+      listed.map((entry, index) => {
+        return {
+          id: index + 1,
+          user: { login: entry.reviewer },
+          state: entry.state,
+          commit_id: entry.commitSha,
+          submitted_at: entry.state === 'PENDING' ? jsonNull : entry.submittedAt,
+        };
+      }),
     );
   }
   if (third === 'requested_reviewers' && pull !== undefined && request.method === 'GET') {
     const requested = api.requestedReviewers.get(pull.number) ?? { users: [], teams: [] };
     return conditional(request, {
-      users: requested.users.map((login) => ({ login })),
-      teams: requested.teams.map((slug) => ({ slug })),
+      users: requested.users.map((login) => {
+        return { login };
+      }),
+      teams: requested.teams.map((slug) => {
+        return { slug };
+      }),
     });
   }
   if (third === 'reviews' && pull !== undefined && request.method === 'POST') {
@@ -276,13 +284,15 @@ function githubPullFrom(api: FakeGithubApi, pull: FakePullRequest): Record<strin
 function statuses(checks: readonly FakeCheck[]): unknown[] {
   return checks
     .filter((check) => check.kind === 'status')
-    .map((check) => ({
-      context: check.name,
-      state: check.result,
-      target_url: jsonNull,
-      created_at: '2026-10-01T00:00:00Z',
-      updated_at: '2026-10-01T00:00:00Z',
-    }));
+    .map((check) => {
+      return {
+        context: check.name,
+        state: check.result,
+        target_url: jsonNull,
+        created_at: '2026-10-01T00:00:00Z',
+        updated_at: '2026-10-01T00:00:00Z',
+      };
+    });
 }
 
 function checkRuns(api: FakeGithubApi, checks: readonly FakeCheck[]): unknown[] {
@@ -304,9 +314,9 @@ function checkRuns(api: FakeGithubApi, checks: readonly FakeCheck[]): unknown[] 
 function conditional(request: FakeHttpRequest, value: unknown): FakeHttpResponse {
   const text = JSON.stringify(value);
   const etag = `"${createHash('sha256').update(text).digest('hex').slice(0, 16)}"`;
-  const match = Object.entries(request.headers).find(
-    ([name]) => name.toLowerCase() === 'if-none-match',
-  );
+  const match = Object.entries(request.headers).find(([name]) => {
+    return name.toLowerCase() === 'if-none-match';
+  });
   return match?.[1] === etag
     ? { status: 304, headers: { etag }, body: undefined }
     : { status: 200, headers: { 'content-type': 'application/json', etag }, body: text };

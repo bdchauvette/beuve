@@ -16,15 +16,17 @@ describe('recordUraPostings', () => {
     insertUraItem(db, second);
     expect(listUraPostings(db, testUraIds.sessionId)).toStrictEqual([]);
 
-    const posting = (itemId: UraPosting['itemId'], at: string): UraPosting => ({
-      itemId,
-      sessionId: testUraIds.sessionId,
-      target: 'github',
-      url: 'https://github.com/o/r/pull/1#pullrequestreview-1',
-      headSha: testUraIds.headSha,
-      placement: 'inline',
-      postedAt: at,
-    });
+    const posting = (itemId: UraPosting['itemId'], at: string): UraPosting => {
+      return {
+        itemId,
+        sessionId: testUraIds.sessionId,
+        target: 'github',
+        url: 'https://github.com/o/r/pull/1#pullrequestreview-1',
+        headSha: testUraIds.headSha,
+        placement: 'inline',
+        postedAt: at,
+      };
+    };
     recordUraPostings(db, [
       posting(first.id, '2026-10-28T12:00:00.000Z'),
       posting(second.id, '2026-10-28T12:00:00.000Z'),

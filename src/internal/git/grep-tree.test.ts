@@ -63,7 +63,13 @@ describe('grepTree', () => {
       await grepTree(
         repository,
         commit,
-        query({ accept: (file) => file.endsWith('.md'), maxLineChars: 10, signal }),
+        query({
+          accept: (file) => {
+            return file.endsWith('.md');
+          },
+          maxLineChars: 10,
+          signal,
+        }),
       ),
     );
     expect(markdown.matches).toStrictEqual([{ path: 'b.md', line: 1, text: 'needle xxx' }]);

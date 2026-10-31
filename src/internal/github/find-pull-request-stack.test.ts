@@ -66,7 +66,9 @@ describe('findPullRequestStack', () => {
 
   test('gives a pull request from a fork no children', async ({ expect, fakeGithub, signal }) => {
     const pullRequest = decode(githubFixtures.pullRequest);
-    const { client, requests } = fakeGithub(() => ({ status: 200, body: [] }));
+    const { client, requests } = fakeGithub(() => {
+      return { status: 200, body: [] };
+    });
     await expect(findPullRequestStack(client, pullRequest, signal)).resolves.toStrictEqual({
       ok: true,
       value: { parents: [], children: [] },

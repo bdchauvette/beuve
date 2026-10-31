@@ -67,7 +67,9 @@ function checkPath(path: string): string | undefined {
     return 'the path is empty or contains control characters';
   }
   const segments = path.split('/');
-  const hasBadSegment = segments.some((segment) => ['', '.', '..'].includes(segment));
+  const hasBadSegment = segments.some((segment) => {
+    return ['', '.', '..'].includes(segment);
+  });
   return hasBadSegment
     ? 'the path must be repository-relative, without empty, . or .. segments'
     : undefined;

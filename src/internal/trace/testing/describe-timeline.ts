@@ -2,9 +2,9 @@ import type { TraceEntry, TraceTimeline } from '../trace-timeline.ts';
 
 /** Renders a timeline as indented `line: step` strings so tests read the run. Test-only. */
 export function describeTimeline(timeline: TraceTimeline): string[] {
-  return timeline.entries.map(
-    (entry) => `${'  '.repeat(entry.depth)}${String(entry.line)}: ${describeEntry(entry)}`,
-  );
+  return timeline.entries.map((entry) => {
+    return `${'  '.repeat(entry.depth)}${String(entry.line)}: ${describeEntry(entry)}`;
+  });
 }
 
 function describeEntry(entry: TraceEntry): string {

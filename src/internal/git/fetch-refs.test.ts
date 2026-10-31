@@ -137,9 +137,9 @@ interface WithRemote {
 /** Lock files and temporary packs anywhere under `.git`. */
 async function leftovers(repo: TestRepository): Promise<readonly string[]> {
   const entries = await readdir(path.join(repo.directory, '.git'), { recursive: true });
-  return entries.filter(
-    (entry) => entry.endsWith('.lock') || path.basename(entry).startsWith('tmp_'),
-  );
+  return entries.filter((entry) => {
+    return entry.endsWith('.lock') || path.basename(entry).startsWith('tmp_');
+  });
 }
 
 async function withRemote(repositories: TestRepositories): Promise<WithRemote> {
