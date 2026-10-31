@@ -69,3 +69,8 @@ A checkout is now removed in the background when its last lease goes, not by the
 ## Amendment 2026-10-30 (ADR 0081)
 
 Probes, fork points and review diffs are shared between requests. A shared computation runs on a handle of its own, bound to no request's signal; a request that gives up stops waiting, and the computation is aborted only when no request waits for it, as for ImpactGate's shared runs. A lease on a checkout the manager made, still on disk, no longer runs `git worktree list`.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+- `GitObjectReader` joins the `read` row: every request on the shared `cat-file --batch-command` is a read, and an abort **abandons** the request (it answers `aborted` at once and its bytes are skipped) instead of stopping the shared process. The process is restarted (SIGTERM) only on a crash, a desync, a head-of-queue timeout or too many bytes owed to abandoned requests. `streamGit` (`git grep`) is a `read` too. `git-object-reader.ts` and `stream-git.ts` join `git-only-through-typed-operations`.
+- A chat request leases the session checkout only when one of its models reads a checkout (`ModelCapabilities.checkout`: the Claude Code CLI and the Agent SDK). OpenAI-compatible models, with or without tools, run on git objects and take no lease. The language servers, trace probes and the editor keep theirs.

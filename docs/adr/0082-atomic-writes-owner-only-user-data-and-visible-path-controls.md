@@ -90,3 +90,7 @@ Both now open once, with `O_NONBLOCK` so that a FIFO can't block the open, and c
   - Tooltips hold the raw path, which the browser lays out with its controls active.
   - Bidi controls inside file contents are still drawn as the code has them. Code is not a path, and the diff library renders it.
   - The rule only sees a check and an open within one function. `resolveWorkspaceFile` (realpath, then a containment check) followed by `readFile` in `create-lsp-multiplexer.ts`'s `readInsideRoot` still crosses two functions. It reads a checkout beuve made, which repository content can't change while beuve runs.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+The read-only sandbox no longer opens files at all: it reads git objects at the pinned head, so its `readCapped` and the check-then-open question are gone from it. The LSP multiplexer keeps the one-open fix.

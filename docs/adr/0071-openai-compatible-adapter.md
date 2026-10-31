@@ -25,3 +25,7 @@ Reviewers want to run a model on their own machine (Ollama, llama.cpp, vLLM, LM 
 - Without tools a model sees only what the prompt holds, and the budget of ADR 0070 keeps that small for a small context window. With tools, a weak model may loop; the turn cap and the per-call caps bound it.
 - The sandbox is code beuve owns (path confinement, caps, a fixed-string grep); it is deliberately smaller than Claude Code's tools, and a fixed-string grep finds less than a regular expression.
 - Prompt contents go wherever the base URL points. Loopback servers keep them on the machine; anything else is the user's choice, flagged in Settings.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+The sandbox no longer reads the worktree. `createReadOnlySandbox(tree)` serves `read_file`, `grep` and `glob` from git objects at the pinned head: the tree listing (`ls-tree -r`, cached per commit), blobs by object id on the warm `cat-file --batch-command`, and `git grep -F` on the commit. Symbolic links are followed lexically inside the tree (at most 8), and the filesystem is never touched, which closes the symlink-swap race of the TOCTOU audit (finding 4) by construction. The tool names, schemas and caps are unchanged except that the 20,000-entry walk cap is gone and a file over 16 MiB is not read. The model now sees only tracked files, raw content (LFS pointers, line endings as committed), case-sensitive paths and git's path order (so a capped answer can differ); ADR 0087 lists the differences. An OpenAI-compatible request takes no worktree lease.

@@ -32,3 +32,7 @@ beuve had one hard-wired model: main's `resolveLanguageModel` built the Claude C
 - Selections moved after the diff, so the diff message is identical across questions at one head; models that weigh the start of a prompt more may attend less to them. The question still names them.
 - The packaged app grows by the Claude Code binary for Bundled. Linux `out/linux-unpacked` (`du -sb`, this container): 312 MB without it, 606 MB with it (the binary is 294 MB); the macOS dmg grows by the darwin-arm64 binary, to be measured on the first signed build.
 - Settings writes `models` into `settings.json`; an older beuve ignores it. Removing an entry removes its key.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+`ModelCapabilities.checkout` says whether an adapter reads `cwd` itself: `true` for the Claude Code CLI and the Agent SDK, `false` for the OpenAI-compatible adapter. `BaseModelRequest.cwd` is optional, and `tree` carries the reviewed commit's files from git objects. Chat leases a checkout only for a request whose models need one.

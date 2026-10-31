@@ -20,6 +20,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - `src/ui` and `src/preload` never import `src/main` or `src/internal`.
 - Nothing imports an entrypoint (`src/*/index.ts`). No other `index.ts` files exist.
 - Git runs only through the typed operations in `src/internal/git`, and each git command declares an interruption policy: `read`, `owned-write` or `atomic` (ADR 0079).
+- Single-object reads and ref lookups go through `GitRunner.objects`, the per-root long-lived `GitObjectReader` on `cat-file --batch-command` (ADR 0087), inside a typed operation (`resolveRevision`, `readBlobs`, `findTreeBlob`, `readBlobBytes`); never add a one-off `cat-file`. Diffs, `ls-tree -r`, `git grep` and writes still spawn.
 - dependency-cruiser enforces all of this (`npm run deps`); type-only imports count.
 
 ## Files and exports

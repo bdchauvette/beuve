@@ -54,3 +54,7 @@ Sheets' one-file `--unified=0` diff, `getFilePair`'s and sheets' blob reads, `ls
 ## Consequences
 
 The large review drops from 994 spawns to 283, and the main thread's time blocked in `execFile` from about 7.3 s to about 1.8 s (measurements in the task #29 report). What remains is mostly ref resolution (215 `rev-parse`s), which stays live by design, and per-request object reads. Results are the same with and without the caches, by test. Memory is bounded by the counts and the diff weight; a review whose diff alone is heavier than 256 MiB is recomputed per request, as before. A probe can be stale until the next failed ref lookup. Adding a cached result means building its key from SHAs; a cache keyed by a ref name or a path needs its own invalidation argument here.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+`GitCaches` also owns the `ObjectReaderPool` (one `cat-file --batch-command` per root, disposed with the caches on quit) and `treeFiles`, the `listTreeBlobs` listing per root and commit that chat's sandbox reads. The "Not cached" reads above now go through the reader: ref lookups stay live, but no longer spawn.

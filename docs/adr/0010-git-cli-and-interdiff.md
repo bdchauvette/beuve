@@ -42,3 +42,7 @@ We accept the costs:
 - A minimum system git of 2.36.
 
 If spawning shows up as a real cost, the remedy is to batch requests through long-lived git processes, such as `cat-file --batch-command` for object reads, not to switch to a library. Revisit this decision only if a library gains `merge-tree`, `patch-id` and worktree parity and becomes the reference implementation, or if beuve has to run where no system git exists.
+
+## Amendment 2026-10-31 (ADR 0087)
+
+The remedy named above is in place: single-object reads and ref lookups go through one long-lived `git cat-file --batch-command --buffer` per repository root (`GitObjectReader`), with structural, validated specs and restart rules. Diffs, `merge-tree`, `rev-list`, `ls-tree -r`, `git grep`, `check-attr`, fetches and the worktree commands still spawn one process each.
