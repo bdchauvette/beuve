@@ -38,7 +38,7 @@ const renameImports = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((
   name,
   importNames: ['rename', 'renameSync'],
   message:
-    'Replace a file through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`): a unique temporary name created exclusively with its mode, fsync, rename, fsync of the directory (ADR 0081).',
+    'Replace a file through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`): a unique temporary name created exclusively with its mode, fsync, rename, fsync of the directory (ADR 0082).',
 }));
 const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
 const staticOrStandalone =
@@ -385,6 +385,16 @@ export default defineConfig(
           ],
         },
       ],
+    },
+  },
+
+  {
+    // ADR 0082: shipped code opens a path once; tests and their helpers stat their own fixtures.
+    name: 'beuve/no-check-then-open',
+    files: ['src/**/*.ts', 'scripts/**/*.ts'],
+    ignores: [...testFiles, '**/testing/**'],
+    rules: {
+      'local/no-check-then-open': 'error',
     },
   },
 

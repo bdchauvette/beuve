@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BigIntStats } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -292,7 +293,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     displayPath: string,
   ): Promise<Result<{ text: string; stamp: FileStamp }, LspError>> => {
     try {
-      const stats = await stat(absolutePath, { bigint: true });
+      // One open, then the handle's own size and text (ADR 0082): a file swapped in between
+      // can't be read past the size check.
+      await using handle = await open(absolutePath, constants.O_RDONLY | constants.O_NONBLOCK);
+      const stats = await handle.stat({ bigint: true });
       const size = Number(stats.size);
       if (size > maxFileBytes) {
         return err({
@@ -302,7 +306,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
           maxBytes: maxFileBytes,
         });
       }
-      const text = await readFile(absolutePath, 'utf8');
+      const text = await handle.readFile('utf8');
       return ok({ text, stamp: stampFrom(stats) });
     } catch {
       return err({

@@ -1,5 +1,7 @@
-import type { Dirent, Stats } from 'node:fs';
+import { constants } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import { open, readdir, realpath, stat } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 
 import { z } from 'zod';
@@ -323,27 +325,38 @@ function invalidArguments(error: z.ZodError): SandboxResult {
   return { output: `invalid arguments: ${z.prettifyError(error)}`, denied: false };
 }
 
-/** At most `maxBytes` of a regular file as UTF-8 text, or `undefined` if it is not one. */
+/**
+ * At most `maxBytes` of a regular file as UTF-8 text, or `undefined` if it is not one. The file is
+ * opened once and the handle is asked what it is (ADR 0082), so a swap between a check and the
+ * read can't make it read something else; `O_NONBLOCK` keeps a FIFO from blocking the open.
+ */
 async function readCapped(
   file: string,
   maxBytes: number,
 ): Promise<{ readonly content: string; readonly isCut: boolean } | undefined> {
-  let stats: Stats;
-  try {
-    stats = await stat(file);
-  } catch {
+  await using handle = await openToRead(file);
+  if (handle === undefined) {
     return undefined;
   }
+  const stats = await handle.stat();
   if (!stats.isFile()) {
     return undefined;
   }
-  await using handle = await open(file, 'r');
   const buffer = Buffer.alloc(Math.min(maxBytes, stats.size));
   const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
   const bytes = buffer.subarray(0, bytesRead);
   return bytes.includes(0)
     ? undefined
     : { content: bytes.toString('utf8'), isCut: stats.size > maxBytes };
+}
+
+/** `file` opened for reading, or `undefined` when it can't be. */
+async function openToRead(file: string): Promise<FileHandle | undefined> {
+  try {
+    return await open(file, constants.O_RDONLY | constants.O_NONBLOCK);
+  } catch {
+    return undefined;
+  }
 }
 
 /**

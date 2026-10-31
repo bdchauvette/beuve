@@ -5,6 +5,7 @@ import { enforceSingleNamedExport } from './enforce-single-named-export.ts';
 import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-syntax.ts';
 import { exportNameMatchesFilename } from './export-name-matches-filename.ts';
 import { noBarrelFiles } from './no-barrel-files.ts';
+import { noCheckThenOpen } from './no-check-then-open.ts';
 import { noDate } from './no-date.ts';
 import { noHandFormattedDuration } from './no-hand-formatted-duration.ts';
 import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template.ts';
@@ -35,6 +36,7 @@ const plugin = {
     'export-name-matches-filename': exportNameMatchesFilename,
     'forward-abort-signal': forwardAbortSignal,
     'no-barrel-files': noBarrelFiles,
+    'no-check-then-open': noCheckThenOpen,
     'no-date': noDate,
     'no-hand-formatted-duration': noHandFormattedDuration,
     'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
