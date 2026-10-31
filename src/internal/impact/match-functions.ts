@@ -1,5 +1,11 @@
 import type { FunctionMeasurement } from './function-measurement.ts';
 
+/** The functions measured on each side of a file. */
+export interface FunctionSides {
+  readonly base: readonly FunctionMeasurement[];
+  readonly head: readonly FunctionMeasurement[];
+}
+
 /** How a base function corresponds to a head function. */
 export type FunctionPair =
   | { readonly kind: 'added'; readonly head: FunctionMeasurement }
@@ -18,10 +24,7 @@ const minRenameBodyLength = 32;
  * an identical body under another name as renames; the rest are added or removed. Linear in the
  * number of functions. Head pairs come in head order, removed functions last in base order.
  */
-export function matchFunctions(
-  base: readonly FunctionMeasurement[],
-  head: readonly FunctionMeasurement[],
-): readonly FunctionPair[] {
+export function matchFunctions({ base, head }: FunctionSides): readonly FunctionPair[] {
   const baseByName = new Map(
     base.map((measurement) => {
       return [measurement.name, measurement];
@@ -42,17 +45,18 @@ export function matchFunctions(
       .push(measurement);
   }
   const renamedFrom = new Set<FunctionMeasurement>();
+  const renameSource = (measurement: FunctionMeasurement): FunctionMeasurement | undefined => {
+    if (measurement.bodyLength < minRenameBodyLength) {
+      return undefined;
+    }
+    return unmatchedBodies.get(measurement.bodyHash)?.shift();
+  };
   const pairs: FunctionPair[] = head.map((measurement): FunctionPair => {
-    const sameName = matchedNames.has(measurement.name)
-      ? baseByName.get(measurement.name)
-      : undefined;
-    if (sameName !== undefined) {
+    const sameName = baseByName.get(measurement.name);
+    if (sameName !== undefined && matchedNames.has(measurement.name)) {
       return { kind: 'matched', base: sameName, head: measurement };
     }
-    const renamed =
-      measurement.bodyLength >= minRenameBodyLength
-        ? unmatchedBodies.get(measurement.bodyHash)?.shift()
-        : undefined;
+    const renamed = renameSource(measurement);
     if (renamed === undefined) {
       return { kind: 'added', head: measurement };
     }

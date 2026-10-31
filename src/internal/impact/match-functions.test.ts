@@ -8,13 +8,17 @@ import { matchFunctions } from './match-functions.ts';
 describe('matchFunctions', () => {
   test('pairs by name, then identical bodies as renames, then adds and removes', ({ expect }) => {
     const base = [
-      fn('kept', 'a'),
-      fn('A.old', 'long-body', 40),
-      fn('gone', 'b'),
-      fn('tiny', 'same-tiny', 4),
+      fn('kept', { hash: 'a' }),
+      fn('A.old', { hash: 'long-body', length: 40 }),
+      fn('gone', { hash: 'b' }),
+      fn('tiny', { hash: 'same-tiny', length: 4 }),
     ];
-    const head = [fn('A.renamed', 'long-body', 40), fn('kept', 'c'), fn('fresh', 'same-tiny', 4)];
-    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toStrictEqual([
+    const head = [
+      fn('A.renamed', { hash: 'long-body', length: 40 }),
+      fn('kept', { hash: 'c' }),
+      fn('fresh', { hash: 'same-tiny', length: 4 }),
+    ];
+    expect(matchFunctions({ base, head }).map((pair) => describePair(pair))).toStrictEqual([
       'renamed A.old -> A.renamed',
       'matched kept',
       'added fresh',
@@ -24,16 +28,28 @@ describe('matchFunctions', () => {
   });
 
   test('pairs each base body at most once', ({ expect }) => {
-    const base = [fn('one', 'shared', 40)];
-    const head = [fn('two', 'shared', 40), fn('three', 'shared', 40)];
-    expect(matchFunctions(base, head).map((pair) => describePair(pair))).toStrictEqual([
+    const base = [fn('one', { hash: 'shared', length: 40 })];
+    const head = [
+      fn('two', { hash: 'shared', length: 40 }),
+      fn('three', { hash: 'shared', length: 40 }),
+    ];
+    expect(matchFunctions({ base, head }).map((pair) => describePair(pair))).toStrictEqual([
       'renamed one -> two',
       'added three',
     ]);
   });
 });
 
-function fn(name: string, bodyHash: string, bodyLength = 10): FunctionMeasurement {
+/** A function body as matching sees it: its hash, and its length (default 10). */
+interface TestBody {
+  readonly hash: string;
+  readonly length?: number;
+}
+
+function fn(
+  name: string,
+  { hash: bodyHash, length: bodyLength = 10 }: TestBody,
+): FunctionMeasurement {
   return {
     name,
     startLine: 1,

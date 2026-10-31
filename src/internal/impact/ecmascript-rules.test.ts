@@ -36,7 +36,7 @@ describe('ecmascriptRules', () => {
   });
 });
 
-function referenced(rules: LanguageRules): { types: string[]; fields: string[] } {
+function referenced(rules: LanguageRules): ReferencedNames {
   const types = [
     ...Object.keys(rules.functions),
     ...Object.keys(rules.scopes),
@@ -111,4 +111,10 @@ function constructReferences(rule: ConstructRule): References {
       };
     }
   }
+}
+
+/** The node types and field names a rule table refers to. */
+interface ReferencedNames {
+  readonly types: string[];
+  readonly fields: string[];
 }

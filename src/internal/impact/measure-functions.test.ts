@@ -254,11 +254,21 @@ describe('measureFunctions', () => {
       transparent: [],
     };
     const node = nodeBuilder();
-    const inner = node('when', 2, 2, [], 'then');
-    const body = node('block', 1, 3, [node('when', 1, 3, [inner])], 'body');
-    const tree = node('module', 0, 3, [
-      node('def', 0, 3, [node('identifier', 0, 0, [], 'name', 'run'), body]),
-    ]);
+    const inner = node({ type: 'when', startRow: 2, endRow: 2, field: 'then' });
+    const body = node({
+      type: 'block',
+      startRow: 1,
+      endRow: 3,
+      children: [node({ type: 'when', startRow: 1, endRow: 3, children: [inner] })],
+      field: 'body',
+    });
+    const name = node({ type: 'identifier', startRow: 0, endRow: 0, field: 'name', text: 'run' });
+    const tree = node({
+      type: 'module',
+      startRow: 0,
+      endRow: 3,
+      children: [node({ type: 'def', startRow: 0, endRow: 3, children: [name, body] })],
+    });
     expect(measureFunctions(tree, rules).functions).toMatchObject([
       { name: 'run', metrics: { cognitive: 3, cyclomatic: 3, maxNesting: 2, lines: 4 } },
     ]);
@@ -287,19 +297,22 @@ function cognitive(metrics: ReadonlyMap<string, FunctionMetrics>): Record<string
 
 type TestNode = ImpactNode & { readonly field?: string };
 
-type NodeBuilder = (
-  type: string,
-  startRow: number,
-  endRow: number,
-  children: readonly TestNode[],
-  field?: string,
-  text?: string,
-) => TestNode;
+/** A hand-built node; `field` is the field it sits in, and its text defaults to its type. */
+interface TestNodeSpec {
+  readonly type: string;
+  readonly startRow: number;
+  readonly endRow: number;
+  readonly children?: readonly TestNode[];
+  readonly field?: string;
+  readonly text?: string;
+}
 
-/** Builds hand-built nodes with ids unique within the builder; `field` is the field a node sits in. */
+type NodeBuilder = (spec: TestNodeSpec) => TestNode;
+
+/** Builds hand-built nodes with ids unique within the builder. */
 function nodeBuilder(): NodeBuilder {
   let nextId = 0;
-  return (type, startRow, endRow, children, field, text = type): TestNode => {
+  return ({ type, startRow, endRow, children = [], field, text = type }): TestNode => {
     nextId += 1;
     return {
       id: nextId,

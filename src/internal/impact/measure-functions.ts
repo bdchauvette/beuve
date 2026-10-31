@@ -83,28 +83,43 @@ function visit(frame: Frame, rules: LanguageRules, tallies: Tally[]): readonly F
   }
   const scopeRule = rules.scopes[node.type];
   if (scopeRule !== undefined) {
-    const ownName =
-      scopeRule.nameField === undefined ? undefined : fieldText(node, scopeRule.nameField);
-    const name = ownName ?? frame.name ?? anonymous;
+    const name = ownNameOf(node, scopeRule.nameField) ?? frame.name ?? anonymous;
     return childFrames(frame, rules, { scope: [...frame.scope, name] });
   }
   const construct = rules.constructs[node.type];
-  if (construct !== undefined && frame.owner !== undefined) {
-    return visitConstruct(frame, frame.owner, construct, rules);
+  if (construct !== undefined && isOwned(frame)) {
+    return visitConstruct(frame, construct, rules);
   }
   return childFrames(frame, rules, {
     inSequence: frame.inSequence && rules.transparent.includes(node.type),
   });
 }
 
+/** A frame inside a function, whose constructs count towards it. */
+type OwnedFrame = Frame & { readonly owner: Tally };
+
+function isOwned(frame: Frame): frame is OwnedFrame {
+  return frame.owner !== undefined;
+}
+
+function ownNameOf(node: ImpactNode, nameField: string | undefined): string | undefined {
+  if (nameField === undefined) {
+    return undefined;
+  }
+  return fieldText(node, nameField);
+}
+
 function startTally(frame: Frame, rule: FunctionRule): Tally {
   const { node } = frame;
-  const ownName = rule.nameField === undefined ? undefined : fieldText(node, rule.nameField);
+  const ownName = ownNameOf(node, rule.nameField);
   const modifier = node.children.find((child) => {
     return !child.isNamed && (rule.nameModifiers ?? []).includes(child.type);
   });
   const base = frame.name ?? ownName ?? anonymous;
-  const simpleName = modifier === undefined ? base : `${modifier.type} ${base}`;
+  let simpleName = base;
+  if (modifier !== undefined) {
+    simpleName = `${modifier.type} ${base}`;
+  }
   return {
     name: [...frame.scope, simpleName].join('.'),
     simpleName,
@@ -119,32 +134,34 @@ function startTally(frame: Frame, rule: FunctionRule): Tally {
 }
 
 function visitConstruct(
-  frame: Frame,
-  owner: Tally,
+  frame: OwnedFrame,
   rule: ConstructRule,
   rules: LanguageRules,
 ): readonly Frame[] {
-  const { node, level } = frame;
+  const { node, level, owner } = frame;
   switch (rule.kind) {
     case 'branch': {
       if (frame.continuation) {
         owner.cyclomatic += 1;
       } else {
         owner.cognitive += 1 + level;
-        owner.cyclomatic += rule.decision ? 1 : 0;
+        if (rule.decision) {
+          owner.cyclomatic += 1;
+        }
       }
       owner.maxNesting = Math.max(owner.maxNesting, level + 1);
       const nested = new Set(rule.nestedFields.map((field) => node.childForFieldName(field)?.id));
-      return childFrames(frame, rules, {}, (child) => {
-        return {
-          level: nested.has(child.id) ? level + 1 : level,
-        };
+      return childFrames(frame, rules, (child) => {
+        if (nested.has(child.id)) {
+          return { level: level + 1 };
+        }
+        return {};
       });
     }
     case 'else': {
       owner.cognitive += 1;
       owner.maxNesting = Math.max(owner.maxNesting, level + 1);
-      return childFrames(frame, rules, {}, (child) => {
+      return childFrames(frame, rules, (child) => {
         if (child.type === rule.continues) {
           return { continuation: true };
         }
@@ -152,54 +169,73 @@ function visitConstruct(
       });
     }
     case 'case': {
-      owner.cyclomatic += node.childForFieldName(rule.valueField) === null ? 0 : 1;
-      return childFrames(frame, rules, {});
+      if (node.childForFieldName(rule.valueField) !== null) {
+        owner.cyclomatic += 1;
+      }
+      return childFrames(frame, rules);
     }
     case 'logical': {
       const operator = node.childForFieldName(rule.operatorField)?.type;
       const isLogical = operator !== undefined && rule.operators.includes(operator);
       if (isLogical) {
         owner.cyclomatic += 1;
-        owner.cognitive += frame.inSequence ? 0 : countBooleanSequences(node, rules);
+        if (!frame.inSequence) {
+          owner.cognitive += countBooleanSequences(node, rules);
+        }
       }
       return childFrames(frame, rules, { inSequence: isLogical });
     }
     case 'jump': {
-      owner.cognitive += node.childForFieldName(rule.labelField) === null ? 0 : 1;
-      return childFrames(frame, rules, {});
+      if (node.childForFieldName(rule.labelField) !== null) {
+        owner.cognitive += 1;
+      }
+      return childFrames(frame, rules);
     }
     case 'call': {
       owner.recursive ||= isSelfCall(node, owner, rule);
-      return childFrames(frame, rules, {});
+      return childFrames(frame, rules);
     }
   }
 }
 
+/** What a child frame takes from its node instead of inheriting it. */
+type FrameOverride = Partial<
+  Pick<Frame, 'owner' | 'level' | 'scope' | 'inSequence' | 'continuation'>
+>;
+
 /**
- * Frames for a node's children: inheriting `frame`, overridden by `shared` and then `perChild`.
- * Names flow from namer parents to the child in their value field.
+ * Frames for a node's children: inheriting `frame`, overridden by `override`, which is one for all
+ * children or one per child. Names flow from namer parents to the child in their value field.
  */
 function childFrames(
   frame: Frame,
   rules: LanguageRules,
-  shared: Partial<Pick<Frame, 'owner' | 'level' | 'scope' | 'inSequence'>>,
-  perChild: (child: ImpactNode) => Partial<Pick<Frame, 'level' | 'continuation'>> = () => {
-    return {};
-  },
+  override: FrameOverride | ((child: ImpactNode) => FrameOverride) = {},
 ): readonly Frame[] {
   const { node } = frame;
   const naming = namesFor(node, rules.namers[node.type]);
-  return node.children.map((child) => {
+  return node.children.map((child): Frame => {
+    let own = override;
+    if (typeof own === 'function') {
+      own = own(child);
+    }
+    let name = frame.childName;
+    if (child.id === naming.valueId) {
+      name = naming.name;
+    }
+    let childName: string | undefined;
+    if (child.id === naming.argumentsId) {
+      childName = naming.name;
+    }
     return {
       node: child,
-      owner: shared.owner ?? frame.owner,
-      level: shared.level ?? frame.level,
-      scope: shared.scope ?? frame.scope,
-      name: child.id === naming.valueId ? naming.name : frame.childName,
-      childName: child.id === naming.argumentsId ? naming.name : undefined,
-      inSequence: shared.inSequence ?? false,
-      continuation: false,
-      ...perChild(child),
+      owner: own.owner ?? frame.owner,
+      level: own.level ?? frame.level,
+      scope: own.scope ?? frame.scope,
+      name,
+      childName,
+      inSequence: own.inSequence ?? false,
+      continuation: own.continuation ?? false,
     };
   });
 }
@@ -234,7 +270,7 @@ function namesFor(node: ImpactNode, rule: NamerRule | undefined): Naming {
       const label = callArguments?.children.find((child) => rule.labelTypes.includes(child.type));
       const callee = fieldText(node, rule.calleeField) ?? anonymous;
       return {
-        name: shorten(`${callee}(${label === undefined ? '…' : label.text})`),
+        name: shorten(`${callee}(${label?.text ?? '…'})`),
         valueId: undefined,
         argumentsId: callArguments?.id,
       };
@@ -266,12 +302,16 @@ function measurementFrom(tally: Tally): FunctionMeasurement {
   const startLine = node.startPosition.row + 1;
   const endLine = node.endPosition.row + 1;
   const body = normalize(node.childForFieldName(rule.bodyField)?.text ?? '');
+  let cognitive = tally.cognitive;
+  if (tally.recursive) {
+    cognitive += 1;
+  }
   return {
     name: tally.name,
     startLine,
     endLine,
     metrics: {
-      cognitive: tally.cognitive + (tally.recursive ? 1 : 0),
+      cognitive,
       cyclomatic: tally.cyclomatic,
       lines: endLine - startLine + 1,
       maxNesting: tally.maxNesting,

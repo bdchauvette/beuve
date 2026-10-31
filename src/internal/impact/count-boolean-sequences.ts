@@ -12,7 +12,9 @@ export function countBooleanSequences(root: ImpactNode, rules: LanguageRules): n
   const stack: (ImpactNode | string)[] = [root];
   for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
     if (typeof item === 'string') {
-      runs += item === previous ? 0 : 1;
+      if (item !== previous) {
+        runs += 1;
+      }
       previous = item;
       continue;
     }
@@ -22,8 +24,13 @@ export function countBooleanSequences(root: ImpactNode, rules: LanguageRules): n
     }
     for (let index = item.children.length - 1; index >= 0; index -= 1) {
       const child = item.children[index];
-      if (child !== undefined) {
-        stack.push(child.id === operatorNode?.id ? child.type : child);
+      if (child === undefined) {
+        continue;
+      }
+      if (child.id === operatorNode?.id) {
+        stack.push(child.type);
+      } else {
+        stack.push(child);
       }
     }
   }

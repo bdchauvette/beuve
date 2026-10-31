@@ -13,10 +13,14 @@ const initialized = Parser.init({
   },
 });
 
+/** A grammar's node types and field names. */
+export interface GrammarNames {
+  readonly types: ReadonlySet<string>;
+  readonly fields: ReadonlySet<string>;
+}
+
 /** A grammar's node types and field names, to check rule tables for typos. Test-only. */
-export async function loadTestLanguage(
-  language: TestLanguage,
-): Promise<{ readonly types: ReadonlySet<string>; readonly fields: ReadonlySet<string> }> {
+export async function loadTestLanguage(language: TestLanguage): Promise<GrammarNames> {
   await initialized;
   const path = require.resolve(`@vscode/tree-sitter-wasm/wasm/tree-sitter-${language}.wasm`);
   const loaded = await Language.load(await readFile(path));

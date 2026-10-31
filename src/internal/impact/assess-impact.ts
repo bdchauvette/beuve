@@ -13,7 +13,8 @@ import type {
   ImpactReport,
 } from './impact-report.ts';
 import { matchFunctions } from './match-functions.ts';
-import type { FunctionPair } from './match-functions.ts';
+import type { FunctionPair, FunctionSides } from './match-functions.ts';
+import { locationOf } from './location-of.ts';
 
 type Rank = (value: number) => number;
 
@@ -72,10 +73,7 @@ export function assessImpact(
 }
 
 function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileAssessment {
-  const location =
-    file.previousPath === undefined
-      ? { path: file.path }
-      : { path: file.path, previousPath: file.previousPath };
+  const location = locationOf(file);
   if (file.status === 'skipped') {
     return {
       impact: { status: 'skipped', ...location, reason: file.reason },
@@ -93,7 +91,7 @@ function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileA
       (pair.kind !== 'removed' && isHeadChanged(pair.head.startLine, pair.head.endLine))
     );
   };
-  const entries = matchFunctions(base, head)
+  const entries = matchFunctions({ base, head })
     .map((pair) => impactFrom(pair, isInDiff(pair), rank))
     .filter((entry) => entry.change !== 'unchanged' || entry.inDiff);
   const findings = entries.flatMap((entry) => findingFrom(file.path, entry, config));
@@ -103,7 +101,7 @@ function assessFile(file: MeasuredFile, rank: Rank, config: ImpactConfig): FileA
       ...location,
       language: file.language,
       parseErrors: (file.base?.parseErrors ?? false) || (file.head?.parseErrors ?? false),
-      aggregate: aggregate(base, head, entries, findings.length),
+      aggregate: aggregate({ base, head }, entries, findings.length),
       functions: entries.toSorted((left, right) => firstLine(left) - firstLine(right)),
     },
     findings,
@@ -149,10 +147,10 @@ function impactFrom(pair: FunctionPair, isInDiff: boolean, rank: Rank): Function
       if (pair.kind === 'renamed') {
         return { change: 'renamed', previousName: pair.base.name, ...common };
       }
-      return {
-        change: pair.base.textHash === pair.head.textHash ? 'unchanged' : 'modified',
-        ...common,
-      };
+      if (pair.base.textHash === pair.head.textHash) {
+        return { change: 'unchanged', ...common };
+      }
+      return { change: 'modified', ...common };
     }
   }
 }
@@ -169,7 +167,10 @@ function findingFrom(
   if (value <= config.cognitiveMax) {
     return [];
   }
-  const baseValue = entry.change === 'added' ? undefined : entry.base.metrics.cognitive;
+  let baseValue: number | undefined;
+  if (entry.change !== 'added') {
+    baseValue = entry.base.metrics.cognitive;
+  }
   return [
     {
       kind: 'cognitive-complexity',
@@ -180,7 +181,7 @@ function findingFrom(
       value,
       limit: config.cognitiveMax,
       baseValue,
-      trend: trend(value, baseValue, config.cognitiveMax),
+      trend: trend(value, baseValue, config),
       percentile: entry.percentile,
     },
   ];
@@ -189,9 +190,9 @@ function findingFrom(
 function trend(
   value: number,
   baseValue: number | undefined,
-  limit: number,
+  config: ImpactConfig,
 ): ImpactFinding['trend'] {
-  if (baseValue === undefined || baseValue <= limit) {
+  if (baseValue === undefined || baseValue <= config.cognitiveMax) {
     return 'introduced';
   }
   if (value === baseValue) {
@@ -204,8 +205,7 @@ function trend(
 }
 
 function aggregate(
-  base: readonly FunctionMeasurement[],
-  head: readonly FunctionMeasurement[],
+  { base, head }: FunctionSides,
   entries: readonly FunctionImpact[],
   findings: number,
 ): FileAggregate {

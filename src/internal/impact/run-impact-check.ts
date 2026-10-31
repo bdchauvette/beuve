@@ -7,6 +7,7 @@ import { defaultImpactConfig } from './default-impact-config.ts';
 import type { ImpactConfig } from './default-impact-config.ts';
 import type { SourceMeasurement } from './function-measurement.ts';
 import type { ImpactSourceFile, MeasuredFile, ParseSource } from './impact-input.ts';
+import { locationOf } from './location-of.ts';
 import type { ImpactReport, SkipReason } from './impact-report.ts';
 import { measureFunctions } from './measure-functions.ts';
 import { rulesByLanguage } from './rules-by-language.ts';
@@ -54,14 +55,6 @@ async function measureFile(file: ImpactSourceFile, parse: ParseSource): Promise<
     head: head.value?.measurement,
     changedLines: file.changedLines,
   };
-}
-
-/** The file's path, and its base path when it was renamed. */
-function locationOf(file: ImpactSourceFile): Pick<ImpactSourceFile, 'path' | 'previousPath'> {
-  if (file.previousPath === undefined) {
-    return { path: file.path };
-  }
-  return { path: file.path, previousPath: file.previousPath };
 }
 
 async function measureSide(
