@@ -153,21 +153,21 @@ describe('CoalescingCache', () => {
         return value.length;
       },
     });
-    const put = async ({ key, value }: Entry): Promise<string> => {
+    const put = async (key: string, value: string): Promise<string> => {
       return cache.get(key, immediate(value), { signal });
     };
-    await put({ key: 'a', value: 'aaaa' });
-    await put({ key: 'b', value: 'bbbb' });
-    await put({ key: 'a', value: 'unused' });
-    await put({ key: 'c', value: 'cccc' });
+    await put('a', 'aaaa');
+    await put('b', 'bbbb');
+    await put('a', 'unused');
+    await put('c', 'cccc');
     expect(cache.weight).toBe(8);
-    await expect(put({ key: 'b', value: 'recomputed' })).resolves.toBe('recomputed');
+    await expect(put('b', 'recomputed')).resolves.toBe('recomputed');
     expect(cache.size).toBe(1);
-    await put({ key: 'heavy', value: 'x'.repeat(11) });
+    await put('heavy', 'x'.repeat(11));
     expect(cache.size).toBe(1);
-    await put({ key: 'd', value: 'd' });
-    await put({ key: 'e', value: 'e' });
-    await put({ key: 'f', value: 'f' });
+    await put('d', 'd');
+    await put('e', 'e');
+    await put('f', 'f');
     expect(cache.size).toBe(3);
   });
 
@@ -193,8 +193,3 @@ describe('CoalescingCache', () => {
     await expect(cache.get('b', immediate('fresh'), { signal })).resolves.toBe('fresh');
   });
 });
-
-interface Entry {
-  readonly key: string;
-  readonly value: string;
-}

@@ -33,9 +33,15 @@ export function parsePullRequestMarkdown(body: string): BodyBlock[] {
     .replaceAll(sentinelCharacters, '')
     .replaceAll(
       markdownLink,
-      (whole: string, ...[text, href = '', bare]: (string | undefined)[]): string => {
+      (
+        whole: string,
+        text: string | undefined,
+        href: string | undefined,
+        bare: string | undefined,
+      ): string => {
         if (bare === undefined) {
-          links.push({ kind: 'link', text: text ?? href, href });
+          const target = href ?? '';
+          links.push({ kind: 'link', text: text ?? target, href: target });
           literals.push(whole);
           return `${String(links.length - 1)}`;
         }
