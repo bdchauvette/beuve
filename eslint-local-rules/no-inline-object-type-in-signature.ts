@@ -29,10 +29,14 @@ const signatureSelector = [
   'TSMethodSignature',
 ].join(', ');
 
+const unionFilters = new Set(['Extract', 'Exclude']);
+
 /**
  * Bans object type literals anywhere in a function's parameter types or return type, nested ones
  * (`Promise<{ … }>`, `(event: { … }) => void`) included. Name the type with an interface or a
- * type alias, so callers and errors can refer to it.
+ * type alias, so callers and errors can refer to it. The filter of `Extract` and `Exclude`
+ * (`Extract<SessionError, { kind: 'corrupt-row' }>`) is a pattern that picks members of a union,
+ * not a shape, so it is allowed.
  */
 export const noInlineObjectTypeInSignature = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
   meta: {
@@ -108,9 +112,14 @@ function typeLiteralsIn(
   sourceCode: Readonly<TSESLint.SourceCode>,
 ): TSESTree.TSTypeLiteral[] {
   const found: TSESTree.TSTypeLiteral[] = [];
+  const filters = new Set<TSESTree.Node>();
   const visit = (node: TSESTree.Node): void => {
-    if (node.type === AST_NODE_TYPES.TSTypeLiteral) {
+    if (node.type === AST_NODE_TYPES.TSTypeLiteral && !filters.has(node)) {
       found.push(node);
+    }
+    const filter = unionFilterOf(node);
+    if (filter !== undefined) {
+      filters.add(filter);
     }
     const keys = sourceCode.visitorKeys[node.type] ?? [];
     for (const key of keys) {
@@ -125,6 +134,18 @@ function typeLiteralsIn(
   };
   visit(root);
   return found;
+}
+
+/** The object type `Extract<T, { … }>` or `Exclude<T, { … }>` matches union members against. */
+function unionFilterOf(node: TSESTree.Node): TSESTree.TypeNode | undefined {
+  if (
+    node.type !== AST_NODE_TYPES.TSTypeReference ||
+    node.typeName.type !== AST_NODE_TYPES.Identifier ||
+    !unionFilters.has(node.typeName.name)
+  ) {
+    return undefined;
+  }
+  return node.typeArguments?.params[1];
 }
 
 function isNode(value: unknown): value is TSESTree.Node {

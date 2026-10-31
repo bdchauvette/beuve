@@ -13,8 +13,18 @@ createRuleTester().run('no-inline-object-type-in-signature', noInlineObjectTypeI
     'function f<T extends object>(a: T): T { return a; }',
     'const f = (a: Map<string, number>): Promise<string> => g(a);',
     'class A { constructor(readonly name: string) {} }',
+    "function f(): Extract<Failure, { kind: 'gone' }> { throw new Error(); }",
+    "function f(failure: Exclude<Failure, { kind: 'gone' | 'moved' }>): void {}",
   ],
   invalid: [
+    {
+      code: "function f(): Extract<{ kind: 'gone'; at: number }, { kind: 'gone' }> {}",
+      errors: [{ messageId: 'nameTheType' }],
+    },
+    {
+      code: 'function f(): Extract<Failure, { meta: { a: number } }> {}',
+      errors: [{ messageId: 'nameTheType' }],
+    },
     {
       code: 'function f(options: { a: number }): void {}',
       errors: [{ messageId: 'nameTheType' }],
