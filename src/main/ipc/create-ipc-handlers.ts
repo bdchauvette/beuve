@@ -41,6 +41,12 @@ import type {
   DiffDisplayView,
   FileAttributesView,
   EditorSettingsView,
+  ReviewEditsDiscardedView,
+  ReviewEditsDiscardView,
+  ReviewEditsOpenedView,
+  ReviewEditsPlanView,
+  ReviewEditsStagedView,
+  ReviewEditsView,
   FilePairView,
   FlowGraphResponse,
   GithubAuthStatusView,
@@ -417,6 +423,13 @@ const editorOpenRequest = z.strictObject({
   column: z.number().int().min(1).max(100_000).optional(),
 });
 const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
+const reviewEditsPrefixRequest = z.strictObject({ prefix: z.string().min(1).max(100) });
+const openReviewEditsRequest = z.strictObject({
+  sessionId,
+  path: pathPrefix.optional(),
+  line: line.optional(),
+});
+const digestRequest = z.strictObject({ sessionId, digest: z.string().regex(/^[\da-f]{64}$/u) });
 const reviewOrderMode = z.enum(['path', 'imports', 'calls']);
 const reviewOrderRequest = z.strictObject({ sessionId, mode: reviewOrderMode.optional() });
 const displayRequest = z.strictObject({
@@ -901,6 +914,64 @@ export function createIpcHandlers(
       const parsed = preferredEditorRequest.safeParse(request);
       if (parsed.success) {
         return services.editor.setPreferred(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'editor:set-review-edits-prefix': async (request): Promise<IpcResult<EditorSettingsView>> => {
+      const parsed = reviewEditsPrefixRequest.safeParse(request);
+      if (parsed.success) {
+        return services.editor.setReviewEditsPrefix(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'review-edits:get': async (request): Promise<IpcResult<ReviewEditsView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.reviewEdits.get(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'review-edits:open': async (request): Promise<IpcResult<ReviewEditsOpenedView>> => {
+      const parsed = openReviewEditsRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { path, line: at, ...required } = parsed.data;
+      return services.reviewEdits.open({
+        ...required,
+        ...(path !== undefined && { path }),
+        ...(at !== undefined && { line: at }),
+      });
+    },
+    'review-edits:preview-suggestions': async (
+      request,
+    ): Promise<IpcResult<ReviewEditsPlanView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.reviewEdits.previewSuggestions(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'review-edits:stage-suggestions': async (
+      request,
+    ): Promise<IpcResult<ReviewEditsStagedView>> => {
+      const parsed = digestRequest.safeParse(request);
+      if (parsed.success) {
+        return services.reviewEdits.stageSuggestions(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'review-edits:preview-discard': async (request): Promise<IpcResult<ReviewEditsDiscardView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.reviewEdits.previewDiscard(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'review-edits:discard': async (request): Promise<IpcResult<ReviewEditsDiscardedView>> => {
+      const parsed = digestRequest.safeParse(request);
+      if (parsed.success) {
+        return services.reviewEdits.discard(parsed.data);
       }
       return invalid(parsed.error);
     },

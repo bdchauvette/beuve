@@ -10,6 +10,7 @@ import type {
   EditorSettingsView,
   IpcResult,
   SetPreferredEditorRequest,
+  SetReviewEditsPrefixRequest,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
@@ -30,6 +31,7 @@ import type { WorkingFileState } from './choose-editor-root.ts';
 import type { EditorSettings } from './create-editor-settings.ts';
 import { editorDefinitions } from './editor-definitions.ts';
 import type { EditorDefinition } from './editor-definitions.ts';
+import type { EditorLocation } from './editor-location.ts';
 import type { EditorPlatform } from './editor-platform.ts';
 import { findEditor } from './find-editor.ts';
 import type { FoundEditor } from './find-editor.ts';
@@ -43,6 +45,16 @@ export interface EditorServices {
   readonly setPreferred: (
     request: SetPreferredEditorRequest,
   ) => Promise<IpcResult<EditorSettingsView>>;
+  /** Sets the review-edits branch prefix (ADR 0088); a non-empty value without spaces or controls. */
+  readonly setReviewEditsPrefix: (
+    request: SetReviewEditsPrefixRequest,
+  ) => Promise<IpcResult<EditorSettingsView>>;
+  /**
+   * Opens an absolute path (a file or a directory) at a line in the preferred, else first
+   * installed, editor: the editor's name, or why it couldn't. For review edits (ADR 0088), whose
+   * caller has already checked the path.
+   */
+  readonly launchFile: (location: EditorLocation) => Promise<Result<string, string>>;
 }
 
 export interface EditorServicesOptions {
@@ -52,9 +64,17 @@ export interface EditorServicesOptions {
   readonly platform: EditorPlatform;
 }
 
+const spaceOrControl = /[\s\p{Cc}]/u;
+
 interface DetectedEditor {
   readonly definition: EditorDefinition;
   readonly found: FoundEditor | undefined;
+}
+
+/** An installed editor and where it was found. */
+interface ChosenEditor {
+  readonly definition: EditorDefinition;
+  readonly found: FoundEditor;
 }
 
 /** A session file to find on disk, as a path relative to the repository root. */
@@ -99,7 +119,27 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         installed: found !== undefined,
       };
     });
-    return { ...(preferred !== undefined && { preferred }), editors };
+    return {
+      ...(preferred !== undefined && { preferred }),
+      editors,
+      reviewEditsPrefix: await settings.readReviewEditsPrefix(),
+    };
+  };
+
+  /** The preferred editor if it is installed, else the first installed one. */
+  const chooseEditor = async (): Promise<ChosenEditor | undefined> => {
+    const preferred = await settings.read();
+    const detected = detectAll();
+    const candidates = [
+      ...detected.filter(({ definition }) => definition.id === preferred),
+      ...detected.filter(({ definition }) => definition.id !== preferred),
+    ];
+    for (const { definition, found } of candidates) {
+      if (found !== undefined) {
+        return { definition, found };
+      }
+    }
+    return undefined;
   };
 
   const locate = async ({
@@ -150,15 +190,8 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         return refreshed;
       }
       const { repository, session } = refreshed.value;
-      const preferred = await settings.read();
-      const detected = detectAll();
-      const candidates = [
-        ...detected.filter(({ definition }) => definition.id === preferred),
-        ...detected.filter(({ definition }) => definition.id !== preferred),
-      ];
-      const chosen = candidates.find(({ found: candidate }) => candidate !== undefined);
-      const found = chosen?.found;
-      if (chosen === undefined || found === undefined) {
+      const chosen = await chooseEditor();
+      if (chosen === undefined) {
         return failedOpen(
           'no-editor-found',
           'No editor found: install Zed, VS Code or Cursor, or choose one with /editor.',
@@ -177,7 +210,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         );
       }
       using _checkout = located.checkout;
-      const { definition } = chosen;
+      const { definition, found } = chosen;
       const plan = planEditorLaunch(definition, found, {
         file: located.file,
         line: request.line,
@@ -199,6 +232,25 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
     },
     getSettings: async (): Promise<IpcResult<EditorSettingsView>> => {
       return ok(await settingsView());
+    },
+    setReviewEditsPrefix: async ({ prefix }): Promise<IpcResult<EditorSettingsView>> => {
+      if (prefix === '' || prefix.length > 100 || spaceOrControl.test(prefix)) {
+        return err({ code: 'invalid-request', message: 'a branch prefix without spaces' });
+      }
+      await settings.writeReviewEditsPrefix(prefix);
+      return ok(await settingsView());
+    },
+    launchFile: async (location): Promise<Result<string, string>> => {
+      const chosen = await chooseEditor();
+      if (chosen === undefined) {
+        return err('No editor found: install Zed, VS Code or Cursor, or choose one with /editor.');
+      }
+      const plan = planEditorLaunch(chosen.definition, chosen.found, location);
+      const launched = await launch(platform, plan);
+      if (launched !== undefined) {
+        return err(`Could not start ${chosen.definition.name}: ${launched}`);
+      }
+      return ok(chosen.definition.name);
     },
     setPreferred: async ({ editorId }): Promise<IpcResult<EditorSettingsView>> => {
       if (!isEditorId(editorId)) {

@@ -78,3 +78,8 @@ Probes, fork points and review diffs are shared between requests. A shared compu
 ## Amendment 2026-10-31 (task #28, ADR 0033 amendment)
 
 - **Sealing is part of the add, opening part of the removal.** A granted checkout is made read-only on its path's serial chain right after `addWorktree` (and after the startup prune keeps it), before any lease is handed out; its directories get their owner's write bit back on the same chain right before `removeWorktree`. A lease therefore never sees a checkout that is writable, half sealed or being opened for removal.
+
+## Amendment 2026-10-31 (ADR 0088): the third claim kind
+
+- **`review-edits { sessionId, branch, base }`** is the writable worktree Task #28 anticipated. Its path is planned per branch under a root of its own (`<userData>/review-edits`), and it is added by `addBranchWorktree` (`atomic`), which creates the branch at `base` or checks out the existing one. It shares the leases, the per-path chains and the holders map; its holder is never replaced, so the worktree is never collected when its leases go, and the startup prune, which works only under the read-only root, never reaches it. It is not sealed.
+- **`discardEdits`** removes it on its path's chain, refusing while a lease holds it or when the branch moved past the tip the reviewer confirmed, then deletes the branch with a compare-and-swap `update-ref -d`.

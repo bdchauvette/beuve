@@ -12,13 +12,14 @@ describe('describeEditorSettings', () => {
         { id: 'zed', name: 'Zed', installed: true },
         { id: 'cursor', name: 'Cursor', installed: false },
       ],
+      reviewEditsPrefix: 'review/',
     });
     expect(lines[0]).toContain('Cursor (not found');
     expect(lines[1]).toBe('Found: Zed.');
   });
 
   test('handles no choice and nothing installed', ({ expect }) => {
-    const lines = describeEditorSettings({ editors: [] });
+    const lines = describeEditorSettings({ editors: [], reviewEditsPrefix: 'review/' });
     expect(lines[0]).toContain('No editor chosen');
     expect(lines[1]).toBe('No supported editor found.');
   });

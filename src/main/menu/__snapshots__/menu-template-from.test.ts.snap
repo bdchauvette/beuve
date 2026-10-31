@@ -511,6 +511,26 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
+        "label": "Re&view Edits",
+        "submenu": [
+          {
+            "id": "open-review-edits",
+            "label": "&Open in Editor",
+          },
+          {
+            "id": "harvest-review-edits",
+            "label": "&Turn into Suggestions…",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "discard-review-edits",
+            "label": "&Discard…",
+          },
+        ],
+      },
+      {
         "id": "open-permalink",
         "label": "Open on &GitHub",
       },
@@ -1230,6 +1250,26 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "id": "editor-cursor",
             "label": "Cursor",
             "type": "radio",
+          },
+        ],
+      },
+      {
+        "label": "Review Edits",
+        "submenu": [
+          {
+            "id": "open-review-edits",
+            "label": "Open in Editor",
+          },
+          {
+            "id": "harvest-review-edits",
+            "label": "Turn into Suggestions…",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "discard-review-edits",
+            "label": "Discard…",
           },
         ],
       },

@@ -1,13 +1,9 @@
-import { mkdir, realpath } from 'node:fs/promises';
-import path from 'node:path';
-
-import { errorFrom } from '#x/error/error-from.ts';
 import { removeTree } from '#x/fs/remove-tree.ts';
 import { err } from '#x/result/err.ts';
-import { fromPromise } from '#x/result/from-promise.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { canonicalWorktreeRoot } from './canonical-worktree-root.ts';
 import type { GitError } from './git-error.ts';
 import { gitRunner } from './git-runner.ts';
 import { listWorktrees } from './list-worktrees.ts';
@@ -16,6 +12,7 @@ import type { GitRepository } from './open-repository.ts';
 import type { Worktree } from './parse-worktree-list.ts';
 import { planWorktreePath } from './plan-worktree-path.ts';
 import { pruneWorktrees } from './prune-worktrees.ts';
+import { removeFailedAdd } from './remove-failed-add.ts';
 
 export interface AddWorktreeRequest {
   /** Absolute directory that holds review worktrees; created if missing. */
@@ -42,7 +39,7 @@ export async function addWorktree(
   repository: GitRepository,
   request: AddWorktreeRequest,
 ): Promise<Result<Worktree, GitError>> {
-  const root = await canonicalRoot(request.root);
+  const root = await canonicalWorktreeRoot(request.root);
   if (!root.ok) {
     return root;
   }
@@ -88,39 +85,4 @@ export async function addWorktree(
     locked: undefined,
     prunable: undefined,
   });
-}
-
-/** Drops what a failed `worktree add` left: git's record of it, then the directory. */
-async function removeFailedAdd(repository: GitRepository, target: string): Promise<void> {
-  const worktrees = await listWorktrees(repository);
-  const isRegistered = worktrees.ok && worktrees.value.some((worktree) => worktree.path === target);
-  if (isRegistered) {
-    return;
-  }
-  await removeTree(target);
-  await pruneWorktrees(repository);
-}
-
-/** Resolves symlinks (macOS `/tmp` → `/private/tmp`) so paths match what git records. */
-async function canonicalRoot(root: string): Promise<Result<string, GitError>> {
-  if (!path.isAbsolute(root)) {
-    return err({
-      kind: 'invalid-argument',
-      argument: root,
-      reason: 'worktree root must be absolute',
-    });
-  }
-  return fromPromise(
-    (async (): Promise<string> => {
-      await mkdir(root, { recursive: true, mode: 0o700 });
-      return realpath(root);
-    })(),
-    (cause): GitError => {
-      return {
-        kind: 'invalid-argument',
-        argument: root,
-        reason: errorFrom(cause).message,
-      };
-    },
-  );
 }

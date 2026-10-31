@@ -1149,6 +1149,15 @@ function stubServices(
       open: notWired,
       getSettings: notWired,
       setPreferred: notWired,
+      setReviewEditsPrefix: notWired,
+    },
+    reviewEdits: {
+      get: notWired,
+      open: notWired,
+      previewSuggestions: notWired,
+      stageSuggestions: notWired,
+      previewDiscard: notWired,
+      discard: notWired,
     },
     display: { get: notWired, set: notWired },
     chat: {

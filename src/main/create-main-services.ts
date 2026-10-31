@@ -30,6 +30,7 @@ import type { ChatServices } from './chat/create-chat-services.ts';
 import { createDisplayServices } from './display/create-display-services.ts';
 import { createEditorServices } from './editor/create-editor-services.ts';
 import { createEditorSettings } from './editor/create-editor-settings.ts';
+import { createReviewEditsServices } from './review-edits/create-review-edits-services.ts';
 import type { EditorPlatform } from './editor/editor-platform.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { createFileServices } from './files/create-file-services.ts';
@@ -78,6 +79,11 @@ export interface MainServicesOptions {
   readonly logger: Logger;
   /** Where session head checkouts live (ADR 0020): `<userData>/worktrees` in the app. */
   readonly worktreeRoot: string;
+  /**
+   * Where review-edits worktrees live (ADR 0088): `<userData>/review-edits` in the app; defaults
+   * to `review-edits` beside `worktreeRoot`.
+   */
+  readonly reviewEditsRoot?: string;
   /**
    * The Node that runs the TypeScript language server and trace probes (ADR 0083), resolved once
    * at startup with `resolveNodeRuntime`. Without one, TypeScript has no language server and
@@ -230,6 +236,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   });
   const worktrees = createSessionWorktrees({
     root: options.worktreeRoot,
+    ...(options.reviewEditsRoot !== undefined && { editsRoot: options.reviewEditsRoot }),
     logger,
     git: context.git,
     storedHead: (sessionId): CommitSha | undefined => {
@@ -306,6 +313,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   gh.services = github;
   const files = createFileServices({ context });
   const display = createDisplayServices(options.display?.settingsPath);
+  const editorSettings = createEditorSettings(options.editor?.settingsPath);
+  const editor = createEditorServices({
+    context,
+    worktrees,
+    settings: editorSettings,
+    platform: options.editor?.platform ?? createSystemEditorPlatform(),
+  });
   return {
     sessions,
     impact,
@@ -337,11 +351,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       }),
     }),
     flow: createFlowServices({ context, parse: parser.parse }),
-    editor: createEditorServices({
+    editor,
+    reviewEdits: createReviewEditsServices({
       context,
       worktrees,
-      settings: createEditorSettings(options.editor?.settingsPath),
-      platform: options.editor?.platform ?? createSystemEditorPlatform(),
+      ura,
+      editor,
+      settings: editorSettings,
     }),
     display,
     chat,

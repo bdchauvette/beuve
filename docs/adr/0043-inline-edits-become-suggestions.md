@@ -19,3 +19,7 @@ Spec 5A reserves `e` for inline edit, and ADR 0018 noted that `@pierre/diffs/edi
 ## Consequences
 
 Reviewers can say "like this" with real code, and every export already carries it: GitHub suggestions for replacements of the anchored lines, a diff block otherwise, the patch in the agent JSON and XML. Edits outside the chosen lines are refused rather than silently widening the note; to suggest a larger change the reviewer selects more lines first. The editor works on the plain head file, so under the whitespace-ignoring display (ADR 0042) the edit session shows the full diff. One edit per card at a time; a card being edited stays mounted however far the stream scrolls.
+
+## Amendment (2026-10-31, ADR 0088)
+
+Edits made outside beuve can become suggested patches too. Open Review Edits gives each session one writable local branch, checked out in a worktree of its own; Turn into Suggestions snapshots it (uncommitted and untracked files included, on a temporary index) and turns each change region inside lines the pull request changed into a patch of this ADR's shape, validated with `parseSuggestedPatch` and attached to a covering staged note at that head when there is one; other edits become notes with a ` ```diff ` block. Nothing is staged without a preview. The rule "no path writes a file" is narrowed to: beuve writes only the review-edits worktree, through `git worktree`, never the reviewer's checkout or its own read-only ones, and never pushes.

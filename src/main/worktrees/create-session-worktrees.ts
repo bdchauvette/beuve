@@ -1,15 +1,20 @@
 import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { addBranchWorktree } from '#internal/git/add-branch-worktree.ts';
 import { addWorktree } from '#internal/git/add-worktree.ts';
+import { canonicalWorktreeRoot } from '#internal/git/canonical-worktree-root.ts';
+import { deleteBranch } from '#internal/git/delete-branch.ts';
 import type { GitError } from '#internal/git/git-error.ts';
 import { listWorktrees } from '#internal/git/list-worktrees.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository, OpenRepositoryOptions } from '#internal/git/open-repository.ts';
+import { planBranchWorktreePath } from '#internal/git/plan-branch-worktree-path.ts';
 import { planWorktreePath } from '#internal/git/plan-worktree-path.ts';
 import { pruneWorktrees } from '#internal/git/prune-worktrees.ts';
 import { removeWorktree } from '#internal/git/remove-worktree.ts';
+import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { errorFrom } from '#x/error/error-from.ts';
 import { chmodTree } from '#x/fs/chmod-tree.ts';
 import { removeTree } from '#x/fs/remove-tree.ts';
@@ -29,6 +34,12 @@ export interface SessionWorktreesOptions {
   readonly git: OpenRepositoryOptions;
   /** A session's stored head (ADR 0078), or `undefined` once the session is gone. */
   readonly storedHead: (sessionId: string) => CommitSha | undefined;
+  /**
+   * Directory for the writable review-edits worktrees (ADR 0088), `<userData>/review-edits`,
+   * separate from the read-only checkouts so no prune of `root` ever reaches them. Defaults to
+   * `review-edits` beside `root`.
+   */
+  readonly editsRoot?: string;
 }
 
 /** A session's stored head, as `prune` keeps it. */
@@ -46,7 +57,32 @@ export type WorktreeClaim =
    */
   | { readonly kind: 'session-head'; readonly sessionId: string; readonly headSha: CommitSha }
   /** A commit a sheet pins (ADR 0067): any commit, kept until the next startup prune. */
-  | { readonly kind: 'pinned-commit'; readonly sessionId: string; readonly commit: CommitSha };
+  | { readonly kind: 'pinned-commit'; readonly sessionId: string; readonly commit: CommitSha }
+  /**
+   * The session's writable review-edits worktree (ADR 0088): `branch`, a real local branch that
+   * starts at `base` when it is new, checked out under the edits root. Never read-only, never
+   * removed when its leases go or at startup: only {@link SessionWorktrees.discardEdits} removes
+   * it, with its branch.
+   */
+  | {
+      readonly kind: 'review-edits';
+      readonly sessionId: string;
+      readonly branch: string;
+      readonly base: CommitSha;
+    };
+
+/** The review-edits worktree to discard, and the branch tip the reviewer agreed to lose. */
+export interface DiscardEditsRequest {
+  readonly sessionId: string;
+  readonly branch: string;
+  readonly expectedTip: CommitSha;
+}
+
+/** Why a discard was refused: a git failure, or a lease still working in the worktree. */
+export type DiscardEditsError =
+  | GitError
+  | { readonly kind: 'in-use'; readonly path: string }
+  | { readonly kind: 'branch-moved'; readonly branch: string; readonly tip: CommitSha };
 
 /**
  * A checkout that stays on disk, at `commit`, until it is disposed (`using lease = …`). Disposing
@@ -96,6 +132,20 @@ export interface SessionWorktrees {
   readonly prune: (keep: readonly WorktreeKeep[]) => Promise<void>;
   /** Resolves once every queued add and removal has finished, for quitting and tests. */
   readonly settled: () => Promise<void>;
+  /**
+   * Removes a session's review-edits worktree (`--force`: its uncommitted work goes) and deletes
+   * its branch if it still points at `expectedTip`, on the path's serial chain. Refuses while a
+   * lease holds the worktree. The caller has shown the reviewer what is lost (ADR 0088).
+   */
+  readonly discardEdits: (
+    repository: GitRepository,
+    request: DiscardEditsRequest,
+  ) => Promise<Result<undefined, DiscardEditsError>>;
+  /** Where `branch`'s review-edits worktree is, or would be, checked out; creates nothing. */
+  readonly editsPath: (
+    repository: GitRepository,
+    branch: string,
+  ) => Promise<Result<string, GitError>>;
 }
 
 /** One checkout path: its leases, and the chain its adds and removals run on, one at a time. */
@@ -123,6 +173,9 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
    * asks git and repairs what it finds. Changed only on a path's serial chain, or by the prune.
    */
   const checkedOut = new Map<string, CommitSha>();
+  /** Review-edits worktrees this manager checked out, path → branch; same rules as `checkedOut`. */
+  const branchesOut = new Map<string, string>();
+  const editsRoot = options.editsRoot ?? path.join(path.dirname(options.root), 'review-edits');
   const handles = new Map<string, Promise<Result<GitRepository, GitError>>>();
   let canonicalRoot: Promise<Result<string, GitError>> | undefined;
   let pruning: Promise<void> | undefined;
@@ -161,6 +214,36 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       canonicalRoot = undefined;
     }
     return resolved;
+  };
+
+  /** The root and path of a claim's worktree: per commit under `root`, per branch under the edits root. */
+  const place = async (
+    repository: GitRepository,
+    claim: WorktreeClaim,
+  ): Promise<Result<Placed, GitError>> => {
+    let root: Result<string, GitError>;
+    let planned: Result<string, GitError>;
+    if (claim.kind === 'review-edits') {
+      root = await canonicalWorktreeRoot(editsRoot);
+      if (!root.ok) {
+        return root;
+      }
+      planned = planBranchWorktreePath({
+        root: root.value,
+        repositoryRoot: repository.root,
+        branch: claim.branch,
+      });
+    } else {
+      root = await rootPath();
+      if (!root.ok) {
+        return root;
+      }
+      planned = planWorktreePath(root.value, repository.root, commitOf(claim));
+    }
+    if (!planned.ok) {
+      return planned;
+    }
+    return ok({ root: root.value, path: planned.value });
   };
 
   const isHeld = (path: string): boolean => {
@@ -235,11 +318,38 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     }
   };
 
+  /** Checks the branch out writable (or finds it), and keeps it as the session's edits. */
+  const grantEdits = async (
+    entry: Entry,
+    { root, claim }: EditsGrant,
+  ): Promise<Result<undefined, WorktreeLeaseError>> => {
+    const isKnown =
+      branchesOut.get(entry.path) === claim.branch && (await isCheckoutPresent(entry.path));
+    if (!isKnown) {
+      branchesOut.delete(entry.path);
+      const added = await addBranchWorktree(entry.repository, {
+        root,
+        branch: claim.branch,
+        base: claim.base,
+      });
+      if (!added.ok) {
+        return added;
+      }
+      branchesOut.set(entry.path, claim.branch);
+      logger.debug('review edits ready', { path: entry.path, created: added.value.createdBranch });
+    }
+    holders.set(holderOf(claim), entry.path);
+    return ok(undefined);
+  };
+
   /** Checks the commit out (or finds it) and, if the claim still holds, records its holder. */
   const grant = async (
     entry: Entry,
     { root, claim, commit }: Grant,
   ): Promise<Result<undefined, WorktreeLeaseError>> => {
+    if (claim.kind === 'review-edits') {
+      return grantEdits(entry, { root, claim });
+    }
     const isKnown = checkedOut.get(entry.path) === commit && (await isCheckoutPresent(entry.path));
     if (!isKnown) {
       checkedOut.delete(entry.path);
@@ -298,15 +408,11 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       if (!own.ok) {
         return own;
       }
-      const root = await rootPath();
-      if (!root.ok) {
-        return root;
+      const placed = await place(own.value, claim);
+      if (!placed.ok) {
+        return placed;
       }
-      const planned = planWorktreePath(root.value, own.value.root, commit);
-      if (!planned.ok) {
-        return planned;
-      }
-      const path = planned.value;
+      const { root, path } = placed.value;
       const entry = entries.getOrInsertComputed(path, () => {
         return {
           path,
@@ -319,7 +425,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       entry.leases += 1;
       const lease = leaseOn(entry, commit);
       const granted = serially(entry, async () => {
-        return grant(entry, { root: root.value, claim, commit });
+        return grant(entry, { root, claim, commit });
       });
       let outcome: Result<undefined, WorktreeLeaseError> | 'aborted';
       if (signal === undefined) {
@@ -365,6 +471,61 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         await Promise.all(pending);
       }
     },
+    editsPath: async (repository, branch): Promise<Result<string, GitError>> => {
+      const placed = await place(repository, {
+        kind: 'review-edits',
+        sessionId: '',
+        branch,
+        base: '' as CommitSha,
+      });
+      if (!placed.ok) {
+        return placed;
+      }
+      return ok(placed.value.path);
+    },
+    discardEdits: async (
+      repository,
+      { sessionId, branch, expectedTip },
+    ): Promise<Result<undefined, DiscardEditsError>> => {
+      const own = await handleFor(repository);
+      if (!own.ok) {
+        return own;
+      }
+      const placed = await place(own.value, {
+        kind: 'review-edits',
+        sessionId,
+        branch,
+        base: expectedTip,
+      });
+      if (!placed.ok) {
+        return placed;
+      }
+      const { path } = placed.value;
+      const entry = entries.getOrInsertComputed(path, () => {
+        return { path, repository: own.value, leases: 0, steps: 0, tail: Promise.resolve() };
+      });
+      return serially(entry, async (): Promise<Result<undefined, DiscardEditsError>> => {
+        if (entry.leases > 0) {
+          return err({ kind: 'in-use', path });
+        }
+        const tip = await resolveRevision(own.value, `refs/heads/${branch}`);
+        if (tip.ok && tip.value !== expectedTip) {
+          return err({ kind: 'branch-moved', branch, tip: tip.value });
+        }
+        branchesOut.delete(path);
+        holders.delete(`edits\0${sessionId}`);
+        const removed = await removeWorktree(own.value, path, { force: true });
+        if (!removed.ok && (await isCheckoutPresent(path))) {
+          return removed;
+        }
+        await removeTree(path);
+        await pruneWorktrees(own.value);
+        if (!tip.ok) {
+          return ok(undefined);
+        }
+        return deleteBranch(own.value, { branch, expected: expectedTip });
+      });
+    },
   };
 }
 
@@ -372,6 +533,9 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
 function holderOf(claim: WorktreeClaim): string {
   if (claim.kind === 'session-head') {
     return `session\0${claim.sessionId}`;
+  }
+  if (claim.kind === 'review-edits') {
+    return `edits\0${claim.sessionId}`;
   }
   return `pinned\0${claim.sessionId}\0${claim.commit}`;
 }
@@ -440,9 +604,24 @@ interface Grant {
   readonly commit: CommitSha;
 }
 
+/** A review-edits claim to grant, and the edits root it checks out under. */
+interface EditsGrant {
+  readonly root: string;
+  readonly claim: Extract<WorktreeClaim, { kind: 'review-edits' }>;
+}
+
+/** Where a claim's worktree goes: the root it lives under, and its own path. */
+interface Placed {
+  readonly root: string;
+  readonly path: string;
+}
+
 function commitOf(claim: WorktreeClaim): CommitSha {
   if (claim.kind === 'session-head') {
     return claim.headSha;
+  }
+  if (claim.kind === 'review-edits') {
+    return claim.base;
   }
   return claim.commit;
 }

@@ -10,6 +10,7 @@ import { noBarrelFiles } from './no-barrel-files.ts';
 import { noCheckThenOpen } from './no-check-then-open.ts';
 import { noDate } from './no-date.ts';
 import { noElectronAsNode } from './no-electron-as-node.ts';
+import { noGitPush } from './no-git-push.ts';
 import { noHandFormattedDuration } from './no-hand-formatted-duration.ts';
 import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template.ts';
 import { noInlineObjectTypeInSignature } from './no-inline-object-type-in-signature.ts';
@@ -47,6 +48,7 @@ const plugin = {
     'no-check-then-open': noCheckThenOpen,
     'no-date': noDate,
     'no-electron-as-node': noElectronAsNode,
+    'no-git-push': noGitPush,
     'no-hand-formatted-duration': noHandFormattedDuration,
     'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
     'no-inline-object-type-in-signature': noInlineObjectTypeInSignature,

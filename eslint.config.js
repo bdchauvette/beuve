@@ -216,6 +216,18 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/no-git-push',
+    // ADR 0088: beuve never pushes, and review-edits branches stay local. The runner's
+    // allow-list refuses a push at run time; this keeps one from being written. Tests may push
+    // to their own bare fixtures.
+    files: ['src/**/*.ts'],
+    ignores: [...testFiles, 'src/**/testing/**/*.ts', 'src/testing/**/*.ts'],
+    rules: {
+      'local/no-git-push': 'error',
+    },
+  },
+
+  {
     // ADR 0086: no ternaries outside Lit templates, block bodies for non-trivial arrows, named
     // types and few, unswappable parameters in signatures.
     name: 'beuve/style-rules',

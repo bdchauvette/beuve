@@ -14,6 +14,7 @@ function settings(): EditorSettingsView {
       { id: 'vscode', name: 'VS Code', installed: true },
       { id: 'cursor', name: 'Cursor', installed: false },
     ],
+    reviewEditsPrefix: 'review/',
   };
 }
 

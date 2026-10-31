@@ -11,6 +11,7 @@ import { Stopwatch } from '#x/time/stopwatch.ts';
 import type { GitError } from './git-error.ts';
 import { gitHardeningArgs } from './git-hardening-args.ts';
 import { hardenedGitEnvironment } from './hardened-git-environment.ts';
+import { isAllowedGitCommand } from './is-allowed-git-command.ts';
 
 /** One streamed git read. `args` start at the subcommand; hardening options are prepended. */
 export interface GitStreamRequest {
@@ -52,6 +53,14 @@ export async function streamGit(
   const withNul = request.args.find((arg) => arg.includes('\0'));
   if (withNul !== undefined) {
     return err({ kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' });
+  }
+  if (!isAllowedGitCommand(request.args)) {
+    const [subcommand = ''] = request.args;
+    return err({
+      kind: 'invalid-argument',
+      argument: subcommand,
+      reason: 'not a git subcommand beuve runs',
+    });
   }
   if (request.signal?.aborted === true) {
     return err({ kind: 'aborted', args: request.args });

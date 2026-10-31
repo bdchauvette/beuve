@@ -79,6 +79,14 @@ function headFreeSessionChannels(): Readonly<
     'chat:compact': 'a summary of the conversation, which spans heads',
     'chat:clear': 'the transcript belongs to the session, not a head',
     'editor:open': 'opens a file for the reviewer; it stores nothing',
+    'review-edits:get': read,
+    'review-edits:open':
+      'the branch records the head it starts from (ADR 0088); a later head leaves it there',
+    'review-edits:preview-suggestions': 'a read: the plan names the head its items anchor to',
+    'review-edits:stage-suggestions':
+      'items anchor to the edits branch’s recorded base, which the previewed digest pins',
+    'review-edits:preview-discard': read,
+    'review-edits:discard': 'removes the edits branch, which belongs to the session, not a head',
     'github:get-pr': read,
   };
 }

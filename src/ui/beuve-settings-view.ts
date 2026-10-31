@@ -117,9 +117,15 @@ export class BeuveSettingsView extends LitElement {
       color: var(--beuve-text);
     }
 
-    select {
+    select,
+    input[type='text'] {
       justify-self: start;
       min-width: 160px;
+    }
+
+    input[type='text'] {
+      font: var(--beuve-font-mono);
+      color: var(--beuve-text);
     }
 
     .choices {
@@ -259,6 +265,20 @@ export class BeuveSettingsView extends LitElement {
     }
   }
 
+  private async setReviewEditsPrefix(prefix: string): Promise<void> {
+    const { api: bridge } = this;
+    if (bridge === undefined) {
+      return;
+    }
+    const saved = await bridge.invoke('editor:set-review-edits-prefix', { prefix });
+    if (saved.ok) {
+      this.editors = saved.value;
+      this.error = '';
+    } else {
+      this.error = saved.error.message;
+    }
+  }
+
   private async removeTrust(repositoryPath: string): Promise<void> {
     const { api: bridge } = this;
     if (bridge === undefined) {
@@ -297,6 +317,23 @@ export class BeuveSettingsView extends LitElement {
               </option>`;
             })}
           </select>
+        </div>
+        <div class="row">
+          <label
+            for="review-edits-prefix"
+            title="Open Review Edits makes a local branch named after it, such as review/pr-12; beuve never pushes it."
+          >
+            Review edits branches start with
+          </label>
+          <input
+            id="review-edits-prefix"
+            type="text"
+            spellcheck="false"
+            .value=${this.editors?.reviewEditsPrefix ?? 'review/'}
+            @change=${(event: Event): void => {
+              void this.setReviewEditsPrefix((event.target as HTMLInputElement).value.trim());
+            }}
+          />
         </div>
         <div class="row">
           <label for="order">Order files by</label>

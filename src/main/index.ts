@@ -73,6 +73,7 @@ async function launch(): Promise<void> {
         db,
         logger,
         worktreeRoot,
+        reviewEditsRoot: path.join(userData, 'review-edits'),
         nodeRuntime,
         editor: {
           settingsPath,

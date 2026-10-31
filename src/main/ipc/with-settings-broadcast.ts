@@ -6,6 +6,7 @@ import type { IpcHandlers, IpcSender } from './create-ipc-handlers.ts';
 const settingsChannels = [
   'display:set',
   'editor:set-preferred',
+  'editor:set-review-edits-prefix',
   'trace:set-trust',
   'trace:remove-trust',
 ] as const satisfies readonly InvokeChannel[];

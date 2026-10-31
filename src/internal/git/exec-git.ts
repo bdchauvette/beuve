@@ -12,6 +12,7 @@ import { Stopwatch } from '#x/time/stopwatch.ts';
 import type { GitError } from './git-error.ts';
 import { gitHardeningArgs } from './git-hardening-args.ts';
 import { hardenedGitEnvironment } from './hardened-git-environment.ts';
+import { isAllowedGitCommand } from './is-allowed-git-command.ts';
 import type { InterruptionPolicy } from './interruption-policy.ts';
 
 /** One git invocation. `args` start at the subcommand; hardening options are prepended. */
@@ -27,6 +28,11 @@ export interface GitRequest {
   readonly maxBufferBytes?: number;
   /** Written to git's stdin, which is then closed. */
   readonly input?: string;
+  /**
+   * An absolute path git uses as the index instead of the repository's (`GIT_INDEX_FILE`), so a
+   * snapshot of a working tree never touches the user's index (ADR 0088).
+   */
+  readonly indexFile?: string | undefined;
   /** What an abort of `signal` does: SIGTERM (`read`, `owned-write`) or nothing until git exits (`atomic`). */
   readonly policy: InterruptionPolicy;
   /** Interrupts git as `policy` says; the request then fails with `aborted`. */
@@ -64,6 +70,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     timeout,
     maxBufferBytes,
     input: request.input,
+    indexFile: request.indexFile,
     signal: interruptibleBy(policy, signal),
   });
   request.logger?.debug('git', {
@@ -97,10 +104,25 @@ function validateRequest(request: GitRequest): GitError | undefined {
     return { kind: 'invalid-argument', argument: request.cwd, reason: 'cwd must be absolute' };
   }
   const withNul = [request.cwd, ...request.args].find((arg) => arg.includes('\0'));
-  if (withNul === undefined) {
-    return undefined;
+  if (withNul !== undefined) {
+    return { kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' };
   }
-  return { kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' };
+  if (!isAllowedGitCommand(request.args)) {
+    const [subcommand = ''] = request.args;
+    return {
+      kind: 'invalid-argument',
+      argument: subcommand,
+      reason: 'not a git subcommand beuve runs',
+    };
+  }
+  if (request.indexFile !== undefined && !path.isAbsolute(request.indexFile)) {
+    return {
+      kind: 'invalid-argument',
+      argument: request.indexFile,
+      reason: 'index file must be absolute',
+    };
+  }
+  return undefined;
 }
 
 interface ExecOutcome {
@@ -115,7 +137,17 @@ interface ExecSettings {
   readonly timeout: Temporal.Duration;
   readonly maxBufferBytes: number;
   readonly input: string | undefined;
+  readonly indexFile: string | undefined;
   readonly signal: AbortSignal | undefined;
+}
+
+/** The hardened environment, pointed at `indexFile` when there is one. */
+function environmentFor(indexFile: string | undefined): NodeJS.ProcessEnv {
+  const environment = hardenedGitEnvironment();
+  if (indexFile === undefined) {
+    return environment;
+  }
+  return { ...environment, GIT_INDEX_FILE: indexFile };
 }
 
 /** An `atomic` command runs to the end once started; the others stop on the signal. */
@@ -140,7 +172,7 @@ async function execute(
     args,
     {
       cwd: options.cwd,
-      env: hardenedGitEnvironment(),
+      env: environmentFor(options.indexFile),
       timeout: options.timeout.total('milliseconds'),
       killSignal: 'SIGTERM',
       maxBuffer: options.maxBufferBytes,

@@ -331,6 +331,62 @@ describe('createSessionWorktrees', () => {
     await expect(attemptWrite(path.join(checkout, 'f.txt'), signal)).resolves.toBe('EACCES');
   });
 
+  test('review edits: a writable branch worktree that outlives its leases and the prune', async ({
+    expect,
+    repo,
+    repository,
+    worktreeRoot,
+    logger,
+    signal,
+  }) => {
+    const { c1, c2 } = await twoCommits(repo);
+    const { worktrees, heads } = manager(worktreeRoot, logger.logger, { signal });
+    heads.set('S', c2);
+    const claim = edits(c1);
+    const checkout = await leasedPath(worktrees, { repository, claim, signal });
+    await worktrees.settled();
+    const editsRoot = path.join(path.dirname(worktreeRoot), 'review-edits');
+    expect(checkout.startsWith(editsRoot)).toBe(true);
+    expect(readFileSync(path.join(checkout, 'f.txt'), 'utf8')).toBe('1\n');
+    await expect(attemptWrite(path.join(checkout, 'f.txt'), signal)).resolves.toBe('written');
+    await expect(attemptWrite(path.join(checkout, 'new.txt'), signal)).resolves.toBe('written');
+
+    await worktrees.prune([{ repoPath: repo.directory, headSha: c2 }]);
+    using again = okValueFrom(await worktrees.acquire(repository, claim, { signal }));
+    expect(again.path).toBe(checkout);
+    expect(readFileSync(path.join(checkout, 'f.txt'), 'utf8')).toBe('changed\n');
+    await expect(repo.git('rev-parse', 'refs/heads/review/s')).resolves.toBe(c1);
+    await expect(
+      worktrees.discardEdits(repository, { sessionId: 'S', branch: 'review/s', expectedTip: c1 }),
+    ).resolves.toStrictEqual({ ok: false, error: { kind: 'in-use', path: checkout } });
+  });
+
+  test('discarding review edits removes the worktree and the branch, unless it moved', async ({
+    expect,
+    repo,
+    repository,
+    worktreeRoot,
+    logger,
+    signal,
+  }) => {
+    const { c1, c2 } = await twoCommits(repo);
+    const { worktrees } = manager(worktreeRoot, logger.logger, { signal });
+    const checkout = await leasedPath(worktrees, { repository, claim: edits(c1), signal });
+    await repo.git('update-ref', 'refs/heads/review/s', c2);
+    const request = { sessionId: 'S', branch: 'review/s', expectedTip: c1 };
+    await expect(worktrees.discardEdits(repository, request)).resolves.toStrictEqual({
+      ok: false,
+      error: { kind: 'branch-moved', branch: 'review/s', tip: c2 },
+    });
+    expect(existsSync(checkout)).toBe(true);
+    await expect(
+      worktrees.discardEdits(repository, { ...request, expectedTip: c2 }),
+    ).resolves.toStrictEqual({ ok: true, value: undefined });
+    expect(existsSync(checkout)).toBe(false);
+    await expect(repo.git('branch', '--list', 'review/s')).resolves.toBe('');
+    await expect(repo.git('worktree', 'list', '--porcelain')).resolves.not.toContain(checkout);
+  });
+
   test('an already aborted signal checks nothing out', async ({
     expect,
     repo,
@@ -373,6 +429,11 @@ function manager(root: string, logger: Logger, git: OpenRepositoryOptions = {}):
 
 function head(sessionId: string, headSha: CommitSha): WorktreeClaim {
   return { kind: 'session-head', sessionId, headSha };
+}
+
+/** Session `S`'s review edits on `review/s`, starting at `base`. */
+function edits(base: CommitSha): WorktreeClaim {
+  return { kind: 'review-edits', sessionId: 'S', branch: 'review/s', base };
 }
 
 async function opened(

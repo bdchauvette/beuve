@@ -16,6 +16,7 @@ import type { RequestOptions } from './request-options.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
 import type { DisplayServices } from './display/create-display-services.ts';
 import type { EditorServices } from './editor/create-editor-services.ts';
+import type { ReviewEditsServices } from './review-edits/create-review-edits-services.ts';
 import type { FileServices } from './files/create-file-services.ts';
 import type { FlowServices } from './flow/create-flow-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
@@ -65,7 +66,9 @@ export interface MainServices {
   /** The browser for chat answers' links (ADR 0040, amended). */
   readonly shell: ShellServices;
   readonly flow: FlowServices;
-  readonly editor: EditorServices;
+  readonly editor: Omit<EditorServices, 'launchFile'>;
+  /** Review edits: a writable branch whose edits become suggestions (ADR 0088). */
+  readonly reviewEdits: ReviewEditsServices;
   readonly display: DisplayServices;
   readonly chat: Omit<ChatServices, 'observeHead' | 'testModel'>;
   readonly ura: Omit<

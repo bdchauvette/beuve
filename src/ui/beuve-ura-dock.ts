@@ -4,6 +4,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 import type {
+  ReviewEditPreviewView,
+  UraAnchorView,
   UraExportTarget,
   UraItemView,
   UraSeverityView,
@@ -20,6 +22,9 @@ import { keyPlatformOf } from './key-platform-of.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import type { GithubDockState } from './github-post-state.ts';
+import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state.ts';
+import { describeHarvest } from './describe-harvest.ts';
+import { describeEditCounts } from './describe-edit-counts.ts';
 import { moveUraItem } from './move-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
@@ -312,6 +317,45 @@ export class BeuveUraDock extends LitElement {
         gap: var(--beuve-space-1);
       }
 
+      .review-edits {
+        display: grid;
+        gap: var(--beuve-space-1);
+        margin-top: var(--beuve-space-2);
+        padding-top: var(--beuve-space-2);
+        border-top: 1px solid var(--beuve-border);
+      }
+
+      .review-edits .note {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .review-edits > .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-1);
+      }
+
+      .review-edits code {
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+      }
+
+      .harvest {
+        display: grid;
+        gap: var(--beuve-space-1);
+        max-height: 40vh;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+        font: var(--beuve-font-small);
+      }
+
+      .harvest li {
+        cursor: default;
+      }
+
       button.link {
         display: inline;
         padding: 0;
@@ -399,6 +443,9 @@ export class BeuveUraDock extends LitElement {
   /** `process.platform`, for the Save button's tooltip. */
   @property() accessor platform = '';
 
+  /** The session's review edits (ADR 0088); shown only once they exist or an action runs. */
+  @property({ attribute: false }) accessor reviewEdits: ReviewEditsDockState | undefined;
+
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
@@ -406,6 +453,10 @@ export class BeuveUraDock extends LitElement {
     this.addController(
       new ActionDelegation(this, {
         click: {
+          'review-edits': ({ op = '' }, event): void => {
+            event.stopPropagation();
+            this.emit('beuve-review-edits', { op });
+          },
           item: withPayload(
             ({ itemId }) => {
               return this.itemOf(itemId);
@@ -779,6 +830,108 @@ export class BeuveUraDock extends LitElement {
     </section>`;
   }
 
+  /**
+   * Review edits (ADR 0088), quietly: the branch and how much work it holds, with Open, Turn into
+   * Suggestions and Discard; then the preview of what staging does, or of what discarding loses,
+   * each confirmed before anything happens. Keys live in the menus' tooltips, not here.
+   */
+  private renderReviewEdits(): TemplateResult | typeof nothing {
+    const state = this.reviewEdits;
+    const view = state?.view;
+    if (state === undefined || (view?.exists !== true && state.flow.kind === 'idle')) {
+      return nothing;
+    }
+    const { flow } = state;
+    return html`<section class="review-edits" aria-label="Review edits">
+      ${
+        view?.exists === true
+          ? html`<p class="note" title=${view.path ?? view.branch}>
+                Review edits on <code><bdi>${pathText(view.branch)}</bdi></code
+                >: ${describeEditCounts(view)}${view.isOnSessionHead ? '' : ', on an older head'}
+              </p>
+              <div class="actions">
+                <button type="button" data-action="review-edits" data-op="open">Open</button>
+                <button type="button" data-action="review-edits" data-op="preview">
+                  Turn into suggestions…
+                </button>
+                <button type="button" data-action="review-edits" data-op="discard-preview">
+                  Discard…
+                </button>
+              </div>`
+          : nothing
+      }
+      ${this.renderReviewEditsFlow(flow)}
+    </section>`;
+  }
+
+  private renderReviewEditsFlow(flow: ReviewEditsFlow): TemplateResult | typeof nothing {
+    switch (flow.kind) {
+      case 'idle': {
+        return nothing;
+      }
+      case 'busy': {
+        return html`<p class="note" role="status">${flow.text}</p>`;
+      }
+      case 'done': {
+        return html`<p class="note posted" role="status">${flow.text}</p>`;
+      }
+      case 'failed': {
+        return html`<p class="note error" role="alert">${flow.text}</p>`;
+      }
+      case 'preview': {
+        const staged = flow.plan.edits.filter((edit) => edit.action !== 'unchanged');
+        return html`<div class="github confirm" role="group" aria-label="Confirm staging">
+          <p class="note">${describeHarvest(flow.plan.edits)}</p>
+          <ol class="harvest" aria-label="What staging does">
+            ${staged.map((edit) => {
+              return html`<li>
+                <div class="meta">
+                  <span class="severity issue">${harvestActionLabels[edit.action]}</span>
+                  <span class="anchor"><bdi>${pathText(anchorLabel(edit.anchor))}</bdi></span>
+                </div>
+                <div class="title">${edit.title}</div>
+                <beuve-patch-preview .patch=${edit.diff}></beuve-patch-preview>
+              </li>`;
+            })}
+          </ol>
+          <div class="actions">
+            <button type="button" data-action="review-edits" data-op="cancel">Cancel</button>
+            <button
+              type="button"
+              class="primary"
+              ?disabled=${staged.length === 0}
+              data-action="review-edits"
+              data-op="stage"
+            >
+              Stage
+            </button>
+          </div>
+        </div>`;
+      }
+      case 'discard': {
+        const { loss } = flow;
+        return html`<div class="github confirm" role="group" aria-label="Confirm discarding">
+          <p class="note">
+            Discard <code><bdi>${pathText(loss.branch)}</bdi></code> and its worktree? This loses
+            ${describeEditCounts({ files: loss.files.length, commits: loss.commits })}, and can't be
+            undone.
+          </p>
+          <ul class="harvest" aria-label="Files that would be lost">
+            ${loss.files.map((file) => {
+              return html`<li><bdi>${pathText(file)}</bdi></li>`;
+            })}
+          </ul>
+          <div class="actions">
+            <button type="button" data-action="review-edits" data-op="cancel">Cancel</button>
+            <button type="button" class="primary" data-action="review-edits" data-op="discard">
+              Discard
+            </button>
+          </div>
+        </div>`;
+      }
+    }
+  }
+
   /** Post to GitHub: a button, then a confirmation with what goes inline and into the body. */
   private renderGithub(github: GithubDockState): TemplateResult {
     if (!github.isSignedIn) {
@@ -995,7 +1148,7 @@ export class BeuveUraDock extends LitElement {
                 </ol>`
           }
         </section>
-        ${this.renderExport(stagedCount)}
+        ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
       </div>
     `;
   }
@@ -1023,6 +1176,27 @@ const inPlaceKeys: Readonly<Record<string, CommandId>> = {
 };
 
 /** ⌘/Ctrl+Enter in the editor saves, as Enter in its title does. */
+const harvestActionLabels: Readonly<Record<ReviewEditPreviewView['action'], string>> = {
+  create: 'new',
+  attach: 'attach',
+  update: 'update',
+  unchanged: 'staged',
+};
+
+/** `path:lines`, the path, or `whole change`, as the preview names where an edit goes. */
+function anchorLabel(anchor: UraAnchorView): string {
+  if (anchor.kind === 'lines') {
+    if (anchor.startLine === anchor.endLine) {
+      return `${anchor.path}:${String(anchor.startLine)}`;
+    }
+    return `${anchor.path}:${String(anchor.startLine)}-${String(anchor.endLine)}`;
+  }
+  if (anchor.kind === 'file') {
+    return anchor.path;
+  }
+  return 'whole change';
+}
+
 function submitOnModEnter(event: KeyboardEvent, form: HTMLFormElement): void {
   if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
     return;

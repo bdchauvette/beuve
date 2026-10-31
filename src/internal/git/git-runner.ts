@@ -70,4 +70,6 @@ export interface GitExecOptions extends GitRunOptions {
   readonly maxBufferBytes?: number;
   /** Overrides the repository's timeout for this call, e.g. for a network fetch. */
   readonly timeout?: Temporal.Duration;
+  /** A temporary index to use instead of the repository's (`GIT_INDEX_FILE`, ADR 0088). */
+  readonly indexFile?: string;
 }

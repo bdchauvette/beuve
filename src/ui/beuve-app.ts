@@ -35,6 +35,7 @@ import type {
   ReviewOrderMode,
   ReviewOrderView,
   ReviewView,
+  ReviewEditsView,
   SessionSummary,
   SetDiffDisplayRequest,
   SidebarSideView,
@@ -104,6 +105,8 @@ import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
 import type { FlowState } from './flow-state.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
+import type { ReviewEditsFlow } from './review-edits-state.ts';
+import { lineFromTarget } from './line-from-target.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
 import { applyTraceStatus } from './apply-trace-status.ts';
 import { formatIsoDuration } from './format-iso-duration.ts';
@@ -166,6 +169,17 @@ interface FileReviewedDetail {
 interface FindingRefDetail {
   readonly messageId: string;
   readonly finding: number;
+}
+
+/** A repository-relative file and a line to open it at. */
+interface EditorPlace {
+  readonly path: string;
+  readonly line: number;
+}
+
+/** A button of the dock's review-edits section (ADR 0088). */
+interface ReviewEditsDetail {
+  readonly op: string;
 }
 
 /** Post the staged review to GitHub, with this verdict over the derived one. */
@@ -560,6 +574,42 @@ export class BeuveApp extends LitElement {
     this.githubPost = { kind: 'idle' };
   };
 
+  /** Edits happen in the editor, outside beuve: coming back to the window counts them again. */
+  private readonly onWindowFocus = (): void => {
+    const sessionId = this.review?.session.id;
+    if (sessionId !== undefined) {
+      void this.loadReviewEdits(sessionId);
+    }
+  };
+
+  private readonly onReviewEdits = (event: CustomEvent<ReviewEditsDetail>): void => {
+    switch (event.detail.op) {
+      case 'open': {
+        void this.openReviewEdits();
+        return;
+      }
+      case 'preview': {
+        void this.previewReviewEdits();
+        return;
+      }
+      case 'stage': {
+        void this.stageReviewEdits();
+        return;
+      }
+      case 'discard-preview': {
+        void this.previewDiscardReviewEdits();
+        return;
+      }
+      case 'discard': {
+        void this.discardReviewEdits();
+        return;
+      }
+      default: {
+        this.reviewEditsFlow = { kind: 'idle' };
+      }
+    }
+  };
+
   private readonly onMarkReviewed = (): void => {
     void this.markReviewed();
   };
@@ -949,6 +999,8 @@ export class BeuveApp extends LitElement {
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
   @state() accessor githubPost: GithubPostState = { kind: 'idle' };
+  @state() accessor reviewEdits: ReviewEditsView | undefined;
+  @state() accessor reviewEditsFlow: ReviewEditsFlow = { kind: 'idle' };
 
   constructor() {
     super();
@@ -963,6 +1015,7 @@ export class BeuveApp extends LitElement {
   }
 
   private connect(): void {
+    addEventListener('focus', this.onWindowFocus);
     this.addEventListener('focusin', this.onFocusIn);
     this.addEventListener('focusout', this.onFocusOut);
     this.addEventListener('contextmenu', this.onContextMenu);
@@ -1005,6 +1058,7 @@ export class BeuveApp extends LitElement {
   }
 
   private disconnect(): void {
+    removeEventListener('focus', this.onWindowFocus);
     this.removeEventListener('focusin', this.onFocusIn);
     this.removeEventListener('focusout', this.onFocusOut);
     this.removeEventListener('contextmenu', this.onContextMenu);
@@ -1276,6 +1330,157 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
+  private async loadReviewEdits(sessionId: string): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const loaded = await bridge.invoke('review-edits:get', { sessionId });
+    if (this.review?.session.id !== sessionId) {
+      return;
+    }
+    if (loaded.ok) {
+      this.reviewEdits = loaded.value;
+    }
+  }
+
+  /** Where Open Review Edits opens: the tree's file, else the diff's line, else the first file. */
+  private reviewEditsLocation(review: ReviewView): EditorPlace | undefined {
+    const treePath = this.treePath();
+    if (treePath !== undefined) {
+      return { path: treePath, line: 1 };
+    }
+    const target = this.stream()?.target();
+    if (target !== undefined && target.kind !== 'change') {
+      return { path: target.file.path, line: lineFromTarget(target) ?? 1 };
+    }
+    const first = review.files.find((file) => file.status !== 'deleted');
+    if (first === undefined) {
+      return undefined;
+    }
+    return { path: first.path, line: 1 };
+  }
+
+  /** Open Review Edits (ADR 0088): the writable branch, made on first use, in the editor. */
+  private async openReviewEdits(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    const place = this.reviewEditsLocation(review);
+    const opened = await bridge.invoke('review-edits:open', {
+      sessionId: review.session.id,
+      ...(place !== undefined && place),
+    });
+    if (!opened.ok) {
+      this.showNotice({ tone: 'error', text: opened.error.message });
+      return;
+    }
+    let made = '';
+    if (opened.value.created) {
+      made = ', a new local branch beuve never pushes';
+    }
+    this.showNotice({
+      tone: 'info',
+      text: `Opened review edits on ${revealFormatControls(opened.value.branch)}${made}, in ${opened.value.editorName}.`,
+    });
+    await this.loadReviewEdits(review.session.id);
+  }
+
+  /** Turn Edits into Suggestions, step one: what staging would do, to confirm. */
+  private async previewReviewEdits(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined || this.reviewEditsFlow.kind === 'busy') {
+      return;
+    }
+    this.reviewEditsFlow = { kind: 'busy', text: 'Reading the review edits…' };
+    const plan = await bridge.invoke('review-edits:preview-suggestions', {
+      sessionId: review.session.id,
+    });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
+    if (plan.ok) {
+      this.reviewEditsFlow = { kind: 'preview', plan: plan.value };
+    } else {
+      this.reviewEditsFlow = { kind: 'failed', text: plan.error.message };
+    }
+  }
+
+  /** Step two: stage exactly the previewed plan; main refuses if the edits changed since. */
+  private async stageReviewEdits(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review, reviewEditsFlow: flow } = this;
+    if (bridge === undefined || review === undefined || flow.kind !== 'preview') {
+      return;
+    }
+    this.reviewEditsFlow = { kind: 'busy', text: 'Staging…' };
+    const staged = await bridge.invoke('review-edits:stage-suggestions', {
+      sessionId: review.session.id,
+      digest: flow.plan.digest,
+    });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
+    if (!staged.ok) {
+      this.reviewEditsFlow = { kind: 'failed', text: staged.error.message };
+      return;
+    }
+    const { created, attached, updated, unchanged } = staged.value;
+    this.reviewEditsFlow = {
+      kind: 'done',
+      text: `Staged: ${String(created)} new, ${String(attached)} attached to notes, ${String(updated)} updated, ${String(unchanged)} already there.`,
+    };
+    void this.refreshUra(review.session.id);
+  }
+
+  /** Discard Review Edits, step one: what would be lost. */
+  private async previewDiscardReviewEdits(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined || this.reviewEditsFlow.kind === 'busy') {
+      return;
+    }
+    const loss = await bridge.invoke('review-edits:preview-discard', {
+      sessionId: review.session.id,
+    });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
+    if (loss.ok) {
+      this.reviewEditsFlow = { kind: 'discard', loss: loss.value };
+    } else {
+      this.reviewEditsFlow = { kind: 'failed', text: loss.error.message };
+    }
+  }
+
+  private async discardReviewEdits(): Promise<void> {
+    const bridge = beuveBridge();
+    const { review, reviewEditsFlow: flow } = this;
+    if (bridge === undefined || review === undefined || flow.kind !== 'discard') {
+      return;
+    }
+    this.reviewEditsFlow = { kind: 'busy', text: 'Discarding…' };
+    const discarded = await bridge.invoke('review-edits:discard', {
+      sessionId: review.session.id,
+      digest: flow.loss.digest,
+    });
+    if (this.review?.session.id !== review.session.id) {
+      return;
+    }
+    if (discarded.ok) {
+      this.reviewEditsFlow = {
+        kind: 'done',
+        text: `Discarded ${revealFormatControls(discarded.value.branch)}.`,
+      };
+    } else {
+      this.reviewEditsFlow = { kind: 'failed', text: discarded.error.message };
+    }
+    await this.loadReviewEdits(review.session.id);
+  }
+
   /** Open in Editor: opens the head-side file in the reviewer's editor (ADR 0033). */
   private async openInEditor(path: string, line: number): Promise<void> {
     const bridge = beuveBridge();
@@ -1431,6 +1636,8 @@ export class BeuveApp extends LitElement {
       this.pullRequest = undefined;
       this.ci = undefined;
       this.githubPost = { kind: 'idle' };
+      this.reviewEdits = undefined;
+      this.reviewEditsFlow = { kind: 'idle' };
     }
     this.selectedId = sessionId;
     this.reviewLoading = true;
@@ -1462,6 +1669,7 @@ export class BeuveApp extends LitElement {
       void this.loadOrder(review.value);
       void this.loadFileAttributes(review.value);
       void this.refreshUra(review.value.session.id);
+      void this.loadReviewEdits(review.value.session.id);
       void this.loadChat(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
         void this.loadPullRequest(review.value.session.id);
@@ -2715,6 +2923,20 @@ export class BeuveApp extends LitElement {
         this.openInEditorFromFocus();
         return;
       }
+      case 'open-review-edits': {
+        void this.openReviewEdits();
+        return;
+      }
+      case 'harvest-review-edits': {
+        this.focusSidebar('ura');
+        void this.previewReviewEdits();
+        return;
+      }
+      case 'discard-review-edits': {
+        this.focusSidebar('ura');
+        void this.previewDiscardReviewEdits();
+        return;
+      }
       case 'save-progress': {
         void this.markReviewed();
         return;
@@ -3318,6 +3540,8 @@ export class BeuveApp extends LitElement {
       .notice=${this.dockNotice}
       ?exporting=${this.exporting}
       .github=${this.githubDock()}
+      .reviewEdits=${{ view: this.reviewEdits, flow: this.reviewEditsFlow }}
+      @beuve-review-edits=${this.onReviewEdits}
       @beuve-github-preview=${this.onGithubPreview}
       @beuve-github-post=${this.onGithubPost}
       @beuve-github-cancel=${this.onGithubCancel}

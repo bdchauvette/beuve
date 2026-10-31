@@ -1458,10 +1458,109 @@ export interface EditorSettingsView {
   /** Absent until the reviewer chooses; then the first installed editor is used. */
   readonly preferred?: EditorId;
   readonly editors: readonly EditorChoiceView[];
+  /** What review-edits branch names start with (ADR 0088); `review/` by default. */
+  readonly reviewEditsPrefix: string;
 }
 
 export interface SetPreferredEditorRequest {
   readonly editorId: EditorId;
+}
+
+/** Sets the review-edits branch prefix; checked with `git check-ref-format` when a branch is made. */
+export interface SetReviewEditsPrefixRequest {
+  readonly prefix: string;
+}
+
+/** Names a session whose review edits to read or act on (ADR 0088). */
+export interface ReviewEditsRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * A session's review edits (ADR 0088): the local branch beuve made for them (or would make),
+ * where its writable worktree is, the head it starts from, and how much work it holds: files that
+ * differ from that head (committed, uncommitted or untracked) and commits beyond it.
+ */
+export interface ReviewEditsView {
+  readonly sessionId: string;
+  readonly branch: string;
+  readonly exists: boolean;
+  /** The worktree directory, when it is on disk. */
+  readonly path?: string;
+  /** The reviewed head the branch started at. */
+  readonly baseSha?: string;
+  /** The base is the session's current head; otherwise suggestions anchor to the older head. */
+  readonly isOnSessionHead: boolean;
+  readonly files: number;
+  readonly commits: number;
+}
+
+/** Opens the review-edits worktree in the editor, creating it on first use; at a file if given. */
+export interface OpenReviewEditsRequest {
+  readonly sessionId: string;
+  readonly path?: string;
+  readonly line?: number;
+}
+
+/** Where Open Review Edits opened, and whether it made the branch just now. */
+export interface ReviewEditsOpenedView {
+  readonly editorName: string;
+  readonly branch: string;
+  readonly path: string;
+  readonly created: boolean;
+}
+
+/** One edit as Turn Edits into Suggestions would stage it. */
+export interface ReviewEditPreviewView {
+  readonly action: 'create' | 'attach' | 'update' | 'unchanged';
+  readonly kind: 'suggestion' | 'note';
+  readonly anchor: UraAnchorView;
+  readonly title: string;
+  /** The suggested patch, or the note's diff, to preview. */
+  readonly diff: string;
+}
+
+/** The harvest's plan; staging must name `digest`, so only what was previewed is staged. */
+export interface ReviewEditsPlanView {
+  readonly sessionId: string;
+  readonly branch: string;
+  /** The head the items are written against: the edits' base. */
+  readonly headSha: string;
+  readonly digest: string;
+  readonly edits: readonly ReviewEditPreviewView[];
+}
+
+export interface StageReviewEditsRequest {
+  readonly sessionId: string;
+  readonly digest: string;
+}
+
+/** How many items staging created, attached a suggestion to, updated, or left alone. */
+export interface ReviewEditsStagedView {
+  readonly created: number;
+  readonly attached: number;
+  readonly updated: number;
+  readonly unchanged: number;
+}
+
+/** What Discard Review Edits would lose; discarding must name `digest`. */
+export interface ReviewEditsDiscardView {
+  readonly sessionId: string;
+  readonly branch: string;
+  readonly digest: string;
+  readonly commits: number;
+  /** Paths that differ from the base, committed or not. */
+  readonly files: readonly string[];
+}
+
+export interface DiscardReviewEditsRequest {
+  readonly sessionId: string;
+  readonly digest: string;
+}
+
+/** Discard Review Edits removed the worktree and the branch. */
+export interface ReviewEditsDiscardedView {
+  readonly branch: string;
 }
 
 /** How a diff card lays out a modification: side by side, or one inline column (ADR 0042). */
@@ -2170,6 +2269,34 @@ export interface InvokeChannelMap {
     readonly request: SetPreferredEditorRequest;
     readonly response: IpcResult<EditorSettingsView>;
   };
+  'editor:set-review-edits-prefix': {
+    readonly request: SetReviewEditsPrefixRequest;
+    readonly response: IpcResult<EditorSettingsView>;
+  };
+  'review-edits:get': {
+    readonly request: ReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsView>;
+  };
+  'review-edits:open': {
+    readonly request: OpenReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsOpenedView>;
+  };
+  'review-edits:preview-suggestions': {
+    readonly request: ReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsPlanView>;
+  };
+  'review-edits:stage-suggestions': {
+    readonly request: StageReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsStagedView>;
+  };
+  'review-edits:preview-discard': {
+    readonly request: ReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsDiscardView>;
+  };
+  'review-edits:discard': {
+    readonly request: DiscardReviewEditsRequest;
+    readonly response: IpcResult<ReviewEditsDiscardedView>;
+  };
   'display:get': {
     readonly request: undefined;
     readonly response: IpcResult<DiffDisplayView>;
@@ -2317,6 +2444,7 @@ export type SettingsInvokeChannel =
   | 'display:set'
   | 'editor:get-settings'
   | 'editor:set-preferred'
+  | 'editor:set-review-edits-prefix'
   | 'github:auth-status'
   | 'claude:status'
   | 'trace:list-trust'

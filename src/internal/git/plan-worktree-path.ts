@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import { err } from '#x/result/err.ts';
@@ -8,9 +7,7 @@ import type { Result } from '#x/result/result.ts';
 import type { GitError } from './git-error.ts';
 import type { CommitSha } from './object-id.ts';
 import type { RepositoryPath } from './open-repository.ts';
-
-const unsafeNameCharacters = /[^\w.-]+/gu;
-const leadingDotsOrDashes = /^[.-]+/u;
+import { repositoryDirectoryName } from './repository-directory-name.ts';
 
 /**
  * Where the review worktree for `commit` of `repositoryRoot` lives under `root`:
@@ -29,11 +26,5 @@ export function planWorktreePath(
       reason: 'worktree root must be absolute',
     });
   }
-  const name = path
-    .basename(repositoryRoot)
-    .replaceAll(unsafeNameCharacters, '-')
-    .replace(leadingDotsOrDashes, '');
-  const digest = createHash('sha256').update(repositoryRoot).digest('hex').slice(0, 12);
-  const directory = [name, digest].filter((part) => part !== '').join('-');
-  return ok(path.join(path.resolve(root), directory, commit));
+  return ok(path.join(path.resolve(root), repositoryDirectoryName(repositoryRoot), commit));
 }
