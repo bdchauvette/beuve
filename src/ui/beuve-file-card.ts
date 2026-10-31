@@ -50,6 +50,14 @@ import { targetFrom } from './target-from.ts';
 import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
 import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
+import type { PlacedNote } from './head-side-annotations-from.ts';
+import { placeNoteOnDiff } from './place-note-on-diff.ts';
+import type {
+  HeadSideRange,
+  HunkExpansion,
+  NotePlacement,
+  ShownLines,
+} from './place-note-on-diff.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
@@ -129,6 +137,15 @@ interface CardSlot {
   readonly lineStart: number;
   readonly lineEnd: number;
   readonly note: CardNote;
+}
+
+/** A card note placed on the diff, as the library's annotation metadata. */
+type PlacedSlot = PlacedNote<CardSlot>;
+
+/** Context lines a "line N, outside the shown hunks" button revealed, and how. */
+interface RevealedRange {
+  readonly range: HeadSideRange;
+  readonly expansion: HunkExpansion;
 }
 
 const noInsights: readonly ReviewInsight[] = [];
@@ -536,6 +553,27 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-text);
       }
 
+      .ura-marker .ura-outside {
+        flex: none;
+        margin-left: auto;
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        border-radius: 3px;
+        background: none;
+        font: inherit;
+        color: var(--beuve-accent);
+        cursor: pointer;
+      }
+
+      .ura-marker .ura-outside:hover {
+        text-decoration: underline;
+      }
+
+      .ura-marker .ura-outside:focus-visible {
+        outline: 1px solid var(--beuve-accent);
+        outline-offset: 1px;
+      }
+
       .ura-marker .ura-title code {
         padding: 0 2px;
         border-radius: 3px;
@@ -692,7 +730,7 @@ export class BeuveFileCard extends LitElement {
     `,
   ];
 
-  private diff: FileDiff<CardSlot> | undefined;
+  private diff: FileDiff<PlacedSlot> | undefined;
   private metadata: FileDiffMetadata | undefined;
   /** The diff's rendered height when it last unmounted, for an exact placeholder. */
   private measuredHeight: number | undefined;
@@ -716,7 +754,7 @@ export class BeuveFileCard extends LitElement {
   /** The head line a jump (citation, flow node, trace line) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
   /** The Suggest Edit editor attached to the diff, and the head text it started from. */
-  private editor: Editor<'file-diff', CardSlot> | undefined;
+  private editor: Editor<'file-diff', PlacedSlot> | undefined;
   private editHead: string | undefined;
   /** Insight notes the reviewer expanded, by insight key. */
   private readonly openInsights = new Set<string>();
@@ -828,6 +866,10 @@ export class BeuveFileCard extends LitElement {
       expand: (_data, event): void => {
         this.expand(event);
       },
+      'reveal-note': ({ uraItemId = '' }, event): void => {
+        event.stopPropagation();
+        this.revealNote(uraItemId);
+      },
       'insight-line': (_data, _event, line): void => {
         this.toggleInsight(line, undefined);
       },
@@ -895,6 +937,8 @@ export class BeuveFileCard extends LitElement {
   private crossingDelegation: AbortController | undefined;
   /** The editing keys' listeners, while a Suggest Edit edit is in progress. */
   private editKeys: AbortController | undefined;
+  /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
+  @state() private accessor revealed: readonly RevealedRange[] = [];
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
   @property({ type: Boolean, reflect: true }) accessor active = false;
@@ -1000,18 +1044,33 @@ export class BeuveFileCard extends LitElement {
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
-    const annotations = headSideAnnotationsFrom(this.file?.hunks ?? [], this.notes());
-    const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'insights', 'composer'].some(
-      (key) => {
-        return changed.has(key as keyof BeuveFileCard);
-      },
-    );
-    if (isNew || isNewInput) {
+    const annotations = headSideAnnotationsFrom(this.shownLines(), this.notes());
+    const isNewInput = [
+      'file',
+      'mounted',
+      'library',
+      'uraItems',
+      'insights',
+      'composer',
+      'revealed',
+    ].some((key) => {
+      return changed.has(key as keyof BeuveFileCard);
+    });
+    // Only a new diff passes the parsed patch: passing it again would replace the full files an
+    // expansion loaded (a new, hydrated diff) and collapse every expanded gap.
+    const isNewDiff = isNew || changed.has('file') || changed.has('library');
+    if (isNewDiff || isNewInput) {
       this.diff.render({
-        fileDiff: metadata,
+        ...(isNewDiff && { fileDiff: metadata }),
         containerWrapper: container,
         lineAnnotations: annotations,
       });
+    }
+    if (isNew) {
+      // A new diff starts collapsed: show again what the reviewer revealed for notes.
+      for (const { expansion } of this.revealed) {
+        this.diff.expandHunk(expansion.gap, expansion.direction, expansion.lines);
+      }
     }
     if (!isNew && !changed.has('activeHunk') && !changed.has('active')) {
       return;
@@ -1030,6 +1089,35 @@ export class BeuveFileCard extends LitElement {
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff.setSelectedLines(step ?? null, planStepHighlight(this.diffStyle, step));
+  }
+
+  /** The head lines the diff shows: its hunks, and the context revealed for notes. */
+  private shownLines(): ShownLines {
+    return {
+      hunks: this.file?.hunks ?? [],
+      revealed: this.revealed.map(({ range }) => range),
+    };
+  }
+
+  /**
+   * "line N, outside the shown hunks": expands the collapsed context that holds staged item
+   * `itemId`'s lines, as the separator's own buttons would, and moves its marker under them.
+   */
+  private revealNote(itemId: string): void {
+    const marker = uraMarkersFrom(this.file?.path ?? '', this.uraItems).find(({ item }) => {
+      return item.id === itemId;
+    });
+    if (marker === undefined || this.diff === undefined) {
+      return;
+    }
+    const placement = placeNoteOnDiff(this.shownLines(), marker);
+    if (placement.kind !== 'hidden') {
+      return;
+    }
+    const { expansion } = placement;
+    this.diff.expandHunk(expansion.gap, expansion.direction, expansion.lines);
+    const range = { lineStart: marker.lineStart, lineEnd: marker.lineEnd };
+    this.revealed = [...this.revealed, { range, expansion }];
   }
 
   /** Staged URA markers first, then the composer, each under its last line. */
@@ -1064,10 +1152,10 @@ export class BeuveFileCard extends LitElement {
     return slots;
   }
 
-  private createDiff(library: typeof Diffs): FileDiff<CardSlot> {
+  private createDiff(library: typeof Diffs): FileDiff<PlacedSlot> {
     this.isGutterLabelled = false;
     const loader = this.loadFilePair;
-    return new library.FileDiff<CardSlot>(
+    return new library.FileDiff<PlacedSlot>(
       {
         theme: diffsThemeNames,
         themeType: 'system',
@@ -1089,7 +1177,7 @@ export class BeuveFileCard extends LitElement {
           },
         }),
         renderAnnotation: (annotation): HTMLElement => {
-          return this.noteElement(annotation.metadata.note);
+          return this.noteElement(annotation.metadata);
         },
         onPostRender: (_node, _instance, phase): void => {
           if (phase !== 'mount') {
@@ -1191,10 +1279,11 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  private noteElement(note: CardNote): HTMLElement {
+  private noteElement({ note: slot, placement }: PlacedSlot): HTMLElement {
+    const { note } = slot;
     switch (note.kind) {
       case 'ura': {
-        return uraMarkerElement(note.item);
+        return uraMarkerElement(note.item, outsideLabel(slot, placement));
       }
       case 'insight': {
         return this.insightNode(note.insight);
@@ -1593,7 +1682,7 @@ export class BeuveFileCard extends LitElement {
 
   private renderFallback(file: DiffFileView): TemplateResult {
     const path = file.path;
-    return html`${uraMarkersFrom(path, this.uraItems).map((marker) => uraMarkerElement(marker.item))}
+    return html`${uraMarkersFrom(path, this.uraItems).map((marker) => uraMarkerElement(marker.item, undefined))}
       ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
@@ -1782,7 +1871,7 @@ ${splitPatch(file.patch).map((line) => {
       if (this.edit.target !== target || this.diff !== diff) {
         return;
       }
-      const editor = new module.Editor<'file-diff', CardSlot>('file-diff');
+      const editor = new module.Editor<'file-diff', PlacedSlot>('file-diff');
       editor.edit(diff);
       let suggested: string | undefined;
       if (target.patch !== undefined) {
@@ -1889,6 +1978,7 @@ ${splitPatch(file.patch).map((line) => {
     }
     if (changed.has('file')) {
       this.measuredHeight = undefined;
+      this.revealed = [];
     }
     if (!changed.has('file') && !changed.has('library')) {
       return;
@@ -1981,8 +2071,22 @@ ${splitPatch(file.patch).map((line) => {
   }
 }
 
-/** A staged item's marker: its severity and title on one quiet line, built as text nodes. */
-function uraMarkerElement(item: UraItemView): HTMLElement {
+/** "line N, outside the shown hunks" for a note the diff doesn't show, else `undefined`. */
+function outsideLabel(range: HeadSideRange, placement: NotePlacement): string | undefined {
+  if (placement.kind !== 'hidden') {
+    return undefined;
+  }
+  if (range.lineStart === range.lineEnd) {
+    return `line ${String(range.lineStart)}, outside the shown hunks`;
+  }
+  return `lines ${String(range.lineStart)}–${String(range.lineEnd)}, outside the shown hunks`;
+}
+
+/**
+ * A staged item's marker: its severity and title on one quiet line, built as text nodes, and for
+ * lines the diff doesn't show, a button that reveals them (delegated as `reveal-note`).
+ */
+function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLElement {
   const labels = describeUraItem(item);
   const marker = document.createElement('div');
   marker.className = `ura-marker ${item.severity}`;
@@ -1998,6 +2102,16 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   title.className = 'ura-title';
   title.append(...parseInlineTitle(item.title).map((span) => createInlineNode(span)));
   marker.append(kind, title);
+  if (outside !== undefined) {
+    const reveal = document.createElement('button');
+    reveal.type = 'button';
+    reveal.className = 'ura-outside';
+    reveal.dataset['action'] = 'reveal-note';
+    reveal.dataset['uraItemId'] = item.id;
+    reveal.title = 'Show these lines in the diff';
+    reveal.textContent = outside;
+    marker.append(reveal);
+  }
   return marker;
 }
 

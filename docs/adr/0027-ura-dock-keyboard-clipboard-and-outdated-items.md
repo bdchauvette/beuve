@@ -28,3 +28,9 @@ The dock, the diff markers and MCP agree on placement because all of them comput
 ## Amendment 2026-10-30: findings, not insights
 
 `ura:promote-insight` and `y` are gone (ADR 0055). `ura:stage-review-finding { messageId, finding }` stages a `/review` finding read from its stored answer, idempotently, restaging a withdrawn item, the way promotion did; withdrawing it changes nothing else, since findings have no status of their own. Staged findings show as ordinary markers.
+
+## Amendment 2026-10-31: markers on lines the diff doesn't show
+
+A note anchored on an unchanged line outside every hunk (one staged from a citation or chat on context, or re-anchored by a head move) used to sit above the first hunk, as if it were a file note. Now `placeNoteOnDiff` puts it just above the collapsed gap that holds its last line (after the last head line before that gap, or above the first hunk for the gap before it), and its marker ends with a "line N, outside the shown hunks" button. The button expands that gap from its nearer end by exactly enough lines, through the library's own `expandHunk`, as the separator's buttons do, and the marker moves under its line; the card remembers the revealed range until its file changes and expands it again when the diff remounts. Insights and the composer use the same placement, without the button.
+
+The diff never expands on its own: expanding is the reviewer's choice everywhere else (separators, Load diff), it loads both full files over IPC (`session:get-file-pair`), which a card far down the stream would otherwise do for every such note as it mounts, and it changes the card's height under the reader. One click on the marker is the same gesture as a separator's. A re-render for new notes no longer passes the parsed patch again, which had replaced the full files an expansion loaded and collapsed every expanded gap (including ones opened from a separator).
