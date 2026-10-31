@@ -45,11 +45,14 @@ export function attentionFrom(input: AttentionInput): Attention {
   const stale = decisions.filter((review) => {
     return review.verdict === 'changes-requested' && review.commitSha !== input.headSha;
   });
-  const authorReasons = [
-    ...(input.isDraft ? ['it is a draft'] : []),
-    ...blocking.map((review) => `${review.reviewer} requested changes`),
-    ...(input.ci === 'failure' ? [failingReason(input.failingChecks)] : []),
-  ];
+  const authorReasons: string[] = [];
+  if (input.isDraft) {
+    authorReasons.push('it is a draft');
+  }
+  authorReasons.push(...blocking.map((review) => `${review.reviewer} requested changes`));
+  if (input.ci === 'failure') {
+    authorReasons.push(failingReason(input.failingChecks));
+  }
   const reviewerLogins = [
     ...input.requests.users,
     ...stale.map((review) => review.reviewer),
@@ -62,24 +65,29 @@ export function attentionFrom(input: AttentionInput): Attention {
   const isViewerReviewer = input.viewer !== undefined && reviewerLogins.includes(input.viewer);
 
   if (authorReasons.length > 0) {
-    return {
-      turn: input.viewer === input.author ? 'you' : 'author',
-      reasons: [...authorReasons, ...reviewerReasons],
-    };
+    return { turn: authorTurn(input), reasons: [...authorReasons, ...reviewerReasons] };
+  }
+  if (isViewerReviewer && reviewerReasons.length > 0) {
+    return { turn: 'you', reasons: reviewerReasons };
   }
   if (reviewerReasons.length > 0) {
-    return { turn: isViewerReviewer ? 'you' : 'reviewers', reasons: reviewerReasons };
+    return { turn: 'reviewers', reasons: reviewerReasons };
   }
   const isApproved = decisions.some((review) => {
     return review.verdict === 'approved' && review.commitSha === input.headSha;
   });
   if (isApproved && input.ci === 'success') {
-    return {
-      turn: input.viewer === input.author ? 'you' : 'author',
-      reasons: ['approved on the current head with CI passing'],
-    };
+    return { turn: authorTurn(input), reasons: ['approved on the current head with CI passing'] };
   }
   return { turn: 'unknown', reasons: ['nothing is waiting on anyone'] };
+}
+
+/** The author's turn, which is the viewer's when they wrote the pull request. */
+function authorTurn(input: AttentionInput): 'you' | 'author' {
+  if (input.viewer === input.author) {
+    return 'you';
+  }
+  return 'author';
 }
 
 /** Each reviewer's latest approval, change request or dismissal; comments don't count. */
@@ -99,5 +107,8 @@ function failingReason(count: number | undefined): string {
   if (count === undefined || count === 0) {
     return 'CI is failing';
   }
-  return `CI is failing (${String(count)} ${count === 1 ? 'check' : 'checks'})`;
+  if (count === 1) {
+    return 'CI is failing (1 check)';
+  }
+  return `CI is failing (${String(count)} checks)`;
 }

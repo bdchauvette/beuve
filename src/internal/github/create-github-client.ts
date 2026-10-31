@@ -9,6 +9,7 @@ import type { HttpRequest } from './build-github-http-request.ts';
 import { classifyGithubResponse } from './classify-github-response.ts';
 import type {
   FetchLike,
+  GithubCallOptions,
   GithubClient,
   GithubRequest,
   GithubResponse,
@@ -74,13 +75,13 @@ export function createGithubClient<E>(
       return err({ kind: 'invalid-request', reason: built.error });
     }
     const stopwatch = new Stopwatch();
-    const response = await exchange(built.value, fetchImpl, timeout, request.signal);
+    const response = await exchange(built.value, { fetchImpl, timeout, signal: request.signal });
     options.logger?.debug('github: request', {
       method: request.method,
       path: new URL(built.value.url).pathname,
-      status: response.ok ? response.value.status : response.error.kind,
+      status: statusOf(response),
       duration: stopwatch.elapsed(),
-      rateLimitRemaining: response.ok ? response.value.rateLimitRemaining : undefined,
+      rateLimitRemaining: rateLimitOf(response),
     });
     if (!response.ok) {
       return response;
@@ -96,13 +97,11 @@ export function createGithubClient<E>(
     }
     const body = parseBody(text);
     if (status < 200 || status > 299) {
-      return err(
-        classifyGithubResponse(
-          { status, headers },
-          body === invalidJson ? undefined : body,
-          Temporal.Now.instant(),
-        ),
-      );
+      let errorBody = body;
+      if (errorBody === invalidJson) {
+        errorBody = undefined;
+      }
+      return err(classifyGithubResponse({ status, headers }, errorBody, Temporal.Now.instant()));
     }
     if (body === invalidJson) {
       return err({ kind: 'unexpected-shape', reason: 'the response is not JSON' });
@@ -125,13 +124,21 @@ interface Exchange {
   readonly rateLimitRemaining: string | undefined;
 }
 
+/** How to send a request: with which `fetch`, within what time, cancelled by what. */
+interface ExchangeOptions extends GithubCallOptions {
+  readonly fetchImpl: FetchLike;
+  readonly timeout: Temporal.Duration;
+}
+
 async function exchange(
   request: HttpRequest,
-  fetchImpl: FetchLike,
-  timeout: Temporal.Duration,
-  signal: AbortSignal | undefined,
+  { fetchImpl, timeout, signal }: ExchangeOptions,
 ): Promise<Result<Exchange, GithubError<never>>> {
   const timeoutSignal = AbortSignal.timeout(timeout.total('milliseconds'));
+  let combined = timeoutSignal;
+  if (signal !== undefined) {
+    combined = AbortSignal.any([timeoutSignal, signal]);
+  }
   try {
     const response = await fetchImpl(request.url, {
       method: request.method,
@@ -139,7 +146,7 @@ async function exchange(
       ...(request.body !== undefined && { body: request.body }),
       // Renamed repositories answer 301; fetch drops Authorization on a cross-origin redirect.
       redirect: 'follow',
-      signal: signal === undefined ? timeoutSignal : AbortSignal.any([timeoutSignal, signal]),
+      signal: combined,
     });
     const text = await response.text();
     return ok({
@@ -168,4 +175,19 @@ function parseBody(text: string): unknown {
   } catch {
     return invalidJson;
   }
+}
+
+/** What the log records of an exchange: the HTTP status, or why there was none. */
+function statusOf(response: Result<Exchange, GithubError<never>>): number | string {
+  if (response.ok) {
+    return response.value.status;
+  }
+  return response.error.kind;
+}
+
+function rateLimitOf(response: Result<Exchange, GithubError<never>>): string | undefined {
+  if (response.ok) {
+    return response.value.rateLimitRemaining;
+  }
+  return undefined;
 }

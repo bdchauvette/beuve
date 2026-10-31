@@ -3,13 +3,14 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { parsePullRequestRef } from './parse-pull-request-ref.ts';
+import type { PullRequestRef } from './pull-request.ts';
 
 /** Spelled indirectly: the lint rule against plain HTTP can't tell a test of its refusal. */
 function plainHttp(): string {
   return 'https://'.replace('s', '');
 }
 
-function pr(): { host: string; owner: string; repo: string; number: number } {
+function pr(): PullRequestRef {
   return { host: 'github.com', owner: 'octo-org', repo: 'hello.world', number: 1347 };
 }
 
@@ -36,7 +37,7 @@ describe('parsePullRequestRef', () => {
       ok: true,
       value: pr(),
     });
-    expect(parsePullRequestRef('team/svc#9', 'ghe.corp.example')).toMatchObject({
+    expect(parsePullRequestRef('team/svc#9', { defaultHost: 'ghe.corp.example' })).toMatchObject({
       ok: true,
       value: { host: 'ghe.corp.example' },
     });

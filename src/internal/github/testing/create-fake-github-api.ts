@@ -98,7 +98,10 @@ const jsonNull = null;
  * so a revoked token answers 401. It never touches the network; `handle` can also back a local
  * HTTP server for a development run.
  */
-export function createFakeGithubApi(owner = 'octo-org', repo = 'hello-world'): FakeGithubApi {
+export function createFakeGithubApi({
+  owner = 'octo-org',
+  repo = 'hello-world',
+}: FakeRepository = {}): FakeGithubApi {
   const api: FakeGithubApi = {
     owner,
     repo,
@@ -123,7 +126,7 @@ export function createFakeGithubApi(owner = 'octo-org', repo = 'hello-world'): F
         method: init.method ?? 'GET',
         path: url.slice(apiRoot.length),
         headers: { ...(init.headers as Record<string, string>) },
-        body: typeof init.body === 'string' ? init.body : undefined,
+        body: textBodyOf(init),
       });
       return new Response(answer.body, { status: answer.status, headers: answer.headers });
     },
@@ -147,7 +150,10 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   if (first === 'pulls' && second === undefined && request.method === 'GET') {
     return conditional(request, listPulls(api, url.searchParams));
   }
-  const pull = first === 'pulls' ? api.pullRequests.get(Number(second)) : undefined;
+  let pull: FakePullRequest | undefined;
+  if (first === 'pulls') {
+    pull = api.pullRequests.get(Number(second));
+  }
   if (first === 'pulls' && pull === undefined) {
     return json(404, { message: 'Not Found' });
   }
@@ -164,7 +170,7 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
           user: { login: entry.reviewer },
           state: entry.state,
           commit_id: entry.commitSha,
-          submitted_at: entry.state === 'PENDING' ? jsonNull : entry.submittedAt,
+          submitted_at: submittedAtOf(entry),
         };
       }),
     );
@@ -181,7 +187,7 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
     });
   }
   if (third === 'reviews' && pull !== undefined && request.method === 'POST') {
-    return review(api, pull, token, request.body);
+    return review(api, pull, { token, rawBody: request.body });
   }
   if (first === 'commits' && second !== undefined && request.method === 'GET') {
     const checks = api.checks.get(second) ?? [];
@@ -220,15 +226,23 @@ function listPulls(api: FakeGithubApi, query: URLSearchParams): unknown[] {
   return listed;
 }
 
+/** A review POST: the token that sent it and its JSON body. */
+interface ReviewPost {
+  readonly token: string;
+  readonly rawBody: string | undefined;
+}
+
 function review(
   api: FakeGithubApi,
   pull: FakePullRequest,
-  token: string,
-  rawBody = '{}',
+  { token, rawBody = '{}' }: ReviewPost,
 ): FakeHttpResponse {
   const body = JSON.parse(rawBody) as FakeReviewRequest['body'];
   if (pull.author === api.viewer && body.event !== 'COMMENT') {
-    const verb = body.event === 'APPROVE' ? 'approve' : 'request changes on';
+    let verb = 'request changes on';
+    if (body.event === 'APPROVE') {
+      verb = 'approve';
+    }
     return json(422, {
       message: 'Unprocessable Entity',
       errors: [`Can not ${verb} your own pull request`],
@@ -250,12 +264,7 @@ function review(
   const id = api.reviews.length;
   return json(200, {
     id,
-    state:
-      body.event === 'APPROVE'
-        ? 'APPROVED'
-        : body.event === 'COMMENT'
-          ? 'COMMENTED'
-          : 'CHANGES_REQUESTED',
+    state: reviewStates.get(body.event) ?? 'CHANGES_REQUESTED',
     html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(pull.number)}#pullrequestreview-${String(id)}`,
     commit_id: body.commit_id,
   });
@@ -302,14 +311,24 @@ function checkRuns(api: FakeGithubApi, checks: readonly FakeCheck[]): unknown[] 
   return checks
     .filter((check) => check.kind === 'check-run')
     .map((check, index) => {
-      const isRunning = check.result === 'queued' || check.result === 'in_progress';
+      const htmlUrl = `https://github.com/${api.owner}/${api.repo}/runs/${String(index + 1)}`;
+      if (check.result === 'queued' || check.result === 'in_progress') {
+        return {
+          name: check.name,
+          status: check.result,
+          conclusion: jsonNull,
+          html_url: htmlUrl,
+          started_at: '2026-10-01T00:00:00Z',
+          completed_at: jsonNull,
+        };
+      }
       return {
         name: check.name,
-        status: isRunning ? check.result : 'completed',
-        conclusion: isRunning ? jsonNull : check.result,
-        html_url: `https://github.com/${api.owner}/${api.repo}/runs/${String(index + 1)}`,
+        status: 'completed',
+        conclusion: check.result,
+        html_url: htmlUrl,
         started_at: '2026-10-01T00:00:00Z',
-        completed_at: isRunning ? jsonNull : '2026-10-01T00:01:00Z',
+        completed_at: '2026-10-01T00:01:00Z',
       };
     });
 }
@@ -332,4 +351,29 @@ function json(status: number, value: unknown): FakeHttpResponse {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(value),
   };
+}
+
+/** The repository a fake API serves. */
+interface FakeRepository {
+  readonly owner?: string;
+  readonly repo?: string;
+}
+
+const reviewStates: ReadonlyMap<string, string> = new Map([
+  ['APPROVE', 'APPROVED'],
+  ['COMMENT', 'COMMENTED'],
+]);
+
+function textBodyOf(init: RequestInit): string | undefined {
+  if (typeof init.body === 'string') {
+    return init.body;
+  }
+  return undefined;
+}
+
+function submittedAtOf(entry: FakeSubmittedReview): unknown {
+  if (entry.state === 'PENDING') {
+    return jsonNull;
+  }
+  return entry.submittedAt;
 }

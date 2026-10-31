@@ -34,7 +34,7 @@ export async function postGithubReview(
   }
   const { ref, payload, entries, preview } = prepared.value;
   const posted = await context.clients.withClient(ref.host, async (client) =>
-    postPullRequestReview(client, ref, payload, { onRejectedComments: 'move-to-body' }),
+    postPullRequestReview(client, { ref, payload }, { onRejectedComments: 'move-to-body' }),
   );
   if (!posted.ok) {
     context.session.logger.info('github: review not posted', { kind: posted.error.kind });

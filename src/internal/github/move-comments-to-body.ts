@@ -28,11 +28,10 @@ export function moveCommentsToBody(
     return payload;
   }
   const section = ['### Comments GitHub could not attach to the diff', ...moved].join('\n\n');
-  return {
-    ...payload,
-    body: payload.body.trim() === '' ? section : `${payload.body}\n\n${section}`,
-    comments: kept,
-  };
+  if (payload.body.trim() === '') {
+    return { ...payload, body: section, comments: kept };
+  }
+  return { ...payload, body: `${payload.body}\n\n${section}`, comments: kept };
 }
 
 function formatLines(comment: ReviewComment): string {

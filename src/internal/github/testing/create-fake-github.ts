@@ -39,7 +39,7 @@ export function createFakeGithub(
   options: FakeGithubOptions = {},
 ): FakeGithub {
   const requests: RecordedRequest[] = [];
-  const configured = 'token' in options ? options.token : 'gho_testtoken';
+  const configured = configuredToken(options);
   const created = createGithubClient<'no-token'>({
     host: options.host ?? 'github.com',
     getToken: async () => {
@@ -55,13 +55,11 @@ export function createFakeGithub(
         url,
         method: init.method ?? 'GET',
         headers: { ...(init.headers as Record<string, string>) },
-        body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
+        body: parsedBodyOf(init),
       };
       requests.push(recorded);
       const response = respond(recorded, requests.length - 1);
-      const text =
-        typeof response.body === 'string' ? response.body : JSON.stringify(response.body);
-      return new Response(response.body === undefined ? undefined : text, {
+      return new Response(responseText(response), {
         status: response.status,
         headers: { 'content-type': 'application/json; charset=utf-8', ...response.headers },
       });
@@ -71,4 +69,29 @@ export function createFakeGithub(
     throw new Error(created.error);
   }
   return { client: created.value, requests };
+}
+
+/** The token the client gets: the configured one, `undefined` for none, or a default. */
+function configuredToken(options: FakeGithubOptions): string | undefined {
+  if ('token' in options) {
+    return options.token;
+  }
+  return 'gho_testtoken';
+}
+
+function parsedBodyOf(init: RequestInit): unknown {
+  if (typeof init.body === 'string') {
+    return JSON.parse(init.body) as unknown;
+  }
+  return undefined;
+}
+
+function responseText(response: FakeResponse): string | undefined {
+  if (response.body === undefined) {
+    return undefined;
+  }
+  if (typeof response.body === 'string') {
+    return response.body;
+  }
+  return JSON.stringify(response.body);
 }

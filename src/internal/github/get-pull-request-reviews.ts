@@ -5,7 +5,7 @@ import type { Result } from '#x/result/result.ts';
 
 import { decodeWith } from './decode-with.ts';
 import { fetchAllPages } from './fetch-all-pages.ts';
-import type { GithubClient } from './github-client.ts';
+import type { GithubCallOptions, GithubClient } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { githubPath } from './github-path.ts';
 import type { PullRequestRef } from './pull-request.ts';
@@ -47,7 +47,7 @@ const pageSchema = z.array(reviewSchema);
 export async function getPullRequestReviews<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly signal?: AbortSignal | undefined } = {},
+  options: GithubCallOptions = {},
 ): Promise<Result<readonly PullRequestReview[], GithubError<E>>> {
   const pages = await fetchAllPages(
     client,

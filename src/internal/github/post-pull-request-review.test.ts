@@ -4,10 +4,12 @@ import { test } from './testing/test.ts';
 
 import { moveCommentsToBody } from './move-comments-to-body.ts';
 import { postPullRequestReview } from './post-pull-request-review.ts';
+import type { PullRequestRef } from './pull-request.ts';
 import type { ReviewPayload } from './review-payload.ts';
+import type { FakeResponse } from './testing/create-fake-github.ts';
 import githubFixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-function ref(): { owner: string; repo: string; number: number } {
+function ref(): Omit<PullRequestRef, 'host'> {
   return { owner: 'octo-org', repo: 'hello-world', number: 1347 };
 }
 
@@ -30,7 +32,7 @@ function payload(): ReviewPayload {
   };
 }
 
-function offDiff(): { status: number; body: unknown } {
+function offDiff(): FakeResponse {
   return {
     status: 422,
     body: {
@@ -50,7 +52,11 @@ describe('postPullRequestReview', () => {
         body: githubFixtures.review,
       };
     });
-    const result = await postPullRequestReview(client, ref(), payload(), { signal });
+    const result = await postPullRequestReview(
+      client,
+      { ref: ref(), payload: payload() },
+      { signal },
+    );
     expect(requests[0]).toMatchObject({
       method: 'POST',
       url: 'https://api.github.com/repos/octo-org/hello-world/pulls/1347/reviews',
@@ -82,7 +88,7 @@ describe('postPullRequestReview', () => {
       };
     });
     await expect(
-      postPullRequestReview(client, ref(), payload(), { signal }),
+      postPullRequestReview(client, { ref: ref(), payload: payload() }, { signal }),
     ).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -100,7 +106,7 @@ describe('postPullRequestReview', () => {
   }) => {
     const { client, requests } = fakeGithub(() => offDiff());
     await expect(
-      postPullRequestReview(client, ref(), payload(), { signal }),
+      postPullRequestReview(client, { ref: ref(), payload: payload() }, { signal }),
     ).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -126,10 +132,14 @@ describe('postPullRequestReview', () => {
       }
       return { status: 200, body: githubFixtures.review };
     });
-    const result = await postPullRequestReview(client, ref(), payload(), {
-      onRejectedComments: 'move-to-body',
-      signal,
-    });
+    const result = await postPullRequestReview(
+      client,
+      { ref: ref(), payload: payload() },
+      {
+        onRejectedComments: 'move-to-body',
+        signal,
+      },
+    );
     expect(result).toMatchObject({ ok: true, value: { id: 80, movedToBody: 2 } });
     expect(requests[1]?.body).toStrictEqual(moveCommentsToBody(payload()));
   });
@@ -154,10 +164,14 @@ describe('postPullRequestReview', () => {
       }
       return { status: 200, body: githubFixtures.review };
     });
-    const result = await postPullRequestReview(client, ref(), payload(), {
-      onRejectedComments: 'move-to-body',
-      signal,
-    });
+    const result = await postPullRequestReview(
+      client,
+      { ref: ref(), payload: payload() },
+      {
+        onRejectedComments: 'move-to-body',
+        signal,
+      },
+    );
     expect(result).toMatchObject({ ok: true, value: { movedToBody: 1 } });
     expect(
       (requests[1]?.body as ReviewPayload).comments.map((comment) => comment.path),
@@ -179,7 +193,11 @@ describe('postPullRequestReview', () => {
       };
     });
     await expect(
-      postPullRequestReview(client, ref(), { ...payload(), comments: [] }, { signal }),
+      postPullRequestReview(
+        client,
+        { ref: ref(), payload: { ...payload(), comments: [] } },
+        { signal },
+      ),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'stale-commit', commitId: githubFixtures.headSha },
@@ -194,7 +212,7 @@ describe('postPullRequestReview', () => {
       };
     });
     await expect(
-      postPullRequestReview(client, ref(), payload(), { signal }),
+      postPullRequestReview(client, { ref: ref(), payload: payload() }, { signal }),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'forbidden' },

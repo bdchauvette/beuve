@@ -7,7 +7,7 @@ import type { Result } from '#x/result/result.ts';
 import type { CiBucket, CiCheck, CiStatus } from './ci-status.ts';
 import { decodeWith } from './decode-with.ts';
 import { fetchAllPages } from './fetch-all-pages.ts';
-import type { GithubClient, GithubRequest } from './github-client.ts';
+import type { GithubCallOptions, GithubClient, GithubRequest } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { githubPath } from './github-path.ts';
 import { parseLinkHeader } from './parse-link-header.ts';
@@ -43,11 +43,14 @@ const checkRunSchema = z
   })
   .transform((raw): CiCheck => {
     const isCompleted = raw.status === 'completed';
-    const conclusion = isCompleted ? (raw.conclusion ?? undefined) : undefined;
+    let conclusion: string | undefined;
+    if (isCompleted) {
+      conclusion = raw.conclusion ?? undefined;
+    }
     return {
       source: 'check-run',
       name: raw.name,
-      status: isCompleted ? 'completed' : raw.status === 'in_progress' ? 'in-progress' : 'queued',
+      status: checkRunStatus(raw.status),
       conclusion,
       bucket: checkRunBucket(conclusion),
       url: raw.html_url ?? raw.details_url ?? undefined,
@@ -60,6 +63,9 @@ const checkRunsPageSchema = z
   .object({ check_runs: z.array(checkRunSchema) })
   .transform((raw) => raw.check_runs);
 
+/** A commit status's state as a rollup bucket: GitHub's `error` counts as a failure. */
+const statusBuckets = { error: 'failure', failure: 'failure', success: 'success' } as const;
+
 const statusSchema = z
   .object({
     context: z.string(),
@@ -69,21 +75,45 @@ const statusSchema = z
     updated_at: z.string(),
   })
   .transform((raw): CiCheck => {
+    if (raw.state === 'pending') {
+      return {
+        source: 'status',
+        name: raw.context,
+        status: 'queued',
+        conclusion: undefined,
+        bucket: 'pending',
+        url: raw.target_url ?? undefined,
+        startedAt: raw.created_at,
+        completedAt: undefined,
+      };
+    }
     return {
       source: 'status',
       name: raw.context,
-      status: raw.state === 'pending' ? 'queued' : 'completed',
-      conclusion: raw.state === 'pending' ? undefined : raw.state,
-      bucket: raw.state === 'error' ? 'failure' : raw.state,
+      status: 'completed',
+      conclusion: raw.state,
+      bucket: statusBuckets[raw.state],
       url: raw.target_url ?? undefined,
       startedAt: raw.created_at,
-      completedAt: raw.state === 'pending' ? undefined : raw.updated_at,
+      completedAt: raw.updated_at,
     };
   });
 
 const combinedStatusSchema = z
   .object({ statuses: z.array(statusSchema) })
   .transform((raw) => raw.statuses);
+
+/** A commit in a repository on the client's host. */
+export interface CommitRef {
+  readonly owner: string;
+  readonly repo: string;
+  readonly sha: string;
+}
+
+export interface CiStatusOptions extends GithubCallOptions {
+  /** The ETags of the previous poll's two responses. */
+  readonly etags?: CiEtags;
+}
 
 /**
  * CI for one commit: its combined status (`GET …/commits/{sha}/status`, the latest status per
@@ -93,10 +123,10 @@ const combinedStatusSchema = z
  */
 export async function getCiStatus<E>(
   client: GithubClient<E>,
-  commit: { readonly owner: string; readonly repo: string; readonly sha: string },
-  options: { readonly etags?: CiEtags; readonly signal?: AbortSignal | undefined } = {},
+  commit: CommitRef,
+  options: CiStatusOptions = {},
 ): Promise<Result<CiStatusResult, GithubError<E>>> {
-  const signal = options.signal === undefined ? {} : { signal: options.signal };
+  const signal = { signal: options.signal };
   const statusesRequest: GithubRequest = {
     method: 'GET',
     path: githubPath`/repos/${commit.owner}/${commit.repo}/commits/${commit.sha}/status`,
@@ -206,11 +236,15 @@ async function fetchAllPagesWithEtag<E>(
   }
   const rest = await fetchAllPages(
     client,
-    { method: 'GET', path: next, ...(request.signal !== undefined && { signal: request.signal }) },
+    {
+      method: 'GET',
+      path: next,
+      ...(request.signal !== undefined && { signal: request.signal }),
+      maxPages: 9,
+    },
     (body) => {
       return decodeWith(checkRunsPageSchema, body);
     },
-    9,
   );
   if (!rest.ok) {
     return rest;
@@ -220,4 +254,14 @@ async function fetchAllPagesWithEtag<E>(
     etag: undefined,
     isTruncated: rest.value.isTruncated,
   });
+}
+
+function checkRunStatus(status: string): CiCheck['status'] {
+  if (status === 'completed') {
+    return 'completed';
+  }
+  if (status === 'in_progress') {
+    return 'in-progress';
+  }
+  return 'queued';
 }

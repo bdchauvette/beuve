@@ -43,6 +43,12 @@ export type PostReviewError<E> =
       readonly message: string;
     };
 
+/** A review for a pull request: where it goes and what it says. */
+export interface ReviewSubmission {
+  readonly ref: Omit<PullRequestRef, 'host'>;
+  readonly payload: ReviewPayload;
+}
+
 export interface PostReviewOptions {
   /**
    * `move-to-body`: when GitHub rejects inline comments, post once more with the identified comments
@@ -69,11 +75,10 @@ const staleCommit = /commit_id|not part of the pull request|no commit found/i;
  */
 export async function postPullRequestReview<E>(
   client: GithubClient<E>,
-  ref: Omit<PullRequestRef, 'host'>,
-  payload: ReviewPayload,
+  { ref, payload }: ReviewSubmission,
   options: PostReviewOptions = {},
 ): Promise<Result<PostedReview, PostReviewError<E>>> {
-  const first = await submit(client, ref, payload, options.signal);
+  const first = await submit(client, { ref, payload }, options.signal);
   if (
     first.ok ||
     first.error.kind !== 'comments-rejected' ||
@@ -85,15 +90,13 @@ export async function postPullRequestReview<E>(
     return first;
   }
   const failed = first.error.failedCommentIndexes;
-  const fallback = moveCommentsToBody(
-    payload,
-    failed === undefined
-      ? undefined
-      : (_comment, index): boolean => {
-          return failed.includes(index);
-        },
-  );
-  const second = await submit(client, ref, fallback, options.signal);
+  let fallback = moveCommentsToBody(payload, undefined);
+  if (failed !== undefined) {
+    fallback = moveCommentsToBody(payload, (_comment, index): boolean => {
+      return failed.includes(index);
+    });
+  }
+  const second = await submit(client, { ref, payload: fallback }, options.signal);
   if (second.ok) {
     return ok({ ...second.value, movedToBody: payload.comments.length - fallback.comments.length });
   }
@@ -102,8 +105,7 @@ export async function postPullRequestReview<E>(
 
 async function submit<E>(
   client: GithubClient<E>,
-  ref: Omit<PullRequestRef, 'host'>,
-  payload: ReviewPayload,
+  { ref, payload }: ReviewSubmission,
   signal: AbortSignal | undefined,
 ): Promise<Result<Omit<PostedReview, 'movedToBody'>, PostReviewError<E>>> {
   const response = await client.send({
@@ -117,12 +119,11 @@ async function submit<E>(
     },
     ...(signal !== undefined && { signal }),
   });
+  if (!response.ok && response.error.kind === 'validation-failed') {
+    return err(classifyRejection(response.error, payload));
+  }
   if (!response.ok) {
-    return err(
-      response.error.kind === 'validation-failed'
-        ? classifyRejection(response.error, payload)
-        : response.error,
-    );
+    return err(response.error);
   }
   const decoded = decodeWith(reviewSchema, response.value.body);
   if (decoded.ok) {
@@ -158,11 +159,10 @@ function classifyRejection<E>(
         identified.push(index);
       }
     }
-    return {
-      kind: 'comments-rejected',
-      messages,
-      failedCommentIndexes: identified.length === 0 ? undefined : identified,
-    };
+    if (identified.length === 0) {
+      return { kind: 'comments-rejected', messages, failedCommentIndexes: undefined };
+    }
+    return { kind: 'comments-rejected', messages, failedCommentIndexes: identified };
   }
   if (messages.some((text) => staleCommit.test(text))) {
     return { kind: 'stale-commit', commitId: payload.commit_id, message: messages.join('; ') };

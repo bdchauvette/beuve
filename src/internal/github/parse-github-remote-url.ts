@@ -22,7 +22,7 @@ const gitSuffix = /\.git$/iu;
  * compare the result with a pull request's base repository. Pure.
  */
 export function parseGithubRemoteUrl(url: string): GithubRemote | undefined {
-  const parts = schemePattern.test(url) ? fromUrl(url) : fromScpLike(url);
+  const parts = partsFrom(url);
   if (parts === undefined) {
     return undefined;
   }
@@ -41,7 +41,17 @@ export function parseGithubRemoteUrl(url: string): GithubRemote | undefined {
   ) {
     return undefined;
   }
-  return { host: host === ssh443Host ? 'github.com' : host, owner, repo };
+  if (host === ssh443Host) {
+    return { host: 'github.com', owner, repo };
+  }
+  return { host, owner, repo };
+}
+
+function partsFrom(url: string): Parts | undefined {
+  if (schemePattern.test(url)) {
+    return fromUrl(url);
+  }
+  return fromScpLike(url);
 }
 
 interface Parts {

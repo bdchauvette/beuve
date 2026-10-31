@@ -19,10 +19,10 @@ const numberPattern = /^\d{1,10}$/;
  */
 export function parsePullRequestRef(
   text: string,
-  defaultHost = 'github.com',
+  { defaultHost = 'github.com' }: PullRequestRefOptions = {},
 ): Result<PullRequestRef, string> {
   const input = text.trim();
-  const parts = webUrl.test(input) ? fromUrl(input) : fromShorthand(input, defaultHost);
+  const parts = partsFrom(input, { defaultHost });
   if (typeof parts === 'string') {
     return err(parts);
   }
@@ -36,11 +36,23 @@ export function parsePullRequestRef(
   if (!repoPattern.test(parts.repo) || parts.repo === '.' || parts.repo === '..') {
     return err(`not a GitHub repository name: ${parts.repo}`);
   }
-  const number = numberPattern.test(parts.number) ? Number(parts.number) : 0;
-  if (!Number.isSafeInteger(number) || number < 1) {
+  const number = Number(parts.number);
+  if (!numberPattern.test(parts.number) || !Number.isSafeInteger(number) || number < 1) {
     return err(`not a pull request number: ${parts.number}`);
   }
   return ok({ host, owner: parts.owner, repo: parts.repo, number });
+}
+
+export interface PullRequestRefOptions {
+  /** The host of an `owner/repo#number` shorthand. Defaults to `github.com`. */
+  readonly defaultHost?: string;
+}
+
+function partsFrom(input: string, options: Required<PullRequestRefOptions>): Parts | string {
+  if (webUrl.test(input)) {
+    return fromUrl(input);
+  }
+  return fromShorthand(input, options);
 }
 
 interface Parts {
@@ -59,12 +71,16 @@ function fromUrl(input: string): Parts | string {
     return 'pull request URLs must be plain https://';
   }
   const [owner, repo, kind, number] = url.pathname.split('/').filter((segment) => segment !== '');
-  return owner === undefined || repo === undefined || kind !== 'pull' || number === undefined
-    ? 'expected https://<host>/<owner>/<repo>/pull/<number>'
-    : { host: url.hostname, owner, repo, number };
+  if (owner === undefined || repo === undefined || kind !== 'pull' || number === undefined) {
+    return 'expected https://<host>/<owner>/<repo>/pull/<number>';
+  }
+  return { host: url.hostname, owner, repo, number };
 }
 
-function fromShorthand(input: string, defaultHost: string): Parts | string {
+function fromShorthand(
+  input: string,
+  { defaultHost }: Required<PullRequestRefOptions>,
+): Parts | string {
   const usage = 'expected a pull request URL, owner/repo#number or host/owner/repo#number';
   const [path = '', number, ...extra] = input.split('#');
   const segments = path.split('/');

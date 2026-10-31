@@ -16,11 +16,16 @@ function sameRepoHead(): typeof githubFixtures.pullRequest.head {
   };
 }
 
+/** The branches a fixture pull request merges, and the repository its head is in. */
+interface Branches {
+  readonly base: string;
+  readonly head: string;
+  readonly repo?: typeof githubFixtures.pullRequest.base.repo;
+}
+
 function raw(
   number: number,
-  base: string,
-  head: string,
-  repo = githubFixtures.pullRequest.base.repo,
+  { base, head, repo = githubFixtures.pullRequest.base.repo }: Branches,
 ): unknown {
   return {
     ...githubFixtures.pullRequest,
@@ -40,18 +45,22 @@ describe('findPullRequestStack', () => {
     fakeGithub,
     signal,
   }) => {
-    const pullRequest = decode(raw(20, 'feature-1', 'feature-2'));
+    const pullRequest = decode(raw(20, { base: 'feature-1', head: 'feature-2' }));
     const { client, requests } = fakeGithub((request) => {
       const url = new URL(request.url);
       if (url.searchParams.has('head')) {
-        return { status: 200, body: [raw(10, 'main', 'feature-1')] };
+        return { status: 200, body: [raw(10, { base: 'main', head: 'feature-1' })] };
       }
       return {
         status: 200,
         body: [
-          raw(30, 'feature-2', 'feature-3'),
-          raw(31, 'feature-2', 'feature-3b', githubFixtures.pullRequest.head.repo),
-          raw(20, 'feature-2', 'feature-2'),
+          raw(30, { base: 'feature-2', head: 'feature-3' }),
+          raw(31, {
+            base: 'feature-2',
+            head: 'feature-3b',
+            repo: githubFixtures.pullRequest.head.repo,
+          }),
+          raw(20, { base: 'feature-2', head: 'feature-2' }),
         ],
       };
     });

@@ -47,11 +47,11 @@ export async function findPullRequestStack<E>(
         path: githubPath`/repos/${repository.owner}/${repository.name}/pulls`,
         query: { state: 'open', per_page: 100, ...query },
         ...(signal !== undefined && { signal }),
+        maxPages: 3,
       },
       (body) => {
         return decodeWith(pageSchema, body);
       },
-      3,
     );
     if (pages.ok) {
       return ok(

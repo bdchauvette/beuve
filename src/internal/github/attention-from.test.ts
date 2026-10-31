@@ -22,13 +22,15 @@ describe('attentionFrom', () => {
   });
 
   test('is the author’s after changes are requested on the current head', ({ expect }) => {
-    const reviews = [review('rita', 'changes-requested', head())];
+    const reviews = [review({ reviewer: 'rita', verdict: 'changes-requested', commitSha: head() })];
     const result = attentionFrom(input({ reviews, viewer: 'vic' }));
     expect(result).toStrictEqual({ turn: 'author', reasons: ['rita requested changes'] });
   });
 
   test('is the reviewer’s once the author pushed after changes were requested', ({ expect }) => {
-    const reviews = [review('rita', 'changes-requested', older())];
+    const reviews = [
+      review({ reviewer: 'rita', verdict: 'changes-requested', commitSha: older() }),
+    ];
     expect(attentionFrom(input({ reviews }))).toStrictEqual({
       turn: 'reviewers',
       reasons: ['the author pushed since rita requested changes'],
@@ -79,25 +81,25 @@ describe('attentionFrom', () => {
     expect,
   }) => {
     const resolved = [
-      review('rita', 'changes-requested', older()),
-      review('rita', 'approved', head()),
-      review('rita', 'commented', head()),
+      review({ reviewer: 'rita', verdict: 'changes-requested', commitSha: older() }),
+      review({ reviewer: 'rita', verdict: 'approved', commitSha: head() }),
+      review({ reviewer: 'rita', verdict: 'commented', commitSha: head() }),
     ];
     expect(attentionFrom(input({ reviews: resolved, ci: 'success' }))).toStrictEqual({
       turn: 'author',
       reasons: ['approved on the current head with CI passing'],
     });
     const dismissed = [
-      review('rita', 'changes-requested', head()),
-      review('rita', 'dismissed', head()),
+      review({ reviewer: 'rita', verdict: 'changes-requested', commitSha: head() }),
+      review({ reviewer: 'rita', verdict: 'dismissed', commitSha: head() }),
     ];
     expect(attentionFrom(input({ reviews: dismissed })).turn).toBe('unknown');
-    const commentOnly = [review('rita', 'commented', head())];
+    const commentOnly = [review({ reviewer: 'rita', verdict: 'commented', commitSha: head() })];
     expect(attentionFrom(input({ reviews: commentOnly })).turn).toBe('unknown');
   });
 
   test('ignores the author’s own reviews and a re-request of the author', ({ expect }) => {
-    const reviews = [review('ada', 'changes-requested', head())];
+    const reviews = [review({ reviewer: 'ada', verdict: 'changes-requested', commitSha: head() })];
     expect(attentionFrom(input({ reviews })).turn).toBe('unknown');
   });
 
@@ -108,13 +110,13 @@ describe('attentionFrom', () => {
       turn: 'unknown',
       reasons: ['nothing is waiting on anyone'],
     });
-    const reviews = [review('rita', 'approved', head())];
+    const reviews = [review({ reviewer: 'rita', verdict: 'approved', commitSha: head() })];
     const waiting = attentionFrom(input({ reviews, ci: 'pending' }));
     expect(waiting.turn).toBe('unknown');
   });
 
   test('keeps an approval on an older() head() from reading as ready to merge', ({ expect }) => {
-    const reviews = [review('rita', 'approved', older())];
+    const reviews = [review({ reviewer: 'rita', verdict: 'approved', commitSha: older() })];
     expect(attentionFrom(input({ reviews, ci: 'success' })).turn).toBe('unknown');
   });
 });
@@ -141,10 +143,10 @@ function input(overrides: Partial<AttentionInput>): AttentionInput {
   };
 }
 
-function review(
-  reviewer: string,
-  verdict: PullRequestReview['verdict'],
-  commitSha: string,
-): PullRequestReview {
+function review({
+  reviewer,
+  verdict,
+  commitSha,
+}: Omit<PullRequestReview, 'submittedAt'>): PullRequestReview {
   return { reviewer, verdict, commitSha, submittedAt: '2026-10-01T12:00:00Z' };
 }

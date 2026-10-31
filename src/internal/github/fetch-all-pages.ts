@@ -6,6 +6,11 @@ import type { GithubClient, GithubRequest } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { parseLinkHeader } from './parse-link-header.ts';
 
+/** A list request, and how many pages of it to fetch at most (default 10). */
+export interface PagedRequest extends GithubRequest {
+  readonly maxPages?: number;
+}
+
 export interface Pages<T> {
   readonly items: readonly T[];
   /** More pages existed past `maxPages`. */
@@ -19,10 +24,10 @@ export interface Pages<T> {
  */
 export async function fetchAllPages<T, E>(
   client: GithubClient<E>,
-  request: GithubRequest,
+  request: PagedRequest,
   decodePage: (body: unknown) => Result<readonly T[], string>,
-  maxPages = 10,
 ): Promise<Result<Pages<T>, GithubError<E>>> {
+  const { maxPages = 10 } = request;
   const items: T[] = [];
   let next: GithubRequest | undefined = request;
   for (let page = 0; next !== undefined; page += 1) {
@@ -39,14 +44,10 @@ export async function fetchAllPages<T, E>(
     }
     items.push(...decoded.value);
     const url = parseLinkHeader(response.value.link).get('next');
-    next =
-      url === undefined
-        ? undefined
-        : {
-            method: request.method,
-            path: url,
-            ...(request.signal !== undefined && { signal: request.signal }),
-          };
+    next = undefined;
+    if (url !== undefined) {
+      next = { method: request.method, path: url, signal: request.signal };
+    }
   }
   return ok({ items, isTruncated: false });
 }

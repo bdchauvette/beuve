@@ -3,9 +3,10 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { getPullRequest } from './get-pull-request.ts';
+import type { PullRequestRef } from './pull-request.ts';
 import githubFixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-function ref(): { owner: string; repo: string; number: number } {
+function ref(): Omit<PullRequestRef, 'host'> {
   return { owner: 'octo-org', repo: 'hello-world', number: 1347 };
 }
 

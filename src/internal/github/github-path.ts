@@ -8,6 +8,10 @@ export function githubPath(
   ...values: readonly (string | number)[]
 ): string {
   return strings.reduce((path, text, index) => {
-    return path + text + (index < values.length ? encodeURIComponent(String(values[index])) : '');
+    const value = values[index];
+    if (value === undefined) {
+      return path + text;
+    }
+    return path + text + encodeURIComponent(String(value));
   }, '');
 }

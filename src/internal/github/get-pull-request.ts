@@ -3,7 +3,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { decodeWith } from './decode-with.ts';
-import type { GithubClient } from './github-client.ts';
+import type { GithubCallOptions, GithubClient } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { githubPath } from './github-path.ts';
 import type { PullRequest, PullRequestRef } from './pull-request.ts';
@@ -14,6 +14,11 @@ export type Conditional<T> =
   | { readonly kind: 'modified'; readonly value: T; readonly etag: string | undefined }
   | { readonly kind: 'not-modified' };
 
+export interface PullRequestPollOptions extends GithubCallOptions {
+  /** The previous response's ETag: an unchanged pull request then answers 304. */
+  readonly etag?: string;
+}
+
 /**
  * `GET /repos/{owner}/{repo}/pulls/{number}`. Pass the previous `etag` when polling for a new head:
  * an unchanged pull request answers 304, which GitHub doesn't count against the rate limit.
@@ -21,7 +26,7 @@ export type Conditional<T> =
 export async function getPullRequest<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly etag?: string; readonly signal?: AbortSignal | undefined } = {},
+  options: PullRequestPollOptions = {},
 ): Promise<Result<Conditional<PullRequest>, GithubError<E>>> {
   const response = await client.send({
     method: 'GET',

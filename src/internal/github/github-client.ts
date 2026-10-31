@@ -15,6 +15,11 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type QueryValue = string | number | boolean | undefined;
 
+/** What every API call takes: a signal that cancels it. */
+export interface GithubCallOptions {
+  readonly signal?: AbortSignal | undefined;
+}
+
 export interface GithubRequest {
   readonly method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /**

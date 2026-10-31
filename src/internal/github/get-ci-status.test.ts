@@ -3,11 +3,12 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { getCiStatus } from './get-ci-status.ts';
+import type { CommitRef } from './get-ci-status.ts';
 import { summarizeCiStatus } from './summarize-ci-status.ts';
 import type { FakeResponse, RecordedRequest } from './testing/create-fake-github.ts';
 import githubFixtures from './testing/github-fixtures.json' with { type: 'json' };
 
-function commit(): { owner: string; repo: string; sha: string } {
+function commit(): CommitRef {
   return { owner: 'octo-org', repo: 'hello-world', sha: githubFixtures.headSha };
 }
 

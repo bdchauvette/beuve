@@ -5,7 +5,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { decodeWith } from './decode-with.ts';
-import type { GithubClient } from './github-client.ts';
+import type { GithubCallOptions, GithubClient } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { githubPath } from './github-path.ts';
 import type { PullRequestRef } from './pull-request.ts';
@@ -30,7 +30,7 @@ const requestsSchema = z
 export async function getReviewRequests<E>(
   client: GithubClient<E>,
   ref: Omit<PullRequestRef, 'host'>,
-  options: { readonly signal?: AbortSignal | undefined } = {},
+  options: GithubCallOptions = {},
 ): Promise<Result<ReviewRequests, GithubError<E>>> {
   const response = await client.send({
     method: 'GET',

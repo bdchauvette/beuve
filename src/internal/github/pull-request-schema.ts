@@ -48,15 +48,14 @@ export const pullRequestSchema = z
       number: raw.number,
       title: raw.title,
       body: raw.body ?? '',
-      state: raw.state === 'open' ? 'open' : raw.merged_at == undefined ? 'closed' : 'merged',
+      state: stateFrom(raw.state, raw.merged_at),
       isDraft: raw.draft ?? false,
       author: raw.user?.login ?? 'ghost',
       base,
       head,
       isCrossRepository:
         head.repository === undefined || head.repository.fullName !== base.repository?.fullName,
-      mergeable:
-        raw.mergeable == undefined ? 'unknown' : raw.mergeable ? 'mergeable' : 'conflicting',
+      mergeable: mergeableFrom(raw.mergeable),
       mergeableState: raw.mergeable_state,
       htmlUrl: raw.html_url,
       createdAt: raw.created_at,
@@ -64,18 +63,41 @@ export const pullRequestSchema = z
     };
   });
 
+function stateFrom(
+  state: 'open' | 'closed',
+  mergedAt: string | null | undefined,
+): PullRequest['state'] {
+  if (state === 'open') {
+    return 'open';
+  }
+  if (mergedAt == undefined) {
+    return 'closed';
+  }
+  return 'merged';
+}
+
+function mergeableFrom(mergeable: boolean | null | undefined): PullRequest['mergeable'] {
+  if (mergeable == undefined) {
+    return 'unknown';
+  }
+  if (mergeable) {
+    return 'mergeable';
+  }
+  return 'conflicting';
+}
+
 function tipFrom(raw: z.infer<typeof branchSchema>): BranchTip {
+  if (raw.repo === null) {
+    return { ref: raw.ref, sha: raw.sha, repository: undefined };
+  }
   return {
     ref: raw.ref,
     sha: raw.sha,
-    repository:
-      raw.repo === null
-        ? undefined
-        : {
-            owner: raw.repo.owner.login,
-            name: raw.repo.name,
-            fullName: raw.repo.full_name,
-            cloneUrl: raw.repo.clone_url,
-          },
+    repository: {
+      owner: raw.repo.owner.login,
+      name: raw.repo.name,
+      fullName: raw.repo.full_name,
+      cloneUrl: raw.repo.clone_url,
+    },
   };
 }

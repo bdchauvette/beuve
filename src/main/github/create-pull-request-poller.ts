@@ -226,7 +226,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return undefined;
     }
     if (synced.value.pullRequest !== pullRequest) {
-      savePullRequest(context.session.db, ref, synced.value.pullRequest, Temporal.Now.instant());
+      savePullRequest(context.session.db, ref, synced.value.pullRequest);
     }
     return moveSessionHead(context.session, session, synced.value.headSha).ok
       ? synced.value.headSha
@@ -283,7 +283,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     state.headSeen ??= headSha;
     if (pulled.value.kind === 'modified') {
       const pullRequest = pulled.value.value;
-      savePullRequest(context.session.db, ref, pullRequest, Temporal.Now.instant());
+      savePullRequest(context.session.db, ref, pullRequest);
       const stack = await context.clients.withClient(host, async (client) =>
         findPullRequestStack(client, pullRequest, disposal.signal),
       );

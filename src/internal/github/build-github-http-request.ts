@@ -49,8 +49,15 @@ export function buildGithubHttpRequest(
     url: url.href,
     method: request.method,
     headers,
-    body: request.body === undefined ? undefined : JSON.stringify(request.body),
+    body: bodyText(request),
   });
+}
+
+function bodyText(request: GithubRequest): string | undefined {
+  if (request.body === undefined) {
+    return undefined;
+  }
+  return JSON.stringify(request.body);
 }
 
 const absoluteUrl = /^https?:/i;
@@ -60,7 +67,10 @@ function resolveUrl(request: GithubRequest, base: URL): URL | undefined {
   if (!isAbsolute && (!request.path.startsWith('/') || request.path.startsWith('//'))) {
     return undefined;
   }
-  const url = isAbsolute ? URL.parse(request.path) : URL.parse(request.path.slice(1), base.href);
+  let url = URL.parse(request.path.slice(1), base.href);
+  if (isAbsolute) {
+    url = URL.parse(request.path);
+  }
   if (
     url?.origin !== base.origin ||
     !url.pathname.startsWith(base.pathname) ||

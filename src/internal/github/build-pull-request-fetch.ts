@@ -40,20 +40,20 @@ export function buildPullRequestFetch(
   }
   const prefix = `refs/beuve/pr/${String(input.number)}`;
   const headRef = `${prefix}/head`;
-  const baseRef = input.baseBranch === undefined ? undefined : `${prefix}/base`;
-  return ok({
-    args: [
-      'fetch',
-      '--no-tags',
-      '--no-write-fetch-head',
-      '--end-of-options',
-      input.remote,
-      `+refs/pull/${String(input.number)}/head:${headRef}`,
-      ...(input.baseBranch === undefined ? [] : [`+refs/heads/${input.baseBranch}:${prefix}/base`]),
-    ],
-    headRef,
-    baseRef,
-  });
+  const args = [
+    'fetch',
+    '--no-tags',
+    '--no-write-fetch-head',
+    '--end-of-options',
+    input.remote,
+    `+refs/pull/${String(input.number)}/head:${headRef}`,
+  ];
+  if (input.baseBranch === undefined) {
+    return ok({ args, headRef, baseRef: undefined });
+  }
+  const baseRef = `${prefix}/base`;
+  args.push(`+refs/heads/${input.baseBranch}:${baseRef}`);
+  return ok({ args, headRef, baseRef });
 }
 
 const remoteName = /^[\w.-]+$/;

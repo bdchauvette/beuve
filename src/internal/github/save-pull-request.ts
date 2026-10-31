@@ -10,7 +10,6 @@ export function savePullRequest(
   db: DatabaseSync,
   ref: PullRequestRef,
   pullRequest: PullRequest,
-  fetchedAt: Temporal.Instant,
 ): void {
   db.prepare(
     `INSERT INTO github_pull_requests (
@@ -36,14 +35,22 @@ export function savePullRequest(
     body: pullRequest.body,
     author: pullRequest.author,
     state: pullRequest.state,
-    is_draft: pullRequest.isDraft ? 1 : 0,
+    is_draft: sqliteBoolean(pullRequest.isDraft),
     html_url: pullRequest.htmlUrl,
     base_branch: pullRequest.base.ref,
     base_sha: pullRequest.base.sha,
     head_branch: pullRequest.head.ref,
     head_sha: pullRequest.head.sha,
-    is_cross_repository: pullRequest.isCrossRepository ? 1 : 0,
+    is_cross_repository: sqliteBoolean(pullRequest.isCrossRepository),
     github_updated_at: pullRequest.updatedAt,
-    fetched_at: fetchedAt.toString({ fractionalSecondDigits: 3 }),
+    fetched_at: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
   });
+}
+
+/** SQLite has no boolean: `1` or `0`. */
+function sqliteBoolean(isTrue: boolean): number {
+  if (isTrue) {
+    return 1;
+  }
+  return 0;
 }

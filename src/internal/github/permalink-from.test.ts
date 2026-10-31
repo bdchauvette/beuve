@@ -3,13 +3,9 @@ import { describe } from 'vitest';
 import { test } from '#testing/test.ts';
 
 import { permalinkFrom } from './permalink-from.ts';
+import type { PermalinkTarget } from './permalink-from.ts';
 
-function repositoryAt(sha: string): {
-  host: string;
-  owner: string;
-  repo: string;
-  sha: string;
-} {
+function repositoryAt(sha: string): Pick<PermalinkTarget, 'host' | 'owner' | 'repo' | 'sha'> {
   return { host: 'github.com', owner: 'octo', repo: 'beuve', sha };
 }
 
