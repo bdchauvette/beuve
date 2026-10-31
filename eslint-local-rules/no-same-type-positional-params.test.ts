@@ -26,6 +26,15 @@ createTypedRuleTester().run('no-same-type-positional-params', noSameTypePosition
     'function f(min: number, max: number): void {}',
     'function f(actual: string, expected: string): void {}',
     'function f(expected: string, actual: string): void {}',
+    'function f(key: string, value: string): void {}',
+    'function f(value: string, key: string): void {}',
+    // A type dictates the parameters.
+    'type F = (...args: [string, string]) => void; const f: F = function (source: string, target: string): void {};',
+    'type F = (...args: [string, string]) => void; const f: F = (source, target) => {};',
+    'type F = (...args: [string, string]) => void; class A { f: F = (source: string, target: string): void => {}; }',
+    'type F = (...args: [string, string]) => void; const f = ((source: string, target: string): void => {}) satisfies F;',
+    'interface H { m: (...args: [string, string]) => void } const h: H = { m: (source: string, target: string): void => {} };',
+    'interface H { m(...args: [string, string]): void } const h = { m(source: string, target: string): void {} } satisfies H;',
     'const f = (left: string, right: string): void => {};',
     'type F = (left: string, right: string) => void;',
     'interface I { m(start: Date, end: Date): void }',
@@ -92,6 +101,16 @@ createTypedRuleTester().run('no-same-type-positional-params', noSameTypePosition
     {
       code: 'const f = function (from: string, to: string): void {};',
       errors: [{ messageId: 'sameTypeParams' }],
+    },
+    {
+      code: 'const h = { m: (source: string, target: string): void => {} };',
+      errors: [{ messageId: 'sameTypeParams' }],
+      name: 'an untyped object literal dictates nothing',
+    },
+    {
+      code: 'function f(key: string, value: string, other: string): void {}',
+      errors: [{ messageId: 'sameTypeParams' }],
+      name: 'key/value is a pair only on its own',
     },
     {
       code: 'declare function f(from: string, to: string): void;',

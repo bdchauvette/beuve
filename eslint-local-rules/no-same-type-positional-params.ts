@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { ParserServicesWithTypeInformation, TSESTree } from '@typescript-eslint/utils';
 import type ts from 'typescript';
 
+import { isSignatureDictated } from './is-signature-dictated.ts';
 import type { SignatureNode } from './no-inline-object-type-in-signature.ts';
 
 type MessageIds = 'sameTypeParams';
@@ -22,6 +23,7 @@ const defaultPairs: readonly (readonly [string, string])[] = [
   ['start', 'end'],
   ['min', 'max'],
   ['actual', 'expected'],
+  ['key', 'value'],
 ];
 
 const signatureSelector = [
@@ -40,8 +42,9 @@ const signatureSelector = [
 /**
  * Two positional parameters of the same type are easy to swap and the compiler can't tell. Pass an
  * options object, or give the type a brand. Exactly two parameters whose names form an allowlisted
- * pair (`a`/`b`, `left`/`right`, `actual`/`expected`, …) are fine, as are callbacks passed
- * straight to a call, methods that implement or override, overloads, and declaration files (which
+ * pair (`a`/`b`, `left`/`right`, `actual`/`expected`, `key`/`value`, …) are fine, as are
+ * functions whose parameters a callee or a type dictates ({@link isSignatureDictated}), methods
+ * that implement or override, overloads, and declaration files (which
  * describe an API someone else defined). Type-aware.
  */
 export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
@@ -170,16 +173,7 @@ function isAllowedPair(
 }
 
 function isExempt(node: SignatureNode, services: ParserServicesWithTypeInformation): boolean {
-  return isCallArgument(node) || isDictatedMethod(node, services) || isOverloadRelated(node);
-}
-
-function isCallArgument(node: SignatureNode): boolean {
-  const { parent } = node;
-  return (
-    (parent.type === AST_NODE_TYPES.CallExpression ||
-      parent.type === AST_NODE_TYPES.NewExpression) &&
-    parent.arguments.some((argument) => argument === node)
-  );
+  return isSignatureDictated(node) || isDictatedMethod(node, services) || isOverloadRelated(node);
 }
 
 /** An `override`, or a method one of the class's `implements` interfaces declares. */

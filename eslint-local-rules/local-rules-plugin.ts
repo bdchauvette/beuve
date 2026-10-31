@@ -1,6 +1,7 @@
 import { arrowBodyBraces } from './arrow-body-braces.ts';
 import { enforceInternalUtils } from './enforce-internal-utils.ts';
 import { forwardAbortSignal } from './forward-abort-signal.ts';
+import { maxParams } from './max-params.ts';
 import { expectFromTestContext } from './expect-from-test-context.ts';
 import { enforceSingleNamedExport } from './enforce-single-named-export.ts';
 import { enforceTopLevelFunctionSyntax } from './enforce-top-level-function-syntax.ts';
@@ -41,6 +42,7 @@ const plugin = {
     'expect-from-test-context': expectFromTestContext,
     'export-name-matches-filename': exportNameMatchesFilename,
     'forward-abort-signal': forwardAbortSignal,
+    'max-params': maxParams,
     'no-barrel-files': noBarrelFiles,
     'no-check-then-open': noCheckThenOpen,
     'no-date': noDate,

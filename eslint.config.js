@@ -228,7 +228,9 @@ export default defineConfig(
       'local/no-same-type-positional-params': 'off',
       curly: ['off', 'all'],
       'max-params': 'off',
-      '@typescript-eslint/max-params': ['off', { max: 3 }],
+      '@typescript-eslint/max-params': 'off',
+      // ADR 0086: typescript-eslint's rule, without callbacks and typed values whose shape is dictated.
+      'local/max-params': ['off', { max: 3 }],
       // Wants the ternaries `local/no-ternary-outside-templates` bans, and its fix writes them.
       'unicorn/prefer-ternary': 'off',
     },
@@ -256,7 +258,7 @@ export default defineConfig(
       'local/no-inline-object-type-in-signature': 'error',
       'local/no-same-type-positional-params': 'error',
       curly: ['error', 'all'],
-      '@typescript-eslint/max-params': ['error', { max: 3 }],
+      'local/max-params': ['error', { max: 3 }],
     },
   },
 
@@ -271,7 +273,7 @@ export default defineConfig(
       'local/no-inline-object-type-in-signature': 'error',
       'local/no-same-type-positional-params': 'error',
       curly: ['error', 'all'],
-      '@typescript-eslint/max-params': ['error', { max: 3 }],
+      'local/max-params': ['error', { max: 3 }],
     },
   },
 
@@ -286,7 +288,7 @@ export default defineConfig(
       'local/no-inline-object-type-in-signature': 'error',
       'local/no-same-type-positional-params': 'error',
       curly: ['error', 'all'],
-      '@typescript-eslint/max-params': ['error', { max: 3 }],
+      'local/max-params': ['error', { max: 3 }],
     },
   },
 
