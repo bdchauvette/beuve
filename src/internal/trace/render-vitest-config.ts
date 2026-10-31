@@ -32,10 +32,10 @@ export function renderVitestConfig(input: VitestConfigInput): string {
     reportFile: input.reportFile,
     cacheDirectory: input.cacheDirectory,
   };
-  const projectImport =
-    input.projectConfig === undefined
-      ? 'const projectConfig = {};'
-      : `import projectConfig from ${JSON.stringify(input.projectConfig)};`;
+  let projectImport = 'const projectConfig = {};';
+  if (input.projectConfig !== undefined) {
+    projectImport = `import projectConfig from ${JSON.stringify(input.projectConfig)};`;
+  }
   return String.raw`import { readFileSync } from 'node:fs';
 import { mergeConfig } from 'vitest/config';
 ${projectImport}

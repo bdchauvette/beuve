@@ -11,7 +11,8 @@ export interface VitestFixture {
   readonly dependencyRoot: string;
   /** Where runners may put their temporary directories. */
   readonly temporaryDirectory: string;
-  readonly write: (file: string, content: string) => void;
+  /** Writes files, by path relative to the worktree, creating parent directories. */
+  readonly write: (files: Readonly<Record<string, string>>) => void;
 }
 
 /**
@@ -28,19 +29,19 @@ export function createVitestFixture(
   const dependencyRoot = path.join(base, 'dependencies');
   const temporaryDirectory = path.join(base, 'tmp');
   linkTestVitest(dependencyRoot);
-  const write = (file: string, content: string): void => {
-    const target = path.join(worktree, file);
-    mkdirSync(path.dirname(target), { recursive: true });
-    writeFileSync(target, content);
+  const write = (written: Readonly<Record<string, string>>): void => {
+    for (const [file, content] of Object.entries(written)) {
+      const target = path.join(worktree, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, content);
+    }
   };
-  write('package.json', JSON.stringify({ name: 'fixture', type: 'module', private: true }));
-  write(
-    'vitest.config.ts',
-    "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({ test: { include: ['src/**/*.test.ts'] } });\n",
-  );
-  for (const [file, content] of Object.entries(files)) {
-    write(file, content);
-  }
+  write({
+    'package.json': JSON.stringify({ name: 'fixture', type: 'module', private: true }),
+    'vitest.config.ts':
+      "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({ test: { include: ['src/**/*.test.ts'] } });\n",
+  });
+  write(files);
   return {
     worktree,
     dependencyRoot,

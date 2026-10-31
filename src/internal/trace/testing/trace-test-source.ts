@@ -8,6 +8,7 @@ import { ecmascriptTraceRules } from '../ecmascript-trace-rules.ts';
 import type { InstrumentationPlan } from '../instrumentation-plan.ts';
 import { planInstrumentation } from '../plan-instrumentation.ts';
 import { traceGlobalName } from '../trace-global-name.ts';
+import type { TraceRecord } from '../trace-record.ts';
 import type { TraceTimeline } from '../trace-timeline.ts';
 import { parseTestSource } from './parse-test-source.ts';
 
@@ -19,6 +20,12 @@ export interface TestTrace {
   readonly outcome: { readonly value: unknown } | { readonly error: unknown };
 }
 
+/** The changed lines to trace, and the code that runs the source. */
+export interface TestRun {
+  readonly changedLines: readonly number[];
+  readonly run: string;
+}
+
 /**
  * Plans and instruments plain-JavaScript `source` (parsed with the TypeScript grammar), then
  * evaluates it followed by `run` in a fresh `vm` context with a recorder installed, the way the
@@ -26,8 +33,7 @@ export interface TestTrace {
  */
 export async function traceTestSource(
   source: string,
-  changedLines: readonly number[],
-  run: string,
+  { changedLines, run }: TestRun,
 ): Promise<TestTrace> {
   const root = await parseTestSource(source);
   const planned = planInstrumentation(
@@ -50,7 +56,11 @@ export async function traceTestSource(
     outcome = { error };
   }
   const record = recorder.take();
-  const timelines = buildTraceTimelines(plan, record === undefined ? [] : [record], [
+  const records: TraceRecord[] = [];
+  if (record !== undefined) {
+    records.push(record);
+  }
+  const timelines = buildTraceTimelines(plan, records, [
     {
       file: 'test.ts',
       titles: ['case'],

@@ -51,7 +51,7 @@ export function buildTraceTimelines(
       status: outcome.status,
       failure: outcome.failure,
       duration: outcome.duration,
-      entries: group === undefined ? [] : entriesFrom(plan, group.events),
+      entries: entriesFrom(plan, group?.events ?? []),
       dropped: group?.dropped ?? 0,
     });
   }
@@ -89,8 +89,7 @@ function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]
       if (probe?.kind !== 'enter') {
         continue;
       }
-      const parent = event.parent === undefined ? undefined : frames.get(event.parent);
-      const frame = { fn: probe.fn, depth: parent === undefined ? 0 : parent.depth + 1 };
+      const frame = { fn: probe.fn, depth: depthUnder(frames, event.parent) };
       frames.set(event.frame, frame);
       const names = probe.parameters ?? [];
       const args = event.args.map((value, index) => {
@@ -99,7 +98,10 @@ function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]
       entries.push({ ...base(event.seq, probe, frame), kind: 'enter', args });
       continue;
     }
-    const entry = entryFrom(plan, event, probeOf(event.probe), frames.get(event.frame));
+    const entry = entryFrom(plan, event, {
+      probe: probeOf(event.probe),
+      frame: frames.get(event.frame),
+    });
     if (entry !== undefined) {
       entries.push(entry);
     }
@@ -107,23 +109,35 @@ function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]
   return entries;
 }
 
+/** Where an event happened: its probe and the frame it ran in, when the record has them. */
+interface EventSite {
+  readonly probe: Probe | undefined;
+  readonly frame: Frame | undefined;
+}
+
 function entryFrom(
   plan: InstrumentationPlan,
   event: Exclude<RawTraceEvent, { kind: 'enter' }>,
-  probe: Probe | undefined,
-  frame: Frame | undefined,
+  { probe, frame }: EventSite,
 ): TraceEntry | undefined {
   if (event.kind === 'return' || event.kind === 'throw') {
     const fn = frame?.fn ?? probe?.fn;
-    const traced = fn === undefined ? undefined : plan.functions[fn];
-    if (fn === undefined || traced === undefined) {
+    if (fn === undefined) {
       return undefined;
+    }
+    const traced = plan.functions[fn];
+    if (traced === undefined) {
+      return undefined;
+    }
+    let line = traced.startLine;
+    if (event.kind === 'return') {
+      line = traced.endLine;
     }
     const common = {
       seq: event.seq,
       fn,
       depth: frame?.depth ?? 0,
-      line: probe?.line ?? (event.kind === 'return' ? traced.endLine : traced.startLine),
+      line: probe?.line ?? line,
       inHunk: probe?.inHunk ?? false,
       label: probe?.label ?? traced.name,
     };
@@ -165,11 +179,29 @@ function entryFrom(
   }
 }
 
-function base(
-  seq: number,
-  probe: Probe,
-  frame: Frame,
-): { seq: number; fn: number; line: number; depth: number; inHunk: boolean; label: string } {
+/** What every entry has: its order, function, place and label. */
+interface EntryBase {
+  seq: number;
+  fn: number;
+  line: number;
+  depth: number;
+  inHunk: boolean;
+  label: string;
+}
+
+/** The depth of a frame entered from `parent`: one below it, or the top. */
+function depthUnder(frames: ReadonlyMap<number, Frame>, parent: number | undefined): number {
+  if (parent === undefined) {
+    return 0;
+  }
+  const outer = frames.get(parent);
+  if (outer === undefined) {
+    return 0;
+  }
+  return outer.depth + 1;
+}
+
+function base(seq: number, probe: Probe, frame: Frame): EntryBase {
   return {
     seq,
     fn: frame.fn,

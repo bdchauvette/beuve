@@ -12,6 +12,8 @@ import {
 import path from 'node:path';
 import process from 'node:process';
 
+import { anySignal } from '#x/async/any-signal.ts';
+import type { Brand } from '#x/brand/brand.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -25,7 +27,7 @@ import { renderSetupModule } from './render-setup-module.ts';
 import { renderVitestConfig } from './render-vitest-config.ts';
 import type { TraceError } from './trace-error.ts';
 import type { TraceRecord } from './trace-record.ts';
-import type { TraceRunner, TraceRunOutput, TraceRunRequest } from './trace-runner.ts';
+import type { TestOutcome, TraceRunner, TraceRunOutput, TraceRunRequest } from './trace-runner.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 import { timeoutSignal } from '#x/time/timeout-signal.ts';
 import { tailOf } from '#x/text/tail-of.ts';
@@ -43,10 +45,13 @@ export interface VitestTraceRunnerOptions {
   readonly killGrace?: Temporal.Duration;
 }
 
+/** A directory as `realpath` gives it, which paths are checked to stay inside. */
+type RealDirectory = Brand<string, 'RealDirectory'>;
+
 interface Workspace {
-  readonly worktree: string;
-  readonly dependencyRoot: string;
-  readonly root: string;
+  readonly worktree: RealDirectory;
+  readonly dependencyRoot: RealDirectory;
+  readonly root: RealDirectory;
   readonly projectConfig: string | undefined;
   readonly testFiles: readonly string[];
   readonly files: Readonly<Record<string, { original: string; code: string }>>;
@@ -92,7 +97,10 @@ export function createVitestTraceRunner(options: VitestTraceRunnerOptions): Trac
       await mkdir(options.temporaryDirectory, { recursive: true, mode: 0o700 });
       const parent = await realpath(options.temporaryDirectory);
       await using directory = await mkdtempDisposable(path.join(parent, 'trace-'));
-      return await runIn(options, request, workspace.value, entry.value.script, directory.path);
+      return await runIn({ options, request }, workspace.value, {
+        script: entry.value.script,
+        directory: directory.path,
+      });
     },
   };
 }
@@ -131,7 +139,10 @@ async function resolveWorkspace(request: TraceRunRequest): Promise<Result<Worksp
     files[resolved.value] = { original: file.original, code: file.code };
   }
   const projectConfig = await findProjectConfig(worktree, path.dirname(first));
-  const root = projectConfig === undefined ? worktree : path.dirname(projectConfig);
+  let root = worktree;
+  if (projectConfig !== undefined) {
+    root = path.dirname(projectConfig) as RealDirectory;
+  }
   const inRoot = testFiles.filter((file) => isInside(root, file));
   if (inRoot.length === 0) {
     return err({ kind: 'no-tests', testFiles: request.testFiles });
@@ -139,13 +150,24 @@ async function resolveWorkspace(request: TraceRunRequest): Promise<Result<Worksp
   return ok({ worktree, dependencyRoot, root, projectConfig, testFiles: inRoot, files });
 }
 
+/** The runner's options and the request one run answers. */
+interface RunContext {
+  readonly options: VitestTraceRunnerOptions;
+  readonly request: TraceRunRequest;
+}
+
+/** Vitest's entry script, and the fresh directory a run works in. */
+interface RunScratch {
+  readonly script: string;
+  readonly directory: string;
+}
+
 async function runIn(
-  options: VitestTraceRunnerOptions,
-  request: TraceRunRequest,
+  context: RunContext,
   workspace: Workspace,
-  script: string,
-  directory: string,
+  { script, directory }: RunScratch,
 ): Promise<Result<TraceRunOutput, TraceError>> {
+  const { options, request } = context;
   const eventsDirectory = path.join(directory, 'events');
   const configFile = path.join(directory, 'vitest.config.mjs');
   const reportFile = path.join(directory, 'report.json');
@@ -157,8 +179,7 @@ async function runIn(
   );
   const runFile = path.join(directory, 'run.json');
   const setupFile = path.join(directory, 'setup.mjs');
-  /* eslint-disable local/forward-abort-signal -- Small temporary files; an abort is answered once Vitest
-     starts (`spawnVitest` stops it at once), so the run resolves `cancelled` instead of rejecting. */
+
   await writeFile(runFile, JSON.stringify({ files: workspace.files }));
   await writeFile(setupFile, renderSetupModule(eventsDirectory));
   await writeFile(
@@ -174,7 +195,7 @@ async function runIn(
       cacheDirectory: path.join(directory, 'cache'),
     }),
   );
-  /* eslint-enable local/forward-abort-signal */
+
   const args = [script, 'run', '--config', configFile, '--root', workspace.root];
   if (request.testNamePattern !== undefined) {
     args.push(`--testNamePattern=${request.testNamePattern}`);
@@ -182,7 +203,7 @@ async function runIn(
   args.push(...workspace.testFiles);
 
   const stopwatch = new Stopwatch();
-  const exit = await spawnVitest(options, request, args, workspace.root);
+  const exit = await spawnVitest(context, args, workspace.root);
   const duration = stopwatch.elapsed();
   options.logger?.debug('trace: vitest exited', { duration, ...exit, output: undefined });
   if (exit.stopped === 'cancelled') {
@@ -192,7 +213,10 @@ async function runIn(
     return err({ kind: 'timeout', timeout: request.timeout });
   }
   const report = await readText(reportFile);
-  const outcomes = report === undefined ? undefined : parseVitestReport(report, workspace.worktree);
+  let outcomes: TestOutcome[] | undefined;
+  if (report !== undefined) {
+    outcomes = parseVitestReport(report, { root: workspace.worktree });
+  }
   if (outcomes === undefined) {
     return err({
       kind: 'run-failed',
@@ -209,13 +233,12 @@ async function runIn(
 }
 
 async function spawnVitest(
-  options: VitestTraceRunnerOptions,
-  request: TraceRunRequest,
+  { options, request }: RunContext,
   args: readonly string[],
   cwd: string,
 ): Promise<Exit> {
   const isOwnGroup = process.platform !== 'win32';
-  // eslint-disable-next-line local/forward-abort-signal -- `onAbort` below stops the whole process group, with a grace period; spawn's `signal` would kill only the child.
+
   const child = spawn(options.nodePath, args, {
     cwd,
     env: createTraceEnvironment(options.inheritedEnvironment, options.extraEnvironment),
@@ -264,10 +287,13 @@ async function spawnVitest(
     );
   };
   const deadline = timeoutSignal(request.timeout);
-  const bounded =
-    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const bounded = anySignal(request.signal, deadline) ?? deadline;
   const onStop = (): void => {
-    stop(bounded.reason === deadline.reason ? 'timeout' : 'cancelled');
+    if (bounded.reason === deadline.reason) {
+      stop('timeout');
+    } else {
+      stop('cancelled');
+    }
   };
   const listeners = stack.adopt(new AbortController(), (controller) => {
     controller.abort();
@@ -292,7 +318,7 @@ async function spawnVitest(
   });
 }
 
-async function readRecords(directory: string, worktree: string): Promise<TraceRecord[]> {
+async function readRecords(directory: string, worktree: RealDirectory): Promise<TraceRecord[]> {
   const entries = await readdir(directory);
   const names = entries
     .filter((name) => name.endsWith('.jsonl'))
@@ -301,23 +327,29 @@ async function readRecords(directory: string, worktree: string): Promise<TraceRe
   for (const name of names) {
     const text = (await readText(path.join(directory, name))) ?? '';
     for (const line of text.split('\n')) {
-      const record = line === '' ? undefined : parseTraceRecord(line);
-      if (record !== undefined) {
-        records.push(
-          record.test === undefined
-            ? record
-            : {
-                ...record,
-                test: { ...record.test, file: path.relative(worktree, record.test.file) },
-              },
-        );
+      if (line === '') {
+        continue;
       }
+      const record = parseTraceRecord(line);
+      if (record?.test === undefined) {
+        if (record !== undefined) {
+          records.push(record);
+        }
+        continue;
+      }
+      records.push({
+        ...record,
+        test: { ...record.test, file: path.relative(worktree, record.test.file) },
+      });
     }
   }
   return records;
 }
 
-async function findProjectConfig(worktree: string, from: string): Promise<string | undefined> {
+async function findProjectConfig(
+  worktree: RealDirectory,
+  from: string,
+): Promise<string | undefined> {
   for (let directory = from; isInside(worktree, directory); directory = path.dirname(directory)) {
     for (const name of configNames) {
       const candidate = path.join(directory, name);
@@ -332,7 +364,10 @@ async function findProjectConfig(worktree: string, from: string): Promise<string
   return undefined;
 }
 
-async function realFileInside(root: string, file: string): Promise<Result<string, TraceError>> {
+async function realFileInside(
+  root: RealDirectory,
+  file: string,
+): Promise<Result<string, TraceError>> {
   if (path.isAbsolute(file) || file.includes('\0')) {
     return err({ kind: 'invalid-path', path: file, reason: 'not a relative path' });
   }
@@ -348,12 +383,12 @@ async function realFileInside(root: string, file: string): Promise<Result<string
   return err({ kind: 'invalid-path', path: file, reason: 'not a file inside the worktree' });
 }
 
-async function realDirectory(directory: string): Promise<string | undefined> {
+async function realDirectory(directory: string): Promise<RealDirectory | undefined> {
   try {
     const resolved = await realpath(directory);
     const stats = await stat(resolved);
     if (stats.isDirectory()) {
-      return resolved;
+      return resolved as RealDirectory;
     }
     return undefined;
   } catch {
@@ -370,7 +405,7 @@ async function isFile(file: string): Promise<boolean> {
   }
 }
 
-function isInside(root: string, candidate: string): boolean {
+function isInside(root: RealDirectory, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }

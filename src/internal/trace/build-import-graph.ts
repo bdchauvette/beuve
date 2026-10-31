@@ -25,7 +25,7 @@ export function buildImportGraph(
       if (specifier?.startsWith('.') !== true) {
         continue;
       }
-      const resolved = resolveRelative(file, specifier, known);
+      const resolved = resolveRelative({ file, specifier }, known);
       if (resolved !== undefined && resolved !== file) {
         targets.add(resolved);
       }
@@ -35,12 +35,17 @@ export function buildImportGraph(
   return graph;
 }
 
+/** A relative specifier and the file that wrote it. */
+interface RelativeImport {
+  readonly file: string;
+  readonly specifier: string;
+}
+
 function resolveRelative(
-  from: string,
-  specifier: string,
+  { file, specifier }: RelativeImport,
   known: ReadonlySet<string>,
 ): string | undefined {
-  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
   const stripped = base.replace(scriptExtension, '');
   const candidates = [
     base,

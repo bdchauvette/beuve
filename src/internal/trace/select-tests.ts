@@ -49,20 +49,30 @@ export function selectTests(input: SelectTestsInput): TestSelection[] {
     .filter((file) => distances.has(file) && stemOf(file) !== stem)
     .map((file) => {
       const distance = distances.get(file) ?? 0;
-      return {
-        path: file,
-        reason: distance === 1 ? ('imports' as const) : ('transitive' as const),
-        distance,
-      };
+      if (distance === 1) {
+        return { path: file, reason: 'imports' as const, distance };
+      }
+      return { path: file, reason: 'transitive' as const, distance };
     });
   const directory = path.posix.dirname(changedPath);
+  const closenessOf = (file: string): number => {
+    return sharedSegments(directory, testDirectoryOf(file));
+  };
+  /** Imported directly first, then those near the change. */
   const nameRank = (file: string): number => {
-    return (distances.get(file) === 1 ? 0 : 2) + (closeness(directory, file) > 0 ? 0 : 1);
+    let rank = 0;
+    if (distances.get(file) !== 1) {
+      rank += 2;
+    }
+    if (closenessOf(file) === 0) {
+      rank += 1;
+    }
+    return rank;
   };
   const byName = named.toSorted((left, right) => {
     return (
       nameRank(left.path) - nameRank(right.path) ||
-      closeness(directory, right.path) - closeness(directory, left.path) ||
+      closenessOf(right.path) - closenessOf(left.path) ||
       left.path.localeCompare(right.path)
     );
   });
@@ -76,16 +86,20 @@ function stemOf(file: string): string {
   return path.posix.basename(file).replace(stemPattern, '');
 }
 
-/** How much of `directory` the test's directory shares, in segments; a `__tests__` child counts. */
-function closeness(directory: string, file: string): number {
-  const own = path.posix.dirname(file).replace(testsDirectoryPattern, '') || '.';
-  if (own === directory) {
+/** The directory a test belongs to: its own, or the parent of a `__tests__` directory. */
+function testDirectoryOf(file: string): string {
+  return path.posix.dirname(file).replace(testsDirectoryPattern, '') || '.';
+}
+
+/** How many leading segments two directories share; all of them when they are the same. */
+function sharedSegments(left: string, right: string): number {
+  if (left === right) {
     return Number.MAX_SAFE_INTEGER;
   }
-  const left = directory.split('/');
-  const right = own.split('/');
+  const leftSegments = left.split('/');
+  const rightSegments = right.split('/');
   let shared = 0;
-  while (shared < left.length && left[shared] === right[shared]) {
+  while (shared < leftSegments.length && leftSegments[shared] === rightSegments[shared]) {
     shared += 1;
   }
   return shared;

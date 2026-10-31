@@ -57,9 +57,13 @@ it('hangs', async () => new Promise(() => {}), 60_000);
 }
 
 /** The fixture project of the tracing tests, and the plan for `math.ts` line 5. */
-async function mathProject(
-  fixtures: VitestFixtures,
-): Promise<{ readonly fixture: VitestFixture; readonly plan: InstrumentationPlan }> {
+/** A fixture project and the plan for one of its files. */
+interface PlannedProject {
+  readonly fixture: VitestFixture;
+  readonly plan: InstrumentationPlan;
+}
+
+async function mathProject(fixtures: VitestFixtures): Promise<PlannedProject> {
   const fixture = fixtures.create({
     'src/math.ts': math(),
     'src/math.test.ts': mathTest(),
@@ -322,10 +326,13 @@ process.exitCode = 1;
 }
 
 /** Runs the runner with an empty environment against a fresh fixture holding one empty test. */
-function refusalRunner(fixtures: VitestFixtures): {
+/** A fixture, and a runner over it that should refuse. */
+interface RefusalFixture {
   readonly fixture: VitestFixture;
   readonly run: RefusalRun;
-} {
+}
+
+function refusalRunner(fixtures: VitestFixtures): RefusalFixture {
   const fixture = fixtures.create({ 'src/a.test.ts': '' });
   const run: RefusalRun = async (overrides) => {
     return runnerFor(fixture, {}).run({

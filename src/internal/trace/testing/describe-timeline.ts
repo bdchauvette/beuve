@@ -20,10 +20,16 @@ function describeEntry(entry: TraceEntry): string {
       return `loop ${entry.label} ×${String(entry.iterations)}`;
     }
     case 'return': {
-      return `return${entry.implicit ? ' (implicit)' : ''} ${entry.value.preview}`;
+      if (entry.implicit) {
+        return `return (implicit) ${entry.value.preview}`;
+      }
+      return `return ${entry.value.preview}`;
     }
     case 'throw': {
-      return `throw${entry.propagated ? ' (propagated)' : ''} ${entry.value.preview}`;
+      if (entry.propagated) {
+        return `throw (propagated) ${entry.value.preview}`;
+      }
+      return `throw ${entry.value.preview}`;
     }
   }
 }

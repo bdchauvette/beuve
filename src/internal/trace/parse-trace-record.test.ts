@@ -63,6 +63,9 @@ describe('parseTraceRecord', () => {
     expect(parsed?.events).toHaveLength(1);
     expect(parsed?.events[0]).toMatchObject({ value: { type: 'unavailable' } });
     const event = parsed?.events[0];
-    expect(event?.kind === 'value' ? event.value.preview : '').toHaveLength(1001);
+    expect(event).toMatchObject({
+      kind: 'value',
+      value: { preview: expect.stringMatching(/^[\s\S]{1001}$/u) as unknown },
+    });
   });
 });

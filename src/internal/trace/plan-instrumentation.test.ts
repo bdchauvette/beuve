@@ -26,7 +26,7 @@ describe('planInstrumentation', () => {
   test('traces entry, branches and the return of the function enclosing the hunk', async ({
     expect,
   }) => {
-    const trace = await traceTestSource(clamp(), [5], 'clamp(12, 0, 10)');
+    const trace = await traceTestSource(clamp(), { changedLines: [5], run: 'clamp(12, 0, 10)' });
     expect(trace.outcome).toStrictEqual({ value: 10 });
     expect(trace.plan.functions).toStrictEqual([
       { index: 0, name: 'clamp', startLine: 1, endLine: 9 },
@@ -46,7 +46,7 @@ describe('planInstrumentation', () => {
   });
 
   test('keeps every line where it was', async ({ expect }) => {
-    const trace = await traceTestSource(clamp(), [2], 'clamp(1, 0, 10)');
+    const trace = await traceTestSource(clamp(), { changedLines: [2], run: 'clamp(1, 0, 10)' });
     const lines = trace.code.split('\n');
     expect(lines).toHaveLength(clamp().split('\n').length);
     expect(lines[1]).toContain('value < low');
@@ -64,7 +64,7 @@ describe('planInstrumentation', () => {
 function double(n) {
   return n * 2;
 }`;
-    const trace = await traceTestSource(source, [4, 9], 'total([1, 2])');
+    const trace = await traceTestSource(source, { changedLines: [4, 9], run: 'total([1, 2])' });
     expect(trace.outcome).toStrictEqual({ value: 6 });
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter total(values=[1, 2])',
@@ -86,7 +86,7 @@ function double(n) {
       return 'other';
   }
 }`;
-    const trace = await traceTestSource(source, [4], 'kind(1)');
+    const trace = await traceTestSource(source, { changedLines: [4], run: 'kind(1)' });
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter kind(code=1)',
       '2: switch code = 1',
@@ -108,7 +108,7 @@ function safe(input) {
     return 'fallback';
   }
 }`;
-    const trace = await traceTestSource(source, [2, 7], 'safe(0)');
+    const trace = await traceTestSource(source, { changedLines: [2, 7], run: 'safe(0)' });
     expect(trace.outcome).toStrictEqual({ value: 'fallback' });
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '5: enter safe(input=0)',
@@ -124,8 +124,7 @@ function safe(input) {
   return inner();
 }
 function inner() { throw new TypeError('bad'); }`,
-      [2],
-      'outer()',
+      { changedLines: [2], run: 'outer()' },
     );
     expect(propagated.outcome).toMatchObject({ error: { message: 'bad' } });
     expect(describeTimeline(propagated.timeline)).toStrictEqual([
@@ -141,7 +140,10 @@ function inner() { throw new TypeError('bad'); }`,
 function log(message) {
   message.length;
 }`;
-    const trace = await traceTestSource(source, [1, 3], "[sign(-1), log('hi')]");
+    const trace = await traceTestSource(source, {
+      changedLines: [1, 3],
+      run: "[sign(-1), log('hi')]",
+    });
     expect(trace.outcome).toMatchObject({ value: ['negative', undefined] });
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter sign(n=-1)',
@@ -160,7 +162,10 @@ function log(message) {
     return id + count + rest.length;
   }
 }`;
-    const trace = await traceTestSource(source, [3], "new Cart().add({ id: 1 }, undefined, 'x')");
+    const trace = await traceTestSource(source, {
+      changedLines: [3],
+      run: "new Cart().add({ id: 1 }, undefined, 'x')",
+    });
     expect(trace.outcome).toStrictEqual({ value: 3 });
     expect(describeTimeline(trace.timeline)[0]).toBe(
       '2: enter Cart.add({ id }={ id: 1 }, count=1, rest=["x"])',
@@ -177,7 +182,10 @@ function log(message) {
   }
   return hits;
 }`;
-    const trace = await traceTestSource(source, [5], 'find([[0, 1], [1], []])');
+    const trace = await traceTestSource(source, {
+      changedLines: [5],
+      run: 'find([[0, 1], [1], []])',
+    });
     expect(trace.outcome).toStrictEqual({ value: 2 });
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter find(rows=[[0, 1], [1], []])',
@@ -199,9 +207,9 @@ function log(message) {
     return 0;
   });
 }`;
-    const outer = await traceTestSource(source, [1], 'outer([1])');
+    const outer = await traceTestSource(source, { changedLines: [1], run: 'outer([1])' });
     expect(outer.plan.probes.map((probe) => probe.kind)).toStrictEqual(['enter', 'return']);
-    const inner = await traceTestSource(source, [3], 'outer([1, 0])');
+    const inner = await traceTestSource(source, { changedLines: [3], run: 'outer([1, 0])' });
     expect(inner.plan.functions.map((fn) => fn.name)).toStrictEqual(['<anonymous>']);
     expect(describeTimeline(inner.timeline)).toStrictEqual([
       '2: enter <anonymous>(item=1)',
@@ -219,7 +227,7 @@ function log(message) {
   if (x) return;
   return x;
 }`;
-    const trace = await traceTestSource(source, [3], 'f(1)');
+    const trace = await traceTestSource(source, { changedLines: [3], run: 'f(1)' });
     expect(trace.code).toMatch(/^function f\(x\) \{\n {2}'use strict';const __beuveFrame/u);
     expect(describeTimeline(trace.timeline)).toStrictEqual([
       '1: enter f(x=1)',
@@ -264,9 +272,12 @@ function log(message) {
   });
 });
 
-function hasError(node: { type: string; children: readonly unknown[] }): boolean {
-  return (
-    node.type === 'ERROR' ||
-    node.children.some((child) => hasError(child as { type: string; children: readonly unknown[] }))
-  );
+/** A syntax node, as far as finding parse errors needs it. */
+interface ParsedNode {
+  readonly type: string;
+  readonly children: readonly unknown[];
+}
+
+function hasError(node: ParsedNode): boolean {
+  return node.type === 'ERROR' || node.children.some((child) => hasError(child as ParsedNode));
 }

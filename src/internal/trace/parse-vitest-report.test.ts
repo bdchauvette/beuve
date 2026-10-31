@@ -36,7 +36,7 @@ describe('parseVitestReport', () => {
         },
       ],
     };
-    expect(parseVitestReport(JSON.stringify(report), '/w')).toStrictEqual([
+    expect(parseVitestReport(JSON.stringify(report), { root: '/w' })).toStrictEqual([
       {
         file: 'src/a.test.ts',
         titles: ['suite', 'works'],
@@ -69,7 +69,7 @@ describe('parseVitestReport', () => {
   });
 
   test('refuses text that is not a report', ({ expect }) => {
-    expect(parseVitestReport('', '/w')).toBeUndefined();
-    expect(parseVitestReport('{}', '/w')).toBeUndefined();
+    expect(parseVitestReport('', { root: '/w' })).toBeUndefined();
+    expect(parseVitestReport('{}', { root: '/w' })).toBeUndefined();
   });
 });

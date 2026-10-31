@@ -42,8 +42,10 @@ export function parseTraceRecord(line: string): TraceRecord | undefined {
   if (!isObject(parsed) || !Array.isArray(parsed.events)) {
     return undefined;
   }
-  const test =
-    parsed.test === undefined || parsed.test === null ? undefined : testFrom(parsed.test);
+  let test: ReturnType<typeof testFrom> | undefined;
+  if (parsed.test !== undefined && parsed.test !== null) {
+    test = testFrom(parsed.test);
+  }
   if (test === 'invalid') {
     return undefined;
   }
@@ -54,7 +56,7 @@ export function parseTraceRecord(line: string): TraceRecord | undefined {
     }
     return [read];
   });
-  const dropped = isCount(parsed.dropped) ? parsed.dropped : 0;
+  const dropped = countOf(parsed.dropped) ?? 0;
   return { test, events, dropped: dropped + Math.max(0, parsed.events.length - maxEvents) };
 }
 
@@ -77,10 +79,10 @@ function eventFrom(value: unknown): RawTraceEvent | undefined {
     return undefined;
   }
   const { seq, frame } = value;
-  const probe = isCount(value.probe) ? value.probe : undefined;
+  const probe = countOf(value.probe);
   switch (value.kind) {
     case 'enter': {
-      const parent = isCount(value.parent) ? value.parent : undefined;
+      const parent = countOf(value.parent);
       if (probe === undefined || !Array.isArray(value.args)) {
         return undefined;
       }
@@ -124,9 +126,14 @@ function eventFrom(value: unknown): RawTraceEvent | undefined {
 
 function summaryFrom(value: unknown): ValueSummary {
   if (isObject(value) && typeof value.type === 'string' && typeof value.preview === 'string') {
-    const type = valueTypes.has(value.type) ? (value.type as ValueType) : 'unavailable';
-    const preview =
-      value.preview.length <= maxPreview ? value.preview : `${value.preview.slice(0, maxPreview)}…`;
+    let type: ValueType = 'unavailable';
+    if (valueTypes.has(value.type)) {
+      type = value.type as ValueType;
+    }
+    let { preview } = value;
+    if (preview.length > maxPreview) {
+      preview = `${preview.slice(0, maxPreview)}…`;
+    }
     return { type, preview };
   }
   return { type: 'unavailable', preview: '<unavailable>' };
@@ -156,4 +163,11 @@ function isObject(value: unknown): value is Partial<Record<Field, unknown>> {
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function countOf(value: unknown): number | undefined {
+  if (isCount(value)) {
+    return value;
+  }
+  return undefined;
 }

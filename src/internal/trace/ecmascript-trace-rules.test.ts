@@ -34,11 +34,9 @@ describe('ecmascriptTraceRules', () => {
       ...Object.values(rules.namers),
       ...Object.values(rules.parameters.wrappers),
       ...Object.values(rules.functions).flatMap((rule) => {
-        return [
-          rule.bodyField,
-          ...(rule.parametersField === undefined ? [] : [rule.parametersField]),
-          ...(rule.parameterField === undefined ? [] : [rule.parameterField]),
-        ];
+        return [rule.bodyField, rule.parametersField, rule.parameterField].filter((field) => {
+          return field !== undefined;
+        });
       }),
     ];
     for (const rule of Object.values(rules.constructs)) {

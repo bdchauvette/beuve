@@ -33,12 +33,7 @@ export async function findVitestEntry(
     return notFound;
   }
   const { bin, version } = manifest as { bin?: unknown; version?: unknown };
-  const relative =
-    typeof bin === 'string'
-      ? bin
-      : typeof bin === 'object' && bin !== null && 'vitest' in bin
-        ? bin.vitest
-        : undefined;
+  const relative = binPath(bin);
   if (typeof relative !== 'string') {
     return notFound;
   }
@@ -48,8 +43,23 @@ export async function findVitestEntry(
     if (!stats.isFile()) {
       return notFound;
     }
-    return ok({ script, version: typeof version === 'string' ? version : 'unknown' });
+    let shown = 'unknown';
+    if (typeof version === 'string') {
+      shown = version;
+    }
+    return ok({ script, version: shown });
   } catch {
     return notFound;
   }
+}
+
+/** A manifest's `bin`: one path, or the `vitest` entry of a map. */
+function binPath(bin: unknown): unknown {
+  if (typeof bin === 'string') {
+    return bin;
+  }
+  if (typeof bin === 'object' && bin !== null && 'vitest' in bin) {
+    return bin.vitest;
+  }
+  return undefined;
 }

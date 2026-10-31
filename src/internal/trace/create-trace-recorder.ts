@@ -1,3 +1,5 @@
+import type { Brand } from '#x/brand/brand.ts';
+
 import type { RawTraceEvent, TraceRecord, TraceTestId } from './trace-record.ts';
 import type { ValueSummary, ValueType } from './value-summary.ts';
 
@@ -16,18 +18,21 @@ export interface TraceRecorderLimits {
 }
 
 /** The calls instrumented code makes (see `planInstrumentation`), plus the setup module's hooks. */
+/** A call's frame, as `enter` numbered it: only `enter` makes one, so it can't pass for a probe. */
+export type TraceFrame = Brand<number, 'TraceFrame'>;
+
 export interface TraceRecorder {
-  readonly enter: (probe: number, args: ArrayLike<unknown>) => number;
-  readonly branch: <T>(frame: number, probe: number, value: T) => T;
-  readonly value: <T>(frame: number, probe: number, value: T) => T;
-  readonly mark: (frame: number, probe: number) => void;
-  readonly caught: (frame: number, probe: number, value: unknown) => void;
-  readonly loop: (frame: number, probe: number) => void;
-  readonly iterate: (frame: number, probe: number) => void;
-  readonly returns: <T>(frame: number, probe: number, value: T) => T;
-  readonly throws: <T>(frame: number, probe: number, value: T) => T;
-  readonly unwind: <T>(frame: number, error: T) => T;
-  readonly exit: (frame: number) => void;
+  readonly enter: (probe: number, args: ArrayLike<unknown>) => TraceFrame;
+  readonly branch: <T>(frame: TraceFrame, probe: number, value: T) => T;
+  readonly value: <T>(frame: TraceFrame, probe: number, value: T) => T;
+  readonly mark: (frame: TraceFrame, probe: number) => void;
+  readonly caught: (frame: TraceFrame, probe: number, value: unknown) => void;
+  readonly loop: (frame: TraceFrame, probe: number) => void;
+  readonly iterate: (frame: TraceFrame, probe: number) => void;
+  readonly returns: <T>(frame: TraceFrame, probe: number, value: T) => T;
+  readonly throws: <T>(frame: TraceFrame, probe: number, value: T) => T;
+  readonly unwind: <T>(frame: TraceFrame, error: T) => T;
+  readonly exit: (frame: TraceFrame) => void;
   /** Starts attributing events to `test` (`undefined`: outside any test). */
   readonly setTest: (test: TraceTestId | undefined) => void;
   /** The events since the last call, or `undefined` when there were none. */
@@ -148,7 +153,7 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     return `${text.slice(0, Math.max(0, length - 1))}…`;
   };
   const quote = (text: string): string => JSON.stringify(clip(text, limits.maxStringLength));
-  const dataValue = (target: object, key: PropertyKey): { value: unknown } | undefined => {
+  const dataValue = (target: object, key: PropertyKey): DataValue | undefined => {
     const descriptor = Object.getOwnPropertyDescriptor(target, key);
     if (descriptor !== undefined && 'value' in descriptor) {
       return { value: descriptor.value as unknown };
@@ -225,7 +230,11 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     return found?.[1] ?? 'object';
   };
 
-  const render = (value: unknown, depth: number, seen: Set<object>): string => {
+  // Nested, not top-level: the setup module embeds this function's source, so it can't reach out.
+  const deeper = (walk: Walk): Walk => {
+    return { depth: walk.depth + 1, seen: walk.seen };
+  };
+  const render = (value: unknown, walk: Walk): string => {
     const type = classify(value);
     switch (type) {
       case 'undefined':
@@ -271,7 +280,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
         const target = value as object;
         const name = inherited(target, 'name');
         const message = dataValue(target, 'message')?.value;
-        const head = typeof name === 'string' ? name : 'Error';
+        let head = 'Error';
+        if (typeof name === 'string') {
+          head = name;
+        }
         if (typeof message === 'string' && message !== '') {
           return `${head}: ${clip(message, limits.maxStringLength)}`;
         }
@@ -280,14 +292,19 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       case 'binary': {
         const target = value as object;
         const isTyped = isKind(target, 'isTypedArray', () => ArrayBuffer.isView(target));
-        const length = call(isTyped ? intrinsics.typedLength : intrinsics.bufferLength, target);
+        let length: unknown;
+        if (isTyped) {
+          length = call(intrinsics.typedLength, target);
+        } else {
+          length = call(intrinsics.bufferLength, target);
+        }
         return `${className(target) ?? 'Buffer'}(${String(length)})`;
       }
       case 'array':
       case 'map':
       case 'set':
       case 'object': {
-        return renderContainer(value as object, type, depth, seen);
+        return renderContainer(value as object, type, walk);
       }
       case 'unavailable': {
         return '<unavailable>';
@@ -296,7 +313,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   };
   const renderFunction = (target: object): string => {
     const name = dataValue(target, 'name')?.value;
-    const label = typeof name === 'string' && name !== '' ? ` ${name}` : '';
+    let label = '';
+    if (typeof name === 'string' && name !== '') {
+      label = ` ${name}`;
+    }
     if (functionSource(target).startsWith('class')) {
       return `[class${label}]`;
     }
@@ -312,36 +332,47 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   const renderContainer = (
     target: object,
     type: 'array' | 'map' | 'set' | 'object',
-    depth: number,
-    seen: Set<object>,
+    walk: Walk,
   ): string => {
+    const { seen } = walk;
     if (seen.has(target)) {
       return '[Circular]';
     }
     const name = className(target);
     const size = containerSize(target, type);
-    if (depth >= limits.maxDepth) {
+    if (walk.depth >= limits.maxDepth) {
       if (type === 'object') {
         return `[${name ?? 'Object'}]`;
       }
       return `[${name ?? typeName(type)}(${String(size)})]`;
     }
     seen.add(target);
-    const items = containerItems(target, type, depth, seen);
+    const body = containerItems(target, type, walk);
     seen.delete(target);
-    const more = size - items.length;
-    const body = more > 0 ? [...items, `… ${String(more)} more`] : items;
+    const more = size - body.length;
+    if (more > 0) {
+      body.push(`… ${String(more)} more`);
+    }
     switch (type) {
       case 'array': {
-        const prefix = name === undefined || name === 'Array' ? '' : `${name}(${String(size)}) `;
-        return `${prefix}[${body.join(', ')}]`;
+        if (name === undefined || name === 'Array') {
+          return `[${body.join(', ')}]`;
+        }
+        return `${name}(${String(size)}) [${body.join(', ')}]`;
       }
       case 'map':
       case 'set': {
-        return `${name ?? typeName(type)}(${String(size)}) {${body.length > 0 ? ` ${body.join(', ')} ` : ''}}`;
+        const head = `${name ?? typeName(type)}(${String(size)})`;
+        if (body.length === 0) {
+          return `${head} {}`;
+        }
+        return `${head} { ${body.join(', ')} }`;
       }
       case 'object': {
-        const prefix = name === undefined ? '' : `${name} `;
+        let prefix = '';
+        if (name !== undefined) {
+          prefix = `${name} `;
+        }
         if (body.length === 0) {
           return `${prefix}{}`;
         }
@@ -377,13 +408,13 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       return Object.getOwnPropertyDescriptor(target, key)?.enumerable === true;
     });
   };
-  const property = (target: object, key: PropertyKey, depth: number, seen: Set<object>): string => {
+  const property = (target: object, key: PropertyKey, walk: Walk): string => {
     const descriptor = Object.getOwnPropertyDescriptor(target, key);
     if (descriptor === undefined) {
       return '<empty>';
     }
     if ('value' in descriptor) {
-      return render(descriptor.value, depth + 1, seen);
+      return render(descriptor.value, deeper(walk));
     }
     if (descriptor.get !== undefined) {
       if (descriptor.set === undefined) {
@@ -396,15 +427,14 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   const containerItems = (
     target: object,
     type: 'array' | 'map' | 'set' | 'object',
-    depth: number,
-    seen: Set<object>,
+    walk: Walk,
   ): string[] => {
     const items: string[] = [];
     switch (type) {
       case 'array': {
         const length = Math.min(containerSize(target, type), limits.maxItems);
         for (let index = 0; index < length; index += 1) {
-          items.push(property(target, String(index), depth, seen));
+          items.push(property(target, String(index), walk));
         }
         return items;
       }
@@ -412,22 +442,28 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
         const iterator = call(intrinsics.mapEntries, target);
         for (let step = iterator?.next(); step !== undefined && step.done !== true;) {
           const [key, entry] = step.value;
-          items.push(`${render(key, depth + 1, seen)} => ${render(entry, depth + 1, seen)}`);
-          step = items.length < limits.maxItems ? iterator?.next() : undefined;
+          items.push(`${render(key, deeper(walk))} => ${render(entry, deeper(walk))}`);
+          step = undefined;
+          if (items.length < limits.maxItems) {
+            step = iterator?.next();
+          }
         }
         return items;
       }
       case 'set': {
         const iterator = call(intrinsics.setValues, target);
         for (let step = iterator?.next(); step !== undefined && step.done !== true;) {
-          items.push(render(step.value, depth + 1, seen));
-          step = items.length < limits.maxItems ? iterator?.next() : undefined;
+          items.push(render(step.value, deeper(walk)));
+          step = undefined;
+          if (items.length < limits.maxItems) {
+            step = iterator?.next();
+          }
         }
         return items;
       }
       case 'object': {
         for (const key of enumerableKeys(target).slice(0, limits.maxItems)) {
-          items.push(`${keyText(key)}: ${property(target, key, depth, seen)}`);
+          items.push(`${keyText(key)}: ${property(target, key, walk)}`);
         }
         return items;
       }
@@ -437,7 +473,7 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     try {
       return {
         type: classify(value),
-        preview: clip(render(value, 0, new Set()), limits.maxPreviewLength),
+        preview: clip(render(value, { depth: 0, seen: new Set() }), limits.maxPreviewLength),
       };
     } catch {
       return { type: 'unavailable', preview: '<unavailable>' };
@@ -486,9 +522,9 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   };
 
   return {
-    enter: (probe, args): number => {
+    enter: (probe, args): TraceFrame => {
       nextFrame += 1;
-      const frame = nextFrame;
+      const frame = nextFrame as TraceFrame;
       const parent = active.at(-1);
       active.push(frame);
       stateOf(frame);
@@ -498,13 +534,13 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       }
       return frame;
     },
-    branch: <T>(frame: number, probe: number, value: T): T => {
+    branch: <T>(frame: TraceFrame, probe: number, value: T): T => {
       if (isAdmitted(stateOf(frame), probe)) {
         events.push({ kind: 'branch', seq: nextSeq(), frame, probe, taken: Boolean(value) });
       }
       return value;
     },
-    value: <T>(frame: number, probe: number, value: T): T => {
+    value: <T>(frame: TraceFrame, probe: number, value: T): T => {
       if (isAdmitted(stateOf(frame), probe)) {
         events.push({ kind: 'value', seq: nextSeq(), frame, probe, value: summarize(value) });
       }
@@ -538,17 +574,20 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
         counter.iterations += 1;
       }
     },
-    returns: <T>(frame: number, probe: number, value: T): T => {
+    returns: <T>(frame: TraceFrame, probe: number, value: T): T => {
       stateOf(frame).returned = { probe, value: summarize(value) };
       return value;
     },
-    throws: <T>(frame: number, probe: number, value: T): T => {
+    throws: <T>(frame: TraceFrame, probe: number, value: T): T => {
       stateOf(frame).thrown = { probe, value };
       return value;
     },
-    unwind: <T>(frame: number, error: T): T => {
+    unwind: <T>(frame: TraceFrame, error: T): T => {
       const state = stateOf(frame);
-      const probe = state.thrown?.value === error ? state.thrown.probe : undefined;
+      let probe: number | undefined;
+      if (state.thrown?.value === error) {
+        probe = state.thrown.probe;
+      }
       state.unwound = { probe, value: summarize(error) };
       return error;
     },
@@ -583,4 +622,15 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     },
     summarize,
   };
+}
+
+/** An own data property's value: present, even when the value is `undefined`. */
+interface DataValue {
+  readonly value: unknown;
+}
+
+/** How deep a render is, and the containers it is inside, to cut cycles. */
+interface Walk {
+  readonly depth: number;
+  readonly seen: Set<object>;
 }
