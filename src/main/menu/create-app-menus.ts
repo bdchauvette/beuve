@@ -15,6 +15,7 @@ import type { MenuContextRequest, MenuStateRequest } from '#contract/ipc-contrac
 import { sendEvent } from '../ipc/send-event.ts';
 import { contextMenuTemplateFrom } from './context-menu-template-from.ts';
 import { menuItemStatesFrom } from './menu-item-states-from.ts';
+import type { MenuItemState } from './menu-item-states-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
 import type { MenuTemplateItem } from './menu-template-item.ts';
 
@@ -92,7 +93,10 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
 
   const build = (): Menu => Menu.buildFromTemplate(withClicks(template, dispatch));
 
-  const appMenu = platform === 'mac' ? build() : undefined;
+  let appMenu: Menu | undefined;
+  if (platform === 'mac') {
+    appMenu = build();
+  }
   // eslint-disable-next-line unicorn/no-null -- Electron removes the default menu with null.
   Menu.setApplicationMenu(appMenu ?? null);
 
@@ -146,9 +150,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     },
     popup: (contentsId, request): boolean => {
       const kind = kinds.get(contentsId);
-      const contents = webContents.fromId(contentsId);
-      const window =
-        contents === undefined ? undefined : (BrowserWindow.fromWebContents(contents) ?? undefined);
+      const window = windowOfContents(contentsId);
       if (kind === undefined || window === undefined) {
         return false;
       }
@@ -187,6 +189,14 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   };
 }
 
+/** The menu item id of a command's `index`th accelerator: `<id>`, then `<id>~1`, `<id>~2`, … */
+function itemIdAt(id: string, index: number): string {
+  if (index === 0) {
+    return id;
+  }
+  return `${id}~${String(index)}`;
+}
+
 /** Electron's options with a click on every item that names a command (`<id>~n` runs `<id>`). */
 function withClicks(
   items: readonly MenuTemplateItem[],
@@ -199,7 +209,7 @@ function withClicks(
       ...(id !== undefined && {
         id,
         click: (_menuItem, window): void => {
-          dispatch(id.split('~', 1)[0] ?? id, window instanceof BrowserWindow ? window : undefined);
+          dispatch(id.split('~', 1)[0] ?? id, browserWindowOf(window));
         },
       }),
       ...(submenu !== undefined && { submenu: withClicks(submenu, dispatch) }),
@@ -207,14 +217,30 @@ function withClicks(
   });
 }
 
-function applyStates(
-  menu: Menu,
-  states: ReadonlyMap<string, { readonly enabled: boolean; readonly checked: boolean }>,
-): void {
+function windowOfContents(contentsId: number): BrowserWindow | undefined {
+  const contents = webContents.fromId(contentsId);
+  if (contents === undefined) {
+    return undefined;
+  }
+  return BrowserWindow.fromWebContents(contents) ?? undefined;
+}
+
+function browserWindowOf(window: unknown): BrowserWindow | undefined {
+  if (window instanceof BrowserWindow) {
+    return window;
+  }
+  return undefined;
+}
+
+function applyStates(menu: Menu, states: ReadonlyMap<string, MenuItemState>): void {
   for (const [id, state] of states) {
     const command = byId.get(id);
-    for (let index = 0; index <= (command?.keys === undefined ? 0 : 3); index += 1) {
-      const item = menu.getMenuItemById(index === 0 ? id : `${id}~${String(index)}`);
+    let lastAlias = 0;
+    if (command?.keys !== undefined) {
+      lastAlias = 3;
+    }
+    for (let index = 0; index <= lastAlias; index += 1) {
+      const item = menu.getMenuItemById(itemIdAt(id, index));
       if (item === null) {
         continue;
       }

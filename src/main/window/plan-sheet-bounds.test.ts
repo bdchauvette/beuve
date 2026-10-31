@@ -3,6 +3,7 @@ import { describe } from 'vitest';
 import { test } from '#testing/test.ts';
 
 import { planSheetBounds } from './plan-sheet-bounds.ts';
+import type { WindowBounds } from './plan-sheet-bounds.ts';
 
 describe('planSheetBounds', () => {
   test('centres the first sheet and steps the next ones down and right', ({ expect }) => {
@@ -45,6 +46,6 @@ describe('planSheetBounds', () => {
   });
 });
 
-function workArea(): { x: number; y: number; width: number; height: number } {
+function workArea(): WindowBounds {
   return { x: 0, y: 25, width: 1440, height: 875 };
 }

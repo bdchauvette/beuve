@@ -1,5 +1,6 @@
 import type { IpcResult, PermalinkRequest, PermalinkView } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
+import type { GithubRemote } from '#internal/github/parse-github-remote-url.ts';
 import { permalinkFrom } from '#internal/github/permalink-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -43,11 +44,11 @@ export function createRemoteServices(options: RemoteServicesOptions): RemoteServ
       return gitFailure(context.logger, remotes.error);
     }
     const { source } = session;
-    const isPull = source.kind === 'github-pull-request';
-    const remote = choosePrimaryRemote(
-      remotes.value,
-      isPull ? { host: source.host, owner: source.owner, repo: source.repo } : undefined,
-    );
+    let pullRequestBase: GithubRemote | undefined;
+    if (source.kind === 'github-pull-request') {
+      pullRequestBase = { host: source.host, owner: source.owner, repo: source.repo };
+    }
+    const remote = choosePrimaryRemote(remotes.value, pullRequestBase);
     if (remote === undefined) {
       return ok({ kind: 'no-remote' });
     }

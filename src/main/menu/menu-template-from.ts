@@ -15,6 +15,44 @@ export interface MenuTemplateOptions {
 
 const letter = /^[\p{L}\p{N}]$/u;
 
+/** A catalog command and where the menu bar shows it. */
+interface PlacedCommand {
+  readonly command: CatalogCommand;
+  readonly place: MenuPlace;
+}
+
+/** The accelerators of the roles both platforms show. */
+const roleAccelerators = {
+  mac: {
+    toggleDevTools: 'Alt+Cmd+J',
+    undo: 'Cmd+Z',
+    redo: 'Shift+Cmd+Z',
+    cut: 'Cmd+X',
+    copy: 'Cmd+C',
+    paste: 'Cmd+V',
+    selectAll: 'Cmd+A',
+    resetZoom: 'Cmd+0',
+    zoomIn: 'Cmd+Plus',
+    zoomOut: 'Cmd+-',
+    togglefullscreen: 'Ctrl+Cmd+F',
+    close: 'Cmd+W',
+  },
+  linux: {
+    toggleDevTools: 'Ctrl+Shift+J',
+    undo: 'Ctrl+Z',
+    redo: 'Ctrl+Shift+Z',
+    cut: 'Ctrl+X',
+    copy: 'Ctrl+C',
+    paste: 'Ctrl+V',
+    selectAll: 'Ctrl+A',
+    resetZoom: 'Ctrl+0',
+    zoomIn: 'Ctrl+Plus',
+    zoomOut: 'Ctrl+-',
+    togglefullscreen: 'F11',
+    close: 'Ctrl+W',
+  },
+} as const satisfies Readonly<Record<KeyPlatform, Readonly<Record<string, string>>>>;
+
 const topMenus: readonly TopMenu[] = [
   'app',
   'file',
@@ -54,7 +92,7 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
     .map((command) => {
       return { command, place: placeOfCommand(command, platform) };
     })
-    .filter((entry): entry is { command: CatalogCommand; place: MenuPlace } => {
+    .filter((entry): entry is PlacedCommand => {
       return entry.place !== undefined;
     });
   const menus = topMenus
@@ -77,24 +115,23 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
           ];
         });
       const submenu = joinMenuSections(sections);
-      const label = isMac ? topLabels[menu].replace('&', '') : topLabels[menu];
-      if (isMac && menu === 'window') {
+      if (!isMac) {
+        return { label: topLabels[menu], submenu: withMnemonics(submenu) };
+      }
+      if (menu === 'window') {
         return { role: 'windowMenu' };
       }
       return {
-        label,
-        ...(isMac && menu === 'help' && { role: 'help' }),
-        submenu: isMac ? submenu : withMnemonics(submenu),
+        label: topLabels[menu].replace('&', ''),
+        ...(menu === 'help' && { role: 'help' }),
+        submenu,
       };
     });
   return menus;
 }
 
 /** One group's items; a submenu gathers the group's commands that name it, at its first one. */
-function itemsOf(
-  entries: readonly { readonly command: CatalogCommand; readonly place: MenuPlace }[],
-  platform: KeyPlatform,
-): MenuTemplateItem[] {
+function itemsOf(entries: readonly PlacedCommand[], platform: KeyPlatform): MenuTemplateItem[] {
   const items: MenuTemplateItem[] = [];
   const seen = new Set<string>();
   for (const { command, place } of entries) {
@@ -155,7 +192,10 @@ function commandItems(command: CatalogCommand, platform: KeyPlatform): MenuTempl
 function withMnemonics(items: readonly MenuTemplateItem[]): MenuTemplateItem[] {
   const taken = new Set<string>();
   return items.map((item) => {
-    const submenu = item.submenu === undefined ? undefined : withMnemonics(item.submenu);
+    let submenu: MenuTemplateItem[] | undefined;
+    if (item.submenu !== undefined) {
+      submenu = withMnemonics(item.submenu);
+    }
     if (item.label === undefined || item.visible === false) {
       if (submenu === undefined) {
         return item;
@@ -205,51 +245,42 @@ function roleItemsFor(
   platform: KeyPlatform,
   isPackaged: boolean,
 ): Partial<Record<TopMenu, Readonly<Record<number, readonly MenuTemplateItem[]>>>> {
-  const isMac = platform === 'mac';
-  const developer: Record<number, readonly MenuTemplateItem[]> = isPackaged
-    ? {}
-    : {
-        8: [
-          {
-            role: 'toggleDevTools',
-            label: 'Toggle Developer Tools',
-            accelerator: isMac ? 'Alt+Cmd+J' : 'Ctrl+Shift+J',
-          },
-        ],
-      };
+  const keys = roleAccelerators[platform];
+  const developer: Record<number, readonly MenuTemplateItem[]> = {};
+  if (!isPackaged) {
+    developer[8] = [
+      { role: 'toggleDevTools', label: 'Toggle Developer Tools', accelerator: keys.toggleDevTools },
+    ];
+  }
   const edit: Record<number, readonly MenuTemplateItem[]> = {
     0: [
-      { role: 'undo', label: 'Undo', accelerator: isMac ? 'Cmd+Z' : 'Ctrl+Z' },
-      { role: 'redo', label: 'Redo', accelerator: isMac ? 'Shift+Cmd+Z' : 'Ctrl+Shift+Z' },
+      { role: 'undo', label: 'Undo', accelerator: keys.undo },
+      { role: 'redo', label: 'Redo', accelerator: keys.redo },
     ],
     1: [
-      { role: 'cut', label: 'Cut', accelerator: isMac ? 'Cmd+X' : 'Ctrl+X' },
-      { role: 'copy', label: 'Copy', accelerator: isMac ? 'Cmd+C' : 'Ctrl+C' },
-      { role: 'paste', label: 'Paste', accelerator: isMac ? 'Cmd+V' : 'Ctrl+V' },
-      { role: 'selectAll', label: 'Select All', accelerator: isMac ? 'Cmd+A' : 'Ctrl+A' },
+      { role: 'cut', label: 'Cut', accelerator: keys.cut },
+      { role: 'copy', label: 'Copy', accelerator: keys.copy },
+      { role: 'paste', label: 'Paste', accelerator: keys.paste },
+      { role: 'selectAll', label: 'Select All', accelerator: keys.selectAll },
     ],
   };
   const view: Record<number, readonly MenuTemplateItem[]> = {
     5: [
-      { role: 'resetZoom', label: 'Actual Size', accelerator: isMac ? 'Cmd+0' : 'Ctrl+0' },
-      { role: 'zoomIn', label: 'Zoom In', accelerator: isMac ? 'Cmd+Plus' : 'Ctrl+Plus' },
-      { role: 'zoomOut', label: 'Zoom Out', accelerator: isMac ? 'Cmd+-' : 'Ctrl+-' },
+      { role: 'resetZoom', label: 'Actual Size', accelerator: keys.resetZoom },
+      { role: 'zoomIn', label: 'Zoom In', accelerator: keys.zoomIn },
+      { role: 'zoomOut', label: 'Zoom Out', accelerator: keys.zoomOut },
     ],
     6: [
-      {
-        role: 'togglefullscreen',
-        label: 'Toggle Full Screen',
-        accelerator: isMac ? 'Ctrl+Cmd+F' : 'F11',
-      },
+      { role: 'togglefullscreen', label: 'Toggle Full Screen', accelerator: keys.togglefullscreen },
     ],
     ...developer,
   };
   const closeWindow: MenuTemplateItem = {
     role: 'close',
     label: 'Close Window',
-    accelerator: isMac ? 'Cmd+W' : 'Ctrl+W',
+    accelerator: keys.close,
   };
-  if (isMac) {
+  if (platform === 'mac') {
     return {
       app: {
         2: [{ role: 'services', label: 'Services' }],

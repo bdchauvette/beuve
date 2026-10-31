@@ -1,6 +1,8 @@
 import process from 'node:process';
 
-import { BrowserWindow, nativeTheme } from 'electron';
+import { BrowserWindow } from 'electron';
+
+import { windowBackground } from './window-background.ts';
 
 export interface SettingsWindowOptions {
   /** The Settings preload, which exposes only the settings channels (ADR 0068). */
@@ -42,8 +44,8 @@ export function createSettingsWindow(options: SettingsWindowOptions): SettingsWi
         maximizable: false,
         fullscreenable: false,
         show: false,
-        title: process.platform === 'darwin' ? 'Settings' : 'Preferences',
-        backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#f7f7f8',
+        title: settingsTitle(),
+        backgroundColor: windowBackground({ dark: '#16181d', light: '#f7f7f8' }),
         ...(parent !== undefined && process.platform !== 'darwin' && { parent }),
         webPreferences: {
           preload: options.preloadPath,
@@ -70,4 +72,12 @@ export function createSettingsWindow(options: SettingsWindowOptions): SettingsWi
       void window.loadFile(options.settingsHtmlPath);
     },
   };
+}
+
+/** The window's name as each platform calls it. */
+function settingsTitle(): string {
+  if (process.platform === 'darwin') {
+    return 'Settings';
+  }
+  return 'Preferences';
 }

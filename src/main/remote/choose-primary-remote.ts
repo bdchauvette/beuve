@@ -24,7 +24,10 @@ export function choosePrimaryRemote(
       parsed.push({ name: remote.name, repository });
     }
   }
-  const base = pullRequestBase === undefined ? undefined : keyOf(pullRequestBase);
+  let base: string | undefined;
+  if (pullRequestBase !== undefined) {
+    base = keyOf(pullRequestBase);
+  }
   return (
     parsed.find((remote) => base !== undefined && keyOf(remote.repository) === base) ??
     parsed.find((remote) => remote.name === 'origin') ??

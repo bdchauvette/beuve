@@ -86,16 +86,31 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
   const skipReviewed = settings['skipReviewed'];
   const sheets = settings['sheets'];
   return {
-    layout: isLayout(layout) ? layout : defaults.layout,
-    ignoreWhitespace:
-      typeof ignoreWhitespace === 'boolean' ? ignoreWhitespace : defaults.ignoreWhitespace,
-    sidebarSide: isSidebarSide(sidebarSide) ? sidebarSide : defaults.sidebarSide,
-    showGenerated: typeof showGenerated === 'boolean' ? showGenerated : defaults.showGenerated,
-    showInsights: typeof showInsights === 'boolean' ? showInsights : defaults.showInsights,
-    reviewOrder: isReviewOrder(reviewOrder) ? reviewOrder : defaults.reviewOrder,
-    skipReviewed: typeof skipReviewed === 'boolean' ? skipReviewed : defaults.skipReviewed,
-    sheets: isSheetMode(sheets) ? sheets : defaults.sheets,
+    layout: validOr(layout, isLayout, defaults.layout),
+    ignoreWhitespace: validOr(ignoreWhitespace, isBoolean, defaults.ignoreWhitespace),
+    sidebarSide: validOr(sidebarSide, isSidebarSide, defaults.sidebarSide),
+    showGenerated: validOr(showGenerated, isBoolean, defaults.showGenerated),
+    showInsights: validOr(showInsights, isBoolean, defaults.showInsights),
+    reviewOrder: validOr(reviewOrder, isReviewOrder, defaults.reviewOrder),
+    skipReviewed: validOr(skipReviewed, isBoolean, defaults.skipReviewed),
+    sheets: validOr(sheets, isSheetMode, defaults.sheets),
   };
+}
+
+/** The stored value when `isValid` accepts it, else the default. */
+function validOr<T>(
+  value: unknown,
+  isValid: (candidate: unknown) => candidate is T,
+  fallback: T,
+): T {
+  if (isValid(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
 }
 
 function isLayout(value: unknown): value is DiffLayoutView {

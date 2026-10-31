@@ -1,5 +1,6 @@
 import { describe } from 'vitest';
 
+import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import { test } from '#testing/test.ts';
 
 import { choosePrimaryRemote } from './choose-primary-remote.ts';
@@ -27,7 +28,7 @@ describe('choosePrimaryRemote', () => {
   });
 });
 
-function remotes(): { name: string; url: string }[] {
+function remotes(): RemoteUrl[] {
   return [
     { name: 'backup', url: '/srv/git/beuve.git' },
     { name: 'fork', url: 'git@github.com:me/beuve.git' },

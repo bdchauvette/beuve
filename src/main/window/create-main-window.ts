@@ -1,4 +1,6 @@
-import { BrowserWindow, nativeTheme } from 'electron';
+import { BrowserWindow } from 'electron';
+
+import { windowBackground } from './window-background.ts';
 
 export interface MainWindowOptions {
   readonly preloadPath: string;
@@ -20,7 +22,7 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     show: false,
     title: 'beuve',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#f7f7f8',
+    backgroundColor: windowBackground({ dark: '#16181d', light: '#f7f7f8' }),
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,

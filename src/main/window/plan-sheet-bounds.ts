@@ -28,25 +28,33 @@ const steps = 8;
  */
 export function planSheetBounds(input: SheetBoundsInput): WindowBounds {
   const { workArea, remembered } = input;
-  const width = clamp(remembered?.width ?? defaultSize.width, minimumSize.width, workArea.width);
-  const height = clamp(
-    remembered?.height ?? defaultSize.height,
-    minimumSize.height,
-    workArea.height,
-  );
+  const width = clamp(remembered?.width ?? defaultSize.width, {
+    min: minimumSize.width,
+    max: workArea.width,
+  });
+  const height = clamp(remembered?.height ?? defaultSize.height, {
+    min: minimumSize.height,
+    max: workArea.height,
+  });
   const origin = remembered ?? {
     x: workArea.x + Math.round((workArea.width - width) / 2),
     y: workArea.y + Math.round((workArea.height - height) / 2),
   };
   const offset = (input.openCount % steps) * step;
   return {
-    x: clamp(origin.x + offset, workArea.x, workArea.x + workArea.width - width),
-    y: clamp(origin.y + offset, workArea.y, workArea.y + workArea.height - height),
+    x: clamp(origin.x + offset, { min: workArea.x, max: workArea.x + workArea.width - width }),
+    y: clamp(origin.y + offset, { min: workArea.y, max: workArea.y + workArea.height - height }),
     width,
     height,
   };
 }
 
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), Math.max(low, high));
+/** Bounds for {@link clamp}; `min` wins when they cross. */
+interface ClampRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+function clamp(value: number, { min, max }: ClampRange): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }

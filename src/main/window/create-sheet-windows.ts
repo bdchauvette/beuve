@@ -1,9 +1,10 @@
-import { BrowserWindow, nativeTheme, screen } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 
 import type { OpenSheetRequest } from '#contract/ipc-contract.ts';
 
 import { planSheetBounds } from './plan-sheet-bounds.ts';
 import type { WindowBounds } from './plan-sheet-bounds.ts';
+import { windowBackground } from './window-background.ts';
 
 export interface SheetWindowsOptions {
   /** The sheet preload, which exposes only the sheet channels (ADR 0067). */
@@ -36,8 +37,10 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
     open: (request): void => {
       const siblings = open.getOrInsertComputed(request.sessionId, () => new Set<BrowserWindow>());
       const near = BrowserWindow.getFocusedWindow()?.getBounds();
-      const display =
-        near === undefined ? screen.getPrimaryDisplay() : screen.getDisplayMatching(near);
+      let display = screen.getPrimaryDisplay();
+      if (near !== undefined) {
+        display = screen.getDisplayMatching(near);
+      }
       const bounds = planSheetBounds({
         workArea: display.workArea,
         remembered: remembered.get(request.sessionId),
@@ -49,7 +52,7 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
         minHeight: 320,
         show: false,
         title: titleOf(request),
-        backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1415' : '#f7f7f7',
+        backgroundColor: windowBackground({ dark: '#0e1415', light: '#f7f7f7' }),
         webPreferences: {
           preload: options.preloadPath,
           contextIsolation: true,
@@ -93,7 +96,10 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
 }
 
 function titleOf(request: OpenSheetRequest): string {
-  const line = request.range === undefined ? '' : `:${String(request.range.startLine)}`;
+  let line = '';
+  if (request.range !== undefined) {
+    line = `:${String(request.range.startLine)}`;
+  }
   return `${request.path}${line} · ${request.sha.slice(0, 7)}`;
 }
 
