@@ -1,6 +1,13 @@
 import type { SheetMarksView } from '#contract/ipc-contract.ts';
 import type { DiffHunk } from '#internal/git/diff-model.ts';
 
+/** A run of changed lines: how many it removes, and the head lines it adds. */
+interface ChangedRun {
+  removed: number;
+  firstAdded: number | undefined;
+  lastAdded: number;
+}
+
 /**
  * The gutter marks of a sheet (ADR 0067) from one file's hunks against the review base: each run
  * of changed lines that only adds marks its lines `added`, one that removes and adds marks the
@@ -13,8 +20,11 @@ export function sheetMarksFrom(hunks: readonly DiffHunk[], lineCount: number): S
   const modified: Span[] = [];
   const deletedAt: number[] = [];
   for (const hunk of hunks) {
-    let nextLine = hunk.newCount === 0 ? hunk.newStart + 1 : hunk.newStart;
-    let run: { removed: number; firstAdded: number | undefined; lastAdded: number } | undefined;
+    let nextLine = hunk.newStart;
+    if (hunk.newCount === 0) {
+      nextLine += 1;
+    }
+    let run: ChangedRun | undefined;
     const close = (): void => {
       if (run === undefined) {
         return;
@@ -22,10 +32,12 @@ export function sheetMarksFrom(hunks: readonly DiffHunk[], lineCount: number): S
       if (run.firstAdded === undefined) {
         deletedAt.push(Math.max(1, Math.min(nextLine, lineCount)));
       } else {
-        (run.removed > 0 ? modified : added).push({
-          startLine: run.firstAdded,
-          endLine: run.lastAdded,
-        });
+        const span = { startLine: run.firstAdded, endLine: run.lastAdded };
+        if (run.removed > 0) {
+          modified.push(span);
+        } else {
+          added.push(span);
+        }
       }
       run = undefined;
     };

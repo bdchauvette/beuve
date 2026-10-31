@@ -1,8 +1,10 @@
 import type {
   IpcResult,
+  OpenedView,
   OpenSheetRequest,
   SheetFileRequest,
   SheetFileView,
+  SheetHeadRequest,
   SheetHeadView,
   SheetNoteView,
   UraItemView,
@@ -29,11 +31,11 @@ export interface SheetServices {
     options?: RequestOptions,
   ) => Promise<IpcResult<SheetFileView>>;
   readonly getHead: (
-    request: { readonly sessionId: string },
+    request: SheetHeadRequest,
     options?: RequestOptions,
   ) => Promise<IpcResult<SheetHeadView>>;
   /** Checks that the sheet's commit and file exist before main opens a window for it. */
-  readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<{ readonly opened: true }>>;
+  readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<OpenedView>>;
 }
 
 export interface SheetServicesOptions {
@@ -50,7 +52,7 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
   const { context, ura } = options;
   return {
     getFile: async ({ sessionId, sha, path }, call = {}): Promise<IpcResult<SheetFileView>> => {
-      const commit = await resolveSheetCommit(context, sessionId, sha, call);
+      const commit = await resolveSheetCommit(context, { sessionId, sha }, call);
       if (!commit.ok) {
         return commit;
       }
@@ -80,7 +82,13 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       }
       const lineCount = contents.value.split('\n').length;
       const isHead = commit.value.sha === session.headSha;
-      const listed = isHead ? await ura.list({ sessionId: session.id }) : undefined;
+      let notes: SheetFileView['notes'] = [];
+      if (isHead) {
+        const listed = await ura.list({ sessionId: session.id });
+        if (listed.ok) {
+          notes = notesOn(path, listed.value.items);
+        }
+      }
       return ok({
         sessionId: session.id,
         sha: commit.value.sha,
@@ -89,7 +97,7 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         path,
         contents: contents.value,
         marks: sheetMarksFrom(files.value[0]?.hunks ?? [], lineCount),
-        notes: listed?.ok === true ? notesOn(path, listed.value.items) : [],
+        notes,
       });
     },
     getHead: async ({ sessionId }, call = {}): Promise<IpcResult<SheetHeadView>> => {
@@ -106,8 +114,8 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       }
       return refreshed;
     },
-    checkOpen: async ({ sessionId, sha, path }): Promise<IpcResult<{ readonly opened: true }>> => {
-      const commit = await resolveSheetCommit(context, sessionId, sha);
+    checkOpen: async ({ sessionId, sha, path }): Promise<IpcResult<OpenedView>> => {
+      const commit = await resolveSheetCommit(context, { sessionId, sha });
       if (!commit.ok) {
         return commit;
       }

@@ -34,7 +34,7 @@ export interface RemoteServicesOptions {
 export function createRemoteServices(options: RemoteServicesOptions): RemoteServices {
   const { context } = options;
   const permalink = async (request: PermalinkRequest): Promise<IpcResult<PermalinkView>> => {
-    const commit = await resolveSheetCommit(context, request.sessionId, request.sha);
+    const commit = await resolveSheetCommit(context, request);
     if (!commit.ok) {
       return commit;
     }

@@ -12,6 +12,12 @@ import { refreshSession } from '../sessions/refresh-session.ts';
 import type { RefreshedSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
+/** The session a sheet is of, and the commit it names (untrusted; the head when absent). */
+export interface SheetCommitRequest {
+  readonly sessionId: string;
+  readonly sha?: string | undefined;
+}
+
 /** A session brought up to date, and a commit of its repository the renderer named. */
 export interface SheetCommit {
   readonly refreshed: RefreshedSession;
@@ -25,8 +31,7 @@ export interface SheetCommit {
  */
 export async function resolveSheetCommit(
   context: SessionContext,
-  sessionId: string,
-  sha: string | undefined,
+  { sessionId, sha }: SheetCommitRequest,
   options: RequestOptions = {},
 ): Promise<Result<SheetCommit, IpcError>> {
   const loaded = loadSession(context, sessionId);

@@ -300,7 +300,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
   };
 
   const define = async (request: DefinitionRequest): Promise<IpcResult<DefinitionView>> => {
-    const commit = await resolveSheetCommit(context, request.sessionId, request.sha);
+    const commit = await resolveSheetCommit(context, request);
     if (!commit.ok) {
       return commit;
     }
