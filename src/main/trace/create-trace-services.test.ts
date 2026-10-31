@@ -78,7 +78,7 @@ describe(
       });
       expect(result.timelines[1]?.entries[2]).toMatchObject({ kind: 'branch', taken: false });
       await expect(repo.git('status', '--porcelain')).resolves.toBe('');
-      expect(existsSync(traceDirectory) ? await isDirectoryEmpty(traceDirectory) : true).toBe(true);
+      await expect(isAbsentOrEmpty(traceDirectory)).resolves.toBe(true);
     });
 
     test('reports failing tests together with their trace', async ({
@@ -218,8 +218,7 @@ describe(
 
       okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
       const outcome = await services.mcpTools.runTraceProbe(input);
-      expect(outcome.ok).toBe(true);
-      const traced = outcome.ok ? (outcome.value as Record<string, unknown>) : {};
+      const traced = okValueFrom(outcome) as Record<string, unknown>;
       expect(traced).toMatchObject({
         sessionId,
         path: 'src/math.ts',
@@ -258,4 +257,12 @@ function failedTrace(status: TraceStatusView): Extract<TraceStatusView, { state:
 async function isDirectoryEmpty(directory: string): Promise<boolean> {
   const entries = await readdir(directory);
   return entries.length === 0;
+}
+
+/** Whether the trace scratch directory is gone, or left empty. */
+async function isAbsentOrEmpty(directory: string): Promise<boolean> {
+  if (!existsSync(directory)) {
+    return true;
+  }
+  return isDirectoryEmpty(directory);
 }

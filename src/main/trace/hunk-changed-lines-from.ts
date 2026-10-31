@@ -15,7 +15,10 @@ export function hunkChangedLinesFrom(
       line >= candidate.newStart && line <= candidate.newStart + Math.max(candidate.newCount, 1) - 1
     );
   });
-  const lines = hunk === undefined ? new Set<number>() : flowChangedLinesFrom({ hunks: [hunk] });
+  let lines = new Set<number>();
+  if (hunk !== undefined) {
+    lines = flowChangedLinesFrom({ hunks: [hunk] });
+  }
   lines.add(line);
   return lines;
 }

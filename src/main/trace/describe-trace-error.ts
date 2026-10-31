@@ -55,14 +55,15 @@ export function describeTraceError(
     }
     case 'run-failed': {
       const tail = tailOf(error.output, outputTailChars).trim();
-      const how =
-        error.signal === undefined
-          ? `exit code ${String(error.exitCode ?? 'unknown')}`
-          : `signal ${error.signal}`;
-      return {
-        failure: 'runner-failed',
-        message: `Vitest ended without a report (${how}).${tail === '' ? '' : `\n${tail}`}`,
-      };
+      let how = `exit code ${String(error.exitCode ?? 'unknown')}`;
+      if (error.signal !== undefined) {
+        how = `signal ${error.signal}`;
+      }
+      let message = `Vitest ended without a report (${how}).`;
+      if (tail !== '') {
+        message += `\n${tail}`;
+      }
+      return { failure: 'runner-failed', message };
     }
   }
 }

@@ -2,6 +2,7 @@ import { realpath } from 'node:fs/promises';
 
 import type { TraceTrustEntryView, TraceTrustView } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
+import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 
 import { readSettingsFile } from '../settings/read-settings-file.ts';
@@ -46,12 +47,7 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
       return remembered.get(key);
     }
     const settings = await readSettingsFile(settingsPath);
-    const stored = settings[settingsKey];
-    return approvalFrom(
-      typeof stored === 'object' && stored !== null
-        ? (stored as Record<string, unknown>)[key]
-        : undefined,
-    );
+    return approvalFrom(approvalsOf(settings[settingsKey])[key]);
   };
 
   const view = async (repository: GitRepository): Promise<TraceTrustView> => {
@@ -77,24 +73,24 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
       return;
     }
     await updateSettingsFile(settingsPath, (current) => {
-      const stored = current[settingsKey];
-      const others = Object.entries(
-        typeof stored === 'object' && stored !== null ? stored : {},
-      ).filter(([other]) => other !== key);
-      const entries = Object.fromEntries(
-        approval === undefined ? others : [...others, [key, approval]],
-      );
+      const others = Object.entries(approvalsOf(current[settingsKey])).filter(([other]) => {
+        return other !== key;
+      });
+      if (approval !== undefined) {
+        others.push([key, approval]);
+      }
+      const entries = Object.fromEntries(others);
       return { ...current, [settingsKey]: entries };
     });
   };
 
   const list = async (): Promise<readonly TraceTrustEntryView[]> => {
-    const settings =
-      settingsPath === undefined
-        ? { [settingsKey]: Object.fromEntries(remembered) }
-        : await readSettingsFile(settingsPath);
-    const stored = settings[settingsKey];
-    const entries = Object.entries(typeof stored === 'object' && stored !== null ? stored : {});
+    let stored: unknown = Object.fromEntries(remembered);
+    if (settingsPath !== undefined) {
+      const settings = await readSettingsFile(settingsPath);
+      stored = settings[settingsKey];
+    }
+    const entries = Object.entries(approvalsOf(stored));
     return entries
       .flatMap(([repositoryPath, value]): TraceTrustEntryView[] => {
         const approval = approvalFrom(value);
@@ -143,11 +139,12 @@ function approvalFrom(value: unknown): Approval | undefined {
   return { trustedAt };
 }
 
-async function identify(
-  repository: GitRepository,
-): Promise<{ readonly key: string; readonly remoteUrl: string | undefined }> {
+async function identify(repository: GitRepository): Promise<RepositoryIdentity> {
   const [key, remotes] = await Promise.all([realPathOf(repository), listRemoteUrls(repository)]);
-  const urls = remotes.ok ? remotes.value : [];
+  let urls: readonly RemoteUrl[] = [];
+  if (remotes.ok) {
+    urls = remotes.value;
+  }
   const chosen = urls.find((remote) => remote.name === 'origin') ?? urls[0];
   return { key, remoteUrl: chosen?.url };
 }
@@ -158,4 +155,18 @@ async function realPathOf(repository: GitRepository): Promise<string> {
   } catch {
     return repository.root;
   }
+}
+
+/** How a repository is keyed in the trust settings, and the remote shown beside it. */
+interface RepositoryIdentity {
+  readonly key: string;
+  readonly remoteUrl: string | undefined;
+}
+
+/** The stored approvals by repository path; none when the setting is missing or not an object. */
+function approvalsOf(stored: unknown): Readonly<Record<string, unknown>> {
+  if (typeof stored === 'object' && stored !== null) {
+    return stored as Record<string, unknown>;
+  }
+  return {};
 }

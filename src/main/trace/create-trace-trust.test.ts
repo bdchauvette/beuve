@@ -143,9 +143,13 @@ function firstCommitTemplate(): RepositoryTemplate<undefined> {
   };
 }
 
-async function openFirstCommit(
-  repositories: TestRepositories,
-): Promise<{ readonly repo: TestRepository; readonly git: GitRepository }> {
+async function openFirstCommit(repositories: TestRepositories): Promise<OpenedCommit> {
   const { repo } = await repositories.fromTemplate(firstCommitTemplate());
   return { repo, git: okValueFrom(await openRepository(repo.directory)) };
+}
+
+/** A test repository, and the same repository opened as beuve opens one. */
+interface OpenedCommit {
+  readonly repo: TestRepository;
+  readonly git: GitRepository;
 }

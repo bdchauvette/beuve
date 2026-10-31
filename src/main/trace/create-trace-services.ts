@@ -175,12 +175,11 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
   const stopMessage = (job: Job): string => describeStop(job.controller.signal);
 
   const plan = async (
-    filePath: string,
-    source: string,
+    { path: filePath, text }: TracedSource,
     changedLines: ReadonlySet<number>,
   ): Promise<Result<InstrumentationPlan, Failed>> => {
     const planned = await parse(
-      { path: filePath, text: source },
+      { path: filePath, text },
       (root, language): Result<InstrumentationPlan, Failed> => {
         const rules = traceRulesByLanguage[language];
         if (rules === undefined) {
@@ -190,16 +189,19 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         if (made.ok) {
           return made;
         }
+        if (made.error.kind === 'no-function') {
+          return err(
+            failed(
+              'no-function-at-line',
+              `No function with a body encloses the change in ${filePath}.`,
+            ),
+          );
+        }
         return err(
-          made.error.kind === 'no-function'
-            ? failed(
-                'no-function-at-line',
-                `No function with a body encloses the change in ${filePath}.`,
-              )
-            : failed(
-                'too-large',
-                `The functions around this change have more than ${String(made.error.probeLimit)} places to trace.`,
-              ),
+          failed(
+            'too-large',
+            `The functions around this change have more than ${String(made.error.probeLimit)} places to trace.`,
+          ),
         );
       },
     );
@@ -221,9 +223,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
   };
 
   const execute = async (
-    job: Job,
-    diff: ReviewDiff,
-    request: { path: string; line: number; testNamePattern?: string | undefined },
+    { job, diff, request }: TraceExecution,
     onRunning: (testFiles: readonly string[]) => void,
   ): Promise<Outcome> => {
     const { session, repository } = diff.refreshed;
@@ -252,12 +252,18 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       return failed('file-unavailable', `${filePath} does not exist at the head.`);
     }
     const blobs = await readBlobs(repository, [{ objectId: search.value.objectId }]);
-    const blob = blobs.ok ? blobs.value.get(search.value.objectId) : undefined;
+    if (!blobs.ok) {
+      return failed('file-unavailable', `${filePath} has no readable text at the head.`);
+    }
+    const blob = blobs.value.get(search.value.objectId);
     if (blob?.kind !== 'text') {
       return failed('file-unavailable', `${filePath} has no readable text at the head.`);
     }
     const file = diff.files.find((candidate) => headPathOf(candidate) === filePath);
-    const planned = await plan(filePath, blob.text, hunkChangedLinesFrom(file, request.line));
+    const planned = await plan(
+      { path: filePath, text: blob.text },
+      hunkChangedLinesFrom(file, request.line),
+    );
     if (!planned.ok) {
       return planned.error;
     }
@@ -318,12 +324,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
 
   /** Registers the session's job and starts it, or refuses while another is in flight. */
   const launch = async (
-    request: {
-      sessionId: string;
-      path: string;
-      line: number;
-      testNamePattern?: string | undefined;
-    },
+    request: TraceRequest,
     onRunning?: (job: Job, testFiles: readonly string[]) => void,
   ): Promise<Result<Job, IpcError>> => {
     if (isDisposed) {
@@ -357,7 +358,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
     jobs.set(job.sessionId, job);
     job.outcome = (async (): Promise<Outcome> => {
       try {
-        return await execute(job, diff.value, request, (testFiles) => {
+        return await execute({ job, diff: diff.value, request }, (testFiles) => {
           onRunning?.(job, testFiles);
         });
       } catch (error: unknown) {
@@ -384,7 +385,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
 
   return {
     run: async (request): Promise<IpcResult<TraceRunStartedView>> => {
-      const echo = (job: Job): { sessionId: string; runId: string; path: string; line: number } => {
+      const echo = (job: Job): TraceEcho => {
         return {
           sessionId: job.sessionId,
           runId: job.runId,
@@ -444,7 +445,10 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         return refreshed;
       }
       const { repository } = refreshed.value;
-      return ok(trusted ? await trust.grant(repository) : await trust.revoke(repository));
+      if (trusted) {
+        return ok(await trust.grant(repository));
+      }
+      return ok(await trust.revoke(repository));
     },
 
     listTrust: async (): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
@@ -498,10 +502,36 @@ function traceRunnerFrom(options: TraceServicesOptions): Result<TraceRunner, str
   );
 }
 
-function statusFrom(
-  echo: { sessionId: string; runId: string; path: string; line: number },
-  outcome: Outcome,
-): TraceStatusView {
+/** A trace request and what the head and checkout must match to run it. */
+interface TraceRequest {
+  readonly sessionId: string;
+  readonly path: string;
+  readonly line: number;
+  readonly testNamePattern?: string | undefined;
+}
+
+/** A job, the diff it runs against, and the request it answers. */
+interface TraceExecution {
+  readonly job: Job;
+  readonly diff: ReviewDiff;
+  readonly request: Omit<TraceRequest, 'sessionId'>;
+}
+
+/** A source file to instrument: its repository-relative path and text at the head. */
+interface TracedSource {
+  readonly path: string;
+  readonly text: string;
+}
+
+/** What every status of one run repeats: which run, and the line it traces. */
+interface TraceEcho {
+  readonly sessionId: string;
+  readonly runId: string;
+  readonly path: string;
+  readonly line: number;
+}
+
+function statusFrom(echo: TraceEcho, outcome: Outcome): TraceStatusView {
   if (outcome.kind === 'done') {
     if (outcome.testsFailed) {
       return {
