@@ -21,7 +21,7 @@ import { parseGhAuthStatus } from './parse-gh-auth-status.ts';
 import { resolveGhCommand } from './resolve-gh-command.ts';
 import type { ResolveGhCommandOptions } from './resolve-gh-command.ts';
 import { runGh } from './run-gh.ts';
-import type { GhExit } from './run-gh.ts';
+import type { GhExit, GhRunFailure } from './run-gh.ts';
 
 export interface GhCliCredentialProviderOptions {
   /** An absolute `gh` path. When omitted it is resolved (and remembered) with `resolveGhCommand`. */
@@ -76,7 +76,7 @@ export function createGhCliCredentialProvider(
     options.logger?.debug('gh: finished', {
       subcommand: args.slice(0, 2).join(' '),
       duration: stopwatch.elapsed(),
-      outcome: outcome.ok ? outcome.value.exitCode : outcome.error.kind,
+      outcome: outcomeOf(outcome),
     });
     if (outcome.ok) {
       return outcome;
@@ -112,9 +112,9 @@ export function createGhCliCredentialProvider(
     if (!exit.ok) {
       return exit;
     }
-    const { exitCode, stdout, stderr } = exit.value;
+    const { exitCode, stdout } = exit.value;
     if (exitCode !== 0) {
-      return err(classifyGhFailure(normalized, exitCode, stderr));
+      return err(classifyGhFailure(normalized, exit.value));
     }
     const parsed = GithubToken.parse(stdout);
     if (parsed === undefined) {
@@ -142,14 +142,14 @@ export function createGhCliCredentialProvider(
       if (stderr.includes('unknown flag: --json')) {
         return ok({ provider: 'gh-cli', host: normalized, account: undefined });
       }
-      return err(classifyGhFailure(normalized, exitCode, stderr));
+      return err(classifyGhFailure(normalized, exit.value));
     }
-    const account = parseGhAuthStatus(stdout, normalized);
+    const account = parseGhAuthStatus({ stdout, host: normalized });
     if (account === 'invalid') {
       return ok({ provider: 'gh-cli', host: normalized, account: undefined });
     }
     if (account === undefined) {
-      return err(classifyGhFailure(normalized, exitCode, 'no oauth token found'));
+      return err(classifyGhFailure(normalized, { exitCode, stderr: 'no oauth token found' }));
     }
     return ok({ provider: 'gh-cli', host: normalized, account });
   };
@@ -161,4 +161,12 @@ export function createGhCliCredentialProvider(
       // Nothing is cached: every getToken asks gh afresh.
     },
   };
+}
+
+/** What the debug log records of a run: gh's exit code, or why it didn't run. */
+function outcomeOf(outcome: Result<GhExit, GhRunFailure>): number | string | undefined {
+  if (outcome.ok) {
+    return outcome.value.exitCode;
+  }
+  return outcome.error.kind;
 }

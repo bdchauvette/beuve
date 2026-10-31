@@ -78,20 +78,21 @@ export async function runGh(invocation: GhInvocation): Promise<Result<GhExit, Gh
   // Awaited, not returned: the timer must outlive the process.
   return await new Promise((resolve) => {
     child.once('error', (error: NodeJS.ErrnoException) => {
-      resolve(
-        err(
-          error.code === 'ENOENT' || error.code === 'EACCES'
-            ? { kind: 'not-found' }
-            : { kind: 'spawn-failed', message: error.message },
-        ),
-      );
+      resolve(err(spawnFailureFrom(error)));
     });
     child.once('close', (code, signal) => {
-      resolve(
-        failure === undefined
-          ? ok({ exitCode: code ?? undefined, signal: signal ?? undefined, stdout, stderr })
-          : err(failure),
-      );
+      if (failure === undefined) {
+        resolve(ok({ exitCode: code ?? undefined, signal: signal ?? undefined, stdout, stderr }));
+      } else {
+        resolve(err(failure));
+      }
     });
   });
+}
+
+function spawnFailureFrom(error: NodeJS.ErrnoException): GhRunFailure {
+  if (error.code === 'ENOENT' || error.code === 'EACCES') {
+    return { kind: 'not-found' };
+  }
+  return { kind: 'spawn-failed', message: error.message };
 }

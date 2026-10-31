@@ -40,7 +40,7 @@ describe('parseGhAuthStatus', () => {
         ],
       },
     });
-    expect(parseGhAuthStatus(stdout, 'github.com')).toStrictEqual({
+    expect(parseGhAuthStatus({ stdout: stdout, host: 'github.com' })).toStrictEqual({
       login: 'octocat',
       scopes: ['gist', 'read:org', 'repo'],
       check: { kind: 'valid' },
@@ -48,7 +48,7 @@ describe('parseGhAuthStatus', () => {
   });
 
   test('reports a failed check with gh’s reason', ({ expect }) => {
-    expect(parseGhAuthStatus(failedCheck(), 'ghe.invalid')).toStrictEqual({
+    expect(parseGhAuthStatus({ stdout: failedCheck(), host: 'ghe.invalid' })).toStrictEqual({
       login: 'fakeuser',
       scopes: undefined,
       check: {
@@ -59,11 +59,11 @@ describe('parseGhAuthStatus', () => {
   });
 
   test('has no account for a host gh does not list', ({ expect }) => {
-    expect(parseGhAuthStatus('{"hosts":{}}', 'github.com')).toBeUndefined();
+    expect(parseGhAuthStatus({ stdout: '{"hosts":{}}', host: 'github.com' })).toBeUndefined();
   });
 
   test('rejects output of another shape', ({ expect }) => {
-    expect(parseGhAuthStatus('not json', 'github.com')).toBe('invalid');
-    expect(parseGhAuthStatus('{"hosts":[]}', 'github.com')).toBe('invalid');
+    expect(parseGhAuthStatus({ stdout: 'not json', host: 'github.com' })).toBe('invalid');
+    expect(parseGhAuthStatus({ stdout: '{"hosts":[]}', host: 'github.com' })).toBe('invalid');
   });
 });

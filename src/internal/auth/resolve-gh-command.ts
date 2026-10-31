@@ -10,6 +10,8 @@ import type { Result } from '#x/result/result.ts';
 
 import type { AuthError } from './auth-error.ts';
 
+const executableNames: Partial<Record<NodeJS.Platform, string>> = { win32: 'gh.exe' };
+
 export interface ResolveGhCommandOptions {
   /** Where `BEUVE_GH_PATH` and `PATH` are read. Defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -46,7 +48,7 @@ export async function resolveGhCommand(
     '/usr/local/bin/gh',
     path.join(home, '.local', 'bin', 'gh'),
   ];
-  const name = process.platform === 'win32' ? 'gh.exe' : 'gh';
+  const name = executableNames[process.platform] ?? 'gh';
   const fromPath = (env['PATH'] ?? '')
     .split(path.delimiter)
     .filter((directory) => path.isAbsolute(directory))

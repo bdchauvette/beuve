@@ -15,15 +15,23 @@ const accountSchema = z.object({
 
 const statusSchema = z.object({ hosts: z.record(z.string(), z.array(accountSchema)) });
 
+type StatusAccount = z.infer<typeof accountSchema>;
+
+/** What `gh auth status --hostname <host> --json hosts` printed, and the host it asked about. */
+export interface GhAuthStatusOutput {
+  readonly stdout: string;
+  readonly host: string;
+}
+
 /**
  * The active account for `host` in `gh auth status --json hosts` output: `undefined` when gh lists
  * no account there, `'invalid'` when the output isn't the documented shape. `scopes` is gh's
  * comma-separated list; gh omits it for fine-grained tokens and when its check failed.
  */
-export function parseGhAuthStatus(
-  stdout: string,
-  host: string,
-): CredentialAccount | undefined | 'invalid' {
+export function parseGhAuthStatus({
+  stdout,
+  host,
+}: GhAuthStatusOutput): CredentialAccount | undefined | 'invalid' {
   let json: unknown;
   try {
     json = JSON.parse(stdout);
@@ -46,9 +54,13 @@ export function parseGhAuthStatus(
   return {
     login: account.login,
     scopes,
-    check:
-      account.state === 'success'
-        ? { kind: 'valid' }
-        : { kind: 'failed', message: redactSecrets(account.error ?? account.state) },
+    check: checkFrom(account),
   };
+}
+
+function checkFrom(account: StatusAccount): CredentialAccount['check'] {
+  if (account.state === 'success') {
+    return { kind: 'valid' };
+  }
+  return { kind: 'failed', message: redactSecrets(account.error ?? account.state) };
 }

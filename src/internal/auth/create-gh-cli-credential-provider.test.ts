@@ -15,13 +15,25 @@ import type { FakeGhScenario } from './testing/write-fake-gh.ts';
 
 interface Fixture {
   readonly provider: GithubCredentialProvider;
-  readonly calls: () => readonly { args: string[]; envKeys: string[]; cwd: string }[];
+  readonly calls: () => readonly GhCall[];
+}
+
+/** One run of the fake `gh`, as it recorded it. */
+interface GhCall {
+  readonly args: string[];
+  readonly envKeys: string[];
+  readonly cwd: string;
+}
+
+/** The fake `gh` script and the directory its files live in. */
+interface FakeGhPlace {
+  readonly fakeGh: string;
+  readonly directory: string;
 }
 
 /** A provider over the fake `gh` running `scenario`; its files live in `directory`. */
 function fake(
-  script: string,
-  directory: string,
+  { fakeGh: script, directory }: FakeGhPlace,
   scenario: Omit<FakeGhScenario, 'callsFile'>,
   timeout = Temporal.Duration.from({ seconds: 5 }),
 ): Fixture {
@@ -43,11 +55,11 @@ function fake(
     cwd: directory,
     timeout,
   });
-  const calls = (): { args: string[]; envKeys: string[]; cwd: string }[] => {
+  const calls = (): GhCall[] => {
     return readFileSync(callsFile, 'utf8')
       .split('\n')
       .filter((line) => line !== '')
-      .map((line) => JSON.parse(line) as { args: string[]; envKeys: string[]; cwd: string });
+      .map((line) => JSON.parse(line) as GhCall);
   };
   return { provider, calls };
 }
@@ -64,7 +76,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider, calls } = fake(fakeGh, directory, loggedIn());
+    const { provider, calls } = fake({ fakeGh, directory }, loggedIn());
     const token = okValueFrom(await provider.getToken({ host: 'GitHub.com' }));
     expect(token.reveal()).toBe('gho_abcdefghijklmnopqrstuvwxyz0123');
     expect(String(token)).toBe('[redacted]');
@@ -83,7 +95,7 @@ describe('createGhCliCredentialProvider', () => {
   });
 
   test('reports not-logged-in for github.com', async ({ expect, fakeGh, tempDir: directory }) => {
-    const { provider } = fake(fakeGh, directory, { hosts: {} });
+    const { provider } = fake({ fakeGh, directory }, { hosts: {} });
     await expect(provider.getToken({ host: 'github.com' })).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -99,7 +111,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider, calls } = fake(fakeGh, directory, loggedIn());
+    const { provider, calls } = fake({ fakeGh, directory }, loggedIn());
     await expect(provider.getToken({ host: 'ghe.example.com' })).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -113,8 +125,7 @@ describe('createGhCliCredentialProvider', () => {
 
   test('times out a gh that hangs', async ({ expect, fakeGh, tempDir: directory }) => {
     const { provider } = fake(
-      fakeGh,
-      directory,
+      { fakeGh, directory },
       { hosts: {}, hang: true },
       Temporal.Duration.from({ milliseconds: 300 }),
     );
@@ -129,10 +140,13 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider } = fake(fakeGh, directory, {
-      hosts: {},
-      fail: 'failed to read keyring entry gho_abcdefghijklmnopqrstuvwxyz0123',
-    });
+    const { provider } = fake(
+      { fakeGh, directory },
+      {
+        hosts: {},
+        fail: 'failed to read keyring entry gho_abcdefghijklmnopqrstuvwxyz0123',
+      },
+    );
     await expect(provider.getToken({ host: 'github.com' })).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -148,7 +162,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider, calls } = fake(fakeGh, directory, loggedIn());
+    const { provider, calls } = fake({ fakeGh, directory }, loggedIn());
     for (const host of ['--help', 'https://github.com', 'github.com/x', '']) {
       await expect(provider.getToken({ host })).resolves.toStrictEqual({
         ok: false,
@@ -177,7 +191,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider, calls } = fake(fakeGh, directory, loggedIn());
+    const { provider, calls } = fake({ fakeGh, directory }, loggedIn());
     await expect(provider.describe({ host: 'github.com' })).resolves.toStrictEqual({
       ok: true,
       value: {
@@ -205,7 +219,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider } = fake(fakeGh, directory, { ...loggedIn(), withoutStatusJson: true });
+    const { provider } = fake({ fakeGh, directory }, { ...loggedIn(), withoutStatusJson: true });
     await expect(provider.describe({ host: 'github.com' })).resolves.toStrictEqual({
       ok: true,
       value: { provider: 'gh-cli', host: 'github.com', account: undefined },
@@ -217,7 +231,7 @@ describe('createGhCliCredentialProvider', () => {
     fakeGh,
     tempDir: directory,
   }) => {
-    const { provider } = fake(fakeGh, directory, loggedIn());
+    const { provider } = fake({ fakeGh, directory }, loggedIn());
     const result = await provider.describe({ host: 'ghe.example.com' });
     expect(result).toMatchObject({ ok: false, error: { kind: 'host-not-configured' } });
   });

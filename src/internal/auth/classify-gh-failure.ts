@@ -1,5 +1,6 @@
 import type { AuthError } from './auth-error.ts';
 import { redactSecrets } from './redact-secrets.ts';
+import type { GhExit } from './run-gh.ts';
 
 const loginHint = /no oauth token found|not logged in|gh auth login/i;
 
@@ -12,8 +13,7 @@ const loginHint = /no oauth token found|not logged in|gh auth login/i;
  */
 export function classifyGhFailure(
   host: string,
-  exitCode: number | undefined,
-  stderr: string,
+  { exitCode, stderr }: Pick<GhExit, 'exitCode' | 'stderr'>,
 ): AuthError {
   if (loginHint.test(stderr)) {
     const remedy = `gh auth login --hostname ${host}`;
