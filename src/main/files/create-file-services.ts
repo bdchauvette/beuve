@@ -138,7 +138,11 @@ export function createFileServices(options: FileServicesOptions): FileServices {
       if (!read.ok && read.error.kind !== 'unsupported-git-version') {
         return gitFailure(context.logger, read.error);
       }
-      const lists = attributeListsFrom(read.ok ? read.value : new Map());
+      let found: ReadonlyMap<string, DiffAttributes> = new Map();
+      if (read.ok) {
+        found = read.value;
+      }
+      const lists = attributeListsFrom(found);
       attributes.set(key, lists);
       return ok({ sessionId, headSha: session.headSha, ...lists });
     },
@@ -165,19 +169,29 @@ function headPath(file: DiffFile): string {
 }
 
 function blobId(file: DiffFile, side: 'old' | 'new'): string | undefined {
-  const isAbsent = side === 'old' ? file.status === 'added' : file.status === 'deleted';
-  const objectId = side === 'old' ? file.oldObject : file.newObject;
+  if (side === 'old') {
+    return readableObject(file.status === 'added', file.oldObject);
+  }
+  return readableObject(file.status === 'deleted', file.newObject);
+}
+
+function readableObject(isAbsent: boolean, objectId: string | undefined): string | undefined {
   if (isAbsent || objectId === undefined || zeroIdPattern.test(objectId)) {
     return undefined;
   }
   return objectId;
 }
 
+/** One side's text: `value` is `undefined` for a side that does not exist. */
+interface SideText {
+  readonly value: string | undefined;
+}
+
 /** `{ value: undefined }` for an absent side, `undefined` when the side is not readable text. */
 function textOf(
   objectId: string | undefined,
   blobs: ReadonlyMap<string, BlobContent>,
-): { readonly value: string | undefined } | undefined {
+): SideText | undefined {
   if (objectId === undefined) {
     return { value: undefined };
   }

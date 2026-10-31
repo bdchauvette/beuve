@@ -7,7 +7,10 @@ import type { DiffFile } from '#internal/git/diff-model.ts';
 export function flowChangedLinesFrom(file: Pick<DiffFile, 'hunks'>): Set<number> {
   const lines = new Set<number>();
   for (const hunk of file.hunks) {
-    let nextLine = hunk.newCount === 0 ? hunk.newStart + 1 : hunk.newStart;
+    let nextLine = hunk.newStart;
+    if (hunk.newCount === 0) {
+      nextLine += 1;
+    }
     for (const [index, line] of hunk.lines.entries()) {
       if (line.kind === 'removed') {
         const following = hunk.lines[index + 1]?.kind;

@@ -6,16 +6,22 @@ import { test } from '../testing/test.ts';
 
 describe('buildEditorUrl', () => {
   test('builds the Zed file URL', ({ expect }) => {
-    expect(buildEditorUrl('zed', '/repo/src/a.ts', 12, 3)).toBe('zed://file/repo/src/a.ts:12:3');
+    expect(buildEditorUrl('zed', { file: '/repo/src/a.ts', line: 12, column: 3 })).toBe(
+      'zed://file/repo/src/a.ts:12:3',
+    );
   });
 
   test('builds the VS Code and Cursor file URLs', ({ expect }) => {
-    expect(buildEditorUrl('vscode', '/r/a.ts', 1, 1)).toBe('vscode://file/r/a.ts:1:1');
-    expect(buildEditorUrl('cursor', '/r/a.ts', 1, 1)).toBe('cursor://file/r/a.ts:1:1');
+    expect(buildEditorUrl('vscode', { file: '/r/a.ts', line: 1, column: 1 })).toBe(
+      'vscode://file/r/a.ts:1:1',
+    );
+    expect(buildEditorUrl('cursor', { file: '/r/a.ts', line: 1, column: 1 })).toBe(
+      'cursor://file/r/a.ts:1:1',
+    );
   });
 
   test('percent-encodes characters that would change the URL', ({ expect }) => {
-    const url = buildEditorUrl('zed', '/my repo/a#b?c.ts', 2, 1);
+    const url = buildEditorUrl('zed', { file: '/my repo/a#b?c.ts', line: 2, column: 1 });
     expect(url).toBe('zed://file/my%20repo/a%23b%3Fc.ts:2:1');
     expect(isEditorUrl(url)).toBe(true);
   });

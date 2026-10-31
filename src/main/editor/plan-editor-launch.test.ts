@@ -1,10 +1,11 @@
 import { describe } from 'vitest';
 
+import type { EditorLocation } from './editor-location.ts';
 import { getEditorDefinition } from './testing/get-editor-definition.ts';
 import { planEditorLaunch } from './plan-editor-launch.ts';
 import { test } from '../testing/test.ts';
 
-function target(): { file: string; line: number; column: number } {
+function target(): EditorLocation {
   return { file: '/repo/a.ts', line: 5, column: 2 };
 }
 

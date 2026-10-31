@@ -3,6 +3,7 @@ import type { EditorId } from '#contract/ipc-contract.ts';
 import { buildGotoArgv } from './build-goto-argv.ts';
 import { buildZedArgv } from './build-zed-argv.ts';
 import type { EditorUrlScheme } from './build-editor-url.ts';
+import type { EditorLocation } from './editor-location.ts';
 
 /**
  * How to find an editor and open `file:line:column` in it. `knownPaths` start with `~/` for the
@@ -16,7 +17,7 @@ export interface EditorDefinition {
   readonly knownPaths: readonly string[];
   readonly appBundles: readonly string[];
   readonly urlScheme: EditorUrlScheme;
-  readonly buildArgv: (file: string, line: number, column: number) => string[];
+  readonly buildArgv: (location: EditorLocation) => string[];
 }
 
 /** Editors in order of preference (ADR 0033): Zed, VS Code, Cursor. */

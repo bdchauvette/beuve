@@ -64,14 +64,16 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
       if (language === undefined || flowRulesByLanguage[language] === undefined) {
         return failed('unsupported-language', `there are no control-flow rules for ${path}`);
       }
-      const blobId = file.status === 'deleted' ? undefined : file.newObject;
+      const blobId = headObjectOf(file);
       if (blobId === undefined || file.submodule || file.binary || zeroIdPattern.test(blobId)) {
         return failed('file-unavailable', `${path} has no readable text at the head`);
       }
-      const baseKey = `${blobId}\0${file.status === 'added' ? '' : (file.oldObject ?? '')}`;
+      const baseKey = `${blobId}\0${baseObjectOf(file)}`;
       const knownStart = functionStarts.get(`${baseKey}\0${String(line)}`);
-      const cached =
-        knownStart === undefined ? undefined : graphs.get(`${baseKey}\0${String(knownStart)}`);
+      let cached: FlowGraphView | undefined;
+      if (knownStart !== undefined) {
+        cached = graphs.get(`${baseKey}\0${String(knownStart)}`);
+      }
       if (cached !== undefined) {
         return ok({ kind: 'graph', graph: cached });
       }
@@ -128,6 +130,21 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
       return ok(built.value);
     },
   };
+}
+
+function headObjectOf(file: DiffFile): string | undefined {
+  if (file.status === 'deleted') {
+    return undefined;
+  }
+  return file.newObject;
+}
+
+/** The base blob's id for a cache key, empty for an added file. */
+function baseObjectOf(file: DiffFile): string {
+  if (file.status === 'added') {
+    return '';
+  }
+  return file.oldObject ?? '';
 }
 
 function headPath(file: DiffFile): string {

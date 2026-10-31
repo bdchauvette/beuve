@@ -1,5 +1,6 @@
 import type { EditorDefinition } from './editor-definitions.ts';
 import { buildEditorUrl } from './build-editor-url.ts';
+import type { EditorLocation } from './editor-location.ts';
 import type { FoundEditor } from './find-editor.ts';
 
 export type LaunchPlan =
@@ -10,15 +11,10 @@ export type LaunchPlan =
 export function planEditorLaunch(
   definition: EditorDefinition,
   found: FoundEditor,
-  target: { readonly file: string; readonly line: number; readonly column: number },
+  target: EditorLocation,
 ): LaunchPlan {
-  const { file, line, column } = target;
   if (found.kind === 'cli') {
-    return {
-      kind: 'spawn',
-      command: found.command,
-      args: definition.buildArgv(file, line, column),
-    };
+    return { kind: 'spawn', command: found.command, args: definition.buildArgv(target) };
   }
-  return { kind: 'url', url: buildEditorUrl(definition.urlScheme, file, line, column) };
+  return { kind: 'url', url: buildEditorUrl(definition.urlScheme, target) };
 }

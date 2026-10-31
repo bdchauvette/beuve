@@ -9,11 +9,11 @@ export function flowBranchTemplate(): RepositoryTemplate<undefined> {
     name: 'main-flow: feature branch',
     build: async (repo): Promise<undefined> => {
       repo.write('README.md', lines(['# test']));
-      repo.write('src/flow.ts', lines(flowSource('item * 2', 'total += 4')));
+      repo.write('src/flow.ts', lines(flowSource({ accumulate: 'item * 2', caseB: 'total += 4' })));
       repo.write('src/data.json', '{}\n');
       await repo.commit('base');
       await repo.git('switch', '--quiet', '--create', 'feature');
-      repo.write('src/flow.ts', lines(flowSource('item', 'total += 5')));
+      repo.write('src/flow.ts', lines(flowSource({ accumulate: 'item', caseB: 'total += 5' })));
       repo.write('src/data.json', '{ "a": 1 }\n');
       repo.write('src/gone.ts', lines(['export function gone(): void {', '  return;', '}']));
       await repo.commit('change flow');

@@ -1,3 +1,5 @@
+import type { EditorLocation } from './editor-location.ts';
+
 export type EditorUrlScheme = 'zed' | 'vscode' | 'cursor';
 
 /**
@@ -6,14 +8,18 @@ export type EditorUrlScheme = 'zed' | 'vscode' | 'cursor';
  */
 export function buildEditorUrl(
   scheme: EditorUrlScheme,
-  file: string,
-  line: number,
-  column: number,
+  { file, line, column }: EditorLocation,
 ): string {
   const encoded = file
     .split('/')
     .map((segment) => encodeURIComponent(segment))
     .join('/');
-  const rooted = encoded.startsWith('/') ? encoded : `/${encoded}`;
-  return `${scheme}://file${rooted}:${String(line)}:${String(column)}`;
+  return `${scheme}://file${rooted(encoded)}:${String(line)}:${String(column)}`;
+}
+
+function rooted(encoded: string): string {
+  if (encoded.startsWith('/')) {
+    return encoded;
+  }
+  return `/${encoded}`;
 }

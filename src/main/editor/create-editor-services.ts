@@ -18,6 +18,7 @@ import { readPathStatus } from '#internal/git/read-path-status.ts';
 import { errorFrom } from '#x/error/error-from.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -51,6 +52,19 @@ export interface EditorServicesOptions {
   readonly platform: EditorPlatform;
 }
 
+interface DetectedEditor {
+  readonly definition: EditorDefinition;
+  readonly found: FoundEditor | undefined;
+}
+
+/** A session file to find on disk, as a path relative to the repository root. */
+interface LocateRequest {
+  readonly repository: GitRepository;
+  readonly sessionId: string;
+  readonly headSha: CommitSha;
+  readonly relative: string;
+}
+
 interface Located {
   readonly file: string;
   readonly location: 'working-tree' | 'beuve-checkout';
@@ -66,10 +80,7 @@ interface Located {
 export function createEditorServices(options: EditorServicesOptions): EditorServices {
   const { context, worktrees, settings, platform } = options;
 
-  const detectAll = (): readonly {
-    definition: EditorDefinition;
-    found: FoundEditor | undefined;
-  }[] => {
+  const detectAll = (): readonly DetectedEditor[] => {
     return editorDefinitions.map((definition) => {
       return {
         definition,
@@ -91,22 +102,22 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
     return { ...(preferred !== undefined && { preferred }), editors };
   };
 
-  const locate = async (
-    repository: GitRepository,
-    sessionId: string,
-    headSha: CommitSha,
-    relative: string,
-  ): Promise<Located | EditorOpenFailure> => {
+  const locate = async ({
+    repository,
+    sessionId,
+    headSha,
+    relative,
+  }: LocateRequest): Promise<Located | EditorOpenFailure> => {
     const working = path.join(repository.root, relative);
     const workingHead = await resolveRevision(repository, 'HEAD');
-    const workingFile = await readWorkingFileState(repository, working, relative);
+    const workingFile = await readWorkingFileState(repository, relative);
     const root = chooseEditorRoot({
-      workingTreeHead: workingHead.ok ? workingHead.value : undefined,
+      workingTreeHead: valueOrUndefined(workingHead),
       sessionHead: headSha,
       workingFile,
     });
     if (root === 'working-tree') {
-      if (await isInsideRoot(repository.root, working)) {
+      if (await isInsideRoot({ root: repository.root, file: working })) {
         return { file: working, location: root };
       }
       return 'file-unavailable';
@@ -121,7 +132,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
       return 'file-unavailable';
     }
     const file = path.join(checkout.value.path, relative);
-    if (!(await isInsideRoot(checkout.value.path, file))) {
+    if (!(await isInsideRoot({ root: checkout.value.path, file }))) {
       checkout.value[Symbol.dispose]();
       return 'file-unavailable';
     }
@@ -153,7 +164,12 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
           'No editor found: install Zed, VS Code or Cursor, or choose one with /editor.',
         );
       }
-      const located = await locate(repository, session.id, session.headSha, request.path);
+      const located = await locate({
+        repository,
+        sessionId: session.id,
+        headSha: session.headSha,
+        relative: request.path,
+      });
       if (typeof located === 'string') {
         return failedOpen(
           'file-unavailable',
@@ -221,12 +237,18 @@ async function launch(
   }
 }
 
+function valueOrUndefined<T>(result: Result<T, unknown>): T | undefined {
+  if (result.ok) {
+    return result.value;
+  }
+  return undefined;
+}
+
 async function readWorkingFileState(
   repository: GitRepository,
-  file: string,
   relative: string,
 ): Promise<WorkingFileState> {
-  if (!(await isPresent(file))) {
+  if (!(await isPresent(path.join(repository.root, relative)))) {
     return 'missing';
   }
   const status = await readPathStatus(repository, relative);
@@ -245,8 +267,14 @@ async function isPresent(file: string): Promise<boolean> {
   }
 }
 
+/** A file and the directory it must stay inside. */
+interface RootedFile {
+  readonly root: string;
+  readonly file: string;
+}
+
 /** Whether `file` exists and, symlinks resolved, lies inside `root`. */
-async function isInsideRoot(root: string, file: string): Promise<boolean> {
+async function isInsideRoot({ root, file }: RootedFile): Promise<boolean> {
   try {
     const [realRoot, realFile] = await Promise.all([realpath(root), realpath(file)]);
     const relative = path.relative(realRoot, realFile);

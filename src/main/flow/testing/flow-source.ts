@@ -1,5 +1,13 @@
+/** The two statements a branch of the flow fixture changes. */
+export interface FlowSourceEdits {
+  /** The loop's `total +=` expression. */
+  readonly accumulate: string;
+  /** The statement of the switch's `case 'b'`. */
+  readonly caseB: string;
+}
+
 /** A function with an if/else-if chain, a loop with continue and break, a switch and a try. */
-export function flowSource(accumulate: string, caseB: string): string[] {
+export function flowSource({ accumulate, caseB }: FlowSourceEdits): string[] {
   return [
     'export function process(items: number[], mode: string): number {',
     '  let total = 0;',

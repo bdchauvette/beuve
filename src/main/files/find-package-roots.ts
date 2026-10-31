@@ -12,7 +12,10 @@ export function findPackageRoots(paths: readonly string[]): string[] {
     if (!manifestNames.has(path.slice(slash + 1))) {
       continue;
     }
-    const directory = slash === -1 ? '' : path.slice(0, slash);
+    let directory = '';
+    if (slash !== -1) {
+      directory = path.slice(0, slash);
+    }
     if (!isVendored(directory)) {
       roots.add(directory);
     }

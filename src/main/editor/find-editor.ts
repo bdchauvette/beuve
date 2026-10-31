@@ -32,7 +32,9 @@ export function findEditor(
     .flatMap((directory) => {
       return definition.executables.map((executable) => path.join(directory, executable));
     });
-  const known = definition.knownPaths.flatMap((file) => expandHome(file, home));
+  const known = definition.knownPaths.flatMap((file) => {
+    return expandHome({ file, home });
+  });
   const candidates = [...onPath, ...known];
   for (const candidate of candidates) {
     if (probe.exists(candidate)) {
@@ -40,7 +42,9 @@ export function findEditor(
     }
   }
   if (probe.platform === 'darwin') {
-    const bundles = definition.appBundles.flatMap((file) => expandHome(file, home));
+    const bundles = definition.appBundles.flatMap((file) => {
+      return expandHome({ file, home });
+    });
     for (const bundle of bundles) {
       if (probe.exists(bundle)) {
         return { kind: 'url' };
@@ -50,7 +54,13 @@ export function findEditor(
   return undefined;
 }
 
-function expandHome(file: string, home: string): string[] {
+/** A path that may start with `~/`, and the home directory that stands for. */
+interface HomePath {
+  readonly file: string;
+  readonly home: string;
+}
+
+function expandHome({ file, home }: HomePath): string[] {
   if (!file.startsWith('~/')) {
     return [file];
   }
