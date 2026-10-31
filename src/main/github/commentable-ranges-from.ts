@@ -19,10 +19,16 @@ export function commentableRangesFrom(
       .map((hunk) => {
         return { start: hunk.newStart, end: hunk.newStart + hunk.newCount - 1 };
       });
-    const path = 'newPath' in file ? file.newPath : file.path;
     if (spans.length > 0) {
-      ranges.set(path, spans);
+      ranges.set(headPathOf(file), spans);
     }
   }
   return ranges;
+}
+
+function headPathOf(file: DiffFile): string {
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
 }

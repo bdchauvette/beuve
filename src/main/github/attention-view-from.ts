@@ -13,6 +13,10 @@ export interface AttentionFacts {
 
 /** The pull request's attention as plain contract data, for the head the CI status is about. */
 export function attentionViewFrom(stored: StoredPullRequest, facts: AttentionFacts): AttentionView {
+  let ci: CiStatusView | undefined;
+  if (facts.ci?.sha === stored.headSha) {
+    ci = facts.ci;
+  }
   const attention = attentionFrom({
     viewer: facts.viewer,
     author: stored.author,
@@ -21,8 +25,8 @@ export function attentionViewFrom(stored: StoredPullRequest, facts: AttentionFac
     headSha: stored.headSha,
     requests: facts.requests,
     reviews: facts.reviews,
-    ci: facts.ci?.sha === stored.headSha ? facts.ci.overall : undefined,
-    ...(facts.ci?.sha === stored.headSha && { failingChecks: facts.ci.counts.failure }),
+    ci: ci?.overall,
+    ...(ci !== undefined && { failingChecks: ci.counts.failure }),
   });
   return { turn: attention.turn, reasons: [...attention.reasons] };
 }

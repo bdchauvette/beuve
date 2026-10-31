@@ -8,10 +8,8 @@ import type { PullRequestStack } from '#internal/github/find-pull-request-stack.
  */
 export function stackViewFrom(host: string, stack: PullRequestStack): PullRequestStackView {
   const entry = (pull: PullRequest): PullRequestStackEntryView => {
-    const repository = pull.base.repository;
-    const fullName = repository === undefined ? '' : `${repository.owner}/${repository.name}`;
     return {
-      ref: `${host}/${fullName}#${String(pull.number)}`,
+      ref: `${host}/${fullNameOf(pull)}#${String(pull.number)}`,
       number: pull.number,
       title: pull.title,
       isDraft: pull.isDraft,
@@ -26,4 +24,12 @@ export function stackViewFrom(host: string, stack: PullRequestStack): PullReques
       .filter((pull) => pull.base.repository !== undefined)
       .map((pull) => entry(pull)),
   };
+}
+
+function fullNameOf(pull: PullRequest): string {
+  const repository = pull.base.repository;
+  if (repository === undefined) {
+    return '';
+  }
+  return `${repository.owner}/${repository.name}`;
 }

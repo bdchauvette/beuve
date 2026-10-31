@@ -9,6 +9,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { test } from '../testing/test.ts';
 import { moveSessionHead } from './move-session-head.ts';
 import { upsertPullRequestSession } from './upsert-pull-request-session.ts';
+import type { PullRequestHead } from './upsert-pull-request-session.ts';
 
 describe('upsertPullRequestSession', () => {
   test('a slower open that finishes last does not move the head back (ADR 0079)', ({
@@ -29,10 +30,14 @@ describe('upsertPullRequestSession', () => {
       },
     };
     const source = pullRequest();
-    const opened = okValueFrom(upsertPullRequestSession(context, source, sha('1'), undefined));
+    const opened = okValueFrom(
+      upsertPullRequestSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
+    );
     const observedFrom = okValueFrom(loadSession(context, opened.id));
     okValueFrom(moveSessionHead(context, observedFrom, sha('3')));
-    const reopened = okValueFrom(upsertPullRequestSession(context, source, sha('2'), observedFrom));
+    const reopened = okValueFrom(
+      upsertPullRequestSession(context, { source, headSha: sha('2'), observedFrom }),
+    );
     expect(reopened.headSha).toBe(sha('3'));
     expect(okValueFrom(loadSession(context, opened.id)).headSha).toBe(sha('3'));
     expect(moves).toStrictEqual([sha('3')]);
@@ -47,22 +52,16 @@ describe('upsertPullRequestSession', () => {
       caches: createGitCaches(),
     };
     const source = pullRequest();
-    const opened = okValueFrom(upsertPullRequestSession(context, source, sha('1'), undefined));
+    const opened = okValueFrom(
+      upsertPullRequestSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
+    );
     const observedFrom = okValueFrom(loadSession(context, opened.id));
-    const moved = upsertPullRequestSession(context, source, sha('2'), observedFrom);
+    const moved = upsertPullRequestSession(context, { source, headSha: sha('2'), observedFrom });
     expect(okValueFrom(moved).headSha).toBe(sha('2'));
   });
 });
 
-function pullRequest(): {
-  readonly kind: 'github-pull-request';
-  readonly repoPath: string;
-  readonly baseRef: string;
-  readonly host: string;
-  readonly owner: string;
-  readonly repo: string;
-  readonly number: number;
-} {
+function pullRequest(): PullRequestHead['source'] {
   return {
     kind: 'github-pull-request',
     repoPath: '/repo',

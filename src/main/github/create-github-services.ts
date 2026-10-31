@@ -6,6 +6,7 @@ import type {
   GithubReviewPreviewView,
   IpcResult,
   OpenGithubLinkRequest,
+  OpenedView,
   OpenPullRequestRequest,
   OpenPullRequestResponse,
   PostGithubReviewRequest,
@@ -66,9 +67,7 @@ export interface GithubServices {
   readonly postReview: (
     request: PostGithubReviewRequest,
   ) => Promise<IpcResult<PostGithubReviewResponse>>;
-  readonly openLink: (
-    request: OpenGithubLinkRequest,
-  ) => Promise<IpcResult<{ readonly opened: true }>>;
+  readonly openLink: (request: OpenGithubLinkRequest) => Promise<IpcResult<OpenedView>>;
   /** The stored title, state and base branch of a pull request session, for the session list. */
   readonly badgeFor: (source: SessionSourceView) => PullRequestBadgeView | undefined;
   /** Stored number, title, URL, state and author of a pull request session, for agents (ADR 0041). */
@@ -128,11 +127,21 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     return stored.value;
   };
 
+  const storedForSession = (sessionId: string): StoredPullRequest | undefined => {
+    const loaded = loadSession(options.context, sessionId);
+    if (!loaded.ok) {
+      return undefined;
+    }
+    return storedFor(loaded.value.source);
+  };
+
   const knownHosts = (): Set<string> => {
     const hosts = new Set(['github.com']);
     const listed = listSessions(db);
-    const sessions = listed.ok ? listed.value : [];
-    for (const session of sessions) {
+    if (!listed.ok) {
+      return hosts;
+    }
+    for (const session of listed.value) {
       if (session.source.kind === 'github-pull-request') {
         hosts.add(session.source.host);
       }
@@ -142,8 +151,11 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
 
   const defaultHost = (): string => {
     const sessionId = options.openSessionId();
-    const session = sessionId === undefined ? undefined : loadSession(options.context, sessionId);
-    if (session?.ok === true && session.value.source.kind === 'github-pull-request') {
+    if (sessionId === undefined) {
+      return 'github.com';
+    }
+    const session = loadSession(options.context, sessionId);
+    if (session.ok && session.value.source.kind === 'github-pull-request') {
       return session.value.source.host;
     }
     return 'github.com';
@@ -151,7 +163,12 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
 
   return {
     authStatus: async ({ host }): Promise<IpcResult<GithubAuthStatusView>> => {
-      const target = host === undefined ? defaultHost() : normalizeHostname(host);
+      let target: string | undefined;
+      if (host === undefined) {
+        target = defaultHost();
+      } else {
+        target = normalizeHostname(host);
+      }
       if (target === undefined) {
         return err({ code: 'invalid-request', message: `not a GitHub hostname: ${host ?? ''}` });
       }
@@ -160,14 +177,12 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     },
 
     openPullRequest: async (request, call = {}): Promise<IpcResult<OpenPullRequestResponse>> => {
-      const opened = await openPullRequest(
-        github,
-        request,
-        ({ session, pullRequest }) => {
+      const opened = await openPullRequest(github, request, {
+        onOpened: ({ session, pullRequest }) => {
           poller.watch(session.id);
           void (async (): Promise<void> => {
             const stack = await options.clients.withClient(
-              session.source.kind === 'github-pull-request' ? session.source.host : 'github.com',
+              hostOf(session.source),
               async (client) => {
                 // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
                 return findPullRequestStack(client, pullRequest);
@@ -178,8 +193,8 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
             }
           })();
         },
-        call.signal,
-      );
+        signal: call.signal,
+      });
       return ok(opened);
     },
 
@@ -249,7 +264,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       }
     },
 
-    openLink: async ({ url }): Promise<IpcResult<{ opened: true }>> => {
+    openLink: async ({ url }): Promise<IpcResult<OpenedView>> => {
       if (!isAllowedGithubLink(url, knownHosts())) {
         return err({ code: 'refused', message: 'Only https links to GitHub open from beuve.' });
       }
@@ -274,8 +289,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     },
 
     summaryFor: (sessionId): PullRequestSummary | undefined => {
-      const loaded = loadSession(options.context, sessionId);
-      const stored = loaded.ok ? storedFor(loaded.value.source) : undefined;
+      const stored = storedForSession(sessionId);
       if (stored === undefined) {
         return undefined;
       }
@@ -289,8 +303,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     },
 
     intentFor: (sessionId): string | undefined => {
-      const loaded = loadSession(options.context, sessionId);
-      const stored = loaded.ok ? storedFor(loaded.value.source) : undefined;
+      const stored = storedForSession(sessionId);
       if (stored === undefined) {
         return undefined;
       }
@@ -304,4 +317,12 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     onCiStatus: poller.onCiStatus,
     dispose: poller.dispose,
   };
+}
+
+/** The GitHub host a session's pull request lives on; github.com for any other session. */
+function hostOf(source: Session['source']): string {
+  if (source.kind === 'github-pull-request') {
+    return source.host;
+  }
+  return 'github.com';
 }

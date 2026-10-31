@@ -31,11 +31,7 @@ export function createClonePathSettings(filePath?: string): ClonePathSettings {
         return remembered.get(keyOf(repository));
       }
       const settings = await readSettingsFile(filePath);
-      const paths = settings[settingsKey];
-      const value =
-        typeof paths === 'object' && paths !== null
-          ? (paths as Record<string, unknown>)[keyOf(repository)]
-          : undefined;
+      const value = clonePathsOf(settings[settingsKey])[keyOf(repository)];
       if (typeof value === 'string' && path.isAbsolute(value)) {
         return value;
       }
@@ -47,8 +43,7 @@ export function createClonePathSettings(filePath?: string): ClonePathSettings {
         return;
       }
       await updateSettingsFile(filePath, (current) => {
-        const paths = current[settingsKey];
-        const previous = typeof paths === 'object' && paths !== null ? paths : {};
+        const previous = clonePathsOf(current[settingsKey]);
         return { ...current, [settingsKey]: { ...previous, [keyOf(repository)]: repoPath } };
       });
     },
@@ -57,4 +52,12 @@ export function createClonePathSettings(filePath?: string): ClonePathSettings {
 
 function keyOf(repository: RepositoryKey): string {
   return `${repository.host}/${repository.owner}/${repository.repo}`.toLowerCase();
+}
+
+/** The stored clone paths by repository; none when the setting is missing or not an object. */
+function clonePathsOf(stored: unknown): Readonly<Record<string, unknown>> {
+  if (typeof stored === 'object' && stored !== null) {
+    return stored as Record<string, unknown>;
+  }
+  return {};
 }

@@ -4,6 +4,7 @@ import type {
   OpenPullRequestResponse,
 } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
+import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import { openRepository } from '#internal/git/open-repository.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
@@ -35,6 +36,12 @@ export interface OpenedPullRequest {
   readonly pullRequest: PullRequest;
 }
 
+export interface OpenPullRequestOptions {
+  /** Told once the session is stored, before `openPullRequest` answers. */
+  readonly onOpened: (opened: OpenedPullRequest) => void;
+  readonly signal?: AbortSignal | undefined;
+}
+
 /**
  * `github:open-pr` (ADR 0037): resolves the pull request on GitHub, finds the local clone (the
  * given path, else the one last used for its repository) and the remote in it that points at
@@ -44,8 +51,7 @@ export interface OpenedPullRequest {
 export async function openPullRequest(
   context: GithubContext,
   request: OpenPullRequestRequest,
-  onOpened: (opened: OpenedPullRequest) => void,
-  signal?: AbortSignal,
+  { onOpened, signal }: OpenPullRequestOptions,
 ): Promise<OpenPullRequestResponse> {
   const asked = parsePullRequestRef(request.ref);
   if (!asked.ok) {
@@ -56,12 +62,15 @@ export async function openPullRequest(
     return fetched.error;
   }
   const ref = canonicalPullRequestRef(asked.value, fetched.value);
-  const repository = await openClone(context, ref, request.repoPath, signal);
+  const repository = await openClone(context, ref, { repoPath: request.repoPath, signal });
   if (!repository.ok) {
     return repository.error;
   }
   const remotes = await listRemoteUrls(repository.value);
-  const remote = remotes.ok ? findMatchingRemote(remotes.value, ref) : undefined;
+  let remote: RemoteUrl | undefined;
+  if (remotes.ok) {
+    remote = findMatchingRemote(remotes.value, ref);
+  }
   if (remote === undefined) {
     return githubFailure(
       'needs-local-clone',
@@ -90,12 +99,15 @@ export async function openPullRequest(
   if (!synced.ok) {
     return synced.error;
   }
-  const session = upsertPullRequestSession(
-    context.session,
-    { ...source, baseRef: synced.value.baseRef },
-    synced.value.headSha,
-    before.ok ? before.value : undefined,
-  );
+  let observedFrom: Session | undefined;
+  if (before.ok) {
+    observedFrom = before.value;
+  }
+  const session = upsertPullRequestSession(context.session, {
+    source: { ...source, baseRef: synced.value.baseRef },
+    headSha: synced.value.headSha,
+    observedFrom,
+  });
   if (!session.ok) {
     return githubFailure('github-failed', session.error.message);
   }
@@ -115,11 +127,16 @@ export async function openPullRequest(
   };
 }
 
+/** Where the reviewer said the clone is, if they did, and the request's signal. */
+interface CloneLookup {
+  readonly repoPath: string | undefined;
+  readonly signal: AbortSignal | undefined;
+}
+
 async function openClone(
   context: GithubContext,
   ref: PullRequestRef,
-  repoPath: string | undefined,
-  signal: AbortSignal | undefined,
+  { repoPath, signal }: CloneLookup,
 ): Promise<Result<GitRepository, GithubFailureView>> {
   const target = repoPath ?? (await context.clonePaths.read(ref));
   const name = `${ref.owner}/${ref.repo}`;

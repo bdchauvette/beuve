@@ -57,7 +57,7 @@ export async function postGithubReview(
         target: 'github',
         url: htmlUrl,
         headSha: preview.headSha as CommitSha,
-        placement: inline && !wereAllMoved ? 'inline' : 'body',
+        placement: placementOf(inline && !wereAllMoved),
         postedAt,
       };
     }),
@@ -70,4 +70,11 @@ export async function postGithubReview(
     bodyCount: preview.bodyCount + movedToBody,
     movedToBody,
   });
+}
+
+function placementOf(isInline: boolean): UraPosting['placement'] {
+  if (isInline) {
+    return 'inline';
+  }
+  return 'body';
 }

@@ -17,7 +17,18 @@ export interface GithubClients {
   readonly withClient: <T, F extends { readonly kind: string }>(
     host: string,
     call: (client: GithubClient<AuthError>) => Promise<Result<T, F>>,
-  ) => Promise<Result<T, F | { readonly kind: 'invalid-request'; readonly reason: string }>>;
+  ) => Promise<Result<T, F | InvalidHost>>;
+}
+
+/** A host no client can be built for, such as one that is not a GitHub hostname. */
+export interface InvalidHost {
+  readonly kind: 'invalid-request';
+  readonly reason: string;
+}
+
+/** The token a client sent, recorded so a 401 invalidates that one only. */
+interface UsedToken {
+  token: GithubToken | undefined;
 }
 
 export interface GithubClientsOptions {
@@ -34,10 +45,7 @@ export interface GithubClientsOptions {
  * token only, and a concurrent call's fresh token survives (ADR 0034).
  */
 export function createGithubClients(options: GithubClientsOptions): GithubClients {
-  const clientFor = (
-    host: string,
-    used: { token: GithubToken | undefined },
-  ): Result<GithubClient<AuthError>, string> => {
+  const clientFor = (host: string, used: UsedToken): Result<GithubClient<AuthError>, string> => {
     return createGithubClient<AuthError>({
       host,
       getToken: async (forHost) => {
@@ -58,8 +66,8 @@ export function createGithubClients(options: GithubClientsOptions): GithubClient
     withClient: async <T, F extends { readonly kind: string }>(
       host: string,
       call: (client: GithubClient<AuthError>) => Promise<Result<T, F>>,
-    ): Promise<Result<T, F | { readonly kind: 'invalid-request'; readonly reason: string }>> => {
-      const used: { token: GithubToken | undefined } = { token: undefined };
+    ): Promise<Result<T, F | InvalidHost>> => {
+      const used: UsedToken = { token: undefined };
       const client = clientFor(host, used);
       if (!client.ok) {
         return err({ kind: 'invalid-request', reason: client.error });

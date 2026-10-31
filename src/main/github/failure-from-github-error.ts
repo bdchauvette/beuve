@@ -20,11 +20,11 @@ export function failureFromGithubError(
   switch (error.kind) {
     case 'credentials': {
       const auth = error.error;
-      return githubFailure(
-        'not-signed-in',
-        describeAuthError(auth, locale),
-        'remedy' in auth ? auth.remedy : undefined,
-      );
+      let remedy: string | undefined;
+      if ('remedy' in auth) {
+        remedy = auth.remedy;
+      }
+      return githubFailure('not-signed-in', describeAuthError(auth, locale), remedy);
     }
     case 'unauthorized': {
       return githubFailure(
@@ -34,20 +34,19 @@ export function failureFromGithubError(
       );
     }
     case 'forbidden': {
+      if (error.ssoUrl === undefined) {
+        return githubFailure('forbidden', `GitHub refused access to ${subject}: ${error.message}`);
+      }
       return githubFailure(
         'forbidden',
-        error.ssoUrl === undefined
-          ? `GitHub refused access to ${subject}: ${error.message}`
-          : `Authorize your token for this organization (SAML) at ${error.ssoUrl}`,
+        `Authorize your token for this organization (SAML) at ${error.ssoUrl}`,
       );
     }
     case 'rate-limited': {
-      return githubFailure(
-        'rate-limited',
-        error.resetAt === undefined
-          ? 'GitHub rate limit reached; try again later.'
-          : `GitHub rate limit reached until ${error.resetAt}.`,
-      );
+      if (error.resetAt === undefined) {
+        return githubFailure('rate-limited', 'GitHub rate limit reached; try again later.');
+      }
+      return githubFailure('rate-limited', `GitHub rate limit reached until ${error.resetAt}.`);
     }
     case 'not-found': {
       return githubFailure(
@@ -67,10 +66,11 @@ export function failureFromGithubError(
         'The pull request moved on GitHub since this review was written. Reload it and post again.',
       );
     }
-    case 'comments-rejected':
+    case 'comments-rejected': {
+      return refusedReview(error.messages);
+    }
     case 'validation-failed': {
-      const messages = error.kind === 'validation-failed' ? [error.message] : error.messages;
-      return githubFailure('github-failed', `GitHub refused the review: ${messages.join('; ')}`);
+      return refusedReview([error.message]);
     }
     case 'unexpected-status':
     case 'network':
@@ -109,4 +109,8 @@ function describeTransport(
       return `unexpected response (${error.reason})`;
     }
   }
+}
+
+function refusedReview(messages: readonly string[]): GithubFailureView {
+  return githubFailure('github-failed', `GitHub refused the review: ${messages.join('; ')}`);
 }

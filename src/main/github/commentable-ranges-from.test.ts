@@ -9,9 +9,9 @@ describe('commentableRangesFrom', () => {
   test('spans each hunk on the head side, under the new path, skipping deletions', ({ expect }) => {
     const files: DiffFile[] = [
       file({ status: 'modified', path: 'a.ts', oldMode: '100644', newMode: '100644' }, [
-        hunk(1, 3),
-        hunk(10, 0),
-        hunk(20, 2),
+        hunk({ newStart: 1, newCount: 3 }),
+        hunk({ newStart: 10, newCount: 0 }),
+        hunk({ newStart: 20, newCount: 2 }),
       ]),
       file(
         {
@@ -22,9 +22,11 @@ describe('commentableRangesFrom', () => {
           oldMode: '100644',
           newMode: '100644',
         },
-        [hunk(5, 1)],
+        [hunk({ newStart: 5, newCount: 1 })],
       ),
-      file({ status: 'deleted', path: 'gone.ts', mode: '100644' }, [hunk(0, 0)]),
+      file({ status: 'deleted', path: 'gone.ts', mode: '100644' }, [
+        hunk({ newStart: 0, newCount: 0 }),
+      ]),
     ];
     expect(commentableRangesFrom(files)).toStrictEqual(
       new Map([
@@ -53,6 +55,6 @@ function file(change: FileChange, hunks: DiffHunk[]): DiffFile {
   };
 }
 
-function hunk(newStart: number, newCount: number): DiffHunk {
+function hunk({ newStart, newCount }: Pick<DiffHunk, 'newStart' | 'newCount'>): DiffHunk {
   return { oldStart: 1, oldCount: 1, newStart, newCount, header: '@@', section: '', lines: [] };
 }

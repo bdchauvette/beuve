@@ -72,19 +72,26 @@ export async function syncPullRequestHead(
   );
 }
 
+/** A fetched head, and whether it is the commit GitHub reported. */
+interface VerifiedFetch {
+  readonly matches: boolean;
+  readonly synced: SyncedPullRequest;
+}
+
 async function fetchAndVerify(
   input: SyncPullRequestInput,
   pullRequest: PullRequest,
-): Promise<
-  Result<{ readonly matches: boolean; readonly synced: SyncedPullRequest }, GithubFailureView>
-> {
+): Promise<Result<VerifiedFetch, GithubFailureView>> {
   const plan = buildPullRequestFetch({
     number: pullRequest.number,
     remote: input.remote,
     baseBranch: pullRequest.base.ref,
   });
   if (!plan.ok || plan.value.baseRef === undefined) {
-    return err(githubFailure('fetch-failed', plan.ok ? 'no base branch' : plan.error));
+    if (plan.ok) {
+      return err(githubFailure('fetch-failed', 'no base branch'));
+    }
+    return err(githubFailure('fetch-failed', plan.error));
   }
   const { args, headRef, baseRef } = plan.value;
   const refspecs = args.slice(args.indexOf('--end-of-options') + 2);
@@ -112,7 +119,10 @@ async function fetchAndVerify(
 function describeFetchError(remote: string, error: GitError): string {
   if (error.kind === 'command-failed') {
     const last = error.stderr.trim().split('\n').at(-1)?.slice(0, 300) ?? '';
-    return `git fetch from ${remote} failed${last === '' ? '' : `: ${last}`}`;
+    if (last === '') {
+      return `git fetch from ${remote} failed`;
+    }
+    return `git fetch from ${remote} failed: ${last}`;
   }
   if (error.kind === 'timeout') {
     return `git fetch from ${remote} timed out`;

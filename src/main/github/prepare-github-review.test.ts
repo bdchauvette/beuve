@@ -104,15 +104,18 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
   });
 });
 
-/** Holds `compileArtifact` until `release`, recording the head each call asked for. */
-function holdCompile(ura: UraServices): {
+/** URA services whose `compileArtifact` waits for `release`, and what each call asked for. */
+interface HeldCompile {
   readonly ura: Pick<UraServices, 'compileArtifact' | 'listPostings'>;
   readonly arrived: Promise<undefined>;
   readonly release: () => void;
   readonly compiledAt: () => readonly string[];
   /** The base tip each call was pinned to. */
   readonly compiledFrom: () => readonly (string | undefined)[];
-} {
+}
+
+/** Holds `compileArtifact` until `release`, recording the head each call asked for. */
+function holdCompile(ura: UraServices): HeldCompile {
   const arrived = Promise.withResolvers<undefined>();
   const gate = Promise.withResolvers<undefined>();
   const heads: string[] = [];

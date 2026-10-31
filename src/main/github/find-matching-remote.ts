@@ -1,5 +1,6 @@
 import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import { parseGithubRemoteUrl } from '#internal/github/parse-github-remote-url.ts';
+import type { GithubRemote } from '#internal/github/parse-github-remote-url.ts';
 
 /**
  * The first remote whose configured URL names `host/owner/repo` (case-insensitively, as GitHub
@@ -8,7 +9,7 @@ import { parseGithubRemoteUrl } from '#internal/github/parse-github-remote-url.t
  */
 export function findMatchingRemote(
   remotes: readonly RemoteUrl[],
-  repository: { readonly host: string; readonly owner: string; readonly repo: string },
+  repository: GithubRemote,
 ): RemoteUrl | undefined {
   const wanted = key(repository);
   return remotes.find((remote) => {
@@ -17,10 +18,6 @@ export function findMatchingRemote(
   });
 }
 
-function key(repository: {
-  readonly host: string;
-  readonly owner: string;
-  readonly repo: string;
-}): string {
+function key(repository: GithubRemote): string {
   return `${repository.host}/${repository.owner}/${repository.repo}`.toLowerCase();
 }

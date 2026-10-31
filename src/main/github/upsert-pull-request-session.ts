@@ -11,6 +11,13 @@ import { sessionFailure } from '../sessions/session-failure.ts';
 
 import { moveSessionHead } from './move-session-head.ts';
 
+/** A pull request's session source, the head just fetched, and the session as first observed. */
+export interface PullRequestHead {
+  readonly source: Extract<SessionSource, { kind: 'github-pull-request' }>;
+  readonly headSha: CommitSha;
+  readonly observedFrom: Session | undefined;
+}
+
 /**
  * Resumes the session reviewing `source` (found with `findSessionBySource`, so opening a pull
  * request twice is one session) or creates it. A moved head is stored and announced through
@@ -22,9 +29,7 @@ import { moveSessionHead } from './move-session-head.ts';
  */
 export function upsertPullRequestSession(
   context: SessionContext,
-  source: Extract<SessionSource, { kind: 'github-pull-request' }>,
-  headSha: CommitSha,
-  observedFrom: Session | undefined,
+  { source, headSha, observedFrom }: PullRequestHead,
 ): Result<Session, IpcError> {
   const { db, deps, logger } = context;
   const existing = findSessionBySource(db, source);

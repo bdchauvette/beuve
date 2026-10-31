@@ -5,6 +5,7 @@ import type {
   PullRequestUpdatedView,
   CiStatusView,
 } from '#contract/ipc-contract.ts';
+import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
 import { findPullRequestStack } from '#internal/github/find-pull-request-stack.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
@@ -45,16 +46,33 @@ export interface PullRequestPoller {
   /** A focused window polls on the interval; a blurred one five times less often. */
   readonly setForeground: (isForeground: boolean) => void;
   /** The last CI status and stack seen for a session in this run. */
-  readonly snapshot: (sessionId: string) => {
-    readonly ci?: CiStatusView;
-    readonly stack?: PullRequestStackView;
-    readonly attention?: AttentionView;
-  };
+  readonly snapshot: (sessionId: string) => PollSnapshot;
   /** Remembers a stack found elsewhere (when the pull request was opened). */
   readonly rememberStack: (sessionId: string, stack: PullRequestStackView) => void;
   readonly onUpdated: (listener: (event: PullRequestUpdatedView) => void) => () => void;
   readonly onCiStatus: (listener: (event: CiStatusChangedView) => void) => () => void;
   readonly dispose: () => void;
+}
+
+/** The last CI status, stack and attention one session's polls saw. */
+export interface PollSnapshot {
+  readonly ci?: CiStatusView;
+  readonly stack?: PullRequestStackView;
+  readonly attention?: AttentionView;
+}
+
+/** A failed GitHub request, as far as backing off needs it. */
+interface PollFailure {
+  readonly kind: string;
+  readonly resetAt?: string | undefined;
+}
+
+/** What a poll learned about one session, for `github:pull-request-updated`. */
+interface PollUpdate {
+  readonly sessionId: string;
+  readonly ref: PullRequestRef;
+  readonly state: PollState;
+  readonly isHeadMoved: boolean;
 }
 
 export interface PullRequestPollerOptions {
@@ -128,10 +146,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   };
 
   /** The delay after a failed request: `resetAt` for rate limits, else doubling backoff. */
-  const failed = (
-    state: PollState,
-    error: { readonly kind: string; readonly resetAt?: string | undefined },
-  ): Temporal.Duration => {
+  const failed = (state: PollState, error: PollFailure): Temporal.Duration => {
     state.failures += 1;
     if (error.kind === 'rate-limited' && error.resetAt !== undefined) {
       const untilReset = Temporal.Now.instant()
@@ -175,7 +190,11 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return;
     }
     const described = await context.clients.credentials.describe({ host: ref.host });
-    state.viewer = { login: described.ok ? described.value.account?.login : undefined };
+    let login: string | undefined;
+    if (described.ok) {
+      login = described.value.account?.login;
+    }
+    state.viewer = { login };
   };
 
   /** Recomputes the attention; true when it differs from the one last computed. */
@@ -211,7 +230,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       return undefined;
     }
     const remotes = await listRemoteUrls(repository.value);
-    const remote = remotes.ok ? findMatchingRemote(remotes.value, ref) : undefined;
+    let remote: RemoteUrl | undefined;
+    if (remotes.ok) {
+      remote = findMatchingRemote(remotes.value, ref);
+    }
     if (remote === undefined) {
       logger.warn('github poll: no remote for the pull request', { ref });
       return undefined;
@@ -239,12 +261,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return undefined;
   };
 
-  const emitUpdated = (
-    sessionId: string,
-    ref: PullRequestRef,
-    state: PollState,
-    isHeadMoved: boolean,
-  ): void => {
+  const emitUpdated = ({ sessionId, ref, state, isHeadMoved }: PollUpdate): void => {
     const stored = findStoredPullRequest(context.session.db, ref);
     if (!stored.ok || stored.value === undefined) {
       return;
@@ -299,14 +316,20 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       await readReviews(state, ref);
       const isNewHead = pullRequest.head.sha !== session.headSha;
       // The synced head, which can be newer than this answer's when GitHub was asked again.
-      const movedTo = isNewHead ? await moveHead(session, ref, pullRequest) : undefined;
+      let movedTo: string | undefined;
+      if (isNewHead) {
+        movedTo = await moveHead(session, ref, pullRequest);
+      }
       const hasHeadMoved = movedTo !== undefined;
       // A head that couldn't be fetched is asked for unconditionally next time, not 304'd past.
-      state.prEtag = isNewHead && !hasHeadMoved ? undefined : pulled.value.etag;
+      state.prEtag = pulled.value.etag;
+      if (isNewHead && !hasHeadMoved) {
+        state.prEtag = undefined;
+      }
       headSha = movedTo ?? headSha;
       state.headSeen = headSha;
       isAttentionChanged(state, ref);
-      emitUpdated(sessionId, ref, state, hasHeadMoved);
+      emitUpdated({ sessionId, ref, state, isHeadMoved: hasHeadMoved });
     }
     if (state.ciSha !== headSha) {
       state.ciSha = headSha;
@@ -328,7 +351,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       state.ci = ciStatusViewFrom(ci.value.value);
       emit(ciListeners, { sessionId, ci: state.ci });
       if (isAttentionChanged(state, ref)) {
-        emitUpdated(sessionId, ref, state, false);
+        emitUpdated({ sessionId, ref, state, isHeadMoved: false });
       }
     }
     state.failures = 0;
@@ -364,8 +387,13 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     timer = setTimeout(() => {
       void (async (): Promise<void> => {
         const next = await pollShared(sessionId);
-        if (watched === sessionId) {
-          schedule(isForeground ? next : multiplyDuration(next, backgroundFactor));
+        if (watched !== sessionId) {
+          return;
+        }
+        if (isForeground) {
+          schedule(next);
+        } else {
+          schedule(multiplyDuration(next, backgroundFactor));
         }
       })();
     }, delay.total('milliseconds'));
@@ -390,11 +418,16 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
         return;
       }
       const last = stateOf(watched).lastPolled;
-      const remaining =
-        last === undefined ? new Temporal.Duration() : interval.subtract(last.elapsed());
-      schedule(remaining.sign < 0 ? new Temporal.Duration() : remaining);
+      let remaining = new Temporal.Duration();
+      if (last !== undefined) {
+        remaining = interval.subtract(last.elapsed());
+      }
+      if (remaining.sign < 0) {
+        remaining = new Temporal.Duration();
+      }
+      schedule(remaining);
     },
-    snapshot: (sessionId): ReturnType<PullRequestPoller['snapshot']> => {
+    snapshot: (sessionId): PollSnapshot => {
       const state = states.get(sessionId);
       return {
         ...(state?.ci !== undefined && { ci: state.ci }),

@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs';
 
 import { describe } from 'vitest';
 
-import type { FakeGithubApi } from '#internal/github/testing/create-fake-github-api.ts';
+import type {
+  FakeGithubApi,
+  FakeSubmittedReview,
+} from '#internal/github/testing/create-fake-github-api.ts';
 import { advanceHead } from '#internal/session/advance-head.ts';
 import type { CommitSha } from '#internal/session/session.ts';
 import { updateSessionHead } from '#internal/session/update-session-head.ts';
-import type { AppInfo } from '#contract/ipc-contract.ts';
+import type { AppInfo, OpenPullRequestResponse } from '#contract/ipc-contract.ts';
 import { startHoldServer } from '#internal/git/testing/start-hold-server.ts';
 import { writeHoldScript } from '#internal/git/testing/write-hold-script.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
@@ -66,9 +69,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     await expect(clone.git('rev-parse', 'refs/beuve/pr/7/base')).resolves.toBe(baseSha);
 
     const again = await openPull();
-    expect(again.kind === 'opened' && first.kind === 'opened' && again.session.id).toBe(
-      first.kind === 'opened' && first.session.id,
-    );
+    expect(openedSessionId(again)).toBe(openedSessionId(first));
     expect(okValueFrom(services.sessions.list())).toMatchObject([
       {
         source: { kind: 'github-pull-request', number: 7 },
@@ -81,7 +82,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       },
     ]);
 
-    const sessionId = first.kind === 'opened' ? first.session.id : '';
+    const sessionId = openedSessionId(first);
     const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
     expect(review.scope).toStrictEqual({ kind: 'full' });
     expect(review.baseSha).toBe(baseSha);
@@ -102,7 +103,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     await upstream.git('commit', '--quiet', '--amend', '--message', 'feature, amended');
     const amended = await upstream.git('rev-parse', 'HEAD');
     await upstream.git('push', '--quiet', '--force', bare, 'feature:refs/pull/7/head');
-    const racing = racingFetch(api, firstHead, amended);
+    const racing = racingFetch(api, { first: firstHead, later: amended });
     Object.assign(api, { fetch: racing.fetch });
     const restarted = recreate(services);
     const result = okValueFrom(
@@ -494,7 +495,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     Object.assign(api.pullRequests.get(7) ?? {}, { updatedAt: '2026-10-28T11:00:00Z' });
     api.checks.set(answered, [{ kind: 'check-run', name: 'test', result: 'success' }]);
     api.checks.set(synced, [{ kind: 'check-run', name: 'test', result: 'failure' }]);
-    const racing = racingFetch(api, answered, synced);
+    const racing = racingFetch(api, { first: answered, later: synced });
     Object.assign(api, { fetch: racing.fetch });
     const restarted = recreate(services);
 
@@ -651,12 +652,35 @@ async function pushHead(world: GithubWorld, message: string): Promise<string> {
   return head;
 }
 
-/** Holds every review POST until `release`; `arrived` settles when the first one reaches GitHub. */
-function holdReviewPosts(api: FakeGithubApi): {
+/** The opened session's id, or empty when the pull request did not open. */
+function openedSessionId(response: OpenPullRequestResponse): string {
+  if (response.kind === 'opened') {
+    return response.session.id;
+  }
+  return '';
+}
+
+/** A fake GitHub fetch that holds review POSTs until `release`. */
+interface HeldReviewPosts {
   readonly fetch: FakeGithubApi['fetch'];
   readonly arrived: Promise<undefined>;
   readonly release: () => void;
-} {
+}
+
+/** The pull request's head on its first GET, and on every later one. */
+interface HeadRace {
+  readonly first: string;
+  readonly later: string;
+}
+
+/** A fake GitHub fetch that moves the pull request's head between GETs, and counts them. */
+interface RacingFetch {
+  readonly fetch: FakeGithubApi['fetch'];
+  readonly pullGets: () => number;
+}
+
+/** Holds every review POST until `release`; `arrived` settles when the first one reaches GitHub. */
+function holdReviewPosts(api: FakeGithubApi): HeldReviewPosts {
   const arrived = Promise.withResolvers<undefined>();
   const gate = Promise.withResolvers<undefined>();
   const fetch = api.fetch;
@@ -675,11 +699,7 @@ function holdReviewPosts(api: FakeGithubApi): {
   };
 }
 
-function racingFetch(
-  api: FakeGithubApi,
-  first: string,
-  later: string,
-): { readonly fetch: FakeGithubApi['fetch']; readonly pullGets: () => number } {
+function racingFetch(api: FakeGithubApi, { first, later }: HeadRace): RacingFetch {
   let pullGets = 0;
   const fetch = api.fetch;
   return {
@@ -687,7 +707,11 @@ function racingFetch(
       const pull = api.pullRequests.get(7);
       if (pull !== undefined && url.endsWith('/pulls/7')) {
         pullGets += 1;
-        pull.headSha = pullGets === 1 ? first : later;
+        if (pullGets === 1) {
+          pull.headSha = first;
+        } else {
+          pull.headSha = later;
+        }
       }
       return fetch(url, init);
     },
@@ -697,10 +721,7 @@ function racingFetch(
   };
 }
 
-function reviewBy(
-  state: 'CHANGES_REQUESTED' | 'APPROVED',
-  commitSha: string,
-): { reviewer: string; state: typeof state; commitSha: string; submittedAt: string } {
+function reviewBy(state: 'CHANGES_REQUESTED' | 'APPROVED', commitSha: string): FakeSubmittedReview {
   return { reviewer: 'rita', state, commitSha, submittedAt: '2026-10-28T10:30:00Z' };
 }
 
