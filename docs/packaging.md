@@ -33,7 +33,7 @@ To bump it, on a Node security release or when CI moves to a new LTS:
 
 On macOS the binary keeps the Node.js Foundation's Developer ID signature and entitlements, because `mac.signIgnore` stops electron-builder from re-signing it (ADR 0085). `codesign -dv out/mac-arm64/beuve.app/Contents/Resources/node/node` shows `TeamIdentifier=HX7739G8FX`.
 
-Size: the binary is 150.3 MB on Linux and 147.3 MB on macOS. It takes the Linux app directory from 606.6 MB to 756.9 MB.
+Size: the binary is 150.3 MB on Linux and 147.3 MB on macOS. It takes the Linux app directory from 606.6 MB to 756.9 MB. On macOS it adds about 45 MB to the compressed dmg and zip (the binary deflates to 44.9 MB). The first CI build with it produced a 276.1 MiB dmg and a 267.6 MiB zip, and a 690 MB `beuve.app`.
 
 ## Signing and notarization
 

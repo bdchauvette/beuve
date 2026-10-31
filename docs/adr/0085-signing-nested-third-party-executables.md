@@ -5,7 +5,7 @@
 
 ## Context
 
-The macOS app now contains a third-party executable that beuve runs: the bundled Node, `Contents/Resources/node/node` (ADR 0083). nodejs.org's darwin binary is signed with the Node.js Foundation's Developer ID (team `HX7739G8FX`), with the hardened runtime and a timestamp. Its entitlements are what Node needs: `allow-jit`, `allow-unsigned-executable-memory`, `disable-executable-page-protection`, `allow-dyld-environment-variables` and `disable-library-validation`.
+The macOS app now contains a third-party executable that beuve runs: the bundled Node, `Contents/Resources/node/node` (ADR 0083). nodejs.org's darwin binary is signed with the Node.js Foundation's Developer ID (team `HX7739G8FX`), with the hardened runtime and a timestamp. Its entitlements are what Node needs: `allow-jit`, `allow-unsigned-executable-memory`, `disable-executable-page-protection`, `allow-dyld-environment-variables`, `disable-library-validation` and `get-task-allow`. The last was seen in CI's `codesign -d --entitlements -` output for 26.13.0.
 
 electron-builder signs through `@electron/osx-sign`, which walks the whole bundle and re-signs every Mach-O file with `--force`, under beuve's identity and `entitlementsInherit`. Today that identity is ad hoc (`-`), without the hardened runtime (ADR 0048).
 
@@ -32,5 +32,11 @@ The Node binary then has two possible signatures:
 
 The bundled Node behaves as upstream's does, with the same entitlements under any beuve signing mode, so probes don't depend on how beuve was signed. beuve doesn't vouch for the binary with its own identity, and a Node bump changes the signer's certificate only if the Foundation does. Not verified yet:
 
-- **Notarization** needs Apple credentials beuve doesn't have.
+- **Notarization** needs Apple credentials beuve doesn't have. It is also a known risk for this decision. Apple's notary service normally rejects any executable whose entitlements include `get-task-allow`, and the Foundation's 26.13.0 binary carries it. If the first notarized build is refused for this reason, the fallback is to re-sign the binary as beuve:
+  - `signIgnore` it from electron-builder's pass;
+  - sign it in an `afterSign` step with a Node-only entitlements file: Node's entitlements minus `get-task-allow`;
+  - amend this ADR.
+
+  Ad-hoc builds, today's default, are unaffected.
+
 - **First launch of a quarantined, ad-hoc build that spawns the nested Node** needs a person at a Mac. Gatekeeper may assess the quarantined `node` separately from the app, though `xattr -dr com.apple.quarantine` (docs/packaging.md) clears it with the rest of the bundle.
