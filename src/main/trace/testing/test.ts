@@ -54,8 +54,10 @@ export const test = baseTest
           return traceEvents.some((event) => event.state !== 'running');
         },
         'the trace to settle',
-        Temporal.Duration.from({ seconds: 45 }),
-        Temporal.Duration.from({ milliseconds: 25 }),
+        {
+          timeout: Temporal.Duration.from({ seconds: 45 }),
+          interval: Temporal.Duration.from({ milliseconds: 25 }),
+        },
       );
       const last = traceEvents.findLast((event) => event.state !== 'running');
       if (last === undefined) {

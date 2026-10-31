@@ -30,11 +30,16 @@ export interface ClaudeScript {
   readonly structured?: object;
 }
 
+/** The fake `claude` script, and where its scripted turn is written. */
+export interface ScriptedClaudeFile {
+  readonly fakeClaudePath: string;
+  readonly directory: string;
+  readonly name: string;
+}
+
 /** Writes `script` to `<directory>/<name>.json` and runs the fake `claude` in `chat` mode on it. */
 export function createScriptedClaude(
-  fakeClaudePath: string,
-  directory: string,
-  name: string,
+  { fakeClaudePath, directory, name }: ScriptedClaudeFile,
   script: ClaudeScript,
 ): ScriptedClaude {
   const file = path.join(directory, `${name}.json`);
@@ -52,7 +57,10 @@ export function createScriptedClaude(
     },
     calls: (): ClaudeCall[] => {
       const log = `${file}.calls`;
-      const lines = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
+      if (!existsSync(log)) {
+        return [];
+      }
+      const lines = readFileSync(log, 'utf8').trim().split('\n');
       return lines.map((line) => JSON.parse(line) as ClaudeCall);
     },
   };

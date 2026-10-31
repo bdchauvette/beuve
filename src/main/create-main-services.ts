@@ -15,6 +15,7 @@ import type { FetchLike } from '#internal/github/github-client.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { createLspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
 import type { LspMultiplexerOptions } from '#internal/lsp/create-lsp-multiplexer.ts';
+import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
@@ -69,6 +70,7 @@ import { createUraServices } from './ura/create-ura-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 import { loadSession } from './sessions/load-session.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
+import type { WorktreeKeep } from './worktrees/create-session-worktrees.ts';
 
 export interface MainServicesOptions {
   /** An open, migrated database (see `openAppDatabase`). The caller closes it. */
@@ -188,14 +190,18 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     caches,
     onHeadMoved,
   };
-  const open: { sessionId: string | undefined } = { sessionId: undefined };
+  const open: OpenSession = { sessionId: undefined };
   const gh: { services: GithubServices | undefined } = { services: undefined };
   const sessions = withPullRequestBadges(
     trackOpenSession(
       createSessionServices({ ...options, onHeadMoved, caches }),
       open,
       (id, isPull) => {
-        gh.services?.watch(isPull ? id : undefined);
+        if (isPull) {
+          gh.services?.watch(id);
+        } else {
+          gh.services?.watch(undefined);
+        }
       },
     ),
     (summary): PullRequestBadgeView | undefined => {
@@ -217,7 +223,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   const impact = createImpactServices({ context, runner: impactRunner });
   heads.impact = impact;
   const multiplexer = createLspMultiplexer({
-    servers: options.nodeRuntime.ok ? [createTypescriptServer(options.nodeRuntime.value)] : [],
+    servers: languageServersFor(options.nodeRuntime),
     trustWorkspaceBinaries: false,
     logger,
     ...options.lsp,
@@ -311,7 +317,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       getFileAttributes: files.getFileAttributes,
       defaultMode: async () => {
         const shown = await display.get();
-        return (shown.ok ? shown.value.reviewOrder : undefined) ?? 'path';
+        if (shown.ok) {
+          return shown.value.reviewOrder ?? 'path';
+        }
+        return 'path';
       },
     }),
     lsp,
@@ -364,16 +373,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
-      await worktrees.prune(
-        stored.ok
-          ? stored.value.map((session) => {
-              return {
-                repoPath: session.source.repoPath,
-                headSha: session.headSha,
-              };
-            })
-          : [],
-      );
+      let keep: WorktreeKeep[] = [];
+      if (stored.ok) {
+        keep = stored.value.map((session) => {
+          return { repoPath: session.source.repoPath, headSha: session.headSha };
+        });
+      }
+      await worktrees.prune(keep);
     },
     dispose: async (): Promise<void> => {
       github.dispose();
@@ -386,19 +392,40 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   };
 }
 
+/** The session the reviewer last opened, if any; shared with the MCP tools. */
+interface OpenSession {
+  sessionId: string | undefined;
+}
+
+function languageServersFor(
+  nodeRuntime: Result<NodeRuntime, NodeRuntimeError>,
+): ServerDefinition[] {
+  if (nodeRuntime.ok) {
+    return [createTypescriptServer(nodeRuntime.value)];
+  }
+  return [];
+}
+
+function summaryOf(value: ReviewView | SessionSummary): SessionSummary {
+  if ('session' in value) {
+    return value.session;
+  }
+  return value;
+}
+
 /**
  * Remembers the session the reviewer last opened, which agents get when they name none, and
  * tells `onOpened` whether it is a pull request (which main then polls, ADR 0038).
  */
 function trackOpenSession(
   sessions: SessionServices,
-  open: { sessionId: string | undefined },
+  open: OpenSession,
   onOpened: (sessionId: string, isPullRequest: boolean) => void,
 ): SessionServices {
   const remember = <T extends ReviewView | SessionSummary>(result: IpcResult<T>): IpcResult<T> => {
     if (result.ok) {
       const value: ReviewView | SessionSummary = result.value;
-      const summary = 'session' in value ? value.session : value;
+      const summary = summaryOf(value);
       open.sessionId = summary.id;
       onOpened(summary.id, summary.source.kind === 'github-pull-request');
     }

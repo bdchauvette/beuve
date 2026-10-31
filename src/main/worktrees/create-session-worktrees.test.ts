@@ -266,9 +266,7 @@ describe('createSessionWorktrees', () => {
   });
 });
 
-async function twoCommits(
-  repo: TestRepository,
-): Promise<{ readonly c1: CommitSha; readonly c2: CommitSha }> {
+async function twoCommits(repo: TestRepository): Promise<TwoCommits> {
   repo.write('f.txt', '1\n');
   const c1 = await repo.commit('one');
   repo.write('f.txt', '2\n');
@@ -276,11 +274,7 @@ async function twoCommits(
   return { c1, c2 };
 }
 
-function manager(
-  root: string,
-  logger: Logger,
-  git: OpenRepositoryOptions = {},
-): { readonly worktrees: SessionWorktrees; readonly heads: Map<string, CommitSha> } {
+function manager(root: string, logger: Logger, git: OpenRepositoryOptions = {}): Manager {
   const heads = new Map<string, CommitSha>();
   const worktrees = createSessionWorktrees({
     root,
@@ -318,4 +312,16 @@ function worktreeCommands(lines: readonly Readonly<Record<string, unknown>>[]): 
 async function locksUnder(repo: TestRepository): Promise<readonly string[]> {
   const entries = await readdir(path.join(repo.directory, '.git'), { recursive: true });
   return entries.filter((entry) => entry.endsWith('.lock'));
+}
+
+/** The two commits of a repository with two. */
+interface TwoCommits {
+  readonly c1: CommitSha;
+  readonly c2: CommitSha;
+}
+
+/** Session worktrees, and the stored session heads they check claims against. */
+interface Manager {
+  readonly worktrees: SessionWorktrees;
+  readonly heads: Map<string, CommitSha>;
 }

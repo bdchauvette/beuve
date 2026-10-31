@@ -688,12 +688,12 @@ function typescriptBranchTemplate(): RepositoryTemplate<undefined> {
   };
 }
 
-function featureBranchTemplate(): RepositoryTemplate<{ readonly mergeBase: string }> {
+function featureBranchTemplate(): RepositoryTemplate<FeatureBranch> {
   return { name: 'main: feature branch', build: featureBranch };
 }
 
 /** main: app.rs + lib.rs; feature: edits app.rs, adds feature.rs. Leaves main checked out. */
-async function featureBranch(repo: TestRepository): Promise<{ mergeBase: string }> {
+async function featureBranch(repo: TestRepository): Promise<FeatureBranch> {
   repo.write('app.rs', lines(['fn main() {', '  run();', '}']));
   repo.write('lib.rs', lines(['pub fn lib() {}']));
   const mergeBase = await repo.commit('base');
@@ -824,10 +824,20 @@ function sixtyModulesTemplate(): RepositoryTemplate<undefined> {
   };
 }
 
+/** The feature branch template's merge base with main. */
+interface FeatureBranch {
+  readonly mergeBase: string;
+}
+
+/** Settles once the held run has begun. */
+interface HeldRunStart {
+  readonly started: Promise<undefined>;
+}
+
 interface HoldableImpactRunner {
   readonly runner: ImpactRunner;
   /** The next run waits until its signal aborts; `started` settles once that run has begun. */
-  readonly hold: () => { readonly started: Promise<undefined> };
+  readonly hold: () => HeldRunStart;
 }
 
 /** The real worker, except that a held run is parked in the runner instead of racing the test. */
@@ -857,7 +867,7 @@ function createHoldableImpactRunner(logger: Logger): HoldableImpactRunner {
         real.dispose();
       },
     },
-    hold: (): { readonly started: Promise<undefined> } => {
+    hold: (): HeldRunStart => {
       const started = Promise.withResolvers<undefined>();
       onStart = (): void => {
         started.resolve(undefined);

@@ -109,7 +109,10 @@ export const test = baseTest
     return {
       script: claudeScript,
       scripted: (script, name = 'chat'): ScriptedClaude => {
-        return createScriptedClaude(claudeScript, home, name, script);
+        return createScriptedClaude(
+          { fakeClaudePath: claudeScript, directory: home, name },
+          script,
+        );
       },
     };
   })

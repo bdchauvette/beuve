@@ -141,7 +141,7 @@ async function launch(): Promise<void> {
  * The Claude Code binary packaged for the Agent SDK's Bundled option (ADR 0069, 0070), unpacked
  * from the archive so it can run. Unpackaged, the SDK finds its own in `node_modules`.
  */
-function bundledClaudeCode(): { bundledClaudeCodePath?: string; hasBundledClaudeCode: boolean } {
+function bundledClaudeCode(): BundledClaudeCode {
   if (!app.isPackaged) {
     return { hasBundledClaudeCode: true };
   }
@@ -151,7 +151,7 @@ function bundledClaudeCode(): { bundledClaudeCodePath?: string; hasBundledClaude
     'node_modules',
     '@anthropic-ai',
     `claude-agent-sdk-${process.platform}-${process.arch}`,
-    process.platform === 'win32' ? 'claude.exe' : 'claude',
+    claudeExecutableName(),
   );
   if (existsSync(binary)) {
     return { bundledClaudeCodePath: binary, hasBundledClaudeCode: true };
@@ -176,4 +176,17 @@ function parsePort(value: string | undefined): number | undefined {
     return port;
   }
   return undefined;
+}
+
+/** Where the bundled Claude Code binary is, when the app ships one it can run. */
+interface BundledClaudeCode {
+  bundledClaudeCodePath?: string;
+  hasBundledClaudeCode: boolean;
+}
+
+function claudeExecutableName(): string {
+  if (process.platform === 'win32') {
+    return 'claude.exe';
+  }
+  return 'claude';
 }

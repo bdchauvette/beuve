@@ -221,7 +221,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     return { kind: 'stale-head', sessionId: claim.sessionId, requested: claim.headSha, stored };
   };
 
-  const hold = (holder: string, path: string): void => {
+  const hold = ({ holder, path }: Holding): void => {
     const previous = holders.get(holder);
     holders.set(holder, path);
     if (previous !== undefined && previous !== path) {
@@ -232,9 +232,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
   /** Checks the commit out (or finds it) and, if the claim still holds, records its holder. */
   const grant = async (
     entry: Entry,
-    root: string,
-    claim: WorktreeClaim,
-    commit: CommitSha,
+    { root, claim, commit }: Grant,
   ): Promise<Result<undefined, WorktreeLeaseError>> => {
     const isKnown = checkedOut.get(entry.path) === commit && (await isCheckoutPresent(entry.path));
     if (!isKnown) {
@@ -251,7 +249,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
     if (stale !== undefined) {
       return err(stale);
     }
-    hold(holderOf(claim), entry.path);
+    hold({ holder: holderOf(claim), path: entry.path });
     return ok(undefined);
   };
 
@@ -288,7 +286,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       if (stale !== undefined) {
         return err(stale);
       }
-      const commit = claim.kind === 'session-head' ? claim.headSha : claim.commit;
+      const commit = commitOf(claim);
       const own = await handleFor(repository);
       if (!own.ok) {
         return own;
@@ -313,8 +311,15 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       });
       entry.leases += 1;
       const lease = leaseOn(entry, commit);
-      const granted = serially(entry, async () => grant(entry, root.value, claim, commit));
-      const outcome = signal === undefined ? await granted : await untilAborted(granted, signal);
+      const granted = serially(entry, async () => {
+        return grant(entry, { root: root.value, claim, commit });
+      });
+      let outcome: Result<undefined, WorktreeLeaseError> | 'aborted';
+      if (signal === undefined) {
+        outcome = await granted;
+      } else {
+        outcome = await untilAborted(granted, signal);
+      }
       if (outcome === 'aborted' || !outcome.ok) {
         lease[Symbol.dispose]();
         if (outcome === 'aborted') {
@@ -393,7 +398,7 @@ async function pruneAll(
       continue;
     }
     const heads = keep.filter((entry) => entry.repoPath === repoPath).map((entry) => entry.headSha);
-    const kept = await pruneRepository(repository.value, root, heads, logger);
+    const kept = await pruneRepository(repository.value, { root, heads }, logger);
     for (const worktree of kept) {
       registered.set(worktree.path, worktree.head);
     }
@@ -402,13 +407,44 @@ async function pruneAll(
   return registered;
 }
 
+/** The worktree root to prune under, and the heads whose worktrees stay. */
+interface PruneScope {
+  readonly root: string;
+  readonly heads: readonly CommitSha[];
+}
+
+/** A worktree that survived the prune, and the commit it has checked out. */
+interface KeptWorktree {
+  readonly path: string;
+  readonly head: CommitSha;
+}
+
+/** Who holds a checkout now, and where it is. */
+interface Holding {
+  readonly holder: string;
+  readonly path: string;
+}
+
+/** A claim to grant, the commit it resolves to, and the worktree root it checks out under. */
+interface Grant {
+  readonly root: string;
+  readonly claim: WorktreeClaim;
+  readonly commit: CommitSha;
+}
+
+function commitOf(claim: WorktreeClaim): CommitSha {
+  if (claim.kind === 'session-head') {
+    return claim.headSha;
+  }
+  return claim.commit;
+}
+
 /** Removes this repository's worktrees under `root` except those at `heads`; returns the kept ones. */
 async function pruneRepository(
   repository: GitRepository,
-  root: string,
-  heads: readonly CommitSha[],
+  { root, heads }: PruneScope,
   logger: Logger,
-): Promise<readonly { readonly path: string; readonly head: CommitSha }[]> {
+): Promise<readonly KeptWorktree[]> {
   await pruneWorktrees(repository);
   const worktrees = await listWorktrees(repository);
   if (!worktrees.ok) {
@@ -421,9 +457,9 @@ async function pruneRepository(
       wanted.add(planned.value);
     }
   }
-  const kept: { readonly path: string; readonly head: CommitSha }[] = [];
+  const kept: KeptWorktree[] = [];
   for (const worktree of worktrees.value) {
-    if (!isInside(root, worktree.path)) {
+    if (!isInside({ root, candidate: worktree.path })) {
       continue;
     }
     const { head } = worktree;
@@ -476,7 +512,13 @@ async function listDirectories(directory: string): Promise<readonly string[]> {
   }
 }
 
-function isInside(root: string, candidate: string): boolean {
+/** A path, and the directory it must be strictly inside. */
+interface Containment {
+  readonly root: string;
+  readonly candidate: string;
+}
+
+function isInside({ root, candidate }: Containment): boolean {
   const relative = path.relative(root, candidate);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
