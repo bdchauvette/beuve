@@ -199,7 +199,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       },
     );
     await clone.git('config', 'remote.origin.uploadpack', uploadPack.command);
-    const handlers = createIpcHandlers(services, appInfo(), {}, new RequestScopes());
+    const handlers = createIpcHandlers(services, appInfo(), { scopes: new RequestScopes() });
     const window = { webContentsId: 1 };
     const request = {
       ref: 'https://github.com/octo-org/hello-world/pull/7/files',

@@ -10,6 +10,11 @@ const settingsChannels = [
   'trace:remove-trust',
 ] as const satisfies readonly InvokeChannel[];
 
+/** A handler's answer, as far as telling success needs it. */
+interface Settled {
+  readonly ok: boolean;
+}
+
 /**
  * Wraps `handlers` so that a successful change of a preference calls `changed` with the sender,
  * which main turns into `settings:changed` for every other window: the Settings window and the
@@ -21,10 +26,7 @@ export function withSettingsBroadcast(
 ): IpcHandlers {
   const wrapped: Record<string, unknown> = { ...handlers };
   for (const channel of settingsChannels) {
-    const handler = handlers[channel] as (
-      request: unknown,
-      sender?: IpcSender,
-    ) => Promise<{ readonly ok: boolean }>;
+    const handler = handlers[channel] as (request: unknown, sender?: IpcSender) => Promise<Settled>;
     wrapped[channel] = async (request: unknown, sender?: IpcSender): Promise<unknown> => {
       const result = await handler(request, sender);
       if (result.ok) {

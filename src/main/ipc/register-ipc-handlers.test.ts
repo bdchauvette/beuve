@@ -10,7 +10,7 @@ import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 import { ok } from '#x/result/ok.ts';
 
 import { test } from '../testing/test.ts';
-import type { IpcHandlers } from './create-ipc-handlers.ts';
+import type { IpcHandlers, IpcSender } from './create-ipc-handlers.ts';
 import { registerIpcHandlers } from './register-ipc-handlers.ts';
 
 type Registered = (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<unknown>;
@@ -32,7 +32,7 @@ function handlersAnsweringOk(): IpcHandlers {
     invokeChannels.map((channel) => {
       return [
         channel,
-        (_request: unknown, sender?: { readonly webContentsId: number }): unknown => {
+        (_request: unknown, sender?: IpcSender): unknown => {
           if (channel === 'menu:set-state') {
             return ok(sender);
           }
@@ -45,10 +45,17 @@ function handlersAnsweringOk(): IpcHandlers {
 
 function eventFrom(url: string, isTopLevel = true): IpcMainInvokeEvent {
   return {
-    // eslint-disable-next-line unicorn/no-null -- Electron marks a top-level frame with a null parent.
-    senderFrame: { url, parent: isTopLevel ? null : {} },
+    senderFrame: { url, parent: parentFrame(isTopLevel) },
     sender: { id: 7 },
   } as unknown as IpcMainInvokeEvent;
+}
+
+function parentFrame(isTopLevel: boolean): object | null {
+  if (isTopLevel) {
+    // eslint-disable-next-line unicorn/no-null -- Electron marks a top-level frame with a null parent.
+    return null;
+  }
+  return {};
 }
 
 describe('registerIpcHandlers', () => {

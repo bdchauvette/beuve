@@ -1,7 +1,13 @@
 import { describe } from 'vitest';
 import type { ExpectStatic } from 'vitest';
 
-import type { AppInfo, IpcError, IpcResult, SessionSummary } from '#contract/ipc-contract.ts';
+import type {
+  AppInfo,
+  IpcError,
+  IpcResult,
+  OpenedView,
+  SessionSummary,
+} from '#contract/ipc-contract.ts';
 import { perHeadInvokeChannels } from '#contract/per-head-invoke-channels.ts';
 import type { PerHeadInvokeChannel } from '#contract/per-head-invoke-channels.ts';
 import { err } from '#x/result/err.ts';
@@ -61,7 +67,7 @@ async function notWired(): Promise<Err<IpcError>> {
   return notWiredError();
 }
 
-async function sheetChecked(): Promise<Ok<{ readonly opened: true }>> {
+async function sheetChecked(): Promise<Ok<OpenedView>> {
   await Promise.resolve();
   return ok({ opened: true });
 }
@@ -357,7 +363,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
         sheets: {
           getFile: notWired,
           getHead: notWired,
-          checkOpen: async (request): Promise<IpcResult<{ readonly opened: true }>> => {
+          checkOpen: async (request): Promise<IpcResult<OpenedView>> => {
             if (request.path === 'src/a.ts') {
               return sheetChecked();
             }
@@ -547,7 +553,7 @@ describe('createIpcHandlers for menus and the Settings window', () => {
 describe('createIpcHandlers for the model registry', () => {
   test('validates every models channel in main and never echoes a key', async ({ expect }) => {
     const calls: unknown[] = [];
-    const record = async (...args: unknown[]): Promise<{ ok: true; value: never }> => {
+    const record = async (...args: unknown[]): Promise<Ok<never>> => {
       calls.push(args);
       await Promise.resolve();
       return ok(undefined as never);
@@ -1217,10 +1223,15 @@ function stubServices(
   };
 }
 
-function recording(name: Exclude<keyof SessionServices, 'list' | 'inspectRepository'>): {
-  calls: unknown[];
-  services: MainServices;
-} {
+/** Main services whose one session operation records every request it is given. */
+interface RecordingServices {
+  readonly calls: unknown[];
+  readonly services: MainServices;
+}
+
+function recording(
+  name: Exclude<keyof SessionServices, 'list' | 'inspectRepository'>,
+): RecordingServices {
   const calls: unknown[] = [];
   const overrides: Record<typeof name, Partial<SessionServices>> = {
     createLocal: {

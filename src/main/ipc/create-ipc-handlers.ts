@@ -11,6 +11,12 @@ import { menuConditions } from '#contract/menu-conditions.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 import type {
   AppInfo,
+  ChooseFolderRequest,
+  ClipboardWrittenView,
+  ContextMenuShownView,
+  MainCommandRanView,
+  MenuStateAppliedView,
+  OpenedView,
   ClaudeStatusView,
   MenuContextRequest,
   MenuStateRequest,
@@ -79,14 +85,24 @@ import { RequestScopes } from './request-scopes.ts';
 import type { SupersededKind } from './request-scopes.ts';
 
 /** What the handlers need from Electron itself; tests pass a stub. */
+/** The platform hooks, and the scopes superseded loads run in. */
+export interface IpcHandlerOptions extends IpcPlatform {
+  /** One per app, shared with `request:cancel` and window teardown; a fresh one by default. */
+  readonly scopes?: RequestScopes;
+}
+
+/** Which window asked, and the kind (and optional id) of the scope its request runs in. */
+interface ScopedRequest {
+  readonly sender: IpcSender | undefined;
+  readonly kind: SupersededKind;
+  readonly id?: string | undefined;
+}
+
 export interface IpcPlatform {
   /** Absent outside Electron, where `clipboard:write-text` answers `not-wired`. */
   readonly writeClipboard?: (text: string) => Promise<void>;
   /** The system folder picker; absent outside Electron, where `dialog:choose-folder` answers `not-wired`. */
-  readonly chooseFolder?: (options: {
-    readonly title?: string;
-    readonly defaultPath?: string;
-  }) => Promise<string | undefined>;
+  readonly chooseFolder?: (options: ChooseFolderRequest) => Promise<string | undefined>;
   /**
    * Opens a new sheet window (ADR 0067) for a request main has already checked; absent outside
    * Electron, where `sheet:open` answers `not-wired`.
@@ -462,15 +478,13 @@ const openUrlRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 export function createIpcHandlers(
   services: MainServices,
   appInfo: AppInfo,
-  platform: IpcPlatform = {},
-  scopes: RequestScopes = new RequestScopes(),
+  options: IpcHandlerOptions = {},
 ): IpcHandlers {
+  const { scopes = new RequestScopes(), ...platform } = options;
   /** Runs `work` in a scope of `kind` for the sender's window; without a sender, unscoped. */
   const scoped = async <T>(
-    sender: IpcSender | undefined,
-    kind: SupersededKind,
+    { sender, kind, id }: ScopedRequest,
     work: (options: RequestOptions) => Promise<IpcResult<T>>,
-    id?: string,
   ): Promise<IpcResult<T>> => {
     if (sender === undefined) {
       return work({});
@@ -525,7 +539,10 @@ export function createIpcHandlers(
         ...(title !== undefined && { title }),
         ...(defaultPath !== undefined && { defaultPath }),
       });
-      return ok(chosen === undefined ? { kind: 'cancelled' } : { kind: 'chosen', path: chosen });
+      if (chosen === undefined) {
+        return ok({ kind: 'cancelled' });
+      }
+      return ok({ kind: 'chosen', path: chosen });
     },
     'session:get-review': async (request, sender): Promise<IpcResult<ReviewView>> => {
       const parsed = reviewRequest.safeParse(request);
@@ -533,7 +550,7 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { sessionId: id, ignoreWhitespace } = parsed.data;
-      return scoped(sender, 'review', async (options) => {
+      return scoped({ sender, kind: 'review' }, async (options) => {
         return services.sessions.getReview(
           { sessionId: id, ...(ignoreWhitespace !== undefined && { ignoreWhitespace }) },
           options,
@@ -560,9 +577,9 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { sessionId: id, mode } = parsed.data;
-      return scoped(sender, 'order', async (options) => {
+      return scoped({ sender, kind: 'order' }, async (options) => {
         return services.order.getOrder(
-          mode === undefined ? { sessionId: id } : { sessionId: id, mode },
+          { sessionId: id, ...(mode !== undefined && { mode }) },
           options,
         );
       });
@@ -570,7 +587,7 @@ export function createIpcHandlers(
     'session:get-impact': async (request, sender): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return scoped(sender, 'impact', async (options) => {
+        return scoped({ sender, kind: 'impact' }, async (options) => {
           return services.impact.getImpactForRenderer(parsed.data, options);
         });
       }
@@ -586,7 +603,7 @@ export function createIpcHandlers(
     'session:get-tree': async (request, sender): Promise<IpcResult<RepositoryTreeView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return scoped(sender, 'tree', async (options) => {
+        return scoped({ sender, kind: 'tree' }, async (options) => {
           return services.files.getTree(parsed.data, options);
         });
       }
@@ -598,7 +615,7 @@ export function createIpcHandlers(
     ): Promise<IpcResult<FileAttributesView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return scoped(sender, 'file-attributes', async (options) => {
+        return scoped({ sender, kind: 'file-attributes' }, async (options) => {
           return services.files.getFileAttributes(parsed.data, options);
         });
       }
@@ -625,7 +642,7 @@ export function createIpcHandlers(
       };
       return services.lsp.definition(definition);
     },
-    'sheet:open': async (request): Promise<IpcResult<{ opened: true }>> => {
+    'sheet:open': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = openSheetRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
@@ -647,7 +664,7 @@ export function createIpcHandlers(
     'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
       const parsed = sheetFileRequest.safeParse(request);
       if (parsed.success) {
-        return scoped(sender, 'sheet-file', async (options) => {
+        return scoped({ sender, kind: 'sheet-file' }, async (options) => {
           return services.sheets.getFile(parsed.data, options);
         });
       }
@@ -656,7 +673,7 @@ export function createIpcHandlers(
     'sheet:get-head': async (request, sender): Promise<IpcResult<SheetHeadView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return scoped(sender, 'sheet-head', async (options) => {
+        return scoped({ sender, kind: 'sheet-head' }, async (options) => {
           return services.sheets.getHead(parsed.data, options);
         });
       }
@@ -893,7 +910,7 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { host } = parsed.data;
-      return services.github.authStatus(host === undefined ? {} : { host });
+      return services.github.authStatus({ ...(host !== undefined && { host }) });
     },
     'github:open-pr': async (request, sender): Promise<IpcResult<OpenPullRequestResponse>> => {
       const parsed = openPullRequestRequest.safeParse(request);
@@ -901,17 +918,12 @@ export function createIpcHandlers(
         return invalid(parsed.error);
       }
       const { ref, repoPath, requestId: id } = parsed.data;
-      return scoped(
-        sender,
-        'open-pull-request',
-        async (options) => {
-          return services.github.openPullRequest(
-            { ref, ...(repoPath !== undefined && { repoPath }) },
-            options,
-          );
-        },
-        id,
-      );
+      return scoped({ sender, kind: 'open-pull-request', id }, async (options) => {
+        return services.github.openPullRequest(
+          { ref, ...(repoPath !== undefined && { repoPath }) },
+          options,
+        );
+      });
     },
     'display:get': async (request): Promise<IpcResult<DiffDisplayView>> => {
       const parsed = noRequest.safeParse(request);
@@ -979,21 +991,21 @@ export function createIpcHandlers(
         ...(verdict !== undefined && { verdict }),
       });
     },
-    'github:open-link': async (request): Promise<IpcResult<{ opened: true }>> => {
+    'github:open-link': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = githubLinkRequest.safeParse(request);
       if (parsed.success) {
         return services.github.openLink(parsed.data);
       }
       return invalid(parsed.error);
     },
-    'shell:open-url': async (request): Promise<IpcResult<{ opened: true }>> => {
+    'shell:open-url': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = openUrlRequest.safeParse(request);
       if (parsed.success) {
         return services.shell.openUrl(parsed.data);
       }
       return invalid(parsed.error);
     },
-    'menu:set-state': (request, sender): IpcResult<{ readonly applied: true }> => {
+    'menu:set-state': (request, sender): IpcResult<MenuStateAppliedView> => {
       const parsed = menuStateRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
@@ -1004,7 +1016,7 @@ export function createIpcHandlers(
       platform.menus.setState(sender.webContentsId, parsed.data);
       return ok({ applied: true });
     },
-    'menu:context': (request, sender): IpcResult<{ readonly shown: boolean }> => {
+    'menu:context': (request, sender): IpcResult<ContextMenuShownView> => {
       const parsed = menuContextRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
@@ -1021,7 +1033,7 @@ export function createIpcHandlers(
         }),
       });
     },
-    'menu:run-main': (request, sender): IpcResult<{ readonly ran: true }> => {
+    'menu:run-main': (request, sender): IpcResult<MainCommandRanView> => {
       const parsed = menuRunMainRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);
@@ -1116,7 +1128,7 @@ export function createIpcHandlers(
       }
       return invalid(parsed.error);
     },
-    'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
+    'clipboard:write-text': async (request): Promise<IpcResult<ClipboardWrittenView>> => {
       const parsed = clipboardRequest.safeParse(request);
       if (!parsed.success) {
         return invalid(parsed.error);

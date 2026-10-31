@@ -14,6 +14,11 @@ export interface TrustedPage {
   readonly channels: 'all' | readonly InvokeChannel[];
 }
 
+export interface RegisterIpcOptions {
+  readonly pages: readonly TrustedPage[];
+  readonly logger: Logger;
+}
+
 /**
  * Registers every contract channel on `ipcMain`. Calls from frames other than the top-level
  * frame of one of beuve's own pages, for a channel that page may not call (a sheet calls only the
@@ -24,7 +29,7 @@ export interface TrustedPage {
 export function registerIpcHandlers(
   ipcMain: IpcMain,
   handlers: IpcHandlers,
-  options: { readonly pages: readonly TrustedPage[]; readonly logger: Logger },
+  options: RegisterIpcOptions,
 ): () => void {
   const { pages, logger } = options;
   for (const channel of invokeChannels) {

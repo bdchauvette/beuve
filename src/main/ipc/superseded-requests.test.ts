@@ -24,12 +24,12 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     closing,
     signal,
   }) => {
-    const { server, git, handlers, sessionId } = await heldDiffs(
+    const { server, git, handlers, sessionId } = await heldDiffs({
       repo,
       createServices,
       closing,
       signal,
-    );
+    });
     const older = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
     const olderDiff = await server.next();
     const newer = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
@@ -51,12 +51,12 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     closing,
     signal,
   }) => {
-    const { server, git, handlers, sessionId } = await heldDiffs(
+    const { server, git, handlers, sessionId } = await heldDiffs({
       repo,
       createServices,
       closing,
       signal,
-    );
+    });
     const first = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
     const diff = await server.next();
     const second = handlers['session:get-review']({ sessionId }, { webContentsId: 2 });
@@ -73,12 +73,12 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     closing,
     signal,
   }) => {
-    const { server, git, scopes, handlers, sessionId } = await heldDiffs(
+    const { server, git, scopes, handlers, sessionId } = await heldDiffs({
       repo,
       createServices,
       closing,
       signal,
-    );
+    });
     const waiting = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
     const diff = await server.next();
     const closed = handlers['session:get-review']({ sessionId }, { webContentsId: 2 });
@@ -100,12 +100,12 @@ describe('superseded and cancelled requests (ADR 0079)', () => {
     closing,
     signal,
   }) => {
-    const { server, scopes, handlers, sessionId } = await heldDiffs(
+    const { server, scopes, handlers, sessionId } = await heldDiffs({
       repo,
       createServices,
       closing,
       signal,
-    );
+    });
     const loading = handlers['session:get-review']({ sessionId }, { webContentsId: 1 });
     const diff = await server.next();
     scopes.closeWindow(1);
@@ -124,12 +124,20 @@ interface HeldDiffs {
 }
 
 /** A local session whose `git diff` waits for the test, behind IPC handlers with their own scopes. */
-async function heldDiffs(
-  repo: TestRepository,
-  createServices: CreateServices,
-  closing: Closing,
-  signal: AbortSignal,
-): Promise<HeldDiffs> {
+/** The fixtures a held-diff setup is built from. */
+interface HeldDiffsSetup {
+  readonly repo: TestRepository;
+  readonly createServices: CreateServices;
+  readonly closing: Closing;
+  readonly signal: AbortSignal;
+}
+
+async function heldDiffs({
+  repo,
+  createServices,
+  closing,
+  signal,
+}: HeldDiffsSetup): Promise<HeldDiffs> {
   repo.write('f.txt', '1\n');
   await repo.commit('base');
   await repo.git('switch', '--quiet', '-c', 'feature');
@@ -142,7 +150,7 @@ async function heldDiffs(
   });
   const services = createServices({ git: { gitBinary: git.command } });
   const scopes = new RequestScopes();
-  const handlers = createIpcHandlers(services, appInfo(), {}, scopes);
+  const handlers = createIpcHandlers(services, appInfo(), { scopes });
   const created = okValueFrom(
     await services.sessions.createLocal({
       repoPath: repo.directory,

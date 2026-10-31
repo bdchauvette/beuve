@@ -6,13 +6,14 @@ import type { App } from 'electron';
 
 import type { Logger } from '#x/log/create-logger.ts';
 
-import type { CommandId } from '#contract/command-catalog.ts';
-import type { AppInfo, McpStatus } from '#contract/ipc-contract.ts';
+import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
+import type { AppInfo, ChooseFolderRequest, McpStatus } from '#contract/ipc-contract.ts';
 import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
 
 import { createIpcHandlers } from './ipc/create-ipc-handlers.ts';
+import type { IpcSender } from './ipc/create-ipc-handlers.ts';
 import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';
 import { RequestScopes } from './ipc/request-scopes.ts';
 import { sendEvent } from './ipc/send-event.ts';
@@ -82,7 +83,7 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     }
   };
   const menus = createAppMenus({
-    platform: process.platform === 'darwin' ? 'mac' : 'linux',
+    platform: keyPlatform(),
     isPackaged: app.isPackaged,
     runMain: handleMainCommand,
     logger,
@@ -162,32 +163,25 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     writeClipboard: async (text: string): Promise<void> => {
       return clipboard.writeText(text);
     },
-    chooseFolder: async (picker: {
-      readonly title?: string;
-      readonly defaultPath?: string;
-    }): Promise<string | undefined> => {
+    chooseFolder: async (picker: ChooseFolderRequest): Promise<string | undefined> => {
       const options: Electron.OpenDialogOptions = {
         properties: ['openDirectory', 'createDirectory'],
         ...(picker.title !== undefined && { title: picker.title }),
         ...(picker.defaultPath !== undefined && { defaultPath: picker.defaultPath }),
       };
-      const owner = BrowserWindow.getFocusedWindow();
-      const chosen =
-        owner === null
-          ? await dialog.showOpenDialog(options)
-          : await dialog.showOpenDialog(owner, options);
+      const chosen = await showOpenDialog(options);
       if (chosen.canceled) {
         return undefined;
       }
       return chosen.filePaths[0];
     },
   };
-  const handlers = createIpcHandlers(
-    services,
-    readAppInfo(app),
-    { ...platform, openSheet: sheets.open, menus },
+  const handlers = createIpcHandlers(services, readAppInfo(app), {
+    ...platform,
+    openSheet: sheets.open,
+    menus,
     scopes,
-  );
+  });
 
   registerIpcHandlers(ipcMain, withSettingsBroadcast(handlers, announceSettingsChanged), {
     pages: [
@@ -232,12 +226,30 @@ function isMainWindow(window: BrowserWindow, options: StartAppOptions): boolean 
 }
 
 /** `settings:changed` to every window but the one that made the change. */
-function announceSettingsChanged(sender: { readonly webContentsId: number } | undefined): void {
+function announceSettingsChanged(sender: IpcSender | undefined): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.webContents.id !== sender?.webContentsId) {
       sendEvent(window.webContents, 'settings:changed', {});
     }
   }
+}
+
+function keyPlatform(): KeyPlatform {
+  if (process.platform === 'darwin') {
+    return 'mac';
+  }
+  return 'linux';
+}
+
+/** The open dialog, as a sheet of the focused window when there is one. */
+async function showOpenDialog(
+  options: Electron.OpenDialogOptions,
+): Promise<Electron.OpenDialogReturnValue> {
+  const owner = BrowserWindow.getFocusedWindow();
+  if (owner === null) {
+    return dialog.showOpenDialog(options);
+  }
+  return dialog.showOpenDialog(owner, options);
 }
 
 function readAppInfo(app: App): AppInfo {
