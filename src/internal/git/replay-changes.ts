@@ -65,9 +65,10 @@ export async function replayChanges(
     return parseMergeTreeOutput(args, output.value, false);
   }
   const { error } = output;
-  return error.kind === 'command-failed' && error.exitCode === 1
-    ? parseMergeTreeOutput(args, error.stdout, true)
-    : output;
+  if (error.kind === 'command-failed' && error.exitCode === 1) {
+    return parseMergeTreeOutput(args, error.stdout, true);
+  }
+  return output;
 }
 
 /** `<tree>\0<conflicted path>\0…` with `--name-only -z --no-messages`. */

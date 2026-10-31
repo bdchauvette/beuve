@@ -22,10 +22,19 @@ function compareEdits(left: SourceEdit, right: SourceEdit): number {
     return left.offset - right.offset;
   }
   if (left.side !== right.side) {
-    return left.side === 'close' ? -1 : 1;
+    if (left.side === 'close') {
+      return -1;
+    }
+    return 1;
   }
   if (left.side === 'close') {
-    return left.span === right.span ? right.order - left.order : left.span - right.span;
+    if (left.span === right.span) {
+      return right.order - left.order;
+    }
+    return left.span - right.span;
   }
-  return left.span === right.span ? left.order - right.order : right.span - left.span;
+  if (left.span === right.span) {
+    return left.order - right.order;
+  }
+  return right.span - left.span;
 }

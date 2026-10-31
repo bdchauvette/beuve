@@ -120,7 +120,10 @@ async function pairInterdiff(
           ignoreWhitespace: options.ignoreWhitespace,
         }),
       });
-      return files.ok ? ok({ kind: 'clean', files: files.value }) : files;
+      if (files.ok) {
+        return ok({ kind: 'clean', files: files.value });
+      }
+      return files;
     }
     case 'conflicted': {
       return ok({ kind: 'conflicts', paths: outcome.paths });

@@ -44,7 +44,10 @@ export function validateUraItem(candidate: UraItemCandidate): Result<UraItem, Ur
     return ok({ ...candidate, suggestion: undefined });
   }
   const suggestion = parseSuggestedPatch(candidate.suggestion, candidate.anchor);
-  return suggestion.ok ? ok({ ...candidate, suggestion: suggestion.value }) : suggestion;
+  if (suggestion.ok) {
+    return ok({ ...candidate, suggestion: suggestion.value });
+  }
+  return suggestion;
 }
 
 function checkAnchor(anchor: UraAnchor): string | undefined {
@@ -59,7 +62,10 @@ function checkAnchor(anchor: UraAnchor): string | undefined {
   if (!Number.isSafeInteger(startLine) || !Number.isSafeInteger(endLine) || startLine < 1) {
     return 'lines must be positive integers';
   }
-  return endLine < startLine ? 'the end line comes before the start line' : undefined;
+  if (endLine < startLine) {
+    return 'the end line comes before the start line';
+  }
+  return undefined;
 }
 
 function checkPath(path: string): string | undefined {
@@ -70,9 +76,10 @@ function checkPath(path: string): string | undefined {
   const hasBadSegment = segments.some((segment) => {
     return ['', '.', '..'].includes(segment);
   });
-  return hasBadSegment
-    ? 'the path must be repository-relative, without empty, . or .. segments'
-    : undefined;
+  if (hasBadSegment) {
+    return 'the path must be repository-relative, without empty, . or .. segments';
+  }
+  return undefined;
 }
 
 function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
@@ -90,7 +97,10 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
       if (!Number.isSafeInteger(origin.finding) || origin.finding < 0) {
         return 'the finding index is not a non-negative integer';
       }
-      return anchor.kind === 'lines' ? undefined : 'a review finding is anchored to lines';
+      if (anchor.kind === 'lines') {
+        return undefined;
+      }
+      return 'a review finding is anchored to lines';
     }
     case 'impact-finding': {
       return checkFinding(origin, anchor);
@@ -112,9 +122,10 @@ function checkFinding(
     return 'the metric value and threshold must be finite numbers';
   }
   const { percentile } = origin;
-  return Number.isFinite(percentile) && percentile >= 0 && percentile <= 100
-    ? undefined
-    : 'the percentile must be between 0 and 100';
+  if (Number.isFinite(percentile) && percentile >= 0 && percentile <= 100) {
+    return undefined;
+  }
+  return 'the percentile must be between 0 and 100';
 }
 
 function checkTitle(title: string): string | undefined {
@@ -124,9 +135,10 @@ function checkTitle(title: string): string | undefined {
   if (hasControlCharacter(title)) {
     return 'the title must be a single line';
   }
-  return title.length > maxTitleLength
-    ? `the title must be at most ${String(maxTitleLength)} characters`
-    : undefined;
+  if (title.length > maxTitleLength) {
+    return `the title must be at most ${String(maxTitleLength)} characters`;
+  }
+  return undefined;
 }
 
 function hasControlCharacter(text: string): boolean {

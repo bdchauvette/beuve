@@ -121,7 +121,10 @@ describe('postPullRequestReview', () => {
     signal,
   }) => {
     const { client, requests } = fakeGithub((_request, index) => {
-      return index === 0 ? offDiff() : { status: 200, body: githubFixtures.review };
+      if (index === 0) {
+        return offDiff();
+      }
+      return { status: 200, body: githubFixtures.review };
     });
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',
@@ -133,22 +136,23 @@ describe('postPullRequestReview', () => {
 
   test('moves only the comments GitHub names', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub((_request, index) => {
-      return index === 0
-        ? {
-            status: 422,
-            body: {
-              message: 'Validation Failed',
-              errors: [
-                {
-                  resource: 'PullRequestReviewComment',
-                  field: 'pull_request_review_thread.path',
-                  code: 'invalid',
-                  message: 'src/b.ts is not part of the diff',
-                },
-              ],
-            },
-          }
-        : { status: 200, body: githubFixtures.review };
+      if (index === 0) {
+        return {
+          status: 422,
+          body: {
+            message: 'Validation Failed',
+            errors: [
+              {
+                resource: 'PullRequestReviewComment',
+                field: 'pull_request_review_thread.path',
+                code: 'invalid',
+                message: 'src/b.ts is not part of the diff',
+              },
+            ],
+          },
+        };
+      }
+      return { status: 200, body: githubFixtures.review };
     });
     const result = await postPullRequestReview(client, ref(), payload(), {
       onRejectedComments: 'move-to-body',

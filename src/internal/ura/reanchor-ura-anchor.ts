@@ -33,21 +33,25 @@ export function reanchorUraAnchor(
     return { kind: 'current', anchor: { kind: 'file', path } };
   }
   const shift = shiftRange(anchor.startLine, anchor.endLine, file.hunks);
-  return shift === undefined
-    ? { kind: 'outdated', reason: 'lines-changed' }
-    : {
-        kind: 'current',
-        anchor: {
-          kind: 'lines',
-          path,
-          startLine: anchor.startLine + shift,
-          endLine: anchor.endLine + shift,
-        },
-      };
+  if (shift === undefined) {
+    return { kind: 'outdated', reason: 'lines-changed' };
+  }
+  return {
+    kind: 'current',
+    anchor: {
+      kind: 'lines',
+      path,
+      startLine: anchor.startLine + shift,
+      endLine: anchor.endLine + shift,
+    },
+  };
 }
 
 function oldPath(file: FileLineMapping): string {
-  return file.kind === 'renamed' ? file.oldPath : file.path;
+  if (file.kind === 'renamed') {
+    return file.oldPath;
+  }
+  return file.path;
 }
 
 /** How far lines `start`–`end` moved, or `undefined` when the change touched them. */

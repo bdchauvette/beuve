@@ -79,9 +79,10 @@ export async function openRepository(
     return err({ kind: 'invalid-argument', argument: directory, reason: 'path must be absolute' });
   }
   const signalFor = (own: AbortSignal | undefined): AbortSignal | undefined => {
-    return own === undefined || options.signal === undefined || own === options.signal
-      ? (own ?? options.signal)
-      : AbortSignal.any([options.signal, own]);
+    if (own === undefined || options.signal === undefined || own === options.signal) {
+      return own ?? options.signal;
+    }
+    return AbortSignal.any([options.signal, own]);
   };
   const runIn = async (
     cwd: string,
@@ -177,5 +178,8 @@ async function probeRepository(
     return err({ kind: 'unsupported-git-version', found: version, required });
   }
   const topLevel = await run(directory, ['rev-parse', '--show-toplevel']);
-  return topLevel.ok ? ok({ root: topLevel.value.trim() as RepositoryPath, version }) : topLevel;
+  if (topLevel.ok) {
+    return ok({ root: topLevel.value.trim() as RepositoryPath, version });
+  }
+  return topLevel;
 }

@@ -27,14 +27,15 @@ const reviewSchema = z
   })
   .transform((raw): PullRequestReview | undefined => {
     const verdict = verdicts[raw.state];
-    return verdict === undefined || raw.submitted_at == undefined
-      ? undefined
-      : {
-          reviewer: raw.user?.login ?? 'ghost',
-          verdict,
-          commitSha: raw.commit_id ?? undefined,
-          submittedAt: raw.submitted_at,
-        };
+    if (verdict === undefined || raw.submitted_at == undefined) {
+      return undefined;
+    }
+    return {
+      reviewer: raw.user?.login ?? 'ghost',
+      verdict,
+      commitSha: raw.commit_id ?? undefined,
+      submittedAt: raw.submitted_at,
+    };
   });
 
 const pageSchema = z.array(reviewSchema);
@@ -58,8 +59,14 @@ export async function getPullRequestReviews<E>(
     },
     (body) => {
       const decoded = decodeWith(pageSchema, body);
-      return decoded.ok ? ok(decoded.value.filter((review) => review !== undefined)) : decoded;
+      if (decoded.ok) {
+        return ok(decoded.value.filter((review) => review !== undefined));
+      }
+      return decoded;
     },
   );
-  return pages.ok ? ok(pages.value.items) : pages;
+  if (pages.ok) {
+    return ok(pages.value.items);
+  }
+  return pages;
 }

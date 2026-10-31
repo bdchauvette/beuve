@@ -117,9 +117,10 @@ export function createGhCliCredentialProvider(
       return err(classifyGhFailure(normalized, exitCode, stderr));
     }
     const parsed = GithubToken.parse(stdout);
-    return parsed === undefined
-      ? err({ kind: 'command-failed', exitCode, message: 'gh printed no usable token' })
-      : ok(parsed);
+    if (parsed === undefined) {
+      return err({ kind: 'command-failed', exitCode, message: 'gh printed no usable token' });
+    }
+    return ok(parsed);
   };
 
   const describe = async ({
@@ -138,9 +139,10 @@ export function createGhCliCredentialProvider(
     }
     const { exitCode, stdout, stderr } = exit.value;
     if (exitCode !== 0) {
-      return stderr.includes('unknown flag: --json')
-        ? ok({ provider: 'gh-cli', host: normalized, account: undefined })
-        : err(classifyGhFailure(normalized, exitCode, stderr));
+      if (stderr.includes('unknown flag: --json')) {
+        return ok({ provider: 'gh-cli', host: normalized, account: undefined });
+      }
+      return err(classifyGhFailure(normalized, exitCode, stderr));
     }
     const account = parseGhAuthStatus(stdout, normalized);
     if (account === 'invalid') {

@@ -37,5 +37,8 @@ function attributeFrom(name: string | undefined, value: string): DiffAttributes 
   if (name === 'linguist-generated') {
     return { generated: value !== 'unset' && value !== 'false' };
   }
-  return name === 'diff' && value === 'unset' ? { diff: false } : undefined;
+  if (name === 'diff' && value === 'unset') {
+    return { diff: false };
+  }
+  return undefined;
 }

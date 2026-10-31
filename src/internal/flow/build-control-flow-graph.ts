@@ -38,9 +38,10 @@ export function buildControlFlowGraph(
     return err({ kind: 'unsupported', reason: `${functionNode.type} is not a function` });
   }
   const body = functionNode.childForFieldName(rules.bodyField);
-  return body === null
-    ? err({ kind: 'unsupported', reason: 'the function has no body' })
-    : new ControlFlowBuilder(rules, options).build(functionNode, body);
+  if (body === null) {
+    return err({ kind: 'unsupported', reason: 'the function has no body' });
+  }
+  return new ControlFlowBuilder(rules, options).build(functionNode, body);
 }
 
 /** An edge waiting for its target: the next node created becomes where it points. */
@@ -178,7 +179,10 @@ class ControlFlowBuilder {
     const parent = functionNode.parent;
     const field = parent === null ? undefined : this.rules.namers[parent.type];
     const assigned = fieldOf(parent ?? undefined, field);
-    return assigned === undefined ? '' : summarizeSource(assigned.text, maxLabelLength);
+    if (assigned === undefined) {
+      return '';
+    }
+    return summarizeSource(assigned.text, maxLabelLength);
   }
 
   private lowerStatements(statements: readonly FlowSyntaxNode[], pendings: Pending[]): Pending[] {
@@ -298,9 +302,10 @@ class ControlFlowBuilder {
     if (body === null) {
       return this.lowerSimple(node, pendings);
     }
-    return rule.form === 'pre'
-      ? this.lowerPreLoop(node, body, pendings)
-      : this.lowerPostLoop(node, body, rule, pendings);
+    if (rule.form === 'pre') {
+      return this.lowerPreLoop(node, body, pendings);
+    }
+    return this.lowerPostLoop(node, body, rule, pendings);
   }
 
   private lowerPreLoop(node: FlowSyntaxNode, body: FlowSyntaxNode, pendings: Pending[]): Pending[] {
@@ -429,7 +434,10 @@ class ControlFlowBuilder {
     for (const request of scope.abrupt) {
       this.route(sources, request, this.scopes.length - 1);
     }
-    return ends.length === 0 ? [] : finallyEnds;
+    if (ends.length === 0) {
+      return [];
+    }
+    return finallyEnds;
   }
 
   private lowerLabeled(
@@ -571,9 +579,10 @@ class ControlFlowBuilder {
   }
 
   private unwrap(node: FlowSyntaxNode, wrapper: string): FlowSyntaxNode | undefined {
-    return node.type === wrapper
-      ? this.statementsOf(node).findLast((child) => !this.rules.skipped.includes(child.type))
-      : node;
+    if (node.type === wrapper) {
+      return this.statementsOf(node).findLast((child) => !this.rules.skipped.includes(child.type));
+    }
+    return node;
   }
 
   private conditionLabel(condition: FlowSyntaxNode): string {
@@ -589,7 +598,10 @@ class ControlFlowBuilder {
 
   private caseLabel(clause: FlowSyntaxNode, rule: CaseRule): string {
     const value = fieldOf(clause, rule.valueField);
-    return value === undefined ? 'default' : `case ${summarizeSource(value.text, maxLabelLength)}`;
+    if (value === undefined) {
+      return 'default';
+    }
+    return `case ${summarizeSource(value.text, maxLabelLength)}`;
   }
 
   private caseStatements(clause: FlowSyntaxNode, rule: CaseRule): readonly FlowSyntaxNode[] {
@@ -626,9 +638,10 @@ class ControlFlowBuilder {
       ? this.lowerStatements(this.statementsOf(body), start)
       : this.lowerLeaf('return', body, start);
     this.connect(ends, this.exitId);
-    return this.drafts.length > this.maxNodes
-      ? err({ kind: 'too-large', nodeLimit: this.maxNodes })
-      : ok(this.finish(name, functionNode));
+    if (this.drafts.length > this.maxNodes) {
+      return err({ kind: 'too-large', nodeLimit: this.maxNodes });
+    }
+    return ok(this.finish(name, functionNode));
   }
 }
 
@@ -674,7 +687,8 @@ function fieldOf(
   node: FlowSyntaxNode | undefined,
   field: string | undefined,
 ): FlowSyntaxNode | undefined {
-  return node === undefined || field === undefined
-    ? undefined
-    : (node.childForFieldName(field) ?? undefined);
+  if (node === undefined || field === undefined) {
+    return undefined;
+  }
+  return node.childForFieldName(field) ?? undefined;
 }

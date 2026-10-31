@@ -41,5 +41,8 @@ export async function getReviewRequests<E>(
     return response;
   }
   const decoded = decodeWith(requestsSchema, response.value.body);
-  return decoded.ok ? ok(decoded.value) : err({ kind: 'unexpected-shape', reason: decoded.error });
+  if (decoded.ok) {
+    return ok(decoded.value);
+  }
+  return err({ kind: 'unexpected-shape', reason: decoded.error });
 }

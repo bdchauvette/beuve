@@ -45,5 +45,8 @@ export async function removeWorktree(
     ['worktree', 'remove', ...force, '--end-of-options', worktreePath],
     { policy: { kind: 'atomic' }, timeout: removalTimeout },
   );
-  return removed.ok ? ok(undefined) : removed;
+  if (removed.ok) {
+    return ok(undefined);
+  }
+  return removed;
 }

@@ -78,7 +78,10 @@ function readHeaders(
 ): Result<number, string> {
   const minus = lines[index];
   if (minus?.startsWith('--- ') !== true) {
-    return index === 0 ? ok(index) : err('expected a "--- " header after the preamble');
+    if (index === 0) {
+      return ok(index);
+    }
+    return err('expected a "--- " header after the preamble');
   }
   const plus = lines[index + 1];
   if (plus?.startsWith('+++ ') !== true) {
@@ -157,7 +160,10 @@ function lineKind(line: string): PatchLine['kind'] | undefined {
   if (line.startsWith('+')) {
     return 'added';
   }
-  return line.startsWith('-') ? 'removed' : undefined;
+  if (line.startsWith('-')) {
+    return 'removed';
+  }
+  return undefined;
 }
 
 function checkPlacement(hunks: readonly PatchHunk[], anchor: UraAnchor): string | undefined {
@@ -177,11 +183,15 @@ function checkPlacement(hunks: readonly PatchHunk[], anchor: UraAnchor): string 
     return undefined;
   }
   const isInside = (region: ChangeRegion): boolean => {
-    return region.removed === 0
-      ? region.before >= anchor.startLine - 1 && region.before <= anchor.endLine
-      : region.before + 1 >= anchor.startLine && region.before + region.removed <= anchor.endLine;
+    if (region.removed === 0) {
+      return region.before >= anchor.startLine - 1 && region.before <= anchor.endLine;
+    }
+    return (
+      region.before + 1 >= anchor.startLine && region.before + region.removed <= anchor.endLine
+    );
   };
-  return regions.every((region) => isInside(region))
-    ? undefined
-    : `the patch changes lines outside ${String(anchor.startLine)}–${String(anchor.endLine)}`;
+  if (regions.every((region) => isInside(region))) {
+    return undefined;
+  }
+  return `the patch changes lines outside ${String(anchor.startLine)}–${String(anchor.endLine)}`;
 }

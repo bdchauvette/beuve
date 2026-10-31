@@ -423,9 +423,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     opened: { readonly session: ServerSession; readonly entry: ServerEntry },
     capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
   ): Result<undefined, LspError> => {
-    return opened.session.server.capabilities[capability]
-      ? ok(undefined)
-      : err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
+    if (opened.session.server.capabilities[capability]) {
+      return ok(undefined);
+    }
+    return err({ kind: 'capability-missing', serverId: opened.entry.definition.id, capability });
   };
 
   const nodesFrom = async (
@@ -655,7 +656,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 }
 
 function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
-  return Temporal.Duration.compare(a, b) <= 0 ? a : b;
+  if (Temporal.Duration.compare(a, b) <= 0) {
+    return a;
+  }
+  return b;
 }
 
 function positionParams(opened: OpenedFile, position: Position): Record<string, unknown> {
@@ -690,9 +694,10 @@ async function readInsideRoot(
       return undefined;
     }
     const resolved = await resolveWorkspaceFile(root, filePath);
-    return !resolved.ok || resolved.value.bytes > maxBytes
-      ? undefined
-      : await readFile(resolved.value.absolutePath, 'utf8');
+    if (!resolved.ok || resolved.value.bytes > maxBytes) {
+      return undefined;
+    }
+    return await readFile(resolved.value.absolutePath, 'utf8');
   } catch {
     return undefined;
   }

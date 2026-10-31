@@ -42,5 +42,8 @@ export function updateChatAnswer(
       update.review === undefined ? '' : JSON.stringify(update.review),
       id,
     );
-  return Number(changed.changes) === 1 ? ok(undefined) : err({ kind: 'message-not-found', id });
+  if (Number(changed.changes) === 1) {
+    return ok(undefined);
+  }
+  return err({ kind: 'message-not-found', id });
 }

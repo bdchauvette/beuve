@@ -55,16 +55,17 @@ function configurationItems(params: unknown): (string | undefined)[] {
     return [];
   }
   const { items } = params;
-  return Array.isArray(items)
-    ? items.map((item: unknown) => {
-        return typeof item === 'object' &&
-          item !== null &&
-          'section' in item &&
-          typeof item.section === 'string'
-          ? item.section
-          : undefined;
-      })
-    : [];
+  if (Array.isArray(items)) {
+    return items.map((item: unknown) => {
+      return typeof item === 'object' &&
+        item !== null &&
+        'section' in item &&
+        typeof item.section === 'string'
+        ? item.section
+        : undefined;
+    });
+  }
+  return [];
 }
 
 function lookUp(settings: Readonly<Record<string, unknown>>, section: string | undefined): unknown {

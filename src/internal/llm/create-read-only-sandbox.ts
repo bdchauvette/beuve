@@ -155,7 +155,10 @@ export function createReadOnlySandbox(
   const listing = async (): Promise<Listing | undefined> => {
     listed ??= (async (): Promise<Listing | undefined> => {
       const files = await tree.files();
-      return files === undefined ? undefined : listingFrom(files);
+      if (files === undefined) {
+        return undefined;
+      }
+      return listingFrom(files);
     })();
     return listed;
   };
@@ -216,7 +219,10 @@ export function createReadOnlySandbox(
     if (file !== undefined) {
       return { kind: 'file', file };
     }
-    return files.directories.has(found) ? { kind: 'directory', path: found } : notFound;
+    if (files.directories.has(found)) {
+      return { kind: 'directory', path: found };
+    }
+    return notFound;
   };
 
   const readFileTool = async (input: z.infer<typeof readFileArguments>): Promise<SandboxResult> => {
@@ -331,17 +337,24 @@ export function createReadOnlySandbox(
         switch (name) {
           case 'read_file': {
             const parsed = readFileArguments.safeParse(json);
-            return parsed.success
-              ? await readFileTool(parsed.data)
-              : invalidArguments(parsed.error);
+            if (parsed.success) {
+              return await readFileTool(parsed.data);
+            }
+            return invalidArguments(parsed.error);
           }
           case 'grep': {
             const parsed = grepArguments.safeParse(json);
-            return parsed.success ? await grepTool(parsed.data) : invalidArguments(parsed.error);
+            if (parsed.success) {
+              return await grepTool(parsed.data);
+            }
+            return invalidArguments(parsed.error);
           }
           case 'glob': {
             const parsed = globArguments.safeParse(json);
-            return parsed.success ? await globTool(parsed.data) : invalidArguments(parsed.error);
+            if (parsed.success) {
+              return await globTool(parsed.data);
+            }
+            return invalidArguments(parsed.error);
           }
           default: {
             return { output: `refused: there is no tool named ${name}`, denied: true };
@@ -432,15 +445,19 @@ function listingFrom(files: readonly SandboxFile[]): Listing {
 
 /** A normalized relative path's segments; none for the root. */
 function segmentsOf(normalized: string): string[] {
-  return normalized === '.' || normalized === '' ? [] : normalized.split('/').filter(Boolean);
+  if (normalized === '.' || normalized === '') {
+    return [];
+  }
+  return normalized.split('/').filter(Boolean);
 }
 
 /** The text a link's blob holds, or `undefined` when it can't be read as one. */
 async function linkTarget(tree: SandboxTree, link: SandboxFile): Promise<string | undefined> {
   const read = await tree.read(link, maxLinkTargetBytes);
-  return read.kind === 'bytes' && !read.bytes.includes(0) && read.bytes.length > 0
-    ? Buffer.from(read.bytes).toString('utf8')
-    : undefined;
+  if (read.kind === 'bytes' && !read.bytes.includes(0) && read.bytes.length > 0) {
+    return Buffer.from(read.bytes).toString('utf8');
+  }
+  return undefined;
 }
 
 /**
@@ -457,12 +474,13 @@ async function readText(
     return undefined;
   }
   const shown = read.bytes.subarray(0, caps.maxFileBytes);
-  return shown.includes(0)
-    ? undefined
-    : {
-        content: Buffer.from(shown).toString('utf8'),
-        isCut: read.bytes.length > caps.maxFileBytes,
-      };
+  if (shown.includes(0)) {
+    return undefined;
+  }
+  return {
+    content: Buffer.from(shown).toString('utf8'),
+    isCut: read.bytes.length > caps.maxFileBytes,
+  };
 }
 
 function tooManyWildcards(): SandboxResult {
@@ -511,12 +529,16 @@ function globMatcher(pattern: string): RegExp | null {
         return ')';
       }
       case ',': {
-        return depth > 0 ? '|' : ',';
+        if (depth > 0) {
+          return '|';
+        }
+        return ',';
       }
       default: {
-        return token.startsWith('[') && token.length > 2
-          ? `[${token.slice(1, -1).replaceAll('\\', '\\\\').replace(negation, '^')}]`
-          : RegExp.escape(token);
+        if (token.startsWith('[') && token.length > 2) {
+          return `[${token.slice(1, -1).replaceAll('\\', '\\\\').replace(negation, '^')}]`;
+        }
+        return RegExp.escape(token);
       }
     }
   });

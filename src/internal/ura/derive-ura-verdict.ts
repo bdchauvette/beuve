@@ -10,7 +10,8 @@ export function deriveUraVerdict(severities: readonly UraSeverity[]): UraVerdict
   if (severities.includes('blocker')) {
     return 'request-changes';
   }
-  return severities.some((severity) => severity === 'issue' || severity === 'question')
-    ? 'comment'
-    : 'approve';
+  if (severities.some((severity) => severity === 'issue' || severity === 'question')) {
+    return 'comment';
+  }
+  return 'approve';
 }

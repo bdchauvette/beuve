@@ -42,9 +42,10 @@ export function assessImpact(
   config: ImpactConfig = defaultImpactConfig,
 ): ImpactReport {
   const population = files.flatMap((file) => {
-    return file.status === 'measured'
-      ? (file.head?.functions ?? []).map(({ metrics }) => metrics.cognitive)
-      : [];
+    if (file.status === 'measured') {
+      return (file.head?.functions ?? []).map(({ metrics }) => metrics.cognitive);
+    }
+    return [];
   });
   const rank = createPercentileRank(population);
   const assessed = files.map((file) => assessFile(file, rank, config));
@@ -196,7 +197,10 @@ function trend(
   if (value === baseValue) {
     return 'unchanged';
   }
-  return value > baseValue ? 'worsened' : 'improved';
+  if (value > baseValue) {
+    return 'worsened';
+  }
+  return 'improved';
 }
 
 function aggregate(
@@ -243,5 +247,8 @@ function subtract(left: FunctionMetrics, right: FunctionMetrics): FunctionMetric
 }
 
 function firstLine(entry: FunctionImpact): number {
-  return entry.change === 'removed' ? entry.base.startLine : entry.head.startLine;
+  if (entry.change === 'removed') {
+    return entry.base.startLine;
+  }
+  return entry.head.startLine;
 }

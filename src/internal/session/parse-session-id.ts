@@ -9,5 +9,8 @@ import type { SessionError, SessionId } from './session.ts';
 export function parseSessionId(
   value: string,
 ): Result<SessionId, Extract<SessionError, { kind: 'invalid-session-id' }>> {
-  return isUuid(value) ? ok(value as SessionId) : err({ kind: 'invalid-session-id', value });
+  if (isUuid(value)) {
+    return ok(value as SessionId);
+  }
+  return err({ kind: 'invalid-session-id', value });
 }

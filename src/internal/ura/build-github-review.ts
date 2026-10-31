@@ -108,7 +108,10 @@ function header(artifact: UraArtifact): string {
     .map((severity) => `${String(counts[severity])} ${formatUraSeverity(severity).toLowerCase()}`)
     .join(', ');
   const summary = `**beuve review: ${verdictLabels[verdict.value]}**${chosen}`;
-  return tally === '' ? summary : `${summary}\n\n${tally}.`;
+  if (tally === '') {
+    return summary;
+  }
+  return `${summary}\n\n${tally}.`;
 }
 
 function commentFrom(
@@ -126,9 +129,10 @@ function commentFrom(
     `**${formatUraSeverity(item.severity)}:** ${escapeMarkdownHtml(item.title)}`,
     ...details(item, true),
   ].join('\n\n');
-  return startLine === endLine
-    ? { path, line: endLine, side: 'RIGHT', body }
-    : { path, start_line: startLine, start_side: 'RIGHT', line: endLine, side: 'RIGHT', body };
+  if (startLine === endLine) {
+    return { path, line: endLine, side: 'RIGHT', body };
+  }
+  return { path, start_line: startLine, start_side: 'RIGHT', line: endLine, side: 'RIGHT', body };
 }
 
 function isCommentable(

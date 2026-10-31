@@ -255,7 +255,10 @@ function parsed(text: string): readonly DiffFile[] {
 }
 
 function pathOf(diffFile: DiffFile): string {
-  return 'path' in diffFile ? diffFile.path : diffFile.newPath;
+  if ('path' in diffFile) {
+    return diffFile.path;
+  }
+  return diffFile.newPath;
 }
 
 function file(text: string, path: string): DiffFile {

@@ -53,16 +53,17 @@ export async function findPullRequestStack<E>(
       },
       3,
     );
-    return pages.ok
-      ? ok(
-          pages.value.items.filter((candidate) => {
-            return (
-              candidate.number !== pullRequest.number &&
-              candidate.head.repository?.fullName === repository.fullName
-            );
-          }),
-        )
-      : pages;
+    if (pages.ok) {
+      return ok(
+        pages.value.items.filter((candidate) => {
+          return (
+            candidate.number !== pullRequest.number &&
+            candidate.head.repository?.fullName === repository.fullName
+          );
+        }),
+      );
+    }
+    return pages;
   };
 
   const parents = await list({ head: `${repository.owner}:${pullRequest.base.ref}` });

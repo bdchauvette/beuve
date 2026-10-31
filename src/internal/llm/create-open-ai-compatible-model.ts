@@ -199,9 +199,10 @@ async function runChat(
   });
   const run = await converse(request, options, mode, sandbox, signal);
   if (signal.aborted) {
-    return signal.reason === deadline.reason
-      ? err({ kind: 'timeout', timeout: request.timeout })
-      : err({ kind: 'cancelled' });
+    if (signal.reason === deadline.reason) {
+      return err({ kind: 'timeout', timeout: request.timeout });
+    }
+    return err({ kind: 'cancelled' });
   }
   if (!run.ok) {
     options.logger?.info('openai-compatible: run failed', {
@@ -368,13 +369,15 @@ async function requestTurn(
   const maxBytes = options.maxResponseBytes ?? defaultMaxResponseBytes;
   try {
     const type = response.headers.get('content-type') ?? '';
-    return type.includes('text/event-stream')
-      ? await readStream(response, maxBytes, listeners)
-      : await readWhole(response, maxBytes, listeners);
+    if (type.includes('text/event-stream')) {
+      return await readStream(response, maxBytes, listeners);
+    }
+    return await readWhole(response, maxBytes, listeners);
   } catch (error: unknown) {
-    return error instanceof RangeError
-      ? err({ kind: 'output-too-large', maxBytes })
-      : err(unreachable(options.baseUrl, error, signal));
+    if (error instanceof RangeError) {
+      return err({ kind: 'output-too-large', maxBytes });
+    }
+    return err(unreachable(options.baseUrl, error, signal));
   }
 }
 

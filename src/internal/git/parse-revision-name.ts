@@ -20,11 +20,14 @@ const refused = /[\s:?*[\\{}]|\.\.|@\{/u;
  * instead.
  */
 export function parseRevisionName(text: string): RevisionName | undefined {
-  return text.length === 0 ||
+  if (
+    text.length === 0 ||
     text.length > maxRevisionLength ||
     !firstCharacter.test(text) ||
     refused.test(text) ||
     hasControlCharacters(text)
-    ? undefined
-    : (text as RevisionName);
+  ) {
+    return undefined;
+  }
+  return text as RevisionName;
 }

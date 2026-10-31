@@ -25,7 +25,10 @@ describe('stageReviewFinding', () => {
   test('never blocks by default, and lets the reviewer choose', ({ expect, deps }) => {
     const severity = (value: StageableReviewFinding['severity']): string | undefined => {
       const result = stageReviewFinding({ ...finding(), severity: value }, source(), deps);
-      return result.ok ? result.value.severity : undefined;
+      if (result.ok) {
+        return result.value.severity;
+      }
+      return undefined;
     };
     expect([severity('risk'), severity('warning'), severity('info')]).toStrictEqual([
       'issue',

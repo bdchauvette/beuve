@@ -38,7 +38,10 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
 
 function reasonOf(overrides: Record<string, SQLOutputValue>): string | undefined {
   const result = uraItemFromRow(row(overrides));
-  return result.ok ? undefined : result.error.reason;
+  if (result.ok) {
+    return undefined;
+  }
+  return result.error.reason;
 }
 
 describe('uraItemFromRow', () => {

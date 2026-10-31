@@ -34,7 +34,10 @@ export function findStoredPullRequest(
         WHERE host = ? AND owner = ? AND repo = ? AND number = ?;`,
     )
     .get(ref.host, ref.owner, ref.repo, ref.number);
-  return row === undefined ? ok(undefined) : storedPullRequestFromRow(row, ref);
+  if (row === undefined) {
+    return ok(undefined);
+  }
+  return storedPullRequestFromRow(row, ref);
 }
 
 function storedPullRequestFromRow(
@@ -43,7 +46,10 @@ function storedPullRequestFromRow(
 ): Result<StoredPullRequest, CorruptPullRequestRow> {
   const text = (column: (typeof textColumns)[number]): string => {
     const value = row[column];
-    return typeof value === 'string' ? value : '';
+    if (typeof value === 'string') {
+      return value;
+    }
+    return '';
   };
   const { state, is_draft: isDraft, is_cross_repository: isCrossRepository } = row;
   if (

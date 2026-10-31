@@ -21,7 +21,10 @@ export async function listRemoteUrls(
   );
   if (!output.ok) {
     const { error } = output;
-    return error.kind === 'command-failed' && error.exitCode === 1 ? ok([]) : output;
+    if (error.kind === 'command-failed' && error.exitCode === 1) {
+      return ok([]);
+    }
+    return output;
   }
   return ok(parseRemoteUrls(output.value));
 }

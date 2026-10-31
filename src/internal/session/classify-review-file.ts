@@ -15,5 +15,8 @@ export function classifyReviewFile(
 }
 
 function isMatch(rule: MechanicalRule, path: string, facts: FileFacts): boolean {
-  return rule.kind === 'path' ? rule.pattern.test(path) : facts[rule.fact];
+  if (rule.kind === 'path') {
+    return rule.pattern.test(path);
+  }
+  return facts[rule.fact];
 }

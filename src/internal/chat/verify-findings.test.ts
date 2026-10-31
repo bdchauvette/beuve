@@ -37,16 +37,17 @@ function verdictModel(
       seen.push(request);
       await Promise.resolve();
       const parsed = request.outputSchema.safeParse({ verdicts });
-      return parsed.success
-        ? ok({
-            value: parsed.data,
-            model: 'fake',
-            turns: 1,
-            costUsd: 0,
-            duration: Temporal.Duration.from({ milliseconds: 1 }),
-            deniedToolUses: 0,
-          })
-        : err('invalid-output');
+      if (parsed.success) {
+        return ok({
+          value: parsed.data,
+          model: 'fake',
+          turns: 1,
+          costUsd: 0,
+          duration: Temporal.Duration.from({ milliseconds: 1 }),
+          deniedToolUses: 0,
+        });
+      }
+      return err('invalid-output');
     },
   };
 }

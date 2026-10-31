@@ -62,9 +62,10 @@ const runtime: { ready: Promise<void> | undefined } = { ready: undefined };
 export function createSyntaxParser(options: SyntaxParserOptions = {}): SyntaxParser {
   const maxSourceLength = options.maxSourceLength ?? defaultMaxSourceLength;
   const locate = (fileName: string): string => {
-    return options.wasmDirectory === undefined
-      ? defaultWasmPath(fileName)
-      : path.join(options.wasmDirectory, fileName);
+    if (options.wasmDirectory === undefined) {
+      return defaultWasmPath(fileName);
+    }
+    return path.join(options.wasmDirectory, fileName);
   };
   const languages = new Map<SyntaxLanguage, Promise<Result<Language, SyntaxFailure>>>();
   let parser: Parser | undefined;

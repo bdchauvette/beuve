@@ -66,7 +66,10 @@ describe('createOpenAiCompatibleModel', () => {
     });
     expect(
       text.map((event) => {
-        return event.kind === 'append' ? event.text : '|';
+        if (event.kind === 'append') {
+          return event.text;
+        }
+        return '|';
       }),
     ).toStrictEqual(['It ', 'adds a ', 'parser.']);
     expect(progress).toStrictEqual([

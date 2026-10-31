@@ -61,7 +61,10 @@ export function carryOverFileMarks(
     if (mark === undefined) {
       return 'no';
     }
-    return mark.diffId === file.diffId ? 'yes' : 'changed-since';
+    if (mark.diffId === file.diffId) {
+      return 'yes';
+    }
+    return 'changed-since';
   });
   const countOf = (state: FileReviewState): number => {
     return states.filter((candidate) => candidate === state).length;
@@ -85,7 +88,10 @@ function claimByDiff(
   diffId: string,
 ): MarkedFile | undefined {
   const found = marks.find((mark) => unclaimed.has(mark.path) && mark.diffId === diffId);
-  return found === undefined ? undefined : claim(unclaimed, found.path);
+  if (found === undefined) {
+    return undefined;
+  }
+  return claim(unclaimed, found.path);
 }
 
 function claim(unclaimed: Map<string, MarkedFile>, path: string): MarkedFile | undefined {

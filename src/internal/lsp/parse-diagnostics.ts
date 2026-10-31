@@ -8,7 +8,10 @@ export function parseDiagnostics(value: unknown): LspDiagnostic[] {
   }
   return value.flatMap((item: unknown) => {
     const diagnostic = parseDiagnostic(item);
-    return diagnostic === undefined ? [] : [diagnostic];
+    if (diagnostic === undefined) {
+      return [];
+    }
+    return [diagnostic];
   });
 }
 
@@ -48,7 +51,8 @@ function parseRelated(value: unknown): { location: LspLocation; message: string 
     return [];
   }
   const { uri, range } = location as Fields;
-  return typeof uri === 'string' && isLspRange(range)
-    ? [{ location: { uri, range }, message }]
-    : [];
+  if (typeof uri === 'string' && isLspRange(range)) {
+    return [{ location: { uri, range }, message }];
+  }
+  return [];
 }

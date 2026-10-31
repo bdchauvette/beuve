@@ -370,7 +370,10 @@ function fakeServer(script: string, mode: string): ServerDefinition {
 }
 
 function errorKindOf(result: Result<unknown, LspError>): string {
-  return result.ok ? 'ok' : result.error.kind;
+  if (result.ok) {
+    return 'ok';
+  }
+  return result.error.kind;
 }
 
 function requireNode(node: CallHierarchyNode | undefined): CallHierarchyNode {
@@ -428,6 +431,9 @@ async function waitUntil(
   isSatisfied: () => boolean | Promise<boolean>,
 ): Promise<void> {
   await pollUntil(description, async () => {
-    return (await isSatisfied()) ? true : undefined;
+    if (await isSatisfied()) {
+      return true;
+    }
+    return;
   });
 }

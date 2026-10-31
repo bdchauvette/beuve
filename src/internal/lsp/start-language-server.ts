@@ -199,7 +199,10 @@ export async function startLanguageServer(
     if (!outcome.ok && isRetryable(outcome.error)) {
       outcome = await connection.request(method, params, requestOptions);
     }
-    return outcome.ok ? outcome : err(lspErrorFrom(serverId, outcome.error));
+    if (outcome.ok) {
+      return outcome;
+    }
+    return err(lspErrorFrom(serverId, outcome.error));
   };
 
   const initialized = await initialize(connection, options, workspaceFolders);

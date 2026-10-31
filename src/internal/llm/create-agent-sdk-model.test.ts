@@ -61,11 +61,12 @@ function lastToolResults(api: FakeMessagesApi): unknown[] {
     content: unknown;
   }[];
   const user = messages.findLast((message) => message.role === 'user');
-  return Array.isArray(user?.content)
-    ? user.content.filter((block: { type?: string }) => {
-        return typeof block === 'object' && block.type === 'tool_result';
-      })
-    : [];
+  if (Array.isArray(user?.content)) {
+    return user.content.filter((block: { type?: string }) => {
+      return typeof block === 'object' && block.type === 'tool_result';
+    });
+  }
+  return [];
 }
 
 // Each test starts a real Claude Code process: one at a time, so they don't starve each other of CPU.

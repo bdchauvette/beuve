@@ -45,15 +45,19 @@ export function classifyClaudeCodeOutcome(
     return err(failedResult(result, outcome));
   }
   if (expects === 'text') {
-    return result.text === undefined || result.text.trim() === ''
-      ? err({ kind: 'invalid-output', reason: 'the result has no text' })
-      : ok({ value: result.text, result });
+    if (result.text === undefined || result.text.trim() === '') {
+      return err({ kind: 'invalid-output', reason: 'the result has no text' });
+    }
+    return ok({ value: result.text, result });
   }
   if (result.hasStructuredOutput) {
     return ok({ value: result.structuredOutput, result });
   }
   const parsed = parseResultText(result.text);
-  return parsed.ok ? ok({ value: parsed.value, result }) : parsed;
+  if (parsed.ok) {
+    return ok({ value: parsed.value, result });
+  }
+  return parsed;
 }
 
 const authenticationPattern =

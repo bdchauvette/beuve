@@ -148,9 +148,10 @@ function withHeader(headers: Headers, line: string): Headers | undefined {
     }
     const raw = line.slice(prefix.length);
     const value = type === 'path' ? unquoteGitPath(raw) : raw;
-    return value === undefined || (type === 'mode' && !modePattern.test(value))
-      ? undefined
-      : { ...headers, [key]: value };
+    if (value === undefined || (type === 'mode' && !modePattern.test(value))) {
+      return undefined;
+    }
+    return { ...headers, [key]: value };
   }
   return undefined;
 }
@@ -164,7 +165,10 @@ function withIndexLine(headers: Headers, rest: string): Headers | undefined {
   }
   const [, oldObject = '', newObject = ''] = match;
   const objects = { ...headers, oldObject, newObject };
-  return mode === undefined ? objects : { ...objects, indexMode: mode };
+  if (mode === undefined) {
+    return objects;
+  }
+  return { ...objects, indexMode: mode };
 }
 
 function parsePathLines(cursor: Cursor, headers: Headers): Result<Headers, DiffParseError> {
@@ -185,7 +189,10 @@ function sidePath(raw: string, prefix: string): string | undefined {
     return devNull;
   }
   const decoded = unquoteGitPath(name);
-  return decoded?.startsWith(prefix) === true ? decoded.slice(prefix.length) : undefined;
+  if (decoded?.startsWith(prefix) === true) {
+    return decoded.slice(prefix.length);
+  }
+  return undefined;
 }
 
 function parseHunks(cursor: Cursor): Result<readonly DiffHunk[], DiffParseError> {
@@ -231,7 +238,10 @@ function parseHunk(cursor: Cursor): Result<DiffHunk, DiffParseError> {
 }
 
 function withoutLeadingSpace(text: string): string {
-  return text.startsWith(' ') ? text.slice(1) : text;
+  if (text.startsWith(' ')) {
+    return text.slice(1);
+  }
+  return text;
 }
 
 interface Range {
@@ -242,9 +252,10 @@ interface Range {
 /** `start[,count]`, where a missing count means 1. */
 function parseRange(text = ''): Range | undefined {
   const [start = '', count = '1', ...extra] = text.split(',');
-  return extra.length > 0 || !digitsPattern.test(start) || !digitsPattern.test(count)
-    ? undefined
-    : { start: Number(start), count: Number(count) };
+  if (extra.length > 0 || !digitsPattern.test(start) || !digitsPattern.test(count)) {
+    return undefined;
+  }
+  return { start: Number(start), count: Number(count) };
 }
 
 function parseHunkLines(
@@ -304,14 +315,16 @@ function fileChange(headerPaths: string, headers: Headers): FileChange | undefin
   const oldPath = headers.minusPath ?? fallback?.[0];
   const newPath = headers.plusPath ?? fallback?.[1];
   if (headers.newFileMode !== undefined) {
-    return isRealPath(newPath)
-      ? { status: 'added', path: newPath, mode: headers.newFileMode }
-      : undefined;
+    if (isRealPath(newPath)) {
+      return { status: 'added', path: newPath, mode: headers.newFileMode };
+    }
+    return undefined;
   }
   if (headers.deletedFileMode !== undefined) {
-    return isRealPath(oldPath)
-      ? { status: 'deleted', path: oldPath, mode: headers.deletedFileMode }
-      : undefined;
+    if (isRealPath(oldPath)) {
+      return { status: 'deleted', path: oldPath, mode: headers.deletedFileMode };
+    }
+    return undefined;
   }
   return movedOrModified(headers, newPath);
 }
@@ -339,9 +352,10 @@ function movedOrModified(headers: Headers, path: string | undefined): FileChange
       newMode,
     };
   }
-  return oldMode === undefined || newMode === undefined || !isRealPath(path)
-    ? undefined
-    : { status: 'modified', path, oldMode, newMode };
+  if (oldMode === undefined || newMode === undefined || !isRealPath(path)) {
+    return undefined;
+  }
+  return { status: 'modified', path, oldMode, newMode };
 }
 
 function isRealPath(path: string | undefined): path is string {
@@ -355,22 +369,34 @@ function isRealPath(path: string | undefined): path is string {
  */
 function headerPathPair(text: string): readonly [string, string] | undefined {
   const strip = (side: string | undefined, prefix: string): string | undefined => {
-    return side?.startsWith(prefix) === true ? side.slice(prefix.length) : undefined;
+    if (side?.startsWith(prefix) === true) {
+      return side.slice(prefix.length);
+    }
+    return undefined;
   };
   const pair = splitHeaderPaths(text);
   const oldPath = strip(unquoteGitPath(pair?.[0] ?? ''), 'a/');
   const newPath = strip(unquoteGitPath(pair?.[1] ?? ''), 'b/');
-  return oldPath === undefined || newPath === undefined ? undefined : [oldPath, newPath];
+  if (oldPath === undefined || newPath === undefined) {
+    return undefined;
+  }
+  return [oldPath, newPath];
 }
 
 function splitHeaderPaths(text: string): readonly [string, string] | undefined {
   if (text.startsWith('"')) {
     const close = closingQuote(text);
-    return close === undefined ? undefined : [text.slice(0, close + 1), text.slice(close + 2)];
+    if (close === undefined) {
+      return undefined;
+    }
+    return [text.slice(0, close + 1), text.slice(close + 2)];
   }
   if (text.endsWith('"')) {
     const open = text.lastIndexOf(' "b/');
-    return open === -1 ? undefined : [text.slice(0, open), text.slice(open + 1)];
+    if (open === -1) {
+      return undefined;
+    }
+    return [text.slice(0, open), text.slice(open + 1)];
   }
   const half = (text.length - 1) / 2;
   const isEvenSplit =
@@ -378,7 +404,10 @@ function splitHeaderPaths(text: string): readonly [string, string] | undefined {
     text.charAt(half) === ' ' &&
     text.slice(2, half) === text.slice(half + 3);
   const separator = isEvenSplit ? half : text.indexOf(' b/');
-  return separator === -1 ? undefined : [text.slice(0, separator), text.slice(separator + 1)];
+  if (separator === -1) {
+    return undefined;
+  }
+  return [text.slice(0, separator), text.slice(separator + 1)];
 }
 
 function closingQuote(text: string): number | undefined {

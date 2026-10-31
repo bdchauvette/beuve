@@ -37,9 +37,10 @@ export function parsePullRequestRef(
     return err(`not a GitHub repository name: ${parts.repo}`);
   }
   const number = numberPattern.test(parts.number) ? Number(parts.number) : 0;
-  return !Number.isSafeInteger(number) || number < 1
-    ? err(`not a pull request number: ${parts.number}`)
-    : ok({ host, owner: parts.owner, repo: parts.repo, number });
+  if (!Number.isSafeInteger(number) || number < 1) {
+    return err(`not a pull request number: ${parts.number}`);
+  }
+  return ok({ host, owner: parts.owner, repo: parts.repo, number });
 }
 
 interface Parts {
@@ -74,7 +75,8 @@ function fromShorthand(input: string, defaultHost: string): Parts | string {
   if (segments.length === 2) {
     return { host: defaultHost, owner: first, repo: second, number };
   }
-  return third !== undefined && segments.length === 3
-    ? { host: first, owner: second, repo: third, number }
-    : usage;
+  if (third !== undefined && segments.length === 3) {
+    return { host: first, owner: second, repo: third, number };
+  }
+  return usage;
 }

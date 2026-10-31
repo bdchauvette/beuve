@@ -96,7 +96,8 @@ function latestDecisions(input: AttentionInput): PullRequestReview[] {
 }
 
 function failingReason(count: number | undefined): string {
-  return count === undefined || count === 0
-    ? 'CI is failing'
-    : `CI is failing (${String(count)} ${count === 1 ? 'check' : 'checks'})`;
+  if (count === undefined || count === 0) {
+    return 'CI is failing';
+  }
+  return `CI is failing (${String(count)} ${count === 1 ? 'check' : 'checks'})`;
 }

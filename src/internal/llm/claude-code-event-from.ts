@@ -154,9 +154,10 @@ export function claudeCodeEventFrom(json: unknown): ClaudeCodeEvent {
   }
   if (type === 'system' && subtype === 'model_refusal_fallback') {
     const parsed = refusalFallback.safeParse(json);
-    return parsed.success
-      ? { kind: 'refusal-fallback', model: parsed.data.fallback_model }
-      : { kind: 'other' };
+    if (parsed.success) {
+      return { kind: 'refusal-fallback', model: parsed.data.fallback_model };
+    }
+    return { kind: 'other' };
   }
   switch (type) {
     case 'assistant': {
@@ -208,7 +209,10 @@ function toolUseFrom(json: unknown): ClaudeCodeEvent {
         input: block.input,
       };
     });
-  return uses.length === 0 ? { kind: 'other' } : { kind: 'tool-use', uses };
+  if (uses.length === 0) {
+    return { kind: 'other' };
+  }
+  return { kind: 'tool-use', uses };
 }
 
 function toolResultFrom(json: unknown): ClaudeCodeEvent {
@@ -226,7 +230,10 @@ function toolResultFrom(json: unknown): ClaudeCodeEvent {
     .map((block) => {
       return { id: block.tool_use_id ?? '', isError: block.is_error === true };
     });
-  return results.length === 0 ? { kind: 'other' } : { kind: 'tool-result', results };
+  if (results.length === 0) {
+    return { kind: 'other' };
+  }
+  return { kind: 'tool-result', results };
 }
 
 function streamEventFrom(json: unknown): ClaudeCodeEvent {
@@ -249,9 +256,10 @@ function streamEventFrom(json: unknown): ClaudeCodeEvent {
     return { kind: 'block-stop', index: event.index };
   }
   const text = event.delta?.type === 'text_delta' ? event.delta.text : undefined;
-  return text !== undefined && text !== '' && event.type === 'content_block_delta'
-    ? { kind: 'text-delta', text }
-    : { kind: 'other' };
+  if (text !== undefined && text !== '' && event.type === 'content_block_delta') {
+    return { kind: 'text-delta', text };
+  }
+  return { kind: 'other' };
 }
 
 function rateLimitFrom(json: unknown): ClaudeCodeEvent {

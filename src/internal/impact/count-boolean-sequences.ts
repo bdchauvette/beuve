@@ -36,5 +36,8 @@ function logicalOperator(node: ImpactNode, rules: LanguageRules): ImpactNode | u
     return undefined;
   }
   const operator = node.childForFieldName(rule.operatorField);
-  return operator !== null && rule.operators.includes(operator.type) ? operator : undefined;
+  if (operator !== null && rule.operators.includes(operator.type)) {
+    return operator;
+  }
+  return undefined;
 }

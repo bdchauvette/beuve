@@ -28,7 +28,10 @@ function seed(db: DatabaseSync): void {
 
 function answer(db: DatabaseSync): ChatMessage | undefined {
   const listed = listChatMessages(db, sessionId());
-  return listed.ok ? listed.value[1] : undefined;
+  if (listed.ok) {
+    return listed.value[1];
+  }
+  return undefined;
 }
 
 describe('updateChatAnswer', () => {

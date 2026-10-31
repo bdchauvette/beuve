@@ -91,7 +91,10 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
         tags: (value.tags ?? [])
           .filter((tag) => tag === 1 || tag === 2)
           .map((tag) => {
-            return tag === 1 ? 'unnecessary' : 'deprecated';
+            if (tag === 1) {
+              return 'unnecessary';
+            }
+            return 'deprecated';
           }),
         related: (value.relatedInformation ?? []).map((related) => {
           return {

@@ -32,7 +32,8 @@ export function parseServerCapabilities(result: unknown): LspServerCapabilities 
 }
 
 function encodingFrom(value: unknown): PositionEncoding {
-  return value === positionEncodings.utf8 || value === positionEncodings.utf32
-    ? value
-    : positionEncodings.utf16;
+  if (value === positionEncodings.utf8 || value === positionEncodings.utf32) {
+    return value;
+  }
+  return positionEncodings.utf16;
 }

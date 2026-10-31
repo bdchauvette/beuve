@@ -12,15 +12,16 @@ export function computeReviewRange(session: Session): ReviewRange {
     }
     case 'reviewed': {
       const { baseSha, headSha: reviewedSha } = review.checkpoint;
-      return reviewedSha === headSha
-        ? { kind: 'up-to-date', headSha }
-        : {
-            kind: 'interdiff',
-            baseRef: source.baseRef,
-            fromBaseSha: baseSha,
-            fromHeadSha: reviewedSha,
-            toHeadSha: headSha,
-          };
+      if (reviewedSha === headSha) {
+        return { kind: 'up-to-date', headSha };
+      }
+      return {
+        kind: 'interdiff',
+        baseRef: source.baseRef,
+        fromBaseSha: baseSha,
+        fromHeadSha: reviewedSha,
+        toHeadSha: headSha,
+      };
     }
   }
 }

@@ -78,17 +78,18 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
   if (policy.kind === 'atomic' && isAborted()) {
     return err({ kind: 'aborted', args: request.args });
   }
-  return outcome.error === null
-    ? ok(outcome.stdout)
-    : err(
-        await classifyFailure(outcome, {
-          cwd: request.cwd,
-          args: request.args,
-          gitBinary,
-          timeout,
-          maxBufferBytes,
-        }),
-      );
+  if (outcome.error === null) {
+    return ok(outcome.stdout);
+  }
+  return err(
+    await classifyFailure(outcome, {
+      cwd: request.cwd,
+      args: request.args,
+      gitBinary,
+      timeout,
+      maxBufferBytes,
+    }),
+  );
 }
 
 function validateRequest(request: GitRequest): GitError | undefined {
@@ -96,9 +97,10 @@ function validateRequest(request: GitRequest): GitError | undefined {
     return { kind: 'invalid-argument', argument: request.cwd, reason: 'cwd must be absolute' };
   }
   const withNul = [request.cwd, ...request.args].find((arg) => arg.includes('\0'));
-  return withNul === undefined
-    ? undefined
-    : { kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' };
+  if (withNul === undefined) {
+    return undefined;
+  }
+  return { kind: 'invalid-argument', argument: withNul, reason: 'contains a NUL byte' };
 }
 
 interface ExecOutcome {
@@ -169,9 +171,10 @@ async function classifyFailure(
   const { args } = request;
   const code = error?.code;
   if (code === 'ENOENT') {
-    return (await isDirectory(request.cwd))
-      ? { kind: 'git-not-found', gitBinary: request.gitBinary }
-      : { kind: 'not-a-repository', path: request.cwd, stderr: 'directory does not exist' };
+    if (await isDirectory(request.cwd)) {
+      return { kind: 'git-not-found', gitBinary: request.gitBinary };
+    }
+    return { kind: 'not-a-repository', path: request.cwd, stderr: 'directory does not exist' };
   }
   if (code === 'ABORT_ERR') {
     return { kind: 'aborted', args };

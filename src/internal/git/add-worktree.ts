@@ -59,13 +59,14 @@ export async function addWorktree(
       return pruned;
     }
   } else if (found !== undefined) {
-    return found.head === request.commit
-      ? ok(found)
-      : err({
-          kind: 'worktree-conflict',
-          path: target.value,
-          reason: `HEAD is ${found.head ?? 'unborn'}`,
-        });
+    if (found.head === request.commit) {
+      return ok(found);
+    }
+    return err({
+      kind: 'worktree-conflict',
+      path: target.value,
+      reason: `HEAD is ${found.head ?? 'unborn'}`,
+    });
   }
   await rm(target.value, { recursive: true, force: true });
   const added = await repository[gitRunner].exec(

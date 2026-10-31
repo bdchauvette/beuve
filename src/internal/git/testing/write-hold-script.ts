@@ -50,7 +50,10 @@ export function writeHoldScript(
   return {
     command,
     terminations: (): readonly string[] => {
-      return existsSync(marker) ? readFileSync(marker, 'utf8').trim().split('\n') : [];
+      if (existsSync(marker)) {
+        return readFileSync(marker, 'utf8').trim().split('\n');
+      }
+      return [];
     },
   };
 }

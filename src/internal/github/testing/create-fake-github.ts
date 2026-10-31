@@ -39,12 +39,15 @@ export function createFakeGithub(
   options: FakeGithubOptions = {},
 ): FakeGithub {
   const requests: RecordedRequest[] = [];
-  const token = 'token' in options ? options.token : 'gho_testtoken';
+  const configured = 'token' in options ? options.token : 'gho_testtoken';
   const created = createGithubClient<'no-token'>({
     host: options.host ?? 'github.com',
     getToken: async () => {
       await Promise.resolve();
-      return token === undefined ? err('no-token') : ok({ reveal: (): string => token });
+      if (configured === undefined) {
+        return err('no-token');
+      }
+      return ok({ reveal: (): string => configured });
     },
     fetch: async (url, init) => {
       await Promise.resolve();

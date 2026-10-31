@@ -31,7 +31,10 @@ export function answerPartsFrom(streamed: StreamedParts, ending: AnswerEnding): 
     case 'text': {
       const id = state.parts.findLast((part) => part.kind === 'text')?.id ?? newId();
       const kept = state.parts.filter((part) => part.kind !== 'text');
-      return ending.text === '' ? kept : [...kept, { kind: 'text', id, text: ending.text }];
+      if (ending.text === '') {
+        return kept;
+      }
+      return [...kept, { kind: 'text', id, text: ending.text }];
     }
     case 'findings': {
       const kept = state.parts.filter((part) => part.kind !== 'text');

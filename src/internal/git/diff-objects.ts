@@ -62,17 +62,18 @@ export async function diffObjects(
     return output;
   }
   const parsed = parseUnifiedDiff(output.value);
-  return parsed.ok
-    ? ok(
-        options.ignoreWhitespace === true
-          ? parsed.value.filter((file) => hasVisibleChange(file))
-          : parsed.value,
-      )
-    : err({
-        kind: 'unexpected-output',
-        args,
-        message: `line ${String(parsed.error.line)}: ${parsed.error.message}`,
-      });
+  if (parsed.ok) {
+    return ok(
+      options.ignoreWhitespace === true
+        ? parsed.value.filter((file) => hasVisibleChange(file))
+        : parsed.value,
+    );
+  }
+  return err({
+    kind: 'unexpected-output',
+    args,
+    message: `line ${String(parsed.error.line)}: ${parsed.error.message}`,
+  });
 }
 
 /** Older gits print a bare header for a file whose changes `-w` hid; such a file shows nothing. */

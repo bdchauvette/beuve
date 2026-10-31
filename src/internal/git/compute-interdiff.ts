@@ -82,7 +82,10 @@ export async function computeInterdiff(
 
   if (previousMergeBase.value === nextMergeBase.value) {
     const files = await diffObjects(repository, previous.head, next.head, options);
-    return files.ok ? ok({ ...common, kind: 'exact', files: files.value }) : files;
+    if (files.ok) {
+      return ok({ ...common, kind: 'exact', files: files.value });
+    }
+    return files;
   }
 
   const replay = await replayChanges(repository, {
@@ -98,16 +101,17 @@ export async function computeInterdiff(
     method: 'range' | 'commit-pairs',
   ): Promise<Result<Interdiff, GitError>> => {
     const files = await diffObjects(repository, tree, next.head, options);
-    return files.ok
-      ? ok({
-          ...common,
-          kind: 'rebased',
-          previousMergeBase: previousMergeBase.value,
-          replayedTree: tree,
-          replay: method,
-          files: files.value,
-        })
-      : files;
+    if (files.ok) {
+      return ok({
+        ...common,
+        kind: 'rebased',
+        previousMergeBase: previousMergeBase.value,
+        replayedTree: tree,
+        replay: method,
+        files: files.value,
+      });
+    }
+    return files;
   };
   const outcome = replay.value;
   if (outcome.kind === 'clean') {
@@ -132,13 +136,14 @@ export async function computeInterdiff(
       ? { kind: 'conflicts', paths: outcome.paths }
       : { kind: 'git-too-old', version: outcome.version, required: outcome.required };
   const files = await diffObjects(repository, nextMergeBase.value, next.head, options);
-  return files.ok
-    ? ok({
-        ...common,
-        kind: 'fallback',
-        previousMergeBase: previousMergeBase.value,
-        reason,
-        files: files.value,
-      })
-    : files;
+  if (files.ok) {
+    return ok({
+      ...common,
+      kind: 'fallback',
+      previousMergeBase: previousMergeBase.value,
+      reason,
+      files: files.value,
+    });
+  }
+  return files;
 }

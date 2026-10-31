@@ -35,7 +35,8 @@ export async function getPullRequest<E>(
     return ok({ kind: 'not-modified' });
   }
   const decoded = decodeWith(pullRequestSchema, response.value.body);
-  return decoded.ok
-    ? ok({ kind: 'modified', value: decoded.value, etag: response.value.etag })
-    : err({ kind: 'unexpected-shape', reason: decoded.error });
+  if (decoded.ok) {
+    return ok({ kind: 'modified', value: decoded.value, etag: response.value.etag });
+  }
+  return err({ kind: 'unexpected-shape', reason: decoded.error });
 }

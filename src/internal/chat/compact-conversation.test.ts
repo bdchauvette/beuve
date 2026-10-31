@@ -21,16 +21,17 @@ function fakeModel(
     runText: async (request): Promise<Result<ChatModelOutput, 'boom'>> => {
       seen.push(request);
       await Promise.resolve();
-      return answer.ok
-        ? ok({
-            value: answer.value,
-            model: 'fake',
-            turns: 1,
-            costUsd: 0,
-            duration: Temporal.Duration.from({ milliseconds: 1 }),
-            deniedToolUses: 0,
-          })
-        : answer;
+      if (answer.ok) {
+        return ok({
+          value: answer.value,
+          model: 'fake',
+          turns: 1,
+          costUsd: 0,
+          duration: Temporal.Duration.from({ milliseconds: 1 }),
+          deniedToolUses: 0,
+        });
+      }
+      return answer;
     },
   };
 }

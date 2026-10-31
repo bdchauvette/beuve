@@ -31,7 +31,8 @@ export function permalinkFrom(target: PermalinkTarget): string {
   if (startLine === undefined) {
     return url;
   }
-  return endLine === undefined || endLine <= startLine
-    ? `${url}#L${String(startLine)}`
-    : `${url}#L${String(startLine)}-L${String(endLine)}`;
+  if (endLine === undefined || endLine <= startLine) {
+    return `${url}#L${String(startLine)}`;
+  }
+  return `${url}#L${String(startLine)}-L${String(endLine)}`;
 }

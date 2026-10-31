@@ -42,17 +42,21 @@ function referenceFrom(node: SyntaxNode): ModuleReference | undefined {
   switch (node.type) {
     case 'import_statement': {
       const source = node.childForFieldName('source') ?? requireClauseSource(node);
-      return source === undefined
-        ? undefined
-        : makeReference(
-            source,
-            requireClauseSource(node) === undefined ? 'static' : 'require',
-            node,
-          );
+      if (source === undefined) {
+        return undefined;
+      }
+      return makeReference(
+        source,
+        requireClauseSource(node) === undefined ? 'static' : 'require',
+        node,
+      );
     }
     case 'export_statement': {
       const source = node.childForFieldName('source');
-      return source === null ? undefined : makeReference(source, 'export-from', node);
+      if (source === null) {
+        return undefined;
+      }
+      return makeReference(source, 'export-from', node);
     }
     case 'call_expression': {
       return callReference(node);
@@ -77,9 +81,10 @@ function callReference(call: SyntaxNode): ModuleReference | undefined {
   if (callee.type === 'import') {
     return makeReference(argument, 'dynamic', call);
   }
-  return callee.type === 'identifier' && callee.text === 'require'
-    ? makeReference(argument, 'require', call)
-    : undefined;
+  if (callee.type === 'identifier' && callee.text === 'require') {
+    return makeReference(argument, 'require', call);
+  }
+  return undefined;
 }
 
 function makeReference(
@@ -88,11 +93,12 @@ function makeReference(
   statement: SyntaxNode,
 ): ModuleReference | undefined {
   const specifier = literal.text.slice(1, -1);
-  return specifier === ''
-    ? undefined
-    : {
-        specifier,
-        kind,
-        isTypeOnly: statement.children.some((child) => !child.isNamed && child.type === 'type'),
-      };
+  if (specifier === '') {
+    return undefined;
+  }
+  return {
+    specifier,
+    kind,
+    isTypeOnly: statement.children.some((child) => !child.isNamed && child.type === 'type'),
+  };
 }

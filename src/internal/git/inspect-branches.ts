@@ -84,5 +84,8 @@ async function readSymbolicRef(
     policy: { kind: 'read' },
   });
   const name = read.ok ? read.value.trim() : '';
-  return name === '' ? undefined : name;
+  if (name === '') {
+    return undefined;
+  }
+  return name;
 }

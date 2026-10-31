@@ -145,7 +145,10 @@ function visitConstruct(
       owner.cognitive += 1;
       owner.maxNesting = Math.max(owner.maxNesting, level + 1);
       return childFrames(frame, rules, {}, (child) => {
-        return child.type === rule.continues ? { continuation: true } : { level: level + 1 };
+        if (child.type === rule.continues) {
+          return { continuation: true };
+        }
+        return { level: level + 1 };
       });
     }
     case 'case': {
@@ -284,7 +287,10 @@ function countParameters(node: ImpactNode, rule: FunctionRule): number {
   const list = node.childForFieldName(rule.parametersField);
   if (list === null) {
     const { parameterField } = rule;
-    return parameterField === undefined || node.childForFieldName(parameterField) === null ? 0 : 1;
+    if (parameterField === undefined || node.childForFieldName(parameterField) === null) {
+      return 0;
+    }
+    return 1;
   }
   return list.children.filter((child) => child.isNamed && child.type !== 'comment').length;
 }
@@ -295,20 +301,27 @@ function deduplicate(measurements: readonly FunctionMeasurement[]): readonly Fun
   return measurements.map((measurement) => {
     const count = (seen.get(measurement.name) ?? 0) + 1;
     seen.set(measurement.name, count);
-    return count === 1
-      ? measurement
-      : { ...measurement, name: `${measurement.name}#${String(count)}` };
+    if (count === 1) {
+      return measurement;
+    }
+    return { ...measurement, name: `${measurement.name}#${String(count)}` };
   });
 }
 
 function fieldText(node: ImpactNode, field: string): string | undefined {
   const child = node.childForFieldName(field);
-  return child === null ? undefined : shorten(child.text);
+  if (child === null) {
+    return undefined;
+  }
+  return shorten(child.text);
 }
 
 function shorten(text: string): string {
   const single = text.slice(0, maxNameLength * 4).replaceAll(/\s+/gu, ' ');
-  return single.length > maxNameLength ? `${single.slice(0, maxNameLength - 1)}…` : single;
+  if (single.length > maxNameLength) {
+    return `${single.slice(0, maxNameLength - 1)}…`;
+  }
+  return single;
 }
 
 function normalize(text: string): string {

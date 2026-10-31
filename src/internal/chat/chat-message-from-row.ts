@@ -65,7 +65,10 @@ export function chatMessageFromRow(
     if (parsedParts.some((part) => !allowed.has(part.kind))) {
       return corrupt(`a ${role} has a part it can't have`);
     }
-    return status === 'done' ? ok({ ...base, role }) : corrupt(`a ${role} is not done`);
+    if (status === 'done') {
+      return ok({ ...base, role });
+    }
+    return corrupt(`a ${role} is not done`);
   }
   if (role !== 'assistant') {
     return corrupt('role is not user, assistant, system-notice or summary');
@@ -187,10 +190,16 @@ const storedPart = z.discriminatedUnion('kind', [
 function parseParts(value: unknown): ChatPart[] | undefined {
   const parts = parseJsonList(value, (item) => {
     const parsed = storedPart.safeParse(item);
-    return parsed.success ? partFrom(parsed.data) : undefined;
+    if (parsed.success) {
+      return partFrom(parsed.data);
+    }
+    return;
   });
   const ids = new Set(parts?.map((part) => part.id));
-  return parts?.length === ids.size ? parts : undefined;
+  if (parts?.length === ids.size) {
+    return parts;
+  }
+  return undefined;
 }
 
 /** Drops absent optional fields, so a parsed part equals the one stored. */
@@ -202,7 +211,10 @@ function partFrom(part: z.infer<typeof storedPart>): ChatPart | undefined {
     }
     case 'mention': {
       const mention = mentionFrom(part.mention);
-      return mention === undefined ? undefined : { ...part, mention };
+      if (mention === undefined) {
+        return undefined;
+      }
+      return { ...part, mention };
     }
     default: {
       return part;
@@ -284,7 +296,10 @@ function citationFrom(item: unknown): Citation | undefined {
     isLine(startLine) &&
     isLine(endLine) &&
     endLine >= startLine;
-  return isCitation ? { path, startLine, endLine, side } : undefined;
+  if (isCitation) {
+    return { path, startLine, endLine, side };
+  }
+  return undefined;
 }
 
 function mentionFrom(item: unknown): ChatMention | undefined {
@@ -304,9 +319,10 @@ function mentionFrom(item: unknown): ChatMention | undefined {
   if (startLine === undefined && endLine === undefined) {
     return { path, side, sha: sha as CommitSha };
   }
-  return isLine(startLine) && isLine(endLine) && endLine >= startLine
-    ? { path, side, startLine, endLine, sha: sha as CommitSha }
-    : undefined;
+  if (isLine(startLine) && isLine(endLine) && endLine >= startLine) {
+    return { path, side, startLine, endLine, sha: sha as CommitSha };
+  }
+  return undefined;
 }
 
 function isLine(line: unknown): line is number {

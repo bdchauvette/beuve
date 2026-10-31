@@ -12,9 +12,10 @@ function commit(): { owner: string; repo: string; sha: string } {
 }
 
 function ci(request: RecordedRequest): FakeResponse {
-  return request.url.includes('/check-runs')
-    ? { status: 200, body: githubFixtures.checkRuns, headers: { etag: '"checks-1"' } }
-    : { status: 200, body: githubFixtures.combinedStatus, headers: { etag: '"status-1"' } };
+  if (request.url.includes('/check-runs')) {
+    return { status: 200, body: githubFixtures.checkRuns, headers: { etag: '"checks-1"' } };
+  }
+  return { status: 200, body: githubFixtures.combinedStatus, headers: { etag: '"status-1"' } };
 }
 
 describe('getCiStatus', () => {
@@ -88,7 +89,10 @@ describe('getCiStatus', () => {
 
   test('refetches both when one of them changed', async ({ expect, fakeGithub, signal }) => {
     const { client, requests } = fakeGithub((request, index) => {
-      return index < 2 && request.url.includes('/status') ? { status: 304 } : ci(request);
+      if (index < 2 && request.url.includes('/status')) {
+        return { status: 304 };
+      }
+      return ci(request);
     });
     const result = await getCiStatus(client, commit(), {
       etags: { statuses: '"status-1"', checkRuns: '"checks-0"' },
@@ -101,18 +105,20 @@ describe('getCiStatus', () => {
   test('drops the check-runs ETag when they span pages', async ({ expect, fakeGithub, signal }) => {
     const page2 = `https://api.github.com/repositories/1/commits/${githubFixtures.headSha}/check-runs?page=2`;
     const { client } = fakeGithub((request) => {
-      return request.url === page2
-        ? {
-            status: 200,
-            body: { total_count: 4, check_runs: [githubFixtures.checkRuns.check_runs[0]] },
-          }
-        : request.url.includes('/check-runs')
-          ? {
-              status: 200,
-              body: githubFixtures.checkRuns,
-              headers: { etag: '"c"', link: `<${page2}>; rel="next"` },
-            }
-          : ci(request);
+      if (request.url === page2) {
+        return {
+          status: 200,
+          body: { total_count: 4, check_runs: [githubFixtures.checkRuns.check_runs[0]] },
+        };
+      }
+      if (request.url.includes('/check-runs')) {
+        return {
+          status: 200,
+          body: githubFixtures.checkRuns,
+          headers: { etag: '"c"', link: `<${page2}>; rel="next"` },
+        };
+      }
+      return ci(request);
     });
     const result = await getCiStatus(client, commit(), { signal });
     expect(

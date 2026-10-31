@@ -220,9 +220,10 @@ export class ServerSession {
       return undefined;
     }
     const report = result.value as Readonly<Record<string, unknown>>;
-    return report['kind'] === 'full'
-      ? { diagnostics: parseDiagnostics(report['items']), freshness: 'fresh' }
-      : undefined;
+    if (report['kind'] === 'full') {
+      return { diagnostics: parseDiagnostics(report['items']), freshness: 'fresh' };
+    }
+    return undefined;
   }
 
   async #waitForPush(
@@ -306,7 +307,10 @@ export class ServerSession {
 
   /** Time since the last request, sync or wait finished; zero while busy. */
   get idle(): Temporal.Duration {
-    return this.isBusy ? new Temporal.Duration() : this.#lastActivity.elapsed();
+    if (this.isBusy) {
+      return new Temporal.Duration();
+    }
+    return this.#lastActivity.elapsed();
   }
 
   /** The stamp of an open document, to decide whether it needs re-reading. */
@@ -416,9 +420,15 @@ function syncedFrom(document: OpenDocument, hasChanged: boolean): SyncedDocument
 }
 
 function longerOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
-  return Temporal.Duration.compare(a, b) >= 0 ? a : b;
+  if (Temporal.Duration.compare(a, b) >= 0) {
+    return a;
+  }
+  return b;
 }
 
 function shorterOf(a: Temporal.Duration, b: Temporal.Duration): Temporal.Duration {
-  return Temporal.Duration.compare(a, b) <= 0 ? a : b;
+  if (Temporal.Duration.compare(a, b) <= 0) {
+    return a;
+  }
+  return b;
 }

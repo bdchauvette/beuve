@@ -12,5 +12,8 @@ export async function pruneWorktrees(
   const pruned = await repository[gitRunner].run(['worktree', 'prune'], {
     policy: { kind: 'atomic' },
   });
-  return pruned.ok ? ok(undefined) : pruned;
+  if (pruned.ok) {
+    return ok(undefined);
+  }
+  return pruned;
 }

@@ -48,16 +48,17 @@ function scripted(
         return answer;
       }
       const parsed = request.outputSchema.safeParse(answer.value);
-      return parsed.success
-        ? ok({
-            value: parsed.data,
-            model: 'fake',
-            turns: 1,
-            costUsd: 0,
-            duration: Temporal.Duration.from({ milliseconds: 1 }),
-            deniedToolUses: 0,
-          })
-        : err('invalid-output');
+      if (parsed.success) {
+        return ok({
+          value: parsed.data,
+          model: 'fake',
+          turns: 1,
+          costUsd: 0,
+          duration: Temporal.Duration.from({ milliseconds: 1 }),
+          deniedToolUses: 0,
+        });
+      }
+      return err('invalid-output');
     },
   };
 }

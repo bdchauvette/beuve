@@ -31,5 +31,8 @@ export async function readDiffAttributes(
     ['check-attr', `--source=${commit}`, '-z', '--stdin', 'linguist-generated', 'diff'],
     { policy: { kind: 'read' }, input: paths.map((path) => `${path}\0`).join('') },
   );
-  return output.ok ? ok(parseCheckAttr(output.value.toString('utf8'))) : output;
+  if (output.ok) {
+    return ok(parseCheckAttr(output.value.toString('utf8')));
+  }
+  return output;
 }

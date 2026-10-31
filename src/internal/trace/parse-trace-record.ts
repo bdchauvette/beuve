@@ -49,7 +49,10 @@ export function parseTraceRecord(line: string): TraceRecord | undefined {
   }
   const events = parsed.events.slice(0, maxEvents).flatMap((event: unknown) => {
     const read = eventFrom(event);
-    return read === undefined ? [] : [read];
+    if (read === undefined) {
+      return [];
+    }
+    return [read];
   });
   const dropped = isCount(parsed.dropped) ? parsed.dropped : 0;
   return { test, events, dropped: dropped + Math.max(0, parsed.events.length - maxEvents) };
@@ -85,23 +88,29 @@ function eventFrom(value: unknown): RawTraceEvent | undefined {
       return { kind: 'enter', seq, frame, parent, probe, args };
     }
     case 'branch': {
-      return probe === undefined || typeof value.taken !== 'boolean'
-        ? undefined
-        : { kind: 'branch', seq, frame, probe, taken: value.taken };
+      if (probe === undefined || typeof value.taken !== 'boolean') {
+        return undefined;
+      }
+      return { kind: 'branch', seq, frame, probe, taken: value.taken };
     }
     case 'value':
     case 'caught': {
-      return probe === undefined
-        ? undefined
-        : { kind: value.kind, seq, frame, probe, value: summaryFrom(value.value) };
+      if (probe === undefined) {
+        return undefined;
+      }
+      return { kind: value.kind, seq, frame, probe, value: summaryFrom(value.value) };
     }
     case 'mark': {
-      return probe === undefined ? undefined : { kind: 'mark', seq, frame, probe };
+      if (probe === undefined) {
+        return undefined;
+      }
+      return { kind: 'mark', seq, frame, probe };
     }
     case 'loop': {
-      return probe === undefined || !isCount(value.iterations)
-        ? undefined
-        : { kind: 'loop', seq, frame, probe, iterations: value.iterations };
+      if (probe === undefined || !isCount(value.iterations)) {
+        return undefined;
+      }
+      return { kind: 'loop', seq, frame, probe, iterations: value.iterations };
     }
     case 'return':
     case 'throw': {

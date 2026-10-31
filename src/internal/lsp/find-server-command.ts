@@ -28,9 +28,10 @@ export async function findServerCommand(
 ): Promise<Result<string, LspError>> {
   const { serverId, command } = request;
   if (path.isAbsolute(command)) {
-    return (await isExecutableFile(command))
-      ? ok(command)
-      : err({ kind: 'server-not-found', serverId, command, searched: [command] });
+    if (await isExecutableFile(command)) {
+      return ok(command);
+    }
+    return err({ kind: 'server-not-found', serverId, command, searched: [command] });
   }
   if (
     command.length === 0 ||

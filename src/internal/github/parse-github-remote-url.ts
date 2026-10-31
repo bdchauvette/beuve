@@ -53,11 +53,12 @@ function fromUrl(text: string): Parts | undefined {
   const url = URL.parse(text);
   if (
     url === null ||
-    !['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'].includes(url.protocol)
+    !['https:', 'http:', 'ssh:', 'git:', 'git+ssh:', 'ssh+git:'].includes(url.protocol) ||
+    url.hostname === ''
   ) {
     return undefined;
   }
-  return url.hostname === '' ? undefined : { host: url.hostname, path: url.pathname.slice(1) };
+  return { host: url.hostname, path: url.pathname.slice(1) };
 }
 
 /** `[user@]host:path`, git's scp-like syntax: a colon before any slash, then a relative path. */
@@ -70,5 +71,8 @@ function fromScpLike(text: string): Parts | undefined {
   const authority = text.slice(0, colon);
   const host = authority.slice(authority.lastIndexOf('@') + 1);
   const path = text.slice(colon + 1);
-  return host === '' || path === '' ? undefined : { host, path };
+  if (host === '' || path === '') {
+    return undefined;
+  }
+  return { host, path };
 }

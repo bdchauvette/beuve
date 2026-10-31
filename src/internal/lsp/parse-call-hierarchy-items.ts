@@ -21,7 +21,10 @@ export function parseCallHierarchyItems(
   }
   return value.flatMap((entry: unknown) => {
     if (shape === 'items') {
-      return isCallHierarchyItem(entry) ? { item: entry, fromRanges: [] } : [];
+      if (isCallHierarchyItem(entry)) {
+        return { item: entry, fromRanges: [] };
+      }
+      return [];
     }
     if (typeof entry !== 'object' || entry === null) {
       return [];

@@ -181,9 +181,10 @@ async function fetchFirstPage<E>(
     return response;
   }
   const decoded = decodeWith(schema, response.value.body);
-  return decoded.ok
-    ? ok({ items: decoded.value, etag: response.value.etag, isTruncated: false })
-    : err({ kind: 'unexpected-shape', reason: decoded.error });
+  if (decoded.ok) {
+    return ok({ items: decoded.value, etag: response.value.etag, isTruncated: false });
+  }
+  return err({ kind: 'unexpected-shape', reason: decoded.error });
 }
 
 /** Check runs page; an ETag is only kept when everything fit on the first page. */

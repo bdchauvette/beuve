@@ -52,9 +52,10 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
       return { kind: 'current', anchor: item.anchor };
     }
     const mapping = mappings.get(item.headSha);
-    return mapping === undefined
-      ? { kind: 'outdated', reason: 'no-line-mapping' }
-      : reanchorUraAnchor(item.anchor, mapping.files);
+    if (mapping === undefined) {
+      return { kind: 'outdated', reason: 'no-line-mapping' };
+    }
+    return reanchorUraAnchor(item.anchor, mapping.files);
   };
   const derived = deriveUraVerdict(staged.map((item) => item.severity));
   const blockers = staged.filter((item) => item.severity === 'blocker').map((item) => item.id);

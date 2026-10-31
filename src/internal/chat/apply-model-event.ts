@@ -113,9 +113,10 @@ export function applyModelEvent(
             Object.entries(tools).filter(([toolId]) => toolId !== progress.id),
           );
           end(id, (part) => {
-            return part.kind === 'tool-call'
-              ? { ...part, state: progress.ok ? 'done' : 'failed' }
-              : part;
+            if (part.kind === 'tool-call') {
+              return { ...part, state: progress.ok ? 'done' : 'failed' };
+            }
+            return part;
           });
           break;
         }
@@ -152,9 +153,10 @@ export function applyModelEvent(
       }
       const id = openText;
       parts = parts.map((part) => {
-        return part.id === id && part.kind === 'text'
-          ? { ...part, text: part.text + delta.text }
-          : part;
+        if (part.id === id && part.kind === 'text') {
+          return { ...part, text: part.text + delta.text };
+        }
+        return part;
       });
       events.push({ type: 'text-delta', partId: id, text: delta.text });
       break;
@@ -164,7 +166,10 @@ export function applyModelEvent(
       endText();
       for (const id of Object.values(tools)) {
         end(id, (part) => {
-          return part.kind === 'tool-call' ? { ...part, state: 'stopped' } : part;
+          if (part.kind === 'tool-call') {
+            return { ...part, state: 'stopped' };
+          }
+          return part;
         });
       }
       tools = {};

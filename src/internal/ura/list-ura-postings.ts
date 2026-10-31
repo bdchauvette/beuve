@@ -17,14 +17,19 @@ export function listUraPostings(db: DatabaseSync, sessionId: SessionId): UraPost
   return rows.flatMap((row): UraPosting[] => {
     const { item_id: itemId, target, url, head_sha: headSha, placement, posted_at: postedAt } = row;
     const isPlacement = placement === 'inline' || placement === 'body';
-    return target === 'github' &&
+    if (
+      target === 'github' &&
       isPlacement &&
       typeof url === 'string' &&
       typeof postedAt === 'string' &&
       isUuid(itemId) &&
       isCommitSha(headSha) &&
       isIsoTimestamp(postedAt)
-      ? [{ itemId: itemId as UraItemId, sessionId, target, url, headSha, placement, postedAt }]
-      : [];
+    ) {
+      return [
+        { itemId: itemId as UraItemId, sessionId, target, url, headSha, placement, postedAt },
+      ];
+    }
+    return [];
   });
 }

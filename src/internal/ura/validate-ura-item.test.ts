@@ -9,7 +9,10 @@ import { test } from './testing/test.ts';
 
 function errorOf(overrides: Partial<UraItemCandidate>): UraItemError | undefined {
   const result = validateUraItem({ ...candidate(), ...overrides });
-  return result.ok ? undefined : result.error;
+  if (result.ok) {
+    return undefined;
+  }
+  return result.error;
 }
 
 describe('validateUraItem', () => {

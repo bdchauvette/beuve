@@ -198,7 +198,10 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
 
 function bearer(headers: Readonly<Record<string, string>>): string | undefined {
   const value = Object.entries(headers).find(([name]) => name.toLowerCase() === 'authorization');
-  return value?.[1].startsWith('Bearer ') === true ? value[1].slice('Bearer '.length) : undefined;
+  if (value?.[1].startsWith('Bearer ') === true) {
+    return value[1].slice('Bearer '.length);
+  }
+  return undefined;
 }
 
 function listPulls(api: FakeGithubApi, query: URLSearchParams): unknown[] {
@@ -317,9 +320,10 @@ function conditional(request: FakeHttpRequest, value: unknown): FakeHttpResponse
   const match = Object.entries(request.headers).find(([name]) => {
     return name.toLowerCase() === 'if-none-match';
   });
-  return match?.[1] === etag
-    ? { status: 304, headers: { etag }, body: undefined }
-    : { status: 200, headers: { 'content-type': 'application/json', etag }, body: text };
+  if (match?.[1] === etag) {
+    return { status: 304, headers: { etag }, body: undefined };
+  }
+  return { status: 200, headers: { 'content-type': 'application/json', etag }, body: text };
 }
 
 function json(status: number, value: unknown): FakeHttpResponse {

@@ -28,7 +28,8 @@ export function badgeCallHierarchyNode(
     node.range.end.line +
     (node.range.end.character === 0 && node.range.end.line > node.range.start.line ? 0 : 1);
   const spans = changed.get(node.file.path) ?? [];
-  return spans.some((span) => span.startLine <= last && span.endLine >= first)
-    ? 'modified'
-    : 'untouched';
+  if (spans.some((span) => span.startLine <= last && span.endLine >= first)) {
+    return 'modified';
+  }
+  return 'untouched';
 }

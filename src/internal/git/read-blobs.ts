@@ -85,21 +85,24 @@ function blobContentFrom(object: ObjectContent): BlobContent {
       return { kind: 'missing' };
     }
     case 'too-large': {
-      return object.type === 'blob'
-        ? { kind: 'too-large', size: object.size, limit: object.limit }
-        : { kind: 'not-a-blob', type: object.type };
+      if (object.type === 'blob') {
+        return { kind: 'too-large', size: object.size, limit: object.limit };
+      }
+      return { kind: 'not-a-blob', type: object.type };
     }
     case 'content': {
-      return object.type === 'blob'
-        ? contentFrom(object.bytes)
-        : { kind: 'not-a-blob', type: object.type };
+      if (object.type === 'blob') {
+        return contentFrom(object.bytes);
+      }
+      return { kind: 'not-a-blob', type: object.type };
     }
   }
 }
 
 function contentFrom(bytes: Buffer): BlobContent {
   const probe = bytes.subarray(0, binaryProbeBytes);
-  return probe.includes(0)
-    ? { kind: 'binary', size: bytes.length }
-    : { kind: 'text', text: new TextDecoder('utf-8').decode(bytes), size: bytes.length };
+  if (probe.includes(0)) {
+    return { kind: 'binary', size: bytes.length };
+  }
+  return { kind: 'text', text: new TextDecoder('utf-8').decode(bytes), size: bytes.length };
 }

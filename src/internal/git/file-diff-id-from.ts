@@ -36,15 +36,21 @@ function modeChangeOf(file: DiffFile): string {
       return file.mode;
     }
     case 'modified': {
-      return file.oldMode === file.newMode ? '' : `${file.oldMode}>${file.newMode}`;
+      if (file.oldMode === file.newMode) {
+        return '';
+      }
+      return `${file.oldMode}>${file.newMode}`;
     }
     case 'renamed':
     case 'copied': {
-      return file.oldMode === undefined ||
+      if (
+        file.oldMode === undefined ||
         file.newMode === undefined ||
         file.oldMode === file.newMode
-        ? ''
-        : `${file.oldMode}>${file.newMode}`;
+      ) {
+        return '';
+      }
+      return `${file.oldMode}>${file.newMode}`;
     }
   }
 }

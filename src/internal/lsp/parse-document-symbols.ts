@@ -11,7 +11,10 @@ export function parseDocumentSymbols(value: unknown): LspDocumentSymbol[] {
   }
   return value.flatMap((entry: unknown) => {
     const symbol = parseSymbol(entry);
-    return symbol === undefined ? [] : [symbol];
+    if (symbol === undefined) {
+      return [];
+    }
+    return [symbol];
   });
 }
 

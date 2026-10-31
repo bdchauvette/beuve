@@ -84,7 +84,10 @@ describe('fileDiffIdFrom', () => {
 /** A one-hunk patch: lines starting with `-` or `+` are changes, the rest context. */
 function modified(path: string, lines: readonly string[], start = 1): DiffFile {
   const body = lines.map((line) => {
-    return /^[-+]/u.test(line) ? line : ` ${line}`;
+    if (/^[-+]/u.test(line)) {
+      return line;
+    }
+    return ` ${line}`;
   });
   const removed = body.filter((line) => !line.startsWith('+')).length;
   const added = body.filter((line) => !line.startsWith('-')).length;

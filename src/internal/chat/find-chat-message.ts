@@ -12,5 +12,8 @@ export function findChatMessage(
   id: ChatMessageId,
 ): Result<ChatMessage, Extract<ChatStoreError, { kind: 'message-not-found' | 'corrupt-row' }>> {
   const row = db.prepare('SELECT * FROM chat_messages WHERE id = ?;').get(id);
-  return row === undefined ? err({ kind: 'message-not-found', id }) : chatMessageFromRow(row);
+  if (row === undefined) {
+    return err({ kind: 'message-not-found', id });
+  }
+  return chatMessageFromRow(row);
 }

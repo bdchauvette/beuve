@@ -69,16 +69,23 @@ async function measureSide(
   }
   const parsed = await parse(path, text, (root, language): MeasuredSide | undefined => {
     const rules = rulesByLanguage[language];
-    return rules === undefined
-      ? undefined
-      : { language, measurement: measureFunctions(root, rules) };
+    if (rules === undefined) {
+      return undefined;
+    }
+    return { language, measurement: measureFunctions(root, rules) };
   });
   if (!parsed.ok) {
     return err(skipReasonFrom(parsed.error.kind));
   }
-  return parsed.value === undefined ? err('unsupported-language') : ok(parsed.value);
+  if (parsed.value === undefined) {
+    return err('unsupported-language');
+  }
+  return ok(parsed.value);
 }
 
 function skipReasonFrom(kind: string): SkipReason {
-  return kind === 'unsupported-language' || kind === 'too-large' ? kind : 'parse-failed';
+  if (kind === 'unsupported-language' || kind === 'too-large') {
+    return kind;
+  }
+  return 'parse-failed';
 }

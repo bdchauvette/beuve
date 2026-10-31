@@ -31,6 +31,9 @@ export class LineIndex {
   lineText(line: number): string {
     const start = this.#starts[line];
     const end = this.#ends[line];
-    return start === undefined || end === undefined ? '' : this.#text.slice(start, end);
+    if (start === undefined || end === undefined) {
+      return '';
+    }
+    return this.#text.slice(start, end);
   }
 }

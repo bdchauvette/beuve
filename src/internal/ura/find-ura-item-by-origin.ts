@@ -30,5 +30,8 @@ export function findUraItemByOrigin(
       )
       .get(item.sessionId, item.headSha, item.anchor.path, origin.metric, origin.functionName);
   }
-  return row === undefined ? ok(undefined) : uraItemFromRow(row);
+  if (row === undefined) {
+    return ok(undefined);
+  }
+  return uraItemFromRow(row);
 }

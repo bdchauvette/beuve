@@ -11,5 +11,8 @@ import type { GitError } from './git-error.ts';
  */
 export async function runGit(request: GitRequest): Promise<Result<string, GitError>> {
   const output = await execGit(request);
-  return output.ok ? ok(output.value.toString('utf8')) : output;
+  if (output.ok) {
+    return ok(output.value.toString('utf8'));
+  }
+  return output;
 }

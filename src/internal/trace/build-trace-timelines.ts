@@ -77,7 +77,10 @@ function entriesFrom(plan: InstrumentationPlan, events: readonly RawTraceEvent[]
   const frames = new Map<number, Frame>();
   const entries: TraceEntry[] = [];
   const probeOf = (id: number | undefined): Probe | undefined => {
-    return id === undefined ? undefined : plan.probes[id];
+    if (id === undefined) {
+      return undefined;
+    }
+    return plan.probes[id];
   };
   const ordered = events.toSorted((left, right) => left.seq - right.seq);
   for (const event of ordered) {
@@ -124,9 +127,10 @@ function entryFrom(
       inHunk: probe?.inHunk ?? false,
       label: probe?.label ?? traced.name,
     };
-    return event.kind === 'return'
-      ? { ...common, kind: 'return', value: event.value, implicit: probe === undefined }
-      : { ...common, kind: 'throw', value: event.value, propagated: probe === undefined };
+    if (event.kind === 'return') {
+      return { ...common, kind: 'return', value: event.value, implicit: probe === undefined };
+    }
+    return { ...common, kind: 'throw', value: event.value, propagated: probe === undefined };
   }
   if (probe === undefined) {
     return undefined;
@@ -134,25 +138,29 @@ function entryFrom(
   const common = base(event.seq, probe, frame ?? { fn: probe.fn, depth: 0 });
   switch (event.kind) {
     case 'branch': {
-      return probe.kind === 'if' || probe.kind === 'ternary'
-        ? { ...common, kind: 'branch', construct: probe.kind, taken: event.taken }
-        : undefined;
+      if (probe.kind === 'if' || probe.kind === 'ternary') {
+        return { ...common, kind: 'branch', construct: probe.kind, taken: event.taken };
+      }
+      return undefined;
     }
     case 'value':
     case 'caught': {
-      return probe.kind === 'switch' || probe.kind === 'catch'
-        ? { ...common, kind: 'branch', construct: probe.kind, value: event.value }
-        : undefined;
+      if (probe.kind === 'switch' || probe.kind === 'catch') {
+        return { ...common, kind: 'branch', construct: probe.kind, value: event.value };
+      }
+      return undefined;
     }
     case 'mark': {
-      return probe.kind === 'case' || probe.kind === 'default'
-        ? { ...common, kind: 'branch', construct: probe.kind }
-        : undefined;
+      if (probe.kind === 'case' || probe.kind === 'default') {
+        return { ...common, kind: 'branch', construct: probe.kind };
+      }
+      return undefined;
     }
     case 'loop': {
-      return probe.kind === 'loop'
-        ? { ...common, kind: 'loop', iterations: event.iterations }
-        : undefined;
+      if (probe.kind === 'loop') {
+        return { ...common, kind: 'loop', iterations: event.iterations };
+      }
+      return undefined;
     }
   }
 }

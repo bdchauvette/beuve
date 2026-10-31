@@ -68,11 +68,12 @@ export async function listOpenAiCompatibleModels(
     return err({ kind: 'invalid-output', reason: 'the model list is not JSON' });
   }
   const parsed = modelList.safeParse(json);
-  return parsed.success
-    ? ok(
-        parsed.data.data
-          .map((model) => model.id)
-          .toSorted((left, right) => left.localeCompare(right, 'en')),
-      )
-    : err({ kind: 'invalid-output', reason: 'the model list has no data array' });
+  if (parsed.success) {
+    return ok(
+      parsed.data.data
+        .map((model) => model.id)
+        .toSorted((left, right) => left.localeCompare(right, 'en')),
+    );
+  }
+  return err({ kind: 'invalid-output', reason: 'the model list has no data array' });
 }

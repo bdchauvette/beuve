@@ -14,9 +14,10 @@ export class GithubToken {
   /** A token from a credential source's output: trimmed, non-empty printable ASCII, no spaces. */
   static parse(raw: string): GithubToken | undefined {
     const value = raw.trim();
-    return value.length > maxTokenLength || !printableAscii.test(value)
-      ? undefined
-      : new GithubToken(value);
+    if (value.length > maxTokenLength || !printableAscii.test(value)) {
+      return undefined;
+    }
+    return new GithubToken(value);
   }
 
   readonly #value: string;

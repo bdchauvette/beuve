@@ -532,9 +532,10 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
       return found as Result<ObjectContent, GitError>;
     }
     const { oid, type, size } = found.value;
-    return size > maxBytes
-      ? ok({ kind: 'too-large', oid, type, size, limit: maxBytes })
-      : this.#request<ObjectContent>('contents', oid, { oid, type, size }, options.signal);
+    if (size > maxBytes) {
+      return ok({ kind: 'too-large', oid, type, size, limit: maxBytes });
+    }
+    return this.#request<ObjectContent>('contents', oid, { oid, type, size }, options.signal);
   }
 
   /** Answers every request `aborted`, stops the process and waits until it has exited. */
@@ -553,15 +554,22 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
 function lineFrom(spec: ObjectSpec): string | undefined {
   switch (spec.kind) {
     case 'object': {
-      return isObjectId(spec.oid) ? spec.oid : undefined;
+      if (isObjectId(spec.oid)) {
+        return spec.oid;
+      }
+      return undefined;
     }
     case 'path': {
-      return isObjectId(spec.commit) && parseTreePath(spec.path) !== undefined
-        ? `${spec.commit}:${spec.path}`
-        : undefined;
+      if (isObjectId(spec.commit) && parseTreePath(spec.path) !== undefined) {
+        return `${spec.commit}:${spec.path}`;
+      }
+      return undefined;
     }
     case 'ref': {
-      return parseRevisionName(spec.ref) === undefined ? undefined : `${spec.ref}^{${spec.peel}}`;
+      if (parseRevisionName(spec.ref) === undefined) {
+        return undefined;
+      }
+      return `${spec.ref}^{${spec.peel}}`;
     }
   }
 }
@@ -569,13 +577,16 @@ function lineFrom(spec: ObjectSpec): string | undefined {
 function infoFrom(line: string): ObjectInfo | undefined {
   const [oid = '', type = '', sizeText = '', ...rest] = line.split(' ');
   const size = Number(sizeText);
-  return isObjectId(oid) &&
+  if (
+    isObjectId(oid) &&
     objectTypes.has(type) &&
     Number.isSafeInteger(size) &&
     size >= 0 &&
     rest.length === 0
-    ? { oid, type: type as ObjectType, size }
-    : undefined;
+  ) {
+    return { oid, type: type as ObjectType, size };
+  }
+  return undefined;
 }
 
 function aborted(): GitError {

@@ -95,9 +95,10 @@ function isSamePatch(previous: PairableCommit, next: PairableCommit): boolean {
   if (previous.sha === next.sha) {
     return true;
   }
-  return previous.patchId === undefined
-    ? next.patchId === undefined && previous.subject === next.subject
-    : previous.patchId === next.patchId;
+  if (previous.patchId === undefined) {
+    return next.patchId === undefined && previous.subject === next.subject;
+  }
+  return previous.patchId === next.patchId;
 }
 
 /** Changed lines as a multiset of `path`, sign and whitespace-trimmed content. */
@@ -130,7 +131,10 @@ function dice(left: ReadonlyMap<string, number>, right: ReadonlyMap<string, numb
   for (const count of right.values()) {
     rightSize += count;
   }
-  return leftSize + rightSize === 0 ? 0 : (2 * shared) / (leftSize + rightSize);
+  if (leftSize + rightSize === 0) {
+    return 0;
+  }
+  return (2 * shared) / (leftSize + rightSize);
 }
 
 /** `git range-diff`'s output order: a dropped commit shows as soon as its predecessors have. */

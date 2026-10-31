@@ -11,5 +11,8 @@ export function findSession(
   id: SessionId,
 ): Result<Session | undefined, Extract<SessionError, { kind: 'corrupt-row' }>> {
   const found = selectSessions(db, 's.id = ?', [id]);
-  return found.ok ? { ok: true, value: found.value[0] } : found;
+  if (found.ok) {
+    return { ok: true, value: found.value[0] };
+  }
+  return found;
 }

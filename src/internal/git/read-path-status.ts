@@ -31,5 +31,8 @@ export async function readPathStatus(
     ['status', '--porcelain', '--untracked-files=no', '--', relativePath],
     { policy: { kind: 'read' } },
   );
-  return status.ok ? ok(status.value.trim() === '' ? 'clean' : 'modified') : status;
+  if (status.ok) {
+    return ok(status.value.trim() === '' ? 'clean' : 'modified');
+  }
+  return status;
 }

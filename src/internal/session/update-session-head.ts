@@ -35,7 +35,8 @@ export function updateSessionHead(
   }
   const row = db.prepare('SELECT head_sha FROM sessions WHERE id = ?;').get(session.id);
   const stored = row?.['head_sha'];
-  return typeof stored === 'string'
-    ? err({ kind: 'head-changed', sessionId: session.id, expected: expectedHeadSha, stored })
-    : err({ kind: 'session-not-found', sessionId: session.id });
+  if (typeof stored === 'string') {
+    return err({ kind: 'head-changed', sessionId: session.id, expected: expectedHeadSha, stored });
+  }
+  return err({ kind: 'session-not-found', sessionId: session.id });
 }

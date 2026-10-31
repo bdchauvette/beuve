@@ -11,8 +11,9 @@ export function expandMentionTokens(text: string, mentions: readonly MentionPlac
   return text.replaceAll(token, (whole, digits: string) => {
     const index = Number(digits);
     const mention = mentions[index - 1];
-    return mention === undefined
-      ? whole
-      : `«selection ${String(index)}: ${formatMention(mention)}»`;
+    if (mention === undefined) {
+      return whole;
+    }
+    return `«selection ${String(index)}: ${formatMention(mention)}»`;
   });
 }

@@ -138,9 +138,12 @@ export async function reviewChange<E>(
     },
   );
   if (!verdicts.ok) {
-    return deps.signal?.aborted === true
-      ? err({ kind: 'model', error: verdicts.error })
-      : ok(assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'));
+    if (deps.signal?.aborted === true) {
+      return err({ kind: 'model', error: verdicts.error });
+    }
+    return ok(
+      assemble(unchecked(validated.findings), drops, pathScope, input.files.length, 'failed'),
+    );
   }
   const kept = applyVerdicts(validated.findings, verdicts.value);
   return ok(

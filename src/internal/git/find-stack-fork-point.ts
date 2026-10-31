@@ -62,7 +62,10 @@ export async function findStackForkPoint(
   };
   const chain = await listFirstParents(repository, mergeBase.value, range.head, options);
   if (!chain.ok || chain.value.length === 0) {
-    return chain.ok ? ok(plain) : chain;
+    if (chain.ok) {
+      return ok(plain);
+    }
+    return chain;
   }
   const commits = chain.value;
   const reviewed = new Set(options.reviewedBases);
@@ -77,14 +80,15 @@ export async function findStackForkPoint(
   ].filter((candidate) => candidate.index !== -1);
   const best = candidates.toSorted((a, b) => a.index - b.index)[0];
   const forkPoint = best === undefined ? undefined : commits[best.index];
-  return best === undefined || forkPoint === undefined
-    ? ok(plain)
-    : ok({
-        forkPoint,
-        mergeBase: mergeBase.value,
-        reason: best.reason,
-        skipped: commits.length - best.index,
-      });
+  if (best === undefined || forkPoint === undefined) {
+    return ok(plain);
+  }
+  return ok({
+    forkPoint,
+    mergeBase: mergeBase.value,
+    reason: best.reason,
+    skipped: commits.length - best.index,
+  });
 }
 
 /** Newest first. */
@@ -106,14 +110,15 @@ async function listFirstParents(
     ],
     { policy: { kind: 'read' } },
   );
-  return output.ok
-    ? ok(
-        output.value
-          .split('\n')
-          .map((line) => parseCommitSha(line.trim()))
-          .filter((sha) => sha !== undefined),
-      )
-    : output;
+  if (output.ok) {
+    return ok(
+      output.value
+        .split('\n')
+        .map((line) => parseCommitSha(line.trim()))
+        .filter((sha) => sha !== undefined),
+    );
+  }
+  return output;
 }
 
 /** Index into `commits` (newest first) of the newest already-upstream commit, or -1. */
@@ -136,14 +141,18 @@ async function findNewestUpstream(
       return ok(false);
     }
     const replay = await replayChanges(repository, { from: mergeBase, to: commit, onto: base });
-    return replay.ok
-      ? ok(replay.value.kind === 'clean' && replay.value.tree === baseTree.value.trim())
-      : replay;
+    if (replay.ok) {
+      return ok(replay.value.kind === 'clean' && replay.value.tree === baseTree.value.trim());
+    }
+    return replay;
   };
   let known = commits.length - 1;
   const oldest = await checkUpstream(known);
   if (!oldest.ok || !oldest.value) {
-    return oldest.ok ? ok(-1) : oldest;
+    if (oldest.ok) {
+      return ok(-1);
+    }
+    return oldest;
   }
   let low = 0;
   while (low < known) {

@@ -125,9 +125,10 @@ function normalizePath(raw: string, worktreePath: string | undefined): string | 
       return undefined;
     }
     const relative = path.relative(worktreePath, trimmed);
-    return relative === '' || relative.startsWith('..') || path.isAbsolute(relative)
-      ? undefined
-      : relative.split(path.sep).join('/');
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    return relative.split(path.sep).join('/');
   }
   return trimmed.replace(leadingDotSlashes, '');
 }

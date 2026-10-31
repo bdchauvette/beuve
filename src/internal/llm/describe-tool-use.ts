@@ -13,15 +13,25 @@ export function describeToolUse(tool: string, input: unknown, cwd?: string): str
   const fields =
     typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
   const text = (key: string): string | undefined => {
-    return typeof fields[key] === 'string' ? fields[key] : undefined;
+    if (typeof fields[key] === 'string') {
+      return fields[key];
+    }
+    return undefined;
   };
   const count = (key: string): number | undefined => {
-    return typeof fields[key] === 'number' && Number.isSafeInteger(fields[key])
-      ? fields[key]
-      : undefined;
+    if (typeof fields[key] === 'number' && Number.isSafeInteger(fields[key])) {
+      return fields[key];
+    }
+    return undefined;
   };
   const shown = (file: string | undefined): string => {
-    return file === undefined ? '' : cwd === undefined ? file : relativeTo(cwd, file);
+    if (file === undefined) {
+      return '';
+    }
+    if (cwd === undefined) {
+      return file;
+    }
+    return relativeTo(cwd, file);
   };
   let description: string;
   switch (tool.toLowerCase()) {
@@ -52,7 +62,10 @@ export function describeToolUse(tool: string, input: unknown, cwd?: string): str
     }
   }
   const line = description.replaceAll(/\s+/gu, ' ').trim();
-  return line.length > maxChars ? `${line.slice(0, maxChars - 1)}…` : line;
+  if (line.length > maxChars) {
+    return `${line.slice(0, maxChars - 1)}…`;
+  }
+  return line;
 }
 
 function relativeTo(cwd: string, file: string): string {
@@ -60,5 +73,11 @@ function relativeTo(cwd: string, file: string): string {
     return file;
   }
   const relative = path.relative(cwd, file);
-  return relative === '' ? '.' : relative.startsWith('..') ? file : relative;
+  if (relative === '') {
+    return '.';
+  }
+  if (relative.startsWith('..')) {
+    return file;
+  }
+  return relative;
 }

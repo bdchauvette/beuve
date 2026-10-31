@@ -17,9 +17,10 @@ export function classifyGhFailure(
 ): AuthError {
   if (loginHint.test(stderr)) {
     const remedy = `gh auth login --hostname ${host}`;
-    return host === 'github.com'
-      ? { kind: 'not-logged-in', host, remedy }
-      : { kind: 'host-not-configured', host, remedy };
+    if (host === 'github.com') {
+      return { kind: 'not-logged-in', host, remedy };
+    }
+    return { kind: 'host-not-configured', host, remedy };
   }
   const lines = stderr.split('\n').map((line) => line.trim());
   const last = lines.findLast((line) => line !== '') ?? `gh exited with ${String(exitCode)}`;

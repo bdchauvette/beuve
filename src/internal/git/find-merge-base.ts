@@ -21,12 +21,14 @@ export async function findMergeBase(
   const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!output.ok) {
     const { error } = output;
-    return error.kind === 'command-failed' && error.exitCode === 1 && error.stderr === ''
-      ? err({ kind: 'no-merge-base', left, right })
-      : output;
+    if (error.kind === 'command-failed' && error.exitCode === 1 && error.stderr === '') {
+      return err({ kind: 'no-merge-base', left, right });
+    }
+    return output;
   }
   const sha = parseCommitSha(output.value.trim());
-  return sha === undefined
-    ? err({ kind: 'unexpected-output', args, message: `not an object name: ${output.value}` })
-    : ok(sha);
+  if (sha === undefined) {
+    return err({ kind: 'unexpected-output', args, message: `not an object name: ${output.value}` });
+  }
+  return ok(sha);
 }

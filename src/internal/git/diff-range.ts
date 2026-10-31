@@ -31,5 +31,8 @@ export async function diffRange(
     return mergeBase;
   }
   const files = await diffObjects(repository, mergeBase.value, range.head, options);
-  return files.ok ? ok({ range, mergeBase: mergeBase.value, files: files.value }) : files;
+  if (files.ok) {
+    return ok({ range, mergeBase: mergeBase.value, files: files.value });
+  }
+  return files;
 }

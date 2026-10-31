@@ -21,7 +21,8 @@ export function parseLsTreeEntry(entry: string): LsTreeEntry | undefined {
     return undefined;
   }
   const [, mode, type, objectId, path] = match;
-  return mode === undefined || type === undefined || objectId === undefined || path === undefined
-    ? undefined
-    : { mode, type, objectId, path };
+  if (mode === undefined || type === undefined || objectId === undefined || path === undefined) {
+    return undefined;
+  }
+  return { mode, type, objectId, path };
 }

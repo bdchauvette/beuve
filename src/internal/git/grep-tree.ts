@@ -83,9 +83,10 @@ export async function grepTree(
   });
   if (!streamed.ok) {
     const { error } = streamed;
-    return error.kind === 'command-failed' && error.exitCode === 1 && error.stderr === ''
-      ? ok({ matches: [], isCapped: false })
-      : streamed;
+    if (error.kind === 'command-failed' && error.exitCode === 1 && error.stderr === '') {
+      return ok({ matches: [], isCapped: false });
+    }
+    return streamed;
   }
   return ok({ matches: parser.matches, isCapped: parser.isCapped });
 }

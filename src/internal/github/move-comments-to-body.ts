@@ -36,7 +36,8 @@ export function moveCommentsToBody(
 }
 
 function formatLines(comment: ReviewComment): string {
-  return comment.start_line === undefined || comment.start_line === comment.line
-    ? `line ${String(comment.line)}`
-    : `lines ${String(comment.start_line)}–${String(comment.line)}`;
+  if (comment.start_line === undefined || comment.start_line === comment.line) {
+    return `line ${String(comment.line)}`;
+  }
+  return `lines ${String(comment.start_line)}–${String(comment.line)}`;
 }

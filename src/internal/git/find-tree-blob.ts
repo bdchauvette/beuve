@@ -34,9 +34,10 @@ export async function findTreeBlob(
   path: string,
 ): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
   const treePath = parseTreePath(path);
-  return treePath === undefined
-    ? findWithLsTree(repository, commit, path)
-    : findInParentTree(repository, commit, treePath);
+  if (treePath === undefined) {
+    return findWithLsTree(repository, commit, path);
+  }
+  return findInParentTree(repository, commit, treePath);
 }
 
 async function findInParentTree(

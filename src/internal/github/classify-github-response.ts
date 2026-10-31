@@ -33,9 +33,10 @@ export function classifyGithubResponse(
         head.headers.get('x-ratelimit-remaining') === '0' ||
         head.headers.get('retry-after') !== null ||
         rateLimitMessage.test(message);
-      return isRateLimited
-        ? { kind: 'rate-limited', message, resetAt }
-        : { kind: 'forbidden', message, ssoUrl: readSsoUrl(head.headers) };
+      if (isRateLimited) {
+        return { kind: 'rate-limited', message, resetAt };
+      }
+      return { kind: 'forbidden', message, ssoUrl: readSsoUrl(head.headers) };
     }
     case 404:
     case 410: {
@@ -52,7 +53,10 @@ export function classifyGithubResponse(
 
 function readMessage(body: unknown): string | undefined {
   if (typeof body === 'object' && body !== null && 'message' in body) {
-    return typeof body.message === 'string' ? body.message : undefined;
+    if (typeof body.message === 'string') {
+      return body.message;
+    }
+    return undefined;
   }
   return undefined;
 }
@@ -69,11 +73,12 @@ function readResetAt(
     return receivedAt.add(retryAfter).toString({ fractionalSecondDigits: 3 });
   }
   const resetSeconds = Number(headers.get('x-ratelimit-reset') ?? NaN);
-  return Number.isFinite(resetSeconds) && resetSeconds > 0
-    ? Temporal.Instant.fromEpochMilliseconds(Math.round(resetSeconds * 1000)).toString({
-        fractionalSecondDigits: 3,
-      })
-    : undefined;
+  if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+    return Temporal.Instant.fromEpochMilliseconds(Math.round(resetSeconds * 1000)).toString({
+      fractionalSecondDigits: 3,
+    });
+  }
+  return undefined;
 }
 
 function readSsoUrl(headers: ResponseHead['headers']): string | undefined {

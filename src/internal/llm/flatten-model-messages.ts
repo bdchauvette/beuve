@@ -7,11 +7,12 @@ import type { ModelMessage } from './language-model.ts';
  */
 export function flattenModelMessages(messages: readonly ModelMessage[]): string {
   const hasAnswers = messages.some((message) => message.role === 'assistant');
-  return hasAnswers
-    ? messages
-        .map((message) => {
-          return `${message.role === 'user' ? '## User' : '## Assistant'}\n\n${message.content}`;
-        })
-        .join('\n\n')
-    : messages.map((message) => message.content).join('\n');
+  if (hasAnswers) {
+    return messages
+      .map((message) => {
+        return `${message.role === 'user' ? '## User' : '## Assistant'}\n\n${message.content}`;
+      })
+      .join('\n\n');
+  }
+  return messages.map((message) => message.content).join('\n');
 }

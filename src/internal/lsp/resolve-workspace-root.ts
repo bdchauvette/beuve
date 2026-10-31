@@ -26,9 +26,10 @@ export async function resolveWorkspaceRoot(root: string): Promise<Result<Workspa
   try {
     const real = await realpath(root);
     const stats = await stat(real);
-    return stats.isDirectory()
-      ? ok(real as WorkspaceRoot)
-      : err({ kind: 'invalid-root', root, reason: 'not a directory' });
+    if (stats.isDirectory()) {
+      return ok(real as WorkspaceRoot);
+    }
+    return err({ kind: 'invalid-root', root, reason: 'not a directory' });
   } catch {
     return err({ kind: 'invalid-root', root, reason: 'does not exist or is unreadable' });
   }

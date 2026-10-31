@@ -85,7 +85,10 @@ function ancestorsOf(directory: string): string[] {
 }
 
 function configPathIn(directory: string, name: string): string {
-  return directory === '' ? name : `${directory}/${name}`;
+  if (directory === '') {
+    return name;
+  }
+  return `${directory}/${name}`;
 }
 
 function resolveAlias(
@@ -104,7 +107,10 @@ function resolveAlias(
     if (match === undefined || target === undefined) {
       return undefined;
     }
-    return target.startsWith('./') ? probe(inDirectory(ancestor, target, match.star)) : undefined;
+    if (target.startsWith('./')) {
+      return probe(inDirectory(ancestor, target, match.star));
+    }
+    return undefined;
   }
   return undefined;
 }

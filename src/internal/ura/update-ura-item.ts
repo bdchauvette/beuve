@@ -24,5 +24,8 @@ export function updateUraItem(
   );
   statement.setAllowUnknownNamedParameters(true);
   const { changes } = statement.run(uraItemRowFrom(item));
-  return Number(changes) === 0 ? err({ kind: 'item-not-found', id: item.id }) : ok(undefined);
+  if (Number(changes) === 0) {
+    return err({ kind: 'item-not-found', id: item.id });
+  }
+  return ok(undefined);
 }

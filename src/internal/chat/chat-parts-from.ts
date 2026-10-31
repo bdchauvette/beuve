@@ -42,5 +42,8 @@ const wholeToken = /^\[\[@([1-9]\d{0,2})\]\]$/u;
 
 function mentionIndexOf(piece: string): number | undefined {
   const found = wholeToken.exec(piece);
-  return found?.[1] === undefined ? undefined : Number(found[1]) - 1;
+  if (found?.[1] === undefined) {
+    return undefined;
+  }
+  return Number(found[1]) - 1;
 }

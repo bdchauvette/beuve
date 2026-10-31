@@ -536,9 +536,10 @@ function renderSelection(
 
 /** A selection as the prompt names it: a whole file by its path alone. */
 function placeFrom(selection: ChatSelection): MentionPlace {
-  return selection.kind === 'lines' && !selection.isWholeFile
-    ? selection
-    : { path: selection.path, side: selection.side };
+  if (selection.kind === 'lines' && !selection.isWholeFile) {
+    return selection;
+  }
+  return { path: selection.path, side: selection.side };
 }
 
 interface FileSection {
@@ -639,15 +640,16 @@ function renderOmissions(
 
 /** The read-only rule, for a model with the worktree's tools or with the prompt alone. */
 function readOnlyRule(hasTools: boolean, purpose: string): string[] {
-  return hasTools
-    ? [
-        '- You are read-only. Use Read, Grep and Glob on the working directory (the repository at the',
-        `  head commit) ${purpose}. Never try to modify files, run commands or reach the network.`,
-      ]
-    : [
-        '- You cannot read files, run commands or reach the network: work from the prompt alone, and',
-        '  say when the code you would need to see is not in it.',
-      ];
+  if (hasTools) {
+    return [
+      '- You are read-only. Use Read, Grep and Glob on the working directory (the repository at the',
+      `  head commit) ${purpose}. Never try to modify files, run commands or reach the network.`,
+    ];
+  }
+  return [
+    '- You cannot read files, run commands or reach the network: work from the prompt alone, and',
+    '  say when the code you would need to see is not in it.',
+  ];
 }
 
 function questionSystemPrompt(hasTools: boolean): string {

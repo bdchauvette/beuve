@@ -117,7 +117,10 @@ function sourceFromRow(row: Row): SessionSource | string {
     return 'kind and source columns disagree';
   }
   const parsed = parseSessionSource(source);
-  return parsed.ok ? parsed.value : parsed.error.reason;
+  if (parsed.ok) {
+    return parsed.value;
+  }
+  return parsed.error.reason;
 }
 
 function reviewFromRow(row: Row): Result<ReviewState, CorruptRow> {
@@ -125,5 +128,8 @@ function reviewFromRow(row: Row): Result<ReviewState, CorruptRow> {
     return ok({ kind: 'unreviewed' });
   }
   const checkpoint = checkpointFromRow(row);
-  return checkpoint.ok ? ok({ kind: 'reviewed', checkpoint: checkpoint.value }) : checkpoint;
+  if (checkpoint.ok) {
+    return ok({ kind: 'reviewed', checkpoint: checkpoint.value });
+  }
+  return checkpoint;
 }

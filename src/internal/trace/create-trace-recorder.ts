@@ -116,33 +116,44 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     symbolText: method(Symbol.prototype, 'toString') as Text,
   };
   const call = <T>(method: ((this: unknown) => T) | undefined, target: unknown): T | undefined => {
-    return method === undefined ? undefined : Reflect.apply(method, target, []);
+    if (method === undefined) {
+      return undefined;
+    }
+    return Reflect.apply(method, target, []);
   };
   /** A foreign Date as an ISO instant with milliseconds, through Temporal (ADR 0059). */
   const isoFromDate = (value: unknown): string | undefined => {
     const instant = call(intrinsics.instantFromDate, value);
-    return instant === undefined || intrinsics.instantText === undefined
-      ? undefined
-      : Reflect.apply(intrinsics.instantText, instant, [{ fractionalSecondDigits: 3 }]);
+    if (instant === undefined || intrinsics.instantText === undefined) {
+      return undefined;
+    }
+    return Reflect.apply(intrinsics.instantText, instant, [{ fractionalSecondDigits: 3 }]);
   };
   const isProxy = (value: object): boolean => types?.isProxy(value) ?? false;
   const isKind = (value: object, test: keyof UtilTypes, isFallback: () => boolean): boolean => {
     try {
-      return types === undefined ? isFallback() : types[test](value);
+      if (types === undefined) {
+        return isFallback();
+      }
+      return types[test](value);
     } catch {
       return false;
     }
   };
 
   const clip = (text: string, length: number): string => {
-    return text.length <= length ? text : `${text.slice(0, Math.max(0, length - 1))}…`;
+    if (text.length <= length) {
+      return text;
+    }
+    return `${text.slice(0, Math.max(0, length - 1))}…`;
   };
   const quote = (text: string): string => JSON.stringify(clip(text, limits.maxStringLength));
   const dataValue = (target: object, key: PropertyKey): { value: unknown } | undefined => {
     const descriptor = Object.getOwnPropertyDescriptor(target, key);
-    return descriptor !== undefined && 'value' in descriptor
-      ? { value: descriptor.value as unknown }
-      : undefined;
+    if (descriptor !== undefined && 'value' in descriptor) {
+      return { value: descriptor.value as unknown };
+    }
+    return undefined;
   };
   const inherited = (target: object, key: string): unknown => {
     let current: object | null = target;
@@ -168,14 +179,20 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       return undefined;
     }
     const name = dataValue(constructor, 'name')?.value;
-    return typeof name === 'string' && name !== '' && name !== 'Object' ? name : undefined;
+    if (typeof name === 'string' && name !== '' && name !== 'Object') {
+      return name;
+    }
+    return undefined;
   };
   const keyText = (key: PropertyKey): string => {
     if (typeof key === 'symbol') {
       return `[${clip(call(intrinsics.symbolText, key) ?? 'Symbol()', limits.maxStringLength)}]`;
     }
     const text = String(key);
-    return /^[$A-Z_a-z][\w$]*$/u.test(text) ? text : quote(text);
+    if (/^[$A-Z_a-z][\w$]*$/u.test(text)) {
+      return text;
+    }
+    return quote(text);
   };
 
   const classify = (value: unknown): ValueType => {
@@ -183,7 +200,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       return 'null';
     }
     if (typeof value !== 'object') {
-      return typeof value === 'function' && isProxy(value) ? 'proxy' : typeof value;
+      if (typeof value === 'function' && isProxy(value)) {
+        return 'proxy';
+      }
+      return typeof value;
     }
     if (isProxy(value)) {
       return 'proxy';
@@ -214,7 +234,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
         return String(value);
       }
       case 'number': {
-        return Object.is(value, -0) ? '-0' : String(value);
+        if (Object.is(value, -0)) {
+          return '-0';
+        }
+        return String(value);
       }
       case 'bigint': {
         return `${String(value)}n`;
@@ -249,9 +272,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
         const name = inherited(target, 'name');
         const message = dataValue(target, 'message')?.value;
         const head = typeof name === 'string' ? name : 'Error';
-        return typeof message === 'string' && message !== ''
-          ? `${head}: ${clip(message, limits.maxStringLength)}`
-          : head;
+        if (typeof message === 'string' && message !== '') {
+          return `${head}: ${clip(message, limits.maxStringLength)}`;
+        }
+        return head;
       }
       case 'binary': {
         const target = value as object;
@@ -273,7 +297,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
   const renderFunction = (target: object): string => {
     const name = dataValue(target, 'name')?.value;
     const label = typeof name === 'string' && name !== '' ? ` ${name}` : '';
-    return functionSource(target).startsWith('class') ? `[class${label}]` : `[Function${label}]`;
+    if (functionSource(target).startsWith('class')) {
+      return `[class${label}]`;
+    }
+    return `[Function${label}]`;
   };
   const functionSource = (target: object): string => {
     try {
@@ -294,9 +321,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     const name = className(target);
     const size = containerSize(target, type);
     if (depth >= limits.maxDepth) {
-      return type === 'object'
-        ? `[${name ?? 'Object'}]`
-        : `[${name ?? typeName(type)}(${String(size)})]`;
+      if (type === 'object') {
+        return `[${name ?? 'Object'}]`;
+      }
+      return `[${name ?? typeName(type)}(${String(size)})]`;
     }
     seen.add(target);
     const items = containerItems(target, type, depth, seen);
@@ -314,7 +342,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       }
       case 'object': {
         const prefix = name === undefined ? '' : `${name} `;
-        return body.length === 0 ? `${prefix}{}` : `${prefix}{ ${body.join(', ')} }`;
+        if (body.length === 0) {
+          return `${prefix}{}`;
+        }
+        return `${prefix}{ ${body.join(', ')} }`;
       }
     }
   };
@@ -325,7 +356,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
     switch (type) {
       case 'array': {
         const length = dataValue(target, 'length')?.value;
-        return typeof length === 'number' ? length : 0;
+        if (typeof length === 'number') {
+          return length;
+        }
+        return 0;
       }
       case 'map': {
         return Number(call(intrinsics.mapSize, target) ?? 0);
@@ -352,7 +386,10 @@ export function createTraceRecorder(limits: TraceRecorderLimits): TraceRecorder 
       return render(descriptor.value, depth + 1, seen);
     }
     if (descriptor.get !== undefined) {
-      return descriptor.set === undefined ? '[Getter]' : '[Getter/Setter]';
+      if (descriptor.set === undefined) {
+        return '[Getter]';
+      }
+      return '[Getter/Setter]';
     }
     return '[Setter]';
   };

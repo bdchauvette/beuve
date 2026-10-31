@@ -60,7 +60,10 @@ export async function fetchRefs(
     timeout: options.timeout ?? defaultTimeout,
     signal: options.signal,
   });
-  return fetched.ok ? ok(undefined) : fetched;
+  if (fetched.ok) {
+    return ok(undefined);
+  }
+  return fetched;
 }
 
 interface Problem {
@@ -74,16 +77,18 @@ function remoteProblem(remote: string): Problem | undefined {
     if (url === null) {
       return { argument: remote, reason: 'not a URL' };
     }
-    return url.username === '' && url.password === '' && url.search === '' && url.hash === ''
-      ? undefined
-      : {
-          argument: remote,
-          reason: 'remote URLs may not carry credentials, a query or a fragment',
-        };
+    if (url.username === '' && url.password === '' && url.search === '' && url.hash === '') {
+      return undefined;
+    }
+    return {
+      argument: remote,
+      reason: 'remote URLs may not carry credentials, a query or a fragment',
+    };
   }
-  return remoteName.test(remote) && !remote.startsWith('-') && !remote.startsWith('.')
-    ? undefined
-    : { argument: remote, reason: 'not a remote name or https URL' };
+  if (remoteName.test(remote) && !remote.startsWith('-') && !remote.startsWith('.')) {
+    return undefined;
+  }
+  return { argument: remote, reason: 'not a remote name or https URL' };
 }
 
 function refspecsProblem(refspecs: readonly string[]): Problem | undefined {

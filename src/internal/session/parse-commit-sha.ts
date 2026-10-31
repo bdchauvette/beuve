@@ -10,7 +10,8 @@ const fullSha = /^(?:[\da-f]{40}|[\da-f]{64})$/iu;
 export function parseCommitSha(
   value: string,
 ): Result<CommitSha, Extract<SessionError, { kind: 'invalid-commit-sha' }>> {
-  return fullSha.test(value)
-    ? ok(value.toLowerCase() as CommitSha)
-    : err({ kind: 'invalid-commit-sha', value });
+  if (fullSha.test(value)) {
+    return ok(value.toLowerCase() as CommitSha);
+  }
+  return err({ kind: 'invalid-commit-sha', value });
 }

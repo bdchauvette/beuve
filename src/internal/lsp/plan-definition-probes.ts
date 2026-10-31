@@ -127,7 +127,13 @@ export function planDefinitionProbes(text: string, character?: number): readonly
   );
   const isCall = (token: ProbeToken): boolean => callFollows.test(text.slice(token.end));
   const rank = (token: ProbeToken): number => {
-    return declared.has(token.start) ? 2 : isCall(token) ? 0 : 1;
+    if (declared.has(token.start)) {
+      return 2;
+    }
+    if (isCall(token)) {
+      return 0;
+    }
+    return 1;
   };
   return candidates
     .map((token, index) => {

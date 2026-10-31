@@ -22,7 +22,10 @@ function seed(db: DatabaseSync): void {
 
 function titles(db: DatabaseSync): string[] {
   const items = listUraItems(db, testUraIds.sessionId);
-  return items.ok ? items.value.map((item) => item.title) : [];
+  if (items.ok) {
+    return items.value.map((item) => item.title);
+  }
+  return [];
 }
 
 describe('reorderUraItems', () => {

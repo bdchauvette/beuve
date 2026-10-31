@@ -102,11 +102,14 @@ async function start(
 async function waitForAnswers(server: LanguageServer): Promise<unknown> {
   return pollUntil('the fake server receiving all answers', async () => {
     const result = await server.request('test/clientAnswers', {});
-    return result.ok &&
+    if (
+      result.ok &&
       typeof result.value === 'object' &&
       result.value !== null &&
       Object.keys(result.value).length === 3
-      ? result.value
-      : undefined;
+    ) {
+      return result.value;
+    }
+    return;
   });
 }

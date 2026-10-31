@@ -17,10 +17,11 @@ export interface ChangeRegion {
  */
 export function changeRegionsFrom(hunk: LineMappingHunk): ChangeRegion[] {
   if (hunk.lines === undefined) {
+    if (hunk.oldCount === 0 && hunk.newCount === 0) {
+      return [];
+    }
     const before = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
-    return hunk.oldCount === 0 && hunk.newCount === 0
-      ? []
-      : [{ before, removed: hunk.oldCount, added: hunk.newCount }];
+    return [{ before, removed: hunk.oldCount, added: hunk.newCount }];
   }
   const regions: ChangeRegion[] = [];
   let nextOld = hunk.oldCount === 0 ? hunk.oldStart + 1 : hunk.oldStart;

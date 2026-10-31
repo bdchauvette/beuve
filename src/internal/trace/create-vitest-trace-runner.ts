@@ -133,9 +133,10 @@ async function resolveWorkspace(request: TraceRunRequest): Promise<Result<Worksp
   const projectConfig = await findProjectConfig(worktree, path.dirname(first));
   const root = projectConfig === undefined ? worktree : path.dirname(projectConfig);
   const inRoot = testFiles.filter((file) => isInside(root, file));
-  return inRoot.length === 0
-    ? err({ kind: 'no-tests', testFiles: request.testFiles })
-    : ok({ worktree, dependencyRoot, root, projectConfig, testFiles: inRoot, files });
+  if (inRoot.length === 0) {
+    return err({ kind: 'no-tests', testFiles: request.testFiles });
+  }
+  return ok({ worktree, dependencyRoot, root, projectConfig, testFiles: inRoot, files });
 }
 
 async function runIn(
@@ -341,16 +342,20 @@ async function realFileInside(root: string, file: string): Promise<Result<string
   } catch {
     return err({ kind: 'invalid-path', path: file, reason: 'no such file' });
   }
-  return isInside(root, resolved) && (await isFile(resolved))
-    ? ok(resolved)
-    : err({ kind: 'invalid-path', path: file, reason: 'not a file inside the worktree' });
+  if (isInside(root, resolved) && (await isFile(resolved))) {
+    return ok(resolved);
+  }
+  return err({ kind: 'invalid-path', path: file, reason: 'not a file inside the worktree' });
 }
 
 async function realDirectory(directory: string): Promise<string | undefined> {
   try {
     const resolved = await realpath(directory);
     const stats = await stat(resolved);
-    return stats.isDirectory() ? resolved : undefined;
+    if (stats.isDirectory()) {
+      return resolved;
+    }
+    return undefined;
   } catch {
     return undefined;
   }

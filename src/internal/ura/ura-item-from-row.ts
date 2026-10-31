@@ -70,7 +70,10 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
     createdAt: created_at,
     updatedAt: updated_at,
   });
-  return item.ok ? item : corrupt(`${item.error.kind}: ${item.error.reason}`);
+  if (item.ok) {
+    return item;
+  }
+  return corrupt(`${item.error.kind}: ${item.error.reason}`);
 }
 
 function anchorFrom(row: Row): UraAnchor | string {
@@ -80,12 +83,16 @@ function anchorFrom(row: Row): UraAnchor | string {
       return { kind: 'change' };
     }
     case 'file': {
-      return typeof path === 'string' ? { kind: 'file', path } : 'path is not text';
+      if (typeof path === 'string') {
+        return { kind: 'file', path };
+      }
+      return 'path is not text';
     }
     case 'lines': {
-      return typeof path === 'string' && isInteger(line_start) && isInteger(line_end)
-        ? { kind: 'lines', path, startLine: Number(line_start), endLine: Number(line_end) }
-        : 'path, line_start or line_end is missing';
+      if (typeof path === 'string' && isInteger(line_start) && isInteger(line_end)) {
+        return { kind: 'lines', path, startLine: Number(line_start), endLine: Number(line_end) };
+      }
+      return 'path, line_start or line_end is missing';
     }
     default: {
       return 'anchor_kind is unknown';
@@ -107,25 +114,29 @@ function originFrom(row: Row): UraOrigin | string {
       if (chat_finding === null) {
         return { kind: 'chat-answer', messageId: chat_message_id };
       }
-      return Number.isSafeInteger(chat_finding) && Number(chat_finding) >= 0
-        ? { kind: 'chat-answer', messageId: chat_message_id, finding: Number(chat_finding) }
-        : 'chat_finding is not a finding index';
+      if (Number.isSafeInteger(chat_finding) && Number(chat_finding) >= 0) {
+        return { kind: 'chat-answer', messageId: chat_message_id, finding: Number(chat_finding) };
+      }
+      return 'chat_finding is not a finding index';
     }
     case 'impact-finding': {
-      return impact_metric === 'cognitive-complexity' &&
+      if (
+        impact_metric === 'cognitive-complexity' &&
         typeof impact_function === 'string' &&
         typeof impact_value === 'number' &&
         typeof impact_threshold === 'number' &&
         typeof impact_percentile === 'number'
-        ? {
-            kind: 'impact-finding',
-            metric: impact_metric,
-            functionName: impact_function,
-            value: impact_value,
-            threshold: impact_threshold,
-            percentile: impact_percentile,
-          }
-        : 'the ImpactGate columns are incomplete';
+      ) {
+        return {
+          kind: 'impact-finding',
+          metric: impact_metric,
+          functionName: impact_function,
+          value: impact_value,
+          threshold: impact_threshold,
+          percentile: impact_percentile,
+        };
+      }
+      return 'the ImpactGate columns are incomplete';
     }
     default: {
       return 'origin_kind is unknown';
@@ -141,9 +152,10 @@ function statusFrom(row: Row): UraStatus | string {
       return { kind: status };
     }
     case 'addressed': {
-      return isCommitSha(addressed_sha) && (addressed_by === 'reviewer' || addressed_by === 'agent')
-        ? { kind: 'addressed', atSha: addressed_sha, by: addressed_by }
-        : 'addressed_sha or addressed_by is invalid';
+      if (isCommitSha(addressed_sha) && (addressed_by === 'reviewer' || addressed_by === 'agent')) {
+        return { kind: 'addressed', atSha: addressed_sha, by: addressed_by };
+      }
+      return 'addressed_sha or addressed_by is invalid';
     }
     default: {
       return 'status is unknown';

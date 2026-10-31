@@ -10,7 +10,10 @@ export function streamedPartsFrom(parts: readonly ChatPart[]): StreamedParts {
   const highest = Math.max(0, ...parts.map((part) => Number(part.id.slice(1)) || 0));
   const tools = Object.fromEntries(
     parts.flatMap((part) => {
-      return part.kind === 'tool-call' && part.state === 'running' ? [[part.id, part.id]] : [];
+      if (part.kind === 'tool-call' && part.state === 'running') {
+        return [[part.id, part.id]];
+      }
+      return [];
     }),
   );
   return { parts, nextId: highest + 1, tools };

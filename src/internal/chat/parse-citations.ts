@@ -53,5 +53,8 @@ function markerFrom(inner: string, index: number, length: number): CitationMarke
   const startLine = Number(start);
   const endLine = Number(end);
   const isValid = startLine >= 1 && endLine >= startLine && path !== '' && path.trim() === path;
-  return isValid ? { index, length, path, startLine, endLine } : undefined;
+  if (isValid) {
+    return { index, length, path, startLine, endLine };
+  }
+  return undefined;
 }

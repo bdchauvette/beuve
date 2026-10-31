@@ -61,9 +61,10 @@ export function planInstrumentation(
   const builder: Builder = { rules, changedLines: request.changedLines, probes: [], edits: [] };
   const functions = targets.map((target, index) => planFunction(builder, target, index));
   const probeLimit = request.maxProbes ?? 400;
-  return builder.probes.length > probeLimit
-    ? err({ kind: 'too-large', probeLimit })
-    : ok({ path: request.path, functions, probes: builder.probes, edits: builder.edits });
+  if (builder.probes.length > probeLimit) {
+    return err({ kind: 'too-large', probeLimit });
+  }
+  return ok({ path: request.path, functions, probes: builder.probes, edits: builder.edits });
 }
 
 function findTargets(
@@ -424,9 +425,10 @@ function wrapValue(
 }
 
 function inner(node: TraceSyntaxNode, rules: TraceRules): TraceSyntaxNode {
-  return rules.delimited.includes(node.type)
-    ? (node.children.find((child) => child.isNamed) ?? node)
-    : node;
+  if (rules.delimited.includes(node.type)) {
+    return node.children.find((child) => child.isNamed) ?? node;
+  }
+  return node;
 }
 
 function addProbe(builder: Builder, probe: Omit<Probe, 'id'>): Probe {
@@ -457,5 +459,8 @@ function isTouched(builder: Builder, from: number, to: number): boolean {
 
 function label(text: string): string {
   const flat = text.replaceAll(/\s+/gu, ' ').trim();
-  return flat.length <= labelLength ? flat : `${flat.slice(0, labelLength - 1)}…`;
+  if (flat.length <= labelLength) {
+    return flat;
+  }
+  return `${flat.slice(0, labelLength - 1)}…`;
 }

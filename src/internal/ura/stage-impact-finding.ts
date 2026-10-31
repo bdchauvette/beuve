@@ -65,7 +65,10 @@ export function stageImpactFinding(
 
 function title(finding: StageableFinding): string {
   const text = `Cognitive complexity ${String(finding.value)} exceeds ${String(finding.limit)} in ${finding.functionName}`;
-  return text.length > maxTitleLength ? `${text.slice(0, maxTitleLength - 1)}…` : text;
+  if (text.length > maxTitleLength) {
+    return `${text.slice(0, maxTitleLength - 1)}…`;
+  }
+  return text;
 }
 
 function body(finding: StageableFinding): string {

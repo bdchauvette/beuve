@@ -6,5 +6,8 @@ import type { CommitSha } from './object-id.ts';
  * format only; use `resolveRevision` to confirm a commit exists.
  */
 export function parseCommitSha(text: string): CommitSha | undefined {
-  return isObjectId(text) ? (text as CommitSha) : undefined;
+  if (isObjectId(text)) {
+    return text as CommitSha;
+  }
+  return undefined;
 }

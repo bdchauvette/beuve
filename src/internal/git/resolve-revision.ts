@@ -36,14 +36,16 @@ export async function resolveRevision(
   const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!output.ok) {
     const { error } = output;
-    return error.kind === 'command-failed' && error.exitCode === 1
-      ? err({ kind: 'unknown-revision', revision })
-      : output;
+    if (error.kind === 'command-failed' && error.exitCode === 1) {
+      return err({ kind: 'unknown-revision', revision });
+    }
+    return output;
   }
   const sha = parseCommitSha(output.value.trim());
-  return sha === undefined
-    ? err({ kind: 'unexpected-output', args, message: `not an object name: ${output.value}` })
-    : ok(sha);
+  if (sha === undefined) {
+    return err({ kind: 'unexpected-output', args, message: `not an object name: ${output.value}` });
+  }
+  return ok(sha);
 }
 
 /** `info <name>^{commit}` on the warm reader: the ref is read afresh, without a spawn. */
@@ -64,13 +66,14 @@ async function resolveWithReader(
     return err({ kind: 'unknown-revision', revision });
   }
   const sha = parseCommitSha(found.value.oid);
-  return sha === undefined || found.value.type !== 'commit'
-    ? err({
-        kind: 'unexpected-output',
-        args: ['cat-file', '--batch-command'],
-        message: `not a commit: ${found.value.oid}`,
-      })
-    : ok(sha);
+  if (sha === undefined || found.value.type !== 'commit') {
+    return err({
+      kind: 'unexpected-output',
+      args: ['cat-file', '--batch-command'],
+      message: `not a commit: ${found.value.oid}`,
+    });
+  }
+  return ok(sha);
 }
 
 function revisionProblem(revision: string): string | undefined {

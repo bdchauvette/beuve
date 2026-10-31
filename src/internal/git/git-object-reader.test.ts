@@ -167,7 +167,10 @@ describe('GitObjectReader', () => {
     expect(
       read.map((result) => {
         const value = okValueFrom(result);
-        return 'bytes' in value ? value.bytes.toString('utf8') : '';
+        if ('bytes' in value) {
+          return value.bytes.toString('utf8');
+        }
+        return '';
       }),
     ).toStrictEqual(names.map((_, index) => `${String(index)}\n`.repeat(index + 1)));
     expect(objectsReader.stats.starts).toBe(1);

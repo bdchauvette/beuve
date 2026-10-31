@@ -18,7 +18,8 @@ export async function listWorktrees(
     return output;
   }
   const worktrees = parseWorktreeList(output.value);
-  return worktrees === undefined
-    ? err({ kind: 'unexpected-output', args, message: 'malformed worktree list' })
-    : ok(worktrees);
+  if (worktrees === undefined) {
+    return err({ kind: 'unexpected-output', args, message: 'malformed worktree list' });
+  }
+  return ok(worktrees);
 }

@@ -31,7 +31,10 @@ export function convertCharacter(
 function unitsOf(codePoint: number, encoding: PositionEncoding): number {
   switch (encoding) {
     case positionEncodings.utf16: {
-      return codePoint > 0xff_ff ? 2 : 1;
+      if (codePoint > 0xff_ff) {
+        return 2;
+      }
+      return 1;
     }
     case positionEncodings.utf32: {
       return 1;
@@ -43,7 +46,10 @@ function unitsOf(codePoint: number, encoding: PositionEncoding): number {
       if (codePoint < 0x8_00) {
         return 2;
       }
-      return codePoint < 0x1_00_00 ? 3 : 4;
+      if (codePoint < 0x1_00_00) {
+        return 3;
+      }
+      return 4;
     }
   }
 }

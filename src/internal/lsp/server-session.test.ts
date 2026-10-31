@@ -227,17 +227,18 @@ describe('ServerSession', () => {
 
   test('pulls diagnostics when the server supports it', async ({ expect }) => {
     const fake = createFakeServer({ pullDiagnostics: true }, (method) => {
-      return method === 'textDocument/diagnostic'
-        ? {
-            kind: 'full',
-            items: [
-              {
-                range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } },
-                message: 'pulled',
-              },
-            ],
-          }
-        : undefined;
+      if (method === 'textDocument/diagnostic') {
+        return {
+          kind: 'full',
+          items: [
+            {
+              range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } },
+              message: 'pulled',
+            },
+          ],
+        };
+      }
+      return;
     });
     const session = new ServerSession(fake.server);
     const document = session.sync(content('a.ts', 'x'));

@@ -60,7 +60,10 @@ export async function replayCommits(
     ['rev-parse', '--verify', '--end-of-options', onto + '^{tree}'],
     { policy: { kind: 'read' } },
   );
-  return tree.ok ? ok({ kind: 'clean', tree: tree.value.trim() as TreeSha }) : tree;
+  if (tree.ok) {
+    return ok({ kind: 'clean', tree: tree.value.trim() as TreeSha });
+  }
+  return tree;
 }
 
 async function wrapTree(
@@ -86,7 +89,8 @@ async function wrapTree(
     return output;
   }
   const sha = parseCommitSha(output.value.trim());
-  return sha === undefined
-    ? err({ kind: 'unexpected-output', args, message: `not a commit id: ${output.value}` })
-    : ok(sha);
+  if (sha === undefined) {
+    return err({ kind: 'unexpected-output', args, message: `not a commit id: ${output.value}` });
+  }
+  return ok(sha);
 }

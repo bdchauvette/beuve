@@ -115,16 +115,17 @@ export async function streamGit(
     ending: ending ?? 'complete',
   });
   if (closed.kind === 'error') {
-    return closed.error.code === 'ENOENT'
-      ? err({ kind: 'git-not-found', gitBinary })
-      : err({
-          kind: 'command-failed',
-          args: request.args,
-          exitCode: undefined,
-          signal: undefined,
-          stdout: '',
-          stderr: closed.error.message,
-        });
+    if (closed.error.code === 'ENOENT') {
+      return err({ kind: 'git-not-found', gitBinary });
+    }
+    return err({
+      kind: 'command-failed',
+      args: request.args,
+      exitCode: undefined,
+      signal: undefined,
+      stdout: '',
+      stderr: closed.error.message,
+    });
   }
   switch (ending) {
     case 'stopped': {
@@ -137,16 +138,17 @@ export async function streamGit(
       return err({ kind: 'timeout', args: request.args, timeout });
     }
     case undefined: {
-      return closed.code === 0
-        ? ok('complete')
-        : err({
-            kind: 'command-failed',
-            args: request.args,
-            exitCode: closed.code ?? undefined,
-            signal: closed.signal ?? undefined,
-            stdout: '',
-            stderr: stderr.trim(),
-          });
+      if (closed.code === 0) {
+        return ok('complete');
+      }
+      return err({
+        kind: 'command-failed',
+        args: request.args,
+        exitCode: closed.code ?? undefined,
+        signal: closed.signal ?? undefined,
+        stdout: '',
+        stderr: stderr.trim(),
+      });
     }
   }
 }

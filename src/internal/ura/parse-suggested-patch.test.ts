@@ -14,7 +14,10 @@ function patch(...lines: string[]): string {
 
 function reason(text: string, target: UraAnchor = anchor()): string | undefined {
   const result = parseSuggestedPatch(text, target);
-  return result.ok ? undefined : result.error.reason;
+  if (result.ok) {
+    return undefined;
+  }
+  return result.error.reason;
 }
 
 describe('parseSuggestedPatch', () => {

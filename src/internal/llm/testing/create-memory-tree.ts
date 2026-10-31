@@ -18,11 +18,13 @@ export function createMemoryTree(entries: Readonly<Record<string, MemoryEntry>>)
   const paths = Object.keys(entries).toSorted(byCodeUnits);
   const bytesOf = (file: string): Uint8Array => {
     const entry = entries[file] ?? '';
-    return typeof entry === 'string'
-      ? Buffer.from(entry)
-      : entry instanceof Uint8Array
-        ? entry
-        : Buffer.from(entry.link);
+    if (typeof entry === 'string') {
+      return Buffer.from(entry);
+    }
+    if (entry instanceof Uint8Array) {
+      return entry;
+    }
+    return Buffer.from(entry.link);
   };
   const files: SandboxFile[] = paths.map((file, index) => {
     const entry = entries[file];
@@ -35,13 +37,17 @@ export function createMemoryTree(entries: Readonly<Record<string, MemoryEntry>>)
   });
   const read = (file: SandboxFile, maxBytes: number): SandboxBytes => {
     const bytes = bytesOf(file.path);
-    return bytes.length > maxBytes
-      ? { kind: 'too-large', size: bytes.length }
-      : { kind: 'bytes', bytes };
+    if (bytes.length > maxBytes) {
+      return { kind: 'too-large', size: bytes.length };
+    }
+    return { kind: 'bytes', bytes };
   };
   const grep = (query: SandboxGrepQuery): GrepAnswer => {
     const fold = (text: string): string => {
-      return query.ignoreCase ? text.toLowerCase() : text;
+      if (query.ignoreCase) {
+        return text.toLowerCase();
+      }
+      return text;
     };
     const matches: SandboxGrepMatch[] = [];
     for (const file of paths) {

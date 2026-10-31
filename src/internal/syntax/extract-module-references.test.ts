@@ -73,5 +73,8 @@ async function referencesIn(
       return [specifier, kind, isTypeOnly] as const;
     });
   });
-  return parsed.ok ? parsed.value : [];
+  if (parsed.ok) {
+    return parsed.value;
+  }
+  return [];
 }

@@ -79,7 +79,10 @@ export async function postPullRequestReview<E>(
     first.error.kind !== 'comments-rejected' ||
     options.onRejectedComments !== 'move-to-body'
   ) {
-    return first.ok ? ok({ ...first.value, movedToBody: 0 }) : first;
+    if (first.ok) {
+      return ok({ ...first.value, movedToBody: 0 });
+    }
+    return first;
   }
   const failed = first.error.failedCommentIndexes;
   const fallback = moveCommentsToBody(
@@ -91,9 +94,10 @@ export async function postPullRequestReview<E>(
         },
   );
   const second = await submit(client, ref, fallback, options.signal);
-  return second.ok
-    ? ok({ ...second.value, movedToBody: payload.comments.length - fallback.comments.length })
-    : second;
+  if (second.ok) {
+    return ok({ ...second.value, movedToBody: payload.comments.length - fallback.comments.length });
+  }
+  return second;
 }
 
 async function submit<E>(
@@ -121,9 +125,14 @@ async function submit<E>(
     );
   }
   const decoded = decodeWith(reviewSchema, response.value.body);
-  return decoded.ok
-    ? ok({ id: decoded.value.id, htmlUrl: decoded.value.html_url, state: decoded.value.state })
-    : err({ kind: 'unexpected-shape', reason: decoded.error });
+  if (decoded.ok) {
+    return ok({
+      id: decoded.value.id,
+      htmlUrl: decoded.value.html_url,
+      state: decoded.value.state,
+    });
+  }
+  return err({ kind: 'unexpected-shape', reason: decoded.error });
 }
 
 function classifyRejection<E>(
@@ -155,9 +164,10 @@ function classifyRejection<E>(
       failedCommentIndexes: identified.length === 0 ? undefined : identified,
     };
   }
-  return messages.some((text) => staleCommit.test(text))
-    ? { kind: 'stale-commit', commitId: payload.commit_id, message: messages.join('; ') }
-    : error;
+  if (messages.some((text) => staleCommit.test(text))) {
+    return { kind: 'stale-commit', commitId: payload.commit_id, message: messages.join('; ') };
+  }
+  return error;
 }
 
 function describeDetail(detail: GithubValidationDetail): string {

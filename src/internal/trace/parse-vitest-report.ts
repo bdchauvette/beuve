@@ -71,11 +71,17 @@ function outcomeFrom(file: string, value: unknown): TestOutcome | undefined {
 }
 
 function statusFrom(status: unknown): TestStatus {
-  return status === 'passed' || status === 'failed' ? status : 'skipped';
+  if (status === 'passed' || status === 'failed') {
+    return status;
+  }
+  return 'skipped';
 }
 
 function bounded(text: string | undefined): string | undefined {
-  return text === undefined || text.length <= maxFailure ? text : `${text.slice(0, maxFailure)}…`;
+  if (text === undefined || text.length <= maxFailure) {
+    return text;
+  }
+  return `${text.slice(0, maxFailure)}…`;
 }
 
 type Field =

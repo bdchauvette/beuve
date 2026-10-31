@@ -16,7 +16,10 @@ type InvalidSource = Extract<SessionError, { kind: 'invalid-source' }>;
  */
 export function parseSessionSource(source: SessionSource): Result<SessionSource, InvalidSource> {
   const problem = findProblem(source);
-  return problem === undefined ? ok(source) : err({ kind: 'invalid-source', reason: problem });
+  if (problem === undefined) {
+    return ok(source);
+  }
+  return err({ kind: 'invalid-source', reason: problem });
 }
 
 function findProblem(source: SessionSource): string | undefined {
@@ -28,7 +31,10 @@ function findProblem(source: SessionSource): string | undefined {
   }
   switch (source.kind) {
     case 'local': {
-      return isBlank(source.headRef) ? 'headRef must not be blank' : undefined;
+      if (isBlank(source.headRef)) {
+        return 'headRef must not be blank';
+      }
+      return undefined;
     }
     case 'github-pull-request': {
       if (isBlank(source.owner) || isBlank(source.repo)) {
@@ -37,9 +43,10 @@ function findProblem(source: SessionSource): string | undefined {
       if (!isHostname(source.host)) {
         return 'host must be a lowercase hostname';
       }
-      return Number.isSafeInteger(source.number) && source.number > 0
-        ? undefined
-        : 'number must be a positive integer';
+      if (Number.isSafeInteger(source.number) && source.number > 0) {
+        return undefined;
+      }
+      return 'number must be a positive integer';
     }
   }
 }

@@ -64,7 +64,10 @@ export function attributeHunks(
 
 /** The path a file has after the change (the old path for a deletion). */
 function newSidePath(file: DiffFile): string {
-  return 'newPath' in file ? file.newPath : file.path;
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
 }
 
 function carryForward(
@@ -105,9 +108,15 @@ function renamePaths(paths: ReadonlySet<string>, files: readonly DiffFile[]): Se
 /** Copies leave their source in place, so only renames move a path. */
 function oldSidePath(file: DiffFile): string | undefined {
   if ('oldPath' in file) {
-    return file.status === 'renamed' ? file.oldPath : undefined;
+    if (file.status === 'renamed') {
+      return file.oldPath;
+    }
+    return undefined;
   }
-  return file.status === 'added' ? undefined : file.path;
+  if (file.status === 'added') {
+    return undefined;
+  }
+  return file.path;
 }
 
 function merge(target: Map<string, Set<number>>, path: string, keys: Iterable<number>): void {
@@ -173,7 +182,10 @@ function mapKey(key: number, hunks: readonly DiffHunk[]): number | undefined {
     }
     delta += hunk.newCount - hunk.oldCount;
   }
-  return isPoint ? 2 * (line + delta) + 1 : 2 * (line + delta);
+  if (isPoint) {
+    return 2 * (line + delta) + 1;
+  }
+  return 2 * (line + delta);
 }
 
 function isMeeting(keys: ReadonlySet<number>, key: number): boolean {

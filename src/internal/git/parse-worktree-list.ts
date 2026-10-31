@@ -66,7 +66,10 @@ function parseRecord(fields: readonly string[]): Worktree | undefined {
   const branch = attributes.get('branch');
   const reason = (key: string): { readonly reason: string } | undefined => {
     const value = attributes.get(key);
-    return value === undefined ? undefined : { reason: value };
+    if (value === undefined) {
+      return undefined;
+    }
+    return { reason: value };
   };
   return {
     path,

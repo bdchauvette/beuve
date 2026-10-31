@@ -29,10 +29,11 @@ function inner(): Inner {
         return err({ kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1 }) });
       }
       issued += 1;
-      const token = GithubToken.parse(`gho_token${String(issued)}`);
-      return token === undefined
-        ? err({ kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1 }) })
-        : ok(token);
+      const parsed = GithubToken.parse(`gho_token${String(issued)}`);
+      if (parsed === undefined) {
+        return err({ kind: 'timeout', timeout: Temporal.Duration.from({ milliseconds: 1 }) });
+      }
+      return ok(parsed);
     },
     invalidate: (): void => {
       // The fake caches nothing.
@@ -47,7 +48,10 @@ function inner(): Inner {
 
 async function reveal(provider: GithubCredentialProvider, host = 'github.com'): Promise<string> {
   const result = await provider.getToken({ host });
-  return result.ok ? result.value.reveal() : result.error.kind;
+  if (result.ok) {
+    return result.value.reveal();
+  }
+  return result.error.kind;
 }
 
 describe('createCachedCredentialProvider', () => {

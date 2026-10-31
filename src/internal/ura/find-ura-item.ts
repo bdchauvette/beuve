@@ -12,5 +12,8 @@ export function findUraItem(
   id: UraItemId,
 ): Result<UraItem, Extract<UraStoreError, { kind: 'item-not-found' | 'corrupt-row' }>> {
   const row = db.prepare('SELECT * FROM ura_items WHERE id = ?;').get(id);
-  return row === undefined ? err({ kind: 'item-not-found', id }) : uraItemFromRow(row);
+  if (row === undefined) {
+    return err({ kind: 'item-not-found', id });
+  }
+  return uraItemFromRow(row);
 }
