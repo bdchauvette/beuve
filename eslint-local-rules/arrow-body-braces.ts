@@ -13,7 +13,8 @@ type Reason = 'multi-line' | 'followed by a comma' | 'not a trivial expression';
  * element followed by a comma, and a simple expression (identifier, literal, member chain, call
  * with simple arguments, unary or binary of simple operands, template literal without functions).
  * Anything else gets a block with `return`, or a bare statement when the declared return type is
- * `void` (or `Promise<void>` for an async arrow). Lint runs on Prettier output, so a multi-line
+ * `void` (or `Promise<void>` for an async arrow whose body is an `await`, so no promise is
+ * dropped). Lint runs on Prettier output, so a multi-line
  * arrow is one Prettier had to break.
  */
 export const arrowBodyBraces = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
@@ -190,6 +191,7 @@ function isReturnless(node: TSESTree.ArrowFunctionExpression, body: TSESTree.Nod
   }
   return (
     node.async &&
+    body.type === AST_NODE_TYPES.AwaitExpression &&
     annotation.type === AST_NODE_TYPES.TSTypeReference &&
     annotation.typeName.type === AST_NODE_TYPES.Identifier &&
     annotation.typeName.name === 'Promise' &&

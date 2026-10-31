@@ -106,6 +106,12 @@ createRuleTester().run('arrow-body-braces', arrowBodyBraces, {
       output: 'const f = async (): Promise<void> => {\n  await g(await h());\n};',
     },
     {
+      // Without an `await`, the body may be a promise the bare statement would drop.
+      code: 'const f = async (): Promise<void> => g(await h());',
+      errors: [{ messageId: 'useBlockBody' }],
+      output: 'const f = async (): Promise<void> => {\n  return g(await h());\n};',
+    },
+    {
       code: 'const f = (): Promise<void> => g(() => 1);',
       errors: [{ messageId: 'useBlockBody' }],
       output: 'const f = (): Promise<void> => {\n  return g(() => 1);\n};',
