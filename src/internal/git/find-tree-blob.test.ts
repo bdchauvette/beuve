@@ -3,6 +3,8 @@ import { describe } from 'vitest';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { findTreeBlob } from './find-tree-blob.ts';
+import { readBlobs } from './read-blobs.ts';
+import { hostilePathNames } from './testing/hostile-path-names.ts';
 import { test } from './testing/test.ts';
 
 describe('findTreeBlob', () => {
@@ -33,4 +35,16 @@ describe('findTreeBlob', () => {
       undefined,
     ]);
   });
+
+  test.for(hostilePathNames())(
+    'finds %j, a path git would quote',
+    async (name, { expect, repo, repository: git }) => {
+      repo.write(name, 'content\n');
+      const head = await repo.commit('hostile name');
+      const found = okValueFrom(await findTreeBlob(git, head, name));
+      expect(found).toMatchObject({ path: name, mode: '100644' });
+      const blobs = okValueFrom(await readBlobs(git, [{ objectId: found?.objectId ?? '' }]));
+      expect(blobs.get(found?.objectId ?? '')).toMatchObject({ kind: 'text', text: 'content\n' });
+    },
+  );
 });

@@ -4,6 +4,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { listTreeBlobs } from './list-tree-blobs.ts';
 import { readBlobs } from './read-blobs.ts';
+import { hostilePathNames } from './testing/hostile-path-names.ts';
 import { test } from './testing/test.ts';
 
 describe('listTreeBlobs', () => {
@@ -28,5 +29,19 @@ describe('listTreeBlobs', () => {
       kind: 'text',
       text: 'export const a = 1;\n',
     });
+  });
+
+  test('lists paths git would quote exactly as stored', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
+    const names = hostilePathNames();
+    for (const name of names) {
+      repo.write(name, `${name}\n`);
+    }
+    const head = await repo.commit('hostile names');
+    const listed = okValueFrom(await listTreeBlobs(git, head));
+    expect(new Set(listed.map((blob) => blob.path))).toStrictEqual(new Set(names));
   });
 });

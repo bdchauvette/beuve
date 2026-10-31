@@ -1,6 +1,9 @@
 import { describe } from 'vitest';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { listTreePaths } from './list-tree-paths.ts';
+import { hostilePathNames } from './testing/hostile-path-names.ts';
 import { test } from './testing/test.ts';
 
 describe('listTreePaths', () => {
@@ -20,6 +23,20 @@ describe('listTreePaths', () => {
       ok: true,
       value: ['README.md', 'src/a b/ü.ts', 'src/main.ts'],
     });
+  });
+
+  test('lists paths git would quote exactly as stored', async ({
+    expect,
+    repo,
+    repository: git,
+  }) => {
+    const names = hostilePathNames();
+    for (const name of names) {
+      repo.write(name, 'x\n');
+    }
+    const head = await repo.commit('hostile names');
+    const listed = okValueFrom(await listTreePaths(git, head));
+    expect(new Set(listed)).toStrictEqual(new Set(names));
   });
 
   test('fails for a commit the repository lacks', async ({ expect, repo, repository: git }) => {

@@ -6,13 +6,13 @@ import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import type { TreeBlob } from './list-tree-blobs.ts';
-
-const entryPattern = /^blob (\d{6}) ([0-9a-f]{40,64}) (.+)$/su;
+import { parseLsTreeEntry } from './parse-ls-tree-entry.ts';
 
 /**
  * The blob tracked at exactly `path` (repository-relative, `/` separators) in `commit`'s tree, or
  * `undefined` when the path is absent there or is not a file (a directory, a submodule). Pathspecs
- * are literal (`execGit`), so `path` can't match more than itself.
+ * are literal (`execGit`), so `path` can't match more than itself. Any path git can store is
+ * found, quotes, backslashes and control characters included (`parseLsTreeEntry`).
  */
 export async function findTreeBlob(
   repository: GitRepository,
@@ -20,24 +20,16 @@ export async function findTreeBlob(
   path: string,
 ): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
   const output = await repository[gitRunner].exec(
-    [
-      'ls-tree',
-      '-z',
-      '--format=%(objecttype) %(objectmode) %(objectname) %(path)',
-      '--end-of-options',
-      commit,
-      '--',
-      path,
-    ],
+    ['ls-tree', '-z', '--end-of-options', commit, '--', path],
     { policy: { kind: 'read' } },
   );
   if (!output.ok) {
     return output;
   }
-  for (const entry of output.value.toString('utf8').split('\0')) {
-    const match = entryPattern.exec(entry);
-    if (match?.[1] !== undefined && match[2] !== undefined && match[3] === path) {
-      return ok({ path, mode: match[1], objectId: match[2] });
+  for (const line of output.value.toString('utf8').split('\0')) {
+    const entry = parseLsTreeEntry(line);
+    if (entry?.type === 'blob' && entry.path === path) {
+      return ok({ path, mode: entry.mode, objectId: entry.objectId });
     }
   }
   return ok(undefined);
