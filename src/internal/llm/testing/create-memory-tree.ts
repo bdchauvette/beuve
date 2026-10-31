@@ -29,11 +29,11 @@ export function createMemoryTree(entries: Readonly<Record<string, MemoryEntry>>)
   const files: SandboxFile[] = paths.map((file, index) => {
     const entry = entries[file];
     const isLink = typeof entry === 'object' && !(entry instanceof Uint8Array);
-    return {
-      path: file,
-      mode: isLink ? '120000' : '100644',
-      objectId: index.toString(16).padStart(40, '0'),
-    };
+    let mode = '100644';
+    if (isLink) {
+      mode = '120000';
+    }
+    return { path: file, mode, objectId: index.toString(16).padStart(40, '0') };
   });
   const read = (file: SandboxFile, maxBytes: number): SandboxBytes => {
     const bytes = bytesOf(file.path);

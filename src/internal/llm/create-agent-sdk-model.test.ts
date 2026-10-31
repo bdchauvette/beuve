@@ -30,7 +30,13 @@ function model(
 }
 
 /** A worktree with one file, beside a secret outside it. */
-function worktree(directory: string): { readonly cwd: string; readonly secret: string } {
+/** A worktree, and a secret file outside it. */
+interface Worktree {
+  readonly cwd: string;
+  readonly secret: string;
+}
+
+function worktree(directory: string): Worktree {
   const cwd = path.join(directory, 'worktree');
   mkdirSync(path.join(cwd, 'src'), { recursive: true });
   writeFileSync(path.join(cwd, 'src', 'greet.ts'), 'export const greeting = "hello world";\n');
@@ -54,6 +60,11 @@ function messageRequests(api: FakeMessagesApi): RecordedRequest[] {
   return api.requests.filter((request) => request.url.startsWith('/v1/messages?'));
 }
 
+/** A content block of a Messages API message, as far as the tests read it. */
+interface ContentBlock {
+  readonly type?: string;
+}
+
 /** The tool results Claude Code sent back in its last user message. */
 function lastToolResults(api: FakeMessagesApi): unknown[] {
   const messages = (messageRequests(api).at(-1)?.body?.['messages'] ?? []) as {
@@ -62,7 +73,7 @@ function lastToolResults(api: FakeMessagesApi): unknown[] {
   }[];
   const user = messages.findLast((message) => message.role === 'user');
   if (Array.isArray(user?.content)) {
-    return user.content.filter((block: { type?: string }) => {
+    return user.content.filter((block: ContentBlock) => {
       return typeof block === 'object' && block.type === 'tool_result';
     });
   }
@@ -173,13 +184,7 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
             streamed.push(event);
           },
           onProgress: (event) => {
-            tools.push(
-              event.kind === 'tool-start'
-                ? event.description
-                : event.kind === 'tool-end'
-                  ? `${event.tool} ${event.ok ? 'ok' : 'failed'}`
-                  : event.kind,
-            );
+            tools.push(progressText(event));
           },
           signal,
         }),
@@ -490,3 +495,20 @@ describe('createAgentSdkModel', { concurrent: false, timeout: 30_000 }, () => {
     ).resolves.toStrictEqual({ ok: false, error: { kind: 'not-installed', command: missing } });
   });
 });
+
+function progressText(event: ModelProgress): string {
+  switch (event.kind) {
+    case 'tool-start': {
+      return event.description;
+    }
+    case 'tool-end': {
+      if (event.ok) {
+        return `${event.tool} ok`;
+      }
+      return `${event.tool} failed`;
+    }
+    default: {
+      return event.kind;
+    }
+  }
+}

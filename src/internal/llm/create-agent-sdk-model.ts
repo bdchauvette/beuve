@@ -13,6 +13,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { anySignal } from '#x/async/any-signal.ts';
 import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { classifyClaudeCodeOutcome } from './classify-claude-code-outcome.ts';
@@ -171,10 +172,7 @@ async function runAgent(
   options: AgentSdkModelOptions,
   mode: OutputMode,
 ): Promise<Result<ModelOutput<unknown>, ModelError>> {
-  const invalid = validateModelRequest(
-    request,
-    mode.schema === undefined ? 0 : JSON.stringify(mode.schema).length,
-  );
+  const invalid = validateModelRequest(request, schemaLength(mode));
   if (invalid !== undefined) {
     return err(invalid);
   }
@@ -204,17 +202,14 @@ async function runAgent(
     }, 0),
     systemChars: request.system.length,
   });
-  const run = await execute({ ...request, cwd }, options, mode, configDir.path);
+  const run = await execute({ request: { ...request, cwd }, options, mode }, configDir.path);
   const duration = stopwatch.elapsed();
   if (!run.ok) {
     options.logger?.info('agent-sdk: run failed', { duration, error: run.error.kind });
     return run;
   }
   const { outcome, model } = run.value;
-  const classified = classifyClaudeCodeOutcome(
-    outcome,
-    mode.schema === undefined ? 'text' : 'json',
-  );
+  const classified = classifyClaudeCodeOutcome(outcome, expectedOutput(mode));
   if (!classified.ok) {
     options.logger?.info('agent-sdk: run failed', { duration, error: classified.error.kind });
     return classified;
@@ -246,12 +241,15 @@ interface Execution {
   readonly model: string | undefined;
 }
 
-async function execute(
-  request: CheckoutModelRequest,
-  options: AgentSdkModelOptions,
-  mode: OutputMode,
-  configDir: string,
-): Promise<Result<Execution, ModelError>> {
+/** One run: the request, the model's options and the answer it expects. */
+interface AgentRun {
+  readonly request: CheckoutModelRequest;
+  readonly options: AgentSdkModelOptions;
+  readonly mode: OutputMode;
+}
+
+async function execute(run: AgentRun, configDir: string): Promise<Result<Execution, ModelError>> {
+  const { request, options, mode } = run;
   using stack = new DisposableStack();
   const controller = new AbortController();
   type Termination = 'timeout' | 'cancelled' | 'wrong-credential';
@@ -261,15 +259,18 @@ async function execute(
     controller.abort();
   };
   const deadline = timeoutSignal(request.timeout);
-  const stopped =
-    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const stopped = anySignal(request.signal, deadline) ?? deadline;
   const listeners = stack.adopt(new AbortController(), (adopted) => {
     adopted.abort();
   });
   stopped.addEventListener(
     'abort',
     () => {
-      terminate(stopped.reason === deadline.reason ? 'timeout' : 'cancelled');
+      if (stopped.reason === deadline.reason) {
+        terminate('timeout');
+      } else {
+        terminate('cancelled');
+      }
     },
     { once: true, signal: listeners.signal },
   );
@@ -301,8 +302,12 @@ async function execute(
     // Throws at once, not from the iterator, when the platform's Claude Code binary is missing.
     conversation = query({
       prompt: flattenModelMessages(request.messages),
-      options: sdkOptions(request, options, mode, configDir, controller, (chunk) => {
-        stderr = tailOf(stderr + chunk, stderrTailChars);
+      options: sdkOptions(run, {
+        configDir,
+        controller,
+        onStderr: (chunk) => {
+          stderr = tailOf(stderr + chunk, stderrTailChars);
+        },
       }),
     });
     for await (const message of conversation) {
@@ -341,13 +346,16 @@ async function execute(
   });
 }
 
+/** The run's private config directory, its abort controller and where its stderr goes. */
+interface SdkProcess {
+  readonly configDir: string;
+  readonly controller: AbortController;
+  readonly onStderr: (chunk: string) => void;
+}
+
 function sdkOptions(
-  request: CheckoutModelRequest,
-  options: AgentSdkModelOptions,
-  mode: OutputMode,
-  configDir: string,
-  controller: AbortController,
-  onStderr: (chunk: string) => void,
+  { request, options, mode }: AgentRun,
+  { configDir, controller, onStderr }: SdkProcess,
 ): Options {
   return {
     abortController: controller,
@@ -423,4 +431,18 @@ async function isDirectory(directory: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function schemaLength(mode: OutputMode): number {
+  if (mode.schema === undefined) {
+    return 0;
+  }
+  return JSON.stringify(mode.schema).length;
+}
+
+function expectedOutput(mode: OutputMode): 'text' | 'json' {
+  if (mode.schema === undefined) {
+    return 'text';
+  }
+  return 'json';
 }

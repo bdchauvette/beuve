@@ -10,8 +10,7 @@ const maxChars = 80;
  * field is checked and the result is cut to 80 characters on one line.
  */
 export function describeToolUse(tool: string, input: unknown, cwd?: string): string {
-  const fields =
-    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+  const fields = fieldsOf(input);
   const text = (key: string): string | undefined => {
     if (typeof fields[key] === 'string') {
       return fields[key];
@@ -28,10 +27,17 @@ export function describeToolUse(tool: string, input: unknown, cwd?: string): str
     if (file === undefined) {
       return '';
     }
-    if (cwd === undefined) {
+    if (cwd === undefined || !path.isAbsolute(file)) {
       return file;
     }
-    return relativeTo(cwd, file);
+    const relative = path.relative(cwd, file);
+    if (relative === '') {
+      return '.';
+    }
+    if (relative.startsWith('..')) {
+      return file;
+    }
+    return relative;
   };
   let description: string;
   switch (tool.toLowerCase()) {
@@ -40,17 +46,19 @@ export function describeToolUse(tool: string, input: unknown, cwd?: string): str
       const file = shown(text('file_path') ?? text('path'));
       const start = count('offset') ?? count('start_line');
       const limit = count('limit');
-      const end =
-        count('end_line') ??
-        (start === undefined || limit === undefined ? undefined : start + limit - 1);
-      const range =
-        start === undefined ? '' : `:${String(start)}${end === undefined ? '' : `-${String(end)}`}`;
-      description = `read ${file}${range}`;
+      let end = count('end_line');
+      if (end === undefined && start !== undefined && limit !== undefined) {
+        end = start + limit - 1;
+      }
+      description = `read ${file}${rangeText(start, end)}`;
       break;
     }
     case 'grep': {
       const where = shown(text('path'));
-      description = `grep ${text('pattern') ?? ''}${where === '' ? '' : ` in ${where}`}`;
+      description = `grep ${text('pattern') ?? ''}`;
+      if (where !== '') {
+        description += ` in ${where}`;
+      }
       break;
     }
     case 'glob': {
@@ -68,16 +76,20 @@ export function describeToolUse(tool: string, input: unknown, cwd?: string): str
   return line;
 }
 
-function relativeTo(cwd: string, file: string): string {
-  if (!path.isAbsolute(file)) {
-    return file;
+function fieldsOf(input: unknown): Record<string, unknown> {
+  if (typeof input === 'object' && input !== null) {
+    return input as Record<string, unknown>;
   }
-  const relative = path.relative(cwd, file);
-  if (relative === '') {
-    return '.';
+  return {};
+}
+
+/** `:12-40`, `:12`, or nothing without a start. */
+function rangeText(start: number | undefined, end: number | undefined): string {
+  if (start === undefined) {
+    return '';
   }
-  if (relative.startsWith('..')) {
-    return file;
+  if (end === undefined) {
+    return `:${String(start)}`;
   }
-  return relative;
+  return `:${String(start)}-${String(end)}`;
 }

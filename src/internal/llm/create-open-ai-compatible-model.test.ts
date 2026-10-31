@@ -29,7 +29,11 @@ function model(
   return createOpenAiCompatibleModel({ baseUrl, model: 'qwen-test', ...overrides });
 }
 
-function findingsSchema(): z.ZodType<{ findings: string[] }> {
+interface Findings {
+  readonly findings: string[];
+}
+
+function findingsSchema(): z.ZodType<Findings> {
   return z.object({ findings: z.array(z.string()) });
 }
 

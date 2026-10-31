@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/no-null -- the chat completions wire format spells absent fields null. */
 import { createServer } from 'node:http';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
 
 /** One scripted answer to a `POST /chat/completions`. */
 export type FakeOpenAiReply =
@@ -103,7 +103,10 @@ export async function startFakeOpenAiApi(options: FakeOpenAiOptions = {}): Promi
         response.end('{"error":{"message":"no scripted reply"}}');
         return;
       }
-      const model = typeof body?.['model'] === 'string' ? body['model'] : 'fake';
+      let model = 'fake';
+      if (typeof body?.['model'] === 'string') {
+        model = body['model'];
+      }
       switch (reply.kind) {
         case 'error': {
           response.writeHead(reply.status, {
@@ -140,8 +143,7 @@ export async function startFakeOpenAiApi(options: FakeOpenAiOptions = {}): Promi
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
-  const address = server.address();
-  const port = typeof address === 'object' && address !== null ? address.port : 0;
+  const port = portOf(server.address());
   return {
     baseUrl: `http://127.0.0.1:${String(port)}/v1`,
     requests,
@@ -155,8 +157,14 @@ export async function startFakeOpenAiApi(options: FakeOpenAiOptions = {}): Promi
   };
 }
 
+/** Where a streamed reply is written. */
+interface StreamSink {
+  readonly write: (text: string) => unknown;
+  readonly end: () => unknown;
+}
+
 function writeStream(
-  response: { write: (text: string) => unknown; end: () => unknown },
+  response: StreamSink,
   reply: Extract<FakeOpenAiReply, { kind: 'stream' }>,
   model: string,
 ): void {
@@ -227,4 +235,11 @@ async function readBody(incoming: IncomingMessage): Promise<Record<string, unkno
   } catch {
     return undefined;
   }
+}
+
+function portOf(address: ReturnType<Server['address']>): number {
+  if (typeof address === 'object' && address !== null) {
+    return address.port;
+  }
+  return 0;
 }

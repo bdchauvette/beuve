@@ -22,12 +22,15 @@ describe('createReadOnlySandbox', () => {
   test('reads a file with line numbers, a range of it, and caps the lines', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree(), { maxLines: 2 });
     await expect(
-      sandbox.run('read_file', '{"path":"src/a.ts","start_line":2,"end_line":3}'),
+      sandbox.run({
+        name: 'read_file',
+        arguments: '{"path":"src/a.ts","start_line":2,"end_line":3}',
+      }),
     ).resolves.toStrictEqual({
       output: '2\texport function validate(x) {\n3\t  return x;',
       denied: false,
     });
-    const capped = await sandbox.run('read_file', '{"path":"src/a.ts"}');
+    const capped = await sandbox.run({ name: 'read_file', arguments: '{"path":"src/a.ts"}' });
     expect(capped.output).toBe(
       '1\tconst a = 1;\n2\texport function validate(x) {\n[lines 3-5 not shown]',
     );
@@ -35,11 +38,15 @@ describe('createReadOnlySandbox', () => {
 
   test('cuts a file at the byte limit and refuses binary files', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree(), { maxFileBytes: 8 });
-    await expect(sandbox.run('read_file', '{"path":"src/a.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"src/a.ts"}' }),
+    ).resolves.toStrictEqual({
       output: '1\tconst a \n[cut at 8 bytes]',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"logo.png"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"logo.png"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: logo.png',
       denied: false,
     });
@@ -49,7 +56,9 @@ describe('createReadOnlySandbox', () => {
     const sandbox = createReadOnlySandbox(tree({ 'big.txt': 'x'.repeat(100) }), {
       maxBlobBytes: 64,
     });
-    await expect(sandbox.run('read_file', '{"path":"big.txt"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"big.txt"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: big.txt',
       denied: false,
     });
@@ -58,7 +67,9 @@ describe('createReadOnlySandbox', () => {
   test('detects binary content past the first bytes, within what is shown', async ({ expect }) => {
     const late = Buffer.concat([Buffer.from('a'.repeat(9000)), Buffer.from([0])]);
     const sandbox = createReadOnlySandbox(tree({ 'late.bin': late }));
-    await expect(sandbox.run('read_file', '{"path":"late.bin"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"late.bin"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: late.bin',
       denied: false,
     });
@@ -85,7 +96,7 @@ describe('createReadOnlySandbox', () => {
       }),
     );
     await expect(
-      sandbox.run('read_file', JSON.stringify({ path: requested })),
+      sandbox.run({ name: 'read_file', arguments: JSON.stringify({ path: requested }) }),
     ).resolves.toStrictEqual({ output, denied: true });
   });
 
@@ -94,13 +105,13 @@ describe('createReadOnlySandbox', () => {
       tree({ 'alias.ts': { link: 'src/a.ts' }, 'lib/source': { link: '../src' } }),
     );
     await expect(
-      sandbox.run('read_file', '{"path":"alias.ts","end_line":1}'),
+      sandbox.run({ name: 'read_file', arguments: '{"path":"alias.ts","end_line":1}' }),
     ).resolves.toStrictEqual({ output: '1\tconst a = 1;', denied: false });
     await expect(
-      sandbox.run('read_file', '{"path":"lib/source/deep/b.ts"}'),
+      sandbox.run({ name: 'read_file', arguments: '{"path":"lib/source/deep/b.ts"}' }),
     ).resolves.toStrictEqual({ output: '1\tvalidate(2);\n2\t', denied: false });
     await expect(
-      sandbox.run('grep', '{"pattern":"validate(","path":"lib/source/deep"}'),
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"validate(","path":"lib/source/deep"}' }),
     ).resolves.toStrictEqual({
       output: 'src/deep/b.ts:1: validate(2);',
       denied: false,
@@ -111,15 +122,21 @@ describe('createReadOnlySandbox', () => {
     expect,
   }) => {
     const sandbox = createReadOnlySandbox(tree());
-    await expect(sandbox.run('read_file', '{"path":"SRC/a.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"SRC/a.ts"}' }),
+    ).resolves.toStrictEqual({
       output: 'not found: SRC/a.ts',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"src/a.ts/x"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"src/a.ts/x"}' }),
+    ).resolves.toStrictEqual({
       output: 'not found: src/a.ts/x',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"src"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"src"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: src',
       denied: false,
     });
@@ -127,29 +144,42 @@ describe('createReadOnlySandbox', () => {
 
   test('greps a fixed string, skipping binaries and links', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree({ 'outside.md': { link: 'validate( link' } }));
-    await expect(sandbox.run('grep', '{"pattern":"validate("}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"validate("}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts:2: export function validate(x) {\nsrc/deep/b.ts:1: validate(2);',
       denied: false,
     });
     await expect(
-      sandbox.run('grep', '{"pattern":"validate(","ignore_case":true,"glob":"*.md"}'),
+      sandbox.run({
+        name: 'grep',
+        arguments: '{"pattern":"validate(","ignore_case":true,"glob":"*.md"}',
+      }),
     ).resolves.toStrictEqual({ output: 'README.md:1: Call VALIDATE( first.', denied: false });
-    await expect(sandbox.run('grep', '{"pattern":"(a+)+$"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"(a+)+$"}' }),
+    ).resolves.toStrictEqual({
       output: 'no matches',
       denied: false,
     });
-    await expect(sandbox.run('grep', '{"pattern":"x","path":"../"}')).resolves.toMatchObject({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"x","path":"../"}' }),
+    ).resolves.toMatchObject({
       denied: true,
     });
   });
 
   test('caps grep matches and glob paths', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree(), { maxMatches: 1, maxPaths: 1 });
-    await expect(sandbox.run('grep', '{"pattern":"validate("}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"validate("}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts:2: export function validate(x) {\n[stopped at 1 matches]',
       denied: false,
     });
-    await expect(sandbox.run('glob', '{"pattern":"**/*.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: '{"pattern":"**/*.ts"}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts\n[stopped at 1 paths]',
       denied: false,
     });
@@ -157,15 +187,21 @@ describe('createReadOnlySandbox', () => {
 
   test('globs tracked files in git order, leaving links out', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree({ 'src/link.ts': { link: 'a.ts' } }));
-    await expect(sandbox.run('glob', '{"pattern":"src/**/*.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: '{"pattern":"src/**/*.ts"}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts\nsrc/deep/b.ts',
       denied: false,
     });
-    await expect(sandbox.run('glob', '{"pattern":"*.{md,png}"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: '{"pattern":"*.{md,png}"}' }),
+    ).resolves.toStrictEqual({
       output: 'README.md\nlogo.png',
       denied: false,
     });
-    await expect(sandbox.run('glob', `{"pattern":"${'*'.repeat(20)}"}`)).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: `{"pattern":"${'*'.repeat(20)}"}` }),
+    ).resolves.toStrictEqual({
       output: 'invalid arguments: at most 12 wildcards',
       denied: false,
     });
@@ -175,7 +211,9 @@ describe('createReadOnlySandbox', () => {
     const sandbox = createReadOnlySandbox(
       tree({ 'a(1)+b.txt': 'x\n', 'a1b.txt': 'x\n', 'a1bb.txt': 'x\n' }),
     );
-    await expect(sandbox.run('glob', '{"pattern":"a(1)+b.txt"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: '{"pattern":"a(1)+b.txt"}' }),
+    ).resolves.toStrictEqual({
       output: 'a(1)+b.txt',
       denied: false,
     });
@@ -183,15 +221,17 @@ describe('createReadOnlySandbox', () => {
 
   test('refuses unknown tools and rejects bad arguments', async ({ expect }) => {
     const sandbox = createReadOnlySandbox(tree());
-    await expect(sandbox.run('write_file', '{}')).resolves.toStrictEqual({
+    await expect(sandbox.run({ name: 'write_file', arguments: '{}' })).resolves.toStrictEqual({
       output: 'refused: there is no tool named write_file',
       denied: true,
     });
-    await expect(sandbox.run('read_file', '{')).resolves.toStrictEqual({
+    await expect(sandbox.run({ name: 'read_file', arguments: '{' })).resolves.toStrictEqual({
       output: 'invalid arguments: not JSON',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"a","mode":"w"}')).resolves.toMatchObject({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"a","mode":"w"}' }),
+    ).resolves.toMatchObject({
       denied: false,
     });
     expect(sandbox.definitions.map((tool) => tool.function.name)).toStrictEqual([

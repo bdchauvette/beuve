@@ -12,15 +12,7 @@ export function openAiErrorFrom(status: number, body: string, headers: Headers):
     return { kind: 'not-authenticated', message };
   }
   if (status === 429) {
-    const seconds = Number(headers.get('retry-after') ?? '');
-    return {
-      kind: 'rate-limited',
-      message,
-      resetsAt:
-        Number.isSafeInteger(seconds) && seconds > 0
-          ? Temporal.Now.instant().add({ seconds }).toString({ fractionalSecondDigits: 3 })
-          : undefined,
-    };
+    return { kind: 'rate-limited', message, resetsAt: resetTime(headers.get('retry-after')) };
   }
   return { kind: 'model-failed', reason: `http-${String(status)}`, message, status };
 }
@@ -28,9 +20,7 @@ export function openAiErrorFrom(status: number, body: string, headers: Headers):
 function messageFrom(body: string, status: number): string {
   let text = body.trim();
   try {
-    const json = JSON.parse(body) as unknown;
-    const error =
-      typeof json === 'object' && json !== null && 'error' in json ? json.error : undefined;
+    const error = errorFieldOf(JSON.parse(body) as unknown);
     if (typeof error === 'string') {
       text = error;
     } else if (typeof error === 'object' && error !== null && 'message' in error) {
@@ -39,5 +29,24 @@ function messageFrom(body: string, status: number): string {
   } catch {
     // Not JSON: the body as it is.
   }
-  return (text === '' ? `HTTP ${String(status)}` : text).slice(0, 1000);
+  if (text === '') {
+    return `HTTP ${String(status)}`;
+  }
+  return text.slice(0, 1000);
+}
+
+/** When `retry-after` gives a whole number of seconds, the instant it points at. */
+function resetTime(retryAfter: string | null): string | undefined {
+  const seconds = Number(retryAfter ?? '');
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
+    return undefined;
+  }
+  return Temporal.Now.instant().add({ seconds }).toString({ fractionalSecondDigits: 3 });
+}
+
+function errorFieldOf(json: unknown): unknown {
+  if (typeof json === 'object' && json !== null && 'error' in json) {
+    return json.error;
+  }
+  return undefined;
 }

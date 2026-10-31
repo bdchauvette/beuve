@@ -57,11 +57,13 @@ export interface SandboxTree {
   /** A file's raw bytes, or `too-large` past `maxBytes` (then nothing is read). */
   readonly read: (file: SandboxFile, maxBytes: number) => Promise<SandboxBytes>;
   /** Lines holding a fixed string, in git's order, stopped one match past `maxMatches`. */
-  readonly grep: (
-    query: SandboxGrepQuery,
-  ) => Promise<
-    { readonly matches: readonly SandboxGrepMatch[]; readonly isCapped: boolean } | undefined
-  >;
+  readonly grep: (query: SandboxGrepQuery) => Promise<SandboxGrepResult | undefined>;
+}
+
+/** The matches of a grep, and whether it stopped at its cap. */
+export interface SandboxGrepResult {
+  readonly matches: readonly SandboxGrepMatch[];
+  readonly isCapped: boolean;
 }
 
 /** A tool definition in the OpenAI chat completions `tools` shape. */
@@ -84,7 +86,13 @@ export interface SandboxResult {
 export interface ReadOnlySandbox {
   readonly definitions: readonly SandboxToolDefinition[];
   /** Runs one call with the model's raw JSON arguments. Never rejects. */
-  readonly run: (name: string, rawArguments: string) => Promise<SandboxResult>;
+  readonly run: (call: SandboxCall) => Promise<SandboxResult>;
+}
+
+/** A tool call as the model wrote it: the tool's name and its raw JSON arguments. */
+export interface SandboxCall {
+  readonly name: string;
+  readonly arguments: string;
 }
 
 interface Listing {
@@ -230,7 +238,10 @@ export function createReadOnlySandbox(
     if (resolved.kind === 'refused') {
       return { output: resolved.output, denied: resolved.denied };
     }
-    const text = resolved.kind === 'file' ? await readText(tree, resolved.file, caps) : undefined;
+    let text: SandboxText | undefined;
+    if (resolved.kind === 'file') {
+      text = await readText(tree, resolved.file, caps);
+    }
     if (text === undefined) {
       return { output: `not a readable text file: ${input.path}`, denied: false };
     }
@@ -241,13 +252,14 @@ export function createReadOnlySandbox(
     const numbered = lines
       .slice(start - 1, end)
       .map((line, offset) => `${String(start + offset).padStart(width)}\t${line}`);
-    const notes = [
-      ...(text.isCut ? [`[cut at ${String(caps.maxFileBytes)} bytes]`] : []),
-      ...(end < (input.end_line ?? lines.length) && !text.isCut
-        ? [`[lines ${String(end + 1)}-${String(input.end_line ?? lines.length)} not shown]`]
-        : []),
-    ];
-    return { output: [...numbered, ...notes].join('\n'), denied: false };
+    const output = [...numbered];
+    if (text.isCut) {
+      output.push(`[cut at ${String(caps.maxFileBytes)} bytes]`);
+    }
+    if (end < (input.end_line ?? lines.length) && !text.isCut) {
+      output.push(`[lines ${String(end + 1)}-${String(input.end_line ?? lines.length)} not shown]`);
+    }
+    return { output: output.join('\n'), denied: false };
   };
 
   const grepTool = async (input: z.infer<typeof grepArguments>): Promise<SandboxResult> => {
@@ -255,12 +267,20 @@ export function createReadOnlySandbox(
     if (scope.kind === 'refused') {
       return { output: scope.output, denied: scope.denied };
     }
-    const matcher = input.glob === undefined ? undefined : globMatcher(input.glob);
+    let matcher: RegExp | null | undefined;
+    if (input.glob !== undefined) {
+      matcher = globMatcher(input.glob);
+    }
     if (matcher === null) {
       return tooManyWildcards();
     }
     const files = await listing();
-    const scopePath = scope.kind === 'file' ? scope.file.path : scope.path;
+    let scopePath: string;
+    if (scope.kind === 'file') {
+      scopePath = scope.file.path;
+    } else {
+      scopePath = scope.path;
+    }
     const found = await tree.grep({
       pattern: input.pattern,
       ignoreCase: input.ignore_case === true,
@@ -280,16 +300,13 @@ export function createReadOnlySandbox(
     const lines = found.matches.map((match) => {
       return `${match.path}:${String(match.line)}: ${match.text}`;
     });
-    return {
-      output:
-        lines.length === 0
-          ? 'no matches'
-          : [
-              ...lines,
-              ...(found.isCapped ? [`[stopped at ${String(caps.maxMatches)} matches]`] : []),
-            ].join('\n'),
-      denied: false,
-    };
+    if (lines.length === 0) {
+      return { output: 'no matches', denied: false };
+    }
+    if (found.isCapped) {
+      lines.push(`[stopped at ${String(caps.maxMatches)} matches]`);
+    }
+    return { output: lines.join('\n'), denied: false };
   };
 
   const globTool = async (input: z.infer<typeof globArguments>): Promise<SandboxResult> => {
@@ -313,23 +330,25 @@ export function createReadOnlySandbox(
       }
       found.push(file.path);
     }
-    return {
-      output:
-        found.length === 0
-          ? 'no files'
-          : [...found, ...(isCapped ? [`[stopped at ${String(caps.maxPaths)} paths]`] : [])].join(
-              '\n',
-            ),
-      denied: false,
-    };
+    if (found.length === 0) {
+      return { output: 'no files', denied: false };
+    }
+    if (isCapped) {
+      found.push(`[stopped at ${String(caps.maxPaths)} paths]`);
+    }
+    return { output: found.join('\n'), denied: false };
   };
 
   return {
     definitions,
-    run: async (name, rawArguments): Promise<SandboxResult> => {
+    run: async ({ name, arguments: rawArguments }): Promise<SandboxResult> => {
+      let source = rawArguments;
+      if (source === '') {
+        source = '{}';
+      }
       let json: unknown;
       try {
-        json = JSON.parse(rawArguments === '' ? '{}' : rawArguments);
+        json = JSON.parse(source);
       } catch {
         return { output: 'invalid arguments: not JSON', denied: false };
       }
@@ -460,6 +479,18 @@ async function linkTarget(tree: SandboxTree, link: SandboxFile): Promise<string 
   return undefined;
 }
 
+/** How much of a file is shown, and how large a file is read at all. */
+interface TextCaps {
+  readonly maxFileBytes: number;
+  readonly maxBlobBytes: number;
+}
+
+/** A file's text as shown, and whether it was cut at the cap. */
+interface SandboxText {
+  readonly content: string;
+  readonly isCut: boolean;
+}
+
 /**
  * At most `maxFileBytes` of a file as UTF-8 text, or `undefined` for a file larger than
  * `maxBlobBytes`, one with a NUL byte in what is shown (binary), or one git can't read.
@@ -467,8 +498,8 @@ async function linkTarget(tree: SandboxTree, link: SandboxFile): Promise<string 
 async function readText(
   tree: SandboxTree,
   file: SandboxFile,
-  caps: { readonly maxFileBytes: number; readonly maxBlobBytes: number },
-): Promise<{ readonly content: string; readonly isCut: boolean } | undefined> {
+  caps: TextCaps,
+): Promise<SandboxText | undefined> {
   const read = await tree.read(file, caps.maxBlobBytes);
   if (read.kind !== 'bytes') {
     return undefined;

@@ -102,7 +102,9 @@ export class ClaudeCodeStreamReader {
         break;
       }
       case 'rate-limit': {
-        this.rateLimit = event.status === 'allowed' ? this.rateLimit : event;
+        if (event.status !== 'allowed') {
+          this.rateLimit = event;
+        }
         break;
       }
       case 'result': {

@@ -36,11 +36,16 @@ function echoSchema(): z.ZodType<Echo> {
 }
 
 /** The model over the fake `claude` in `mode`; `directory` is its HOME and holds its pid file. */
+/** The fake `claude` script, its HOME, and where it writes its pid (`-` for nowhere). */
+interface FakeClaude {
+  readonly script: string;
+  readonly directory: string;
+  readonly pidFile?: string;
+}
+
 function model(
-  script: string,
-  directory: string,
+  { script, directory, pidFile = '-' }: FakeClaude,
   mode: string,
-  pidFile = '-',
 ): ReturnType<typeof createClaudeCodeModel> {
   return createClaudeCodeModel({
     command: process.execPath,
@@ -74,7 +79,7 @@ describe('createClaudeCodeModel', () => {
   }) => {
     const progress: ModelProgress[] = [];
     const outcome = okValueFrom(
-      await model(script, directory, 'echo').run(
+      await model({ script, directory }, 'echo').run(
         request(directory, {
           onProgress: (event) => {
             progress.push(event);
@@ -115,7 +120,7 @@ describe('createClaudeCodeModel', () => {
     tempDir: directory,
     signal,
   }) => {
-    const outcome = await model(script, directory, 'text-result').run(
+    const outcome = await model({ script, directory }, 'text-result').run(
       request(directory, { messages: [{ role: 'user', content: 'small' }], signal }),
     );
     expect(outcome).toMatchObject({ ok: true, value: { value: { stdin: 'small' } } });
@@ -128,7 +133,7 @@ describe('createClaudeCodeModel', () => {
     signal,
   }) => {
     await expect(
-      model(script, directory, 'garbage').run(request(directory, { signal })),
+      model({ script, directory }, 'garbage').run(request(directory, { signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -144,7 +149,9 @@ describe('createClaudeCodeModel', () => {
     tempDir: directory,
     signal,
   }) => {
-    const outcome = await model(script, directory, 'mismatch').run(request(directory, { signal }));
+    const outcome = await model({ script, directory }, 'mismatch').run(
+      request(directory, { signal }),
+    );
     expect(outcome).toMatchObject({ ok: false, error: { kind: 'invalid-output' } });
   });
 
@@ -155,7 +162,7 @@ describe('createClaudeCodeModel', () => {
     signal,
   }) => {
     await expect(
-      model(script, directory, 'fail').run(request(directory, { signal })),
+      model({ script, directory }, 'fail').run(request(directory, { signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -174,7 +181,7 @@ describe('createClaudeCodeModel', () => {
     signal,
   }) => {
     const progress: ModelProgress[] = [];
-    const outcome = await model(script, directory, 'api-key').run(
+    const outcome = await model({ script, directory }, 'api-key').run(
       request(directory, {
         onProgress: (event) => {
           progress.push(event);
@@ -199,19 +206,19 @@ describe('createClaudeCodeModel', () => {
     signal,
   }) => {
     await expect(
-      model(script, directory, 'not-logged-in').run(request(directory, { signal })),
+      model({ script, directory }, 'not-logged-in').run(request(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated', message: 'Not logged in · Please run /login' },
     });
     await expect(
-      model(script, directory, 'rate-limited').run(request(directory, { signal })),
+      model({ script, directory }, 'rate-limited').run(request(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'rate-limited', resetsAt: '2026-10-28T22:00:00.000Z' },
     });
     await expect(
-      model(script, directory, 'budget').run(request(directory, { signal })),
+      model({ script, directory }, 'budget').run(request(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'model-failed', reason: 'error_max_budget_usd' },
@@ -225,7 +232,7 @@ describe('createClaudeCodeModel', () => {
     signal,
   }) => {
     const pidFile = path.join(directory, 'timeout.json');
-    const outcome = await model(script, directory, 'hang', pidFile).run(
+    const outcome = await model({ script, directory, pidFile }, 'hang').run(
       request(directory, { timeout: Temporal.Duration.from({ milliseconds: 500 }), signal }),
     );
     expect(outcome).toStrictEqual({
@@ -242,7 +249,7 @@ describe('createClaudeCodeModel', () => {
   }) => {
     const pidFile = path.join(directory, 'cancel.json');
     const controller = new AbortController();
-    const running = model(script, directory, 'stubborn', pidFile).run(
+    const running = model({ script, directory, pidFile }, 'stubborn').run(
       request(directory, { signal: controller.signal }),
     );
     await waitFor(expect, () => existsSync(pidFile));
@@ -258,7 +265,7 @@ describe('createClaudeCodeModel', () => {
   }) => {
     const pidFile = path.join(directory, 'caller-timeout.json');
     const signal = AbortSignal.timeout(300);
-    const outcome = await model(script, directory, 'hang', pidFile).run(
+    const outcome = await model({ script, directory, pidFile }, 'hang').run(
       request(directory, { signal }),
     );
     expect(outcome).toStrictEqual({ ok: false, error: { kind: 'cancelled' } });
@@ -271,7 +278,7 @@ describe('createClaudeCodeModel', () => {
     tempDir: directory,
   }) => {
     const aborted = request(directory, { signal: AbortSignal.abort() });
-    await expect(model(script, directory, 'echo').run(aborted)).resolves.toStrictEqual({
+    await expect(model({ script, directory }, 'echo').run(aborted)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'cancelled' },
     });
@@ -302,12 +309,12 @@ describe('createClaudeCodeModel', () => {
       error: { kind: 'not-installed', command: path.join(directory, 'no-such-claude') },
     });
     const gone = request(directory, { cwd: path.join(directory, 'gone'), signal });
-    await expect(model(script, directory, 'echo').run(gone)).resolves.toStrictEqual({
+    await expect(model({ script, directory }, 'echo').run(gone)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd is not a directory' },
     });
     await expect(
-      model(script, directory, 'echo').run(request(directory, { cwd: 'relative', signal })),
+      model({ script, directory }, 'echo').run(request(directory, { cwd: 'relative', signal })),
     ).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'invalid-request', reason: 'cwd must be absolute' },
@@ -323,7 +330,7 @@ describe('createClaudeCodeModel runText', () => {
     signal,
   }) => {
     const events: TextStreamEvent[] = [];
-    const outcome = await chat(script, directory, 'stream', {
+    const outcome = await chat({ script, directory }, 'stream', {
       preamble: 'Let me look.',
       chunks: ['It splits ', 'on commas [[src/a.ts:10-12]].'],
     }).runText(
@@ -344,7 +351,7 @@ describe('createClaudeCodeModel runText', () => {
       { kind: 'append', text: 'It splits ' },
       { kind: 'append', text: 'on commas [[src/a.ts:10-12]].' },
     ]);
-    const [call] = calls(directory, 'stream');
+    const [call] = calls(path.join(directory, 'stream'));
     expect(call?.args).toContain('--include-partial-messages');
     expect(call?.args.some((arg) => arg.startsWith('--json-schema'))).toBe(false);
     expect(call?.args).toContain('--tools=Read,Grep,Glob');
@@ -356,11 +363,13 @@ describe('createClaudeCodeModel runText', () => {
     tempDir: directory,
     signal,
   }) => {
-    const outcome = await chat(script, directory, 'quiet', { chunks: ['Plain.'] }).runText(
+    const outcome = await chat({ script, directory }, 'quiet', { chunks: ['Plain.'] }).runText(
       textRequest(directory, { signal }),
     );
     expect(outcome).toMatchObject({ ok: true, value: { value: 'Plain.' } });
-    expect(calls(directory, 'quiet')[0]?.args).not.toContain('--include-partial-messages');
+    expect(calls(path.join(directory, 'quiet'))[0]?.args).not.toContain(
+      '--include-partial-messages',
+    );
   });
 
   test('maps failures and cancellation like structured runs', async ({
@@ -370,20 +379,20 @@ describe('createClaudeCodeModel runText', () => {
     signal,
   }) => {
     await expect(
-      model(script, directory, 'not-logged-in').runText(textRequest(directory, { signal })),
+      model({ script, directory }, 'not-logged-in').runText(textRequest(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-authenticated' },
     });
     await expect(
-      model(script, directory, 'fail').runText(textRequest(directory, { signal })),
+      model({ script, directory }, 'fail').runText(textRequest(directory, { signal })),
     ).resolves.toMatchObject({
       ok: false,
       error: { kind: 'process-failed', exitCode: 2 },
     });
     const pidFile = path.join(directory, 'text-cancel.json');
     const controller = new AbortController();
-    const running = model(script, directory, 'hang', pidFile).runText(
+    const running = model({ script, directory, pidFile }, 'hang').runText(
       textRequest(directory, { signal: controller.signal }),
     );
     await waitFor(expect, () => existsSync(pidFile));
@@ -407,21 +416,26 @@ function textRequest(
 }
 
 function chat(
-  script: string,
-  directory: string,
+  { script, directory }: FakeClaude,
   name: string,
   chatScript: object,
 ): ReturnType<typeof createClaudeCodeModel> {
   const file = path.join(directory, `${name}.json`);
   writeFileSync(file, JSON.stringify(chatScript));
-  return model(script, directory, 'chat', file);
+  return model({ script, directory, pidFile: file }, 'chat');
 }
 
-function calls(directory: string, name: string): { args: string[] }[] {
-  return readFileSync(path.join(directory, `${name}.json.calls`), 'utf8')
+/** One run of the fake `claude`, as it recorded it. */
+interface ClaudeCall {
+  readonly args: string[];
+}
+
+/** The runs of the chat script at `scriptPath` (without its `.json`). */
+function calls(scriptPath: string): ClaudeCall[] {
+  return readFileSync(`${scriptPath}.json.calls`, 'utf8')
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as { args: string[] });
+    .map((line) => JSON.parse(line) as ClaudeCall);
 }
 
 async function waitFor(expect: ExpectStatic, isDone: () => boolean): Promise<void> {

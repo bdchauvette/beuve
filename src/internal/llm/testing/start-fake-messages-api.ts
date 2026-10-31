@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/no-null -- the Messages API wire format spells absent fields null. */
 import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
 /** A content block of a scripted reply. */
 export type FakeBlock =
@@ -64,7 +64,10 @@ export async function startFakeMessagesApi(): Promise<FakeMessagesApi> {
       raw += chunk;
     });
     incoming.on('end', () => {
-      const body = raw === '' ? undefined : (JSON.parse(raw) as Record<string, unknown>);
+      let body: Record<string, unknown> | undefined;
+      if (raw !== '') {
+        body = JSON.parse(raw) as Record<string, unknown>;
+      }
       requests.push({
         method: incoming.method ?? '',
         url: incoming.url ?? '',
@@ -72,7 +75,7 @@ export async function startFakeMessagesApi(): Promise<FakeMessagesApi> {
         body,
       });
       if (incoming.method !== 'POST' || !(incoming.url ?? '').startsWith('/v1/messages?')) {
-        sendError(response, 404, 'not_found_error', 'not found', {});
+        sendError(response, 404, { type: 'not_found_error', message: 'not found', headers: {} });
         return;
       }
       messageCount += 1;
@@ -82,8 +85,7 @@ export async function startFakeMessagesApi(): Promise<FakeMessagesApi> {
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
-  const address = server.address();
-  const port = typeof address === 'object' && address !== null ? address.port : 0;
+  const port = portOf(server.address());
   return {
     baseUrl: `http://127.0.0.1:${String(port)}`,
     requests,
@@ -99,18 +101,26 @@ export async function startFakeMessagesApi(): Promise<FakeMessagesApi> {
 
 function answer(response: ServerResponse, reply: FakeReply | undefined, id: string): void {
   if (reply === undefined) {
-    sendError(response, 500, 'api_error', 'the fake has no reply queued', {});
+    sendError(response, 500, {
+      type: 'api_error',
+      message: 'the fake has no reply queued',
+      headers: {},
+    });
     return;
   }
   switch (reply.kind) {
     case 'error': {
-      sendError(response, reply.status, reply.type, reply.message, reply.headers ?? {});
+      sendError(response, reply.status, {
+        type: reply.type,
+        message: reply.message,
+        headers: reply.headers ?? {},
+      });
       return;
     }
     case 'hang': {
       startEvents(response);
       for (const event of [
-        messageStart(id, 'claude-opus-5-5'),
+        messageStart({ id, model: 'claude-opus-5-5' }),
         { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
         { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: reply.text } },
       ]) {
@@ -133,7 +143,9 @@ function messageEvents(
   id: string,
   reply: Extract<FakeReply, { kind: 'message' }>,
 ): Record<string, unknown>[] {
-  const events: Record<string, unknown>[] = [messageStart(id, reply.model ?? 'claude-opus-5-5')];
+  const events: Record<string, unknown>[] = [
+    messageStart({ id, model: reply.model ?? 'claude-opus-5-5' }),
+  ];
   for (const [index, block] of reply.content.entries()) {
     if (block.type === 'text') {
       events.push(
@@ -162,10 +174,7 @@ function messageEvents(
       delta: {
         stop_reason: reply.stopReason,
         stop_sequence: null,
-        stop_details:
-          reply.stopReason === 'refusal'
-            ? { type: 'refusal', category: 'cyber', explanation: 'scripted refusal' }
-            : null,
+        stop_details: stopDetailsOf(reply.stopReason),
       },
       usage: { output_tokens: 20 },
     },
@@ -174,7 +183,13 @@ function messageEvents(
   return events;
 }
 
-function messageStart(id: string, model: string): Record<string, unknown> {
+/** The id and model of the message a reply starts. */
+interface MessageIdentity {
+  readonly id: string;
+  readonly model: string;
+}
+
+function messageStart({ id, model }: MessageIdentity): Record<string, unknown> {
   return {
     type: 'message_start',
     message: {
@@ -198,12 +213,17 @@ function writeEvent(response: ServerResponse, event: Record<string, unknown>): v
   response.write(`event: ${String(event['type'])}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
+/** An API error's type, message and extra response headers. */
+interface ApiError {
+  readonly type: string;
+  readonly message: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
 function sendError(
   response: ServerResponse,
   status: number,
-  type: string,
-  message: string,
-  headers: Readonly<Record<string, string>>,
+  { type, message, headers }: ApiError,
 ): void {
   response.writeHead(status, {
     'content-type': 'application/json',
@@ -212,4 +232,18 @@ function sendError(
     ...headers,
   });
   response.end(JSON.stringify({ type: 'error', error: { type, message } }));
+}
+
+function portOf(address: ReturnType<Server['address']>): number {
+  if (typeof address === 'object' && address !== null) {
+    return address.port;
+  }
+  return 0;
+}
+
+function stopDetailsOf(stopReason: string): unknown {
+  if (stopReason === 'refusal') {
+    return { type: 'refusal', category: 'cyber', explanation: 'scripted refusal' };
+  }
+  return null;
 }

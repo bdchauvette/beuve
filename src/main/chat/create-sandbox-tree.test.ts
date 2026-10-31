@@ -76,19 +76,27 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     repo.write('src/a.ts', 'export const a = 2; // edited after the commit\n');
     repo.write('untracked.ts', 'export const a = 3;\n');
     const sandbox = sandboxAt(closing, logger, repository, commit);
-    await expect(sandbox.run('read_file', '{"path":"src/a.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"src/a.ts"}' }),
+    ).resolves.toStrictEqual({
       output: '1\texport const a = 1;\n2\t',
       denied: false,
     });
-    await expect(sandbox.run('glob', '{"pattern":"**/*.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'glob', arguments: '{"pattern":"**/*.ts"}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts\nsrc/b.ts',
       denied: false,
     });
-    await expect(sandbox.run('grep', '{"pattern":"const a"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"const a"}' }),
+    ).resolves.toStrictEqual({
       output: 'src/a.ts:1: export const a = 1;',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"untracked.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"untracked.ts"}' }),
+    ).resolves.toStrictEqual({
       output: 'not found: untracked.ts',
       denied: false,
     });
@@ -122,7 +130,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     const seen = { sandbox: new Set<string>(), checkout: new Set<string>() };
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const [read, onDisk] = await Promise.all([
-        sandbox.run('read_file', '{"path":"dir/a.txt"}'),
+        sandbox.run({ name: 'read_file', arguments: '{"path":"dir/a.txt"}' }),
         readOrGone(path.join(directory, 'a.txt'), signal),
       ]);
       seen.sandbox.add(read.output);
@@ -145,18 +153,20 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     }
     const commit = await repo.commit('hostile');
     const sandbox = sandboxAt(closing, logger, repository, commit);
-    const globbed = await sandbox.run('glob', '{"pattern":"**"}');
+    const globbed = await sandbox.run({ name: 'glob', arguments: '{"pattern":"**"}' });
     // `*` and `**` never span a newline, so the name holding one is left out, as before.
     expect(new Set(globbed.output.split('\n'))).toStrictEqual(
       new Set(names.filter((name) => !name.includes('\n'))),
     );
     const read = await Promise.all(
-      names.map(async (name) => sandbox.run('read_file', JSON.stringify({ path: name }))),
+      names.map(async (name) => {
+        return sandbox.run({ name: 'read_file', arguments: JSON.stringify({ path: name }) });
+      }),
     );
     expect(read.map((result) => result.output)).toStrictEqual(
       names.map((name) => `1\tcontent of ${JSON.stringify(name)}\n2\t`),
     );
-    const grepped = await sandbox.run('grep', '{"pattern":"content of"}');
+    const grepped = await sandbox.run({ name: 'grep', arguments: '{"pattern":"content of"}' });
     expect(grepped.output.split('\n')).toHaveLength(names.length + 1);
   });
 
@@ -173,15 +183,21 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     symlinkSync('../outside', path.join(repo.directory, 'up'));
     const commit = await repo.commit('links');
     const sandbox = sandboxAt(closing, logger, repository, commit);
-    await expect(sandbox.run('read_file', '{"path":"lib/a.ts"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"lib/a.ts"}' }),
+    ).resolves.toStrictEqual({
       output: '1\texport const a = 1;\n2\t',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"passwd"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"passwd"}' }),
+    ).resolves.toStrictEqual({
       output: 'refused: passwd links outside the working directory',
       denied: true,
     });
-    await expect(sandbox.run('read_file', '{"path":"up"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"up"}' }),
+    ).resolves.toStrictEqual({
       output: 'refused: up links outside the working directory',
       denied: true,
     });
@@ -202,19 +218,27 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
       maxBlobBytes: 1024 * 1024,
       maxFileBytes: 10,
     });
-    await expect(sandbox.run('read_file', '{"path":"big.txt"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"big.txt"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: big.txt',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"long.txt"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"long.txt"}' }),
+    ).resolves.toStrictEqual({
       output: '1\tyyyyyyyyyy\n[cut at 10 bytes]',
       denied: false,
     });
-    await expect(sandbox.run('read_file', '{"path":"image.png"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'read_file', arguments: '{"path":"image.png"}' }),
+    ).resolves.toStrictEqual({
       output: 'not a readable text file: image.png',
       denied: false,
     });
-    await expect(sandbox.run('grep', '{"pattern":"PNG"}')).resolves.toStrictEqual({
+    await expect(
+      sandbox.run({ name: 'grep', arguments: '{"pattern":"PNG"}' }),
+    ).resolves.toStrictEqual({
       output: 'no matches',
       denied: false,
     });

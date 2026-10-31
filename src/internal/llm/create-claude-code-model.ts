@@ -10,6 +10,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { anySignal } from '#x/async/any-signal.ts';
 import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { buildClaudeCodeArgs } from './build-claude-code-args.ts';
@@ -185,10 +186,8 @@ async function runClaudeCode(
   });
 
   const run = await execute(
-    command,
-    [...(options.leadingArgs ?? []), ...args],
-    { ...request, cwd },
-    mode.onText,
+    { command, args: [...(options.leadingArgs ?? []), ...args], cwd },
+    { request: { ...request, cwd }, onText: mode.onText },
     options,
   );
   const duration = stopwatch.elapsed();
@@ -197,10 +196,7 @@ async function runClaudeCode(
     return run;
   }
   const { outcome, model: reported } = run.value;
-  const classified = classifyClaudeCodeOutcome(
-    outcome,
-    mode.jsonSchema === undefined ? 'text' : 'json',
-  );
+  const classified = classifyClaudeCodeOutcome(outcome, expectedOutput(mode));
   if (!classified.ok) {
     options.logger?.info('claude-code: run failed', {
       duration,
@@ -236,15 +232,26 @@ interface Execution {
   readonly model: string | undefined;
 }
 
+/** The CLI to start, its arguments and the checkout it runs in. */
+interface ClaudeInvocation {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+}
+
+/** The request a run answers, and where its streamed text goes. */
+interface ClaudeRun {
+  readonly request: CheckoutModelRequest;
+  readonly onText: ((event: TextStreamEvent) => void) | undefined;
+}
+
 async function execute(
-  command: string,
-  args: readonly string[],
-  request: CheckoutModelRequest,
-  onText: ((event: TextStreamEvent) => void) | undefined,
+  invocation: ClaudeInvocation,
+  { request, onText }: ClaudeRun,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<Execution, ModelError>> {
   const isOwnGroup = process.platform !== 'win32';
-  const spawned = await spawnClaude(command, args, request.cwd, options, isOwnGroup);
+  const spawned = await spawnClaude(invocation, options, isOwnGroup);
   if (!spawned.ok) {
     return spawned;
   }
@@ -288,15 +295,18 @@ async function execute(
     );
   };
   const deadline = timeoutSignal(request.timeout);
-  const stopped =
-    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const stopped = anySignal(request.signal, deadline) ?? deadline;
   const listeners = stack.adopt(new AbortController(), (controller) => {
     controller.abort();
   });
   stopped.addEventListener(
     'abort',
     () => {
-      terminate(stopped.reason === deadline.reason ? 'timeout' : 'cancelled');
+      if (stopped.reason === deadline.reason) {
+        terminate('timeout');
+      } else {
+        terminate('cancelled');
+      }
     },
     { once: true, signal: listeners.signal },
   );
@@ -383,9 +393,7 @@ async function execute(
 }
 
 async function spawnClaude(
-  command: string,
-  args: readonly string[],
-  cwd: string,
+  { command, args, cwd }: ClaudeInvocation,
   options: ClaudeCodeModelOptions,
   isOwnGroup: boolean,
 ): Promise<Result<ChildProcessWithoutNullStreams, ModelError>> {
@@ -438,4 +446,11 @@ async function isDirectory(directory: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function expectedOutput(mode: OutputMode): 'text' | 'json' {
+  if (mode.jsonSchema === undefined) {
+    return 'text';
+  }
+  return 'json';
 }

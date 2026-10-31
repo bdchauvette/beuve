@@ -10,9 +10,14 @@ export function flattenModelMessages(messages: readonly ModelMessage[]): string 
   if (hasAnswers) {
     return messages
       .map((message) => {
-        return `${message.role === 'user' ? '## User' : '## Assistant'}\n\n${message.content}`;
+        return `${speakerHeadings[message.role]}\n\n${message.content}`;
       })
       .join('\n\n');
   }
   return messages.map((message) => message.content).join('\n');
 }
+
+const speakerHeadings: Readonly<Record<ModelMessage['role'], string>> = {
+  user: '## User',
+  assistant: '## Assistant',
+};

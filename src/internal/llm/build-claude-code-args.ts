@@ -47,12 +47,26 @@ export function buildClaudeCodeArgs(options: ClaudeCodeArgsOptions): string[] {
     `--allowed-tools=${readOnlyTools.join(',')}`,
     `--disallowed-tools=${deniedTools.join(',')}`,
     `--append-system-prompt=${options.system}`,
-    ...(options.jsonSchema === undefined ? [] : [`--json-schema=${options.jsonSchema}`]),
-    ...(options.streamText === true ? ['--include-partial-messages'] : []),
-    ...(options.model === undefined ? [] : [`--model=${options.model}`]),
-    ...(options.effort === undefined ? [] : [`--effort=${options.effort}`]),
-    ...(options.maxBudgetUsd === undefined
-      ? []
-      : [`--max-budget-usd=${String(options.maxBudgetUsd)}`]),
+    ...optionalArgs(options),
   ];
+}
+
+function optionalArgs(options: ClaudeCodeArgsOptions): string[] {
+  const args: string[] = [];
+  if (options.jsonSchema !== undefined) {
+    args.push(`--json-schema=${options.jsonSchema}`);
+  }
+  if (options.streamText === true) {
+    args.push('--include-partial-messages');
+  }
+  if (options.model !== undefined) {
+    args.push(`--model=${options.model}`);
+  }
+  if (options.effort !== undefined) {
+    args.push(`--effort=${options.effort}`);
+  }
+  if (options.maxBudgetUsd !== undefined) {
+    args.push(`--max-budget-usd=${String(options.maxBudgetUsd)}`);
+  }
+  return args;
 }

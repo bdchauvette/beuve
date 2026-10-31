@@ -71,12 +71,12 @@ function withoutResult(outcome: ClaudeCodeOutcome): ModelError {
     return { kind: 'not-authenticated', message: stderr };
   }
   if (outcome.exitCode === 0 && outcome.signal === undefined) {
+    if (outcome.invalidLine === undefined) {
+      return { kind: 'invalid-output', reason: 'the run ended without a result event' };
+    }
     return {
       kind: 'invalid-output',
-      reason:
-        outcome.invalidLine === undefined
-          ? 'the run ended without a result event'
-          : `the run ended without a result event (${outcome.invalidLine})`,
+      reason: `the run ended without a result event (${outcome.invalidLine})`,
     };
   }
   return { kind: 'process-failed', exitCode: outcome.exitCode, signal: outcome.signal, stderr };
@@ -94,17 +94,7 @@ function failedResult(result: ClaudeCodeResult, outcome: ClaudeCodeOutcome): Mod
     outcome.rateLimit !== undefined ||
     rateLimitPattern.test(message)
   ) {
-    const resetsAt = outcome.rateLimit?.resetsAt;
-    return {
-      kind: 'rate-limited',
-      message,
-      resetsAt:
-        resetsAt === undefined
-          ? undefined
-          : Temporal.Instant.fromEpochMilliseconds(Math.round(resetsAt * 1000)).toString({
-              fractionalSecondDigits: 3,
-            }),
-    };
+    return { kind: 'rate-limited', message, resetsAt: resetTime(outcome.rateLimit?.resetsAt) };
   }
   return {
     kind: 'model-failed',
@@ -123,4 +113,14 @@ function parseResultText(text: string | undefined): Result<unknown, ModelError> 
   } catch {
     return err({ kind: 'invalid-output', reason: 'the result is not JSON' });
   }
+}
+
+/** A rate limit's reset, given in epoch seconds, as an ISO instant. */
+function resetTime(resetsAt: number | undefined): string | undefined {
+  if (resetsAt === undefined) {
+    return undefined;
+  }
+  return Temporal.Instant.fromEpochMilliseconds(Math.round(resetsAt * 1000)).toString({
+    fractionalSecondDigits: 3,
+  });
 }

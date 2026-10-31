@@ -217,12 +217,11 @@ function toolUseFrom(json: unknown): ClaudeCodeEvent {
 
 function toolResultFrom(json: unknown): ClaudeCodeEvent {
   const parsed = user.safeParse(json);
-  const content = parsed.success ? parsed.data.message.content : undefined;
-  if (
-    !parsed.success ||
-    (parsed.data.parent_tool_use_id ?? undefined) !== undefined ||
-    !Array.isArray(content)
-  ) {
+  if (!parsed.success || (parsed.data.parent_tool_use_id ?? undefined) !== undefined) {
+    return { kind: 'other' };
+  }
+  const { content } = parsed.data.message;
+  if (!Array.isArray(content)) {
     return { kind: 'other' };
   }
   const results = content
@@ -255,8 +254,11 @@ function streamEventFrom(json: unknown): ClaudeCodeEvent {
   if (event.type === 'content_block_stop' && event.index !== undefined) {
     return { kind: 'block-stop', index: event.index };
   }
-  const text = event.delta?.type === 'text_delta' ? event.delta.text : undefined;
-  if (text !== undefined && text !== '' && event.type === 'content_block_delta') {
+  if (event.delta?.type !== 'text_delta' || event.type !== 'content_block_delta') {
+    return { kind: 'other' };
+  }
+  const { text } = event.delta;
+  if (text !== undefined && text !== '') {
     return { kind: 'text-delta', text };
   }
   return { kind: 'other' };
@@ -285,24 +287,41 @@ function resultFrom(json: unknown): ClaudeCodeEvent {
       isError: data.is_error ?? data.subtype !== 'success',
       text: data.result,
       hasStructuredOutput,
-      structuredOutput: hasStructuredOutput ? data['structured_output'] : undefined,
+      structuredOutput: structuredOutputOf(data),
       apiErrorStatus: data.api_error_status ?? undefined,
       turns: data.num_turns,
       costUsd: data.total_cost_usd,
-      duration:
-        data.duration_ms === undefined
-          ? undefined
-          : Temporal.Duration.from({ milliseconds: Math.round(data.duration_ms) }),
+      duration: durationOf(data.duration_ms),
       deniedToolUses: data.permission_denials?.length ?? 0,
-      usage:
-        data.usage === undefined
-          ? undefined
-          : {
-              inputTokens: data.usage.input_tokens,
-              outputTokens: data.usage.output_tokens,
-              cacheReadInputTokens: data.usage.cache_read_input_tokens ?? 0,
-              cacheCreationInputTokens: data.usage.cache_creation_input_tokens ?? 0,
-            },
+      usage: usageOf(data.usage),
     },
+  };
+}
+
+type ResultData = z.infer<typeof result>;
+
+function structuredOutputOf(data: ResultData): unknown {
+  if ('structured_output' in data && data['structured_output'] !== null) {
+    return data['structured_output'];
+  }
+  return undefined;
+}
+
+function durationOf(milliseconds: number | undefined): Temporal.Duration | undefined {
+  if (milliseconds === undefined) {
+    return undefined;
+  }
+  return Temporal.Duration.from({ milliseconds: Math.round(milliseconds) });
+}
+
+function usageOf(usage: ResultData['usage']): ModelUsage | undefined {
+  if (usage === undefined) {
+    return undefined;
+  }
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+    cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
   };
 }

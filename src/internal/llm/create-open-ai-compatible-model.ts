@@ -7,6 +7,7 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
+import { anySignal } from '#x/async/any-signal.ts';
 import { timeoutSignal } from '#x/time/timeout-signal.ts';
 
 import { createReadOnlySandbox } from './create-read-only-sandbox.ts';
@@ -79,7 +80,7 @@ export function createOpenAiCompatibleModel(options: OpenAiCompatibleModelOption
   const capabilities: ModelCapabilities = {
     tools: options.tools === true,
     checkout: false,
-    structuredOutput: options.structuredOutput === 'prompted' ? 'prompted' : 'native',
+    structuredOutput: nativeUnlessPrompted(options.structuredOutput),
     contextWindowTokens: options.contextWindowTokens,
     ...(options.maxOutputTokens !== undefined && { maxOutputTokens: options.maxOutputTokens }),
     streaming: true,
@@ -118,7 +119,7 @@ async function runStructured<T>(
   const preferred = options.structuredOutput ?? 'auto';
   let answer = await runChat(request, options, {
     schema,
-    format: preferred === 'prompted' ? 'prompted' : 'native',
+    format: nativeUnlessPrompted(preferred),
   });
   if (
     preferred === 'auto' &&
@@ -174,30 +175,26 @@ async function runChat(
   options: OpenAiCompatibleModelOptions,
   mode: OutputMode,
 ): Promise<Result<ModelOutput<string>, ModelError>> {
-  const invalid = validateModelRequest(
-    request,
-    mode.schema === undefined ? 0 : JSON.stringify(mode.schema).length,
-  );
+  const invalid = validateModelRequest(request, schemaLength(mode));
   if (invalid !== undefined) {
     return err(invalid);
   }
   if (request.signal?.aborted === true) {
     return err({ kind: 'cancelled' });
   }
-  const sandbox =
-    options.tools === true && request.tree !== undefined
-      ? createReadOnlySandbox(request.tree, options.sandbox)
-      : undefined;
+  let sandbox: ReadOnlySandbox | undefined;
+  if (options.tools === true && request.tree !== undefined) {
+    sandbox = createReadOnlySandbox(request.tree, options.sandbox);
+  }
   const deadline = timeoutSignal(request.timeout);
-  const signal =
-    request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
+  const signal = anySignal(request.signal, deadline) ?? deadline;
   const stopwatch = new Stopwatch();
   options.logger?.debug('openai-compatible: starting', {
     model: request.model ?? options.model,
     tools: sandbox !== undefined,
     messages: request.messages.length,
   });
-  const run = await converse(request, options, mode, sandbox, signal);
+  const run = await converse({ request, options, mode }, sandbox, signal);
   if (signal.aborted) {
     if (signal.reason === deadline.reason) {
       return err({ kind: 'timeout', timeout: request.timeout });
@@ -214,10 +211,15 @@ async function runChat(
   return ok({ ...run.value, duration: stopwatch.elapsed() });
 }
 
+/** One chat: the request, the model's options and the answer it expects. */
+interface ChatRun {
+  readonly request: BaseModelRequest;
+  readonly options: OpenAiCompatibleModelOptions;
+  readonly mode: OutputMode;
+}
+
 async function converse(
-  request: BaseModelRequest,
-  options: OpenAiCompatibleModelOptions,
-  mode: OutputMode,
+  { request, options, mode }: ChatRun,
   sandbox: ReadOnlySandbox | undefined,
   signal: AbortSignal,
 ): Promise<Result<Omit<ModelOutput<string>, 'duration'>, ModelError>> {
@@ -231,18 +233,24 @@ async function converse(
       }
     | { readonly role: 'tool'; readonly tool_call_id: string; readonly content: string };
   const model = request.model ?? options.model;
-  const effort = options.effort === undefined ? undefined : (request.effort ?? options.effort);
-  const system =
-    mode.schema !== undefined && mode.format === 'prompted'
-      ? `${request.system}\n\n${promptedSchemaInstructions(mode.schema)}`
-      : request.system;
+  let effort: ModelEffort | undefined;
+  if (options.effort !== undefined) {
+    effort = request.effort ?? options.effort;
+  }
+  let system = request.system;
+  if (mode.schema !== undefined && mode.format === 'prompted') {
+    system = `${request.system}\n\n${promptedSchemaInstructions(mode.schema)}`;
+  }
   const wire: WireMessage[] = [
     { role: 'system', content: system },
     ...request.messages.map(({ role, content }): WireMessage => {
       return { role, content };
     }),
   ];
-  const maxTurns = sandbox === undefined ? 1 : (options.maxTurns ?? defaultMaxTurns);
+  let maxTurns = 1;
+  if (sandbox !== undefined) {
+    maxTurns = options.maxTurns ?? defaultMaxTurns;
+  }
   let usage: ModelUsage | undefined;
   let reported: string | undefined;
   let denied = 0;
@@ -267,12 +275,11 @@ async function converse(
             json_schema: { name: 'answer', schema: mode.schema, strict: false },
           },
         }),
-      ...(effort !== undefined && {
-        reasoning_effort: effort === 'low' || effort === 'medium' ? effort : 'high',
-      }),
+      ...(effort !== undefined && { reasoning_effort: reasoningEffort(effort) }),
       ...(options.maxOutputTokens !== undefined && { max_tokens: options.maxOutputTokens }),
     };
-    const answered = await requestTurn(body, options, signal, {
+    const answered = await requestTurn(body, options, {
+      signal,
       onText: (text) => {
         streamed.hasText = true;
         mode.onText?.({ kind: 'append', text });
@@ -297,8 +304,7 @@ async function converse(
     }
     wire.push({
       role: 'assistant',
-      // eslint-disable-next-line unicorn/no-null -- the wire format's "no text" is null.
-      content: value.content === '' ? null : value.content,
+      content: wireContent(value.content),
       tool_calls: value.toolCalls,
     });
     for (const [index, call] of value.toolCalls.entries()) {
@@ -318,8 +324,10 @@ async function converse(
         tool: name,
         description: describeToolUse(name, parseArguments(call.function.arguments), request.cwd),
       });
-      const result = await sandbox.run(name, call.function.arguments);
-      denied += result.denied ? 1 : 0;
+      const result = await sandbox.run(call.function);
+      if (result.denied) {
+        denied += 1;
+      }
       request.onProgress?.({ kind: 'tool-end', id: call.id, tool: name, ok: !result.denied });
       wire.push({ role: 'tool', tool_call_id: call.id, content: result.output });
     }
@@ -336,12 +344,17 @@ interface TurnListeners {
   readonly onProgress: BaseModelRequest['onProgress'];
 }
 
+/** What a turn reports to, and the signal that stops it. */
+interface TurnContext extends TurnListeners {
+  readonly signal: AbortSignal;
+}
+
 async function requestTurn(
   body: Record<string, unknown>,
   options: OpenAiCompatibleModelOptions,
-  signal: AbortSignal,
-  listeners: TurnListeners,
+  listeners: TurnContext,
 ): Promise<Result<Turn, ModelError>> {
+  const { signal } = listeners;
   const url = `${options.baseUrl.replace(trailingSlashes, '')}/chat/completions`;
   let response: Response;
   try {
@@ -505,8 +518,11 @@ async function readWhole(
     return err({ kind: 'invalid-output', reason: 'the response is not JSON' });
   }
   const parsed = completionShape.safeParse(json);
-  const message = parsed.success ? parsed.data.choices[0]?.message : undefined;
-  if (message === undefined || !parsed.success) {
+  if (!parsed.success) {
+    return err({ kind: 'invalid-output', reason: 'the response has no choice' });
+  }
+  const message = parsed.data.choices[0]?.message;
+  if (message === undefined) {
     return err({ kind: 'invalid-output', reason: 'the response has no choice' });
   }
   const content = message.content ?? '';
@@ -533,18 +549,23 @@ async function readWhole(
   });
 }
 
-function toolCallsFrom(
-  calls: readonly (readonly [number, { id: string; name: string; arguments: string }])[],
-): WireToolCall[] {
+/** A tool call as the stream assembles it, by its index in the response. */
+interface StreamedToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+function toolCallsFrom(calls: readonly (readonly [number, StreamedToolCall])[]): WireToolCall[] {
   return calls
     .toSorted(([left], [right]) => left - right)
     .filter(([, call]) => call.name !== '')
-    .map(([index, call]) => {
-      return {
-        id: call.id === '' ? `call_${String(index)}` : call.id,
-        type: 'function',
-        function: { name: call.name, arguments: call.arguments },
-      };
+    .map(([index, call]): WireToolCall => {
+      let { id } = call;
+      if (id === '') {
+        id = `call_${String(index)}`;
+      }
+      return { id, type: 'function', function: { name: call.name, arguments: call.arguments } };
     });
 }
 
@@ -561,17 +582,17 @@ function usageFrom(usage: z.infer<typeof usageShape>): ModelUsage | undefined {
 }
 
 function sumUsage(
-  total: ModelUsage | undefined,
-  next: ModelUsage | undefined,
+  left: ModelUsage | undefined,
+  right: ModelUsage | undefined,
 ): ModelUsage | undefined {
-  if (total === undefined || next === undefined) {
-    return next ?? total;
+  if (left === undefined || right === undefined) {
+    return right ?? left;
   }
   return {
-    inputTokens: total.inputTokens + next.inputTokens,
-    outputTokens: total.outputTokens + next.outputTokens,
-    cacheReadInputTokens: total.cacheReadInputTokens + next.cacheReadInputTokens,
-    cacheCreationInputTokens: total.cacheCreationInputTokens + next.cacheCreationInputTokens,
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    cacheReadInputTokens: left.cacheReadInputTokens + right.cacheReadInputTokens,
+    cacheCreationInputTokens: left.cacheCreationInputTokens + right.cacheCreationInputTokens,
   };
 }
 
@@ -580,7 +601,10 @@ function unreachable(baseUrl: string, error: unknown, signal: AbortSignal): Mode
     return { kind: 'cancelled' };
   }
   const failure = errorFrom(error);
-  const cause = Error.isError(failure.cause) ? failure.cause.message : failure.message;
+  let cause = failure.message;
+  if (Error.isError(failure.cause)) {
+    cause = failure.cause.message;
+  }
   const origin = URL.parse(baseUrl)?.origin ?? baseUrl;
   return {
     kind: 'model-failed',
@@ -604,11 +628,13 @@ function jsonFrom(text: string): unknown {
   const fenced = fencedJson.exec(trimmed)?.[1];
   const first = trimmed.indexOf('{');
   const last = trimmed.lastIndexOf('}');
-  const candidates = [
-    trimmed,
-    ...(fenced === undefined ? [] : [fenced]),
-    ...(first !== -1 && last > first ? [trimmed.slice(first, last + 1)] : []),
-  ];
+  const candidates = [trimmed];
+  if (fenced !== undefined) {
+    candidates.push(fenced);
+  }
+  if (first !== -1 && last > first) {
+    candidates.push(trimmed.slice(first, last + 1));
+  }
   for (const candidate of candidates) {
     try {
       return JSON.parse(candidate) as unknown;
@@ -642,4 +668,37 @@ function logFinished(output: ModelOutput<unknown>, options: OpenAiCompatibleMode
     turns: output.turns,
     deniedToolUses: output.deniedToolUses,
   });
+}
+
+function schemaLength(mode: OutputMode): number {
+  if (mode.schema === undefined) {
+    return 0;
+  }
+  return JSON.stringify(mode.schema).length;
+}
+
+/** `native` structured output unless the endpoint is configured to be asked in the prompt. */
+function nativeUnlessPrompted(
+  structuredOutput: OpenAiCompatibleModelOptions['structuredOutput'],
+): 'native' | 'prompted' {
+  if (structuredOutput === 'prompted') {
+    return 'prompted';
+  }
+  return 'native';
+}
+
+/** The wire's `reasoning_effort`, which knows `low`, `medium` and `high` only. */
+function reasoningEffort(effort: ModelEffort): 'low' | 'medium' | 'high' {
+  if (effort === 'low' || effort === 'medium') {
+    return effort;
+  }
+  return 'high';
+}
+
+function wireContent(content: string): string | null {
+  if (content === '') {
+    // eslint-disable-next-line unicorn/no-null -- the wire format's "no text" is null.
+    return null;
+  }
+  return content;
 }
