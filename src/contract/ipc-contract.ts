@@ -1745,6 +1745,26 @@ export interface OpenGithubLinkRequest {
 }
 
 /** A link from a chat answer; main opens any absolute `http:` or `https:` URL in the browser. */
+/** `clipboard:write-text`'s answer: how many UTF-16 code units were written. */
+export interface ClipboardWrittenView {
+  readonly length: number;
+}
+
+/** `menu:set-state`'s answer. */
+export interface MenuStateAppliedView {
+  readonly applied: true;
+}
+
+/** `menu:context`'s answer: whether a menu opened (an empty one doesn't). */
+export interface ContextMenuShownView {
+  readonly shown: boolean;
+}
+
+/** `menu:run-main`'s answer. */
+export interface MainCommandRanView {
+  readonly ran: true;
+}
+
 /** The answer of a request that opened something outside beuve. */
 export interface OpenedView {
   readonly opened: true;
@@ -2131,7 +2151,7 @@ export interface InvokeChannelMap {
   };
   'clipboard:write-text': {
     readonly request: WriteClipboardRequest;
-    readonly response: IpcResult<{ readonly length: number }>;
+    readonly response: IpcResult<ClipboardWrittenView>;
   };
   'editor:open': {
     readonly request: EditorOpenRequest;
@@ -2183,15 +2203,15 @@ export interface InvokeChannelMap {
   };
   'menu:set-state': {
     readonly request: MenuStateRequest;
-    readonly response: IpcResult<{ readonly applied: true }>;
+    readonly response: IpcResult<MenuStateAppliedView>;
   };
   'menu:context': {
     readonly request: MenuContextRequest;
-    readonly response: IpcResult<{ readonly shown: boolean }>;
+    readonly response: IpcResult<ContextMenuShownView>;
   };
   'menu:run-main': {
     readonly request: MenuRunMainRequest;
-    readonly response: IpcResult<{ readonly ran: true }>;
+    readonly response: IpcResult<MainCommandRanView>;
   };
   'trace:list-trust': {
     readonly request: undefined;
