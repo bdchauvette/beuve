@@ -11,6 +11,13 @@ import type { Result } from '#x/result/result.ts';
 import { rebindRepository } from '../sessions/rebind-repository.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
+/** The commit a sandbox tree shows, through the request's repository handle and signal. */
+export interface SandboxTreeSource {
+  readonly repository: GitRepository;
+  readonly commit: CommitSha;
+  readonly signal?: AbortSignal;
+}
+
 /**
  * The read-only sandbox's view of `commit` (ADR 0087, TOCTOU finding 4), served from git objects
  * and never from a checkout: the listing is `ls-tree -r` once per commit (shared in
@@ -21,9 +28,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
  */
 export function createSandboxTree(
   context: SessionContext,
-  repository: GitRepository,
-  commit: CommitSha,
-  signal?: AbortSignal,
+  { repository, commit, signal }: SandboxTreeSource,
 ): SandboxTree {
   /** The value, or `undefined` (logged) when git failed: the tool call then says it failed. */
   const valueOf = <T>(result: Result<T, GitError>): T | undefined => {

@@ -23,9 +23,15 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
   }) => {
     const deltas: ChatDelta[] = [];
     const result = await askQuestion(createChatQuestion({ worktreePath: tempDir }), {
-      model: fakeModel(claudeScript, tempDir, 'chat', 'success', {
-        preamble: 'Let me grep.',
-        chunks: ['It trims ', `[[${tempDir}/src/a.ts:12-13]] and [[src/zzz.ts:1]].`],
+      model: fakeModel({
+        script: claudeScript,
+        directory: tempDir,
+        mode: 'chat',
+        name: 'success',
+        chat: {
+          preamble: 'Let me grep.',
+          chunks: ['It trims ', `[[${tempDir}/src/a.ts:12-13]] and [[src/zzz.ts:1]].`],
+        },
       }),
       onDelta: (delta) => {
         deltas.push(delta);
@@ -63,7 +69,12 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
     signal,
   }) => {
     const result = await askQuestion(createChatQuestion({ worktreePath: tempDir }), {
-      model: fakeModel(claudeScript, tempDir, 'not-logged-in', 'login'),
+      model: fakeModel({
+        script: claudeScript,
+        directory: tempDir,
+        mode: 'not-logged-in',
+        name: 'login',
+      }),
       signal,
     });
     expect(result).toMatchObject({
@@ -76,10 +87,12 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
     const controller = new AbortController();
     const deltas: ChatDelta[] = [];
     const running = askQuestion(createChatQuestion({ worktreePath: tempDir }), {
-      model: fakeModel(claudeScript, tempDir, 'chat', 'slow', {
-        preamble: 'Looking.',
-        chunks: ['a', 'b', 'c'],
-        delayMs: 600_000,
+      model: fakeModel({
+        script: claudeScript,
+        directory: tempDir,
+        mode: 'chat',
+        name: 'slow',
+        chat: { preamble: 'Looking.', chunks: ['a', 'b', 'c'], delayMs: 600_000 },
       }),
       onDelta: (delta) => {
         deltas.push(delta);
@@ -97,13 +110,17 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
   });
 });
 
-function fakeModel(
-  script: string,
-  directory: string,
-  mode: string,
-  name: string,
-  chat?: object,
-): LanguageModel {
+/** A run of the fake `claude` script: `mode` picks its behaviour, `chat` its scripted turn. */
+interface FakeModelRun {
+  readonly script: string;
+  readonly directory: string;
+  readonly mode: string;
+  /** Names the file `chat` is written to. */
+  readonly name: string;
+  readonly chat?: object;
+}
+
+function fakeModel({ script, directory, mode, name, chat }: FakeModelRun): LanguageModel {
   const file = path.join(directory, `${name}.json`);
   if (chat !== undefined) {
     writeFileSync(file, JSON.stringify(chat));

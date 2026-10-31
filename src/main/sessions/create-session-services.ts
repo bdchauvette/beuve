@@ -7,6 +7,7 @@ import type {
   SessionSummary,
   SetFileReviewedResponse,
 } from '#contract/ipc-contract.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
@@ -34,7 +35,7 @@ export interface SessionServicesOptions {
   /** Clock and id generator; defaults to the system ones. */
   readonly deps?: SessionDeps;
   readonly git?: OpenRepositoryOptions;
-  readonly onHeadMoved?: (sessionId: string, headSha: string) => void;
+  readonly onHeadMoved?: (sessionId: string, headSha: CommitSha) => void;
   /** The caches main shares between its services (ADR 0081); new ones by default. */
   readonly caches?: GitCaches;
 }

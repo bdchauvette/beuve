@@ -19,13 +19,22 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { test } from '../testing/test.ts';
 import { createSandboxTree } from './create-sandbox-tree.ts';
 
-function sandboxAt(
-  closing: Closing,
-  logger: RecordingLogger,
-  repository: GitRepository,
-  commit: CommitSha,
-  limits: SandboxLimits = {},
-): ReadOnlySandbox {
+/** The fixtures and commit a test sandbox is built from. */
+interface SandboxSetup {
+  readonly closing: Closing;
+  readonly logger: RecordingLogger;
+  readonly repository: GitRepository;
+  readonly commit: CommitSha;
+  readonly limits?: SandboxLimits;
+}
+
+function sandboxAt({
+  closing,
+  logger,
+  repository,
+  commit,
+  limits = {},
+}: SandboxSetup): ReadOnlySandbox {
   const context: SessionContext = {
     db: undefined as unknown as SessionContext['db'],
     logger: logger.logger,
@@ -33,7 +42,7 @@ function sandboxAt(
     git: {},
     caches: closing(createGitCaches()),
   };
-  return createReadOnlySandbox(createSandboxTree(context, repository, commit), limits);
+  return createReadOnlySandbox(createSandboxTree(context, { repository, commit }), limits);
 }
 
 /** What the checkout shows at `file` right now, or `gone` between the swapper's renames. */
@@ -45,8 +54,14 @@ async function readOrGone(file: string, signal: AbortSignal): Promise<string> {
   }
 }
 
+/** A directory to swap for a link, and where the link points. */
+interface LinkSwap {
+  readonly directory: string;
+  readonly outside: string;
+}
+
 /** Swaps `directory` for a link to `outside` and back, as fast as it can, until killed. */
-function swapper(directory: string, outside: string): string {
+function swapper({ directory, outside }: LinkSwap): string {
   return `
     const fs = require('node:fs');
     const [directory, outside] = ${JSON.stringify([directory, outside])};
@@ -75,7 +90,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     const commit = await repo.commit('pinned');
     repo.write('src/a.ts', 'export const a = 2; // edited after the commit\n');
     repo.write('untracked.ts', 'export const a = 3;\n');
-    const sandbox = sandboxAt(closing, logger, repository, commit);
+    const sandbox = sandboxAt({ closing, logger, repository, commit });
     await expect(
       sandbox.run({ name: 'read_file', arguments: '{"path":"src/a.ts"}' }),
     ).resolves.toStrictEqual({
@@ -117,7 +132,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     mkdirSync(outside);
     writeFileSync(path.join(outside, 'a.txt'), 'secret\n');
     const directory = path.join(repo.directory, 'dir');
-    const child = spawn(process.execPath, ['-e', swapper(directory, outside)], {
+    const child = spawn(process.execPath, ['-e', swapper({ directory, outside })], {
       stdio: 'ignore',
       signal,
     });
@@ -126,7 +141,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
         child.kill('SIGKILL');
       },
     });
-    const sandbox = sandboxAt(closing, logger, repository, commit);
+    const sandbox = sandboxAt({ closing, logger, repository, commit });
     const seen = { sandbox: new Set<string>(), checkout: new Set<string>() };
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const [read, onDisk] = await Promise.all([
@@ -152,7 +167,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
       repo.write(name, `content of ${JSON.stringify(name)}\n`);
     }
     const commit = await repo.commit('hostile');
-    const sandbox = sandboxAt(closing, logger, repository, commit);
+    const sandbox = sandboxAt({ closing, logger, repository, commit });
     const globbed = await sandbox.run({ name: 'glob', arguments: '{"pattern":"**"}' });
     // `*` and `**` never span a newline, so the name holding one is left out, as before.
     expect(new Set(globbed.output.split('\n'))).toStrictEqual(
@@ -182,7 +197,7 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     symlinkSync('/etc/passwd', path.join(repo.directory, 'passwd'));
     symlinkSync('../outside', path.join(repo.directory, 'up'));
     const commit = await repo.commit('links');
-    const sandbox = sandboxAt(closing, logger, repository, commit);
+    const sandbox = sandboxAt({ closing, logger, repository, commit });
     await expect(
       sandbox.run({ name: 'read_file', arguments: '{"path":"lib/a.ts"}' }),
     ).resolves.toStrictEqual({
@@ -214,9 +229,12 @@ describe('the chat sandbox over git objects (ADR 0087)', { timeout: 60_000 }, ()
     repo.write('long.txt', `${'y'.repeat(100)}\n`);
     repo.write('image.png', Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]));
     const commit = await repo.commit('sizes');
-    const sandbox = sandboxAt(closing, logger, repository, commit, {
-      maxBlobBytes: 1024 * 1024,
-      maxFileBytes: 10,
+    const sandbox = sandboxAt({
+      closing,
+      logger,
+      repository,
+      commit,
+      limits: { maxBlobBytes: 1024 * 1024, maxFileBytes: 10 },
     });
     await expect(
       sandbox.run({ name: 'read_file', arguments: '{"path":"big.txt"}' }),

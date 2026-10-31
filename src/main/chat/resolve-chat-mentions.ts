@@ -42,10 +42,10 @@ export async function resolveChatMentions(
   const { repository, session } = diff.refreshed;
   const shas = { head: session.headSha, base: diff.baseSha };
   const trackedBlob = async (
-    sha: string,
+    side: ChatMentionView['side'],
     path: string,
   ): Promise<Result<string | undefined, IpcError>> => {
-    const found = await findTreeBlob(repository, sha as typeof session.headSha, path);
+    const found = await findTreeBlob(repository, shas[side], path);
     if (found.ok) {
       return ok(found.value?.objectId);
     }
@@ -62,7 +62,7 @@ export async function resolveChatMentions(
     }
     let objectId = blobInDiff(diff.files, mention);
     if (objectId === undefined) {
-      const tracked = await trackedBlob(expected, mention.path);
+      const tracked = await trackedBlob(mention.side, mention.path);
       if (!tracked.ok) {
         return tracked;
       }
@@ -98,7 +98,7 @@ export async function resolveChatMentions(
       content?.kind === 'too-large' ||
       content?.kind === 'submodule'
     ) {
-      mentions.push(mention.startLine === undefined ? where : { ...where, ...lines(mention) });
+      mentions.push(storedMention(where, mention, lines(mention)));
       selections.push({ ...where, kind: 'unreadable', reason: content.kind });
       continue;
     }
@@ -118,24 +118,40 @@ export async function resolveChatMentions(
       );
     }
     const { startLine, endLine } = excerpt.value;
-    mentions.push(mention.startLine === undefined ? where : { ...where, startLine, endLine });
+    mentions.push(storedMention(where, mention, { startLine, endLine }));
     selections.push({ ...where, kind: 'lines', ...excerpt.value });
   }
   return ok({ mentions, selections });
 }
 
+/** A mention's lines: inclusive and 1-based. */
+interface LineRange {
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+/** One side of a diff file: its path there, whether it exists, and its blob. */
+interface DiffSide {
+  readonly path: string;
+  readonly isAbsent: boolean;
+  readonly objectId: string | undefined;
+}
+
+/** The mention as stored: the whole file when it names no lines, else `range` of it. */
+function storedMention(
+  where: ChatMention,
+  mention: ChatMentionView,
+  range: LineRange,
+): ChatMention {
+  if (mention.startLine === undefined) {
+    return where;
+  }
+  return { ...where, ...range };
+}
+
 function blobInDiff(files: readonly DiffFile[], mention: ChatMentionView): string | undefined {
   for (const file of files) {
-    const isHead = mention.side === 'head';
-    const path = isHead
-      ? 'newPath' in file
-        ? file.newPath
-        : file.path
-      : 'oldPath' in file
-        ? file.oldPath
-        : file.path;
-    const isAbsent = isHead ? file.status === 'deleted' : file.status === 'added';
-    const objectId = isHead ? file.newObject : file.oldObject;
+    const { path, isAbsent, objectId } = diffSideOf(file, mention.side);
     if (!isAbsent && objectId !== undefined && path === mention.path && !zeroId.test(objectId)) {
       return objectId;
     }
@@ -143,7 +159,28 @@ function blobInDiff(files: readonly DiffFile[], mention: ChatMentionView): strin
   return undefined;
 }
 
-function lines(mention: ChatMentionView): { startLine: number; endLine: number } {
+function diffSideOf(file: DiffFile, side: ChatMentionView['side']): DiffSide {
+  if (side === 'head') {
+    return { path: newPathOf(file), isAbsent: file.status === 'deleted', objectId: file.newObject };
+  }
+  return { path: oldPathOf(file), isAbsent: file.status === 'added', objectId: file.oldObject };
+}
+
+function newPathOf(file: DiffFile): string {
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
+}
+
+function oldPathOf(file: DiffFile): string {
+  if ('oldPath' in file) {
+    return file.oldPath;
+  }
+  return file.path;
+}
+
+function lines(mention: ChatMentionView): LineRange {
   const startLine = mention.startLine ?? 1;
   return { startLine, endLine: mention.endLine ?? startLine };
 }

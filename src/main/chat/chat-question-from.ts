@@ -40,7 +40,10 @@ export interface ChatQuestionParts {
  */
 export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
   const { diff } = parts;
-  const prefixes = parts.task?.kind === 'review' ? parts.task.pathScope : [];
+  let prefixes: readonly string[] = [];
+  if (parts.task?.kind === 'review') {
+    prefixes = parts.task.pathScope;
+  }
   const files = diff.files
     .map((file) => chatFileFrom(file))
     .filter((file) => isSelected(file, prefixes));

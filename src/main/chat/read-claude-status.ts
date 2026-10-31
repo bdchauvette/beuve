@@ -53,7 +53,11 @@ async function readVersion(command: string, args: readonly string[]): Promise<st
       { timeout: versionTimeout, windowsHide: true, maxBuffer: 64 * 1024 },
       (error, stdout) => {
         const line = stdout.split('\n', 1)[0]?.trim() ?? '';
-        resolve(error === null && line !== '' ? line.slice(0, 200) : undefined);
+        if (error !== null || line === '') {
+          resolve(undefined);
+          return;
+        }
+        resolve(line.slice(0, 200));
       },
     );
   });

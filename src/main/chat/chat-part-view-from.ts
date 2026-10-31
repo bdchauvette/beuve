@@ -33,7 +33,10 @@ export function chatPartViewFrom(part: ChatPart): ChatPartView {
       };
     }
     case 'error': {
-      const code = isErrorCode(part.code) ? part.code : 'internal';
+      let code: ChatErrorCode = 'internal';
+      if (isErrorCode(part.code)) {
+        code = part.code;
+      }
       return { kind: 'error', id: part.id, code, message: describeChatError(code) };
     }
     default: {

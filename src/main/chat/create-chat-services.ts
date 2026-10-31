@@ -41,7 +41,7 @@ import type { ChatReview } from '#internal/chat/chat-review.ts';
 import type { ChatPartEvent } from '#internal/chat/chat-part-event.ts';
 import { chatPartsFrom } from '#internal/chat/chat-parts-from.ts';
 import { chatTextFrom } from '#internal/chat/chat-text-from.ts';
-import type { ChatSelection, ChatTask } from '#internal/chat/chat-question.ts';
+import type { ChatQuestion, ChatSelection, ChatTask } from '#internal/chat/chat-question.ts';
 import { compactConversation } from '#internal/chat/compact-conversation.ts';
 import { deleteChatMessages } from '#internal/chat/delete-chat-messages.ts';
 import { listChatMessages } from '#internal/chat/list-chat-messages.ts';
@@ -101,7 +101,7 @@ export interface ChatServices {
   /** Deletes the transcript (or only the queued requests), stopping what it removes. */
   readonly clear: (request: ChatClearRequest) => IpcResult<ChatClearedView>;
   /** Stops the session's requests that were asked at a head other than `headSha`. */
-  readonly observeHead: (sessionId: string, headSha: string) => void;
+  readonly observeHead: (sessionId: string, headSha: CommitSha) => void;
   /** Subscribes to `chat:stream` events (ADR 0072); returns the unsubscribe function. */
   readonly onStream: (listener: (event: ChatStreamEvent) => void) => () => void;
   /**
@@ -182,6 +182,32 @@ type Outcome =
     }
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly code: ChatErrorCode };
+
+/** What {@link createChatServices}' `prepare` reads before a request asks its models. */
+interface Preparation {
+  readonly withImpact: boolean;
+  /** The models the request will ask; a checkout is leased only if one of them reads it. */
+  readonly models: readonly LanguageModel[];
+}
+
+/** One model call of an answer: the question, the role it serves and what it runs against. */
+interface ModelAsk {
+  readonly input: ChatQuestion;
+  readonly role: ModelRole;
+  readonly resolved: ResolvedModel;
+  readonly prepared: Prepared;
+}
+
+/** The refusal of a request when the session's queue is full (ADR 0057). */
+interface QueueFull {
+  readonly code: 'refused';
+  readonly message: string;
+}
+
+/** A queued `/compact`, and the answer its `chat:compact` call waits for. */
+interface QueuedCompaction {
+  readonly done: Promise<IpcResult<ChatCompactedView>>;
+}
 
 /**
  * What a request runs against: the diff, the head's files from git objects, and a checkout only
@@ -296,11 +322,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const prepare = async (
     job: AnswerJob | CompactJob,
-    options: {
-      readonly withImpact: boolean;
-      /** The models the request will ask; a checkout is leased only if one of them reads it. */
-      readonly models: readonly LanguageModel[];
-    },
+    preparation: Preparation,
   ): Promise<Result<Prepared, Outcome>> => {
     const isAborted = (): boolean => job.controller.signal.aborted;
     const unavailable = (): Result<never, Outcome> => {
@@ -319,21 +341,20 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return err({ status: 'cancelled' });
     }
     let findings: readonly ImpactFindingView[] | undefined;
-    if (options.withImpact) {
+    if (preparation.withImpact) {
       const impactView = await impact.getImpact(
         { sessionId: job.sessionId },
         { signal: job.controller.signal },
       );
-      findings =
-        impactView.ok && impactView.value.headSha === job.headSha
-          ? impactView.value.findings
-          : undefined;
+      if (impactView.ok && impactView.value.headSha === job.headSha) {
+        findings = impactView.value.findings;
+      }
     }
     if (isAborted()) {
       return err({ status: 'cancelled' });
     }
     let worktree: WorktreeLease | undefined;
-    if (options.models.some((model) => model.capabilities.checkout)) {
+    if (preparation.models.some((model) => model.capabilities.checkout)) {
       const leased = await worktrees.acquire(
         refreshed.repository,
         { kind: 'session-head', sessionId: job.sessionId, headSha: refreshed.session.headSha },
@@ -352,16 +373,19 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       worktree = leased.value;
     }
     const paths = await listTreePaths(refreshed.repository, refreshed.session.headSha);
-    const tree = createSandboxTree(
-      context,
-      refreshed.repository,
-      refreshed.session.headSha,
-      job.controller.signal,
-    );
+    const tree = createSandboxTree(context, {
+      repository: refreshed.repository,
+      commit: refreshed.session.headSha,
+      signal: job.controller.signal,
+    });
+    let worktreePaths: ReadonlySet<string> | undefined;
+    if (paths.ok) {
+      worktreePaths = new Set(paths.value);
+    }
     return ok({
       diff: diff.value,
       worktreePath: worktree?.path,
-      worktreePaths: paths.ok ? new Set(paths.value) : undefined,
+      worktreePaths,
       findings,
       bind: (model): LanguageModel => {
         return bindModelTree(model, tree);
@@ -380,7 +404,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       return err({ status: 'failed', code: 'internal' });
     }
     const at = stored.value.findIndex((message) => message.id === job.question.id);
-    return ok(at === -1 ? stored.value : stored.value.slice(0, at));
+    if (at === -1) {
+      return ok(stored.value);
+    }
+    return ok(stored.value.slice(0, at));
   };
 
   /**
@@ -444,7 +471,12 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
-    return await askModel(job, input, 'chat', model.value, prepared.value);
+    return await askModel(job, {
+      input,
+      role: 'chat',
+      resolved: model.value,
+      prepared: prepared.value,
+    });
   };
 
   /** `/summarize` (ADR 0056): from the diff and the code only, never the stated intent. */
@@ -468,15 +500,17 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
-    return await askModel(job, input, 'summarize', model.value, prepared.value);
+    return await askModel(job, {
+      input,
+      role: 'summarize',
+      resolved: model.value,
+      prepared: prepared.value,
+    });
   };
 
   const askModel = async (
     job: AnswerJob,
-    input: ReturnType<typeof chatQuestionFrom>,
-    role: ModelRole,
-    resolved: ResolvedModel,
-    prepared: Prepared,
+    { input, role, resolved, prepared }: ModelAsk,
   ): Promise<Outcome> => {
     const { name } = resolved;
     const stream = streamInto(job);
@@ -487,7 +521,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         pushStatus(job, activity);
       }
     };
-    pushStatus(job, role === 'summarize' ? `${name} is summarizing the change` : `Asking ${name}`);
+    pushStatus(job, askingStatus(role, name));
     const asked = await askQuestion<ModelError>(input, {
       model: prepared.bind(resolved.model),
       signal: job.controller.signal,
@@ -523,9 +557,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!before.ok) {
       return before.error;
     }
-    const earlier = command.fresh === true ? undefined : findReview(before.value, job, pathScope);
-    if (earlier !== undefined) {
-      return earlier;
+    if (command.fresh !== true) {
+      const earlier = findReview(before.value, job, pathScope);
+      if (earlier !== undefined) {
+        return earlier;
+      }
     }
     const progress = (text: string): void => {
       pushStatus(job, text);
@@ -536,14 +572,18 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return model.error;
     }
-    const verifier = command.verify === false ? undefined : await resolve('verify');
+    let verifier: Result<ResolvedModel, Outcome> | undefined;
+    if (command.verify !== false) {
+      verifier = await resolve('verify');
+    }
     if (verifier?.ok === false) {
       return verifier.error;
     }
-    const prepared = await prepare(job, {
-      withImpact: true,
-      models: [model.value.model, ...(verifier?.ok === true ? [verifier.value.model] : [])],
-    });
+    const models = [model.value.model];
+    if (verifier?.ok === true) {
+      models.push(verifier.value.model);
+    }
+    const prepared = await prepare(job, { withImpact: true, models });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -638,13 +678,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
     let outcome: Outcome;
     try {
-      const { command } = job.request;
-      outcome =
-        command === undefined
-          ? await answerQuestion(job)
-          : command.kind === 'review'
-            ? await review(job, command)
-            : await summarize(job);
+      outcome = await answerFor(job);
     } catch (error: unknown) {
       logger.error('chat answer failed unexpectedly', { error });
       outcome = { status: 'failed', code: 'internal' };
@@ -652,24 +686,22 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     finish(job, outcome);
   };
 
+  const answerFor = async (job: AnswerJob): Promise<Outcome> => {
+    const { command } = job.request;
+    if (command === undefined) {
+      return answerQuestion(job);
+    }
+    if (command.kind === 'review') {
+      return review(job, command);
+    }
+    return summarize(job);
+  };
+
   const finish = (job: AnswerJob, outcome: Outcome): void => {
     if (job.controller.signal.reason === 'cleared') {
       return;
     }
-    const update: ChatAnswerUpdate =
-      outcome.status === 'done'
-        ? {
-            status: 'done',
-            parts: answerPartsFrom(job.streamed, outcome.ending),
-            citations: outcome.citations,
-            ...(outcome.review !== undefined && { review: outcome.review }),
-          }
-        : outcome.status === 'cancelled'
-          ? { status: 'cancelled', parts: answerPartsFrom(job.streamed, { kind: 'cancelled' }) }
-          : {
-              status: 'error',
-              parts: answerPartsFrom(job.streamed, { kind: 'error', code: outcome.code }),
-            };
+    const update = answerUpdateFrom(job.streamed, outcome);
     const stored = updateChatAnswer(db, job.assistant.id, update);
     if (!stored.ok) {
       logger.warn('chat answer not stored', { error: stored.error });
@@ -677,7 +709,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     }
     publish(
       { ...job.assistant, ...update, citations: update.citations ?? [] },
-      outcome.status === 'done' ? outcome.droppedTurns : 0,
+      droppedTurnsOf(outcome),
     );
   };
 
@@ -694,20 +726,15 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         errorMessage: describeChatError('internal'),
       });
     }
-    job.settle(job.controller.signal.aborted ? ok({ outcome: 'cancelled' }) : result);
+    if (job.controller.signal.aborted) {
+      result = ok({ outcome: 'cancelled' });
+    }
+    job.settle(result);
   };
 
   const condense = async (job: CompactJob): Promise<IpcResult<ChatCompactedView>> => {
     const failed = (outcome: Outcome): IpcResult<ChatCompactedView> => {
-      return ok(
-        outcome.status === 'failed'
-          ? {
-              outcome: 'failed',
-              errorCode: outcome.code,
-              errorMessage: describeChatError(outcome.code),
-            }
-          : { outcome: 'cancelled' },
-      );
+      return ok(compactionFailureFrom(outcome));
     };
     const stored = listChatMessages(db, job.sessionId as SessionId);
     if (!stored.ok) {
@@ -757,11 +784,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       },
     );
     if (!compacted.ok) {
-      return failed(
-        compacted.error.kind === 'nothing-to-compact'
-          ? { status: 'failed', code: 'internal' }
-          : outcomeFrom(compacted.error.error),
-      );
+      if (compacted.error.kind === 'nothing-to-compact') {
+        return failed({ status: 'failed', code: 'internal' });
+      }
+      return failed(outcomeFrom(compacted.error.error));
     }
     if (job.controller.signal.aborted) {
       return ok({ outcome: 'cancelled' });
@@ -836,6 +862,15 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     return runProbe(job);
   }, options.maxQueued ?? 10);
 
+  const jobToCancel = (request: ChatCancelRequest): Job | undefined => {
+    if ('messageId' in request) {
+      return jobOfMessage(request.messageId);
+    }
+    return queue.all().find((candidate) => {
+      return candidate.kind === 'compact' && candidate.sessionId === request.sessionId;
+    });
+  };
+
   const jobOfMessage = (messageId: string): AnswerJob | undefined => {
     return queue
       .all()
@@ -860,7 +895,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     return { ...message, ...update };
   };
 
-  const observeHead = (sessionId: string, headSha: string): void => {
+  const observeHead = (sessionId: string, headSha: CommitSha): void => {
     const running = queue.running(sessionId);
     if (running !== undefined && running.headSha !== headSha) {
       abort(running, 'head-changed');
@@ -886,7 +921,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     return turn;
   };
 
-  const queueFull = (): Result<never, { code: 'refused'; message: string }> => {
+  const queueFull = (): Result<never, QueueFull> => {
     return err({
       code: 'refused',
       message: `${String(options.maxQueued ?? 10)} requests are already waiting. Wait, cancel one or clear the queue.`,
@@ -940,7 +975,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           id: context.deps.newId() as ChatMessageId,
           role: 'assistant',
           kind: answerKindOf(request.command),
-          status: isQueued ? 'queued' : 'submitted',
+          status: initialStatus(isQueued),
           parts: [],
           citations: [],
           createdAt,
@@ -989,12 +1024,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     },
 
     cancel: (request): IpcResult<ChatCancelledView> => {
-      const job =
-        'messageId' in request
-          ? jobOfMessage(request.messageId)
-          : queue.all().find((candidate) => {
-              return candidate.kind === 'compact' && candidate.sessionId === request.sessionId;
-            });
+      const job = jobToCancel(request);
       if (job === undefined) {
         return ok({ cancelled: false });
       }
@@ -1008,31 +1038,29 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     },
 
     compact: async ({ sessionId: requested }): Promise<IpcResult<ChatCompactedView>> => {
-      const queued = await inOrder(
-        async (): Promise<IpcResult<{ done: Promise<IpcResult<ChatCompactedView>> }>> => {
-          if (isDisposed) {
-            return err({ code: 'not-wired', message: 'beuve is quitting' });
-          }
-          const head = await refreshSessionHead(context, requested);
-          if (!head.ok) {
-            return head;
-          }
-          const { sessionId, headSha } = head.value;
-          if (queue.isFull(sessionId)) {
-            return queueFull();
-          }
-          const settled = Promise.withResolvers<IpcResult<ChatCompactedView>>();
-          queue.enqueue(sessionId, {
-            kind: 'compact',
-            sessionId,
-            headSha,
-            messageId: context.deps.newId(),
-            controller: new AbortController(),
-            settle: settled.resolve,
-          });
-          return ok({ done: settled.promise });
-        },
-      );
+      const queued = await inOrder(async (): Promise<IpcResult<QueuedCompaction>> => {
+        if (isDisposed) {
+          return err({ code: 'not-wired', message: 'beuve is quitting' });
+        }
+        const head = await refreshSessionHead(context, requested);
+        if (!head.ok) {
+          return head;
+        }
+        const { sessionId, headSha } = head.value;
+        if (queue.isFull(sessionId)) {
+          return queueFull();
+        }
+        const settled = Promise.withResolvers<IpcResult<ChatCompactedView>>();
+        queue.enqueue(sessionId, {
+          kind: 'compact',
+          sessionId,
+          headSha,
+          messageId: context.deps.newId(),
+          controller: new AbortController(),
+          settle: settled.resolve,
+        });
+        return ok({ done: settled.promise });
+      });
       if (queued.ok) {
         return queued.value.done;
       }
@@ -1076,7 +1104,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           outcome: 'failed',
           elapsedMs: 0,
           errorKind: 'refused',
-          message: isDisposed ? 'beuve is quitting.' : 'Too many tests are waiting.',
+          message: refusedTestMessage(isDisposed),
         };
       }
       const settled = Promise.withResolvers<ModelTestView>();
@@ -1221,5 +1249,71 @@ function hasSameScope(left: readonly string[], right: readonly string[]): boolea
 }
 
 function plural(count: number, noun: string): string {
-  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+  if (count === 1) {
+    return `${String(count)} ${noun}`;
+  }
+  return `${String(count)} ${noun}s`;
+}
+
+function askingStatus(role: ModelRole, name: string): string {
+  if (role === 'summarize') {
+    return `${name} is summarizing the change`;
+  }
+  return `Asking ${name}`;
+}
+
+/** What `outcome` stores in the answer, after the parts that streamed. */
+function answerUpdateFrom(streamed: StreamedParts, outcome: Outcome): ChatAnswerUpdate {
+  switch (outcome.status) {
+    case 'done': {
+      return {
+        status: 'done',
+        parts: answerPartsFrom(streamed, outcome.ending),
+        citations: outcome.citations,
+        ...(outcome.review !== undefined && { review: outcome.review }),
+      };
+    }
+    case 'cancelled': {
+      return { status: 'cancelled', parts: answerPartsFrom(streamed, { kind: 'cancelled' }) };
+    }
+    case 'failed': {
+      return {
+        status: 'error',
+        parts: answerPartsFrom(streamed, { kind: 'error', code: outcome.code }),
+      };
+    }
+  }
+}
+
+function droppedTurnsOf(outcome: Outcome): number {
+  if (outcome.status === 'done') {
+    return outcome.droppedTurns;
+  }
+  return 0;
+}
+
+/** A `/compact` that ended without a summary: failed with `outcome`'s code, else cancelled. */
+function compactionFailureFrom(outcome: Outcome): ChatCompactedView {
+  if (outcome.status === 'failed') {
+    return {
+      outcome: 'failed',
+      errorCode: outcome.code,
+      errorMessage: describeChatError(outcome.code),
+    };
+  }
+  return { outcome: 'cancelled' };
+}
+
+function initialStatus(isQueued: boolean): 'queued' | 'submitted' {
+  if (isQueued) {
+    return 'queued';
+  }
+  return 'submitted';
+}
+
+function refusedTestMessage(isDisposed: boolean): string {
+  if (isDisposed) {
+    return 'beuve is quitting.';
+  }
+  return 'Too many tests are waiting.';
 }

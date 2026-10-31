@@ -20,6 +20,12 @@ export type ClaudeCommand =
 /** Names the `claude` executable explicitly. */
 const claudePathVariable = 'BEUVE_CLAUDE_PATH';
 
+/** The executable's name and `PATH`'s separator on each kind of platform. */
+const platformConventions = {
+  windows: { name: 'claude.exe', delimiter: ';' },
+  posix: { name: 'claude', delimiter: ':' },
+} as const;
+
 /**
  * Finds the Claude Code CLI (ADR 0022). GUI apps on macOS start with a minimal `PATH`, so the
  * shell's lookup isn't enough: `BEUVE_CLAUDE_PATH` wins (and is not second-guessed: if it names no
@@ -30,7 +36,7 @@ const claudePathVariable = 'BEUVE_CLAUDE_PATH';
 export async function resolveClaudeCommand(lookup: ClaudeCommandLookup): Promise<ClaudeCommand> {
   const override = lookup.env[claudePathVariable]?.trim();
   if (override !== undefined && override !== '') {
-    const file = expandHome(override, lookup.homeDirectory);
+    const file = expandHome({ file: override, homeDirectory: lookup.homeDirectory });
     if (path.isAbsolute(file) && (await lookup.isExecutable(file))) {
       return { kind: 'found', command: file, source: 'env' };
     }
@@ -39,13 +45,12 @@ export async function resolveClaudeCommand(lookup: ClaudeCommandLookup): Promise
       message: `${claudePathVariable} is set to ${override}, which is not an executable file.`,
     };
   }
-  const name = lookup.platform === 'win32' ? 'claude.exe' : 'claude';
+  const { name, delimiter } = platformConventions[platformFamily(lookup.platform)];
   for (const file of knownLocations(lookup.homeDirectory, lookup.platform)) {
     if (await lookup.isExecutable(file)) {
       return { kind: 'found', command: file, source: 'known-location' };
     }
   }
-  const delimiter = lookup.platform === 'win32' ? ';' : ':';
   const directories = (lookup.env['PATH'] ?? '').split(delimiter);
   for (const directory of directories) {
     const file = path.join(directory, name);
@@ -59,7 +64,20 @@ export async function resolveClaudeCommand(lookup: ClaudeCommandLookup): Promise
   };
 }
 
-function expandHome(file: string, homeDirectory: string): string {
+function platformFamily(platform: NodeJS.Platform): 'windows' | 'posix' {
+  if (platform === 'win32') {
+    return 'windows';
+  }
+  return 'posix';
+}
+
+/** A path that may start with `~`, and the home directory that stands for. */
+interface HomePath {
+  readonly file: string;
+  readonly homeDirectory: string;
+}
+
+function expandHome({ file, homeDirectory }: HomePath): string {
   if (file === '~' || file.startsWith('~/')) {
     return path.join(homeDirectory, file.slice(1));
   }

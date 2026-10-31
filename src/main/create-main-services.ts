@@ -169,7 +169,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     trace: TraceServices | undefined;
     impact: ImpactServices | undefined;
   } = { ura: undefined, chat: undefined, trace: undefined, impact: undefined };
-  const onHeadMoved = (sessionId: string, headSha: string): void => {
+  const onHeadMoved = (sessionId: string, headSha: CommitSha): void => {
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
     heads.trace?.observeHead(sessionId, headSha);

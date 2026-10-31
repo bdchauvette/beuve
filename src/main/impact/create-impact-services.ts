@@ -1,4 +1,5 @@
 import type { GetImpactRequest, IpcError, IpcResult, ImpactView } from '#contract/ipc-contract.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import { untilAborted } from '#x/async/until-aborted.ts';
 import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
@@ -37,7 +38,7 @@ export interface ImpactServices {
     options?: RequestOptions,
   ) => Promise<IpcResult<ImpactView>>;
   /** Cancels the session's in-flight computation if it is for a head other than `headSha`. */
-  readonly observeHead: (sessionId: string, headSha: string) => void;
+  readonly observeHead: (sessionId: string, headSha: CommitSha) => void;
 }
 
 export interface ImpactServicesOptions {

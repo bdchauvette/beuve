@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+import type { CommitSha } from '#internal/git/object-id.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import type { SessionDeps } from '#internal/session/session.ts';
 import type { Logger } from '#x/log/create-logger.ts';
@@ -15,5 +16,5 @@ export interface SessionContext {
   /** Repository probes, fork points and review diffs shared by every service (ADR 0081). */
   readonly caches: GitCaches;
   /** Told whenever a refresh stores a new head, so main can abort work for the old one. */
-  readonly onHeadMoved?: (sessionId: string, headSha: string) => void;
+  readonly onHeadMoved?: (sessionId: string, headSha: CommitSha) => void;
 }

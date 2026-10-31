@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe } from 'vitest';
 
 import type { CallHierarchyRequest, ReviewView } from '#contract/ipc-contract.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
@@ -774,7 +775,7 @@ describe('createMainServices (integration: ImpactGate in a worker thread)', () =
     async ({ expect, createServices, repositories, logger, signal }) => {
       const { services, sessionId } = await openLargeSession(createServices, repositories, logger);
       const loading = services.impact.getImpact({ sessionId }, { signal });
-      services.impact.observeHead(sessionId, 'f'.repeat(40));
+      services.impact.observeHead(sessionId, 'f'.repeat(40) as CommitSha);
       await expect(loading).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
     },
   );

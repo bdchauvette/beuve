@@ -21,8 +21,12 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
         chunks: [],
         structured: {
           findings: [
-            finding(2, 'warning', 'The constant hides a missing computation'),
-            finding(3, 'risk', 'The closing brace swallows a return'),
+            finding({
+              line: 2,
+              severity: 'warning',
+              title: 'The constant hides a missing computation',
+            }),
+            finding({ line: 3, severity: 'risk', title: 'The closing brace swallows a return' }),
           ],
           verdicts: [
             { finding: 1, verdict: 'confirmed', reason: 'Line 2 returns a constant.' },
@@ -70,7 +74,14 @@ describe('chat: /review findings for the renderer (integration: SQLite + git + f
   });
 });
 
-function finding(line: number, severity: string, title: string): object {
+/** A finding the fake model reports on one line of `feature.rs`. */
+interface FindingSpec {
+  readonly line: number;
+  readonly severity: string;
+  readonly title: string;
+}
+
+function finding({ line, severity, title }: FindingSpec): object {
   return {
     path: 'feature.rs',
     startLine: line,

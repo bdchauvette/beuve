@@ -3,7 +3,12 @@ import process from 'node:process';
 
 import { describe } from 'vitest';
 
-import type { ChatMessageView, IpcResult } from '#contract/ipc-contract.ts';
+import type {
+  ChatMentionView,
+  ChatMessageView,
+  ChatStreamEvent,
+  IpcResult,
+} from '#contract/ipc-contract.ts';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
@@ -78,11 +83,7 @@ describe(
           if (event.type === 'status') {
             return [];
           }
-          return [
-            'text' in event
-              ? [event.type, event.text]
-              : [event.type, 'part' in event ? event.part.id : ''],
-          ];
+          return [[event.type, eventDetail(event)]];
         }),
       ).toStrictEqual([
         ['part-start', 'p1'],
@@ -373,10 +374,30 @@ describe(
           chunks: ['Follow-up answer.'],
           structured: {
             findings: [
-              modelFinding('feature.rs', 2, 'warning', 'The constant hides a missing computation'),
-              modelFinding('feature.rs', 3, 'risk', 'The closing brace swallows a return'),
-              modelFinding('feature.rs', 40, 'info', 'Outside the diff'),
-              modelFinding('missing.rs', 1, 'info', 'Not in the diff'),
+              modelFinding({
+                path: 'feature.rs',
+                line: 2,
+                severity: 'warning',
+                title: 'The constant hides a missing computation',
+              }),
+              modelFinding({
+                path: 'feature.rs',
+                line: 3,
+                severity: 'risk',
+                title: 'The closing brace swallows a return',
+              }),
+              modelFinding({
+                path: 'feature.rs',
+                line: 40,
+                severity: 'info',
+                title: 'Outside the diff',
+              }),
+              modelFinding({
+                path: 'missing.rs',
+                line: 1,
+                severity: 'info',
+                title: 'Not in the diff',
+              }),
             ],
             verdicts: [
               { finding: 1, verdict: 'confirmed', reason: 'Line 2 returns a constant.' },
@@ -417,7 +438,11 @@ describe(
       });
       expect(
         reviewed.parts.map((part) => {
-          return [part.kind, 'description' in part ? part.description : ''];
+          let description = '';
+          if ('description' in part) {
+            description = part.description;
+          }
+          return [part.kind, description];
         }),
       ).toStrictEqual([
         ['tool-call', 'grep feature'],
@@ -666,13 +691,7 @@ describe(
       const claude = fakeClaude.scripted({ chunks: ['x'] });
       const { services, chat, sessionId, settled } = await startChat(claude.settings);
       const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
-      const refused = async (mention: {
-        path: string;
-        side: 'head' | 'base';
-        startLine?: number;
-        endLine?: number;
-        sha: string;
-      }): Promise<string> => {
+      const refused = async (mention: ChatMentionView): Promise<string> => {
         const result = await chat.ask({ sessionId, question: 'Why?', mentions: [mention] });
         expect(result).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
         if (result.ok) {
@@ -926,7 +945,9 @@ describe(
       });
       const updates: ChatMessageView[] = [];
       chat.onStream((event) => {
-        updates.push(...(event.type === 'message' ? [event.message] : []));
+        if (event.type === 'message') {
+          updates.push(event.message);
+        }
       });
       closing(chat);
       const { id: sessionId } = okValueFrom(
@@ -974,7 +995,15 @@ function answerText(): string {
   return 'It adds [[feature.rs:1-2]] and ignores `ghost.rs:4-4`.';
 }
 
-function modelFinding(path: string, line: number, severity: string, title: string): object {
+/** A finding the fake model reports on one line. */
+interface ModelFindingSpec {
+  readonly path: string;
+  readonly line: number;
+  readonly severity: string;
+  readonly title: string;
+}
+
+function modelFinding({ path, line, severity, title }: ModelFindingSpec): object {
   return {
     path,
     startLine: line,
@@ -983,6 +1012,24 @@ function modelFinding(path: string, line: number, severity: string, title: strin
     category: 'edge-case',
     title,
     body: `**${title}**: check \`${path}\` line ${String(line)}.`,
-    confidence: severity === 'risk' ? 0.9 : 0.8,
+    confidence: confidenceFor(severity),
   };
+}
+
+function confidenceFor(severity: string): number {
+  if (severity === 'risk') {
+    return 0.9;
+  }
+  return 0.8;
+}
+
+/** A stream event's text, or else the id of its part. */
+function eventDetail(event: ChatStreamEvent): string {
+  if ('text' in event) {
+    return event.text;
+  }
+  if ('part' in event) {
+    return event.part.id;
+  }
+  return '';
 }

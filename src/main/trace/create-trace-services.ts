@@ -18,6 +18,7 @@ import type {
   TraceTrustEntryView,
   TraceTrustView,
 } from '#contract/ipc-contract.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
 import type { ParseSyntax } from '#internal/syntax/create-syntax-parser.ts';
 import { createVitestTraceRunner } from '#internal/trace/create-vitest-trace-runner.ts';
@@ -83,7 +84,7 @@ export interface TraceServices {
     request: TraceRemoveTrustRequest,
   ) => Promise<IpcResult<readonly TraceTrustEntryView[]>>;
   /** Aborts the session's probe if it started at a head other than `headSha`. */
-  readonly observeHead: (sessionId: string, headSha: string) => void;
+  readonly observeHead: (sessionId: string, headSha: CommitSha) => void;
   readonly onStatus: (listener: (event: TraceStatusView) => void) => () => void;
   /** Aborts every probe and waits until their processes are gone. */
   readonly dispose: () => Promise<void>;
