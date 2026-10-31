@@ -1,15 +1,20 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
+import type { Brand } from '../../../src/x/brand/brand.ts';
+
+/** A page's flattened DevTools session, as the browser names it in `Target.attachedToTarget`. */
+export type SessionId = Brand<string, 'SessionId'>;
+
 /** An event the browser sends unprompted, on a page's session or on the browser's own. */
 export interface DevtoolsEvent {
   readonly method: string;
   readonly params: Readonly<Record<string, unknown>>;
-  readonly sessionId?: string;
+  readonly sessionId?: SessionId;
 }
 
 /** A page target, attached and paused until the `onPage` callback of {@link DevtoolsConnection.open} returns. */
 export interface DevtoolsPage {
-  readonly sessionId: string;
+  readonly sessionId: SessionId;
   readonly url: string;
 }
 
@@ -65,7 +70,7 @@ export class DevtoolsConnection implements Disposable {
   readonly #pending = new Map<number, Pending>();
   readonly #listeners: ((event: DevtoolsEvent) => void)[] = [];
   /** Attached page sessions and their targets, as last reported. */
-  readonly #pages = new Map<string, TargetInfo>();
+  readonly #pages = new Map<SessionId, TargetInfo>();
   #nextId = 1;
 
   private constructor(socket: WebSocket) {
@@ -107,7 +112,7 @@ export class DevtoolsConnection implements Disposable {
   async #sendIgnoringResult(
     method: string,
     params: Readonly<Record<string, unknown>>,
-    sessionId: string | undefined,
+    sessionId: SessionId | undefined,
   ): Promise<void> {
     try {
       await this.send(method, params, sessionId);
@@ -116,7 +121,7 @@ export class DevtoolsConnection implements Disposable {
     }
   }
 
-  async #evaluateOrUndefined(sessionId: string, expression: string): Promise<unknown> {
+  async #evaluateOrUndefined(sessionId: SessionId, expression: string): Promise<unknown> {
     try {
       return await this.evaluate(sessionId, expression);
     } catch {
@@ -129,7 +134,7 @@ export class DevtoolsConnection implements Disposable {
     event: DevtoolsEvent,
     onPage: (page: DevtoolsPage, connection: DevtoolsConnection) => Promise<void>,
   ): void {
-    const sessionId = event.params['sessionId'] as string;
+    const sessionId = event.params['sessionId'] as SessionId;
     const info = event.params['targetInfo'] as TargetInfo;
     const prepare = async (): Promise<void> => {
       try {
@@ -150,7 +155,7 @@ export class DevtoolsConnection implements Disposable {
   async send(
     method: string,
     params: Readonly<Record<string, unknown>> = {},
-    sessionId?: string,
+    sessionId?: SessionId,
   ): Promise<Readonly<Record<string, unknown>>> {
     const id = this.#nextId;
     this.#nextId += 1;
@@ -166,7 +171,11 @@ export class DevtoolsConnection implements Disposable {
    * Sends a command without waiting for its result, which is ignored: for a page held before its
    * first script, which answers `Page.*` only once it runs. A session applies commands in order.
    */
-  post(method: string, params: Readonly<Record<string, unknown>> = {}, sessionId?: string): void {
+  post(
+    method: string,
+    params: Readonly<Record<string, unknown>> = {},
+    sessionId?: SessionId,
+  ): void {
     void this.#sendIgnoringResult(method, params, sessionId);
   }
 
@@ -175,13 +184,16 @@ export class DevtoolsConnection implements Disposable {
     this.#listeners.push(listener);
   }
 
-  /** The URL of the page attached as `sessionId`, as last reported. */
-  urlOf(sessionId: string): string {
+  /** The URL of the page attached as `sessionId`, as last reported; empty for the browser's own. */
+  urlOf(sessionId: SessionId | undefined): string {
+    if (sessionId === undefined) {
+      return '';
+    }
     return this.#pages.get(sessionId)?.url ?? '';
   }
 
   /** Evaluates `expression` in a page, awaiting a promise, and returns its value as JSON. */
-  async evaluate(sessionId: string, expression: string): Promise<unknown> {
+  async evaluate(sessionId: SessionId, expression: string): Promise<unknown> {
     const result = await this.send(
       'Runtime.evaluate',
       { expression, awaitPromise: true, returnByValue: true, userGesture: true },
@@ -197,7 +209,7 @@ export class DevtoolsConnection implements Disposable {
   }
 
   /** Re-evaluates `expression` until it is truthy and returns that value; rejects when `signal` aborts. */
-  async waitFor(sessionId: string, expression: string, signal: AbortSignal): Promise<unknown> {
+  async waitFor(sessionId: SessionId, expression: string, signal: AbortSignal): Promise<unknown> {
     for (;;) {
       const value = await this.#evaluateOrUndefined(sessionId, expression);
       if (!falsy.has(value)) {
@@ -208,7 +220,7 @@ export class DevtoolsConnection implements Disposable {
   }
 
   /** The session of the first page whose URL `isWanted`, once one is attached; rejects when `signal` aborts. */
-  async waitForPage(isWanted: (url: string) => boolean, signal: AbortSignal): Promise<string> {
+  async waitForPage(isWanted: (url: string) => boolean, signal: AbortSignal): Promise<SessionId> {
     for (;;) {
       const { targetInfos } = (await this.send('Target.getTargets')) as {
         readonly targetInfos: readonly TargetInfo[];

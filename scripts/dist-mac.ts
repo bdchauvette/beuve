@@ -67,11 +67,15 @@ function describeSigning(signing: Signing): void {
     );
     return;
   }
-  console.log(
-    signing.notarization === undefined
-      ? 'dist:mac: signing with Developer ID; no complete Apple credentials, so NOT notarizing'
-      : `dist:mac: signing with Developer ID and notarizing with the ${signing.notarization}`,
-  );
+  if (signing.notarization === undefined) {
+    console.log(
+      'dist:mac: signing with Developer ID; no complete Apple credentials, so NOT notarizing',
+    );
+  } else {
+    console.log(
+      `dist:mac: signing with Developer ID and notarizing with the ${signing.notarization}`,
+    );
+  }
 }
 
 /**
@@ -80,11 +84,18 @@ function describeSigning(signing: Signing): void {
  * (`disable-library-validation`) would weaken a signed build too.
  */
 function configFor(signing: Signing, version: string | undefined): Configuration {
-  const base: Configuration =
-    signing.kind === 'ad-hoc'
-      ? { mac: { identity: '-', hardenedRuntime: false, notarize: false } }
-      : { forceCodeSigning: true, mac: { notarize: signing.notarization !== undefined } };
-  return version === undefined || version === '' ? base : { ...base, extraMetadata: { version } };
+  const base = signingConfig(signing);
+  if (version === undefined || version === '') {
+    return base;
+  }
+  return { ...base, extraMetadata: { version } };
+}
+
+function signingConfig(signing: Signing): Configuration {
+  if (signing.kind === 'ad-hoc') {
+    return { mac: { identity: '-', hardenedRuntime: false, notarize: false } };
+  }
+  return { forceCodeSigning: true, mac: { notarize: signing.notarization !== undefined } };
 }
 
 function mib(bytes: number): string {

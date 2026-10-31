@@ -32,8 +32,13 @@ export interface FetchNodeBinaryOptions {
   /** Receives `node` and a stamp naming the archive it came from. */
   readonly outputDirectory: string;
   /** Writes the body of `url` to `destination`; the caller decides how (and retries). */
-  readonly download: (url: string, destination: string, signal?: AbortSignal) => Promise<void>;
+  readonly download: (url: string, options: DownloadOptions) => Promise<void>;
   readonly baseUrl?: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface DownloadOptions {
+  readonly destination: string;
   readonly signal?: AbortSignal;
 }
 
@@ -78,7 +83,7 @@ export async function fetchNodeBinary(
 
   const isCached = (await sha256Of(archive)) === sha256;
   if (!isCached) {
-    const fetched = await downloadVerified(options, url, archive);
+    const fetched = await downloadVerified(options, { url, archive });
     if (!fetched.ok) {
       return fetched;
     }
@@ -86,7 +91,7 @@ export async function fetchNodeBinary(
   if ((await readText(stampPath)) === stamp && (await isFile(binary))) {
     return ok({ binary, downloaded: !isCached, extracted: false });
   }
-  const extracted = await extractNode(archive, `${name}/bin/node`, binary, signal);
+  const extracted = await extractNode({ archive, member: `${name}/bin/node`, binary, signal });
   if (!extracted.ok) {
     return extracted;
   }
@@ -94,15 +99,23 @@ export async function fetchNodeBinary(
   return ok({ binary, downloaded: !isCached, extracted: true });
 }
 
+/** Where an archive is downloaded from, and where it is kept once verified. */
+interface ArchiveLocation {
+  readonly url: string;
+  readonly archive: string;
+}
+
 async function downloadVerified(
   options: FetchNodeBinaryOptions,
-  url: string,
-  archive: string,
+  { url, archive }: ArchiveLocation,
 ): Promise<Result<undefined, FetchNodeError>> {
   const partial = `${archive}.partial`;
   await mkdir(path.dirname(archive), { recursive: true });
   try {
-    await options.download(url, partial, options.signal);
+    await options.download(url, {
+      destination: partial,
+      ...(options.signal !== undefined && { signal: options.signal }),
+    });
   } catch (error: unknown) {
     await rm(partial, { force: true });
     return err({ kind: 'download-failed', url, message: errorFrom(error).message });
@@ -116,12 +129,20 @@ async function downloadVerified(
   return ok(undefined);
 }
 
-async function extractNode(
-  archive: string,
-  member: string,
-  binary: string,
-  signal: AbortSignal | undefined,
-): Promise<Result<undefined, FetchNodeError>> {
+/** `member` of `archive`, to be written to `binary`. */
+interface Extraction {
+  readonly archive: string;
+  readonly member: string;
+  readonly binary: string;
+  readonly signal: AbortSignal | undefined;
+}
+
+async function extractNode({
+  archive,
+  member,
+  binary,
+  signal,
+}: Extraction): Promise<Result<undefined, FetchNodeError>> {
   await mkdir(path.dirname(binary), { recursive: true });
   await using scratch = await mkdtempDisposable(path.join(path.dirname(binary), '.extract-'));
   try {

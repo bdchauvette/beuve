@@ -16,7 +16,7 @@ function writeReleaseNotes(): void {
   const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
   const repository = process.env['GITHUB_REPOSITORY'] ?? 'bdchauvette/beuve';
   const previousTag = findPreviousTag(`v${version}`);
-  const range = `${previousTag === undefined ? '' : `${previousTag}..`}HEAD`;
+  const range = commitRange(previousTag);
   const log = git(['log', '--no-merges', '--format=%h%x09%s', range]);
   const commits: ReleaseCommit[] = log
     .split('\n')
@@ -32,6 +32,14 @@ function findPreviousTag(currentTag: string): string | undefined {
   return git(['tag', '--merged', 'HEAD', '--list', 'v*', '--sort=-v:refname'])
     .split('\n')
     .find((tag) => tag !== '' && tag !== currentTag);
+}
+
+/** The commits since `previousTag`, or all of them for the first release. */
+function commitRange(previousTag: string | undefined): string {
+  if (previousTag === undefined) {
+    return 'HEAD';
+  }
+  return `${previousTag}..HEAD`;
 }
 
 function git(args: readonly string[]): string {

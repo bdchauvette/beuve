@@ -64,22 +64,27 @@ async function buildIcon(): Promise<void> {
 function iconLayers(): readonly Layer[] {
   const stem = { left: 322, right: 402, top: 232, bottom: 792 };
   const bowl = { x: 552, y: 602, outer: 190, inner: 110 };
+  const stemDistance = roundedBox({
+    cx: (stem.left + stem.right) / 2,
+    cy: (stem.top + stem.bottom) / 2,
+    halfWidth: (stem.right - stem.left) / 2,
+    halfHeight: (stem.bottom - stem.top) / 2,
+    radius: 12,
+  });
   return [
-    { color: border, distance: (x, y): number => roundedBox(x, y, 512, 512, 412, 412, 185) },
-    { color: paper, distance: (x, y): number => roundedBox(x, y, 512, 512, 404, 404, 177) },
+    {
+      color: border,
+      distance: roundedBox({ cx: 512, cy: 512, halfWidth: 412, halfHeight: 412, radius: 185 }),
+    },
+    {
+      color: paper,
+      distance: roundedBox({ cx: 512, cy: 512, halfWidth: 404, halfHeight: 404, radius: 177 }),
+    },
     {
       color: ink,
       distance: (x, y): number => {
         return Math.min(
-          roundedBox(
-            x,
-            y,
-            (stem.left + stem.right) / 2,
-            (stem.top + stem.bottom) / 2,
-            (stem.right - stem.left) / 2,
-            (stem.bottom - stem.top) / 2,
-            12,
-          ),
+          stemDistance(x, y),
           Math.abs(Math.hypot(x - bowl.x, y - bowl.y) - (bowl.outer + bowl.inner) / 2) -
             (bowl.outer - bowl.inner) / 2,
         );
@@ -89,19 +94,23 @@ function iconLayers(): readonly Layer[] {
   ];
 }
 
-/** Signed distance to an axis-aligned box centred at (cx, cy) with half sizes and corner radius. */
-function roundedBox(
-  x: number,
-  y: number,
-  cx: number,
-  cy: number,
-  halfWidth: number,
-  halfHeight: number,
-  radius: number,
-): number {
-  const qx = Math.abs(x - cx) - halfWidth + radius;
-  const qy = Math.abs(y - cy) - halfHeight + radius;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+/** An axis-aligned box centred at (cx, cy), with half sizes and a corner radius. */
+interface RoundedBox {
+  readonly cx: number;
+  readonly cy: number;
+  readonly halfWidth: number;
+  readonly halfHeight: number;
+  readonly radius: number;
+}
+
+/** The signed distance from a point to `box`. */
+function roundedBox(box: RoundedBox): (x: number, y: number) => number {
+  const { cx, cy, halfWidth, halfHeight, radius } = box;
+  return (x: number, y: number): number => {
+    const qx = Math.abs(x - cx) - halfWidth + radius;
+    const qy = Math.abs(y - cy) - halfHeight + radius;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+  };
 }
 
 /**
@@ -128,9 +137,11 @@ function render(layers: readonly Layer[], size: number): RgbaImage {
         alpha = coverage + alpha * (1 - coverage);
       }
       const offset = (row * size + column) * 4;
-      pixels[offset] = Math.round(alpha === 0 ? 0 : red / alpha);
-      pixels[offset + 1] = Math.round(alpha === 0 ? 0 : green / alpha);
-      pixels[offset + 2] = Math.round(alpha === 0 ? 0 : blue / alpha);
+      if (alpha !== 0) {
+        pixels[offset] = Math.round(red / alpha);
+        pixels[offset + 1] = Math.round(green / alpha);
+        pixels[offset + 2] = Math.round(blue / alpha);
+      }
       pixels[offset + 3] = Math.round(alpha * 255);
     }
   }

@@ -13,10 +13,13 @@ import { revealFormatControls } from '../src/x/text/reveal-format-controls.ts';
 import { timeoutSignal } from '../src/x/time/timeout-signal.ts';
 
 import { DevtoolsConnection } from './lib/devtools/devtools-connection.ts';
-import type { DevtoolsEvent, DevtoolsPage } from './lib/devtools/devtools-connection.ts';
+import type { DevtoolsEvent, DevtoolsPage, SessionId } from './lib/devtools/devtools-connection.ts';
 import { launchElectron } from './lib/devtools/launch-electron.ts';
 import { createHostileRepository } from './lib/hostile-render/create-hostile-repository.ts';
-import type { HostileRepository } from './lib/hostile-render/create-hostile-repository.ts';
+import type {
+  HostileFile,
+  HostileRepository,
+} from './lib/hostile-render/create-hostile-repository.ts';
 import { pageProbe } from './lib/hostile-render/page-probe.ts';
 
 /** A Content Security Policy violation a page reported, from the listener installed before its scripts. */
@@ -33,6 +36,27 @@ interface Findings {
   readonly failures: string[];
   readonly violations: Violation[];
   readonly notes: string[];
+}
+
+/** What each step of the run works with. */
+interface Run {
+  readonly devtools: DevtoolsConnection;
+  readonly findings: Findings;
+  /** Saves a PNG of the page as `<name>.png` when `--screenshots` names a directory. */
+  readonly shoot: (sessionId: SessionId, name: string) => Promise<void>;
+}
+
+/** Text a page shows, where it shows it, and what it must hold. */
+interface TextCheck {
+  readonly where: string;
+  readonly text: string;
+  readonly expected: readonly string[];
+}
+
+/** A value the page produced and the one it must equal, compared as JSON. */
+interface Comparison {
+  readonly actual: unknown;
+  readonly expected: unknown;
 }
 
 /** One sanitizer case: what goes into the default policy and exactly what must come out. */
@@ -96,8 +120,6 @@ async function checkHostileRender(): Promise<void> {
     options: { screenshots: { type: 'string' } },
     allowPositionals: true,
   });
-  const screenshots =
-    values.screenshots === undefined ? undefined : path.resolve(values.screenshots);
   const findings: Findings = { failures: [], violations: [], notes: [] };
   const temporaryRoot = await realpath(os.tmpdir());
   await using temporary = await mkdtempDisposable(path.join(temporaryRoot, 'beuve-hostile-'));
@@ -116,10 +138,11 @@ async function checkHostileRender(): Promise<void> {
   devtools.on((event) => {
     recordEvent(event, devtools, findings);
   });
-  const shoot = async (sessionId: string, name: string): Promise<void> => {
-    if (screenshots === undefined) {
+  const shoot = async (sessionId: SessionId, name: string): Promise<void> => {
+    if (values.screenshots === undefined) {
       return;
     }
+    const screenshots = path.resolve(values.screenshots);
     await mkdir(screenshots, { recursive: true });
     const { data } = (await devtools.send(
       'Page.captureScreenshot',
@@ -130,21 +153,22 @@ async function checkHostileRender(): Promise<void> {
     };
     await writeFile(path.join(screenshots, `${name}.png`), Uint8Array.fromBase64(data));
   };
+  const run: Run = { devtools, findings, shoot };
   try {
     console.log('hostile render: the test build');
     await checkTestBuild(findings);
     console.log('hostile render: the main window');
     const main = await openMainWindow(devtools);
     console.log('hostile render: the diff stream, split and unified');
-    await checkDiffStream(devtools, main, repository, findings, shoot);
+    await checkDiffStream(run, main, repository);
     console.log('hostile render: names with bidi and invisible characters');
-    await checkPathDisplay(devtools, main, repository, findings, shoot);
+    await checkPathDisplay(run, main, repository);
     console.log('hostile render: peek and an inline sheet');
-    await checkPeekAndInlineSheet(devtools, main, repository, findings, shoot);
+    await checkPeekAndInlineSheet(run, main, repository);
     console.log('hostile render: a sheet window');
-    await checkSheetWindow(devtools, main, repository, findings, shoot);
+    await checkSheetWindow(run, main, repository);
     console.log('hostile render: the Settings window');
-    await checkSettingsWindow(devtools, main, findings, shoot);
+    await checkSettingsWindow(run, main);
     expectNone(
       findings,
       'Content Security Policy violation while rendering',
@@ -154,7 +178,7 @@ async function checkHostileRender(): Promise<void> {
     await checkPolicy(devtools, main, findings);
     console.log('hostile render: the corpus through the components, in the harness page');
     const harness = await openHarness(devtools, main);
-    await checkHarness(devtools, harness, findings, shoot);
+    await checkHarness(run, harness);
     console.log('hostile render: the harness page’s policy');
     await checkPolicy(devtools, harness, findings);
   } catch (error) {
@@ -168,7 +192,7 @@ async function checkHostileRender(): Promise<void> {
 /** What `expression` evaluates to once it is truthy, or `undefined` if that takes too long. */
 async function eventually(
   devtools: DevtoolsConnection,
-  sessionId: string,
+  sessionId: SessionId,
   expression: string,
 ): Promise<unknown> {
   try {
@@ -189,7 +213,10 @@ async function freePort(): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   await new Promise((resolve) => server.close(resolve));
-  return typeof address === 'object' && address !== null ? address.port : 0;
+  if (typeof address === 'object' && address !== null) {
+    return address.port;
+  }
+  return 0;
 }
 
 /**
@@ -209,7 +236,7 @@ async function preparePage(page: DevtoolsPage, devtools: DevtoolsConnection): Pr
 }
 
 function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, findings: Findings): void {
-  const page = devtools.urlOf(event.sessionId ?? '').replace(beforeDist, '');
+  const page = devtools.urlOf(event.sessionId).replace(beforeDist, '');
   if (event.method === 'Runtime.consoleAPICalled') {
     const args = event.params['args'] as readonly {
       readonly value?: unknown;
@@ -217,9 +244,10 @@ function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, finding
     }[];
     const text = args
       .map((arg) => {
-        return typeof arg.value === 'string'
-          ? arg.value
-          : (arg.description ?? JSON.stringify(arg.value));
+        if (typeof arg.value === 'string') {
+          return arg.value;
+        }
+        return arg.description ?? JSON.stringify(arg.value);
       })
       .join(' ');
     if (text.startsWith(violationMarker)) {
@@ -239,7 +267,7 @@ function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, finding
 }
 
 /** The main window, reloaded so the violation recorder runs before its scripts, with the probe installed. */
-async function openMainWindow(devtools: DevtoolsConnection): Promise<string> {
+async function openMainWindow(devtools: DevtoolsConnection): Promise<SessionId> {
   const main = await devtools.waitForPage((url) => {
     return url.endsWith('/index.html');
   }, wait());
@@ -254,12 +282,11 @@ async function openMainWindow(devtools: DevtoolsConnection): Promise<string> {
 
 /** Opens the review, then in split and unified views visits every card and checks what it shows. */
 async function checkDiffStream(
-  devtools: DevtoolsConnection,
-  main: string,
+  run: Run,
+  main: SessionId,
   repository: HostileRepository,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
 ): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const request = {
     repoPath: repository.directory,
     baseRef: repository.baseRef,
@@ -298,22 +325,28 @@ async function checkDiffStream(
         findings.failures.push(`${view}: ${JSON.stringify(file.path)} rendered no rows`);
       }
       const text = String(await devtools.evaluate(main, `__hostileProbe.text(${card}.renderRoot)`));
-      expectVisible(findings, `${view} card ${JSON.stringify(file.path)}`, text, [
-        revealFormatControls(file.path),
-        ...(file.oldPath === undefined ? [] : [revealFormatControls(file.oldPath)]),
-        ...file.lines,
-      ]);
+      expectVisible(findings, {
+        where: `${view} card ${JSON.stringify(file.path)}`,
+        text,
+        expected: [...namesOf(file).map((name) => revealFormatControls(name)), ...file.lines],
+      });
       rendered.set(file.path, await settledHtml(devtools, main, card));
     }
     for (const file of repository.files) {
-      const twin = file.twin === undefined ? undefined : rendered.get(file.twin);
+      if (file.twin === undefined) {
+        continue;
+      }
+      const twin = rendered.get(file.twin);
+      if (twin === undefined) {
+        continue;
+      }
       expectNone(
         findings,
         `${view} card ${JSON.stringify(file.path)}: markup its twin ${JSON.stringify(file.twin)} lacks`,
-        twin === undefined ? [] : extraMarkup([rendered.get(file.path) ?? ''], [twin]),
+        extraMarkup([rendered.get(file.path) ?? ''], [twin]),
       );
     }
-    await expectSafe(devtools, main, findings, `diff stream (${view})`);
+    await expectSafe(run, main, `diff stream (${view})`);
     await devtools.evaluate(main, `(${cardOf(repository.contents.path)})?.scrollIntoView()`);
     await delay(300);
     await shoot(main, `stream-${view}-contents`);
@@ -323,10 +356,18 @@ async function checkDiffStream(
   }
 }
 
+/** The file's path, and its path before a rename. */
+function namesOf(file: HostileFile): readonly string[] {
+  if (file.oldPath === undefined) {
+    return [file.path];
+  }
+  return [file.path, file.oldPath];
+}
+
 /** A card serialized with its shadow roots once highlighting has finished: three equal polls in a row. */
 async function settledHtml(
   devtools: DevtoolsConnection,
-  main: string,
+  main: SessionId,
   card: string,
 ): Promise<string> {
   let last = '';
@@ -338,7 +379,11 @@ async function settledHtml(
         `__hostileProbe.html(${card}, ${JSON.stringify(impactSelector)})`,
       ),
     );
-    stable = html === last ? stable + 1 : 0;
+    if (html === last) {
+      stable += 1;
+    } else {
+      stable = 0;
+    }
     last = html;
   }
   return last;
@@ -349,12 +394,11 @@ async function settledHtml(
  * invisible characters as `⟨U+…⟩` escapes and hold no character that reorders text (ADR 0082).
  */
 async function checkPathDisplay(
-  devtools: DevtoolsConnection,
-  main: string,
+  run: Run,
+  main: SessionId,
   repository: HostileRepository,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
 ): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";
   for (const file of repository.files) {
     const header = String(
@@ -363,10 +407,11 @@ async function checkPathDisplay(
         `(${cardOf(file.path)})?.renderRoot.querySelector('.header .path')?.textContent ?? ''`,
       ),
     );
-    expectShown(findings, `card header ${JSON.stringify(file.path)}`, header, [
-      file.path,
-      ...(file.oldPath === undefined ? [] : [file.oldPath]),
-    ]);
+    expectShown(findings, {
+      where: `card header ${JSON.stringify(file.path)}`,
+      text: header,
+      expected: namesOf(file),
+    });
   }
   const tree = "__hostileProbe.all('beuve-radar-tree')[0]";
   for (const name of repository.spoofing) {
@@ -383,7 +428,11 @@ async function checkPathDisplay(
         `__hostileProbe.text(${tree}?.renderRoot ?? document.createElement('i'))`,
       ),
     );
-    expectShown(findings, `file tree ${JSON.stringify(name)}`, `${names}\n${text}`, [name]);
+    expectShown(findings, {
+      where: `file tree ${JSON.stringify(name)}`,
+      text: `${names}\n${text}`,
+      expected: [name],
+    });
   }
   const [spoofing] = repository.spoofing;
   await devtools.evaluate(main, `(${cardOf(spoofing ?? '')})?.scrollIntoView()`);
@@ -403,7 +452,7 @@ async function checkPathDisplay(
       `${sheet}?.renderRoot?.querySelector('header .title')?.textContent.includes('gpj')
         && ${sheet}.renderRoot.querySelector('header .title').textContent`,
     )) ?? '';
-  expectShown(findings, 'sheet title', typeof title === 'string' ? title : '', [spoofing ?? '']);
+  expectShown(findings, { where: 'sheet title', text: textOf(title), expected: [spoofing ?? ''] });
   if (
     (await eventually(
       devtools,
@@ -429,19 +478,21 @@ function treeNames(tree: string): string {
     .join(String.fromCharCode(10))`;
 }
 
-/** `text` shows each of `names` with its escapes, and nothing in it reorders text. */
-function expectShown(
-  findings: Findings,
-  where: string,
-  text: string,
-  names: readonly string[],
-): void {
-  expectVisible(
-    findings,
+/** A string the page returned, or nothing. */
+function textOf(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return '';
+}
+
+/** `text` shows each of the `expected` names with its escapes, and nothing in it reorders text. */
+function expectShown(findings: Findings, { where, text, expected }: TextCheck): void {
+  expectVisible(findings, {
     where,
     text,
-    names.map((name) => revealFormatControls(name)),
-  );
+    expected: expected.map((name) => revealFormatControls(name)),
+  });
   if (bidiControls.test(text)) {
     findings.failures.push(`${where}: shows a bidi control: ${JSON.stringify(text)}`);
   }
@@ -453,12 +504,11 @@ function cardOf(filePath: string): string {
 
 /** Peeks at the hostile lines, then opens an inline sheet of a hostile-named file. */
 async function checkPeekAndInlineSheet(
-  devtools: DevtoolsConnection,
-  main: string,
+  run: Run,
+  main: SessionId,
   repository: HostileRepository,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
 ): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";
   const { peek } = repository;
   await devtools.evaluate(main, `(${cardOf(peek.path)})?.scrollIntoView()`);
@@ -492,8 +542,12 @@ async function checkPeekAndInlineSheet(
       `__hostileProbe.text(${portal}?.renderRoot ?? document.createElement('i'))`,
     ),
   );
-  expectVisible(findings, 'peek', peekText, ['hostileTarget', 'hostileCaller', peek.path]);
-  await expectSafe(devtools, main, findings, 'peek');
+  expectVisible(findings, {
+    where: 'peek',
+    text: peekText,
+    expected: ['hostileTarget', 'hostileCaller', peek.path],
+  });
+  await expectSafe(run, main, 'peek');
   await shoot(main, 'peek');
   await devtools.evaluate(main, `${app}.peek = undefined`);
 
@@ -520,19 +574,22 @@ async function checkPeekAndInlineSheet(
       `__hostileProbe.text(${sheet}?.renderRoot ?? document.createElement('i'))`,
     ),
   );
-  expectVisible(findings, 'inline sheet', sheetText, [named?.path ?? '', ...(named?.lines ?? [])]);
-  await expectSafe(devtools, main, findings, 'inline sheet');
+  expectVisible(findings, {
+    where: 'inline sheet',
+    text: sheetText,
+    expected: [named?.path ?? '', ...(named?.lines ?? [])],
+  });
+  await expectSafe(run, main, 'inline sheet');
   await shoot(main, 'sheet-inline');
 }
 
 /** Opens the hostile lines in a sheet window and checks that window. */
 async function checkSheetWindow(
-  devtools: DevtoolsConnection,
-  main: string,
+  run: Run,
+  main: SessionId,
   repository: HostileRepository,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
 ): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";
   const { contents } = repository;
   await devtools.evaluate(main, `${app}.runCommandId('sheets-window')`);
@@ -551,20 +608,20 @@ async function checkSheetWindow(
     findings.failures.push('sheet window rendered no rows');
   }
   const text = String(await devtools.evaluate(sheet, '__hostileProbe.text()'));
-  expectVisible(findings, 'sheet window', text, [
-    contents.path,
-    ...(repository.files.find((file) => file.path === contents.path)?.lines ?? []),
-  ]);
-  await expectSafe(devtools, sheet, findings, 'sheet window');
+  expectVisible(findings, {
+    where: 'sheet window',
+    text,
+    expected: [
+      contents.path,
+      ...(repository.files.find((file) => file.path === contents.path)?.lines ?? []),
+    ],
+  });
+  await expectSafe(run, sheet, 'sheet window');
   await shoot(sheet, 'sheet-window');
 }
 
-async function checkSettingsWindow(
-  devtools: DevtoolsConnection,
-  main: string,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
-): Promise<void> {
+async function checkSettingsWindow(run: Run, main: SessionId): Promise<void> {
+  const { devtools, shoot } = run;
   await devtools.evaluate(main, "document.querySelector('beuve-app').runCommandId('settings')");
   const settings = await devtools.waitForPage((url) => {
     return url.includes('/settings.html');
@@ -575,7 +632,7 @@ async function checkSettingsWindow(
     wait(),
   );
   await devtools.evaluate(settings, pageProbe);
-  await expectSafe(devtools, settings, findings, 'settings window');
+  await expectSafe(run, settings, 'settings window');
   await shoot(settings, 'settings');
 }
 
@@ -609,7 +666,7 @@ async function checkTestBuild(findings: Findings): Promise<void> {
  * page (`node scripts/build.ts --hostile-harness`), which has `index.html`'s CSP and installs
  * the same policy, and installs the probe there.
  */
-async function openHarness(devtools: DevtoolsConnection, main: string): Promise<string> {
+async function openHarness(devtools: DevtoolsConnection, main: SessionId): Promise<SessionId> {
   const page = path.join(root, 'dist-test/ui/hostile-harness.html');
   await devtools.send('Page.navigate', { url: pathToFileURL(page).href }, main);
   const harness = await devtools.waitForPage((url) => {
@@ -628,12 +685,8 @@ async function openHarness(devtools: DevtoolsConnection, main: string): Promise<
  * through the page's default policy: the sanitizer must leave nothing unsafe, whatever a library
  * escaping bug would let through.
  */
-async function checkHarness(
-  devtools: DevtoolsConnection,
-  harness: string,
-  findings: Findings,
-  shoot: (sessionId: string, name: string) => Promise<void>,
-): Promise<void> {
+async function checkHarness(run: Run, harness: SessionId): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const corpus = hostileCorpus();
   const groups = (await devtools.evaluate(harness, 'hostileHarness.groups()')) as readonly (
     | 'fileNames'
@@ -663,7 +716,7 @@ async function checkHarness(
     for (const { title, failures } of verdicts) {
       expectNone(findings, `harness ${title}`, failures);
     }
-    await expectSafe(devtools, harness, findings, `harness ${group}`);
+    await expectSafe(run, harness, `harness ${group}`);
     await shoot(harness, `harness-${group}`);
     await devtools.evaluate(harness, 'hostileHarness.clear()');
   }
@@ -678,7 +731,7 @@ async function checkHarness(
   });
   await devtools.evaluate(harness, `__hostileProbe.mount(${JSON.stringify(spliced.join(''))})`);
   await delay(300);
-  await expectSafe(devtools, harness, findings, 'hostile strings spliced unescaped into a sink');
+  await expectSafe(run, harness, 'hostile strings spliced unescaped into a sink');
   // The sanitizer's parse reports each event handler it drops as `script-src-attr`; nothing runs.
   expectNone(
     findings,
@@ -699,7 +752,7 @@ async function checkHarness(
  */
 async function checkPolicy(
   devtools: DevtoolsConnection,
-  main: string,
+  main: SessionId,
   findings: Findings,
 ): Promise<void> {
   for (const { label, input, output } of sanitizerCases()) {
@@ -720,12 +773,15 @@ async function checkPolicy(
     catch (error) { return name + ': ' + error.name; }
   })`,
   );
-  expectEqual(findings, 'creating another policy', attempts, [
-    'default: TypeError',
-    'beuve-sanitizer-input: TypeError',
-    'lit-html: TypeError',
-    'beuve-other: TypeError',
-  ]);
+  expectEqual(findings, 'creating another policy', {
+    actual: attempts,
+    expected: [
+      'default: TypeError',
+      'beuve-sanitizer-input: TypeError',
+      'lit-html: TypeError',
+      'beuve-other: TypeError',
+    ],
+  });
   const scriptUrls = await devtools.evaluate(
     main,
     `['https://evil.example/x.js', 'data:text/javascript,1', 'diff-worker/worker.js'].map((url) => {
@@ -733,7 +789,10 @@ async function checkPolicy(
     catch (error) { return error.name; }
   })`,
   );
-  expectEqual(findings, 'script URLs', scriptUrls, ['TypeError', 'TypeError', 'allowed']);
+  expectEqual(findings, 'script URLs', {
+    actual: scriptUrls,
+    expected: ['TypeError', 'TypeError', 'allowed'],
+  });
   const reachable = await devtools.evaluate(
     main,
     `Object.getOwnPropertyNames(globalThis).filter((key) => {
@@ -741,7 +800,10 @@ async function checkPolicy(
     catch { return false; }
   })`,
   );
-  expectEqual(findings, 'globals holding the pass-through policy', reachable, []);
+  expectEqual(findings, 'globals holding the pass-through policy', {
+    actual: reachable,
+    expected: [],
+  });
 }
 
 /** Exact outputs from Chromium 156's Sanitizer with the default policy's configuration. */
@@ -793,9 +855,8 @@ function sanitizerCases(): readonly SanitizerCase[] {
 }
 
 async function expectSafe(
-  devtools: DevtoolsConnection,
-  sessionId: string,
-  findings: Findings,
+  { devtools, findings }: Run,
+  sessionId: SessionId,
   where: string,
 ): Promise<void> {
   const unsafe = (await devtools.evaluate(
@@ -805,12 +866,7 @@ async function expectSafe(
   expectNone(findings, `${where}: unsafe markup`, unsafe);
 }
 
-function expectVisible(
-  findings: Findings,
-  where: string,
-  text: string,
-  expected: readonly string[],
-): void {
+function expectVisible(findings: Findings, { where, text, expected }: TextCheck): void {
   for (const entry of expected) {
     if (!text.includes(entry)) {
       findings.failures.push(`${where}: ${JSON.stringify(entry)} is not visible as text`);
@@ -824,7 +880,7 @@ function expectNone(findings: Findings, what: string, found: readonly string[]):
   }
 }
 
-function expectEqual(findings: Findings, what: string, actual: unknown, expected: unknown): void {
+function expectEqual(findings: Findings, what: string, { actual, expected }: Comparison): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     findings.failures.push(`${what}: ${JSON.stringify(actual)}, not ${JSON.stringify(expected)}`);
   }

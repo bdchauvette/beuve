@@ -82,7 +82,7 @@ async function buildTestPages(): Promise<void> {
     outdir,
     metafile: false,
     // `hostile-harness-entry.ts` installs the policy this names.
-    define: { hostileHarnessPolicy: JSON.stringify(isPassThrough ? 'pass-through' : 'sanitizing') },
+    define: { hostileHarnessPolicy: JSON.stringify(harnessPolicy(isPassThrough)) },
   });
   let harness = await readFile(path.join(root, 'src/ui/index.html'), 'utf8');
   for (const [from, to] of [
@@ -96,10 +96,19 @@ async function buildTestPages(): Promise<void> {
     harness = harness.replace(from, () => to);
   }
   await writeFile(path.join(outdir, 'hostile-harness.html'), harness);
-  console.log(
-    `hostile harness: ${path.relative(root, outdir)}/hostile-harness.html` +
-      (isPassThrough ? ', with a pass-through policy (the negative control)' : ''),
-  );
+  const page = `hostile harness: ${path.relative(root, outdir)}/hostile-harness.html`;
+  if (isPassThrough) {
+    console.log(`${page}, with a pass-through policy (the negative control)`);
+  } else {
+    console.log(page);
+  }
+}
+
+function harnessPolicy(isPassThrough: boolean): string {
+  if (isPassThrough) {
+    return 'pass-through';
+  }
+  return 'sanitizing';
 }
 
 /** Logs what the renderer loads up front (the entry and its static imports) and what lazily. */
@@ -256,7 +265,7 @@ function curatedShikiPlugin(): Plugin {
     setup: (pluginBuild): void => {
       pluginBuild.onResolve({ filter: stubbedModules }, (args) => {
         return {
-          path: args.path.startsWith('shiki/') ? args.path.slice('shiki/'.length) : 'themes',
+          path: stubbedModuleName(args.path),
           namespace,
         };
       });
@@ -269,6 +278,14 @@ function curatedShikiPlugin(): Plugin {
       });
     },
   };
+}
+
+/** `langs` for `shiki/langs`, `wasm` for `shiki/wasm`, and `themes` for the bundled themes. */
+function stubbedModuleName(specifier: string): string {
+  if (specifier.startsWith('shiki/')) {
+    return specifier.slice('shiki/'.length);
+  }
+  return 'themes';
 }
 
 function sharedOptions(): BuildOptions {

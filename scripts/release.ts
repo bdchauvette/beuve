@@ -5,6 +5,8 @@ import process from 'node:process';
 import { errorFrom } from '#x/error/error-from.ts';
 import { nextCalverVersion } from '../src/release/next-calver-version.ts';
 
+const versionFiles = ['package.json', 'package-lock.json'];
+
 release();
 
 /**
@@ -21,9 +23,8 @@ function release(): void {
       git(['tag', '--list', 'v*']).split('\n'),
       Temporal.Now.plainDateISO('UTC'),
     );
-    setVersion('package.json', version, false);
-    setVersion('package-lock.json', version, true);
-    git(['add', 'package.json', 'package-lock.json']);
+    setVersion(version);
+    git(['add', ...versionFiles]);
     git(['commit', '-m', `chore(release): ${version}`]);
     git(['tag', '--annotate', `v${version}`, '-m', `beuve ${version}`]);
     console.log(`Created commit and tag v${version}. Publish with:\n`);
@@ -50,17 +51,20 @@ function ensureReleasable(): void {
   }
 }
 
-function setVersion(file: string, version: string, isLockfile: boolean): void {
-  const json = JSON.parse(readFileSync(file, 'utf8')) as {
-    version: string;
-    packages?: Record<string, { version?: string }>;
-  };
-  json.version = version;
-  const root = json.packages?.[''];
-  if (isLockfile && root !== undefined) {
-    root.version = version;
+/** Sets `version` in `package.json`, and in `package-lock.json` at the top and for the root package. */
+function setVersion(version: string): void {
+  for (const file of versionFiles) {
+    const json = JSON.parse(readFileSync(file, 'utf8')) as {
+      version: string;
+      packages?: Record<string, { version?: string }>;
+    };
+    json.version = version;
+    const root = json.packages?.[''];
+    if (root !== undefined) {
+      root.version = version;
+    }
+    writeFileSync(file, `${JSON.stringify(json, undefined, 2)}\n`);
   }
-  writeFileSync(file, `${JSON.stringify(json, undefined, 2)}\n`);
 }
 
 function git(args: readonly string[]): string {

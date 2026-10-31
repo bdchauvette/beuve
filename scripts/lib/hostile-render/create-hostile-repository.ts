@@ -55,6 +55,7 @@ const peekFunctions: readonly string[] = [
 ];
 /** Lines between a section's context line and its change, more than git's three of context. */
 const fillerLines = 8;
+const renamedValues = { base: 1, feature: 2 } as const;
 /** APFS and ext4 both cap a path component at 255 bytes. */
 const maximumComponentBytes = 255;
 /** NUL makes git call a file binary; a line break splits the line. */
@@ -106,7 +107,7 @@ export async function createHostileRepository(
     await put(name, 'export const before = 1;\n');
   }
   for (const rename of [...renamed, renamedBenign]) {
-    await put(rename.from, renamedFile(rename.index, 1));
+    await put(rename.from, renamedFile(rename.index, 'base'));
   }
   await put(
     contentsPath,
@@ -136,7 +137,7 @@ export async function createHostileRepository(
   }
   for (const rename of [...renamed, renamedBenign]) {
     await git('mv', rename.from, rename.to);
-    await put(rename.to, renamedFile(rename.index, 2));
+    await put(rename.to, renamedFile(rename.index, 'feature'));
     files.push({
       path: rename.to,
       oldPath: rename.from,
@@ -222,9 +223,9 @@ function gitEnvironment(): NodeJS.ProcessEnv {
 }
 
 /** A renamed file whose every line names `index`, so git pairs each rename with its own source. */
-function renamedFile(index: number, value: number): string {
+function renamedFile(index: number, side: 'base' | 'feature'): string {
   const kept = Array.from({ length: 8 }, (_, line) => `// kept ${String(index)}.${String(line)}\n`);
-  return `export const renamed${String(index)} = ${String(value)};\n${kept.join('')}`;
+  return `export const renamed${String(index)} = ${String(renamedValues[side])};\n${kept.join('')}`;
 }
 
 /**
@@ -237,15 +238,17 @@ function contentsFile(lines: readonly string[], side: 'base' | 'feature'): strin
   const filler = Array.from({ length: fillerLines }, (_, index) => `  // line ${String(index)}`);
   return `${lines
     .flatMap((line) => {
-      return [
-        `function f() { ${line}`,
-        ...filler,
-        '}',
-        line,
-        ...(side === 'base' ? [`const a = '${line}';`] : [`const a = "${line}";`, line]),
-      ];
+      return [`function f() { ${line}`, ...filler, '}', line, ...changedLines(line, side)];
     })
     .join('\n')}\n`;
+}
+
+/** `feature` changes the quotes around `line` and repeats it. */
+function changedLines(line: string, side: 'base' | 'feature'): readonly string[] {
+  if (side === 'base') {
+    return [`const a = '${line}';`];
+  }
+  return [`const a = "${line}";`, line];
 }
 
 /** The 1-based line of the first section's first changed line in `feature`. */

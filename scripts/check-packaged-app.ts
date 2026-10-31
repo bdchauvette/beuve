@@ -46,19 +46,30 @@ async function checkPackagedApp(): Promise<void> {
   for (const failure of failures) {
     console.error(`check-packaged-app: FAIL ${failure}`);
   }
-  process.exitCode = failures.length === 0 ? 0 : 1;
+  if (failures.length === 0) {
+    process.exitCode = 0;
+  } else {
+    process.exitCode = 1;
+  }
 }
 
-function layoutOf(app: string): { readonly fuseBinary: string; readonly node: string } {
-  return app.endsWith('.app')
-    ? {
-        fuseBinary: path.join(
-          app,
-          'Contents/Frameworks/Electron Framework.framework/Electron Framework',
-        ),
-        node: path.join(app, 'Contents/Resources/node/node'),
-      }
-    : { fuseBinary: path.join(app, 'beuve'), node: path.join(app, 'resources/node/node') };
+/** Where a packaged app keeps the binary whose fuses are checked and its bundled Node. */
+interface AppLayout {
+  readonly fuseBinary: string;
+  readonly node: string;
+}
+
+function layoutOf(app: string): AppLayout {
+  if (app.endsWith('.app')) {
+    return {
+      fuseBinary: path.join(
+        app,
+        'Contents/Frameworks/Electron Framework.framework/Electron Framework',
+      ),
+      node: path.join(app, 'Contents/Resources/node/node'),
+    };
+  }
+  return { fuseBinary: path.join(app, 'beuve'), node: path.join(app, 'resources/node/node') };
 }
 
 async function checkFuses(binary: string): Promise<string[]> {
@@ -70,14 +81,23 @@ async function checkFuses(binary: string): Promise<string[]> {
   const failures: string[] = [];
   for (const [index, state] of wire.value.fuses.entries()) {
     const [name, expected] = expectedFuses[index] ?? [`fuse ${String(index)}`, undefined];
-    const verdict =
-      expected === undefined ? '' : state === expected ? ' ok' : ` (want ${expected})`;
+    const verdict = verdictOf(state, expected);
     console.log(`  ${name.padEnd(40)} ${state}${verdict}`);
     if (expected !== undefined && state !== expected) {
       failures.push(`fuse ${name} is ${state}, not ${expected}`);
     }
   }
   return failures;
+}
+
+function verdictOf(state: FuseState, expected: FuseState | undefined): string {
+  if (expected === undefined) {
+    return '';
+  }
+  if (state === expected) {
+    return ' ok';
+  }
+  return ` (want ${expected})`;
 }
 
 async function checkNode(node: string): Promise<string[]> {
@@ -93,10 +113,14 @@ async function checkNode(node: string): Promise<string[]> {
     );
     const [version, temporal, target] = stdout.trim().split(' ', 3);
     console.log(`check-packaged-app: ${node}: Node ${String(version)} on ${String(target)}`);
-    return [
-      ...(version === want ? [] : [`${node} is Node ${String(version)}, not the pinned ${want}`]),
-      ...(temporal === 'object' ? [] : [`${node} has no Temporal`]),
-    ];
+    const failures: string[] = [];
+    if (version !== want) {
+      failures.push(`${node} is Node ${String(version)}, not the pinned ${want}`);
+    }
+    if (temporal !== 'object') {
+      failures.push(`${node} has no Temporal`);
+    }
+    return failures;
   } catch (error: unknown) {
     return [`${node} did not run: ${errorFrom(error).message}`];
   }

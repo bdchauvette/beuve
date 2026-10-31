@@ -9,7 +9,11 @@ import { parseArgs } from 'node:util';
 import { errorFrom } from '../src/x/error/error-from.ts';
 
 import { fetchNodeBinary } from './lib/node-runtime/fetch-node-binary.ts';
-import type { FetchNodeError } from './lib/node-runtime/fetch-node-binary.ts';
+import type {
+  DownloadOptions,
+  FetchedNode,
+  FetchNodeError,
+} from './lib/node-runtime/fetch-node-binary.ts';
 import pinned from './node-runtime.json' with { type: 'json' };
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -51,34 +55,48 @@ async function fetchNode(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const { binary, downloaded, extracted } = fetched.value;
-  const what = downloaded ? 'downloaded and verified' : extracted ? 'extracted' : 'up to date';
-  console.log(
-    `fetch-node: Node ${pinned.version} for ${target} ${what}: ${path.relative(root, binary)}`,
-  );
+  const what = outcomeOf(fetched.value);
+  const binary = path.relative(root, fetched.value.binary);
+  console.log(`fetch-node: Node ${pinned.version} for ${target} ${what}: ${binary}`);
 }
 
-async function downloadWithRetries(url: string, destination: string): Promise<void> {
+function outcomeOf({ downloaded, extracted }: FetchedNode): string {
+  if (downloaded) {
+    return 'downloaded and verified';
+  }
+  if (extracted) {
+    return 'extracted';
+  }
+  return 'up to date';
+}
+
+async function downloadWithRetries(url: string, options: DownloadOptions): Promise<void> {
+  const signalOption = { ...(options.signal !== undefined && { signal: options.signal }) };
   for (const pause of [...retryPauses, undefined]) {
     try {
-      await download(url, destination);
+      await download(url, options);
       return;
     } catch (error: unknown) {
       if (pause === undefined) {
         throw error;
       }
       console.warn(`fetch-node: ${errorFrom(error).message}; retrying in ${String(pause)} ms`);
-      await delay(pause);
+      await delay(pause, undefined, signalOption);
     }
   }
 }
 
-async function download(url: string, destination: string): Promise<void> {
-  const response = await fetch(url);
+async function download(url: string, options: DownloadOptions): Promise<void> {
+  const signalOption = { ...(options.signal !== undefined && { signal: options.signal }) };
+  const response = await fetch(url, signalOption);
   if (!response.ok || response.body === null) {
     throw new Error(`GET ${url} answered ${String(response.status)}`);
   }
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(destination));
+  await pipeline(
+    Readable.fromWeb(response.body, signalOption),
+    createWriteStream(options.destination, signalOption),
+    signalOption,
+  );
 }
 
 function describe(error: FetchNodeError): string {

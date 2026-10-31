@@ -33,7 +33,10 @@ export function readFuseWire(binary: Uint8Array): Result<FuseWire, string> {
       return err('the binary has two fuse wires that differ');
     }
   }
-  return wire === undefined ? err('the fuse wire is cut off') : ok(wire);
+  if (wire === undefined) {
+    return err('the fuse wire is cut off');
+  }
+  return ok(wire);
 }
 
 function wireAt(buffer: Buffer, position: number): FuseWire | undefined {

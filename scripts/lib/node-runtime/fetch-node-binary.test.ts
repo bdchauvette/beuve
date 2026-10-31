@@ -90,7 +90,7 @@ describe('fetchNodeBinary', () => {
 
     const fetched = await fetchNodeBinary({
       ...release.options,
-      download: async (_url, destination): Promise<void> => {
+      download: async (_url, { destination }): Promise<void> => {
         await writeFile(destination, 'partial', { signal });
         throw new Error('offline');
       },
@@ -137,7 +137,7 @@ async function fakeRelease(tempDir: string, signal: AbortSignal): Promise<FakeRe
       outputDirectory: path.join(tempDir, 'out'),
       baseUrl: 'https://dist.test',
       signal,
-      download: async (url, destination): Promise<void> => {
+      download: async (url, { destination }): Promise<void> => {
         downloads.push(url);
         await copyFile(archive, destination);
       },
