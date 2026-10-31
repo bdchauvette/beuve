@@ -202,6 +202,20 @@ async function eventually(
   }
 }
 
+/**
+ * Sets where definitions open and waits until the app has applied it: the setting round-trips
+ * through main, and a sheet action before it lands opens the other way.
+ */
+async function chooseSheets(
+  devtools: DevtoolsConnection,
+  main: SessionId,
+  mode: 'inline' | 'window',
+): Promise<void> {
+  const app = "document.querySelector('beuve-app')";
+  await devtools.evaluate(main, `${app}.runCommandId('sheets-${mode}')`);
+  await devtools.waitFor(main, `${app}.display.sheets === '${mode}'`, wait());
+}
+
 /** A fresh deadline for one wait. */
 function wait(): AbortSignal {
   return timeoutSignal(Temporal.Duration.from({ seconds: waitSeconds }));
@@ -438,8 +452,7 @@ async function checkPathDisplay(
   await devtools.evaluate(main, `(${cardOf(spoofing ?? '')})?.scrollIntoView()`);
   await delay(300);
   await shoot(main, 'names-tree-and-header');
-  await devtools.evaluate(main, `${app}.runCommandId('sheets-inline')`);
-  await delay(300);
+  await chooseSheets(devtools, main, 'inline');
   await devtools.evaluate(
     main,
     `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(spoofing)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
@@ -552,8 +565,7 @@ async function checkPeekAndInlineSheet(
   await devtools.evaluate(main, `${app}.peek = undefined`);
 
   const named = repository.files.find((file) => file.path === repository.sheet);
-  await devtools.evaluate(main, `${app}.runCommandId('sheets-inline')`);
-  await delay(300);
+  await chooseSheets(devtools, main, 'inline');
   await devtools.evaluate(
     main,
     `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(named?.path)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
@@ -592,8 +604,7 @@ async function checkSheetWindow(
   const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";
   const { contents } = repository;
-  await devtools.evaluate(main, `${app}.runCommandId('sheets-window')`);
-  await delay(300);
+  await chooseSheets(devtools, main, 'window');
   const line = contents.line - 1;
   await devtools.evaluate(
     main,
