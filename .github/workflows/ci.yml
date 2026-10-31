@@ -31,15 +31,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - name: Render hostile file names and contents in the built app (ADR 0077)
+      # The app and the test-only harness page (dist-test/, never packaged) render the shared
+      # hostile-input corpus with the production CSP and Trusted Types policy (ADR 0077).
+      - name: Build the app and the hostile-input harness
+        run: node scripts/build.ts --hostile-harness
+      - name: Render the hostile-input corpus in the built app (Linux)
         if: runner.os == 'Linux'
         run: |
           # Ubuntu 24.04's AppArmor denies Chromium's sandbox the unprivileged user namespaces it
           # needs; allow them rather than run Electron with --no-sandbox.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          npm run build
-          xvfb-run -a -s '-screen 0 1600x1000x24' \
+          time xvfb-run -a -s '-screen 0 1600x1000x24' \
             node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
+      - name: Render the hostile-input corpus in the built app (macOS)
+        if: runner.os == 'macOS'
+        run: time node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
       # The packaged app with the runAsNode fuse off and the bundled Node (ADR 0083-0085).
       - name: Package for Linux and check its fuses and bundled Node
         if: runner.os == 'Linux'
@@ -65,10 +71,10 @@ jobs:
           ls -l out/*.dmg out/*.zip
           du -sh "$app" "$node"
       - name: Upload the hostile-render screenshots
-        if: failure() && runner.os == 'Linux'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: hostile-render-screenshots
+          name: hostile-render-screenshots-${{ runner.os }}
           path: ${{ runner.temp }}/hostile-render
           if-no-files-found: ignore
       - name: Lint the Homebrew cask

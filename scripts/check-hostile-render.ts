@@ -76,16 +76,20 @@ const bidiControls = /[\u{61C}\u{200E}\u{200F}\u{202A}-\u{202E}\u{2066}-\u{2069}
 await checkHostileRender();
 
 /**
- * Renders a generated repository of hostile file names and contents in the built app (ADR 0077)
- * and fails unless the diff stream (split and unified), peek, an inline sheet, a sheet window and
- * the Settings window render it with no Content Security Policy violation, no element or attribute
- * that runs script or loads from elsewhere, and every hostile name and line visible as text. Then
- * it checks the Trusted Types default policy's sanitizer and that no second policy can be made.
+ * Renders the shared hostile-input corpus (`src/ui/testing/hostile-corpus.ts`, ADR 0077) in the
+ * built app. A generated repository holds it as far as a file system can, and the diff stream
+ * (split and unified, each card against its benign twin's), peek, an inline sheet, a sheet window
+ * and the Settings window must render it with no Content Security Policy violation, no uncaught
+ * exception or console error, no element or attribute that runs script or loads from elsewhere,
+ * and every hostile name and line visible as text. Then the test-only harness page renders every
+ * corpus case through the components and the same oracle, and the Trusted Types default policy's
+ * sanitizer, and that no second policy can be made, are checked in both pages.
  *
- * Build first (`npm run build`). On Linux run it under a display, for example
- * `xvfb-run -a -s '-screen 0 1600x1000x24' node scripts/check-hostile-render.ts`; switches after
- * `--` go to Electron (`-- --no-sandbox` only where the sandbox cannot start, such as as root).
- * `--screenshots <dir>` saves a PNG of each step.
+ * Build first (`node scripts/build.ts --hostile-harness`; add `--pass-through-policy` for the
+ * negative control, which must fail). On Linux run it under a display, for example
+ * `xvfb-run -a -s '-screen 0 1600x1000x24' node scripts/check-hostile-render.ts`; on macOS run it
+ * directly. Switches after `--` go to Electron (`-- --no-sandbox` only where the sandbox cannot
+ * start, such as as root). `--screenshots <dir>` saves a PNG of each step.
  */
 async function checkHostileRender(): Promise<void> {
   const { values, positionals } = parseArgs({
