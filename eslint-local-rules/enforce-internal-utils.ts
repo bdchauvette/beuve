@@ -38,12 +38,13 @@ export const enforceInternalUtils = ESLintUtils.RuleCreator.withoutDocs<Options,
     },
   },
   create(context, [{ banned = defaultBanned }]) {
+    const matchers = banned.map((pattern) => matcherFrom(pattern));
     const check = (source: TSESTree.Node | null | undefined): void => {
       if (source?.type !== AST_NODE_TYPES.Literal || typeof source.value !== 'string') {
         return;
       }
       const name = packageName(source.value);
-      if (banned.some((pattern) => isMatch(pattern, name))) {
+      if (matchers.some((matches) => matches(name))) {
         context.report({ node: source, messageId: 'useInternalUtils', data: { name } });
       }
     };
@@ -76,11 +77,18 @@ export const enforceInternalUtils = ESLintUtils.RuleCreator.withoutDocs<Options,
 });
 
 function packageName(specifier: string): string {
-  const segments = specifier.split('/');
-  const count = specifier.startsWith('@') ? 2 : 1;
-  return segments.slice(0, count).join('/');
+  const [first = '', second] = specifier.split('/', 2);
+  if (second !== undefined && first.startsWith('@')) {
+    return `${first}/${second}`;
+  }
+  return first;
 }
 
-function isMatch(pattern: string, name: string): boolean {
-  return pattern.endsWith('*') ? name.startsWith(pattern.slice(0, -1)) : pattern === name;
+/** `lodash*` matches every name that starts with `lodash`; anything else matches itself. */
+function matcherFrom(pattern: string): (name: string) => boolean {
+  if (pattern.endsWith('*')) {
+    const prefix = pattern.slice(0, -1);
+    return (name: string): boolean => name.startsWith(prefix);
+  }
+  return (name: string): boolean => name === pattern;
 }

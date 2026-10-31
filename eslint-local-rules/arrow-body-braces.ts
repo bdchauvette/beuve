@@ -61,7 +61,10 @@ function reasonForBraces(
   if (after?.type === AST_TOKEN_TYPES.Punctuator && after.value === ',') {
     return 'followed by a comma';
   }
-  return isSimple(node.body, true) ? undefined : 'not a trivial expression';
+  if (isSimple(node.body, true)) {
+    return undefined;
+  }
+  return 'not a trivial expression';
 }
 
 function isSimple(start: TSESTree.Node, isAwaitAllowedAtStart: boolean): boolean {
@@ -126,8 +129,7 @@ function fixFor(
     return fixer.replaceText(node, sourceCode.getText(node));
   }
   const inner = indentContinuationLines(sourceCode, body);
-  const isDiscards = isReturnless(node, body);
-  const statement = isDiscards ? `${statementStart(inner)};` : `return ${returned(body, inner)};`;
+  const statement = statementFor(node, inner);
 
   const comments = sourceCode.getAllComments().filter((comment) => {
     return comment.range[0] >= arrow.range[1] && comment.range[1] <= node.range[1];
@@ -148,17 +150,31 @@ function fixFor(
   );
 }
 
+/** The block's one statement: the body itself when nothing is returned, else `return body;`. */
+function statementFor(node: TSESTree.ArrowFunctionExpression, inner: string): string {
+  if (isReturnless(node, node.body)) {
+    return `${statementStart(inner)};`;
+  }
+  return `return ${returned(node.body, inner)};`;
+}
+
 /** Prettier writes `return (a = b);` and `return (a, b);`. */
 function returned(body: TSESTree.Node, text: string): string {
-  return body.type === AST_NODE_TYPES.SequenceExpression ||
+  if (
+    body.type === AST_NODE_TYPES.SequenceExpression ||
     body.type === AST_NODE_TYPES.AssignmentExpression
-    ? `(${text})`
-    : text;
+  ) {
+    return `(${text})`;
+  }
+  return text;
 }
 
 /** An expression statement can't start with `{`, `function` or `class`. */
 function statementStart(text: string): string {
-  return statementNeedsParens.test(text) ? `(${text})` : text;
+  if (statementNeedsParens.test(text)) {
+    return `(${text})`;
+  }
+  return text;
 }
 
 function isReturnless(node: TSESTree.ArrowFunctionExpression, body: TSESTree.Node): boolean {
@@ -183,7 +199,10 @@ function isReturnless(node: TSESTree.ArrowFunctionExpression, body: TSESTree.Nod
 }
 
 function commentText(comment: TSESTree.Comment, indent: string): string {
-  return `${indent}${comment.type === AST_TOKEN_TYPES.Line ? `//${comment.value}` : `/*${comment.value}*/`}`;
+  if (comment.type === AST_TOKEN_TYPES.Line) {
+    return `${indent}//${comment.value}`;
+  }
+  return `${indent}/*${comment.value}*/`;
 }
 
 function lineIndent(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Node): string {
@@ -207,7 +226,10 @@ function indentContinuationLines(
   for (const line of text.split('\n')) {
     const absolute = start + offset;
     const isInsideTemplate = protectedRanges.some(([from, to]) => absolute > from && absolute < to);
-    result += offset === 0 || isInsideTemplate || line.trim() === '' ? line : `  ${line}`;
+    if (offset !== 0 && !isInsideTemplate && line.trim() !== '') {
+      result += '  ';
+    }
+    result += line;
     offset += line.length + 1;
     if (offset <= text.length) {
       result += '\n';

@@ -64,14 +64,21 @@ function memberName(node: TSESTree.MemberExpression): string | undefined {
   if (!node.computed && node.property.type === AST_NODE_TYPES.Identifier) {
     return node.property.name;
   }
-  return node.property.type === AST_NODE_TYPES.Literal ? String(node.property.value) : undefined;
+  if (node.property.type === AST_NODE_TYPES.Literal) {
+    return String(node.property.value);
+  }
+  return undefined;
 }
 
-function rootIdentifier(node: TSESTree.Node): TSESTree.Identifier | undefined {
+function rootIdentifier(start: TSESTree.Node): TSESTree.Identifier | undefined {
+  let node = start;
+  while (node.type === AST_NODE_TYPES.MemberExpression) {
+    node = node.object;
+  }
   if (node.type === AST_NODE_TYPES.Identifier) {
     return node;
   }
-  return node.type === AST_NODE_TYPES.MemberExpression ? rootIdentifier(node.object) : undefined;
+  return undefined;
 }
 
 function isImportBinding(start: TSESLint.Scope.Scope, name: string): boolean {

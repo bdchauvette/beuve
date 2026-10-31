@@ -158,10 +158,13 @@ function isTypePosition(node: TSESTree.Identifier): boolean {
   );
 }
 
-function globalUse(node: TSESTree.Identifier): {
+/** How the code uses the global `Date`, as the report shows it, and the option that allows it. */
+interface GlobalUseSite {
   readonly text: string;
   readonly allowedAs?: GlobalUse;
-} {
+}
+
+function globalUse(node: TSESTree.Identifier): GlobalUseSite {
   const { parent } = node;
   if (parent.type === AST_NODE_TYPES.NewExpression && parent.callee === node) {
     return { text: 'new Date()' };
@@ -170,31 +173,43 @@ function globalUse(node: TSESTree.Identifier): {
     return { text: 'Date()' };
   }
   if (parent.type === AST_NODE_TYPES.MemberExpression && parent.object === node) {
-    const name = parent.property.type === AST_NODE_TYPES.Identifier ? parent.property.name : '…';
-    return name === 'prototype'
-      ? { text: 'Date.prototype', allowedAs: 'prototype' }
-      : { text: `Date.${name}` };
+    if (parent.property.type !== AST_NODE_TYPES.Identifier) {
+      return { text: 'Date.…' };
+    }
+    if (parent.property.name === 'prototype') {
+      return { text: 'Date.prototype', allowedAs: 'prototype' };
+    }
+    return { text: `Date.${parent.property.name}` };
   }
-  return parent.type === AST_NODE_TYPES.BinaryExpression &&
+  if (
+    parent.type === AST_NODE_TYPES.BinaryExpression &&
     parent.operator === 'instanceof' &&
     parent.right === node
-    ? { text: 'instanceof Date', allowedAs: 'instanceof' }
-    : { text: 'Date' };
+  ) {
+    return { text: 'instanceof Date', allowedAs: 'instanceof' };
+  }
+  return { text: 'Date' };
 }
 
 function isGlobalDateExpression(
   context: Readonly<TSESLint.RuleContext<string, readonly unknown[]>>,
   node: TSESTree.Expression,
 ): boolean {
-  const target =
-    node.type === AST_NODE_TYPES.NewExpression || node.type === AST_NODE_TYPES.CallExpression
-      ? node.callee
-      : node.type === AST_NODE_TYPES.MemberExpression
-        ? node.object
-        : node;
+  const target = subjectOf(node);
   return (
     target.type === AST_NODE_TYPES.Identifier &&
     target.name === 'Date' &&
     isGlobalReference(context, target)
   );
+}
+
+/** The callee of `new X()` or `X()`, the object of `X.y`, or the expression itself. */
+function subjectOf(node: TSESTree.Expression): TSESTree.Node {
+  if (node.type === AST_NODE_TYPES.NewExpression || node.type === AST_NODE_TYPES.CallExpression) {
+    return node.callee;
+  }
+  if (node.type === AST_NODE_TYPES.MemberExpression) {
+    return node.object;
+  }
+  return node;
 }

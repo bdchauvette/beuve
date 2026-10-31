@@ -47,7 +47,8 @@ export const noStringTailSlice = ESLintUtils.RuleCreator.withoutDocs<[], Message
 });
 
 function isStringLike(type: ts.Type): boolean {
-  return type.isUnion()
-    ? type.types.every((member) => isStringLike(member))
-    : (type.flags & ts.TypeFlags.StringLike) !== 0;
+  if (type.isUnion()) {
+    return type.types.every((member) => isStringLike(member));
+  }
+  return (type.flags & ts.TypeFlags.StringLike) !== 0;
 }

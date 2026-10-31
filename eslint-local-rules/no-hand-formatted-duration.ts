@@ -49,17 +49,26 @@ function timeSourceIn(start: TSESTree.Node): string | undefined {
       return timeSourceIn(node.left) ?? timeSourceIn(node.right);
     }
     case AST_NODE_TYPES.CallExpression: {
-      return isTotalCall(node) ? '`duration.total(…)`' : undefined;
+      if (isTotalCall(node)) {
+        return '`duration.total(…)`';
+      }
+      return undefined;
     }
     case AST_NODE_TYPES.Identifier: {
-      return timeUnitNames.test(node.name) ? `\`${node.name}\`` : undefined;
+      if (timeUnitNames.test(node.name)) {
+        return `\`${node.name}\``;
+      }
+      return undefined;
     }
     case AST_NODE_TYPES.MemberExpression: {
-      return !node.computed &&
+      if (
+        !node.computed &&
         node.property.type === AST_NODE_TYPES.Identifier &&
         timeUnitNames.test(node.property.name)
-        ? `\`${node.property.name}\``
-        : undefined;
+      ) {
+        return `\`${node.property.name}\``;
+      }
+      return undefined;
     }
     default: {
       return undefined;

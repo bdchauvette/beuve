@@ -82,13 +82,22 @@ function fakeTimeMethod(node: TSESTree.CallExpression): string | undefined {
   ) {
     return undefined;
   }
-  const name =
-    callee.property.type === AST_NODE_TYPES.Identifier && !callee.computed
-      ? callee.property.name
-      : callee.property.type === AST_NODE_TYPES.Literal
-        ? String(callee.property.value)
-        : undefined;
-  return name !== undefined && fakeTimeMethods.has(name) ? name : undefined;
+  const name = memberName(callee);
+  if (name !== undefined && fakeTimeMethods.has(name)) {
+    return name;
+  }
+  return undefined;
+}
+
+/** `useFakeTimers` for `vi.useFakeTimers` and `vi['useFakeTimers']`. */
+function memberName(callee: TSESTree.MemberExpression): string | undefined {
+  if (callee.property.type === AST_NODE_TYPES.Identifier && !callee.computed) {
+    return callee.property.name;
+  }
+  if (callee.property.type === AST_NODE_TYPES.Literal) {
+    return String(callee.property.value);
+  }
+  return undefined;
 }
 
 function rootName(node: TSESTree.Node): string | undefined {

@@ -140,15 +140,20 @@ export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Optio
     const sourceLabel = (node: TSESTree.Node): string | undefined => {
       if (node.type === AST_NODE_TYPES.MemberExpression && !node.computed) {
         const field = node.property.name;
-        const isField = epochFields.has(field) || durationUnits.has(field);
-        const owner = isField ? temporalTypeOf(node.object) : undefined;
+        if (!epochFields.has(field) && !durationUnits.has(field)) {
+          return undefined;
+        }
+        const owner = temporalTypeOf(node.object);
         if (owner === undefined) {
           return undefined;
         }
         if (owner !== 'Duration' && epochFields.has(field)) {
           return `${owner}#${field}`;
         }
-        return owner === 'Duration' && durationUnits.has(field) ? `Duration#${field}` : undefined;
+        if (owner === 'Duration' && durationUnits.has(field)) {
+          return `Duration#${field}`;
+        }
+        return undefined;
       }
       if (node.type === AST_NODE_TYPES.CallExpression) {
         const callee = calleeText(context, node.callee);
@@ -170,7 +175,7 @@ export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Optio
     const check = (node: TSESTree.Node, source: string): void => {
       let current = node;
       let { parent } = node;
-      while (parent && isTransparent(parent, current)) {
+      while (parent && hasTransparentParent(current)) {
         current = parent;
         parent = parent.parent;
       }
@@ -262,7 +267,7 @@ export const noTimeNumberArithmetic = ESLintUtils.RuleCreator.withoutDocs<[Optio
       if (!arithmeticOperators.has(parent.operator)) {
         return;
       }
-      const other = parent.left === current ? parent.right : parent.left;
+      const other = otherOperand(parent, current);
       const constant = unitConstantText(context, other);
       if (constant === undefined) {
         context.report({ node: parent, messageId: 'arithmetic', data: { source } });
@@ -326,7 +331,10 @@ function temporalName(checker: ts.TypeChecker, type: ts.Type): string | undefine
     return undefined;
   }
   const name = checker.getFullyQualifiedName(symbol);
-  return name.startsWith('Temporal.') ? name.slice('Temporal.'.length) : undefined;
+  if (name.startsWith('Temporal.')) {
+    return name.slice('Temporal.'.length);
+  }
+  return undefined;
 }
 
 function calleeText(
@@ -339,8 +347,10 @@ function calleeText(
     .replace(globalThisPrefix, '');
 }
 
-function isTransparent(parent: TSESTree.Node, child: TSESTree.Node): boolean {
-  switch (parent.type) {
+/** Whether `child`'s parent passes `child`'s value through (a cast, or a branch of `?:`/`??`). */
+function hasTransparentParent(child: TSESTree.Node): boolean {
+  const { parent } = child;
+  switch (parent?.type) {
     case AST_NODE_TYPES.TSAsExpression:
     case AST_NODE_TYPES.TSNonNullExpression:
     case AST_NODE_TYPES.TSSatisfiesExpression:
@@ -378,17 +388,29 @@ function propertyName(property: TSESTree.Property): string | undefined {
   if (property.computed) {
     return undefined;
   }
-  return property.key.type === AST_NODE_TYPES.Identifier
-    ? property.key.name
-    : String(property.key.value);
+  if (property.key.type === AST_NODE_TYPES.Identifier) {
+    return property.key.name;
+  }
+  return String(property.key.value);
 }
 
 /** The source text of `node` when it is a time-unit constant: `1000`, `60 * 60 * 1000`, `1e3`, a `const` set to one. */
+/** The operand of `binary` that `operand` is not. */
+function otherOperand(binary: TSESTree.BinaryExpression, operand: TSESTree.Node): TSESTree.Node {
+  if (binary.left === operand) {
+    return binary.right;
+  }
+  return binary.left;
+}
+
 function unitConstantText(
   context: Readonly<TSESLint.RuleContext<string, readonly unknown[]>>,
   node: TSESTree.Node,
 ): string | undefined {
-  return isUnitConstant(context, node, 0) ? context.sourceCode.getText(node) : undefined;
+  if (isUnitConstant(context, node, 0)) {
+    return context.sourceCode.getText(node);
+  }
+  return undefined;
 }
 
 function isUnitConstant(

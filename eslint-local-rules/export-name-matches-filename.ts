@@ -23,8 +23,15 @@ export const exportNameMatchesFilename = ESLintUtils.RuleCreator.withoutDocs<[],
     const camel = camelCase(stem);
     const pascal = camel.charAt(0).toUpperCase() + camel.slice(1);
 
-    const check = (node: TSESTree.Node, name: string, isClass: boolean): void => {
-      const expected = isClass ? pascal : camel;
+    const expectedName = (isClass: boolean): string => {
+      if (isClass) {
+        return pascal;
+      }
+      return camel;
+    };
+
+    const check = ({ node, name, isClass }: RuntimeBinding): void => {
+      const expected = expectedName(isClass);
       if (name !== expected) {
         context.report({ node, messageId: 'mismatch', data: { actual: name, expected } });
       }
@@ -35,8 +42,8 @@ export const exportNameMatchesFilename = ESLintUtils.RuleCreator.withoutDocs<[],
         if (node.exportKind === 'type' || node.source !== null) {
           return;
         }
-        for (const { node: target, name, isClass } of runtimeBindings(node)) {
-          check(target, name, isClass);
+        for (const binding of runtimeBindings(node)) {
+          check(binding);
         }
       },
     };
@@ -47,9 +54,13 @@ function camelCase(kebab: string): string {
   return kebab.replaceAll(/[-_]+([a-z\d])/giu, (_match, letter: string) => letter.toUpperCase());
 }
 
-function runtimeBindings(
-  node: TSESTree.ExportNamedDeclaration,
-): { node: TSESTree.Node; name: string; isClass: boolean }[] {
+interface RuntimeBinding {
+  readonly node: TSESTree.Node;
+  readonly name: string;
+  readonly isClass: boolean;
+}
+
+function runtimeBindings(node: TSESTree.ExportNamedDeclaration): RuntimeBinding[] {
   const { declaration } = node;
   if (declaration === null) {
     return node.specifiers
@@ -57,10 +68,7 @@ function runtimeBindings(
       .map((specifier) => {
         return {
           node: specifier.exported,
-          name:
-            specifier.exported.type === AST_NODE_TYPES.Identifier
-              ? specifier.exported.name
-              : specifier.exported.value,
+          name: exportedName(specifier.exported),
           isClass: false,
         };
       });
@@ -69,28 +77,27 @@ function runtimeBindings(
     case AST_NODE_TYPES.ClassDeclaration:
     case AST_NODE_TYPES.FunctionDeclaration:
     case AST_NODE_TYPES.TSDeclareFunction: {
-      return declaration.id === null || declaration.declare
-        ? []
-        : [
-            {
-              node: declaration.id,
-              name: declaration.id.name,
-              isClass: declaration.type === AST_NODE_TYPES.ClassDeclaration,
-            },
-          ];
+      if (declaration.id === null || declaration.declare) {
+        return [];
+      }
+      return [
+        {
+          node: declaration.id,
+          name: declaration.id.name,
+          isClass: declaration.type === AST_NODE_TYPES.ClassDeclaration,
+        },
+      ];
     }
     case AST_NODE_TYPES.VariableDeclaration: {
-      return declaration.declare
-        ? []
-        : declaration.declarations
-            .filter((declarator) => declarator.id.type === AST_NODE_TYPES.Identifier)
-            .map((declarator) => {
-              return {
-                node: declarator.id,
-                name: declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '',
-                isClass: isClassValue(declarator),
-              };
-            });
+      if (declaration.declare) {
+        return [];
+      }
+      return declaration.declarations.flatMap((declarator): RuntimeBinding[] | RuntimeBinding => {
+        if (declarator.id.type !== AST_NODE_TYPES.Identifier) {
+          return [];
+        }
+        return { node: declarator.id, name: declarator.id.name, isClass: isClassValue(declarator) };
+      });
     }
     case AST_NODE_TYPES.TSEnumDeclaration:
     case AST_NODE_TYPES.TSImportEqualsDeclaration:
@@ -100,6 +107,13 @@ function runtimeBindings(
       return [];
     }
   }
+}
+
+function exportedName(node: TSESTree.Identifier | TSESTree.StringLiteral): string {
+  if (node.type === AST_NODE_TYPES.Identifier) {
+    return node.name;
+  }
+  return node.value;
 }
 
 function isClassValue(declarator: TSESTree.VariableDeclarator): boolean {

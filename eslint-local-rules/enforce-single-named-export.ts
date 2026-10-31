@@ -68,7 +68,7 @@ export const enforceSingleNamedExport = ESLintUtils.RuleCreator.withoutDocs<Opti
           return;
         }
         runtimeExports.push({
-          name: node.exported === null ? '*' : exportedName(node.exported),
+          name: exportedName(node.exported),
           node,
         });
       },
@@ -115,7 +115,10 @@ function isTypeOnlyDeclaration(declaration: TSESTree.NamedExportDeclarations): b
 function declaredNames(declaration: TSESTree.NamedExportDeclarations): string[] {
   if (declaration.type === AST_NODE_TYPES.VariableDeclaration) {
     return declaration.declarations.map((declarator) => {
-      return declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '{…}';
+      if (declarator.id.type === AST_NODE_TYPES.Identifier) {
+        return declarator.id.name;
+      }
+      return '{…}';
     });
   }
   if ('id' in declaration && declaration.id?.type === AST_NODE_TYPES.Identifier) {
@@ -124,8 +127,15 @@ function declaredNames(declaration: TSESTree.NamedExportDeclarations): string[] 
   return ['<anonymous>'];
 }
 
-function exportedName(node: TSESTree.Identifier | TSESTree.StringLiteral): string {
-  return node.type === AST_NODE_TYPES.Identifier ? node.name : node.value;
+/** `*` for `export * from`, which names nothing. */
+function exportedName(node: TSESTree.Identifier | TSESTree.StringLiteral | null): string {
+  if (node === null) {
+    return '*';
+  }
+  if (node.type === AST_NODE_TYPES.Identifier) {
+    return node.name;
+  }
+  return node.value;
 }
 
 function hasDefaultExport(program: TSESTree.Program): boolean {

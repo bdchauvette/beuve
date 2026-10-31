@@ -32,8 +32,8 @@ export const noListenerInRepeatedTemplate = ESLintUtils.RuleCreator.withoutDocs<
     },
   },
   create(context) {
-    const templates: { readonly node: TSESTree.TaggedTemplateExpression; event: string }[] = [];
-    const calls: { readonly node: TSESTree.Node; readonly name: string }[] = [];
+    const templates: TemplateSite[] = [];
+    const calls: CallSite[] = [];
     const named = new Map<string, FunctionNode>();
 
     return {
@@ -93,6 +93,18 @@ export const noListenerInRepeatedTemplate = ESLintUtils.RuleCreator.withoutDocs<
   },
 });
 
+/** A Lit template with an event binding. */
+interface TemplateSite {
+  readonly node: TSESTree.TaggedTemplateExpression;
+  readonly event: string;
+}
+
+/** A call, or a function passed to a repeating call, by the name the rule resolves it to. */
+interface CallSite {
+  readonly node: TSESTree.Node;
+  readonly name: string;
+}
+
 function boundEvent(node: TSESTree.TaggedTemplateExpression): string | undefined {
   const { tag } = node;
   if (tag.type !== AST_NODE_TYPES.Identifier || (tag.name !== 'html' && tag.name !== 'svg')) {
@@ -113,28 +125,34 @@ function calleeName(node: TSESTree.Node): string | undefined {
   if (node.type === AST_NODE_TYPES.Identifier) {
     return node.name;
   }
-  return node.type === AST_NODE_TYPES.MemberExpression &&
+  if (
+    node.type === AST_NODE_TYPES.MemberExpression &&
     node.object.type === AST_NODE_TYPES.ThisExpression &&
     !node.computed &&
     node.property.type === AST_NODE_TYPES.Identifier
-    ? `this.${node.property.name}`
-    : undefined;
+  ) {
+    return `this.${node.property.name}`;
+  }
+  return undefined;
 }
 
 function isRepeatingCall(node: TSESTree.CallExpression): boolean {
   const { callee } = node;
-  return callee.type === AST_NODE_TYPES.Identifier
-    ? repeatingFunctions.has(callee.name)
-    : callee.type === AST_NODE_TYPES.MemberExpression &&
-        !callee.computed &&
-        callee.property.type === AST_NODE_TYPES.Identifier &&
-        repeatingMethods.has(callee.property.name);
+  if (callee.type === AST_NODE_TYPES.Identifier) {
+    return repeatingFunctions.has(callee.name);
+  }
+  return (
+    callee.type === AST_NODE_TYPES.MemberExpression &&
+    !callee.computed &&
+    callee.property.type === AST_NODE_TYPES.Identifier &&
+    repeatingMethods.has(callee.property.name)
+  );
 }
 
 /** Functions that render a binding themselves or call one that does, to a fixed point. */
 function bindingFunctions(
-  templates: readonly { readonly node: TSESTree.Node }[],
-  calls: readonly { readonly node: TSESTree.Node; readonly name: string }[],
+  templates: readonly TemplateSite[],
+  calls: readonly CallSite[],
   named: ReadonlyMap<string, FunctionNode>,
 ): Set<FunctionNode> {
   const found = new Set<FunctionNode>();

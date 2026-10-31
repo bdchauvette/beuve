@@ -71,16 +71,21 @@ export const noElectronAsNode = ESLintUtils.RuleCreator.withoutDocs<[], MessageI
 });
 
 function importedName(specifier: TSESTree.ImportSpecifier): string {
-  return specifier.imported.type === AST_NODE_TYPES.Identifier
-    ? specifier.imported.name
-    : specifier.imported.value;
+  if (specifier.imported.type === AST_NODE_TYPES.Identifier) {
+    return specifier.imported.name;
+  }
+  return specifier.imported.value;
 }
 
 function propertyName(node: TSESTree.MemberExpression): string | undefined {
   if (!node.computed) {
-    return node.property.type === AST_NODE_TYPES.Identifier ? node.property.name : undefined;
+    if (node.property.type === AST_NODE_TYPES.Identifier) {
+      return node.property.name;
+    }
+    return undefined;
   }
-  return node.property.type === AST_NODE_TYPES.Literal && typeof node.property.value === 'string'
-    ? node.property.value
-    : undefined;
+  if (node.property.type === AST_NODE_TYPES.Literal && typeof node.property.value === 'string') {
+    return node.property.value;
+  }
+  return undefined;
 }

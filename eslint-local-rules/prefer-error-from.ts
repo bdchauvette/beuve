@@ -58,20 +58,27 @@ export const preferErrorFrom = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
   },
 });
 
-function testedValues(test: TSESTree.Node): readonly TSESTree.Node[] {
+function testedValues(start: TSESTree.Node): readonly TSESTree.Node[] {
+  let test = start;
+  while (test.type === AST_NODE_TYPES.UnaryExpression && test.operator === '!') {
+    test = test.argument;
+  }
   switch (test.type) {
-    case AST_NODE_TYPES.UnaryExpression: {
-      return test.operator === '!' ? testedValues(test.argument) : [];
-    }
     case AST_NODE_TYPES.LogicalExpression: {
       return [...testedValues(test.left), ...testedValues(test.right)];
     }
     case AST_NODE_TYPES.BinaryExpression: {
-      return test.operator === 'instanceof' && isErrorIdentifier(test.right) ? [test.left] : [];
+      if (test.operator === 'instanceof' && isErrorIdentifier(test.right)) {
+        return [test.left];
+      }
+      return [];
     }
     case AST_NODE_TYPES.CallExpression: {
       const [argument] = test.arguments;
-      return argument !== undefined && isErrorIsError(test.callee) ? [argument] : [];
+      if (argument !== undefined && isErrorIsError(test.callee)) {
+        return [argument];
+      }
+      return [];
     }
     default: {
       return [];
@@ -111,8 +118,8 @@ function stringCallOf(
   const keys = sourceCode.visitorKeys[node.type] ?? [];
   return keys
     .flatMap((key) => {
-      const child = (node as unknown as Record<string, unknown>)[key];
-      return Array.isArray(child) ? (child as unknown[]) : [child];
+      const child: unknown = (node as unknown as Record<string, unknown>)[key];
+      return [child].flat();
     })
     .filter((item): item is TSESTree.Node => isNode(item))
     .map((item) => stringCallOf(item, text, sourceCode))

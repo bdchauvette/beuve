@@ -31,7 +31,7 @@ export const enforceTopLevelFunctionSyntax = ESLintUtils.RuleCreator.withoutDocs
           context.report({
             node,
             messageId: 'useFunctionDeclaration',
-            data: { name: node.id.type === AST_NODE_TYPES.Identifier ? node.id.name : 'fn' },
+            data: { name: bindingName(node.id) },
           });
         }
       },
@@ -75,6 +75,14 @@ function isTypeAssertion(
     node.type === AST_NODE_TYPES.TSNonNullExpression ||
     node.type === AST_NODE_TYPES.TSTypeAssertion
   );
+}
+
+/** The variable's name, or `fn` for a destructuring pattern. */
+function bindingName(id: TSESTree.BindingName): string {
+  if (id.type === AST_NODE_TYPES.Identifier) {
+    return id.name;
+  }
+  return 'fn';
 }
 
 function isFunctionValue(node: TSESTree.Expression): boolean {

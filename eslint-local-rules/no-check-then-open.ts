@@ -118,11 +118,7 @@ export const noCheckThenOpen = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
         }
         for (const specifier of node.specifiers) {
           if (specifier.type === AST_NODE_TYPES.ImportSpecifier) {
-            const imported =
-              specifier.imported.type === AST_NODE_TYPES.Identifier
-                ? specifier.imported.name
-                : specifier.imported.value;
-            named.set(specifier.local.name, imported);
+            named.set(specifier.local.name, importedName(specifier));
           } else {
             namespaces.add(specifier.local.name);
           }
@@ -161,3 +157,10 @@ export const noCheckThenOpen = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
     };
   },
 });
+
+function importedName(specifier: TSESTree.ImportSpecifier): string {
+  if (specifier.imported.type === AST_NODE_TYPES.Identifier) {
+    return specifier.imported.name;
+  }
+  return specifier.imported.value;
+}

@@ -115,7 +115,7 @@ function typeLiteralsIn(
     const keys = sourceCode.visitorKeys[node.type] ?? [];
     for (const key of keys) {
       const child: unknown = (node as unknown as Record<string, unknown>)[key];
-      const items: unknown[] = Array.isArray(child) ? child : [child];
+      const items: unknown[] = [child].flat();
       for (const item of items) {
         if (isNode(item)) {
           visit(item);

@@ -35,6 +35,27 @@ interface Types {
 
 type Fix = (fixer: TSESLint.RuleFixer) => TSESLint.RuleFix;
 
+/** A call that must forward its one candidate signal, and where the callee takes it. */
+interface Forwarding {
+  readonly node: Call;
+  readonly slots: readonly Slot[];
+  readonly candidate: Candidate;
+}
+
+/** A signal to write into one slot of a call. */
+interface Insertion {
+  readonly node: Call;
+  readonly slot: Slot;
+  /** The expression that reads the signal. */
+  readonly value: string;
+}
+
+/** Text to add to a list: `item` after its last element, or `alone` in place of an empty one. */
+interface Appended {
+  readonly item: string;
+  readonly alone: string;
+}
+
 const functionTypes = new Set<string>([
   AST_NODE_TYPES.ArrowFunctionExpression,
   AST_NODE_TYPES.FunctionDeclaration,
@@ -77,7 +98,10 @@ export const forwardAbortSignal = ESLintUtils.RuleCreator.withoutDocs<[], Messag
         return;
       }
       const slots = signalSlots(types, node);
-      const candidates = slots.length === 0 ? [] : candidatesFor(context, types, node);
+      if (slots.length === 0) {
+        return;
+      }
+      const candidates = candidatesFor(context, types, node);
       if (
         candidates.length === 0 ||
         isCandidatePassed(context, node, candidates) ||
@@ -98,7 +122,7 @@ export const forwardAbortSignal = ESLintUtils.RuleCreator.withoutDocs<[], Messag
         });
         return;
       }
-      const fix = fixFor(context, node, slots, only);
+      const fix = fixFor(context, { node, slots, candidate: only });
       context.report({
         node,
         messageId: 'forward',
@@ -117,19 +141,25 @@ export const forwardAbortSignal = ESLintUtils.RuleCreator.withoutDocs<[], Messag
 /** A method of a signal itself, and Node's `…Sync` functions, which ignore their `signal`. */
 function isSkippedCallee(types: Types, node: Call): boolean {
   const { callee } = node;
-  const name =
-    callee.type === AST_NODE_TYPES.MemberExpression
-      ? callee.property.type === AST_NODE_TYPES.Identifier
-        ? callee.property.name
-        : undefined
-      : callee.type === AST_NODE_TYPES.Identifier
-        ? callee.name
-        : undefined;
   return (
-    name?.endsWith('Sync') === true ||
+    calleeName(callee)?.endsWith('Sync') === true ||
     (callee.type === AST_NODE_TYPES.MemberExpression &&
       isAbortSignalType(types.checker, typeOf(types, callee.object)))
   );
+}
+
+/** `name` for `name(…)` and `object.name(…)`. */
+function calleeName(callee: Call['callee']): string | undefined {
+  if (callee.type === AST_NODE_TYPES.MemberExpression) {
+    if (callee.property.type === AST_NODE_TYPES.Identifier) {
+      return callee.property.name;
+    }
+    return undefined;
+  }
+  if (callee.type === AST_NODE_TYPES.Identifier) {
+    return callee.name;
+  }
+  return undefined;
 }
 
 function typeOf(types: Types, node: TSESTree.Node): ts.Type {
@@ -137,9 +167,10 @@ function typeOf(types: Types, node: TSESTree.Node): ts.Type {
 }
 
 function isAbortSignalType(checker: ts.TypeChecker, type: ts.Type): boolean {
-  return type.isUnion()
-    ? type.types.some((member) => isAbortSignalType(checker, member))
-    : (type.getSymbol() ?? type.aliasSymbol)?.getName() === 'AbortSignal';
+  if (type.isUnion()) {
+    return type.types.some((member) => isAbortSignalType(checker, member));
+  }
+  return (type.getSymbol() ?? type.aliasSymbol)?.getName() === 'AbortSignal';
 }
 
 /** Every parameter of the resolved signature that takes a signal, itself or as `signal`. */
@@ -172,7 +203,8 @@ function signalSlots(types: Types, node: Call): readonly Slot[] {
 function abortSignalAnyArray(node: Call): TSESTree.ArrayExpression | undefined {
   const { callee } = node;
   const [first] = node.arguments;
-  return node.type === AST_NODE_TYPES.CallExpression &&
+  if (
+    node.type === AST_NODE_TYPES.CallExpression &&
     first?.type === AST_NODE_TYPES.ArrayExpression &&
     callee.type === AST_NODE_TYPES.MemberExpression &&
     !callee.computed &&
@@ -180,8 +212,10 @@ function abortSignalAnyArray(node: Call): TSESTree.ArrayExpression | undefined {
     callee.object.name === 'AbortSignal' &&
     callee.property.type === AST_NODE_TYPES.Identifier &&
     callee.property.name === 'any'
-    ? first
-    : undefined;
+  ) {
+    return first;
+  }
+  return undefined;
 }
 
 function isRestParameter(parameter: ts.Symbol): boolean {
@@ -194,8 +228,7 @@ function isRestParameter(parameter: ts.Symbol): boolean {
 }
 
 function hasSignalProperty(checker: ts.TypeChecker, type: ts.Type, at: ts.Node): boolean {
-  const members = type.isUnion() ? type.types : [type];
-  return members.some((member) => {
+  return unionMembers(type).some((member) => {
     if ((member.flags & ts.TypeFlags.Object) === 0 && !member.isIntersection()) {
       return false;
     }
@@ -205,6 +238,14 @@ function hasSignalProperty(checker: ts.TypeChecker, type: ts.Type, at: ts.Node):
       isAbortSignalType(checker, checker.getTypeOfSymbolAtLocation(signal, at))
     );
   });
+}
+
+/** The members of a union, or the type itself. */
+function unionMembers(type: ts.Type): readonly ts.Type[] {
+  if (type.isUnion()) {
+    return type.types;
+  }
+  return [type];
 }
 
 /** The signals in scope at the nearest function that has any, without those others derive from. */
@@ -227,7 +268,7 @@ function candidatesFor(context: Context, types: Types, node: Call): readonly Can
     scope = scope.upper;
   }
   const underived = found.filter((candidate) => {
-    return found.every((other) => other === candidate || !isDerivedFrom(other, candidate));
+    return found.every((other) => other === candidate || !isDerivedFrom(other, candidate.text));
   });
   return underived.filter((candidate, index) => {
     return underived.findIndex(({ text }) => text === candidate.text) === index;
@@ -269,9 +310,10 @@ function parameterCandidate(types: Types, name: TSESTree.Identifier): Candidate 
     return { text: name.name };
   }
   const tsNode = types.services.esTreeNodeToTSNodeMap.get(name);
-  return isDirectParameter(name) && hasSignalProperty(types.checker, type, tsNode)
-    ? { text: `${name.name}${optionalChain(type)}.signal` }
-    : undefined;
+  if (!isDirectParameter(name) || !hasSignalProperty(types.checker, type, tsNode)) {
+    return undefined;
+  }
+  return { text: `${name.name}${optionalChain(type)}.signal` };
 }
 
 function isDirectParameter(name: TSESTree.Identifier): boolean {
@@ -285,10 +327,15 @@ function isDirectParameter(name: TSESTree.Identifier): boolean {
 }
 
 function optionalChain(type: ts.Type): string {
-  return type.isUnion() &&
-    type.types.some((member) => (member.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0)
-    ? '?'
-    : '';
+  const isNullable =
+    type.isUnion() &&
+    type.types.some((member) => {
+      return (member.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0;
+    });
+  if (isNullable) {
+    return '?';
+  }
+  return '';
 }
 
 function localCandidate(
@@ -305,22 +352,21 @@ function localCandidate(
       }),
     };
   }
-  return isAbortController(type)
-    ? { text: `${name.name}${optionalChain(type)}.signal` }
-    : undefined;
+  if (!isAbortController(type)) {
+    return undefined;
+  }
+  return { text: `${name.name}${optionalChain(type)}.signal` };
 }
 
 function isAbortController(type: ts.Type): boolean {
-  const members = type.isUnion() ? type.types : [type];
-  return members.some((member) => member.getSymbol()?.getName() === 'AbortController');
+  return unionMembers(type).some((member) => member.getSymbol()?.getName() === 'AbortController');
 }
 
 /** A destructured parameter whose type has a `signal` it leaves out, such as a test context. */
 function patternCandidates(types: Types, fn: FunctionNode): readonly Candidate[] {
   const found: Candidate[] = [];
   for (const parameter of fn.params) {
-    const pattern =
-      parameter.type === AST_NODE_TYPES.AssignmentPattern ? parameter.left : parameter;
+    const pattern = withoutDefault(parameter);
     if (
       pattern.type !== AST_NODE_TYPES.ObjectPattern ||
       pattern.properties.some((property) => {
@@ -337,14 +383,24 @@ function patternCandidates(types: Types, fn: FunctionNode): readonly Candidate[]
   return found;
 }
 
+function withoutDefault(parameter: TSESTree.Parameter): TSESTree.Parameter | TSESTree.BindingName {
+  if (parameter.type === AST_NODE_TYPES.AssignmentPattern) {
+    return parameter.left;
+  }
+  return parameter;
+}
+
 function propertyName(
   property: TSESTree.Property | TSESTree.RestElement | TSESTree.SpreadElement,
 ): string | undefined {
-  return property.type === AST_NODE_TYPES.Property &&
+  if (
+    property.type === AST_NODE_TYPES.Property &&
     !property.computed &&
     property.key.type === AST_NODE_TYPES.Identifier
-    ? property.key.name
-    : undefined;
+  ) {
+    return property.key.name;
+  }
+  return undefined;
 }
 
 /** `AbortSignal` and `AbortController` fields of the enclosing class that this method reads. */
@@ -384,7 +440,10 @@ function fieldKey(member: TSESTree.PropertyDefinition): string | undefined {
   if (member.key.type === AST_NODE_TYPES.PrivateIdentifier) {
     return `#${member.key.name}`;
   }
-  return member.key.type === AST_NODE_TYPES.Identifier ? member.key.name : undefined;
+  if (member.key.type === AST_NODE_TYPES.Identifier) {
+    return member.key.name;
+  }
+  return undefined;
 }
 
 /** `field` for each `this.field`, and `field.signal` for each `this.field.signal`, in `fn`. */
@@ -414,9 +473,10 @@ function thisMemberKey(node: TSESTree.Node): string | undefined {
   ) {
     return undefined;
   }
-  return node.property.type === AST_NODE_TYPES.PrivateIdentifier
-    ? `#${node.property.name}`
-    : node.property.name;
+  if (node.property.type === AST_NODE_TYPES.PrivateIdentifier) {
+    return `#${node.property.name}`;
+  }
+  return node.property.name;
 }
 
 function isSignalRead(node: TSESTree.Node | undefined): boolean {
@@ -434,7 +494,7 @@ function childNodes(node: TSESTree.Node): readonly TSESTree.Node[] {
     if (key === 'parent') {
       continue;
     }
-    const values: unknown[] = Array.isArray(value) ? value : [value];
+    const values: unknown[] = [value].flat();
     children.push(...values.filter((child) => isNode(child)));
   }
   return children;
@@ -448,14 +508,15 @@ function isNode(value: unknown): value is TSESTree.Node {
   );
 }
 
-function isDerivedFrom(candidate: Candidate, source: Candidate): boolean {
+/** Whether `candidate`'s initializer reads the signal written as `source`. */
+function isDerivedFrom(candidate: Candidate, source: string): boolean {
   const from = candidate.derivedFrom;
-  const at = from?.indexOf(source.text) ?? -1;
+  const at = from?.indexOf(source) ?? -1;
   return (
     from !== undefined &&
     at !== -1 &&
     !isIdentifierCharacter(from.charAt(at - 1)) &&
-    !isIdentifierCharacter(from.charAt(at + source.text.length))
+    !isIdentifierCharacter(from.charAt(at + source.length))
   );
 }
 
@@ -474,9 +535,10 @@ function isCandidatePassed(
     return expression !== null && texts.has(normalized(context.sourceCode.getText(expression)));
   };
   const anyArray = abortSignalAnyArray(node);
-  return anyArray === undefined
-    ? node.arguments.some((arg) => isCandidate(arg))
-    : anyArray.elements.some((element) => isCandidate(element));
+  if (anyArray === undefined) {
+    return node.arguments.some((arg) => isCandidate(arg));
+  }
+  return anyArray.elements.some((element) => isCandidate(element));
 }
 
 /**
@@ -506,17 +568,20 @@ function normalized(text: string): string {
 
 function calleeText(context: Context, node: Call): string {
   const text = context.sourceCode.getText(node.callee).replaceAll(whitespace, '');
-  return text.length > 40 ? `…${tailOf(text, 39)}` : text;
+  if (text.length > 40) {
+    return `…${tailOf(text, 39)}`;
+  }
+  return text;
 }
 
 function fixFor(
   context: Context,
-  node: Call,
-  slots: readonly Slot[],
-  candidate: Candidate,
+  { node, slots, candidate }: Forwarding,
 ): TSESLint.ReportFixFunction | undefined {
   const insert = slots
-    .map((slot) => insertion(context, node, slot, candidate.text))
+    .map((slot) => {
+      return insertion(context, { node, slot, value: candidate.text });
+    })
     .find((fix) => fix !== undefined);
   if (insert === undefined) {
     return undefined;
@@ -530,51 +595,64 @@ function fixFor(
   }
   return (fixer): TSESLint.RuleFix[] => {
     const lastProperty = pattern.properties.at(-1);
-    const destructure =
-      lastProperty === undefined
-        ? fixer.replaceTextRange(
-            [pattern.range[0], pattern.typeAnnotation?.range[0] ?? pattern.range[1]],
-            '{ signal }',
-          )
-        : fixer.insertTextAfter(lastProperty, ', signal');
-    return [destructure, insert(fixer)];
+    if (lastProperty === undefined) {
+      const end = pattern.typeAnnotation?.range[0] ?? pattern.range[1];
+      return [fixer.replaceTextRange([pattern.range[0], end], '{ signal }'), insert(fixer)];
+    }
+    return [fixer.insertTextAfter(lastProperty, ', signal'), insert(fixer)];
   };
 }
 
-function insertion(context: Context, node: Call, slot: Slot, value: string): Fix | undefined {
+function insertion(context: Context, { node, slot, value }: Insertion): Fix | undefined {
   if (slot.kind === 'any') {
-    return appendTo(slot.array, slot.array.elements, value, `[${value}]`);
+    return appendTo(slot.array, slot.array.elements, { item: value, alone: `[${value}]` });
   }
-  const property = value === 'signal' ? 'signal' : `signal: ${value}`;
+  const property = signalProperty(value);
   const arg = node.arguments[slot.index];
   if (arg?.type === AST_NODE_TYPES.ObjectExpression) {
-    return appendTo(arg, arg.properties, property, `{ ${property} }`);
+    return appendTo(arg, arg.properties, { item: property, alone: `{ ${property} }` });
   }
   const closing = context.sourceCode.getLastToken(node);
   if (arg !== undefined || closing?.value !== ')') {
     return undefined;
   }
   const fill = 'undefined, '.repeat(slot.index - node.arguments.length);
-  const added = `${fill}${slot.kind === 'parameter' ? value : `{ ${property} }`}`;
+  const added = `${fill}${signalArgument(slot, value)}`;
   const last = node.arguments.at(-1);
-  return last === undefined
-    ? (fixer): TSESLint.RuleFix => fixer.insertTextBefore(closing, added)
-    : (fixer): TSESLint.RuleFix => fixer.insertTextAfter(last, `, ${added}`);
+  if (last === undefined) {
+    return (fixer): TSESLint.RuleFix => fixer.insertTextBefore(closing, added);
+  }
+  return (fixer): TSESLint.RuleFix => fixer.insertTextAfter(last, `, ${added}`);
+}
+
+/** `signal` in shorthand when the value is a variable named `signal`. */
+function signalProperty(value: string): string {
+  if (value === 'signal') {
+    return 'signal';
+  }
+  return `signal: ${value}`;
+}
+
+function signalArgument(slot: Slot, value: string): string {
+  if (slot.kind === 'parameter') {
+    return value;
+  }
+  return `{ ${signalProperty(value)} }`;
 }
 
 function appendTo(
   container: TSESTree.Node,
   items: readonly (TSESTree.Node | null)[],
-  item: string,
-  alone: string,
+  { item, alone }: Appended,
 ): Fix | undefined {
   const last = items.at(-1);
   if (last === null) {
     return undefined;
   }
-  return last === undefined
-    ? (fixer): TSESLint.RuleFix => fixer.replaceText(container, alone)
-    : (fixer): TSESLint.RuleFix => fixer.insertTextAfter(last, `, ${item}`);
+  if (last === undefined) {
+    return (fixer): TSESLint.RuleFix => fixer.replaceText(container, alone);
+  }
+  return (fixer): TSESLint.RuleFix => fixer.insertTextAfter(last, `, ${item}`);
 }
 
 function isBound(context: Context, node: TSESTree.Node, name: string): boolean {

@@ -94,13 +94,21 @@ export const preferUsing = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
           messageId: 'releasedByHand',
           data: {
             name: variable.name,
-            keyword: symbols.includes('dispose') ? 'using' : 'await using',
+            keyword: usingKeyword(symbols),
           },
         });
       },
     };
   },
 });
+
+/** `using` when the value is synchronously disposable, else `await using`. */
+function usingKeyword(symbols: readonly string[]): string {
+  if (symbols.includes('dispose')) {
+    return 'using';
+  }
+  return 'await using';
+}
 
 function isRelease(statement: TSESTree.Statement): boolean {
   if (statement.type !== AST_NODE_TYPES.ExpressionStatement) {
@@ -139,15 +147,19 @@ function callIn(expression: TSESTree.Expression): TSESTree.CallExpression | unde
     } else if (current.type === AST_NODE_TYPES.ChainExpression) {
       current = current.expression;
     } else {
-      return current.type === AST_NODE_TYPES.CallExpression ? current : undefined;
+      if (current.type === AST_NODE_TYPES.CallExpression) {
+        return current;
+      }
+      return undefined;
     }
   }
 }
 
 function propertyName(member: TSESTree.MemberExpression): string | undefined {
-  return !member.computed && member.property.type === AST_NODE_TYPES.Identifier
-    ? member.property.name
-    : undefined;
+  if (!member.computed && member.property.type === AST_NODE_TYPES.Identifier) {
+    return member.property.name;
+  }
+  return undefined;
 }
 
 /** `x[Symbol.dispose]` or `x[Symbol.asyncDispose]`. */
@@ -170,7 +182,11 @@ function disposeSymbolsOf(checker: ts.TypeChecker, type: ts.Type): string[] {
   for (const property of properties) {
     const name = String(property.escapedName);
     if (disposeSymbolName.test(name)) {
-      found.add(name.startsWith('__@dispose@') ? 'dispose' : 'asyncDispose');
+      if (name.startsWith('__@dispose@')) {
+        found.add('dispose');
+      } else {
+        found.add('asyncDispose');
+      }
     }
   }
   return [...found];
@@ -236,5 +252,8 @@ function useOf(identifier: TSESTree.Identifier): 'reads' | 'frees' | 'escapes' {
     (name !== undefined &&
       (disposingMethods.has(name) ||
         (bareReleasingMethods.has(name) && call.arguments.length === 0)));
-  return isFreeing ? 'frees' : 'reads';
+  if (isFreeing) {
+    return 'frees';
+  }
+  return 'reads';
 }
