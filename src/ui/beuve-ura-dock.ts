@@ -25,6 +25,8 @@ import { parseInlineTitle } from './parse-inline-title.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
 export interface DockNotice {
@@ -72,6 +74,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
 @customElement('beuve-ura-dock')
 export class BeuveUraDock extends LitElement {
   static override styles = [
+    formatControlStyles,
     zoneStyles,
     css`
       :host {
@@ -598,7 +601,7 @@ export class BeuveUraDock extends LitElement {
     >
       <div class="meta">
         <span class="severity ${item.severity}">${labels.severity}</span>
-        <span class="anchor" title=${labels.anchor}><bdi>${labels.anchor}</bdi></span>
+        <span class="anchor" title=${labels.anchor}><bdi>${pathText(labels.anchor)}</bdi></span>
         ${
           labels.outdated === undefined
             ? nothing

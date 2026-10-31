@@ -9,6 +9,8 @@ import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { planPalette } from './plan-palette.ts';
 import type { PaletteEntry, PaletteSources } from './plan-palette.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 const leadingPrefix = /^\s*[>@#!]/u;
 
@@ -36,150 +38,153 @@ const placeholders: Readonly<Record<string, string>> = {
  */
 @customElement('beuve-command-palette')
 export class BeuveCommandPalette extends LitElement {
-  static override styles = css`
-    :host {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding-top: 12vh;
-      background: var(--beuve-scrim-soft);
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 12vh;
+        background: var(--beuve-scrim-soft);
+      }
 
-    .panel {
-      display: flex;
-      flex-direction: column;
-      width: min(640px, calc(100vw - 48px));
-      max-height: 70vh;
-      overflow: hidden;
-      border: 1px solid var(--beuve-border);
-      border-radius: 10px;
-      background: var(--beuve-surface);
-      box-shadow: 0 16px 48px #00000040;
-    }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        width: min(640px, calc(100vw - 48px));
+        max-height: 70vh;
+        overflow: hidden;
+        border: 1px solid var(--beuve-border);
+        border-radius: 10px;
+        background: var(--beuve-surface);
+        box-shadow: 0 16px 48px #00000040;
+      }
 
-    input {
-      flex: none;
-      padding: var(--beuve-space-3) var(--beuve-space-4);
-      border: none;
-      border-bottom: 1px solid var(--beuve-border);
-      background: none;
-      color: var(--beuve-text);
-      font: inherit;
-      font-size: 15px;
-      outline: none;
-    }
+      input {
+        flex: none;
+        padding: var(--beuve-space-3) var(--beuve-space-4);
+        border: none;
+        border-bottom: 1px solid var(--beuve-border);
+        background: none;
+        color: var(--beuve-text);
+        font: inherit;
+        font-size: 15px;
+        outline: none;
+      }
 
-    ol {
-      flex: 1;
-      min-height: 0;
-      margin: 0;
-      padding: var(--beuve-space-1) 0;
-      overflow: auto;
-      list-style: none;
-    }
+      ol {
+        flex: 1;
+        min-height: 0;
+        margin: 0;
+        padding: var(--beuve-space-1) 0;
+        overflow: auto;
+        list-style: none;
+      }
 
-    .group {
-      padding: var(--beuve-space-2) var(--beuve-space-4) 2px;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .group {
+        padding: var(--beuve-space-2) var(--beuve-space-4) 2px;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .entry {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-3);
-      margin: 0 var(--beuve-space-1);
-      padding: 5px var(--beuve-space-3);
-      border-radius: var(--beuve-radius);
-      cursor: pointer;
-    }
+      .entry {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-3);
+        margin: 0 var(--beuve-space-1);
+        padding: 5px var(--beuve-space-3);
+        border-radius: var(--beuve-radius);
+        cursor: pointer;
+      }
 
-    .entry[aria-selected='true'] {
-      background: var(--beuve-accent-soft);
-    }
+      .entry[aria-selected='true'] {
+        background: var(--beuve-accent-soft);
+      }
 
-    .title {
-      flex: none;
-      max-width: 70%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .title {
+        flex: none;
+        max-width: 70%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .title.path {
-      font: var(--beuve-font-mono);
-    }
+      .title.path {
+        font: var(--beuve-font-mono);
+      }
 
-    b {
-      font-weight: 600;
-      color: var(--beuve-accent);
-    }
+      b {
+        font-weight: 600;
+        color: var(--beuve-accent);
+      }
 
-    .detail {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .detail {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .keys {
-      flex: none;
-      display: flex;
-      gap: var(--beuve-space-1);
-    }
+      .keys {
+        flex: none;
+        display: flex;
+        gap: var(--beuve-space-1);
+      }
 
-    kbd {
-      padding: 0 5px;
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-      color: var(--beuve-text-muted);
-    }
+      kbd {
+        padding: 0 5px;
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        color: var(--beuve-text-muted);
+      }
 
-    .empty {
-      margin: 0;
-      padding: var(--beuve-space-4);
-      color: var(--beuve-text-muted);
-    }
+      .empty {
+        margin: 0;
+        padding: var(--beuve-space-4);
+        color: var(--beuve-text-muted);
+      }
 
-    footer {
-      flex: none;
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-1) var(--beuve-space-4);
-      padding: var(--beuve-space-2) var(--beuve-space-4);
-      border-top: 1px solid var(--beuve-border);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      footer {
+        flex: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-1) var(--beuve-space-4);
+        padding: var(--beuve-space-2) var(--beuve-space-4);
+        border-top: 1px solid var(--beuve-border);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    footer button {
-      padding: 0;
-      border: none;
-      background: none;
-      color: inherit;
-      font: inherit;
-      cursor: pointer;
-    }
+      footer button {
+        padding: 0;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
 
-    footer code {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-      color: var(--beuve-text);
-    }
+      footer code {
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        color: var(--beuve-text);
+      }
 
-    .spacer {
-      flex: 1;
-    }
-  `;
+      .spacer {
+        flex: 1;
+      }
+    `,
+  ];
 
   private entries: PaletteEntry[] = [];
 
@@ -286,7 +291,9 @@ export class BeuveCommandPalette extends LitElement {
       data-action="entry"
       data-index=${index}
     >
-      <span class="title ${isPath ? 'path' : ''}">${highlight(entry)}</span>
+      <span class="title ${isPath ? 'path' : ''}" title=${isPath ? entry.title : nothing}
+        >${highlight(entry)}</span
+      >
       <span class="detail">${entry.detail ?? ''}</span>
       ${
         entry.keys === undefined || entry.keys.length === 0
@@ -363,13 +370,19 @@ export class BeuveCommandPalette extends LitElement {
 }
 
 /** The title with matched characters in bold. */
+/**
+ * The entry's title with its matched characters in bold. A file's path shows its invisible and
+ * bidi characters as escapes (ADR 0082), one per character so the match indexes still line up.
+ */
 function highlight(entry: PaletteEntry): TemplateResult {
+  const show = (text: string): TemplateResult | string =>
+    entry.group === 'files' ? pathText(text) : text;
   if (entry.matches.length === 0) {
-    return html`${entry.title}`;
+    return html`${show(entry.title)}`;
   }
   const marked = new Set(entry.matches);
   return html`${Array.from(entry.title, (character, index) =>
-    marked.has(index) ? html`<b>${character}</b>` : character,
+    marked.has(index) ? html`<b>${show(character)}</b>` : show(character),
   )}`;
 }
 

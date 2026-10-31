@@ -1,4 +1,5 @@
 import type { EditorOpenResponse } from '#contract/ipc-contract.ts';
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 /** A status-bar message. */
 export interface StatusNotice {
@@ -11,7 +12,7 @@ export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {
   if (response.kind === 'failed') {
     return { tone: 'error', text: response.message };
   }
-  const where = `${response.path}:${String(response.line)}`;
+  const where = `${revealFormatControls(response.path)}:${String(response.line)}`;
   const copy =
     response.location === 'beuve-checkout'
       ? ' (beuve checkout of the reviewed head, not your working tree)'

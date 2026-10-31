@@ -1,3 +1,5 @@
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
+
 import { countUraSeverities } from './count-ura-severities.ts';
 import { escapeMarkdownHtml } from './escape-markdown-html.ts';
 import { fenceCodeBlock } from './fence-code-block.ts';
@@ -167,7 +169,7 @@ function location(
       return 'On the whole change.';
     }
     case 'file': {
-      return `On \`${anchor.path}\`.`;
+      return `On \`${revealFormatControls(anchor.path)}\`.`;
     }
     case 'lines': {
       const outside = ranges === undefined ? '' : " (outside the pull request's diff)";

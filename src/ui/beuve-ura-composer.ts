@@ -7,6 +7,8 @@ import type { UraSeverityView } from '#contract/ipc-contract.ts';
 import './beuve-patch-preview.ts';
 
 import { keyPlatformOf } from './key-platform-of.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /** What the composer submits: a new note's severity, one-line title and Markdown body. */
 export interface UraDraft {
@@ -26,109 +28,112 @@ const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 
  */
 @customElement('beuve-ura-composer')
 export class BeuveUraComposer extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      margin: var(--beuve-space-1) var(--beuve-space-3) var(--beuve-space-2);
-      white-space: normal;
-      font: var(--beuve-font-body);
-      color: var(--beuve-text);
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: block;
+        margin: var(--beuve-space-1) var(--beuve-space-3) var(--beuve-space-2);
+        white-space: normal;
+        font: var(--beuve-font-body);
+        color: var(--beuve-text);
+      }
 
-    form {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: var(--beuve-space-1);
-      padding: var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-left: 3px solid var(--beuve-accent);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface);
-    }
+      form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--beuve-space-1);
+        padding: var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-left: 3px solid var(--beuve-accent);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+      }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-    }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+      }
 
-    .where {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-      color: var(--beuve-text-muted);
-    }
+      .where {
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        color: var(--beuve-text-muted);
+      }
 
-    .spacer {
-      flex: 1;
-    }
+      .spacer {
+        flex: 1;
+      }
 
-    input,
-    textarea,
-    select {
-      box-sizing: border-box;
-      min-width: 0;
-      padding: var(--beuve-space-1) var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: inherit;
-    }
+      input,
+      textarea,
+      select {
+        box-sizing: border-box;
+        min-width: 0;
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: inherit;
+      }
 
-    input {
-      flex: 1;
-    }
+      input {
+        flex: 1;
+      }
 
-    textarea {
-      width: 100%;
-      min-height: 48px;
-      resize: vertical;
-      font: var(--beuve-font-mono);
-    }
+      textarea {
+        width: 100%;
+        min-height: 48px;
+        resize: vertical;
+        font: var(--beuve-font-mono);
+      }
 
-    input:focus,
-    textarea:focus,
-    select:focus {
-      border-color: var(--beuve-accent);
-      outline: none;
-    }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--beuve-accent);
+        outline: none;
+      }
 
-    button {
-      padding: 0 var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: var(--beuve-font-small);
-      cursor: pointer;
-    }
+      button {
+        padding: 0 var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-surface);
+        color: var(--beuve-text);
+        font: var(--beuve-font-small);
+        cursor: pointer;
+      }
 
-    button.primary {
-      border-color: var(--beuve-accent);
-      background: var(--beuve-accent);
-      color: #fff;
-    }
+      button.primary {
+        border-color: var(--beuve-accent);
+        background: var(--beuve-accent);
+        color: #fff;
+      }
 
-    .suggestion {
-      display: grid;
-      gap: 2px;
-    }
+      .suggestion {
+        display: grid;
+        gap: 2px;
+      }
 
-    .suggestion .label {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .suggestion .label {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .hint,
-    .error {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .hint,
+      .error {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .error {
-      color: var(--beuve-danger);
-    }
-  `;
+      .error {
+        color: var(--beuve-danger);
+      }
+    `,
+  ];
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     // Text entry is never a shortcut: nothing typed here reaches the stream or the shell.
@@ -235,7 +240,7 @@ export class BeuveUraComposer extends LitElement {
             </div>`
       }
       <div class="row">
-        <span class="where">${this.where}</span>
+        <span class="where">${pathText(this.where)}</span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
         <span class="spacer"></span>
         <button type="button" title="Cancel (Esc)" @click=${this.onCancel}>Cancel</button>

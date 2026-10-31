@@ -69,6 +69,7 @@ import type {
   RepositoryInspector,
 } from './beuve-open-panel.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { commandRegistry } from './command-registry.ts';
 import type { CommandDefinition } from './command-registry.ts';
@@ -2148,7 +2149,7 @@ export class BeuveApp extends LitElement {
     if (file === undefined) {
       this.note(
         'info',
-        `${mention.path} is not in this diff: the file is unchanged by the review.`,
+        `${revealFormatControls(mention.path)} is not in this diff: the file is unchanged by the review.`,
       );
       return;
     }
@@ -2174,7 +2175,7 @@ export class BeuveApp extends LitElement {
         startLine === endLine ? String(startLine) : `${String(startLine)}-${String(endLine)}`;
       this.note(
         'info',
-        `${path}:${lines} is not in this diff: the file is unchanged by the review.`,
+        `${revealFormatControls(path)}:${lines} is not in this diff: the file is unchanged by the review.`,
       );
       return;
     }

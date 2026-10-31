@@ -111,6 +111,19 @@ describe('buildGithubReview', () => {
     expect(review.comments[0]).not.toHaveProperty('start_line');
   });
 
+  test('shows a path’s bidi controls as escapes in the body, and keeps the inline path exact', ({
+    expect,
+  }) => {
+    const path = `invoice${character(0x20_2e)}gpj.ts`;
+    const onFile = buildGithubReview(withItem({ anchor: { kind: 'file', path } }));
+    expect(onFile.body).toContain('On `invoice⟨U+202E⟩gpj.ts`.');
+    expect(onFile.body).not.toContain(path);
+    const inline = buildGithubReview(
+      withItem({ anchor: { kind: 'lines', path, startLine: 10, endLine: 12 } }),
+    );
+    expect(inline.comments).toStrictEqual([expect.objectContaining({ path })]);
+  });
+
   test('posts an inline edit (every anchored line replaced, context around) as a ranged suggestion', ({
     expect,
   }) => {
@@ -179,3 +192,8 @@ describe('buildGithubReview', () => {
     );
   });
 });
+
+/** A character by code point, so this file holds none of the characters it tests. */
+function character(codePoint: number): string {
+  return String.fromCodePoint(codePoint);
+}

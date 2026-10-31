@@ -24,6 +24,8 @@ export interface HostileRepository {
   readonly peek: { readonly path: string; readonly line: number };
   /** A hostile-named file git does not quote, so a sheet can open it. */
   readonly sheet: string;
+  /** Names with bidi, control or invisible characters, which must show as escapes (ADR 0082). */
+  readonly spoofing: readonly string[];
 }
 
 /**
@@ -39,6 +41,7 @@ const hostileNames: readonly string[] = [
   '`${alert(1)}` javascript:alert(1).ts',
   'invoice\u{202E}gpj.ts',
   'line\nbreak\tand tab.ts',
+  'zero\u{200B}width\u{2066}isolate\u{2069}\u{200F}.ts',
   String.raw`back\slash "quoted".ts`,
   '&amp;&lt;b&gt; &#x3C;i>.ts',
   '<svg><use href=x.svg#y>.ts',
@@ -140,6 +143,11 @@ export async function createHostileRepository(
     contents: { path: contentsPath, line: firstTailLine + 1 },
     peek: { path: peekPath, line: 1 },
     sheet: "'><svg onload=alert(1)>.ts",
+    spoofing: [
+      'invoice\u{202E}gpj.ts',
+      'line\nbreak\tand tab.ts',
+      'zero\u{200B}width\u{2066}isolate\u{2069}\u{200F}.ts',
+    ],
   };
 }
 

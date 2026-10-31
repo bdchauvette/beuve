@@ -1,4 +1,5 @@
 import type { BeuveApi, PermalinkView, SheetRangeView } from '#contract/ipc-contract.ts';
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { StatusNotice } from './describe-editor-open.ts';
 import { lineFromTarget } from './line-from-target.ts';
@@ -96,7 +97,7 @@ async function open(context: SheetActionContext, place: SheetPlace): Promise<She
   });
   return opened.ok
     ? info(
-        `Opened ${place.path}${place.range === undefined ? '' : `:${String(place.range.startLine)}`} in a sheet.`,
+        `Opened ${revealFormatControls(place.path)}${place.range === undefined ? '' : `:${String(place.range.startLine)}`} in a sheet.`,
       )
     : { kind: 'notice', notice: { tone: 'error', text: opened.error.message } };
 }

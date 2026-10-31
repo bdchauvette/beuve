@@ -6,6 +6,8 @@ import type { CallHierarchyCallView, CallHierarchyNodeView } from '#contract/ipc
 
 import { ActionDelegation } from './action-delegation.ts';
 import type { PeekState } from './peek-state.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'External' };
 
@@ -16,156 +18,159 @@ const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'E
  */
 @customElement('beuve-peek-portal')
 export class BeuvePeekPortal extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      border-bottom: 1px solid var(--beuve-border);
-      background: var(--beuve-bg);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: block;
+        border-bottom: 1px solid var(--beuve-border);
+        background: var(--beuve-bg);
+        font: var(--beuve-font-small);
+      }
 
-    .close,
-    .again {
-      padding: 0 var(--beuve-space-1);
-      border: none;
-      background: none;
-      color: var(--beuve-text-muted);
-      font: inherit;
-      cursor: pointer;
-    }
+      .close,
+      .again {
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: inherit;
+        cursor: pointer;
+      }
 
-    .close {
-      font-size: 15px;
-      line-height: 1;
-    }
+      .close {
+        font-size: 15px;
+        line-height: 1;
+      }
 
-    .heading {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
-      color: var(--beuve-text-muted);
-    }
+      .heading {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+      }
 
-    .heading code {
-      font: var(--beuve-font-mono);
-      color: var(--beuve-text);
-    }
+      .heading code {
+        font: var(--beuve-font-mono);
+        color: var(--beuve-text);
+      }
 
-    .spacer {
-      flex: 1;
-    }
+      .spacer {
+        flex: 1;
+      }
 
-    ul {
-      margin: 0;
-      padding: 0 0 0 var(--beuve-space-4);
-      list-style: none;
-    }
+      ul {
+        margin: 0;
+        padding: 0 0 0 var(--beuve-space-4);
+        list-style: none;
+      }
 
-    .tree {
-      padding: 0 var(--beuve-space-3) var(--beuve-space-2) 0;
-    }
+      .tree {
+        padding: 0 var(--beuve-space-3) var(--beuve-space-2) 0;
+      }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-      width: 100%;
-      padding: 2px var(--beuve-space-1);
-      border: 0;
-      border-radius: 4px;
-      background: none;
-      color: var(--beuve-text);
-      font: var(--beuve-font-small);
-      text-align: left;
-      cursor: pointer;
-    }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        width: 100%;
+        padding: 2px var(--beuve-space-1);
+        border: 0;
+        border-radius: 4px;
+        background: none;
+        color: var(--beuve-text);
+        font: var(--beuve-font-small);
+        text-align: left;
+        cursor: pointer;
+      }
 
-    .row:hover,
-    .row:focus-visible {
-      background: var(--beuve-accent-soft);
-      outline: none;
-    }
+      .row:hover,
+      .row:focus-visible {
+        background: var(--beuve-accent-soft);
+        outline: none;
+      }
 
-    .twisty {
-      width: 1em;
-      color: var(--beuve-text-muted);
-    }
+      .twisty {
+        width: 1em;
+        color: var(--beuve-text-muted);
+      }
 
-    .name {
-      font: var(--beuve-font-mono);
-    }
+      .name {
+        font: var(--beuve-font-mono);
+      }
 
-    .where {
-      overflow: hidden;
-      color: var(--beuve-text-muted);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .where {
+        overflow: hidden;
+        color: var(--beuve-text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    li {
-      position: relative;
-    }
+      li {
+        position: relative;
+      }
 
-    li > .row {
-      padding-right: 52px;
-    }
+      li > .row {
+        padding-right: 52px;
+      }
 
-    .open {
-      position: absolute;
-      top: 2px;
-      right: 0;
-      padding: 0 var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-surface);
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-small);
-      cursor: pointer;
-      opacity: 0;
-    }
+      .open {
+        position: absolute;
+        top: 2px;
+        right: 0;
+        padding: 0 var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-surface);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+        cursor: pointer;
+        opacity: 0;
+      }
 
-    li:hover > .open,
-    .open:focus-visible {
-      opacity: 1;
-    }
+      li:hover > .open,
+      .open:focus-visible {
+        opacity: 1;
+      }
 
-    .badge {
-      margin-left: auto;
-      padding: 0 var(--beuve-space-1);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      color: var(--beuve-text-muted);
-    }
+      .badge {
+        margin-left: auto;
+        padding: 0 var(--beuve-space-1);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        color: var(--beuve-text-muted);
+      }
 
-    .badge.modified {
-      border-color: var(--beuve-warn);
-      color: var(--beuve-warn);
-    }
+      .badge.modified {
+        border-color: var(--beuve-warn);
+        color: var(--beuve-warn);
+      }
 
-    .badge.external {
-      border-style: dashed;
-    }
+      .badge.external {
+        border-style: dashed;
+      }
 
-    .note {
-      padding: 2px var(--beuve-space-1) 2px var(--beuve-space-6);
-      color: var(--beuve-text-muted);
-    }
+      .note {
+        padding: 2px var(--beuve-space-1) 2px var(--beuve-space-6);
+        color: var(--beuve-text-muted);
+      }
 
-    .note.error {
-      color: var(--beuve-danger);
-    }
+      .note.error {
+        color: var(--beuve-danger);
+      }
 
-    kbd {
-      padding: 0 var(--beuve-space-1);
-      border: 1px solid var(--beuve-border);
-      border-bottom-width: 2px;
-      border-radius: 4px;
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-mono);
-      font-size: 10px;
-    }
-  `;
+      kbd {
+        padding: 0 var(--beuve-space-1);
+        border: 1px solid var(--beuve-border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-mono);
+        font-size: 10px;
+      }
+    `,
+  ];
 
   /** The nodes the last render showed, by id, for the delegated actions to act on. */
   private readonly shownNodes = new Map<string, CallHierarchyNodeView>();
@@ -251,8 +256,8 @@ export class BeuvePeekPortal extends LitElement {
         data-node-id=${node.id}
       >
         <span class="twisty">${isOpen ? '▾' : '▸'}</span>
-        <span class="name">${node.name}</span>
-        <span class="where">${location(node, callSiteLines)}</span>
+        <span class="name">${pathText(node.name)}</span>
+        <span class="where">${pathText(location(node, callSiteLines))}</span>
         <span class="badge ${node.badge}">${badgeLabels[node.badge]}</span>
       </button>
       ${node.file.kind === 'workspace' ? this.renderOpen(node) : nothing}
@@ -326,7 +331,8 @@ export class BeuvePeekPortal extends LitElement {
       return html``;
     }
     this.shownNodes.clear();
-    const target = peek.status === 'ready' ? html`<code>${peek.root.name}</code>` : 'the change';
+    const target =
+      peek.status === 'ready' ? html`<code>${pathText(peek.root.name)}</code>` : 'the change';
     return html`
       <div class="heading" role="heading" aria-level="3">
         <span>Callers of ${target}</span>

@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 
 import { errorFrom } from '../src/x/error/error-from.ts';
+import { revealFormatControls } from '../src/x/text/reveal-format-controls.ts';
 import { timeoutSignal } from '../src/x/time/timeout-signal.ts';
 
 import { DevtoolsConnection } from './lib/devtools/devtools-connection.ts';
@@ -53,6 +54,9 @@ const violationRecorder = String.raw`document.addEventListener('securitypolicyvi
 const waitSeconds = 30;
 /** Everything of a page URL up to the build output, which says nothing. */
 const beforeDist = /^.*\/dist\//u;
+/** Characters that reorder text: a displayed path must hold none of them (ADR 0082). */
+// eslint-disable-next-line security/detect-unsafe-regex -- one character class and no quantifier: nothing to backtrack.
+const bidiControls = /[\u{61C}\u{200E}\u{200F}\u{202A}-\u{202E}\u{2066}-\u{2069}]/u;
 
 await checkHostileRender();
 
@@ -109,6 +113,8 @@ async function checkHostileRender(): Promise<void> {
     const main = await openMainWindow(devtools);
     console.log('hostile render: the diff stream, split and unified');
     await checkDiffStream(devtools, main, repository, findings, shoot);
+    console.log('hostile render: names with bidi and invisible characters');
+    await checkPathDisplay(devtools, main, repository, findings, shoot);
     console.log('hostile render: peek and an inline sheet');
     await checkPeekAndInlineSheet(devtools, main, repository, findings, shoot);
     console.log('hostile render: a sheet window');
@@ -254,8 +260,8 @@ async function checkDiffStream(
       }
       const text = String(await devtools.evaluate(main, `__hostileProbe.text(${card}.renderRoot)`));
       expectVisible(findings, `${view} card ${JSON.stringify(file.path)}`, text, [
-        file.path,
-        ...(file.oldPath === undefined ? [] : [file.oldPath]),
+        revealFormatControls(file.path),
+        ...(file.oldPath === undefined ? [] : [revealFormatControls(file.oldPath)]),
         ...file.lines,
       ]);
     }
@@ -266,6 +272,105 @@ async function checkDiffStream(
     await devtools.evaluate(main, `__hostileProbe.all('beuve-file-card')[0]?.scrollIntoView()`);
     await delay(300);
     await shoot(main, `stream-${view}-names`);
+  }
+}
+
+/**
+ * Every card header, the file tree and a sheet's title show each name's bidi, control and
+ * invisible characters as `⟨U+…⟩` escapes and hold no character that reorders text (ADR 0082).
+ */
+async function checkPathDisplay(
+  devtools: DevtoolsConnection,
+  main: string,
+  repository: HostileRepository,
+  findings: Findings,
+  shoot: (sessionId: string, name: string) => Promise<void>,
+): Promise<void> {
+  const app = "document.querySelector('beuve-app')";
+  for (const file of repository.files) {
+    const header = String(
+      await devtools.evaluate(
+        main,
+        `(${cardOf(file.path)})?.renderRoot.querySelector('.header .path')?.textContent ?? ''`,
+      ),
+    );
+    expectShown(findings, `card header ${JSON.stringify(file.path)}`, header, [
+      file.path,
+      ...(file.oldPath === undefined ? [] : [file.oldPath]),
+    ]);
+  }
+  const tree = "__hostileProbe.all('beuve-radar-tree')[0]";
+  for (const name of repository.spoofing) {
+    await devtools.evaluate(main, `${tree}?.revealPath(${JSON.stringify(name)})`);
+    await delay(200);
+    const names = String(await devtools.evaluate(main, treeNames(tree)));
+    const text = String(
+      await devtools.evaluate(
+        main,
+        `__hostileProbe.text(${tree}?.renderRoot ?? document.createElement('i'))`,
+      ),
+    );
+    expectShown(findings, `file tree ${JSON.stringify(name)}`, `${names}\n${text}`, [name]);
+  }
+  const [spoofing] = repository.spoofing;
+  await devtools.evaluate(main, `(${cardOf(spoofing ?? '')})?.scrollIntoView()`);
+  await delay(300);
+  await shoot(main, 'names-tree-and-header');
+  await devtools.evaluate(main, `${app}.runCommandId('sheets-inline')`);
+  await delay(300);
+  await devtools.evaluate(
+    main,
+    `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(spoofing)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
+  );
+  const sheet = "__hostileProbe.all('beuve-sheet-view')[0]";
+  const title =
+    (await eventually(
+      devtools,
+      main,
+      `${sheet}?.renderRoot?.querySelector('header .title')?.textContent.includes('gpj')
+        && ${sheet}.renderRoot.querySelector('header .title').textContent`,
+    )) ?? '';
+  expectShown(findings, 'sheet title', typeof title === 'string' ? title : '', [spoofing ?? '']);
+  if (
+    (await eventually(
+      devtools,
+      main,
+      `${sheet} && __hostileProbe.rows(${sheet}.renderRoot) > 0`,
+    )) === undefined
+  ) {
+    const shown = await devtools.evaluate(main, `__hostileProbe.text(${sheet}.renderRoot)`);
+    findings.failures.push(
+      `sheet of ${JSON.stringify(spoofing)} rendered no rows: ${String(shown)}`,
+    );
+  }
+  await shoot(main, 'names-sheet');
+}
+
+/**
+ * The names the tree's rows show, one per line. `@pierre/trees` splits a name at its extension
+ * and renders each part twice (shown and overflow), so plain text would not hold it whole.
+ */
+function treeNames(tree: string): string {
+  return `__hostileProbe.all('[data-item-section="content"]', ${tree}?.renderRoot ?? document.createElement('i'))
+    .map((content) => [...content.querySelectorAll('[data-truncate-content="visible"]')].map((part) => part.textContent).join(''))
+    .join(String.fromCharCode(10))`;
+}
+
+/** `text` shows each of `names` with its escapes, and nothing in it reorders text. */
+function expectShown(
+  findings: Findings,
+  where: string,
+  text: string,
+  names: readonly string[],
+): void {
+  expectVisible(
+    findings,
+    where,
+    text,
+    names.map((name) => revealFormatControls(name)),
+  );
+  if (bidiControls.test(text)) {
+    findings.failures.push(`${where}: shows a bidi control: ${JSON.stringify(text)}`);
   }
 }
 

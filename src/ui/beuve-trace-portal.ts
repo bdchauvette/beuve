@@ -12,6 +12,8 @@ import { planTraceTimeline } from './plan-trace-timeline.ts';
 import type { TraceCase, TraceRow } from './plan-trace-timeline.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import type { TraceState } from './trace-state.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /** Detail of `trace-line-activate`: the head line of the step the reviewer chose. */
 export interface TraceLineActivateDetail {
@@ -27,287 +29,290 @@ export interface TraceLineActivateDetail {
  */
 @customElement('beuve-trace-portal')
 export class BeuveTracePortal extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      border-bottom: 1px solid var(--beuve-border);
-      background: var(--beuve-bg);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: block;
+        border-bottom: 1px solid var(--beuve-border);
+        background: var(--beuve-bg);
+        font: var(--beuve-font-small);
+      }
 
-    .close,
-    .again {
-      padding: 0 var(--beuve-space-1);
-      border: none;
-      background: none;
-      color: var(--beuve-text-muted);
-      font: inherit;
-      cursor: pointer;
-    }
+      .close,
+      .again {
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: inherit;
+        cursor: pointer;
+      }
 
-    .close {
-      font-size: 15px;
-      line-height: 1;
-    }
+      .close {
+        font-size: 15px;
+        line-height: 1;
+      }
 
-    .heading {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
-      color: var(--beuve-text-muted);
-    }
+      .heading {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+      }
 
-    .heading .spacer {
-      flex: 1;
-    }
+      .heading .spacer {
+        flex: 1;
+      }
 
-    .summary {
-      margin: 0;
-      padding: 0 var(--beuve-space-3) var(--beuve-space-2);
-      color: var(--beuve-text-muted);
-    }
+      .summary {
+        margin: 0;
+        padding: 0 var(--beuve-space-3) var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+      }
 
-    .note {
-      margin: 0;
-      padding: 2px var(--beuve-space-3) var(--beuve-space-2);
-      color: var(--beuve-text-muted);
-    }
+      .note {
+        margin: 0;
+        padding: 2px var(--beuve-space-3) var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+      }
 
-    .note.error,
-    .note.fail {
-      color: var(--beuve-danger);
-    }
+      .note.error,
+      .note.fail {
+        color: var(--beuve-danger);
+      }
 
-    .files {
-      margin: 0;
-      padding: 0 var(--beuve-space-3) var(--beuve-space-2);
-      list-style: none;
-      font: var(--beuve-font-mono);
-      color: var(--beuve-text-muted);
-    }
+      .files {
+        margin: 0;
+        padding: 0 var(--beuve-space-3) var(--beuve-space-2);
+        list-style: none;
+        font: var(--beuve-font-mono);
+        color: var(--beuve-text-muted);
+      }
 
-    .scroll {
-      max-height: 50vh;
-      overflow: auto;
-      padding-bottom: var(--beuve-space-2);
-    }
+      .scroll {
+        max-height: 50vh;
+        overflow: auto;
+        padding-bottom: var(--beuve-space-2);
+      }
 
-    section.case {
-      padding-top: var(--beuve-space-2);
-    }
+      section.case {
+        padding-top: var(--beuve-space-2);
+      }
 
-    .case-head {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      padding: 0 var(--beuve-space-3) var(--beuve-space-1);
-    }
+      .case-head {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: 0 var(--beuve-space-3) var(--beuve-space-1);
+      }
 
-    .case-title {
-      font-weight: 600;
-      color: var(--beuve-text);
-    }
+      .case-title {
+        font-weight: 600;
+        color: var(--beuve-text);
+      }
 
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--beuve-space-1);
-      color: var(--beuve-text-muted);
-    }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+      }
 
-    .status::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--beuve-text-muted);
-    }
+      .status::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--beuve-text-muted);
+      }
 
-    .status.passed::before {
-      background: var(--beuve-ok);
-    }
+      .status.passed::before {
+        background: var(--beuve-ok);
+      }
 
-    .status.failed {
-      color: var(--beuve-danger);
-    }
+      .status.failed {
+        color: var(--beuve-danger);
+      }
 
-    .status.failed::before {
-      background: var(--beuve-danger);
-    }
+      .status.failed::before {
+        background: var(--beuve-danger);
+      }
 
-    .duration {
-      color: var(--beuve-text-muted);
-    }
+      .duration {
+        color: var(--beuve-text-muted);
+      }
 
-    .failure {
-      margin: 0;
-      padding: 0 var(--beuve-space-3) var(--beuve-space-1);
-      color: var(--beuve-danger);
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-    }
+      .failure {
+        margin: 0;
+        padding: 0 var(--beuve-space-3) var(--beuve-space-1);
+        color: var(--beuve-danger);
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+      }
 
-    .quiet {
-      margin: 0;
-      padding: 0 var(--beuve-space-3);
-      color: var(--beuve-text-muted);
-    }
+      .quiet {
+        margin: 0;
+        padding: 0 var(--beuve-space-3);
+        color: var(--beuve-text-muted);
+      }
 
-    ol {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
+      ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
 
-    .row {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      width: 100%;
-      box-sizing: border-box;
-      padding: 1px var(--beuve-space-3);
-      border: 0;
-      border-left: 2px solid transparent;
-      background: transparent;
-      color: var(--beuve-text);
-      font: var(--beuve-font-mono);
-      text-align: left;
-      cursor: pointer;
-    }
+      .row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        width: 100%;
+        box-sizing: border-box;
+        padding: 1px var(--beuve-space-3);
+        border: 0;
+        border-left: 2px solid transparent;
+        background: transparent;
+        color: var(--beuve-text);
+        font: var(--beuve-font-mono);
+        text-align: left;
+        cursor: pointer;
+      }
 
-    .row:hover {
-      background: var(--beuve-surface-sunken);
-    }
+      .row:hover {
+        background: var(--beuve-surface-sunken);
+      }
 
-    .row:focus-visible {
-      outline: 1px solid var(--beuve-accent);
-      outline-offset: -1px;
-    }
+      .row:focus-visible {
+        outline: 1px solid var(--beuve-accent);
+        outline-offset: -1px;
+      }
 
-    .row.in-hunk {
-      border-left-color: var(--beuve-accent);
-      background: var(--beuve-accent-soft);
-    }
+      .row.in-hunk {
+        border-left-color: var(--beuve-accent);
+        background: var(--beuve-accent-soft);
+      }
 
-    .line {
-      flex: none;
-      min-width: 4ch;
-      text-align: right;
-      color: var(--beuve-text-muted);
-    }
+      .line {
+        flex: none;
+        min-width: 4ch;
+        text-align: right;
+        color: var(--beuve-text-muted);
+      }
 
-    .in-hunk .line {
-      color: var(--beuve-accent);
-      font-weight: 600;
-    }
+      .in-hunk .line {
+        color: var(--beuve-accent);
+        font-weight: 600;
+      }
 
-    .row:hover .line {
-      text-decoration: underline;
-    }
+      .row:hover .line {
+        text-decoration: underline;
+      }
 
-    .indent {
-      flex: none;
-      width: calc(var(--depth) * 14px);
-    }
+      .indent {
+        flex: none;
+        width: calc(var(--depth) * 14px);
+      }
 
-    .tag {
-      flex: none;
-      min-width: 5ch;
-      color: var(--beuve-text-muted);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+      .tag {
+        flex: none;
+        min-width: 5ch;
+        color: var(--beuve-text-muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
 
-    .in-hunk .tag {
-      color: var(--beuve-accent);
-    }
+      .in-hunk .tag {
+        color: var(--beuve-accent);
+      }
 
-    .text {
-      flex: 0 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .text {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .result {
-      flex: none;
-      color: var(--beuve-text-muted);
-      white-space: nowrap;
-    }
+      .result {
+        flex: none;
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
 
-    .result.taken {
-      color: var(--beuve-ok);
-    }
+      .result.taken {
+        color: var(--beuve-ok);
+      }
 
-    .result.danger,
-    .row.danger .text {
-      color: var(--beuve-danger);
-    }
+      .result.danger,
+      .row.danger .text {
+        color: var(--beuve-danger);
+      }
 
-    .prompt {
-      margin: 0 var(--beuve-space-3) var(--beuve-space-3);
-      padding: var(--beuve-space-3);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface);
-      font: var(--beuve-font-body);
-    }
+      .prompt {
+        margin: 0 var(--beuve-space-3) var(--beuve-space-3);
+        padding: var(--beuve-space-3);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+        font: var(--beuve-font-body);
+      }
 
-    .prompt h4 {
-      margin: 0 0 var(--beuve-space-1);
-      font-size: 13px;
-    }
+      .prompt h4 {
+        margin: 0 0 var(--beuve-space-1);
+        font-size: 13px;
+      }
 
-    .prompt p {
-      margin: 0 0 var(--beuve-space-2);
-      color: var(--beuve-text-muted);
-    }
+      .prompt p {
+        margin: 0 0 var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+      }
 
-    .prompt code {
-      font: var(--beuve-font-mono);
-      color: var(--beuve-text);
-    }
+      .prompt code {
+        font: var(--beuve-font-mono);
+        color: var(--beuve-text);
+      }
 
-    .actions {
-      display: flex;
-      gap: var(--beuve-space-2);
-      margin-top: var(--beuve-space-3);
-    }
+      .actions {
+        display: flex;
+        gap: var(--beuve-space-2);
+        margin-top: var(--beuve-space-3);
+      }
 
-    button.action {
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: inherit;
-      cursor: pointer;
-    }
+      button.action {
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+        color: var(--beuve-text);
+        font: inherit;
+        cursor: pointer;
+      }
 
-    button.action.primary {
-      border-color: var(--beuve-accent);
-      background: var(--beuve-accent);
-      color: #fff;
-    }
+      button.action.primary {
+        border-color: var(--beuve-accent);
+        background: var(--beuve-accent);
+        color: #fff;
+      }
 
-    button.action:focus-visible {
-      outline: 2px solid var(--beuve-accent);
-      outline-offset: 2px;
-    }
+      button.action:focus-visible {
+        outline: 2px solid var(--beuve-accent);
+        outline-offset: 2px;
+      }
 
-    kbd {
-      padding: 0 var(--beuve-space-1);
-      border: 1px solid var(--beuve-border);
-      border-bottom-width: 2px;
-      border-radius: 4px;
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-mono);
-      font-size: 10px;
-    }
-  `;
+      kbd {
+        padding: 0 var(--beuve-space-1);
+        border: 1px solid var(--beuve-border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-mono);
+        font-size: 10px;
+      }
+    `,
+  ];
 
   private cases: readonly TraceCase[] = [];
   private casesFor: TraceResultView | undefined;
@@ -450,8 +455,8 @@ export class BeuveTracePortal extends LitElement {
         with your user's access to files and network. Only continue for code you trust.
       </p>
       <p>
-        ${repositoryPath === '' ? 'This repository' : html`<code>${repositoryPath}</code>`} is
-        remembered once you agree; <code>/untrust</code> in the chat withdraws it.
+        ${repositoryPath === '' ? 'This repository' : html`<code>${pathText(repositoryPath)}</code>`}
+        is remembered once you agree; <code>/untrust</code> in the chat withdraws it.
       </p>
       <div class="actions">
         <button
@@ -491,7 +496,7 @@ export class BeuveTracePortal extends LitElement {
             trace.testFiles === undefined
               ? nothing
               : html`<ul class="files">
-                  ${trace.testFiles.map((file) => html`<li>${file}</li>`)}
+                  ${trace.testFiles.map((file) => html`<li>${pathText(file)}</li>`)}
                 </ul>`
           }`;
       }

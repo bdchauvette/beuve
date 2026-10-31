@@ -11,6 +11,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import './beuve-sheet-code.ts';
 import type { BeuveSheetCode, SheetSelectDetail, SheetTokenDetail } from './beuve-sheet-code.ts';
@@ -20,6 +21,8 @@ import { sheetRequestFrom } from './sheet-request-from.ts';
 import { sheetTitleFrom } from './sheet-title-from.ts';
 import { stepSheetHistory } from './step-sheet-history.ts';
 import type { SheetHistory, SheetPlace } from './step-sheet-history.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /** Where a sheet lives: its own window, or the overlay in the main window (`/sheets inline`). */
 export type SheetMode = 'window' | 'inline';
@@ -46,132 +49,135 @@ interface FindState {
  */
 @customElement('beuve-sheet-view')
 export class BeuveSheetView extends LitElement {
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 0;
-      background: var(--beuve-code-bg);
-      color: var(--beuve-code-text);
-      outline: none;
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        background: var(--beuve-code-bg);
+        color: var(--beuve-code-text);
+        outline: none;
+      }
 
-    header {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-      border-bottom: 1px solid var(--beuve-border);
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: var(--beuve-font-small);
-      -webkit-app-region: drag;
-    }
+      header {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border-bottom: 1px solid var(--beuve-border);
+        background: var(--beuve-surface);
+        color: var(--beuve-text);
+        font: var(--beuve-font-small);
+        -webkit-app-region: drag;
+      }
 
-    header > * {
-      -webkit-app-region: no-drag;
-    }
+      header > * {
+        -webkit-app-region: no-drag;
+      }
 
-    .title {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font: var(--beuve-font-mono);
-      -webkit-app-region: drag;
-    }
+      .title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: var(--beuve-font-mono);
+        -webkit-app-region: drag;
+      }
 
-    .stamp {
-      color: var(--beuve-text-muted);
-      white-space: nowrap;
-    }
+      .stamp {
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
 
-    button {
-      padding: 1px var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: inherit;
-      cursor: pointer;
-    }
+      button {
+        padding: 1px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-surface);
+        color: var(--beuve-text);
+        font: inherit;
+        cursor: pointer;
+      }
 
-    button:disabled {
-      color: var(--beuve-text-muted);
-      cursor: default;
-    }
+      button:disabled {
+        color: var(--beuve-text-muted);
+        cursor: default;
+      }
 
-    button:not(:disabled):hover,
-    button:focus-visible {
-      border-color: var(--beuve-accent);
-      outline: none;
-    }
+      button:not(:disabled):hover,
+      button:focus-visible {
+        border-color: var(--beuve-accent);
+        outline: none;
+      }
 
-    .find {
-      display: flex;
-      gap: var(--beuve-space-2);
-      align-items: center;
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-      border-bottom: 1px solid var(--beuve-border);
-      background: var(--beuve-surface-sunken);
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-small);
-    }
+      .find {
+        display: flex;
+        gap: var(--beuve-space-2);
+        align-items: center;
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+        border-bottom: 1px solid var(--beuve-border);
+        background: var(--beuve-surface-sunken);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+      }
 
-    .find input {
-      flex: 1;
-      max-width: 320px;
-      padding: 2px var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 4px;
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: var(--beuve-font-mono);
-    }
+      .find input {
+        flex: 1;
+        max-width: 320px;
+        padding: 2px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 4px;
+        background: var(--beuve-surface);
+        color: var(--beuve-text);
+        font: var(--beuve-font-mono);
+      }
 
-    .body {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
-    }
+      .body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
 
-    .note {
-      margin: 0;
-      padding: var(--beuve-space-4);
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-body);
-    }
+      .note {
+        margin: 0;
+        padding: var(--beuve-space-4);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-body);
+      }
 
-    footer {
-      display: flex;
-      gap: var(--beuve-space-3);
-      padding: 3px var(--beuve-space-3);
-      border-top: 1px solid var(--beuve-border);
-      background: var(--beuve-surface);
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-small);
-    }
+      footer {
+        display: flex;
+        gap: var(--beuve-space-3);
+        padding: 3px var(--beuve-space-3);
+        border-top: 1px solid var(--beuve-border);
+        background: var(--beuve-surface);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+      }
 
-    footer .notice {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--beuve-text);
-    }
+      footer .notice {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--beuve-text);
+      }
 
-    footer .notice.error {
-      color: var(--beuve-danger);
-    }
+      footer .notice.error {
+        color: var(--beuve-danger);
+      }
 
-    kbd {
-      font: var(--beuve-font-mono);
-      font-size: 10.5px;
-    }
-  `;
+      kbd {
+        font: var(--beuve-font-mono);
+        font-size: 10.5px;
+      }
+    `,
+  ];
 
   /** The session head when the sheet was printed, from its first read. */
   private printedHead: string | undefined;
@@ -686,7 +692,7 @@ export class BeuveSheetView extends LitElement {
     const line = this.cursor?.start ?? place?.range?.startLine;
     const title = place === undefined ? '' : sheetTitleFrom(place.path, this.sha, line);
     if (title !== '' && this.mode === 'window') {
-      document.title = title;
+      document.title = revealFormatControls(title);
     }
     const { index, places } = this.history;
     return html`
@@ -713,7 +719,7 @@ export class BeuveSheetView extends LitElement {
         >
           →
         </button>
-        <span class="title" title=${`${place?.path ?? ''} at ${this.sha}`}>${title}</span>
+        <span class="title" title=${`${place?.path ?? ''} at ${this.sha}`}>${pathText(title)}</span>
         <span class="stamp">printed ${this.printedAt}</span>
         <button
           type="button"

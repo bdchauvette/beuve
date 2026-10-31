@@ -1,3 +1,5 @@
+import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
+
 import type { ReviewComment, ReviewPayload } from './review-payload.ts';
 
 /**
@@ -13,7 +15,9 @@ export function moveCommentsToBody(
   const moved: string[] = [];
   for (const [index, comment] of payload.comments.entries()) {
     if (shouldMove(comment, index)) {
-      moved.push(`**\`${comment.path}\`, ${formatLines(comment)}**\n\n${comment.body}`);
+      moved.push(
+        `**\`${revealFormatControls(comment.path)}\`, ${formatLines(comment)}**\n\n${comment.body}`,
+      );
     } else {
       kept.push(comment);
     }

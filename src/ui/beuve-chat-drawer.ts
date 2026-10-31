@@ -38,6 +38,8 @@ import { snippetPathFrom } from './snippet-path-from.ts';
 import { textPartStream } from './text-part-stream.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import { zoneStyles } from './zone-styles.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /** Questions carry at most this many mentions (ADR 0046); main refuses more. */
 const maxMentions = 8;
@@ -64,6 +66,7 @@ const maxMentions = 8;
 @customElement('beuve-chat-drawer')
 export class BeuveChatDrawer extends LitElement {
   static override styles = [
+    formatControlStyles,
     zoneStyles,
     css`
       :host {
@@ -818,7 +821,7 @@ export class BeuveChatDrawer extends LitElement {
     chip.className = 'chip';
     chip.contentEditable = 'false';
     chip.dataset['side'] = mention.side;
-    chip.textContent = label;
+    render(pathText(label), chip);
     chip.title = `${title}. Click to show it; Backspace removes it.`;
     this.chipMentions.set(chip, mention);
     return chip;
@@ -1280,7 +1283,7 @@ export class BeuveChatDrawer extends LitElement {
       data-side=${mention.side}
       title="${title} (show it)"
     >
-      ${label}
+      ${pathText(label)}
     </button>`;
   }
 
@@ -1391,7 +1394,7 @@ export class BeuveChatDrawer extends LitElement {
       data-end=${citation.endLine}
       title=${isOutside ? `${title} (not in this diff)` : `${title} (show in the diff)`}
     >
-      ${label}
+      ${pathText(label)}
     </button>`;
   }
 
