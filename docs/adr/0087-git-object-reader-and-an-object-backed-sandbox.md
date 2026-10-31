@@ -70,7 +70,19 @@ A `/review` whose review and verify models differ leases if either needs it. The
 
 ## Consequences
 
-- Single-object reads and ref lookups cost a pipe round trip instead of a spawn, and main's thread no longer blocks in `fork` for them (measurements in the task #30 report). A new long-lived process type exists, with its own failure modes, kept to the restart rules above and covered by hold-until-signal and crashing-wrapper tests (`git-object-reader.test.ts`).
+- Single-object reads and ref lookups cost a pipe round trip instead of a spawn, and main's thread no longer blocks in `fork` for them. Measured on the 18.7k-file benchmark repository (326 changed files, Linux, two runs each, against `main` with ADR 0081's caches):
+
+  | Scenario                                     | Before                                        | After                          |
+  | -------------------------------------------- | --------------------------------------------- | ------------------------------ |
+  | Large review: spawns                         | 212                                           | 20, plus 2,496 reader requests |
+  | Large review: main thread blocked in spawn   | 1.13–1.20 s                                   | 0.10 s                         |
+  | `getFilePair` ×10 (hunk expansion)           | 270–308 ms, 40 spawns                         | 9–10 ms, none                  |
+  | Sheets ×3                                    | 341–411 ms, 47 spawns                         | 46–50 ms, 3 spawns             |
+  | LSP peek ×3                                  | 136–157 ms, 15 spawns                         | 31 ms, none                    |
+  | Chat `/review`, OpenAI-compatible with tools | 7.7 s, 13 spawns (3.7 s of it `worktree add`) | 2.2 s, 7 spawns, no checkout   |
+
+  A new long-lived process type exists, with its own failure modes, kept to the restart rules above and covered by hold-until-signal and crashing-wrapper tests (`git-object-reader.test.ts`).
+
 - Head-of-line blocking: one reader per root is serial, so a large blob read delays the reads behind it; `read`'s cap and `info` first bound it.
 - Not verified: the reftable ref backend (git 2.45+) through a long-lived process. Loose refs, packed refs, deletions, new objects and repacks were verified to stay fresh.
 - A long-lived reader keeps file descriptors on packs gc deleted until it idles out.
