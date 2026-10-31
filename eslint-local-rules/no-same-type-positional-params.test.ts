@@ -42,12 +42,18 @@ createTypedRuleTester().run('no-same-type-positional-params', noSameTypePosition
     'declare const xs: string[]; xs.map((p: string, q: string): string => p + q);',
     'new Promise((resolve: (v: string) => void, reject: (v: string) => void) => { resolve(""); reject(""); });',
     'interface I { m(left: string, right: string): void }\nclass A implements I { m(source: string, target: string): void {} }',
+    'interface I { m(left: string, right: string): void }\ninterface J { n(): void }\nclass A implements J, I { m(source: string, target: string): void {} n(): void {} }',
     'class B { m(left: string, right: string): void {} }\nclass A extends B { override m(source: string, target: string): void {} }',
     'abstract class B { abstract m(source: string, target: string): void; }\nclass A extends B { override m(source: string, target: string): void {} }',
     'function f(source: string, target: string): void;\nfunction f(source: string, target: string, extra: number): void;\nfunction f(source: string, target: string, extra?: number): void {}',
     'class A { m(source: string, target: string): void; m(source: string, target: string, n?: number): void {} }',
     'interface I { m(source: string, target: string): void; m(source: string): void }',
     'declare function f(source: string, target: string): void;\ndeclare function f(source: number): void;',
+    {
+      code: 'interface I { m(input: string, type: string, sink: string): string }',
+      filename: 'ambient.d.ts',
+      name: 'a declaration file describes an API someone else defined',
+    },
   ],
   invalid: [
     {
@@ -103,6 +109,11 @@ createTypedRuleTester().run('no-same-type-positional-params', noSameTypePosition
       code: 'interface I { implements: string }\nclass A implements I { implements = ""; constructor(from: string, to: string) {} }',
       errors: [{ messageId: 'sameTypeParams' }],
       name: 'a constructor is not dictated by implements',
+    },
+    {
+      code: 'interface I { m(): void }\nclass A implements I { m(): void {} n(source: string, target: string): void {} }',
+      errors: [{ messageId: 'sameTypeParams' }],
+      name: 'implements exempts only the methods the interface declares',
     },
     {
       code: 'class A { m(first: string, second: string, third: number): void {} }',

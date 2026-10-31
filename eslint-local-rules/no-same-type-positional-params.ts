@@ -1,5 +1,5 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
-import type { TSESTree } from '@typescript-eslint/utils';
+import type { ParserServicesWithTypeInformation, TSESTree } from '@typescript-eslint/utils';
 import type ts from 'typescript';
 
 import type { SignatureNode } from './no-inline-object-type-in-signature.ts';
@@ -41,7 +41,8 @@ const signatureSelector = [
  * Two positional parameters of the same type are easy to swap and the compiler can't tell. Pass an
  * options object, or give the type a brand. Exactly two parameters whose names form an allowlisted
  * pair (`a`/`b`, `left`/`right`, `actual`/`expected`, …) are fine, as are callbacks passed
- * straight to a call, methods that implement or override, and overloads. Type-aware.
+ * straight to a call, methods that implement or override, overloads, and declaration files (which
+ * describe an API someone else defined). Type-aware.
  */
 export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
   meta: {
@@ -66,6 +67,9 @@ export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Op
     },
   },
   create(context, [options]) {
+    if (context.filename.endsWith('.d.ts')) {
+      return {};
+    }
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
     const pairs = (options.allowedPairs ?? defaultPairs).map(([first, second]) => {
@@ -74,7 +78,7 @@ export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Op
 
     const firstDuplicateGroup = (
       parameters: readonly TSESTree.Parameter[],
-    ): { readonly type: ts.Type; readonly members: TSESTree.Parameter[] } | undefined => {
+    ): DuplicateGroup | undefined => {
       const groups = new Map<ts.Type, TSESTree.Parameter[]>();
       for (const parameter of parameters) {
         const type = checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(parameter));
@@ -92,7 +96,7 @@ export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Op
     return {
       [signatureSelector](node: SignatureNode): void {
         const parameters = node.params.filter((parameter) => isPositional(parameter));
-        if (parameters.length < 2 || isExempt(node)) {
+        if (parameters.length < 2 || isExempt(node, services)) {
           return;
         }
         const group = firstDuplicateGroup(parameters);
@@ -116,6 +120,12 @@ export const noSameTypePositionalParams = ESLintUtils.RuleCreator.withoutDocs<Op
   },
 });
 
+/** Parameters that share one type. */
+interface DuplicateGroup {
+  readonly type: ts.Type;
+  readonly members: TSESTree.Parameter[];
+}
+
 function normalized(name: string): string {
   return name.toLowerCase().replace(leadingUnderscore, '');
 }
@@ -138,7 +148,10 @@ function nameOf(start: TSESTree.Parameter): string | undefined {
       break;
     }
   }
-  return parameter.type === AST_NODE_TYPES.Identifier ? parameter.name : undefined;
+  if (parameter.type === AST_NODE_TYPES.Identifier) {
+    return parameter.name;
+  }
+  return undefined;
 }
 
 function isAllowedPair(
@@ -156,8 +169,8 @@ function isAllowedPair(
   });
 }
 
-function isExempt(node: SignatureNode): boolean {
-  return isCallArgument(node) || isDictatedMethod(node) || isOverloadRelated(node);
+function isExempt(node: SignatureNode, services: ParserServicesWithTypeInformation): boolean {
+  return isCallArgument(node) || isDictatedMethod(node, services) || isOverloadRelated(node);
 }
 
 function isCallArgument(node: SignatureNode): boolean {
@@ -169,7 +182,11 @@ function isCallArgument(node: SignatureNode): boolean {
   );
 }
 
-function isDictatedMethod(node: SignatureNode): boolean {
+/** An `override`, or a method one of the class's `implements` interfaces declares. */
+function isDictatedMethod(
+  node: SignatureNode,
+  services: ParserServicesWithTypeInformation,
+): boolean {
   const method = node.parent;
   if (
     method.type !== AST_NODE_TYPES.MethodDefinition &&
@@ -180,9 +197,19 @@ function isDictatedMethod(node: SignatureNode): boolean {
   if (method.override) {
     return true;
   }
-  const isConstructor = method.kind === 'constructor';
-  const klass = method.parent.parent;
-  return !isConstructor && klass.implements.length > 0;
+  if (method.kind === 'constructor') {
+    return false;
+  }
+  const checker = services.program.getTypeChecker();
+  const key = services.esTreeNodeToTSNodeMap.get(method.key);
+  const name = checker.getSymbolAtLocation(key)?.escapedName;
+  if (name === undefined) {
+    return false;
+  }
+  return method.parent.parent.implements.some((heritage) => {
+    const type = checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(heritage));
+    return checker.getPropertiesOfType(type).some((property) => property.escapedName === name);
+  });
 }
 
 function isOverloadRelated(node: SignatureNode): boolean {
@@ -216,10 +243,13 @@ function isOverloadedDeclaration(
     return false;
   }
   const siblings = siblingsOf(node).map((sibling) => {
-    return sibling.type === AST_NODE_TYPES.ExportNamedDeclaration ||
+    if (
+      sibling.type === AST_NODE_TYPES.ExportNamedDeclaration ||
       sibling.type === AST_NODE_TYPES.ExportDefaultDeclaration
-      ? sibling.declaration
-      : sibling;
+    ) {
+      return sibling.declaration;
+    }
+    return sibling;
   });
   const sameName = siblings.filter((sibling) => {
     return (
@@ -254,9 +284,10 @@ function isOverloadedMethod(node: TSESTree.FunctionExpression): boolean {
 function methodName(
   member: TSESTree.MethodDefinition | TSESTree.TSAbstractMethodDefinition,
 ): string | undefined {
-  return member.key.type === AST_NODE_TYPES.Identifier && !member.computed
-    ? member.key.name
-    : undefined;
+  if (member.key.type === AST_NODE_TYPES.Identifier && !member.computed) {
+    return member.key.name;
+  }
+  return undefined;
 }
 
 function siblingsOf(node: TSESTree.Node): readonly TSESTree.Node[] {

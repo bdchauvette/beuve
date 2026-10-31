@@ -9,5 +9,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["file.ts"]
+  "include": ["file.ts", "ambient.d.ts"]
 }
