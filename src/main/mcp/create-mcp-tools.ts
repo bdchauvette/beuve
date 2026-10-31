@@ -45,7 +45,10 @@ export function createMcpTools(options: McpToolsOptions): McpToolServices {
       if (!view.ok) {
         return failure(view.error);
       }
-      return ok(paths === undefined ? view.value : narrowImpactView(view.value, paths));
+      if (paths === undefined) {
+        return ok(view.value);
+      }
+      return ok(narrowImpactView(view.value, paths));
     },
     getLspDiagnostics: async ({ sessionId, path }): Promise<McpToolOutcome> => {
       const id = sessionFor(sessionId);

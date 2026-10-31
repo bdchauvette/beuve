@@ -12,15 +12,21 @@ export function headSpansFrom(files: readonly DiffFile[]): ChangedLines {
     if (file.status === 'deleted') {
       continue;
     }
-    const path = 'newPath' in file ? file.newPath : file.path;
-    spans.set(path, fileSpans(file));
+    spans.set(headPathOf(file), fileSpans(file));
   }
   return spans;
 }
 
+function headPathOf(file: DiffFile): string {
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
+}
+
 function fileSpans(file: DiffFile): ChangedLineSpan[] {
   const spans: ChangedLineSpan[] = [];
-  const push = (startLine: number, endLine: number): void => {
+  const push = ({ startLine, endLine }: ChangedLineSpan): void => {
     const last = spans.at(-1);
     if (last !== undefined && startLine <= last.endLine + 1) {
       spans[spans.length - 1] = {
@@ -32,14 +38,17 @@ function fileSpans(file: DiffFile): ChangedLineSpan[] {
     }
   };
   for (const hunk of file.hunks) {
-    let nextLine = hunk.newCount === 0 ? hunk.newStart + 1 : hunk.newStart;
+    let nextLine = hunk.newStart;
+    if (hunk.newCount === 0) {
+      nextLine += 1;
+    }
     for (const line of hunk.lines) {
       if (line.kind === 'removed') {
-        push(Math.max(1, nextLine - 1), nextLine);
+        push({ startLine: Math.max(1, nextLine - 1), endLine: nextLine });
         continue;
       }
       if (line.kind === 'added') {
-        push(line.newLine, line.newLine);
+        push({ startLine: line.newLine, endLine: line.newLine });
       }
       nextLine = line.newLine + 1;
     }

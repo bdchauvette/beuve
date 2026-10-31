@@ -7,7 +7,7 @@ const archive = 'app.asar';
  * segment becomes `app.asar.unpacked`, where electron-builder puts `asarUnpack` files (ADR 0048).
  * Paths outside an archive (development, tests) come back unchanged. Pure.
  */
-export function unpackedPathFrom(file: string, separator: string = path.sep): string {
+export function unpackedPathFrom(file: string, separator: typeof path.sep = path.sep): string {
   const segments = file.split(separator);
   const index = segments.indexOf(archive);
   if (index === -1) {

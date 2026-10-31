@@ -10,15 +10,18 @@ import type { ReviewDiff } from '../sessions/load-review-diff.ts';
  */
 export function uraSummaryFrom(diff: ReviewDiff): UraSummary {
   const { session } = diff.refreshed;
-  const { scope } = diff;
   return {
     sessionId: session.id,
     change: session.source,
     baseSha: diff.baseSha,
     headSha: session.headSha,
-    scope:
-      scope.kind === 'interdiff' && scope.outcome.kind !== 'fallback'
-        ? { kind: 'interdiff', fromHeadSha: scope.fromHeadSha as CommitSha }
-        : { kind: 'full' },
+    scope: summaryScopeOf(diff.scope),
   };
+}
+
+function summaryScopeOf(scope: ReviewDiff['scope']): UraSummary['scope'] {
+  if (scope.kind === 'interdiff' && scope.outcome.kind !== 'fallback') {
+    return { kind: 'interdiff', fromHeadSha: scope.fromHeadSha as CommitSha };
+  }
+  return { kind: 'full' };
 }

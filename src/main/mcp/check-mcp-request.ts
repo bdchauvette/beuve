@@ -12,6 +12,12 @@ export interface McpRequestHeaders {
   readonly authorization?: string | undefined;
 }
 
+/** The loopback port the server listens on, and the bearer token it hands out. */
+export interface McpServerSecret {
+  readonly port: number;
+  readonly token: string;
+}
+
 export interface McpRequestRejection {
   readonly status: 401 | 403;
   readonly reason: string;
@@ -23,7 +29,7 @@ export interface McpRequestRejection {
  */
 export function checkMcpRequest(
   headers: McpRequestHeaders,
-  expected: { readonly port: number; readonly token: string },
+  expected: McpServerSecret,
 ): Result<undefined, McpRequestRejection> {
   const hosts = [`127.0.0.1:${String(expected.port)}`, `localhost:${String(expected.port)}`];
   if (headers.host === undefined || !hosts.includes(headers.host.toLowerCase())) {
@@ -40,8 +46,9 @@ export function checkMcpRequest(
   return err({ status: 401, reason: 'missing or invalid bearer token' });
 }
 
-function isSameSecret(presented: string, token: string): boolean {
-  return timingSafeEqual(digest(presented), digest(token));
+/** Compares in constant time, whatever the lengths. */
+function isSameSecret(a: string, b: string): boolean {
+  return timingSafeEqual(digest(a), digest(b));
 }
 
 function digest(value: string): Buffer {

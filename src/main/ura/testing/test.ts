@@ -5,8 +5,15 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { test as baseTest } from '../../testing/test.ts';
 import { uraBranchTemplate } from './ura-branch-template.ts';
 
-/** Stages a human note on `src/app.ts` lines `startLine` to `endLine` of the test session. */
-export type StageNote = (startLine: number, endLine: number, title: string) => Promise<UraItemView>;
+/** A human note on `src/app.ts` lines `startLine` to `endLine`. */
+export interface NoteSpec {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly title: string;
+}
+
+/** Stages a human note on `src/app.ts` of the test session. */
+export type StageNote = (note: NoteSpec) => Promise<UraItemView>;
 
 /**
  * `src/main`'s `test` with ura fixtures (ADR 0058): `repo` is {@link uraBranchTemplate}, `changes`
@@ -34,7 +41,7 @@ export const test = baseTest
     return okValueFrom(created).id;
   })
   .extend('note', ({ services, sessionId }): StageNote => {
-    return async (startLine, endLine, title) => {
+    return async ({ startLine, endLine, title }) => {
       return okValueFrom(
         await services.ura.create({
           sessionId,

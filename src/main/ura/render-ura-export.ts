@@ -20,7 +20,7 @@ export function renderUraExport(artifact: UraArtifact, target: UraExportTarget):
     ...rendered,
     verdict: verdict.value,
     verdictSource: verdict.source,
-    derivedVerdict: verdict.source === 'chosen' ? verdict.derived : verdict.value,
+    derivedVerdict: derivedVerdictOf(verdict),
     itemCount: entries.length,
     outdatedCount: entries.filter((entry) => entry.placement.kind === 'outdated').length,
   };
@@ -45,4 +45,12 @@ function render(
 
 function json(value: unknown): string {
   return `${JSON.stringify(value, undefined, 2)}\n`;
+}
+
+/** The verdict the staged items alone give: a chosen verdict keeps it beside the choice. */
+function derivedVerdictOf(verdict: UraArtifact['verdict']): UraArtifact['verdict']['value'] {
+  if (verdict.source === 'chosen') {
+    return verdict.derived;
+  }
+  return verdict.value;
 }

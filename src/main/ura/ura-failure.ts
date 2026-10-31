@@ -40,7 +40,7 @@ export function uraFailure(
       const count = error.itemIds.length;
       return err({
         code: 'refused',
-        message: `Approving is refused while ${String(count)} ${count === 1 ? 'blocker is' : 'blockers are'} staged.`,
+        message: `Approving is refused while ${blockersAre(count)} staged.`,
       });
     }
     case 'duplicate-item':
@@ -50,4 +50,11 @@ export function uraFailure(
       return err({ code: 'internal', message: 'stored review items are corrupt' });
     }
   }
+}
+
+function blockersAre(count: number): string {
+  if (count === 1) {
+    return '1 blocker is';
+  }
+  return `${String(count)} blockers are`;
 }

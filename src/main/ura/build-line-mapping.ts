@@ -4,6 +4,12 @@ import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { FileLineMapping, LineMapping } from '#internal/ura/line-mapping.ts';
 
+/** The head a session's items were anchored at, and the head they move to. */
+export interface HeadMove {
+  readonly fromHeadSha: string;
+  readonly toHeadSha: string;
+}
+
 /**
  * The URA line mapping from an older head to a later one (ADR 0023): git's zero-context diff
  * between the two commits, with renames, so only changed runs move or outdate an anchor. Added
@@ -13,8 +19,7 @@ import type { FileLineMapping, LineMapping } from '#internal/ura/line-mapping.ts
  */
 export async function buildLineMapping(
   repository: GitRepository,
-  fromHeadSha: string,
-  toHeadSha: string,
+  { fromHeadSha, toHeadSha }: HeadMove,
 ): Promise<LineMapping | undefined> {
   const from = await resolveRevision(repository, fromHeadSha);
   if (!from.ok) {

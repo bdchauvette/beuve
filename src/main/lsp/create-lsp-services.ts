@@ -12,6 +12,7 @@ import type {
   IpcResult,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
+import type { Session } from '#internal/session/session.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { badgeCallHierarchyNode } from '#internal/lsp/badge-call-hierarchy-node.ts';
 import type { ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
@@ -42,7 +43,7 @@ import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import { readSheetSource } from '../sheets/read-sheet-source.ts';
 import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
-import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import type { SessionWorktrees, WorktreeClaim } from '../worktrees/create-session-worktrees.ts';
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
@@ -79,10 +80,49 @@ export interface LspServices {
    * commit kept until the next startup prune.
    */
   readonly definition: (request: DefinitionRequest) => Promise<IpcResult<DefinitionView>>;
-  readonly diagnostics: (request: {
-    readonly sessionId: string;
-    readonly path: string;
-  }) => Promise<Result<AgentDiagnosticsReport, IpcError>>;
+  readonly diagnostics: (
+    request: AgentDiagnosticsRequest,
+  ) => Promise<Result<AgentDiagnosticsReport, IpcError>>;
+}
+
+/** A head file whose diagnostics an agent asks for (MCP). */
+export interface AgentDiagnosticsRequest {
+  readonly sessionId: string;
+  readonly path: string;
+}
+
+/** A head file being asked about, in the checkout that answers. */
+interface WorkspaceFile {
+  readonly workspace: Workspace;
+  readonly file: string;
+  readonly spans: ChangedLines;
+}
+
+/** A file's text, read in the checkout whose server answers about it. */
+interface CheckedOutText {
+  readonly root: string;
+  readonly file: string;
+  readonly text: string;
+}
+
+/** One line of a checked-out file that imports a name. */
+interface ImportingLine {
+  readonly root: string;
+  readonly file: string;
+  readonly lineText: string;
+}
+
+/** The token a definition request asked about, on 0-based `line` of `path`. */
+interface AskedToken {
+  readonly path: string;
+  readonly line: number;
+  readonly token: ProbeToken;
+}
+
+/** 0-based lines, both ends included. */
+interface LineInterval {
+  readonly from: number;
+  readonly to: number;
 }
 
 export interface LspServicesOptions {
@@ -139,10 +179,12 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     direction: CallHierarchyRequest['direction'],
     spans: ChangedLines,
   ): Promise<Result<readonly CallHierarchyCallView[], IpcError>> => {
-    const calls =
-      direction === 'incoming'
-        ? await multiplexer.incomingCalls(nodeId)
-        : await multiplexer.outgoingCalls(nodeId);
+    let calls: Result<readonly CallHierarchyCall[], LspError>;
+    if (direction === 'incoming') {
+      calls = await multiplexer.incomingCalls(nodeId);
+    } else {
+      calls = await multiplexer.outgoingCalls(nodeId);
+    }
     if (calls.ok) {
       return ok(calls.value.map((call) => callViewFrom(call, spans)));
     }
@@ -150,10 +192,8 @@ export function createLspServices(options: LspServicesOptions): LspServices {
   };
 
   const locate = async (
-    workspace: Workspace,
     request: CallHierarchyRequest,
-    file: string,
-    spans: ChangedLines,
+    { workspace, file, spans }: WorkspaceFile,
   ): Promise<Result<Position, IpcError>> => {
     const line = request.line - 1;
     if (request.character !== undefined) {
@@ -166,9 +206,10 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const span = spans.get(file)?.find((candidate) => {
       return candidate.startLine <= request.line && candidate.endLine >= request.line;
     });
-    const symbol =
-      findEnclosingSymbol(symbols.value, line) ??
-      (span === undefined ? undefined : findFirstCallable(symbols.value, line, span.endLine - 1));
+    let symbol = findEnclosingSymbol(symbols.value, line);
+    if (symbol === undefined && span !== undefined) {
+      symbol = findFirstCallable(symbols.value, { from: line, to: span.endLine - 1 });
+    }
     if (symbol === undefined) {
       return err({
         code: 'not-found',
@@ -185,9 +226,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
    * declaration. Once per target, so a cycle can't loop.
    */
   const throughImports = async (
-    root: string,
-    file: string,
-    text: string,
+    { root, file, text }: CheckedOutText,
     targets: readonly LocationView[],
   ): Promise<Result<readonly LocationView[], LspError>> => {
     const lines = text.split(lineBreak);
@@ -200,19 +239,21 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         followed.push(target);
         continue;
       }
-      const onward = await importedDeclaration(root, file, lineText, target);
+      const onward = await importedDeclaration({ root, file, lineText }, target);
       if (!onward.ok) {
         return onward;
       }
-      followed.push(...(onward.value.length > 0 ? onward.value : [target]));
+      if (onward.value.length > 0) {
+        followed.push(...onward.value);
+      } else {
+        followed.push(target);
+      }
     }
     return ok(followed);
   };
 
   const importedDeclaration = async (
-    root: string,
-    file: string,
-    lineText: string,
+    { root, file, lineText }: ImportingLine,
     target: LocationView,
   ): Promise<Result<readonly LocationView[], LspError>> => {
     const outside = (locations: readonly LocationView[]): LocationView[] => {
@@ -239,8 +280,11 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return modules;
     }
     const [module] = outside(modules.value);
-    if (module?.file.kind !== 'workspace') {
-      return ok(module === undefined ? [] : [module]);
+    if (module === undefined) {
+      return ok([]);
+    }
+    if (module.file.kind !== 'workspace') {
+      return ok([module]);
     }
     const local = lineText.slice(target.range.start.character, target.range.end.character);
     const name = aliasedName.exec(lineText.slice(0, target.range.start.character))?.[1] ?? local;
@@ -249,9 +293,10 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return symbols;
     }
     const declared = symbols.value.find((symbol) => symbol.name === name);
-    return ok([
-      declared === undefined ? module : { file: module.file, range: declared.selectionRange },
-    ]);
+    if (declared === undefined) {
+      return ok([module]);
+    }
+    return ok([{ file: module.file, range: declared.selectionRange }]);
   };
 
   const define = async (request: DefinitionRequest): Promise<IpcResult<DefinitionView>> => {
@@ -261,12 +306,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     }
     const { sha } = commit.value;
     const { session, repository } = commit.value.refreshed;
-    const leased = await worktrees.acquire(
-      repository,
-      sha === session.headSha
-        ? { kind: 'session-head', sessionId: session.id, headSha: sha }
-        : { kind: 'pinned-commit', sessionId: session.id, commit: sha },
-    );
+    const leased = await worktrees.acquire(repository, claimOf(session, sha));
     if (!leased.ok) {
       return worktreeFailure(logger, leased.error);
     }
@@ -295,11 +335,16 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       if (!found.ok) {
         return fail(found.error);
       }
-      const resolved = await throughImports(lease.path, request.path, text.value, found.value);
+      const resolved = await throughImports(
+        { root: lease.path, file: request.path, text: text.value },
+        found.value,
+      );
       if (!resolved.ok) {
         return fail(resolved.error);
       }
-      const elsewhere = resolved.value.filter((target) => !isAt(target, request.path, line, token));
+      const elsewhere = resolved.value.filter((target) => {
+        return !isAt(target, { path: request.path, line, token });
+      });
       if (elsewhere.length > 0) {
         return ok({
           sha,
@@ -321,18 +366,19 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return fail(symbols.error);
     }
     const enclosing = findEnclosingSymbol(symbols.value, line);
+    const targets: DefinitionTargetView[] = [];
+    if (enclosing !== undefined) {
+      targets.push(
+        targetViewFrom({
+          file: { kind: 'workspace', path: request.path },
+          range: enclosing.selectionRange,
+        }),
+      );
+    }
     return ok({
       sha,
       ...(first !== undefined && { token: tokenView(line, first.token) }),
-      targets:
-        enclosing === undefined
-          ? []
-          : [
-              targetViewFrom({
-                file: { kind: 'workspace', path: request.path },
-                range: enclosing.selectionRange,
-              }),
-            ],
+      targets,
     });
   };
 
@@ -380,7 +426,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       }
       using workspace = checkedOut.value;
       const file = relativeFrom(repository, request.path);
-      const position = await locate(workspace, request, file, spans);
+      const position = await locate(request, { workspace, file, spans });
       if (!position.ok) {
         return position;
       }
@@ -463,8 +509,16 @@ const aliasedName = /([\w$]+)\s+as\s+$/u;
 const moduleSpecifier = /(?:from|import)\s*['"]([^'"]+)['"]/u;
 const lineBreak = /\r\n|\n|\r/u;
 
+/** The checkout a definition at `sha` reads: the session head's own, else one pinned to `sha`. */
+function claimOf(session: Session, sha: CommitSha): WorktreeClaim {
+  if (sha === session.headSha) {
+    return { kind: 'session-head', sessionId: session.id, headSha: sha };
+  }
+  return { kind: 'pinned-commit', sessionId: session.id, commit: sha };
+}
+
 /** Whether a definition is the asked-about token itself (a name the line declares). */
-function isAt(target: LocationView, path: string, line: number, token: ProbeToken): boolean {
+function isAt(target: LocationView, { path, line, token }: AskedToken): boolean {
   const { start } = target.range;
   return (
     target.file.kind === 'workspace' &&
@@ -506,8 +560,7 @@ const callableKinds = new Set(['function', 'method', 'constructor']);
  */
 function findFirstCallable(
   symbols: readonly DocumentSymbolView[],
-  from: number,
-  to: number,
+  { from, to }: LineInterval,
 ): DocumentSymbolView | undefined {
   let first: DocumentSymbolView | undefined;
   const visit = (candidates: readonly DocumentSymbolView[]): void => {

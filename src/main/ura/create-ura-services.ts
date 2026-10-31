@@ -21,6 +21,7 @@ import type {
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { ChatMessageId } from '#internal/chat/chat-message.ts';
+import type { ChatFinding } from '#internal/chat/chat-review.ts';
 import { findChatMessage } from '#internal/chat/find-chat-message.ts';
 import { buildAgentReview } from '#internal/ura/build-agent-review.ts';
 import type { AgentReview } from '#internal/ura/build-agent-review.ts';
@@ -45,7 +46,7 @@ import { stageReviewFinding } from '#internal/ura/stage-review-finding.ts';
 import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
 import { writeVerdictChoice } from '#internal/ura/write-verdict-choice.ts';
-import type { UraArtifact } from '#internal/ura/ura-artifact.ts';
+import type { UraArtifact, UraSummary } from '#internal/ura/ura-artifact.ts';
 import type {
   CommitSha,
   SessionId,
@@ -106,9 +107,7 @@ export interface UraServices {
   /** Records that a posted review carried these items, and announces the change. */
   readonly recordPostings: (sessionId: string, postings: readonly UraPosting[]) => void;
   /** The `beuve.ura/1` payload and its XML form, with the derived verdict, for MCP. */
-  readonly readAgentReview: (
-    sessionId: string,
-  ) => Promise<IpcResult<{ readonly review: AgentReview; readonly xml: string }>>;
+  readonly readAgentReview: (sessionId: string) => Promise<IpcResult<AgentReviewDocument>>;
   /** Tells listeners a session's items moved, because its head did. */
   readonly observeHead: (sessionId: string) => void;
   /** Subscribes to `ura:changed`; returns the unsubscribe function. */
@@ -123,6 +122,24 @@ export interface CompileArtifactOptions {
   readonly verdict?: UraVerdictView;
 }
 
+/** The `beuve.ura/1` payload and its XML form. */
+export interface AgentReviewDocument {
+  readonly review: AgentReview;
+  readonly xml: string;
+}
+
+/** A staged item, and whether staging created it or found it already there. */
+interface StagedItem {
+  readonly item: UraItem;
+  readonly created: boolean;
+}
+
+/** The head and base tip an export was compiled for, pinned by the caller. */
+interface PinnedHead {
+  readonly headSha: CommitSha;
+  readonly baseTip: CommitSha | undefined;
+}
+
 export interface UraServicesOptions {
   readonly context: SessionContext;
   readonly impact: ImpactServices;
@@ -132,7 +149,7 @@ export interface UraServicesOptions {
 
 interface Head {
   readonly sessionId: string;
-  readonly headSha: string;
+  readonly headSha: CommitSha;
   readonly repository: GitRepository;
 }
 
@@ -156,7 +173,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
    */
   const settledChoice = (
     sessionId: string,
-    headSha: string,
+    headSha: CommitSha,
     items: readonly UraItem[],
   ): UraVerdictChoice => {
     return settleVerdictChoice(db, sessionId as SessionId, {
@@ -188,7 +205,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     if (cached !== undefined) {
       return cached;
     }
-    const building = buildLineMapping(head.repository, fromHeadSha, head.headSha);
+    const building = buildLineMapping(head.repository, { fromHeadSha, toHeadSha: head.headSha });
     mappings.set(key, building);
     const mapping = await building;
     if (mapping === undefined) {
@@ -268,7 +285,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   };
 
   /** Inserts a promoted or staged item; a repeat returns the existing one, restaged if withdrawn. */
-  const stageOnce = (item: UraItem): StoreResult<{ item: UraItem; created: boolean }> => {
+  const stageOnce = (item: UraItem): StoreResult<StagedItem> => {
     const inserted = insertUraItem(db, item);
     if (inserted.ok) {
       return ok({ item, created: true });
@@ -297,9 +314,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return saved;
   };
 
-  const staged = async (
-    result: IpcResult<{ item: UraItem; created: boolean }>,
-  ): Promise<IpcResult<UraStagedView>> => {
+  const staged = async (result: IpcResult<StagedItem>): Promise<IpcResult<UraStagedView>> => {
     if (!result.ok) {
       return result;
     }
@@ -317,7 +332,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
    */
   const choiceAt = (
     sessionId: string,
-    headSha: string,
+    headSha: CommitSha,
     items: readonly UraItem[],
   ): UraVerdictView | undefined => {
     const { chosen, headSha: chosenAt } = readVerdictChoice(db, sessionId);
@@ -333,7 +348,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const compile = async (
     sessionId: string,
     verdict: ExportUraRequest['verdict'],
-    pinned?: { readonly headSha: CommitSha; readonly baseTip: CommitSha | undefined },
+    pinned?: PinnedHead,
   ): Promise<IpcResult<UraArtifact>> => {
     const pinnedHeadSha = pinned?.headSha;
     const diff = await loadReviewDiff(context, sessionId, {
@@ -355,11 +370,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       repository: refreshed.repository,
     };
     const live = items.value.filter((item) => item.status.kind === 'staged');
-    const chosen =
-      verdict ??
-      (pinnedHeadSha === undefined
-        ? settledChoice(summary.sessionId, summary.headSha, items.value).chosen
-        : choiceAt(summary.sessionId, pinnedHeadSha, items.value));
+    const chosen = verdict ?? storedChoice(summary, pinnedHeadSha, items.value);
     const artifact = compileUraArtifact({
       summary,
       items: items.value,
@@ -372,9 +383,28 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return uraFailure(logger, artifact.error);
   };
 
+  /** The reviewer's stored choice: settled at the live head, or as made at a pinned one. */
+  const storedChoice = (
+    summary: UraSummary,
+    pinnedHeadSha: CommitSha | undefined,
+    items: readonly UraItem[],
+  ): UraVerdictView | undefined => {
+    if (pinnedHeadSha === undefined) {
+      return settledChoice(summary.sessionId, summary.headSha, items).chosen;
+    }
+    return choiceAt(summary.sessionId, pinnedHeadSha, items);
+  };
+
+  const stagedOrFailure = (item: Result<UraItem, UraItemError>): IpcResult<StagedItem> => {
+    if (item.ok) {
+      return stored(stageOnce(item.value));
+    }
+    return uraFailure(logger, item.error);
+  };
+
   const verdictState = (
     sessionId: string,
-    headSha: string,
+    headSha: CommitSha,
     items: readonly UraItem[],
   ): Omit<UraVerdictStateView, 'sessionId'> => {
     const choice = settledChoice(sessionId, headSha, items);
@@ -425,7 +455,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const item = createUraItem(
         {
           sessionId: head.value.sessionId as SessionId,
-          headSha: headSha as CommitSha,
+          headSha: headSha,
           anchor: request.anchor,
           severity: request.severity,
           origin: request.origin ?? { kind: 'human' },
@@ -454,9 +484,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       }
       const edit = {
         ...text,
-        ...(suggestedPatch !== undefined && {
-          suggestion: suggestedPatch.trim() === '' ? '' : suggestedPatch,
-        }),
+        ...(suggestedPatch !== undefined && { suggestion: suggestionFrom(suggestedPatch) }),
       };
       const edited = editUraItem(found.value, edit, Temporal.Now.instant());
       if (!edited.ok) {
@@ -475,13 +503,15 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       if (!found.ok) {
         return uraFailure(logger, found.error);
       }
-      let status: UraStatus = { kind: to === 'staged' ? 'staged' : 'withdrawn' };
-      if (to === 'addressed') {
+      let status: UraStatus = { kind: 'withdrawn' };
+      if (to === 'staged') {
+        status = { kind: 'staged' };
+      } else if (to === 'addressed') {
         const head = await headOf(found.value.sessionId);
         if (!head.ok) {
           return head;
         }
-        status = { kind: 'addressed', atSha: head.value.headSha as CommitSha, by: 'reviewer' };
+        status = { kind: 'addressed', atSha: head.value.headSha, by: 'reviewer' };
       }
       const moved = transitionUraItem(found.value, status, Temporal.Now.instant());
       if (!moved.ok) {
@@ -517,7 +547,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         return err({ code: 'internal', message: 'stored chat data is corrupt' });
       }
       const answer = message.value;
-      const found = answer.role === 'assistant' ? answer.review?.findings[finding] : undefined;
+      let found: ChatFinding | undefined;
+      if (answer.role === 'assistant') {
+        found = answer.review?.findings[finding];
+      }
       if (found === undefined) {
         return err({ code: 'not-found', message: 'that answer has no such review finding' });
       }
@@ -526,7 +559,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         { sessionId: answer.sessionId, headSha: answer.headSha, messageId, finding },
         { deps, severity },
       );
-      return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
+      return staged(stagedOrFailure(item));
     },
 
     stageImpactFinding: async ({
@@ -555,7 +588,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         },
         deps,
       );
-      return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
+      return staged(stagedOrFailure(item));
     },
 
     setVerdict: ({ sessionId, verdict, expectedHeadSha }): IpcResult<UraVerdictStateView> => {
@@ -580,18 +613,16 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         return uraFailure(logger, { kind: 'approve-with-blockers', itemIds: blockers });
       }
       const derived = deriveStagedVerdict(items.value);
-      const written = writeVerdictChoice(
-        db,
-        loaded.value.id,
-        verdict === undefined || verdict === derived
-          ? {}
-          : { chosen: verdict, headSha: expectedHeadSha },
-      );
+      let choice: UraVerdictChoice = {};
+      if (verdict !== undefined && verdict !== derived) {
+        choice = { chosen: verdict, headSha: expectedHeadSha };
+      }
+      const written = writeVerdictChoice(db, loaded.value.id, choice);
       if (!written.ok) {
         return uraFailure(logger, written.error);
       }
       changed(sessionId);
-      return ok({ sessionId, ...verdictState(sessionId, expectedHeadSha, items.value) });
+      return ok({ sessionId, ...verdictState(sessionId, loaded.value.headSha, items.value) });
     },
 
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
@@ -618,9 +649,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       changed(sessionId);
     },
 
-    readAgentReview: async (
-      sessionId,
-    ): Promise<IpcResult<{ review: AgentReview; xml: string }>> => {
+    readAgentReview: async (sessionId): Promise<IpcResult<AgentReviewDocument>> => {
       const artifact = await compile(sessionId, undefined);
       if (artifact.ok) {
         return ok({
@@ -646,4 +675,12 @@ function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {
   return deriveUraVerdict(
     items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
   );
+}
+
+/** An empty suggestion clears it; anything else is kept as typed. */
+function suggestionFrom(patch: string): string {
+  if (patch.trim() === '') {
+    return '';
+  }
+  return patch;
 }

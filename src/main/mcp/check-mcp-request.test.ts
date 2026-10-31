@@ -1,10 +1,10 @@
 import { describe } from 'vitest';
 
 import { checkMcpRequest } from './check-mcp-request.ts';
-import type { McpRequestHeaders } from './check-mcp-request.ts';
+import type { McpRequestHeaders, McpServerSecret } from './check-mcp-request.ts';
 import { test } from '../testing/test.ts';
 
-function expected(): { port: number; token: string } {
+function expected(): McpServerSecret {
   return { port: 4000, token: 'secret' };
 }
 

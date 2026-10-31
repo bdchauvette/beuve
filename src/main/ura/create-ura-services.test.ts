@@ -47,7 +47,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     note,
   }) => {
     const head = await repo.git('rev-parse', 'feature');
-    const first = await note(2, 3, 'Name the constant');
+    const first = await note({ startLine: 2, endLine: 3, title: 'Name the constant' });
     expect(first).toMatchObject({
       sessionId,
       headSha: head,
@@ -139,8 +139,8 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     changes,
     note,
   }) => {
-    const shifted = await note(5, 6, 'Below the edit');
-    const replaced = await note(2, 2, 'On the edited line');
+    const shifted = await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
+    const replaced = await note({ startLine: 2, endLine: 2, title: 'On the edited line' });
     const fileNote = okValueFrom(
       await services.ura.create({
         sessionId,
@@ -203,7 +203,11 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     db,
   }) => {
     const head = await repo.git('rev-parse', 'feature');
-    storeReview(db, sessionId, head, [finding('Unchecked answer'), finding('Tab\tin the title')]);
+    storeReview(db, {
+      sessionId,
+      head,
+      findings: [finding('Unchecked answer'), finding('Tab\tin the title')],
+    });
 
     const staged = okValueFrom(
       await services.ura.stageReviewFinding({ messageId: reviewMessageId(), finding: 0 }),
@@ -299,7 +303,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     note,
   }) => {
     const head = await repo.git('rev-parse', 'feature');
-    await note(2, 2, 'Prefer <const>');
+    await note({ startLine: 2, endLine: 2, title: 'Prefer <const>' });
     const blocker = okValueFrom(
       await services.ura.create({
         sessionId,
@@ -349,7 +353,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     services,
     note,
   }) => {
-    await note(5, 6, 'Below the edit');
+    await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
     const read = okValueFrom(await services.mcpTools.readHumanReview({}));
     expect(read.structured).toMatchObject({
       schema: 'beuve.ura/1',
@@ -372,8 +376,8 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     note,
     db,
   }) => {
-    await note(2, 2, 'Prefer const');
-    const read = async (): Promise<{ verdict: unknown; text: string }> => {
+    await note({ startLine: 2, endLine: 2, title: 'Prefer const' });
+    const read = async (): Promise<ReadReview> => {
       const review = await services.mcpTools.readHumanReview({});
       if (!review.ok) {
         throw new Error(review.error);
@@ -455,7 +459,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     sessionId,
     note,
   }) => {
-    await note(2, 2, 'Prefer const');
+    await note({ startLine: 2, endLine: 2, title: 'Prefer const' });
     okValueFrom(
       services.ura.setVerdict({
         sessionId,
@@ -497,7 +501,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     note,
     db,
   }) => {
-    await note(2, 2, 'Prefer const');
+    await note({ startLine: 2, endLine: 2, title: 'Prefer const' });
     const shown = await featureHead(repo);
     await repo.git('switch', '--quiet', 'feature');
     repo.write('src/more.ts', 'export const more = 1;\n');
@@ -531,7 +535,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     sessionId,
     note,
   }) => {
-    await note(2, 2, 'Prefer const');
+    await note({ startLine: 2, endLine: 2, title: 'Prefer const' });
     okValueFrom(
       services.ura.setVerdict({
         sessionId,
@@ -605,12 +609,14 @@ function finding(title: string): ChatFinding {
 }
 
 /** Stores a completed `/review` answer with these findings, as the chat would. */
-function storeReview(
-  db: DatabaseSync,
-  sessionId: string,
-  head: string,
-  findings: readonly ChatFinding[],
-): void {
+/** A `/review` answer to store: its session, the head it was asked at, and its findings. */
+interface StoredReview {
+  readonly sessionId: string;
+  readonly head: string;
+  readonly findings: readonly ChatFinding[];
+}
+
+function storeReview(db: DatabaseSync, { sessionId, head, findings }: StoredReview): void {
   const common = {
     sessionId: sessionId as SessionId,
     headSha: head as CommitSha,
@@ -654,4 +660,10 @@ function storeReview(
   if (!stored.ok) {
     throw new Error(stored.error.kind);
   }
+}
+
+/** What an agent reads back of the human review: its verdict and its text. */
+interface ReadReview {
+  readonly verdict: unknown;
+  readonly text: string;
 }
