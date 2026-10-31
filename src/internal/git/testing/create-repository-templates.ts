@@ -70,7 +70,7 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
           return !isGitLockFile(entry);
         },
       });
-      return { repo: openTestRepository(home, signal), value: source.value as T };
+      return { repo: openTestRepository(home, { signal }), value: source.value as T };
     },
   };
 }

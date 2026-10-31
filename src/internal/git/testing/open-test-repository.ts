@@ -7,22 +7,32 @@ import { promisify } from 'node:util';
 import type { CommitSha } from '../object-id.ts';
 import type { TestRepository } from './test-repository.ts';
 
+/** How {@link openTestRepository} runs git. */
+export interface OpenTestRepositoryOptions {
+  readonly signal?: AbortSignal | undefined;
+  readonly gitBinary?: string;
+}
+
 /**
  * Drives the existing repository at `<home>/repo`. `home` is also its `HOME` and
  * `XDG_CONFIG_HOME`, isolating git from the caller's `GIT_*` environment, global and system
  * config, and holds `scratch` directories; whoever made `home` removes it. Auto-maintenance is off: after
  * `git commit` it would otherwise keep a background `git maintenance` running, which creates and
  * removes `.git/objects/maintenance.lock` while a template is being copied (ENOENT in `fs.cp`).
- * `signal`, a test's, kills the git commands still running when it aborts.
+ * `signal`, a test's, kills the git commands still running when it aborts; `gitBinary` (default
+ * `git` on `PATH`) runs them.
  */
-export function openTestRepository(home: string, signal?: AbortSignal): TestRepository {
+export function openTestRepository(
+  home: string,
+  { signal, gitBinary = 'git' }: OpenTestRepositoryOptions = {},
+): TestRepository {
   const directory = path.join(home, 'repo');
   let scratchCount = 0;
   const environment = testEnvironment(home);
   const execFileAsync = promisify(execFile);
 
   const git = async (...args: string[]): Promise<string> => {
-    const { stdout } = await execFileAsync('git', args, {
+    const { stdout } = await execFileAsync(gitBinary, args, {
       cwd: directory,
       env: environment,
       encoding: 'utf8',

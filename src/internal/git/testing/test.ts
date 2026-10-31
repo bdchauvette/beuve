@@ -9,6 +9,10 @@ import type { GitRepository } from '../open-repository.ts';
 import { createRepositoryTemplates } from './create-repository-templates.ts';
 import type { RepositoryTemplates, TemplateCopy } from './create-repository-templates.ts';
 import type { RepositoryTemplate, TestRepository } from './test-repository.ts';
+import { createNewestGitRepository } from './create-newest-git-repository.ts';
+import type { NewestGitRepository } from './create-newest-git-repository.ts';
+import { resolveNewestGit } from './resolve-newest-git.ts';
+import type { NewestGit } from './resolve-newest-git.ts';
 
 /** Hands out repositories for one test, each in its own directory under the test's `tempDir`. */
 export interface TestRepositories {
@@ -25,6 +29,10 @@ export interface TestRepositories {
  * - `repositories`: {@link TestRepositories}.
  * - `repo`: an empty repository on `main`, from `repositories.create()`.
  * - `repository`: `repo` opened as a {@link GitRepository}.
+ * - `newestGit` (worker): the newest git here (`git` on `PATH` or `BEUVE_TEST_GIT`) and the ref
+ *   backend it makes repositories with: reftable from git 2.45, else files, which
+ *   `BEUVE_REQUIRE_REFTABLE=1` turns into an error ({@link resolveNewestGit}).
+ * - `newestGitRepo`: an empty repository on `main` made by `newestGit`, with its backend.
  */
 export const test = baseTest
   .extend('repositoryTemplates', { scope: 'worker' }, ({ tempRoot }): RepositoryTemplates => {
@@ -49,6 +57,10 @@ export const test = baseTest
   .extend('repo', async ({ repositories }): Promise<TestRepository> => repositories.create())
   .extend('repository', async ({ repo, signal }): Promise<GitRepository> => {
     return okValueFrom(await openRepository(repo.directory, { signal }));
+  })
+  .extend('newestGit', { scope: 'worker' }, async (): Promise<NewestGit> => resolveNewestGit())
+  .extend('newestGitRepo', async ({ tempDir, newestGit, signal }): Promise<NewestGitRepository> => {
+    return createNewestGitRepository(path.join(tempDir, 'newest-git'), newestGit, signal);
   });
 
 const emptyRepository: RepositoryTemplate<undefined> = {

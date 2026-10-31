@@ -28,7 +28,11 @@ How beuve's tests are written (ADR 0058 for tests, ADR 0059 for time). Every tes
 | `repositories`        | `#internal/git/testing/test.ts`     | `create()` an empty repository, `fromTemplate(template)` a copy               |
 | `repo`                | `#internal/git/testing/test.ts`     | an empty repository on `main` (a `TestRepository`)                            |
 | `repository`          | `#internal/git/testing/test.ts`     | `repo` opened as a `GitRepository`                                            |
+| `newestGit` (worker)  | `#internal/git/testing/test.ts`     | the newest git (`PATH` or `BEUVE_TEST_GIT`) and its ref backend               |
+| `newestGitRepo`       | `#internal/git/testing/test.ts`     | `{ repo, git }`: an empty repository on reftable from git 2.45, else files    |
 | `deps`                | `#internal/session/testing/test.ts` | `SessionDeps` with counting ids                                               |
+
+A test that must run against a newer git than the machine's (the reftable backend needs 2.45) takes `newestGitRepo` and asserts the same behaviour on whatever backend it got, so it never needs an `if` or a skip. Point `BEUVE_TEST_GIT` at a newer git to run it on reftable locally; CI sets `BEUVE_REQUIRE_REFTABLE=1`, which makes the fixture fail rather than fall back (ADR 0087).
 
 A layer's `testing/test.ts` extends the one below it and can refine a fixture with its parent's value:
 

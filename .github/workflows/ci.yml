@@ -30,7 +30,13 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
+      # The reftable tests need git 2.45+ (ADR 0087); both runner images ship 2.56.
+      - name: Show the git version
+        run: git --version
       - run: npm run check
+        env:
+          # The reader's ref-backend tests must run on reftable here, not fall back to files.
+          BEUVE_REQUIRE_REFTABLE: '1'
       # The app and the test-only harness page (dist-test/, never packaged) render the shared
       # hostile-input corpus with the production CSP and Trusted Types policy (ADR 0077).
       - name: Build the app and the hostile-input harness

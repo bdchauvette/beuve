@@ -4,6 +4,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { GitObjectReader } from './git-object-reader.ts';
 import type { CommitSha } from './object-id.ts';
+import type { ObjectContent, ObjectLookup, ObjectSpec } from './object-spec.ts';
 import { parseRevisionName } from './parse-revision-name.ts';
 import type { RevisionName } from './parse-revision-name.ts';
 import { parseTreePath } from './parse-tree-path.ts';
@@ -198,6 +199,37 @@ describe('GitObjectReader', () => {
     });
   });
 
+  test('sees a packed ref that pack-refs rewrote at the same size within the second', async ({
+    expect,
+    repo,
+    signal,
+  }) => {
+    const { first, second } = await refObjects(repo);
+    await repo.git('update-ref', 'refs/heads/topic', first);
+    await repo.git('update-ref', 'refs/heads/gone', first);
+    await repo.git('pack-refs', '--all');
+    await using objectsReader = reader(repo);
+    const topic = commitOf('refs/heads/topic');
+    await expect(objectsReader.info(topic, { signal })).resolves.toMatchObject({
+      value: { oid: first },
+    });
+    await repo.git('update-ref', 'refs/heads/topic', second);
+    await repo.git('update-ref', '-d', 'refs/heads/gone');
+    await expect(objectsReader.info(topic, { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    await expect(objectsReader.info(commitOf('gone'), { signal })).resolves.toStrictEqual({
+      ok: true,
+      value: { kind: 'missing' },
+    });
+    // Same size, same second: git's own check of packed-refs misses this rewrite.
+    await repo.git('pack-refs', '--all');
+    await expect(objectsReader.info(topic, { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    expect(objectsReader.stats.restarts).toBe(0);
+  });
+
   test('an abort answers at once and the abandoned bytes are skipped', async ({
     expect,
     repo,
@@ -337,5 +369,220 @@ describe('GitObjectReader', () => {
     await expect(
       objectsReader.info({ kind: 'ref', ref: revision('HEAD'), peel: 'commit' }, { signal }),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'git-not-found' } });
+  });
+});
+
+/** Two commits on `main` (which ends at `second`) and an annotated tag `v1` of `first`. */
+interface RefObjects {
+  readonly first: CommitSha;
+  readonly second: CommitSha;
+  readonly tag: string;
+}
+
+async function refObjects(repo: TestRepository): Promise<RefObjects> {
+  repo.write('a.txt', 'a\n');
+  const first = await repo.commit('first');
+  repo.write('b.txt', 'b\n');
+  const second = await repo.commit('second');
+  await repo.git('tag', '--annotate', '--message', 'v1', 'v1', first);
+  return { first, second, tag: await repo.git('rev-parse', 'refs/tags/v1') };
+}
+
+/** The ref backend the repository uses, as its config records it (`files` has no entry). */
+async function refStorageOf(repo: TestRepository): Promise<string> {
+  return repo.git('config', '--default', 'files', 'extensions.refStorage');
+}
+
+function commitOf(ref: string): ObjectSpec {
+  return { kind: 'ref', ref: revision(ref), peel: 'commit' };
+}
+
+/** The object id a lookup found, or what it answered instead. */
+function oidOf(lookup: ObjectLookup | ObjectContent): string {
+  if (lookup.kind === 'missing' || lookup.kind === 'ambiguous') {
+    return lookup.kind;
+  }
+  return lookup.oid;
+}
+
+/** Where `ref` peels to a commit, through `objectsReader`. */
+interface RefLookup {
+  readonly ref: string;
+  readonly signal: AbortSignal;
+}
+
+async function oidAt(objectsReader: GitObjectReader, { ref, signal }: RefLookup): Promise<string> {
+  const found = await objectsReader.info(commitOf(ref), { signal });
+  return oidOf(okValueFrom(found));
+}
+
+/** Moves `main` between `first` and `second` 40 times from separate git processes. */
+async function keepMovingMain(repo: TestRepository, { first, second }: RefObjects): Promise<void> {
+  for (let round = 0; round < 20; round += 1) {
+    await repo.git('update-ref', 'refs/heads/main', first);
+    await repo.git('update-ref', 'refs/heads/main', second);
+  }
+}
+
+/**
+ * The reader against the newest git's ref backend (ADR 0087): reftable where git is 2.45 or
+ * newer, which CI guarantees with `BEUVE_REQUIRE_REFTABLE=1`; the files backend elsewhere.
+ */
+describe('GitObjectReader on the newest git’s ref backend', () => {
+  test('looks up branches, tags, HEAD and full ref names', async ({
+    expect,
+    newestGitRepo: { repo, git },
+    signal,
+  }) => {
+    await expect(refStorageOf(repo)).resolves.toBe(git.refFormat);
+    const { first, second, tag } = await refObjects(repo);
+    await repo.git('branch', 'feature/nested', first);
+    await repo.git('tag', 'light', second);
+    await using objectsReader = reader(repo, { gitBinary: git.binary });
+    const refs = ['main', 'refs/heads/main', 'HEAD', 'feature/nested', 'light', 'v1'];
+    const found = await Promise.all(
+      refs.map(async (ref) => {
+        return oidAt(objectsReader, { ref, signal });
+      }),
+    );
+    expect(found).toStrictEqual([second, second, second, first, second, first]);
+    await expect(objectsReader.info(commitOf('no-such-branch'), { signal })).resolves.toStrictEqual(
+      { ok: true, value: { kind: 'missing' } },
+    );
+    await expect(
+      objectsReader.info({ kind: 'object', oid: tag }, { signal }),
+    ).resolves.toMatchObject({ ok: true, value: { kind: 'found', type: 'tag' } });
+    expect(objectsReader.stats).toStrictEqual({ starts: 1, restarts: 0, isRunning: true });
+  });
+
+  test('sees refs another git process moves, makes and deletes while it runs', async ({
+    expect,
+    newestGitRepo: { repo, git },
+    signal,
+  }) => {
+    const { first, second } = await refObjects(repo);
+    await using objectsReader = reader(repo, { gitBinary: git.binary });
+    const main = commitOf('refs/heads/main');
+    await expect(objectsReader.info(main, { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    await repo.git('update-ref', 'refs/heads/main', first);
+    await expect(objectsReader.info(main, { signal })).resolves.toMatchObject({
+      value: { oid: first },
+    });
+    await repo.git('update-ref', 'refs/heads/late', second);
+    await expect(objectsReader.info(commitOf('late'), { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    await repo.git('update-ref', '-d', 'refs/heads/late');
+    await expect(objectsReader.info(commitOf('late'), { signal })).resolves.toStrictEqual({
+      ok: true,
+      value: { kind: 'missing' },
+    });
+    expect(objectsReader.stats).toMatchObject({ starts: 1, restarts: 0 });
+  });
+
+  test('answers every lookup while another process keeps moving the ref', async ({
+    expect,
+    newestGitRepo: { repo, git },
+    signal,
+  }) => {
+    const objects = await refObjects(repo);
+    await using objectsReader = reader(repo, { gitBinary: git.binary });
+    const main = commitOf('refs/heads/main');
+    const lookups: Promise<string>[] = [];
+    const state = { isMoving: true };
+    const moving = (async (): Promise<void> => {
+      await keepMovingMain(repo, objects);
+      state.isMoving = false;
+    })();
+    while (state.isMoving) {
+      const batch = Array.from({ length: 8 }, async () => {
+        return oidAt(objectsReader, { ref: 'refs/heads/main', signal });
+      });
+      lookups.push(...batch);
+      await Promise.all(batch);
+    }
+    await moving;
+    const seen = new Set(await Promise.all(lookups));
+    expect(lookups.length).toBeGreaterThan(8);
+    expect(seen).toStrictEqual(new Set([objects.first, objects.second]));
+    await expect(objectsReader.info(main, { signal })).resolves.toMatchObject({
+      value: { oid: objects.second },
+    });
+    expect(objectsReader.stats).toMatchObject({ starts: 1, restarts: 0 });
+  });
+
+  test('stays fresh across packing and compaction, during reads too', async ({
+    expect,
+    newestGitRepo: { repo, git },
+    signal,
+  }) => {
+    const { first, second } = await refObjects(repo);
+    await using objectsReader = reader(repo, { gitBinary: git.binary });
+    const names = Array.from({ length: 30 }, (_, index) => `refs/heads/many-${String(index)}`);
+    for (const name of names) {
+      // One process per ref: the reftable backend compacts its stack as tables pile up.
+      await repo.git('update-ref', name, first);
+    }
+    await expect(objectsReader.info(commitOf('many-29'), { signal })).resolves.toMatchObject({
+      value: { oid: first },
+    });
+    const reads = Promise.all(
+      names.map(async (name) => {
+        return oidAt(objectsReader, { ref: name, signal });
+      }),
+    );
+    await repo.git('pack-refs', '--all');
+    await expect(reads).resolves.toStrictEqual(names.map(() => first));
+    await repo.git('update-ref', 'refs/heads/many-0', second);
+    await repo.git('update-ref', '-d', 'refs/heads/many-1');
+    await expect(objectsReader.info(commitOf('many-0'), { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    await expect(objectsReader.info(commitOf('many-1'), { signal })).resolves.toStrictEqual({
+      ok: true,
+      value: { kind: 'missing' },
+    });
+    await repo.git('pack-refs', '--all');
+    await expect(objectsReader.info(commitOf('many-0'), { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    await expect(objectsReader.info(commitOf('main'), { signal })).resolves.toMatchObject({
+      value: { oid: second },
+    });
+    expect(objectsReader.stats.restarts).toBe(0);
+  });
+
+  test('info and read by ref and peel', async ({
+    expect,
+    newestGitRepo: { repo, git },
+    signal,
+  }) => {
+    const { first } = await refObjects(repo);
+    const tree = await repo.git('rev-parse', 'v1^{tree}');
+    await using objectsReader = reader(repo, { gitBinary: git.binary });
+    await expect(
+      objectsReader.info({ kind: 'ref', ref: revision('v1'), peel: 'tree' }, { signal }),
+    ).resolves.toMatchObject({ ok: true, value: { kind: 'found', oid: tree, type: 'tree' } });
+    const commit = okValueFrom(await objectsReader.read(commitOf('v1'), { signal }));
+    expect(commit).toMatchObject({
+      kind: 'content',
+      oid: first,
+      type: 'commit',
+      bytes: Buffer.from(`${await repo.git('cat-file', 'commit', first)}\n`),
+    });
+    const mainTree = okValueFrom(
+      await objectsReader.read({ kind: 'ref', ref: revision('main'), peel: 'tree' }, { signal }),
+    );
+    expect(mainTree).toMatchObject({ kind: 'content', type: 'tree' });
+    await repo.git('update-ref', 'refs/heads/main', first);
+    await expect(objectsReader.read(commitOf('main'), { signal })).resolves.toMatchObject({
+      ok: true,
+      value: { kind: 'content', oid: first },
+    });
+    await expect(
+      objectsReader.read(commitOf('main'), { signal, maxBytes: 1 }),
+    ).resolves.toMatchObject({ ok: true, value: { kind: 'too-large', oid: first } });
   });
 });

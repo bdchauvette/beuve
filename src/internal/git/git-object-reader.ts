@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessByStdio } from 'node:child_process';
+import { statSync } from 'node:fs';
 import type { Socket } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
 
@@ -9,6 +10,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 import { tailOf } from '#x/text/tail-of.ts';
 
+import { execGit } from './exec-git.ts';
 import type { GitError } from './git-error.ts';
 import { gitHardeningArgs } from './git-hardening-args.ts';
 import type { ObjectReads } from './git-runner.ts';
@@ -122,6 +124,15 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
   #starts = 0;
   #restarts = 0;
   readonly #exits = new Set<Promise<void>>();
+  /**
+   * The repository's `packed-refs` (in the common directory), found once by `rev-parse
+   * --git-path` before the first request; `undefined` if git couldn't say.
+   */
+  #packedRefs: Promise<string | undefined> | undefined;
+  #packedRefsPath: string | undefined;
+  #isPackedRefsFound = false;
+  /** `packed-refs`'s identity when the running process was last sent requests. */
+  #packedRefsSeen: string | undefined;
 
   constructor(options: GitObjectReaderOptions) {
     this.#root = options.root;
@@ -137,8 +148,16 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
     { command, line, expected }: Pick<Pending, 'command' | 'line' | 'expected'>,
     signal: AbortSignal | undefined,
   ): Promise<Result<T, GitError>> {
-    if (this.#isDisposed || signal?.aborted === true) {
+    if (this.#isGone(signal)) {
       return err(aborted());
+    }
+    if (!this.#isPackedRefsFound) {
+      this.#packedRefs ??= this.#findPackedRefs();
+      this.#packedRefsPath = await this.#packedRefs;
+      this.#isPackedRefsFound = true;
+      if (this.#isGone(signal)) {
+        return err(aborted());
+      }
     }
     const answered = Promise.withResolvers<Result<T, GitError>>();
     const pending: Pending = {
@@ -163,6 +182,10 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
     this.#queue.push(pending);
     this.#scheduleFlush();
     return await answered.promise;
+  }
+
+  #isGone(signal: AbortSignal | undefined): boolean {
+    return this.#isDisposed || signal?.aborted === true;
   }
 
   #cancel(pending: Pending): void {
@@ -218,11 +241,16 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
   }
 
   #flush(): void {
-    const unsent = this.#queue.filter((pending) => !pending.isSent);
-    if (this.#isDisposed || unsent.length === 0) {
+    if (this.#isDisposed || this.#queue.every((pending) => pending.isSent)) {
       return;
     }
+    const packedRefs = this.#packedRefsIdentity();
+    if (this.#child !== undefined && packedRefs !== this.#packedRefsSeen) {
+      this.#retire();
+    }
     const child = this.#child ?? this.#start();
+    this.#packedRefsSeen = packedRefs;
+    const unsent = this.#queue.filter((pending) => !pending.isSent);
     setReferenced(child, true);
     for (const pending of unsent) {
       pending.isSent = true;
@@ -231,6 +259,62 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
       `${unsent.map((pending) => `${pending.command} ${pending.line}\n`).join('')}flush\n`,
     );
     this.#watchdog ??= this.#armWatchdog();
+  }
+
+  /**
+   * Where `packed-refs` is. A long-lived git keeps its parsed `packed-refs` until the file's stat
+   * data changes, and misses a rewrite of the same size in the same second (`git pack-refs` after
+   * updating a packed ref), answering the old value from then on; the reader checks the file
+   * itself before each write instead (see {@link #packedRefsIdentity}).
+   */
+  async #findPackedRefs(): Promise<string | undefined> {
+    const found = await execGit({
+      cwd: this.#root,
+      args: ['rev-parse', '--path-format=absolute', '--git-path', 'packed-refs'],
+      gitBinary: this.#gitBinary,
+      timeout: this.#requestTimeout,
+      policy: { kind: 'read' },
+      ...(this.#logger !== undefined && { logger: this.#logger }),
+    });
+    if (!found.ok) {
+      return undefined;
+    }
+    return found.value.toString('utf8').trim() || undefined;
+  }
+
+  /**
+   * `packed-refs`'s inode, size and nanosecond times, or `absent` (the reftable backend has
+   * none, and the files backend may not yet). A change since the running process was last sent
+   * requests means it may hold the old refs, so the next requests go to a fresh process.
+   */
+  #packedRefsIdentity(): string {
+    if (this.#packedRefsPath === undefined) {
+      return 'unknown';
+    }
+    try {
+      const stats = statSync(this.#packedRefsPath, { bigint: true, throwIfNoEntry: false });
+      if (stats === undefined) {
+        return 'absent';
+      }
+      return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(':');
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Hands everything still wanted to a fresh process after `packed-refs` changed: the old one
+   * answers nothing more and is stopped with SIGTERM. Not a restart; nothing went wrong.
+   */
+  #retire(): void {
+    const child = this.#child;
+    this.#detach();
+    this.#queue = this.#queue.filter((pending) => !pending.isAbandoned);
+    for (const pending of this.#queue) {
+      pending.isSent = false;
+    }
+    this.#logger?.debug('git cat-file refreshed: packed-refs changed', { cwd: this.#root });
+    child?.kill('SIGTERM');
   }
 
   #start(): CatFile {
