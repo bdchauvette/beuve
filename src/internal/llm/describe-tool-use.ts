@@ -9,7 +9,7 @@ const maxChars = 80;
  * paths inside `cwd` are shown relative to it. The input is the model's and untrusted, so every
  * field is checked and the result is cut to 80 characters on one line.
  */
-export function describeToolUse(tool: string, input: unknown, cwd: string): string {
+export function describeToolUse(tool: string, input: unknown, cwd?: string): string {
   const fields =
     typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
   const text = (key: string): string | undefined =>
@@ -17,7 +17,7 @@ export function describeToolUse(tool: string, input: unknown, cwd: string): stri
   const count = (key: string): number | undefined =>
     typeof fields[key] === 'number' && Number.isSafeInteger(fields[key]) ? fields[key] : undefined;
   const shown = (file: string | undefined): string =>
-    file === undefined ? '' : relativeTo(cwd, file);
+    file === undefined ? '' : cwd === undefined ? file : relativeTo(cwd, file);
   let description: string;
   switch (tool.toLowerCase()) {
     case 'read':

@@ -1,14 +1,10 @@
-import { constants } from 'node:fs';
-import type { Dirent } from 'node:fs';
-import { open, readdir, realpath, stat } from 'node:fs/promises';
-import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 
 import { z } from 'zod';
 
 /** Caps on what one tool call may read or return. Every field has a default. */
 export interface SandboxLimits {
-  /** Bytes read from one file. Defaults to 256 KiB; a longer file is cut and says so. */
+  /** Bytes of one file shown. Defaults to 256 KiB; a longer file is cut and says so. */
   readonly maxFileBytes?: number;
   /** Lines `read_file` returns at most. Defaults to 2000. */
   readonly maxLines?: number;
@@ -16,8 +12,56 @@ export interface SandboxLimits {
   readonly maxMatches?: number;
   /** Paths `glob` returns at most. Defaults to 500. */
   readonly maxPaths?: number;
-  /** Directory entries one search visits at most. Defaults to 20,000. */
-  readonly maxEntries?: number;
+  /** A file larger than this is not read at all. Defaults to 16 MiB. */
+  readonly maxBlobBytes?: number;
+}
+
+/** A file tracked at the sandbox's commit. `mode` is git's: `100644`, `100755` or `120000` (a link). */
+export interface SandboxFile {
+  readonly path: string;
+  readonly mode: string;
+  readonly objectId: string;
+}
+
+/** What reading one tracked file gave. */
+export type SandboxBytes =
+  | { readonly kind: 'bytes'; readonly bytes: Uint8Array }
+  | { readonly kind: 'too-large'; readonly size: number }
+  | { readonly kind: 'unreadable' };
+
+export interface SandboxGrepQuery {
+  readonly pattern: string;
+  readonly ignoreCase: boolean;
+  /** A tracked file or directory to search; the whole tree if absent. */
+  readonly scope?: string;
+  /** Only matches in files it accepts count. */
+  readonly accept: (path: string) => boolean;
+  readonly maxMatches: number;
+  readonly maxLineChars: number;
+}
+
+export interface SandboxGrepMatch {
+  readonly path: string;
+  readonly line: number;
+  readonly text: string;
+}
+
+/**
+ * The tracked content of one commit, which the sandbox reads instead of a checkout (TOCTOU
+ * finding 4, ADR 0087). Main serves it from git objects. Each method answers `undefined` (or
+ * `unreadable`) when git fails; the tool call then says so.
+ */
+export interface SandboxTree {
+  /** Every tracked file and symbolic link, in git's path order. */
+  readonly files: () => Promise<readonly SandboxFile[] | undefined>;
+  /** A file's raw bytes, or `too-large` past `maxBytes` (then nothing is read). */
+  readonly read: (file: SandboxFile, maxBytes: number) => Promise<SandboxBytes>;
+  /** Lines holding a fixed string, in git's order, stopped one match past `maxMatches`. */
+  readonly grep: (
+    query: SandboxGrepQuery,
+  ) => Promise<
+    { readonly matches: readonly SandboxGrepMatch[]; readonly isCapped: boolean } | undefined
+  >;
 }
 
 /** A tool definition in the OpenAI chat completions `tools` shape. */
@@ -36,14 +80,26 @@ export interface SandboxResult {
   readonly denied: boolean;
 }
 
-/** Read-only file tools confined to one directory, for a model without its own harness. */
+/** Read-only file tools over one commit's tree, for a model without its own harness. */
 export interface ReadOnlySandbox {
   readonly definitions: readonly SandboxToolDefinition[];
   /** Runs one call with the model's raw JSON arguments. Never rejects. */
   readonly run: (name: string, rawArguments: string) => Promise<SandboxResult>;
 }
 
+interface Listing {
+  /** Paths to files and links, in git's order. */
+  readonly byPath: ReadonlyMap<string, SandboxFile>;
+  /** Every directory that holds a tracked file, `''` (the root) included. */
+  readonly directories: ReadonlySet<string>;
+}
+
 const maxLineChars = 300;
+const symlinkMode = '120000';
+/** Links followed while resolving one path; past this the path is refused, like `ELOOP`. */
+const maxSymlinkHops = 8;
+/** A link's target is a path, so its blob is small; a larger one is not followed. */
+const maxLinkTargetBytes = 4096;
 
 const readFileArguments = z.strictObject({
   path: z.string().min(1).max(4096),
@@ -67,54 +123,108 @@ const matchesNothing = /(?!)/u;
 const globToken = /\*\*\/|\*\*|\*|\?|\{|\}|,|\[[^\]]+\]|[.+^$()|\\[\]/]/gu;
 
 /**
- * `read_file`, `grep` and `glob` over `root` (the session worktree) for the OpenAI-compatible
- * adapter (ADR 0071). Nothing writes, runs or fetches. Every path is resolved against `root`'s
- * real path and refused when it leaves it, lexically (`..`, an absolute path elsewhere) or through
- * a symbolic link (the target's real path must be inside too); searches never follow links and
- * skip `.git`. `grep` matches a fixed string, never a regular expression, so a model-written
- * pattern can't hang main's event loop. Sizes, lines, matches, paths and visited entries are
- * capped, and a capped answer says so.
+ * `read_file`, `grep` and `glob` over one commit's tracked files for the OpenAI-compatible
+ * adapter (ADR 0071, 0087). Nothing writes, runs or fetches, and nothing touches the filesystem:
+ * every byte comes from git objects at the pinned commit, so a checkout changing underneath (a
+ * swapped symlink, a file written into it) can't change what the model reads. Paths are
+ * repository-relative and case-sensitive; one that leaves the tree lexically (`..`, an absolute
+ * path) is refused. A symbolic link is a blob holding its target: `read_file` and a `grep` scope
+ * follow links within the tree, resolving every component lexically (at most 8 links), and refuse
+ * a target that is absolute or leaves the tree; `grep` and `glob` list only regular files.
+ * `grep` matches a fixed string (`git grep -F`), never a regular expression, so a model-written
+ * pattern can't hang main's event loop. Sizes, lines, matches and paths are capped, and a capped
+ * answer says so.
  */
-export function createReadOnlySandbox(root: string, limits: SandboxLimits = {}): ReadOnlySandbox {
+export function createReadOnlySandbox(
+  tree: SandboxTree,
+  limits: SandboxLimits = {},
+): ReadOnlySandbox {
+  /** Where a requested path leads in the tree. */
+  type Resolved =
+    | { readonly kind: 'file'; readonly file: SandboxFile }
+    | { readonly kind: 'directory'; readonly path: string }
+    | { readonly kind: 'refused'; readonly output: string; readonly denied: boolean };
   const caps = {
     maxFileBytes: limits.maxFileBytes ?? 256 * 1024,
     maxLines: limits.maxLines ?? 2000,
     maxMatches: limits.maxMatches ?? 100,
     maxPaths: limits.maxPaths ?? 500,
-    maxEntries: limits.maxEntries ?? 20_000,
+    maxBlobBytes: limits.maxBlobBytes ?? 16 * 1024 * 1024,
   };
-  let realRoot: Promise<string> | undefined;
-  const rootPath = async (): Promise<string> => {
-    realRoot ??= realpath(root);
-    return realRoot;
+  let listed: Promise<Listing | undefined> | undefined;
+  const listing = async (): Promise<Listing | undefined> => {
+    listed ??= (async (): Promise<Listing | undefined> => {
+      const files = await tree.files();
+      return files === undefined ? undefined : listingFrom(files);
+    })();
+    return listed;
   };
 
-  /** The real path of `requested` inside the root, or why it is refused. */
-  const resolve = async (
-    requested: string,
-  ): Promise<{ readonly path: string } | { readonly refused: string }> => {
-    const base = await rootPath();
-    const lexical = path.resolve(base, requested);
-    if (!isInside(base, lexical)) {
-      return { refused: `refused: ${requested} is outside the working directory` };
+  /** Where `requested` leads, following links inside the tree, or why it is refused. */
+  const resolve = async (requested: string): Promise<Resolved> => {
+    const outside = {
+      kind: 'refused',
+      output: `refused: ${requested} is outside the working directory`,
+      denied: true,
+    } as const;
+    const notFound = { kind: 'refused', output: `not found: ${requested}`, denied: false } as const;
+    const lexical = path.posix.normalize(requested);
+    if (lexical === '..' || path.posix.isAbsolute(lexical) || lexical.startsWith('../')) {
+      return outside;
     }
-    let real: string;
-    try {
-      real = await realpath(lexical);
-    } catch {
-      return { refused: `not found: ${requested}` };
+    const files = await listing();
+    if (files === undefined) {
+      throw new Error('the tree could not be listed');
     }
-    return isInside(base, real)
-      ? { path: real }
-      : { refused: `refused: ${requested} links outside the working directory` };
+    let remaining = segmentsOf(lexical);
+    let resolved: string[] = [];
+    let hops = 0;
+    for (let segment = remaining.shift(); segment !== undefined; segment = remaining.shift()) {
+      const file = files.byPath.get([...resolved, segment].join('/'));
+      if (file?.mode === symlinkMode) {
+        hops += 1;
+        if (hops > maxSymlinkHops) {
+          return {
+            kind: 'refused',
+            output: `refused: ${requested} has too many links`,
+            denied: true,
+          };
+        }
+        const target = await linkTarget(tree, file);
+        if (target === undefined) {
+          return notFound;
+        }
+        const joined = path.posix.normalize(path.posix.join(resolved.join('/'), target));
+        if (joined === '..' || path.posix.isAbsolute(target) || joined.startsWith('../')) {
+          return {
+            kind: 'refused',
+            output: `refused: ${requested} links outside the working directory`,
+            denied: true,
+          };
+        }
+        remaining = [...segmentsOf(joined), ...remaining];
+        resolved = [];
+        continue;
+      }
+      if (file !== undefined && remaining.length > 0) {
+        return notFound;
+      }
+      resolved.push(segment);
+    }
+    const found = resolved.join('/');
+    const file = files.byPath.get(found);
+    if (file !== undefined) {
+      return { kind: 'file', file };
+    }
+    return files.directories.has(found) ? { kind: 'directory', path: found } : notFound;
   };
 
   const readFileTool = async (input: z.infer<typeof readFileArguments>): Promise<SandboxResult> => {
     const resolved = await resolve(input.path);
-    if ('refused' in resolved) {
-      return { output: resolved.refused, denied: resolved.refused.startsWith('refused') };
+    if (resolved.kind === 'refused') {
+      return { output: resolved.output, denied: resolved.denied };
     }
-    const text = await readCapped(resolved.path, caps.maxFileBytes);
+    const text = resolved.kind === 'file' ? await readText(tree, resolved.file, caps) : undefined;
     if (text === undefined) {
       return { output: `not a readable text file: ${input.path}`, denied: false };
     }
@@ -135,67 +245,64 @@ export function createReadOnlySandbox(root: string, limits: SandboxLimits = {}):
   };
 
   const grepTool = async (input: z.infer<typeof grepArguments>): Promise<SandboxResult> => {
-    const base = await rootPath();
     const scope = await resolve(input.path ?? '.');
-    if ('refused' in scope) {
-      return { output: scope.refused, denied: scope.refused.startsWith('refused') };
+    if (scope.kind === 'refused') {
+      return { output: scope.output, denied: scope.denied };
     }
-    const needle = input.ignore_case === true ? input.pattern.toLowerCase() : input.pattern;
     const matcher = input.glob === undefined ? undefined : globMatcher(input.glob);
     if (matcher === null) {
       return tooManyWildcards();
     }
-    const matches: string[] = [];
-    let isCapped = false;
-    for await (const file of walk(scope.path, caps.maxEntries)) {
-      const relative = path.relative(base, file);
-      if (matcher !== undefined && !matcher.test(relative) && !matcher.test(path.basename(file))) {
-        continue;
-      }
-      const text = await readCapped(file, caps.maxFileBytes);
-      const found =
-        text === undefined
-          ? []
-          : matchingLines(text.content, needle, input.ignore_case === true).map(
-              ({ number, line }) => `${relative}:${String(number)}: ${line.slice(0, maxLineChars)}`,
-            );
-      const room = caps.maxMatches - matches.length;
-      matches.push(...found.slice(0, room));
-      if (found.length > room) {
-        isCapped = true;
-        break;
-      }
+    const files = await listing();
+    const scopePath = scope.kind === 'file' ? scope.file.path : scope.path;
+    const found = await tree.grep({
+      pattern: input.pattern,
+      ignoreCase: input.ignore_case === true,
+      ...(scopePath !== '' && { scope: scopePath }),
+      accept: (file) =>
+        files?.byPath.get(file)?.mode !== symlinkMode &&
+        (matcher === undefined || matcher.test(file) || matcher.test(path.posix.basename(file))),
+      maxMatches: caps.maxMatches,
+      maxLineChars,
+    });
+    if (found === undefined) {
+      return { output: 'the grep call failed', denied: false };
     }
+    const lines = found.matches.map(
+      (match) => `${match.path}:${String(match.line)}: ${match.text}`,
+    );
     return {
       output:
-        matches.length === 0
+        lines.length === 0
           ? 'no matches'
           : [
-              ...matches,
-              ...(isCapped ? [`[stopped at ${String(caps.maxMatches)} matches]`] : []),
+              ...lines,
+              ...(found.isCapped ? [`[stopped at ${String(caps.maxMatches)} matches]`] : []),
             ].join('\n'),
       denied: false,
     };
   };
 
   const globTool = async (input: z.infer<typeof globArguments>): Promise<SandboxResult> => {
-    const base = await rootPath();
     const matcher = globMatcher(input.pattern);
     if (matcher === null) {
       return tooManyWildcards();
     }
+    const files = await listing();
+    if (files === undefined) {
+      return { output: 'the glob call failed', denied: false };
+    }
     const found: string[] = [];
     let isCapped = false;
-    for await (const file of walk(base, caps.maxEntries)) {
-      const relative = path.relative(base, file).split(path.sep).join('/');
-      if (!matcher.test(relative)) {
+    for (const file of files.byPath.values()) {
+      if (file.mode === symlinkMode || !matcher.test(file.path)) {
         continue;
       }
       if (found.length === caps.maxPaths) {
         isCapped = true;
         break;
       }
-      found.push(relative);
+      found.push(file.path);
     }
     return {
       output:
@@ -250,7 +357,7 @@ const definitions: readonly SandboxToolDefinition[] = [
     function: {
       name: 'read_file',
       description:
-        'Read a text file of the repository (the working directory), with line numbers. Paths are relative to the repository root.',
+        'Read a text file tracked at the reviewed commit, with line numbers. Paths are relative to the repository root and case-sensitive.',
       parameters: {
         type: 'object',
         properties: {
@@ -268,7 +375,7 @@ const definitions: readonly SandboxToolDefinition[] = [
     function: {
       name: 'grep',
       description:
-        'Find lines containing a fixed string (not a regular expression) in the repository. Answers path:line: text.',
+        'Find lines containing a fixed string (not a regular expression) in the files tracked at the reviewed commit. Answers path:line: text.',
       parameters: {
         type: 'object',
         properties: {
@@ -289,7 +396,8 @@ const definitions: readonly SandboxToolDefinition[] = [
     type: 'function',
     function: {
       name: 'glob',
-      description: 'List repository files whose relative path matches a glob such as src/**/*.ts.',
+      description:
+        'List files tracked at the reviewed commit whose repository-relative path matches a glob such as src/**/*.ts.',
       parameters: {
         type: 'object',
         properties: { pattern: { type: 'string' } },
@@ -300,21 +408,54 @@ const definitions: readonly SandboxToolDefinition[] = [
   },
 ];
 
-function isInside(base: string, candidate: string): boolean {
-  const relative = path.relative(base, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+function listingFrom(files: readonly SandboxFile[]): Listing {
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const directories = new Set<string>(['']);
+  for (const file of files) {
+    for (
+      let slash = file.path.indexOf('/');
+      slash !== -1;
+      slash = file.path.indexOf('/', slash + 1)
+    ) {
+      directories.add(file.path.slice(0, slash));
+    }
+  }
+  return { byPath, directories };
 }
 
-/** The 1-based numbers and text of the lines that contain `needle`, a fixed string. */
-function matchingLines(
-  content: string,
-  needle: string,
-  isCaseInsensitive: boolean,
-): { readonly number: number; readonly line: string }[] {
-  return content
-    .split('\n')
-    .map((line, index) => ({ number: index + 1, line }))
-    .filter(({ line }) => (isCaseInsensitive ? line.toLowerCase() : line).includes(needle));
+/** A normalized relative path's segments; none for the root. */
+function segmentsOf(normalized: string): string[] {
+  return normalized === '.' || normalized === '' ? [] : normalized.split('/').filter(Boolean);
+}
+
+/** The text a link's blob holds, or `undefined` when it can't be read as one. */
+async function linkTarget(tree: SandboxTree, link: SandboxFile): Promise<string | undefined> {
+  const read = await tree.read(link, maxLinkTargetBytes);
+  return read.kind === 'bytes' && !read.bytes.includes(0) && read.bytes.length > 0
+    ? Buffer.from(read.bytes).toString('utf8')
+    : undefined;
+}
+
+/**
+ * At most `maxFileBytes` of a file as UTF-8 text, or `undefined` for a file larger than
+ * `maxBlobBytes`, one with a NUL byte in what is shown (binary), or one git can't read.
+ */
+async function readText(
+  tree: SandboxTree,
+  file: SandboxFile,
+  caps: { readonly maxFileBytes: number; readonly maxBlobBytes: number },
+): Promise<{ readonly content: string; readonly isCut: boolean } | undefined> {
+  const read = await tree.read(file, caps.maxBlobBytes);
+  if (read.kind !== 'bytes') {
+    return undefined;
+  }
+  const shown = read.bytes.subarray(0, caps.maxFileBytes);
+  return shown.includes(0)
+    ? undefined
+    : {
+        content: Buffer.from(shown).toString('utf8'),
+        isCut: read.bytes.length > caps.maxFileBytes,
+      };
 }
 
 function tooManyWildcards(): SandboxResult {
@@ -323,79 +464,6 @@ function tooManyWildcards(): SandboxResult {
 
 function invalidArguments(error: z.ZodError): SandboxResult {
   return { output: `invalid arguments: ${z.prettifyError(error)}`, denied: false };
-}
-
-/**
- * At most `maxBytes` of a regular file as UTF-8 text, or `undefined` if it is not one. The file is
- * opened once and the handle is asked what it is (ADR 0082), so a swap between a check and the
- * read can't make it read something else; `O_NONBLOCK` keeps a FIFO from blocking the open.
- */
-async function readCapped(
-  file: string,
-  maxBytes: number,
-): Promise<{ readonly content: string; readonly isCut: boolean } | undefined> {
-  await using handle = await openToRead(file);
-  if (handle === undefined) {
-    return undefined;
-  }
-  const stats = await handle.stat();
-  if (!stats.isFile()) {
-    return undefined;
-  }
-  const buffer = Buffer.alloc(Math.min(maxBytes, stats.size));
-  const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-  const bytes = buffer.subarray(0, bytesRead);
-  return bytes.includes(0)
-    ? undefined
-    : { content: bytes.toString('utf8'), isCut: stats.size > maxBytes };
-}
-
-/** `file` opened for reading, or `undefined` when it can't be. */
-async function openToRead(file: string): Promise<FileHandle | undefined> {
-  try {
-    return await open(file, constants.O_RDONLY | constants.O_NONBLOCK);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Regular files under `directory` (or `directory` itself when it is one), in a stable order,
- * without following symbolic links and skipping `.git`, visiting at most `maxEntries` entries.
- */
-async function* walk(directory: string, maxEntries: number): AsyncGenerator<string> {
-  const top = await stat(directory);
-  if (top.isFile()) {
-    yield directory;
-    return;
-  }
-  const pending = [directory];
-  let visited = 0;
-  while (pending.length > 0) {
-    const current = pending.shift();
-    if (current === undefined) {
-      break;
-    }
-    let entries: Dirent[];
-    try {
-      entries = await readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    entries.sort((left, right) => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-      visited += 1;
-      if (visited > maxEntries) {
-        return;
-      }
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory() && entry.name !== '.git') {
-        pending.push(full);
-      } else if (entry.isFile()) {
-        yield full;
-      }
-    }
-  }
 }
 
 /**

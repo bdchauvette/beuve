@@ -1,5 +1,3 @@
-import { stat } from 'node:fs/promises';
-
 import { z } from 'zod';
 
 import { errorFrom } from '#x/error/error-from.ts';
@@ -80,6 +78,7 @@ const maxToolCallsPerTurn = 16;
 export function createOpenAiCompatibleModel(options: OpenAiCompatibleModelOptions): LanguageModel {
   const capabilities: ModelCapabilities = {
     tools: options.tools === true,
+    checkout: false,
     structuredOutput: options.structuredOutput === 'prompted' ? 'prompted' : 'native',
     contextWindowTokens: options.contextWindowTokens,
     ...(options.maxOutputTokens !== undefined && { maxOutputTokens: options.maxOutputTokens }),
@@ -185,10 +184,9 @@ async function runChat(
     return err({ kind: 'cancelled' });
   }
   const sandbox =
-    options.tools === true ? createReadOnlySandbox(request.cwd, options.sandbox) : undefined;
-  if (sandbox !== undefined && !(await isDirectory(request.cwd))) {
-    return err({ kind: 'invalid-request', reason: 'cwd is not a directory' });
-  }
+    options.tools === true && request.tree !== undefined
+      ? createReadOnlySandbox(request.tree, options.sandbox)
+      : undefined;
   const deadline = timeoutSignal(request.timeout);
   const signal =
     request.signal === undefined ? deadline : AbortSignal.any([request.signal, deadline]);
@@ -637,13 +635,4 @@ function logFinished(output: ModelOutput<unknown>, options: OpenAiCompatibleMode
     turns: output.turns,
     deniedToolUses: output.deniedToolUses,
   });
-}
-
-async function isDirectory(directory: string): Promise<boolean> {
-  try {
-    const stats = await stat(directory);
-    return stats.isDirectory();
-  } catch {
-    return false;
-  }
 }

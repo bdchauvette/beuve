@@ -2,9 +2,11 @@ import type { z } from 'zod';
 
 import type { Result } from '#x/result/result.ts';
 
+import type { SandboxTree } from './create-read-only-sandbox.ts';
+
 /**
  * beuve's port to a language model (ADR 0019, 0030). Vendor-neutral: an adapter turns one request
- * into one agentic, read-only run in `cwd`. Neither method rejects; every failure is a
+ * into one agentic, read-only run over `cwd` or `tree`. Neither method rejects; every failure is a
  * {@link ModelError}. Domains don't import this type (ADR 0002): each declares the structural
  * subset it needs, and main passes an adapter in.
  */
@@ -23,8 +25,14 @@ export interface LanguageModel {
  * and only validation enforces it. `contextWindowTokens` is `undefined` when unknown.
  */
 export interface ModelCapabilities {
-  /** Whether the model may read the worktree with read-only tools. */
+  /** Whether the model may read the repository with read-only tools. */
   readonly tools: boolean;
+  /**
+   * Whether a run reads files from `cwd` itself (Claude Code's own `Read`, `Grep` and `Glob`), so
+   * the request needs a checkout. `false` when its tools read `tree` (git objects) or it has
+   * none; such a request needs no worktree lease (ADR 0087).
+   */
+  readonly checkout: boolean;
   readonly structuredOutput: 'native' | 'prompted';
   readonly contextWindowTokens: number | undefined;
   readonly maxOutputTokens?: number;
@@ -54,8 +62,13 @@ export interface BaseModelRequest {
   readonly system: string;
   /** The conversation, oldest first; the last message is the user's. */
   readonly messages: readonly ModelMessage[];
-  /** Absolute directory the model may read (the session worktree). It must never be written. */
-  readonly cwd: string;
+  /**
+   * Absolute directory the model may read (the session worktree), which must never be written.
+   * Required by adapters whose capabilities say `checkout`; the others never read it.
+   */
+  readonly cwd?: string | undefined;
+  /** The reviewed commit's tracked files, for adapters whose tools read git objects (ADR 0087). */
+  readonly tree?: SandboxTree | undefined;
   readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal | undefined;
   /** Coarse progress for a status line. Carries no prompt or file content. */
@@ -65,6 +78,9 @@ export interface BaseModelRequest {
   /** Overrides the configured model for this request. */
   readonly model?: string;
 }
+
+/** A request to an adapter that reads a checkout: `cwd` is set. */
+export type CheckoutModelRequest = BaseModelRequest & { readonly cwd: string };
 
 export interface ModelRequest<T> extends BaseModelRequest {
   /** The shape of the answer. Adapters send it as JSON Schema and validate the reply against it. */

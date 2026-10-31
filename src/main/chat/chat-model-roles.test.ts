@@ -24,7 +24,7 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
       {
         chunks: [],
         structured: {
-          findings: [finding(2, 'The constant hides a missing computation')],
+          findings: [finding('The constant hides a missing computation')],
           verdicts: [{ finding: 1, verdict: 'refuted', reason: 'The CLI would refute it.' }],
         },
       },
@@ -77,6 +77,65 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
     expect(messages[1]?.content).toContain('The diff at these lines:');
   });
 
+  test('an OpenAI-compatible /review reads git objects with its tools and leases no checkout', async ({
+    expect,
+    fakeClaude,
+    openAiApi,
+    startChat,
+    worktreeRoot,
+  }) => {
+    const claude = fakeClaude.scripted({ chunks: [] }, 'unused');
+    const api = await openAiApi();
+    api.reply(
+      {
+        kind: 'stream',
+        toolCalls: [
+          { id: 'g', name: 'glob', arguments: '{"pattern":"*.rs"}' },
+          { id: 'r', name: 'read_file', arguments: '{"path":"feature.rs"}' },
+          { id: 'e', name: 'read_file', arguments: '{"path":"../outside"}' },
+        ],
+      },
+      {
+        kind: 'stream',
+        content: [JSON.stringify({ findings: [finding('The constant hides a computation')] })],
+      },
+      {
+        kind: 'stream',
+        content: ['{"verdicts":[{"finding":1,"verdict":"confirmed","reason":"Line 2."}]}'],
+      },
+    );
+    const { services, chat, sessionId, settled } = await startChat(claude.settings);
+    const saved = okValueFrom(
+      await services.models.save({
+        label: 'Local reviewer',
+        kind: 'openai-compatible',
+        model: 'qwen3:8b',
+        baseUrl: api.baseUrl,
+        tools: true,
+        contextWindowTokens: 32_768,
+      }),
+    );
+    const id = saved.entries.at(-1)?.id ?? '';
+    okValueFrom(await services.models.setRole('review', id));
+    okValueFrom(await services.models.setRole('verify', id));
+
+    const asked = okValueFrom(
+      await chat.ask({ sessionId, question: '/review', command: { kind: 'review' } }),
+    );
+    const answer = await settled(asked.answer.id);
+    expect(answer.status).toBe('done');
+    expect(answer.review?.findings).toMatchObject([{ startLine: 2, check: 'confirmed' }]);
+    const second = api.requests[1]?.body?.['messages'] as { role: string; content: string }[];
+    const tools = second.filter((message) => message.role === 'tool');
+    expect(tools.map((message) => message.content)).toStrictEqual([
+      'app.rs\nfeature.rs',
+      expect.stringContaining('1\t') as string,
+      'refused: ../outside is outside the working directory',
+    ]);
+    expect(claude.calls()).toStrictEqual([]);
+    expect(existsSync(worktreeRoot)).toBe(false);
+  });
+
   test('tests a registry entry through the chat queue, timed, with typed failures', async ({
     expect,
     openAiApi,
@@ -118,7 +177,9 @@ describe('chat: model roles (integration: SQLite + git + fake claude + fake Open
   });
 });
 
-function finding(line: number, title: string): object {
+/** A finding on line 2 of `feature.rs`, the line the feature changed. */
+function finding(title: string): object {
+  const line = 2;
   return {
     path: 'feature.rs',
     startLine: line,

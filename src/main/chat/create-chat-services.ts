@@ -54,7 +54,7 @@ import { chatHistoryFrom } from '#internal/chat/chat-history-from.ts';
 import { updateChatAnswer } from '#internal/chat/update-chat-answer.ts';
 import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
-import type { ModelError } from '#internal/llm/language-model.ts';
+import type { LanguageModel, ModelError } from '#internal/llm/language-model.ts';
 import { KeyedQueue } from '#x/collections/keyed-queue.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -66,7 +66,7 @@ import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSessionHead } from '../sessions/refresh-session-head.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
-import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
+import type { SessionWorktrees, WorktreeLease } from '../worktrees/create-session-worktrees.ts';
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import type { ClaudeCodeSettings } from './claude-code-settings.ts';
@@ -75,6 +75,8 @@ import { describeChatError } from './describe-chat-error.ts';
 import { chatFailureFromModelError } from './chat-failure-from-model-error.ts';
 import { resolveChatMentions } from './resolve-chat-mentions.ts';
 import { describeModelError } from '../models/describe-model-error.ts';
+import { bindModelTree } from './bind-model-tree.ts';
+import { createSandboxTree } from './create-sandbox-tree.ts';
 import { resolveLanguageModel } from '../models/resolve-language-model.ts';
 import type { ModelResolverDeps, ResolvedModel } from '../models/resolve-language-model.ts';
 import { chatMessageViewFrom } from './chat-message-view-from.ts';
@@ -181,12 +183,17 @@ type Outcome =
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly code: ChatErrorCode };
 
-/** What a request runs against: the diff, its checkout and its files. Disposing releases the checkout. */
+/**
+ * What a request runs against: the diff, the head's files from git objects, and a checkout only
+ * when one of its models reads one (ADR 0087). Disposing releases the checkout.
+ */
 interface Prepared extends Disposable {
   readonly diff: ReviewDiff;
-  readonly worktreePath: string;
+  readonly worktreePath: string | undefined;
   readonly worktreePaths: ReadonlySet<string> | undefined;
   readonly findings: readonly ImpactFindingView[] | undefined;
+  /** Binds a resolved model to the head's tree, for adapters whose tools read objects. */
+  readonly bind: (model: LanguageModel) => LanguageModel;
 }
 
 /**
@@ -286,7 +293,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const prepare = async (
     job: AnswerJob | CompactJob,
-    options: { readonly withImpact: boolean },
+    options: {
+      readonly withImpact: boolean;
+      /** The models the request will ask; a checkout is leased only if one of them reads it. */
+      readonly models: readonly LanguageModel[];
+    },
   ): Promise<Result<Prepared, Outcome>> => {
     const isAborted = (): boolean => job.controller.signal.aborted;
     const unavailable = (): Result<never, Outcome> =>
@@ -317,30 +328,40 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (isAborted()) {
       return err({ status: 'cancelled' });
     }
-    const leased = await worktrees.acquire(
-      refreshed.repository,
-      { kind: 'session-head', sessionId: job.sessionId, headSha: refreshed.session.headSha },
-      { signal: job.controller.signal },
-    );
-    if (isAborted()) {
-      if (leased.ok) {
-        leased.value[Symbol.dispose]();
+    let worktree: WorktreeLease | undefined;
+    if (options.models.some((model) => model.capabilities.checkout)) {
+      const leased = await worktrees.acquire(
+        refreshed.repository,
+        { kind: 'session-head', sessionId: job.sessionId, headSha: refreshed.session.headSha },
+        { signal: job.controller.signal },
+      );
+      if (isAborted()) {
+        if (leased.ok) {
+          leased.value[Symbol.dispose]();
+        }
+        return err({ status: 'cancelled' });
       }
-      return err({ status: 'cancelled' });
+      if (!leased.ok) {
+        worktreeFailure(logger, leased.error);
+        return unavailable();
+      }
+      worktree = leased.value;
     }
-    if (!leased.ok) {
-      worktreeFailure(logger, leased.error);
-      return unavailable();
-    }
-    const worktree = leased.value;
-    const tree = await listTreePaths(refreshed.repository, refreshed.session.headSha);
+    const paths = await listTreePaths(refreshed.repository, refreshed.session.headSha);
+    const tree = createSandboxTree(
+      context,
+      refreshed.repository,
+      refreshed.session.headSha,
+      job.controller.signal,
+    );
     return ok({
       diff: diff.value,
-      worktreePath: worktree.path,
-      worktreePaths: tree.ok ? new Set(tree.value) : undefined,
+      worktreePath: worktree?.path,
+      worktreePaths: paths.ok ? new Set(paths.value) : undefined,
       findings,
+      bind: (model): LanguageModel => bindModelTree(model, tree),
       [Symbol.dispose]: (): void => {
-        worktree[Symbol.dispose]();
+        worktree?.[Symbol.dispose]();
       },
     });
   };
@@ -396,7 +417,11 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!before.ok) {
       return before.error;
     }
-    const prepared = await prepare(job, { withImpact: true });
+    const model = await resolve('chat');
+    if (!model.ok) {
+      return model.error;
+    }
+    const prepared = await prepare(job, { withImpact: true, models: [model.value.model] });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -413,12 +438,16 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
-    return await askModel(job, input, 'chat');
+    return await askModel(job, input, 'chat', model.value, prepared.value);
   };
 
   /** `/summarize` (ADR 0056): from the diff and the code only, never the stated intent. */
   const summarize = async (job: AnswerJob): Promise<Outcome> => {
-    const prepared = await prepare(job, { withImpact: false });
+    const model = await resolve('summarize');
+    if (!model.ok) {
+      return model.error;
+    }
+    const prepared = await prepare(job, { withImpact: false, models: [model.value.model] });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -433,19 +462,17 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
-    return await askModel(job, input, 'summarize');
+    return await askModel(job, input, 'summarize', model.value, prepared.value);
   };
 
   const askModel = async (
     job: AnswerJob,
     input: ReturnType<typeof chatQuestionFrom>,
     role: ModelRole,
+    resolved: ResolvedModel,
+    prepared: Prepared,
   ): Promise<Outcome> => {
-    const model = await resolve(role);
-    if (!model.ok) {
-      return model.error;
-    }
-    const { name } = model.value;
+    const { name } = resolved;
     const stream = streamInto(job);
     const report = (event: ModelStreamEvent): void => {
       stream(event);
@@ -456,7 +483,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     };
     pushStatus(job, role === 'summarize' ? `${name} is summarizing the change` : `Asking ${name}`);
     const asked = await askQuestion<ModelError>(input, {
-      model: model.value.model,
+      model: prepared.bind(resolved.model),
       signal: job.controller.signal,
       onDelta: (delta): void => {
         report({ kind: 'text', delta });
@@ -498,7 +525,18 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     };
     const stream = streamInto(job);
     progress('Building the review diff');
-    const prepared = await prepare(job, { withImpact: true });
+    const model = await resolve('review');
+    if (!model.ok) {
+      return model.error;
+    }
+    const verifier = command.verify === false ? undefined : await resolve('verify');
+    if (verifier?.ok === false) {
+      return verifier.error;
+    }
+    const prepared = await prepare(job, {
+      withImpact: true,
+      models: [model.value.model, ...(verifier?.ok === true ? [verifier.value.model] : [])],
+    });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -520,14 +558,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     });
     if (input.files.length === 0) {
       return { status: 'failed', code: 'nothing-to-review' };
-    }
-    const model = await resolve('review');
-    if (!model.ok) {
-      return model.error;
-    }
-    const verifier = command.verify === false ? undefined : await resolve('verify');
-    if (verifier?.ok === false) {
-      return verifier.error;
     }
     const { name } = model.value;
     let toolUses = 0;
@@ -564,8 +594,8 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       }
     };
     const reviewed = await reviewChange<ModelError>(input, {
-      model: model.value.model,
-      ...(verifier?.ok === true && { verifier: verifier.value.model }),
+      model: prepared.value.bind(model.value.model),
+      ...(verifier?.ok === true && { verifier: prepared.value.bind(verifier.value.model) }),
       ...(command.effort !== undefined && { effort: command.effort }),
       verifierEffort: 'low',
       signal: job.controller.signal,
@@ -682,15 +712,15 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         message: 'Nothing to compact yet: there is no question since the last summary.',
       });
     }
-    const prepared = await prepare(job, { withImpact: false });
-    if (!prepared.ok) {
-      return failed(prepared.error);
-    }
-    using _checkout = prepared.value;
     const model = await resolve('compact');
     if (!model.ok) {
       return failed(model.error);
     }
+    const prepared = await prepare(job, { withImpact: false, models: [model.value.model] });
+    if (!prepared.ok) {
+      return failed(prepared.error);
+    }
+    using _checkout = prepared.value;
     const question = chatQuestionFrom({
       diff: prepared.value.diff,
       worktreePath: prepared.value.worktreePath,
@@ -712,7 +742,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         turns,
       },
       {
-        model: model.value.model,
+        model: prepared.value.bind(model.value.model),
         signal: job.controller.signal,
         ...(claude.timeout !== undefined && { timeout: claude.timeout }),
       },

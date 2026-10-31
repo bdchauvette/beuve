@@ -8,7 +8,7 @@ export interface ChatCompaction {
   readonly baseSha: string;
   readonly headSha: string;
   /** The head worktree the model runs in; citations by absolute path inside it are made relative. */
-  readonly worktreePath: string;
+  readonly worktreePath?: string | undefined;
   /** The reviewed diff's files, listed by path and used to check citations. */
   readonly files: readonly ChatFile[];
   readonly worktreePaths?: ReadonlySet<string>;

@@ -9,8 +9,11 @@ export interface ChatQuestion {
   /** The reviewed change: from `baseSha` (the fork point) to `headSha`. */
   readonly baseSha: CommitSha;
   readonly headSha: CommitSha;
-  /** Absolute path of the session worktree, checked out at `headSha`. The model may read it. */
-  readonly worktreePath: string;
+  /**
+   * Absolute path of the session worktree, checked out at `headSha`, which the model may read;
+   * absent when the model reads git objects or nothing (ADR 0087), so no checkout was made.
+   */
+  readonly worktreePath?: string | undefined;
   /** The reviewer's question, as typed; unused for a {@link ChatTask}. */
   readonly question: string;
   /**

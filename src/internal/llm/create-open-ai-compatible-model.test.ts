@@ -1,6 +1,3 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe } from 'vitest';
 import { z } from 'zod';
 
@@ -9,6 +6,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { createOpenAiCompatibleModel } from './create-open-ai-compatible-model.ts';
 import type { OpenAiCompatibleModelOptions } from './create-open-ai-compatible-model.ts';
 import type { ModelProgress, TextModelRequest, TextStreamEvent } from './language-model.ts';
+import { createMemoryTree } from './testing/create-memory-tree.ts';
 import { test } from './testing/test.ts';
 
 function textRequest(cwd: string, overrides: Partial<TextModelRequest> = {}): TextModelRequest {
@@ -108,6 +106,7 @@ describe('createOpenAiCompatibleModel', () => {
     });
     expect(configured.capabilities).toStrictEqual({
       tools: true,
+      checkout: false,
       structuredOutput: 'native',
       contextWindowTokens: 32_768,
       streaming: true,
@@ -195,8 +194,7 @@ describe('createOpenAiCompatibleModel', () => {
     tempDir,
     signal,
   }) => {
-    mkdirSync(path.join(tempDir, 'src'));
-    writeFileSync(path.join(tempDir, 'src', 'auth.ts'), 'export function validate() {}\n');
+    const tree = createMemoryTree({ 'src/auth.ts': 'export function validate() {}\n' });
     const api = await openAiApi();
     api.reply(
       {
@@ -219,6 +217,7 @@ describe('createOpenAiCompatibleModel', () => {
     const output = okValueFrom(
       await model(api.baseUrl, { tools: true }).runText(
         textRequest(tempDir, {
+          tree,
           onText: (event) => {
             text.push(event);
           },
@@ -267,8 +266,11 @@ describe('createOpenAiCompatibleModel', () => {
       toolCalls: [{ id: 'g', name: 'glob', arguments: '{"pattern":"*"}' }],
     } as const;
     api.reply(call, call);
+    const tree = createMemoryTree({ 'a.ts': '' });
     await expect(
-      model(api.baseUrl, { tools: true, maxTurns: 2 }).runText(textRequest(tempDir, { signal })),
+      model(api.baseUrl, { tools: true, maxTurns: 2 }).runText(
+        textRequest(tempDir, { tree, signal }),
+      ),
     ).resolves.toMatchObject({ ok: false, error: { kind: 'model-failed', reason: 'max-turns' } });
   });
 

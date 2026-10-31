@@ -57,6 +57,7 @@ describe('resolveLanguageModel', () => {
     expect(resolved.name).toBe('Claude Code');
     expect(resolved.model.capabilities).toStrictEqual({
       tools: true,
+      checkout: true,
       structuredOutput: 'native',
       contextWindowTokens: undefined,
       streaming: true,

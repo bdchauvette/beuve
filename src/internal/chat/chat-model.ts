@@ -34,7 +34,7 @@ export interface ChatModelRequest {
   readonly system: string;
   readonly messages: readonly ChatModelMessage[];
   /** The head worktree, which the model may read and must never write. */
-  readonly cwd: string;
+  readonly cwd?: string | undefined;
   readonly timeout: Temporal.Duration;
   readonly signal?: AbortSignal | undefined;
   readonly onProgress?: (progress: ChatModelProgress) => void;

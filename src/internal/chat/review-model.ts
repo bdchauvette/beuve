@@ -24,7 +24,7 @@ export interface ReviewModelRequest<T> {
   readonly system: string;
   readonly messages: readonly ChatModelMessage[];
   /** The head worktree, which the model may read and must never write. */
-  readonly cwd: string;
+  readonly cwd?: string | undefined;
   /** The shape of the answer. Adapters send it as JSON Schema and validate the reply against it. */
   readonly outputSchema: z.ZodType<T>;
   readonly timeout: Temporal.Duration;

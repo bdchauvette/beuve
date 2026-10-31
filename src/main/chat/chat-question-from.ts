@@ -14,7 +14,7 @@ import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 export interface ChatQuestionParts {
   /** The diff `session:get-review` shows. */
   readonly diff: ReviewDiff;
-  readonly worktreePath: string;
+  readonly worktreePath: string | undefined;
   readonly question: string;
   /** `/review` or `/summarize` instead of a question (ADR 0055, 0056). */
   readonly task?: ChatTask;

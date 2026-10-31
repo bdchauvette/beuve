@@ -24,6 +24,7 @@ import { flattenModelMessages } from './flatten-model-messages.ts';
 import { jsonSchemaFrom } from './json-schema-from.ts';
 import type {
   BaseModelRequest,
+  CheckoutModelRequest,
   LanguageModel,
   ModelCapabilities,
   ModelEffort,
@@ -98,6 +99,7 @@ const lockdownArgs: Record<string, null> = Object.fromEntries(
 export function createAgentSdkModel(options: AgentSdkModelOptions): LanguageModel {
   const capabilities: ModelCapabilities = {
     tools: true,
+    checkout: true,
     structuredOutput: 'native',
     contextWindowTokens: options.contextWindowTokens,
     streaming: true,
@@ -176,7 +178,14 @@ async function runAgent(
   if (request.signal?.aborted === true) {
     return err({ kind: 'cancelled' });
   }
-  if (!(await isDirectory(request.cwd))) {
+  const { cwd } = request;
+  if (cwd === undefined) {
+    return err({
+      kind: 'invalid-request',
+      reason: 'Claude Code reads a checkout: cwd is required',
+    });
+  }
+  if (!(await isDirectory(cwd))) {
     return err({ kind: 'invalid-request', reason: 'cwd is not a directory' });
   }
   await using configDir = await mkdtempDisposable(path.join(os.tmpdir(), 'beuve-claude-'));
@@ -187,7 +196,7 @@ async function runAgent(
     promptChars: request.messages.reduce((sum, message) => sum + message.content.length, 0),
     systemChars: request.system.length,
   });
-  const run = await execute(request, options, mode, configDir.path);
+  const run = await execute({ ...request, cwd }, options, mode, configDir.path);
   const duration = stopwatch.elapsed();
   if (!run.ok) {
     options.logger?.info('agent-sdk: run failed', { duration, error: run.error.kind });
@@ -230,7 +239,7 @@ interface Execution {
 }
 
 async function execute(
-  request: BaseModelRequest,
+  request: CheckoutModelRequest,
   options: AgentSdkModelOptions,
   mode: OutputMode,
   configDir: string,
@@ -325,7 +334,7 @@ async function execute(
 }
 
 function sdkOptions(
-  request: BaseModelRequest,
+  request: CheckoutModelRequest,
   options: AgentSdkModelOptions,
   mode: OutputMode,
   configDir: string,

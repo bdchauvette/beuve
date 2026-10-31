@@ -23,6 +23,7 @@ import { parseClaudeCodeEvent } from './parse-claude-code-event.ts';
 import { validateModelRequest } from './validate-model-request.ts';
 import type {
   BaseModelRequest,
+  CheckoutModelRequest,
   LanguageModel,
   ModelCapabilities,
   ModelEffort,
@@ -78,6 +79,7 @@ const loginSources = new Set(['none']);
 export function createClaudeCodeModel(options: ClaudeCodeModelOptions = {}): LanguageModel {
   const capabilities: ModelCapabilities = {
     tools: true,
+    checkout: true,
     structuredOutput: 'native',
     contextWindowTokens: options.contextWindowTokens,
     streaming: true,
@@ -150,6 +152,13 @@ async function runClaudeCode(
   if (request.signal?.aborted === true) {
     return err({ kind: 'cancelled' });
   }
+  const { cwd } = request;
+  if (cwd === undefined) {
+    return err({
+      kind: 'invalid-request',
+      reason: 'Claude Code reads a checkout: cwd is required',
+    });
+  }
   const model = request.model ?? options.model;
   const effort = request.effort ?? options.effort;
   const args = buildClaudeCodeArgs({
@@ -172,7 +181,7 @@ async function runClaudeCode(
   const run = await execute(
     command,
     [...(options.leadingArgs ?? []), ...args],
-    request,
+    { ...request, cwd },
     mode.onText,
     options,
   );
@@ -224,7 +233,7 @@ interface Execution {
 async function execute(
   command: string,
   args: readonly string[],
-  request: BaseModelRequest,
+  request: CheckoutModelRequest,
   onText: ((event: TextStreamEvent) => void) | undefined,
   options: ClaudeCodeModelOptions,
 ): Promise<Result<Execution, ModelError>> {

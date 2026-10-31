@@ -113,12 +113,15 @@ export function validateFindings(
 const whitespace = /\s+/gu;
 const leadingDotSlashes = /^(?:\.\/)+/u;
 
-function normalizePath(raw: string, worktreePath: string): string | undefined {
+function normalizePath(raw: string, worktreePath: string | undefined): string | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') {
     return undefined;
   }
   if (path.isAbsolute(trimmed)) {
+    if (worktreePath === undefined) {
+      return undefined;
+    }
     const relative = path.relative(worktreePath, trimmed);
     return relative === '' || relative.startsWith('..') || path.isAbsolute(relative)
       ? undefined

@@ -19,7 +19,7 @@ export interface VerificationRequest {
   readonly baseSha: CommitSha;
   readonly headSha: CommitSha;
   /** The head worktree, where the cited lines are read. */
-  readonly worktreePath: string;
+  readonly worktreePath?: string | undefined;
   /**
    * The reviewed diff. A model without tools can't read the cited lines, so it is shown the
    * hunks each finding touches instead (ADR 0070).
