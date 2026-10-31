@@ -1,10 +1,11 @@
 import { describe } from 'vitest';
 
 import type { ImpactSourceFile } from '#internal/impact/impact-input.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { test } from './testing/test.ts';
 
-function noLines(): { base: never[]; head: never[] } {
+function noLines(): ImpactSourceFile['changedLines'] {
   return { base: [], head: [] };
 }
 
@@ -27,14 +28,14 @@ describe('createImpactWorker with the real worker', () => {
       signal,
     );
     expect(result.ok).toBe(true);
-    const report = result.ok ? result.value : undefined;
-    expect(report?.files[0]).toMatchObject({
+    const report = okValueFrom(result);
+    expect(report.files[0]).toMatchObject({
       status: 'analyzed',
       path: 'src/a.ts',
       functions: [{ name: 'f', change: 'modified', inDiff: true }],
     });
-    expect(report?.files[1]).toMatchObject({ status: 'skipped', reason: 'unsupported-language' });
-    expect(report?.totals.modified).toBe(1);
+    expect(report.files[1]).toMatchObject({ status: 'skipped', reason: 'unsupported-language' });
+    expect(report.totals.modified).toBe(1);
   });
 });
 

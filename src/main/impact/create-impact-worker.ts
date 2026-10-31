@@ -69,12 +69,7 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
     created.unref();
     created.on('message', (response: ImpactWorkerResponse) => {
       if (created === worker && current?.id === response.id) {
-        finish(
-          current,
-          response.ok
-            ? ok(response.report)
-            : err({ kind: 'worker-failed', message: response.message }),
-        );
+        finish(current, runResultFrom(response));
       }
     });
     created.on('error', (error: Error) => {
@@ -170,7 +165,10 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
     dispose: (): void => {
       isDisposed = true;
       retire();
-      const pending = [...queue.splice(0), ...(current === undefined ? [] : [current])];
+      const pending = queue.splice(0);
+      if (current !== undefined) {
+        pending.push(current);
+      }
       current = undefined;
       for (const job of pending) {
         job.resources.dispose();
@@ -178,4 +176,11 @@ export function createImpactWorker(options: ImpactWorkerOptions): ImpactRunner {
       }
     },
   };
+}
+
+function runResultFrom(response: ImpactWorkerResponse): Result<ImpactReport, ImpactRunFailure> {
+  if (response.ok) {
+    return ok(response.report);
+  }
+  return err({ kind: 'worker-failed', message: response.message });
 }

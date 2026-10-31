@@ -82,11 +82,10 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     }
     const run = await runner.run(input.value.sources, signal);
     if (!run.ok) {
-      return err(
-        run.error.kind === 'cancelled'
-          ? headMoved
-          : { code: 'internal', message: `ImpactGate failed: ${run.error.message}` },
-      );
+      if (run.error.kind === 'cancelled') {
+        return err(headMoved);
+      }
+      return err({ code: 'internal', message: `ImpactGate failed: ${run.error.message}` });
     }
     const report = run.value;
     const compute = stopwatch.elapsed();
@@ -128,7 +127,12 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
       return computing;
     }
     job.waiters += 1;
-    const outcome = signal === undefined ? await computing : await untilAborted(computing, signal);
+    let outcome: Result<ImpactView, IpcError> | 'aborted';
+    if (signal === undefined) {
+      outcome = await computing;
+    } else {
+      outcome = await untilAborted(computing, signal);
+    }
     job.waiters -= 1;
     if (outcome !== 'aborted') {
       return outcome;
@@ -202,6 +206,15 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
 }
 
 function cacheKey(sessionId: string, diff: ReviewDiff): string {
-  const from = diff.scope.kind === 'interdiff' ? diff.scope.fromHeadSha : diff.scope.kind;
-  return [sessionId, from, diff.baseSha, diff.refreshed.session.headSha].join('\0');
+  return [sessionId, scopeKeyOf(diff.scope), diff.baseSha, diff.refreshed.session.headSha].join(
+    '\0',
+  );
+}
+
+/** An interdiff's starting head, or the scope's kind. */
+function scopeKeyOf(scope: ReviewDiff['scope']): string {
+  if (scope.kind === 'interdiff') {
+    return scope.fromHeadSha;
+  }
+  return scope.kind;
 }

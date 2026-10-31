@@ -54,6 +54,13 @@ export interface OrderServicesOptions {
   readonly cacheSize?: number;
 }
 
+/** The review whose changed files `primary` names, and the session it belongs to. */
+interface EdgeSource {
+  readonly sessionId: string;
+  readonly review: ReviewDiff;
+  readonly primary: ReadonlySet<string>;
+}
+
 interface EdgePlan {
   readonly mode: ReviewOrderMode;
   readonly edges: readonly DependencyEdge[];
@@ -88,7 +95,11 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
       resolver = created.value;
       resolvers.set(key, resolver);
     }
-    const edges = await buildImportEdges(repository, parse, resolver, review.files, primary);
+    const edges = await buildImportEdges(
+      repository,
+      { parse, resolve: resolver },
+      { files: review.files, paths: primary },
+    );
     if (!edges.ok) {
       gitFailure(context.logger, edges.error);
       return undefined;
@@ -98,9 +109,7 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
 
   const planEdges = async (
     mode: ReviewOrderMode,
-    sessionId: string,
-    review: ReviewDiff,
-    primary: ReadonlySet<string>,
+    { sessionId, review, primary }: EdgeSource,
   ): Promise<EdgePlan> => {
     if (mode === 'path') {
       return { mode, edges: [] };
@@ -116,18 +125,16 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
     }
     const calls = await buildCallEdges(
       options.callHierarchy,
-      sessionId,
-      review.refreshed.session.headSha,
-      review.files,
-      primary,
+      { sessionId, headSha: review.refreshed.session.headSha },
+      { files: review.files, paths: primary },
     );
     if (calls.edges.length > 0) {
       return { mode, edges: calls.edges };
     }
-    const fallback: ReviewOrderFallbackView =
-      calls.answered === 0 && calls.unsupported > 0
-        ? { kind: 'no-language-server' }
-        : { kind: 'no-call-edges' };
+    let fallback: ReviewOrderFallbackView = { kind: 'no-call-edges' };
+    if (calls.answered === 0 && calls.unsupported > 0) {
+      fallback = { kind: 'no-language-server' };
+    }
     return { mode: 'imports', edges: (await importEdges(review, primary)) ?? [], fallback };
   };
 
@@ -147,11 +154,17 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
         return diff;
       }
       const evidence = {
-        generated: new Set(attributes.ok ? attributes.value.generated : []),
-        changedIgnoringWhitespace: new Set(
-          ignoring.ok ? ignoring.value.files.map((file) => headPathOf(file)) : [],
-        ),
+        generated: new Set<string>(),
+        changedIgnoringWhitespace: new Set<string>(),
       };
+      if (attributes.ok) {
+        evidence.generated = new Set(attributes.value.generated);
+      }
+      if (ignoring.ok) {
+        evidence.changedIgnoringWhitespace = new Set(
+          ignoring.value.files.map((file) => headPathOf(file)),
+        );
+      }
       const classified = diff.value.files.map((file) => {
         return {
           path: headPathOf(file),
@@ -161,7 +174,11 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
       const primary = new Set(
         classified.filter((file) => file.mechanical === undefined).map((file) => file.path),
       );
-      const plan = await planEdges(requestedMode, request.sessionId, diff.value, primary);
+      const plan = await planEdges(requestedMode, {
+        sessionId: request.sessionId,
+        review: diff.value,
+        primary,
+      });
       const groups = orderReviewFiles(classified, plan.edges);
       return ok({
         sessionId: request.sessionId,

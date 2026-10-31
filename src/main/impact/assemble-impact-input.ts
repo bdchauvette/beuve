@@ -66,10 +66,13 @@ export async function assembleImpactInput(
     const baseText = textOf(base, blobs.value);
     const headText = textOf(head, blobs.value);
     if (!baseText.ok || !headText.ok) {
-      skipped.push({
-        ...location(file),
-        reason: baseText.ok ? (headText.ok ? 'no-source' : headText.error) : baseText.error,
-      });
+      let reason: ImpactSkipReason = 'no-source';
+      if (!baseText.ok) {
+        reason = baseText.error;
+      } else if (!headText.ok) {
+        reason = headText.error;
+      }
+      skipped.push({ ...location(file), reason });
       continue;
     }
     sources.push({
@@ -91,7 +94,10 @@ function preSkipReason(file: DiffFile): ImpactSkipReason | undefined {
   }
   const { path, previousPath } = location(file);
   const isSupported = [path, previousPath].some((candidate) => {
-    const language = candidate === undefined ? undefined : detectLanguage(candidate);
+    if (candidate === undefined) {
+      return false;
+    }
+    const language = detectLanguage(candidate);
     return language !== undefined && rulesByLanguage[language] !== undefined;
   });
   if (!isSupported) {
@@ -104,23 +110,41 @@ function preSkipReason(file: DiffFile): ImpactSkipReason | undefined {
   return undefined;
 }
 
-function location(file: DiffFile): { path: string; previousPath: string | undefined } {
+/** Where a file is at the head, and where it was before a rename. */
+interface FileLocation {
+  readonly path: string;
+  readonly previousPath: string | undefined;
+}
+
+/** A file's base and head blobs. */
+interface FileSides {
+  readonly base: Side;
+  readonly head: Side;
+}
+
+/** A side's object id and mode, as the diff reports them. */
+interface SideObject {
+  readonly objectId: string | undefined;
+  readonly mode: string | undefined;
+}
+
+function location(file: DiffFile): FileLocation {
   if ('newPath' in file) {
     return { path: file.newPath, previousPath: file.oldPath };
   }
   return { path: file.path, previousPath: undefined };
 }
 
-function sides(file: DiffFile): { base: Side; head: Side } {
-  const modes =
-    file.status === 'added'
-      ? { oldMode: undefined, newMode: file.mode }
-      : file.status === 'deleted'
-        ? { oldMode: file.mode, newMode: undefined }
-        : { oldMode: file.oldMode, newMode: file.newMode };
+function sides(file: DiffFile): FileSides {
+  if (file.status === 'added') {
+    return { base: absent(), head: side({ objectId: file.newObject, mode: file.mode }) };
+  }
+  if (file.status === 'deleted') {
+    return { base: side({ objectId: file.oldObject, mode: file.mode }), head: absent() };
+  }
   return {
-    base: file.status === 'added' ? absent() : side(file.oldObject, modes.oldMode),
-    head: file.status === 'deleted' ? absent() : side(file.newObject, modes.newMode),
+    base: side({ objectId: file.oldObject, mode: file.oldMode }),
+    head: side({ objectId: file.newObject, mode: file.newMode }),
   };
 }
 
@@ -128,7 +152,7 @@ function absent(): Side {
   return { kind: 'absent' };
 }
 
-function side(objectId: string | undefined, mode: string | undefined): Side {
+function side({ objectId, mode }: SideObject): Side {
   if (objectId === undefined || zeroIdPattern.test(objectId)) {
     return absent();
   }

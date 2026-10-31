@@ -62,10 +62,10 @@ export function impactViewFrom(source: ImpactViewSource): ImpactView {
 }
 
 function fileViewFrom(file: FileImpact): FileImpactView {
-  const location =
-    file.previousPath === undefined
-      ? { path: file.path }
-      : { path: file.path, previousPath: file.previousPath };
+  const location = {
+    path: file.path,
+    ...(file.previousPath !== undefined && { previousPath: file.previousPath }),
+  };
   if (file.status === 'skipped') {
     return { status: 'skipped', ...location, reason: file.reason };
   }

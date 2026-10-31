@@ -1,9 +1,11 @@
 import type { CallHierarchyRequest, CallHierarchyView, IpcResult } from '#contract/ipc-contract.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import type { DependencyEdge } from '#internal/session/order-review-files.ts';
 
 import { headPathOf } from '../sessions/head-path-of.ts';
 
+import type { ChangedFiles } from './build-import-edges.ts';
 import { isImportSource } from './is-import-source.ts';
 
 /** What asking the language server about the changed files produced. */
@@ -20,6 +22,12 @@ const maxFiles = 40;
 const maxHunksPerFile = 3;
 const parallelism = 4;
 
+/** The session whose language server answers, and the head every query is pinned to. */
+export interface SessionHead {
+  readonly sessionId: string;
+  readonly headSha: CommitSha;
+}
+
 /**
  * `caller calls callee` between the changed files in `paths` (ADR 0065), from the language
  * server's outgoing calls. For each changed TypeScript or JavaScript file (up to {@link maxFiles})
@@ -29,10 +37,8 @@ const parallelism = 4;
  */
 export async function buildCallEdges(
   callHierarchy: (request: CallHierarchyRequest) => Promise<IpcResult<CallHierarchyView>>,
-  sessionId: string,
-  headSha: string,
-  files: readonly DiffFile[],
-  paths: ReadonlySet<string>,
+  { sessionId, headSha }: SessionHead,
+  { files, paths }: ChangedFiles,
 ): Promise<CallEdges> {
   const queries = files
     .filter((file) => file.status !== 'deleted' && paths.has(headPathOf(file)))
@@ -60,14 +66,12 @@ export async function buildCallEdges(
       if (result.ok) {
         answered += 1;
         for (const { node } of result.value.calls) {
-          const callee = node.file.kind === 'workspace' ? node.file.path : undefined;
-          const key = `${query.path}\0${callee ?? ''}`;
-          if (
-            callee === undefined ||
-            callee === query.path ||
-            !paths.has(callee) ||
-            seen.has(key)
-          ) {
+          if (node.file.kind !== 'workspace') {
+            continue;
+          }
+          const callee = node.file.path;
+          const key = `${query.path}\0${callee}`;
+          if (callee === query.path || !paths.has(callee) || seen.has(key)) {
             continue;
           }
           seen.add(key);

@@ -60,7 +60,12 @@ interface HeldRun {
 }
 
 /** A hold-until-signal ImpactGate runner: each run waits for `finish` or its signal. */
-function heldRunner(): ImpactRunner & { readonly started: () => Promise<HeldRun> } {
+/** An ImpactGate runner that also answers each run as it starts. */
+interface HeldRunner extends ImpactRunner {
+  readonly started: () => Promise<HeldRun>;
+}
+
+function heldRunner(): HeldRunner {
   const started = Promise.withResolvers<HeldRun>();
   const report: ImpactReport = {
     cognitiveMax: 15,
@@ -108,14 +113,17 @@ function heldRunner(): ImpactRunner & { readonly started: () => Promise<HeldRun>
   };
 }
 
+/** A session whose ImpactGate runs wait for the test. */
+interface HeldImpact {
+  readonly services: MainServices;
+  readonly sessionId: string;
+  readonly runner: HeldRunner;
+}
+
 async function heldImpact(
   repo: TestRepository,
   createServices: CreateServices,
-): Promise<{
-  readonly services: MainServices;
-  readonly sessionId: string;
-  readonly runner: ReturnType<typeof heldRunner>;
-}> {
+): Promise<HeldImpact> {
   repo.write('a.ts', 'export function a(): number {\n  return 1;\n}\n');
   await repo.commit('base');
   await repo.git('switch', '--quiet', '-c', 'feature');

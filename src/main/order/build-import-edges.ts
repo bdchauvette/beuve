@@ -13,6 +13,18 @@ import { headPathOf } from '../sessions/head-path-of.ts';
 
 import { isImportSource } from './is-import-source.ts';
 
+/** A review's files, and the changed head paths whose edges count. */
+export interface ChangedFiles {
+  readonly files: readonly DiffFile[];
+  readonly paths: ReadonlySet<string>;
+}
+
+/** How to read a file's imports and resolve them in the head tree. */
+export interface ImportReader {
+  readonly parse: ParseSyntax;
+  readonly resolve: ModuleResolver;
+}
+
 /**
  * `dependent imports dependency` between the changed files in `paths` (ADR 0065): each changed
  * TypeScript or JavaScript file's head blob is parsed for imports, exports-from, `import()` and
@@ -22,10 +34,8 @@ import { isImportSource } from './is-import-source.ts';
  */
 export async function buildImportEdges(
   repository: GitRepository,
-  parse: ParseSyntax,
-  resolve: ModuleResolver,
-  files: readonly DiffFile[],
-  paths: ReadonlySet<string>,
+  { parse, resolve }: ImportReader,
+  { files, paths }: ChangedFiles,
 ): Promise<Result<readonly DependencyEdge[], GitError>> {
   const sources = files.filter((file) => {
     return (
@@ -43,7 +53,10 @@ export async function buildImportEdges(
   }
   const edges: DependencyEdge[] = [];
   for (const file of sources) {
-    const content = file.newObject === undefined ? undefined : blobs.value.get(file.newObject);
+    if (file.newObject === undefined) {
+      continue;
+    }
+    const content = blobs.value.get(file.newObject);
     if (content?.kind !== 'text') {
       continue;
     }
@@ -51,7 +64,10 @@ export async function buildImportEdges(
     const parsed = await parse({ path: dependent, text: content.text }, (root) => {
       return extractModuleReferences(root).map((reference) => reference.specifier);
     });
-    const specifiers = parsed.ok ? new Set(parsed.value) : new Set<string>();
+    if (!parsed.ok) {
+      continue;
+    }
+    const specifiers = new Set(parsed.value);
     for (const specifier of specifiers) {
       const dependency = resolve({ specifier, fromPath: dependent });
       if (dependency !== undefined && dependency !== dependent && paths.has(dependency)) {

@@ -128,12 +128,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     const answering = orderWith(async (request) => {
       queried.push(`${request.path}:${String(request.line)}`);
       heads.add(request.expectedHeadSha);
-      return later(
-        okCalls(
-          request.expectedHeadSha,
-          request.path === 'src/shared.ts' ? [workspaceCall('src/x/helper.ts')] : [],
-        ),
-      );
+      return later(okCalls(request.expectedHeadSha, callsFrom(request.path)));
     });
     const calls = okValueFrom(await answering.getOrder({ sessionId, mode: 'calls' }, { signal }));
     expect(calls).toMatchObject({ requestedMode: 'calls', mode: 'calls' });
@@ -275,4 +270,12 @@ async function startReview(repo: TestRepository, services: MainServices): Promis
     }),
   );
   return created.id;
+}
+
+/** `src/shared.ts` calls the helper; nothing else calls anything. */
+function callsFrom(path: string): CallHierarchyCallView[] {
+  if (path === 'src/shared.ts') {
+    return [workspaceCall('src/x/helper.ts')];
+  }
+  return [];
 }
