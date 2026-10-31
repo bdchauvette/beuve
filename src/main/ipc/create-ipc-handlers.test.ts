@@ -641,7 +641,7 @@ describe('createIpcHandlers for the model registry', () => {
           effort: 'high',
         },
       ],
-      ['a', 'sk-ok'],
+      [{ id: 'a', apiKey: 'sk-ok' }],
       ['verify', 'a'],
     ]);
   });
