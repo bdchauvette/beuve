@@ -24,8 +24,20 @@ export interface SecretStore {
   readonly has: (ref: string) => Promise<boolean>;
   /** The key in clear, for main to hand to an adapter; `undefined` when unset or unreadable. */
   readonly get: (ref: string) => Promise<string | undefined>;
-  readonly set: (ref: string, secret: string) => Promise<Result<undefined, string>>;
+  readonly set: (stored: StoredSecret) => Promise<Result<undefined, string>>;
   readonly remove: (ref: string) => Promise<void>;
+}
+
+/** A secret and the reference it is stored under. */
+export interface StoredSecret {
+  readonly ref: string;
+  readonly secret: string;
+}
+
+export interface SecretStoreOptions {
+  /** Where the ciphertexts live; without one nothing persists. */
+  readonly filePath?: string;
+  readonly cipher?: SecretCipher;
 }
 
 /**
@@ -34,10 +46,7 @@ export interface SecretStore {
  * or a file, or when encryption is unavailable, nothing can be stored and `set` fails. Values
  * never appear in logs, errors or anything this returns but `get`.
  */
-export function createSecretStore(options: {
-  readonly filePath?: string;
-  readonly cipher?: SecretCipher;
-}): SecretStore {
+export function createSecretStore(options: SecretStoreOptions): SecretStore {
   const { filePath, cipher } = options;
   let writes: Promise<unknown> = Promise.resolve();
   const isUsable = async (): Promise<boolean> => {
@@ -84,7 +93,7 @@ export function createSecretStore(options: {
         return undefined;
       }
     },
-    set: async (ref, secret): Promise<Result<undefined, string>> => {
+    set: async ({ ref, secret }): Promise<Result<undefined, string>> => {
       if (cipher === undefined || !(await isUsable())) {
         return err('API keys cannot be stored: no system keychain or keyring is available.');
       }
@@ -114,11 +123,14 @@ async function readSecrets(filePath: string | undefined): Promise<Record<string,
   } catch {
     parsed = undefined;
   }
-  const secrets =
-    typeof parsed === 'object' && parsed !== null && 'secrets' in parsed
-      ? parsed.secrets
-      : undefined;
-  const entries = typeof secrets === 'object' && secrets !== null ? Object.entries(secrets) : [];
+  if (typeof parsed !== 'object' || parsed === null || !('secrets' in parsed)) {
+    return {};
+  }
+  const { secrets } = parsed;
+  if (typeof secrets !== 'object' || secrets === null) {
+    return {};
+  }
+  const entries = Object.entries(secrets);
   return Object.fromEntries(
     entries.filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   );

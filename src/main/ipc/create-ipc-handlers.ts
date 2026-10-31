@@ -1099,7 +1099,7 @@ export function createIpcHandlers(
       const parsed = modelKeyRequest.safeParse(request);
       // Never echo the request: a validation message could quote the key.
       if (parsed.success) {
-        return services.models.setKey(parsed.data.id, parsed.data.apiKey);
+        return services.models.setKey({ id: parsed.data.id, apiKey: parsed.data.apiKey });
       }
       return err({
         code: 'invalid-request',

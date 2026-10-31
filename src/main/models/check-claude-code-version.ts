@@ -24,12 +24,19 @@ export async function checkClaudeCodeVersion(
       [...leadingArgs, '--version'],
       { timeout: 5000, windowsHide: true, maxBuffer: 64 * 1024, shell: false },
       (error, stdout) => {
-        resolve(error === null ? stdout : undefined);
+        if (error === null) {
+          resolve(stdout);
+        } else {
+          resolve(undefined);
+        }
       },
     );
   });
-  const found = output === undefined ? undefined : versionPattern.exec(output);
-  if (found === undefined || found === null) {
+  if (output === undefined) {
+    return err({ kind: 'not-installed', command });
+  }
+  const found = versionPattern.exec(output);
+  if (found === null) {
     return err({ kind: 'not-installed', command });
   }
   const version = found[0];
@@ -39,9 +46,10 @@ export async function checkClaudeCodeVersion(
   return err({ kind: 'unsupported-version', command, version, required: pinnedClaudeCodeVersion });
 }
 
-function isAtLeast(version: string, required: string): boolean {
-  const left = version.split('.').map(Number);
-  const right = required.split('.').map(Number);
+/** Whether dotted version `a` is `b` or later. */
+function isAtLeast(a: string, b: string): boolean {
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
   for (const [index, part] of right.entries()) {
     const have = left[index] ?? 0;
     if (have !== part) {

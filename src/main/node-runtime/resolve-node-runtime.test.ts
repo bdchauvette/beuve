@@ -11,8 +11,14 @@ import { resolveNodeRuntime } from './resolve-node-runtime.ts';
 describe('resolveNodeRuntime', () => {
   test('uses only the bundled node in a packaged app', async ({ expect, tempDir, signal }) => {
     const resources = path.join(tempDir, 'resources');
-    const bundled = await writeFakeNode(path.join(resources, 'node'), 'v26.13.0', signal);
-    const onPath = await writeFakeNode(path.join(tempDir, 'bin'), 'v27.0.0', signal);
+    const bundled = await writeFakeNode(
+      { directory: path.join(resources, 'node'), version: 'v26.13.0' },
+      signal,
+    );
+    const onPath = await writeFakeNode(
+      { directory: path.join(tempDir, 'bin'), version: 'v27.0.0' },
+      signal,
+    );
 
     const resolved = await resolveNodeRuntime({
       packaged: true,
@@ -32,7 +38,10 @@ describe('resolveNodeRuntime', () => {
     tempDir,
     signal,
   }) => {
-    const onPath = await writeFakeNode(path.join(tempDir, 'bin'), 'v26.13.0', signal);
+    const onPath = await writeFakeNode(
+      { directory: path.join(tempDir, 'bin'), version: 'v26.13.0' },
+      signal,
+    );
     const resources = path.join(tempDir, 'resources');
 
     const resolved = await resolveNodeRuntime({
@@ -60,8 +69,14 @@ describe('resolveNodeRuntime', () => {
     const notExecutable = path.join(tempDir, 'plain');
     await mkdir(notExecutable);
     await writeFile(path.join(notExecutable, 'node'), 'not a program', { signal });
-    const first = await writeFakeNode(path.join(tempDir, 'first'), 'v26.1.0', signal);
-    const second = await writeFakeNode(path.join(tempDir, 'second'), 'v27.0.0', signal);
+    const first = await writeFakeNode(
+      { directory: path.join(tempDir, 'first'), version: 'v26.1.0' },
+      signal,
+    );
+    const second = await writeFakeNode(
+      { directory: path.join(tempDir, 'second'), version: 'v27.0.0' },
+      signal,
+    );
 
     const resolved = await resolveNodeRuntime({
       packaged: false,
@@ -107,13 +122,11 @@ describe('resolveNodeRuntime', () => {
     const nodeVersion = await readFile(nodeVersionFile(), { encoding: 'utf8', signal });
     const major = Number(nodeVersion.trim());
     const old = await writeFakeNode(
-      path.join(tempDir, 'old'),
-      `v${String(major - 1)}.22.0`,
+      { directory: path.join(tempDir, 'old'), version: `v${String(major - 1)}.22.0` },
       signal,
     );
     const current = await writeFakeNode(
-      path.join(tempDir, 'current'),
-      `v${String(major)}.0.0`,
+      { directory: path.join(tempDir, 'current'), version: `v${String(major)}.0.0` },
       signal,
     );
 
@@ -191,10 +204,15 @@ describe('resolveNodeRuntime', () => {
   });
 });
 
+/** Where a fake `node` goes, and the version it prints. */
+interface FakeNode {
+  readonly directory: string;
+  readonly version: string;
+}
+
 /** Writes `<directory>/node`, a shell script that prints `version` like `node --version`. */
 async function writeFakeNode(
-  directory: string,
-  version: string,
+  { directory, version }: FakeNode,
   signal: AbortSignal,
 ): Promise<string> {
   await mkdir(directory, { recursive: true });

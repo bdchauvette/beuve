@@ -14,11 +14,11 @@ describe('createSecretStore', () => {
   }) => {
     const filePath = path.join(tempDir, 'user-data', 'model-secrets.json');
     const store = createSecretStore({ filePath, cipher: createFakeCipher() });
-    await expect(store.set('model:a', 'sk-SECRET-1')).resolves.toStrictEqual({
+    await expect(store.set({ ref: 'model:a', secret: 'sk-SECRET-1' })).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
-    await store.set('model:b', 'sk-SECRET-2');
+    await store.set({ ref: 'model:b', secret: 'sk-SECRET-2' });
     const onDisk = readFileSync(filePath, 'utf8');
     expect(onDisk).not.toContain('SECRET');
     expect(JSON.parse(onDisk)).toMatchObject({
@@ -39,7 +39,7 @@ describe('createSecretStore', () => {
   test('treats a corrupted ciphertext as no key', async ({ expect, tempDir }) => {
     const filePath = path.join(tempDir, 'secrets.json');
     const store = createSecretStore({ filePath, cipher: createFakeCipher() });
-    await store.set('model:a', 'sk-SECRET-1');
+    await store.set({ ref: 'model:a', secret: 'sk-SECRET-1' });
     const stored = readFileSync(filePath, 'utf8');
     writeFileSync(filePath, stored.replace(/"model:a": ?"[^"]*"/u, '"model:a":"%%not base64%%"'));
 
@@ -52,7 +52,11 @@ describe('createSecretStore', () => {
       filePath: path.join(tempDir, 'secrets.json'),
       cipher: createFakeCipher({ backend: 'basic' }),
     });
-    await Promise.all(['a', 'b', 'c'].map(async (ref) => store.set(ref, `key-${ref}`)));
+    await Promise.all(
+      ['a', 'b', 'c'].map(async (ref) => {
+        return store.set({ ref, secret: `key-${ref}` });
+      }),
+    );
     await expect(
       Promise.all(['a', 'b', 'c'].map(async (ref) => store.get(ref))),
     ).resolves.toStrictEqual(['key-a', 'key-b', 'key-c']);
@@ -67,7 +71,9 @@ describe('createSecretStore', () => {
       createSecretStore({ cipher: createFakeCipher() }),
     ]) {
       await expect(store.status()).resolves.toBe('unavailable');
-      await expect(store.set('model:a', 'sk')).resolves.toMatchObject({ ok: false });
+      await expect(store.set({ ref: 'model:a', secret: 'sk' })).resolves.toMatchObject({
+        ok: false,
+      });
       await expect(store.get('model:a')).resolves.toBeUndefined();
     }
   });

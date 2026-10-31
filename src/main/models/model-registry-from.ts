@@ -12,11 +12,13 @@ import type { ModelEntry, ModelRegistry } from './model-registry.ts';
  * entry is put back first when missing, and a role naming no entry falls back to it.
  */
 export function modelRegistryFrom(stored: unknown): ModelRegistry {
-  const fields =
-    typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+  const fields = recordOf(stored);
   const [fallback] = defaultModelRegistry.entries;
   const entries: ModelEntry[] = [];
-  const candidates = Array.isArray(fields['entries']) ? (fields['entries'] as unknown[]) : [];
+  let candidates: unknown[] = [];
+  if (Array.isArray(fields['entries'])) {
+    candidates = fields['entries'] as unknown[];
+  }
   for (const candidate of candidates) {
     const entry = entryFrom(candidate);
     if (entry !== undefined && entries.every((known) => known.id !== entry.id)) {
@@ -26,19 +28,14 @@ export function modelRegistryFrom(stored: unknown): ModelRegistry {
   if (fallback !== undefined && entries.every((entry) => entry.id !== fallback.id)) {
     entries.unshift(fallback);
   }
-  const storedRoles =
-    typeof fields['roles'] === 'object' && fields['roles'] !== null
-      ? (fields['roles'] as Record<string, unknown>)
-      : {};
+  const storedRoles = recordOf(fields['roles']);
   const roles = Object.fromEntries(
     modelRoles.map((role): [ModelRole, string] => {
       const id = storedRoles[role];
-      return [
-        role,
-        typeof id === 'string' && entries.some((entry) => entry.id === id)
-          ? id
-          : defaultModelRegistry.roles[role],
-      ];
+      if (typeof id === 'string' && entries.some((entry) => entry.id === id)) {
+        return [role, id];
+      }
+      return [role, defaultModelRegistry.roles[role]];
     }),
   ) as Record<ModelRole, string>;
   return { entries, roles };
@@ -58,4 +55,12 @@ function entryFrom(candidate: unknown): ModelEntry | undefined {
     return { ...entry, apiKeyRef };
   }
   return entry;
+}
+
+/** `value`'s fields when it is an object, else none. */
+function recordOf(value: unknown): Readonly<Record<string, unknown>> {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>;
+  }
+  return {};
 }

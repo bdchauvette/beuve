@@ -16,7 +16,7 @@ describe('checkClaudeCodeVersion', () => {
     ['2.1.200 (Claude Code)', false],
     ['1.9.999', false],
   ] as const)('accepts %s: %s', async ([output, isAccepted], { expect, tempDir }) => {
-    const command = writeVersionCommand(tempDir, 'claude', output);
+    const command = writeVersionCommand({ directory: tempDir, name: 'claude', output });
     const checked = await checkClaudeCodeVersion(command);
     expect(checked.ok).toBe(isAccepted);
   });
@@ -25,7 +25,11 @@ describe('checkClaudeCodeVersion', () => {
     expect,
     tempDir,
   }) => {
-    const command = writeVersionCommand(tempDir, 'claude', '2.1.200 (Claude Code)');
+    const command = writeVersionCommand({
+      directory: tempDir,
+      name: 'claude',
+      output: '2.1.200 (Claude Code)',
+    });
     await expect(checkClaudeCodeVersion(command)).resolves.toStrictEqual({
       ok: false,
       error: {
@@ -40,7 +44,11 @@ describe('checkClaudeCodeVersion', () => {
       ok: false,
       error: { kind: 'not-installed', command: missing },
     });
-    const silent = writeVersionCommand(tempDir, 'quiet', 'no version here');
+    const silent = writeVersionCommand({
+      directory: tempDir,
+      name: 'quiet',
+      output: 'no version here',
+    });
     await expect(checkClaudeCodeVersion(silent)).resolves.toMatchObject({
       ok: false,
       error: { kind: 'not-installed' },

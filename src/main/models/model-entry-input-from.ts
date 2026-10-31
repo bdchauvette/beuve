@@ -11,13 +11,13 @@ export function modelEntryInputFrom(parsed: z.infer<typeof modelEntrySchema>): M
   );
   if (parsed.kind === 'claude-agent-sdk') {
     const { executable } = parsed;
-    return {
-      ...present,
-      executable:
-        executable.source === 'installed' && executable.path !== undefined
-          ? { source: 'installed', path: executable.path }
-          : { source: executable.source },
-    } as ModelEntryInput;
+    if (executable.source === 'installed' && executable.path !== undefined) {
+      return {
+        ...present,
+        executable: { source: 'installed', path: executable.path },
+      } as ModelEntryInput;
+    }
+    return { ...present, executable: { source: executable.source } } as ModelEntryInput;
   }
   return present as ModelEntryInput;
 }

@@ -37,7 +37,9 @@ export function createModelRegistryStore(settingsPath?: string): ModelRegistrySt
     ): Promise<Result<ModelRegistry, E>> => {
       if (settingsPath === undefined) {
         const changed = change(memory);
-        memory = changed.ok ? changed.value : memory;
+        if (changed.ok) {
+          memory = changed.value;
+        }
         return changed;
       }
       let outcome: Result<ModelRegistry, E> | undefined;

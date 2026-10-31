@@ -67,10 +67,15 @@ const runFile = promisify(execFile);
 export async function resolveNodeRuntime(
   options: ResolveNodeRuntimeOptions,
 ): Promise<Result<NodeRuntime, NodeRuntimeError>> {
-  const source: NodeRuntimeSource = options.packaged ? 'bundled' : 'path';
-  const candidates = options.packaged
-    ? [path.join(options.resourcesPath, 'node', 'node')]
-    : pathCandidatesFrom(options.pathVariable);
+  let source: NodeRuntimeSource;
+  let candidates: string[];
+  if (options.packaged) {
+    source = 'bundled';
+    candidates = [path.join(options.resourcesPath, 'node', 'node')];
+  } else {
+    source = 'path';
+    candidates = pathCandidatesFrom(options.pathVariable);
+  }
   const command = await firstExecutable(candidates);
   if (command === undefined) {
     return err({ kind: 'missing', source, searched: candidates });
@@ -110,13 +115,21 @@ async function isExecutableFile(file: string): Promise<boolean> {
   }
 }
 
+/** What `node --version` printed, and its major version. */
+interface PrintedVersion {
+  readonly text: string;
+  readonly major: number;
+}
+
 async function readVersion(
   command: string,
   options: ResolveNodeRuntimeOptions,
-): Promise<Result<{ readonly text: string; readonly major: number }, NodeRuntimeError>> {
+): Promise<Result<PrintedVersion, NodeRuntimeError>> {
   const timeout = timeoutSignal(options.timeout ?? defaultTimeout);
-  const signal =
-    options.signal === undefined ? timeout : AbortSignal.any([options.signal, timeout]);
+  let signal = timeout;
+  if (options.signal !== undefined) {
+    signal = AbortSignal.any([options.signal, timeout]);
+  }
   let stdout: string;
   try {
     // No inherited environment: NODE_OPTIONS and the like must not change the answer.

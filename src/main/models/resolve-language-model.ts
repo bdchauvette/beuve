@@ -21,7 +21,7 @@ import { checkClaudeCodeVersion } from './check-claude-code-version.ts';
 import type { ClaudeCodeVersionCheck } from './create-claude-code-version-check.ts';
 import type { ModelRegistryStore } from './create-model-registry-store.ts';
 import type { SecretStore } from './create-secret-store.ts';
-import type { ModelEntry } from './model-registry.ts';
+import type { ModelEntry, ModelRegistry } from './model-registry.ts';
 
 /** What {@link resolveLanguageModel} builds adapters from. */
 export interface ModelResolverDeps {
@@ -59,6 +59,17 @@ export interface ResolvedModel {
  */
 const defaultOpenAiContextWindow = 32_768;
 
+/** Which entry to resolve: the one a role uses, or one named directly. */
+export type ModelTarget = RoleTarget | EntryTarget;
+
+export interface RoleTarget {
+  readonly role: ModelRole;
+}
+
+export interface EntryTarget {
+  readonly entryId: string;
+}
+
 /**
  * Builds the adapter for a role, or for one registry entry (Settings' Test), per request
  * (ADR 0070): the entry's kind picks the adapter, its settings and capabilities configure it,
@@ -69,11 +80,11 @@ const defaultOpenAiContextWindow = 32_768;
  * Expected failures are the model port's errors, so the chat reports them like a run's.
  */
 export async function resolveLanguageModel(
-  target: { readonly role: ModelRole } | { readonly entryId: string },
+  target: ModelTarget,
   deps: ModelResolverDeps,
 ): Promise<Result<ResolvedModel, ModelError>> {
   const registry = await deps.registry.read();
-  const id = 'role' in target ? registry.roles[target.role] : target.entryId;
+  const id = entryIdOf(target, registry);
   const entry = registry.entries.find((candidate) => candidate.id === id);
   if (entry === undefined) {
     return err({ kind: 'invalid-request', reason: `no model named ${id}` });
@@ -87,8 +98,7 @@ export async function resolveLanguageModel(
       return command;
     }
     case 'claude-agent-sdk': {
-      const apiKey =
-        entry.apiKeyRef === undefined ? undefined : await deps.secrets.get(entry.apiKeyRef);
+      const apiKey = await storedKeyOf(entry, deps.secrets);
       let executable: string | undefined = deps.bundledClaudeCodePath;
       if (entry.executable.source === 'installed') {
         const command = await claudeCommand(deps.claude, entry.executable.path);
@@ -123,8 +133,7 @@ export async function resolveLanguageModel(
       });
     }
     case 'openai-compatible': {
-      const apiKey =
-        entry.apiKeyRef === undefined ? undefined : await deps.secrets.get(entry.apiKeyRef);
+      const apiKey = await storedKeyOf(entry, deps.secrets);
       return ok({
         model: createOpenAiCompatibleModel({
           baseUrl: entry.baseUrl,
@@ -143,7 +152,7 @@ export async function resolveLanguageModel(
 }
 
 function cliModel(
-  entry: ModelEntry & { kind: 'claude-code-cli' },
+  entry: Extract<ModelEntry, { kind: 'claude-code-cli' }>,
   command: string,
   deps: ModelResolverDeps,
 ): LanguageModel {
@@ -163,7 +172,9 @@ function cliModel(
     ...(claude.killGrace !== undefined && { killGrace: claude.killGrace }),
     // A GUI app's PATH may lack the directory of the `node` an npm-installed `claude` needs.
     ...(path.isAbsolute(command) && {
-      extraEnv: { PATH: withDirectory(path.dirname(command), env['PATH']) },
+      extraEnv: {
+        PATH: withDirectory({ directory: path.dirname(command), searchPath: env['PATH'] }),
+      },
     }),
   };
   return createClaudeCodeModel(options);
@@ -205,7 +216,28 @@ async function isExecutable(file: string): Promise<boolean> {
   }
 }
 
-function withDirectory(directory: string, searchPath = ''): string {
+/** A directory to put first on a search path, and the path as it was. */
+interface SearchPathEdit {
+  readonly directory: string;
+  readonly searchPath: string | undefined;
+}
+
+function withDirectory({ directory, searchPath = '' }: SearchPathEdit): string {
   const entries = searchPath.split(path.delimiter).filter((entry) => entry !== '');
   return [directory, ...entries.filter((entry) => entry !== directory)].join(path.delimiter);
+}
+
+function entryIdOf(target: ModelTarget, registry: ModelRegistry): string {
+  if ('role' in target) {
+    return registry.roles[target.role];
+  }
+  return target.entryId;
+}
+
+/** The entry's API key, when it has one stored. */
+async function storedKeyOf(entry: ModelEntry, secrets: SecretStore): Promise<string | undefined> {
+  if (entry.apiKeyRef === undefined) {
+    return undefined;
+  }
+  return secrets.get(entry.apiKeyRef);
 }

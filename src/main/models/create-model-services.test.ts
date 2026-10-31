@@ -130,7 +130,9 @@ describe('createModelServices', () => {
       kind: 'claude-agent-sdk',
       executable: { source: 'bundled' },
     });
-    const withKey = okValueFrom(await models.setKey('claude-1', 'sk-ant-VERY-SECRET'));
+    const withKey = okValueFrom(
+      await models.setKey({ id: 'claude-1', apiKey: 'sk-ant-VERY-SECRET' }),
+    );
     expect(withKey.entries[1]).toMatchObject({ id: 'claude-1', hasApiKey: true });
     expect(JSON.stringify(withKey)).not.toContain('VERY-SECRET');
     expect(readFileSync(path.join(tempDir, 'settings.json'), 'utf8')).not.toContain('VERY-SECRET');
@@ -151,7 +153,7 @@ describe('createModelServices', () => {
     expect(edited.entries[1]).toMatchObject({ label: 'Renamed', hasApiKey: true });
     const without = okValueFrom(await models.removeKey('claude-1'));
     expect(without.entries[1]).toMatchObject({ hasApiKey: false });
-    await expect(models.setKey('claude-code', 'sk')).resolves.toMatchObject({
+    await expect(models.setKey({ id: 'claude-code', apiKey: 'sk' })).resolves.toMatchObject({
       ok: false,
       error: { code: 'refused' },
     });
@@ -162,7 +164,11 @@ describe('createModelServices', () => {
     tempDir,
     logger,
   }) => {
-    const old = writeVersionCommand(tempDir, 'claude', '2.1.100 (Claude Code)');
+    const old = writeVersionCommand({
+      directory: tempDir,
+      name: 'claude',
+      output: '2.1.100 (Claude Code)',
+    });
     const saved = await services(tempDir, logger.logger).save({
       label: 'Old CLI',
       kind: 'claude-agent-sdk',
@@ -193,7 +199,7 @@ describe('createModelServices', () => {
       baseUrl: api.baseUrl,
       tools: false,
     });
-    await models.setKey('openai-1', 'sk-local');
+    await models.setKey({ id: 'openai-1', apiKey: 'sk-local' });
     await expect(
       models.listRemote({ baseUrl: api.baseUrl, id: 'openai-1' }),
     ).resolves.toStrictEqual({

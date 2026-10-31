@@ -35,12 +35,15 @@ function agentSdkEntry(
   return { id, label: id, kind: 'claude-agent-sdk', executable };
 }
 
-function deps(
-  registry: ModelRegistryStore,
-  secrets: SecretStore,
-  logger: ModelResolverDeps['logger'],
-  claude: ModelResolverDeps['claude'] = {},
-): ModelResolverDeps {
+/** The stores, logger and optional Claude Code settings a test resolves with. */
+interface TestDeps {
+  readonly registry: ModelRegistryStore;
+  readonly secrets: SecretStore;
+  readonly logger: ModelResolverDeps['logger'];
+  readonly claude?: ModelResolverDeps['claude'];
+}
+
+function deps({ registry, secrets, logger, claude = {} }: TestDeps): ModelResolverDeps {
   return { registry, secrets, claude, logger };
 }
 
@@ -49,8 +52,11 @@ describe('resolveLanguageModel', () => {
     expect,
     logger,
   }) => {
-    const resolverDeps = deps(createModelRegistryStore(), createSecretStore({}), logger.logger, {
-      command: process.execPath,
+    const resolverDeps = deps({
+      registry: createModelRegistryStore(),
+      secrets: createSecretStore({}),
+      logger: logger.logger,
+      claude: { command: process.execPath },
     });
     const resolved = okValueFrom(await resolveLanguageModel({ role: 'verify' }, resolverDeps));
     expect(resolved.entry.id).toBe('claude-code');
@@ -73,7 +79,7 @@ describe('resolveLanguageModel', () => {
       filePath: path.join(tempDir, 'secrets.json'),
       cipher: createFakeCipher(),
     });
-    await secrets.set('model:openai-1', 'sk-local');
+    await secrets.set({ ref: 'model:openai-1', secret: 'sk-local' });
     const registry = await registryWith(
       [
         {
@@ -89,13 +95,16 @@ describe('resolveLanguageModel', () => {
       { verify: 'openai-1' },
     );
     const verifier = okValueFrom(
-      await resolveLanguageModel({ role: 'verify' }, deps(registry, secrets, logger.logger)),
+      await resolveLanguageModel(
+        { role: 'verify' },
+        deps({ registry, secrets, logger: logger.logger }),
+      ),
     );
     expect(verifier.name).toBe('Local Qwen');
     expect(verifier.model.capabilities).toMatchObject({ tools: true, contextWindowTokens: 32_768 });
     const chat = await resolveLanguageModel(
       { role: 'chat' },
-      deps(registry, secrets, logger.logger, { command: process.execPath }),
+      deps({ registry, secrets, logger: logger.logger, claude: { command: process.execPath } }),
     );
     expect(okValueFrom(chat).entry.id).toBe('claude-code');
   });
@@ -105,15 +114,23 @@ describe('resolveLanguageModel', () => {
     logger,
     tempDir,
   }) => {
-    const old = writeVersionCommand(tempDir, 'claude-old', '2.1.200 (Claude Code)');
-    const current = writeVersionCommand(tempDir, 'claude-new', '2.1.400 (Claude Code)');
+    const old = writeVersionCommand({
+      directory: tempDir,
+      name: 'claude-old',
+      output: '2.1.200 (Claude Code)',
+    });
+    const current = writeVersionCommand({
+      directory: tempDir,
+      name: 'claude-new',
+      output: '2.1.400 (Claude Code)',
+    });
     const registry = await registryWith([
       agentSdkEntry('old', { source: 'installed', path: old }),
       agentSdkEntry('new', { source: 'installed', path: current }),
       agentSdkEntry('gone', { source: 'installed', path: path.join(tempDir, 'missing') }),
       agentSdkEntry('bundled', { source: 'bundled' }),
     ]);
-    const resolverDeps = deps(registry, createSecretStore({}), logger.logger);
+    const resolverDeps = deps({ registry, secrets: createSecretStore({}), logger: logger.logger });
     await expect(resolveLanguageModel({ entryId: 'old' }, resolverDeps)).resolves.toMatchObject({
       ok: false,
       error: { kind: 'unsupported-version', version: '2.1.200', command: old },

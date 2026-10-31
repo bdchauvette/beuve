@@ -9,6 +9,7 @@ import type {
   ModelRole,
   ModelTestView,
   RemoteModelsView,
+  SetModelKeyRequest,
 } from '#contract/ipc-contract.ts';
 import { listOpenAiCompatibleModels } from '#internal/llm/list-open-ai-compatible-models.ts';
 import { isLoopbackUrl } from '#x/net/is-loopback-url.ts';
@@ -33,7 +34,7 @@ export interface ModelServices {
   readonly remove: (id: string) => Promise<IpcResult<ModelRegistryView>>;
   readonly setRole: (role: ModelRole, id: string) => Promise<IpcResult<ModelRegistryView>>;
   /** Write-only: encrypts and stores the key; nothing returned ever contains it. */
-  readonly setKey: (id: string, apiKey: string) => Promise<IpcResult<ModelRegistryView>>;
+  readonly setKey: (request: SetModelKeyRequest) => Promise<IpcResult<ModelRegistryView>>;
   readonly removeKey: (id: string) => Promise<IpcResult<ModelRegistryView>>;
   readonly listRemote: (request: ListRemoteModelsRequest) => Promise<IpcResult<RemoteModelsView>>;
   /** One tiny request through the chat's queue (ADR 0057), timed. */
@@ -91,10 +92,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
     if (updated.ok) {
       return ok(await view(updated.value));
     }
-    return err({
-      code: updated.error.startsWith('no model') ? 'not-found' : 'refused',
-      message: updated.error,
-    });
+    if (updated.error.startsWith('no model')) {
+      return err({ code: 'not-found', message: updated.error });
+    }
+    return err({ code: 'refused', message: updated.error });
   };
 
   return {
@@ -113,8 +114,7 @@ export function createModelServices(options: ModelServicesOptions): ModelService
           return err({ code: 'refused', message: describeModelError(checked.error) });
         }
       }
-      const id =
-        input.id ?? `${input.kind === 'openai-compatible' ? 'openai' : 'claude'}-${newId()}`;
+      const id = input.id ?? `${idPrefixOf(input.kind)}-${newId()}`;
       logger.info('model entry saved', { id, kind: input.kind });
       return changed((current) => {
         const existing = current.entries.find((entry) => entry.id === id);
@@ -132,17 +132,17 @@ export function createModelServices(options: ModelServicesOptions): ModelService
               apiKeyRef: existing.apiKeyRef,
             }),
         };
+        if (existing === undefined) {
+          return ok({ ...current, entries: [...current.entries, entry] });
+        }
         return ok({
           ...current,
-          entries:
-            existing === undefined
-              ? [...current.entries, entry]
-              : current.entries.map((candidate) => {
-                  if (candidate.id === id) {
-                    return entry;
-                  }
-                  return candidate;
-                }),
+          entries: current.entries.map((candidate) => {
+            if (candidate.id === id) {
+              return entry;
+            }
+            return candidate;
+          }),
         });
       });
     },
@@ -160,7 +160,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
         }
         const roles = Object.fromEntries(
           Object.entries(current.roles).map(([role, used]) => {
-            return [role, used === id ? defaultId : used];
+            if (used === id) {
+              return [role, defaultId];
+            }
+            return [role, used];
           }),
         ) as Record<ModelRole, string>;
         return ok({ entries: current.entries.filter((entry) => entry.id !== id), roles });
@@ -180,7 +183,7 @@ export function createModelServices(options: ModelServicesOptions): ModelService
       });
     },
 
-    setKey: async (id, apiKey): Promise<IpcResult<ModelRegistryView>> => {
+    setKey: async ({ id, apiKey }): Promise<IpcResult<ModelRegistryView>> => {
       const current = await registry.read();
       const entry = current.entries.find((candidate) => candidate.id === id);
       if (entry === undefined) {
@@ -192,7 +195,7 @@ export function createModelServices(options: ModelServicesOptions): ModelService
           message: 'Claude Code uses your own login; it takes no key.',
         });
       }
-      const stored = await secrets.set(keyRefFor(id), apiKey);
+      const stored = await secrets.set({ ref: keyRefFor(id), secret: apiKey });
       if (!stored.ok) {
         return err({ code: 'unsupported', message: stored.error });
       }
@@ -218,7 +221,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
           return ok({
             ...current,
             entries: current.entries.map((entry) => {
-              return entry.id === id ? withoutKeyRef(entry) : entry;
+              if (entry.id === id) {
+                return withoutKeyRef(entry);
+              }
+              return entry;
             }),
           });
         }
@@ -229,12 +235,14 @@ export function createModelServices(options: ModelServicesOptions): ModelService
     listRemote: async ({ baseUrl, id }): Promise<IpcResult<RemoteModelsView>> => {
       const current = await registry.read();
       const entry = current.entries.find((candidate) => candidate.id === id);
-      const apiKey =
+      let apiKey: string | undefined;
+      if (
         entry?.kind === 'openai-compatible' &&
         entry.baseUrl === baseUrl &&
         entry.apiKeyRef !== undefined
-          ? await secrets.get(entry.apiKeyRef)
-          : undefined;
+      ) {
+        apiKey = await secrets.get(entry.apiKeyRef);
+      }
       const listed = await listOpenAiCompatibleModels({
         baseUrl,
         timeout: listTimeout,
@@ -260,8 +268,19 @@ function keyRefFor(id: string): string {
   return `model:${id}`;
 }
 
-function withoutKeyRef(entry: ModelEntry): ModelEntryInput & { readonly id: string } {
+/** A registry entry as stored: the input it was saved from, with its id. */
+type StoredEntry = ModelEntryInput & Pick<ModelEntry, 'id'>;
+
+function withoutKeyRef(entry: ModelEntry): StoredEntry {
   return Object.fromEntries(
     Object.entries(entry).filter(([key]) => key !== 'apiKeyRef'),
-  ) as ModelEntryInput & { readonly id: string };
+  ) as StoredEntry;
+}
+
+/** A new entry's id prefix: `openai-` for OpenAI-compatible models, else `claude-`. */
+function idPrefixOf(kind: ModelEntryInput['kind']): string {
+  if (kind === 'openai-compatible') {
+    return 'openai';
+  }
+  return 'claude';
 }

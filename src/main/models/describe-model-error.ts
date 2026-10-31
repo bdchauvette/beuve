@@ -23,7 +23,10 @@ export function describeModelError(error: ModelError, locale?: Intl.LocalesArgum
       return `Not signed in: ${short(error.message)}`;
     }
     case 'rate-limited': {
-      return `Rate-limited${error.resetsAt === undefined ? '' : ` until ${error.resetsAt}`}: ${short(error.message)}`;
+      if (error.resetsAt === undefined) {
+        return `Rate-limited: ${short(error.message)}`;
+      }
+      return `Rate-limited until ${error.resetsAt}: ${short(error.message)}`;
     }
     case 'timeout': {
       return `No answer within ${formatDuration(error.timeout, locale)}.`;
@@ -38,10 +41,16 @@ export function describeModelError(error: ModelError, locale?: Intl.LocalesArgum
       return `The answer was not usable: ${short(error.reason)}`;
     }
     case 'model-failed': {
-      return `${error.status === undefined ? 'The model failed' : `HTTP ${String(error.status)}`}: ${short(error.message)}`;
+      if (error.status === undefined) {
+        return `The model failed: ${short(error.message)}`;
+      }
+      return `HTTP ${String(error.status)}: ${short(error.message)}`;
     }
     case 'process-failed': {
-      return `Claude Code stopped${error.exitCode === undefined ? '' : ` with exit code ${String(error.exitCode)}`}: ${short(error.stderr)}`;
+      if (error.exitCode === undefined) {
+        return `Claude Code stopped: ${short(error.stderr)}`;
+      }
+      return `Claude Code stopped with exit code ${String(error.exitCode)}: ${short(error.stderr)}`;
     }
   }
 }
