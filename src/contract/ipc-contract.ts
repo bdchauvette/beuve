@@ -1745,6 +1745,11 @@ export interface OpenGithubLinkRequest {
 }
 
 /** A link from a chat answer; main opens any absolute `http:` or `https:` URL in the browser. */
+/** The answer of a request that opened something outside beuve. */
+export interface OpenedView {
+  readonly opened: true;
+}
+
 export interface OpenUrlRequest {
   readonly url: string;
 }
@@ -2035,7 +2040,7 @@ export interface InvokeChannelMap {
   };
   'sheet:open': {
     readonly request: OpenSheetRequest;
-    readonly response: IpcResult<{ readonly opened: true }>;
+    readonly response: IpcResult<OpenedView>;
   };
   'sheet:get-file': {
     readonly request: SheetFileRequest;
@@ -2170,11 +2175,11 @@ export interface InvokeChannelMap {
   };
   'github:open-link': {
     readonly request: OpenGithubLinkRequest;
-    readonly response: IpcResult<{ readonly opened: true }>;
+    readonly response: IpcResult<OpenedView>;
   };
   'shell:open-url': {
     readonly request: OpenUrlRequest;
-    readonly response: IpcResult<{ readonly opened: true }>;
+    readonly response: IpcResult<OpenedView>;
   };
   'menu:set-state': {
     readonly request: MenuStateRequest;

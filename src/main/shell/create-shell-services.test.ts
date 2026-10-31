@@ -3,11 +3,14 @@ import { describe } from 'vitest';
 import { test } from '../testing/test.ts';
 import { createShellServices } from './create-shell-services.ts';
 
-/** Shell services whose `openExternal` records what it was asked to open. */
-function recordingShell(): {
+/** Shell services, and the URLs their `openExternal` was asked to open. */
+interface RecordingShell {
   readonly opened: string[];
   readonly shell: ReturnType<typeof createShellServices>;
-} {
+}
+
+/** Shell services whose `openExternal` records what it was asked to open. */
+function recordingShell(): RecordingShell {
   const opened: string[] = [];
   const shell = createShellServices({
     openExternal: async (url): Promise<void> => {

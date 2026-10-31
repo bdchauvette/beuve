@@ -1,10 +1,10 @@
-import type { IpcResult, OpenUrlRequest } from '#contract/ipc-contract.ts';
+import type { IpcResult, OpenedView, OpenUrlRequest } from '#contract/ipc-contract.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
 /** The system browser for links the renderer shows (chat answers). */
 export interface ShellServices {
-  readonly openUrl: (request: OpenUrlRequest) => Promise<IpcResult<{ readonly opened: true }>>;
+  readonly openUrl: (request: OpenUrlRequest) => Promise<IpcResult<OpenedView>>;
 }
 
 export interface ShellServicesOptions {
@@ -19,7 +19,7 @@ export interface ShellServicesOptions {
  */
 export function createShellServices(options: ShellServicesOptions): ShellServices {
   return {
-    openUrl: async ({ url }): Promise<IpcResult<{ readonly opened: true }>> => {
+    openUrl: async ({ url }): Promise<IpcResult<OpenedView>> => {
       const parsed = URL.parse(url);
       if (parsed === null || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) {
         return err({
