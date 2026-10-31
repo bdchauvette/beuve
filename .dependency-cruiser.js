@@ -131,11 +131,11 @@ export default {
       name: 'pierre-only-in-wrappers',
       severity: 'error',
       comment:
-        'Only beuve-file-card, beuve-radar-tree and beuve-sheet-code import @pierre/* (ADR 0018, 0067), so a library swap stays local; tests and src/ui/testing may.',
+        'Only beuve-file-card, beuve-radar-tree, beuve-sheet-code and load-diffs-library import @pierre/* (ADR 0018, 0067), so a library swap stays local; tests and src/ui/testing may.',
       from: {
         path: '^src/',
         pathNot: [
-          '^src/ui/beuve-(file-card|radar-tree|sheet-code)\\.ts$',
+          '^src/ui/(beuve-(file-card|radar-tree|sheet-code)|load-diffs-library)\\.ts$',
           '\\.test\\.ts$',
           '^src/ui/testing/',
         ],

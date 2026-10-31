@@ -49,10 +49,9 @@ import { mentionFromTarget } from './mention-from-target.ts';
 import { targetFrom } from './target-from.ts';
 import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
-import { syntaxPalettes } from './syntax-palettes.ts';
 import { headSideAnnotationsFrom } from './head-side-annotations-from.ts';
-import { textmateThemeFrom } from './textmate-theme-from.ts';
-import type { TextmateTheme } from './textmate-theme-from.ts';
+import { diffsThemeNames } from './diffs-theme-names.ts';
+import { loadDiffsLibrary } from './load-diffs-library.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
@@ -116,7 +115,6 @@ interface CardSlot {
 
 const noInsights: readonly ReviewInsight[] = [];
 
-const themeNames = { light: 'beuve-light', dark: 'beuve-dark' } as const;
 const estimatedLineHeight = 20;
 const estimatedSeparatorHeight = 32;
 
@@ -1040,7 +1038,7 @@ export class BeuveFileCard extends LitElement {
     const loader = this.loadFilePair;
     return new library.FileDiff<CardSlot>(
       {
-        theme: themeNames,
+        theme: diffsThemeNames,
         themeType: 'system',
         preferredHighlighter: 'shiki-js',
         diffStyle: this.diffStyle,
@@ -1952,16 +1950,14 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
 }
 
 /**
- * Shared by every card: the library is a lazy chunk, loaded once, with the themes registered and
- * the highlighting worker pool started once.
+ * Shared by every card: the library (loaded once by `loadDiffsLibrary`, with the themes) and
+ * the highlighting worker pool, started once.
  */
 const shared: {
   library: Promise<typeof Diffs> | undefined;
-  areThemesRegistered: boolean;
   pool: WorkerPoolManager | undefined;
 } = {
   library: undefined,
-  areThemesRegistered: false,
   pool: undefined,
 };
 
@@ -1976,8 +1972,7 @@ async function loadDiffs(): Promise<typeof Diffs> {
 }
 
 async function loadDiffsOnce(): Promise<typeof Diffs> {
-  const [library, workers] = await Promise.all([import('@pierre/diffs'), loadWorkerModule()]);
-  registerThemes(library);
+  const [library, workers] = await Promise.all([loadDiffsLibrary(), loadWorkerModule()]);
   shared.pool = workers === undefined ? undefined : startWorkerPool(workers);
   return library;
 }
@@ -2009,7 +2004,7 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
       },
     },
     {
-      theme: themeNames,
+      theme: diffsThemeNames,
       preferredHighlighter: 'shiki-js',
       lineDiffType: 'word-alt',
       langs: [],
@@ -2030,21 +2025,6 @@ const checkIcon: SVGTemplateResult = svg`<svg viewBox="0 0 14 14" aria-hidden="t
 const warningIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10.5H1Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 5v2.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>`;
 
 const gaugeIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5a4 4 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8.5 7.8 5.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
-
-/** Registers beuve's Alabaster-style themes with the library once (ADR 0025). */
-function registerThemes(library: typeof Diffs): void {
-  if (shared.areThemesRegistered) {
-    return;
-  }
-  shared.areThemesRegistered = true;
-  for (const type of ['light', 'dark'] as const) {
-    const name = themeNames[type];
-    // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
-    library.registerCustomTheme(name, async (): Promise<TextmateTheme> =>
-      textmateThemeFrom(name, type, syntaxPalettes[type]),
-    );
-  }
-}
 
 /** Parses the patch, keyed by its blobs and hunks, and turns highlighting off for languages beuve doesn't ship. */
 function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {

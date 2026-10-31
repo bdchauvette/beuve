@@ -8,9 +8,8 @@ import type { SheetMarksView, SheetNoteView } from '#contract/ipc-contract.ts';
 
 import { highlightedLanguages } from './highlighted-languages.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
-import { syntaxPalettes } from './syntax-palettes.ts';
-import { textmateThemeFrom } from './textmate-theme-from.ts';
-import type { TextmateTheme } from './textmate-theme-from.ts';
+import { diffsThemeNames } from './diffs-theme-names.ts';
+import { loadDiffsLibrary } from './load-diffs-library.ts';
 
 /** A token the reviewer clicked: 1-based line, 0-based UTF-16 column. */
 export interface SheetTokenDetail {
@@ -25,8 +24,6 @@ export interface SheetSelectDetail {
   readonly start: number;
   readonly end: number;
 }
-
-const themeNames = { light: 'beuve-light', dark: 'beuve-dark' } as const;
 
 /**
  * The code of a sheet (ADR 0067): a whole file through `@pierre/diffs`' `File`, highlighted with
@@ -92,7 +89,7 @@ export class BeuveSheetCode extends LitElement {
 
   private createView(library: typeof Diffs): File {
     const options = {
-      theme: themeNames,
+      theme: diffsThemeNames,
       themeType: 'system',
       preferredHighlighter: 'shiki-js',
       disableFileHeader: true,
@@ -165,7 +162,7 @@ export class BeuveSheetCode extends LitElement {
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
-    void loadDiffs()
+    void loadDiffsLibrary()
       .then((library) => {
         this.library = library;
         // Moved in the DOM, it was cleaned up when it left: render it again.
@@ -234,24 +231,6 @@ export class BeuveSheetCode extends LitElement {
       ? html`<pre class="plain">${this.contents}</pre>`
       : html`<div class="code"></div>`;
   }
-}
-
-const shared: { library: Promise<typeof Diffs> | undefined } = { library: undefined };
-
-/** `@pierre/diffs`, loaded once, with beuve's themes registered (ADR 0025). */
-async function loadDiffs(): Promise<typeof Diffs> {
-  shared.library ??= (async (): Promise<typeof Diffs> => {
-    const library = await import('@pierre/diffs');
-    for (const type of ['light', 'dark'] as const) {
-      const name = themeNames[type];
-      // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
-      library.registerCustomTheme(name, async (): Promise<TextmateTheme> =>
-        textmateThemeFrom(name, type, syntaxPalettes[type]),
-      );
-    }
-    return library;
-  })();
-  return shared.library;
 }
 
 function isInViewport(bounds: DOMRect): boolean {
