@@ -293,7 +293,8 @@ function variableCandidates(
       }
     } else if (
       definition.type === TSESLint.Scope.DefinitionType.Variable &&
-      definition.node.range[1] <= node.range[0]
+      definition.node.range[1] <= node.range[0] &&
+      !isWrittenBy(variable, node)
     ) {
       const candidate = localCandidate(types, definition.name, definition.node.init);
       if (candidate !== undefined) {
@@ -302,6 +303,18 @@ function variableCandidates(
     }
   }
   return found;
+}
+
+/** Whether `node` is part of a value being written to `variable`, which cannot carry it yet. */
+function isWrittenBy(variable: TSESLint.Scope.Variable, node: Call): boolean {
+  return variable.references.some(({ writeExpr }) => {
+    return (
+      writeExpr !== null &&
+      writeExpr !== undefined &&
+      writeExpr.range[0] <= node.range[0] &&
+      node.range[1] <= writeExpr.range[1]
+    );
+  });
 }
 
 function parameterCandidate(types: Types, name: TSESTree.Identifier): Candidate | undefined {

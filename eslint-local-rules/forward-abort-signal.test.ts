@@ -27,6 +27,10 @@ createTypedRuleTester('node-fixture').run('forward-abort-signal', forwardAbortSi
     "async function f(): Promise<void> { await fetch('x'); const controller = new AbortController(); controller.abort(); }",
     // A field the method does not read.
     "class A { private readonly controller = new AbortController(); go(): Promise<Response> { return fetch('x'); } stop(): void { this.controller.abort(); } }",
+    // A signal variable being reassigned is not in scope for its own new value.
+    "function f(): AbortSignal { const request = new Request('x'); const deadline = AbortSignal.timeout(5); let stopped = deadline; if (request.keepalive) { stopped = AbortSignal.any([request.signal, deadline]); } return stopped; }",
+    // Nor for its initializer.
+    'function f(): AbortSignal { const deadline = AbortSignal.timeout(5); const stopped: AbortSignal = AbortSignal.any([deadline]); return stopped; }',
     // A callee that takes no signal.
     'function f(signal: AbortSignal): string { void signal; return JSON.stringify({}); }',
   ],
@@ -116,6 +120,13 @@ createTypedRuleTester('node-fixture').run('forward-abort-signal', forwardAbortSi
       errors: [{ messageId: 'forward', data: { callee: 'AbortSignal.any', signal: 'signal' } }],
       output:
         'function f(signal: AbortSignal): AbortSignal { return AbortSignal.any([AbortSignal.timeout(5), signal]); }',
+    },
+    {
+      // A reassigned signal variable is not offered for its own new value: the signal it derives from is.
+      code: 'function f(): AbortSignal { const deadline = AbortSignal.timeout(5); let stopped = deadline; stopped = AbortSignal.any([AbortSignal.timeout(9)]); return stopped; }',
+      errors: [{ messageId: 'forward', data: { callee: 'AbortSignal.any', signal: 'deadline' } }],
+      output:
+        'function f(): AbortSignal { const deadline = AbortSignal.timeout(5); let stopped = deadline; stopped = AbortSignal.any([AbortSignal.timeout(9), deadline]); return stopped; }',
     },
     {
       // Our own function, with a signal parameter.
