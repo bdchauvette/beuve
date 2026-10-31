@@ -48,3 +48,7 @@ The dock shows the review edits quietly, under the staged items, only once they 
 ## Consequences
 
 Reviewers can edit with their own tools without endangering what beuve reviews, and what they edit comes back as ordinary review items that every exporter already understands. The edits branch is a real branch in the reviewer's repository: they can commit to it, diff it or push it themselves; beuve only refuses to. Harvesting walks the worktree once per preview and stage (an `add --all` on a seeded index), and reads the pull request's diff at the base. Moving edits to a new head is manual for now.
+
+## Amendment 2026-10-31: the dock's status lines are transient
+
+A "done" or "failed" line (`clearReviewEditsStatus`) clears when the session is selected or reloaded again and when Open, Turn into Suggestions… or Discard… starts; the branch's summary and an action still waiting on main stay, and so does a preview or discard confirmation, which main checks against its digest anyway.

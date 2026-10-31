@@ -105,6 +105,7 @@ import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
 import type { FlowState } from './flow-state.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
+import { clearReviewEditsStatus } from './clear-review-edits-status.ts';
 import type { ReviewEditsFlow } from './review-edits-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
@@ -1368,6 +1369,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined) {
       return;
     }
+    this.reviewEditsFlow = clearReviewEditsStatus(this.reviewEditsFlow);
     const place = this.reviewEditsLocation(review);
     const opened = await bridge.invoke('review-edits:open', {
       sessionId: review.session.id,
@@ -1443,6 +1445,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined || this.reviewEditsFlow.kind === 'busy') {
       return;
     }
+    this.reviewEditsFlow = { kind: 'busy', text: 'Reading what Discard would remove…' };
     const loss = await bridge.invoke('review-edits:preview-discard', {
       sessionId: review.session.id,
     });
@@ -1623,7 +1626,9 @@ export class BeuveApp extends LitElement {
     if (this.review?.session.id === sessionId) {
       shownHead = this.review.headSha;
     }
-    if (sessionId !== this.selectedId) {
+    if (sessionId === this.selectedId) {
+      this.reviewEditsFlow = clearReviewEditsStatus(this.reviewEditsFlow);
+    } else {
       this.review = undefined;
       this.order = undefined;
       this.tree = undefined;
