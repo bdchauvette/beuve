@@ -1,4 +1,4 @@
-import { mkdir, mkdtempDisposable, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { extraMarkup } from '../src/ui/testing/extra-markup.ts';
 import { hostileCorpus } from '../src/ui/testing/hostile-corpus.ts';
 import { errorFrom } from '../src/x/error/error-from.ts';
+import { removeTree } from '../src/x/fs/remove-tree.ts';
 import { revealFormatControls } from '../src/x/text/reveal-format-controls.ts';
 import { timeoutSignal } from '../src/x/time/timeout-signal.ts';
 
@@ -122,14 +123,19 @@ async function checkHostileRender(): Promise<void> {
   });
   const findings: Findings = { failures: [], violations: [], notes: [] };
   const temporaryRoot = await realpath(os.tmpdir());
-  await using temporary = await mkdtempDisposable(path.join(temporaryRoot, 'beuve-hostile-'));
-  const repository = await createHostileRepository(path.join(temporary.path, 'repo'), wait());
+  const temporary = await mkdtemp(path.join(temporaryRoot, 'beuve-hostile-'));
+  // beuve's checkouts under user-data are read-only (ADR 0033 amendment): `removeTree` reopens them.
+  await using cleanup = new AsyncDisposableStack();
+  cleanup.defer(async (): Promise<void> => {
+    await removeTree(temporary);
+  });
+  const repository = await createHostileRepository(path.join(temporary, 'repo'), wait());
   findings.notes.push(
     `the repository holds the corpus but ${repository.skipped.join(', ')}, which only the harness renders`,
   );
   await using app = await launchElectron({
     root,
-    userDataDir: path.join(temporary.path, 'user-data'),
+    userDataDir: path.join(temporary, 'user-data'),
     args: positionals,
     env: { BEUVE_LOG_LEVEL: 'warn', BEUVE_MCP_PORT: String(await freePort()) },
     signal: wait(),
