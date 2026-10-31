@@ -50,7 +50,7 @@ export async function findStackForkPoint(
   range: ReviewRange,
   options: StackForkPointOptions = {},
 ): Promise<Result<StackForkPoint, GitError>> {
-  const mergeBase = await findMergeBase(repository, range.base, range.head);
+  const mergeBase = await findMergeBase(repository, [range.base, range.head]);
   if (!mergeBase.ok) {
     return mergeBase;
   }
@@ -60,7 +60,11 @@ export async function findStackForkPoint(
     reason: 'merge-base',
     skipped: 0,
   };
-  const chain = await listFirstParents(repository, mergeBase.value, range.head, options);
+  const chain = await listFirstParents(
+    repository,
+    { base: mergeBase.value, head: range.head },
+    options,
+  );
   if (!chain.ok || chain.value.length === 0) {
     if (chain.ok) {
       return ok(plain);
@@ -70,7 +74,11 @@ export async function findStackForkPoint(
   const commits = chain.value;
   const reviewed = new Set(options.reviewedBases);
   const reviewedIndex = commits.findIndex((commit) => reviewed.has(commit));
-  const upstreamIndex = await findNewestUpstream(repository, range.base, mergeBase.value, commits);
+  const upstreamIndex = await findNewestUpstream(
+    repository,
+    { tip: range.base, mergeBase: mergeBase.value },
+    commits,
+  );
   if (!upstreamIndex.ok) {
     return upstreamIndex;
   }
@@ -79,8 +87,11 @@ export async function findStackForkPoint(
     { index: reviewedIndex, reason: 'reviewed-base' as const },
   ].filter((candidate) => candidate.index !== -1);
   const best = candidates.toSorted((a, b) => a.index - b.index)[0];
-  const forkPoint = best === undefined ? undefined : commits[best.index];
-  if (best === undefined || forkPoint === undefined) {
+  if (best === undefined) {
+    return ok(plain);
+  }
+  const forkPoint = commits[best.index];
+  if (forkPoint === undefined) {
     return ok(plain);
   }
   return ok({
@@ -94,8 +105,7 @@ export async function findStackForkPoint(
 /** Newest first. */
 async function listFirstParents(
   repository: GitRepository,
-  mergeBase: CommitSha,
-  head: CommitSha,
+  { base: mergeBase, head }: ReviewRange,
   options: StackForkPointOptions,
 ): Promise<Result<readonly CommitSha[], GitError>> {
   const output = await repository[gitRunner].run(
@@ -122,10 +132,15 @@ async function listFirstParents(
 }
 
 /** Index into `commits` (newest first) of the newest already-upstream commit, or -1. */
+/** The tip of the branch the stack targets, and where the stack forked from it. */
+interface UpstreamBase {
+  readonly tip: CommitSha;
+  readonly mergeBase: CommitSha;
+}
+
 async function findNewestUpstream(
   repository: GitRepository,
-  base: CommitSha,
-  mergeBase: CommitSha,
+  { tip: base, mergeBase }: UpstreamBase,
   commits: readonly CommitSha[],
 ): Promise<Result<number, GitError>> {
   const baseTree = await repository[gitRunner].run(

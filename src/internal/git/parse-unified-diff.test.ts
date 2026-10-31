@@ -35,7 +35,7 @@ describe('parseUnifiedDiff', () => {
   });
 
   test('numbers context, added and removed lines on each side', ({ expect }) => {
-    const [hunk] = file(mixedPatch(), 'modified.txt').hunks;
+    const [hunk] = file({ patch: mixedPatch(), path: 'modified.txt' }).hunks;
     expect(hunk).toMatchObject({ oldStart: 1, oldCount: 3, newStart: 1, newCount: 3 });
     expect(hunk?.lines).toStrictEqual([
       { kind: 'context', content: 'line1', oldLine: 1, newLine: 1, noNewline: false },
@@ -46,7 +46,7 @@ describe('parseUnifiedDiff', () => {
   });
 
   test('reads multiple hunks and their section headings', ({ expect }) => {
-    const multi = file(mixedPatch(), 'multi.txt');
+    const multi = file({ patch: mixedPatch(), path: 'multi.txt' });
     expect(
       multi.hunks.map((hunk) => {
         return [hunk.header, hunk.oldStart, hunk.newStart];
@@ -56,19 +56,19 @@ describe('parseUnifiedDiff', () => {
       ['@@ -32,7 +32,7 @@', 32, 32],
     ]);
     expect(multi.hunks[1]?.lines[3]).toMatchObject({ kind: 'removed', content: '35', oldLine: 35 });
-    const renamed = file(mixedPatch(), 'new name ü.txt');
+    const renamed = file({ patch: mixedPatch(), path: 'new name ü.txt' });
     expect(renamed.hunks[0]?.section).toBe('rename content 17');
     expect(multi.hunks[0]?.section).toBe('');
   });
 
   test('describes added and deleted files with their modes', ({ expect }) => {
-    expect(file(mixedPatch(), 'añadido.txt')).toMatchObject({
+    expect(file({ patch: mixedPatch(), path: 'añadido.txt' })).toMatchObject({
       status: 'added',
       mode: '100644',
       oldObject: '0000000000000000000000000000000000000000',
       newObject: '07f33c419c8df177919cdf71c670e4587f1b645f',
     });
-    const deleted = file(mixedPatch(), 'deleted.txt');
+    const deleted = file({ patch: mixedPatch(), path: 'deleted.txt' });
     expect(deleted).toMatchObject({ status: 'deleted', mode: '100644' });
     expect(deleted.hunks[0]).toMatchObject({ oldStart: 1, oldCount: 1, newStart: 0, newCount: 0 });
   });
@@ -76,7 +76,7 @@ describe('parseUnifiedDiff', () => {
   test('handles renames with and without content changes, and names with spaces or unicode', ({
     expect,
   }) => {
-    expect(file(mixedPatch(), 'empty-added.txt')).toMatchObject({
+    expect(file({ patch: mixedPatch(), path: 'empty-added.txt' })).toMatchObject({
       status: 'renamed',
       oldPath: 'empty-deleted.txt',
       newPath: 'empty-added.txt',
@@ -85,7 +85,7 @@ describe('parseUnifiedDiff', () => {
       newMode: undefined,
       hunks: [],
     });
-    expect(file(mixedPatch(), 'new name ü.txt')).toMatchObject({
+    expect(file({ patch: mixedPatch(), path: 'new name ü.txt' })).toMatchObject({
       status: 'renamed',
       oldPath: 'old-name.txt',
       similarity: 95,
@@ -95,14 +95,17 @@ describe('parseUnifiedDiff', () => {
   });
 
   test('decodes C-quoted names', ({ expect }) => {
-    expect(file(mixedPatch(), 'tab\there.txt').hunks[0]?.lines).toStrictEqual([
+    expect(file({ patch: mixedPatch(), path: 'tab\there.txt' }).hunks[0]?.lines).toStrictEqual([
       { kind: 'added', content: 'x', newLine: 1, noNewline: true },
     ]);
   });
 
   test('flags binary files and mode-only changes', ({ expect }) => {
-    expect(file(mixedPatch(), 'blob.bin')).toMatchObject({ binary: true, hunks: [] });
-    expect(file(mixedPatch(), 'script.sh')).toMatchObject({
+    expect(file({ patch: mixedPatch(), path: 'blob.bin' })).toMatchObject({
+      binary: true,
+      hunks: [],
+    });
+    expect(file({ patch: mixedPatch(), path: 'script.sh' })).toMatchObject({
       status: 'modified',
       oldMode: '100644',
       newMode: '100755',
@@ -113,12 +116,12 @@ describe('parseUnifiedDiff', () => {
   });
 
   test('keeps carriage returns in CRLF content', ({ expect }) => {
-    const lines = file(mixedPatch(), 'crlf.txt').hunks[0]?.lines;
+    const lines = file({ patch: mixedPatch(), path: 'crlf.txt' }).hunks[0]?.lines;
     expect(lines?.map((line) => line.content)).toStrictEqual(['a\r', 'b\r', 'B\r', 'c\r']);
   });
 
   test('attaches "no newline at end of file" to the line before it', ({ expect }) => {
-    expect(file(mixedPatch(), 'nonl.txt').hunks[0]?.lines).toStrictEqual([
+    expect(file({ patch: mixedPatch(), path: 'nonl.txt' }).hunks[0]?.lines).toStrictEqual([
       { kind: 'removed', content: 'no newline', oldLine: 1, noNewline: true },
       { kind: 'added', content: 'no newline changed', newLine: 1, noNewline: true },
     ]);
@@ -127,7 +130,7 @@ describe('parseUnifiedDiff', () => {
   test('retains each file’s exact patch text', ({ expect }) => {
     const files = parsed(mixedPatch());
     expect(files.map((each) => each.patch).join('')).toBe(mixedPatch());
-    expect(file(mixedPatch(), 'blob.bin').patch).toBe(
+    expect(file({ patch: mixedPatch(), path: 'blob.bin' }).patch).toBe(
       patch(
         'diff --git a/blob.bin b/blob.bin',
         'index 0f49c4ae77b43dff338093c78e009676e7e308ba..0468cc67cd03cfa167f0c99fe957425b8eca2617 100644',
@@ -138,17 +141,17 @@ describe('parseUnifiedDiff', () => {
 
   test('recognizes submodules, binary additions and mode changes with content', ({ expect }) => {
     const files = parsed(submodulePatch());
-    expect(file(submodulePatch(), 'image.png')).toMatchObject({
+    expect(file({ patch: submodulePatch(), path: 'image.png' })).toMatchObject({
       status: 'added',
       binary: true,
       submodule: false,
     });
-    expect(file(submodulePatch(), 'script.sh')).toMatchObject({
+    expect(file({ patch: submodulePatch(), path: 'script.sh' })).toMatchObject({
       status: 'modified',
       oldMode: '100755',
       newMode: '100644',
     });
-    expect(file(submodulePatch(), 'sub')).toMatchObject({
+    expect(file({ patch: submodulePatch(), path: 'sub' })).toMatchObject({
       status: 'added',
       mode: '160000',
       submodule: true,
@@ -157,17 +160,19 @@ describe('parseUnifiedDiff', () => {
   });
 
   test('parses copies and empty files whose names contain spaces', ({ expect }) => {
-    expect(file(copyAndEmptyPatch(), 'copied.txt')).toMatchObject({
+    expect(file({ patch: copyAndEmptyPatch(), path: 'copied.txt' })).toMatchObject({
       status: 'copied',
       oldPath: 'source.txt',
       newPath: 'copied.txt',
       similarity: 97,
     });
-    expect(file(copyAndEmptyPatch(), 'fresh empty.txt')).toMatchObject({
+    expect(file({ patch: copyAndEmptyPatch(), path: 'fresh empty.txt' })).toMatchObject({
       status: 'added',
       hunks: [],
     });
-    expect(file(copyAndEmptyPatch(), 'gone empty.txt')).toMatchObject({ status: 'deleted' });
+    expect(file({ patch: copyAndEmptyPatch(), path: 'gone empty.txt' })).toMatchObject({
+      status: 'deleted',
+    });
   });
 
   test('reads hunk bodies by count, so header-like content stays content', ({ expect }) => {
@@ -261,7 +266,13 @@ function pathOf(diffFile: DiffFile): string {
   return diffFile.newPath;
 }
 
-function file(text: string, path: string): DiffFile {
+/** Which file of which patch text. */
+interface PatchFile {
+  readonly patch: string;
+  readonly path: string;
+}
+
+function file({ patch: text, path }: PatchFile): DiffFile {
   const found = parsed(text).find((candidate) => pathOf(candidate) === path);
   if (found === undefined) {
     throw new Error(`no file ${path}`);

@@ -83,7 +83,10 @@ async function readSymbolicRef(
   const read = await repository[gitRunner].run(['symbolic-ref', '--quiet', '--short', ref], {
     policy: { kind: 'read' },
   });
-  const name = read.ok ? read.value.trim() : '';
+  if (!read.ok) {
+    return undefined;
+  }
+  const name = read.value.trim();
   if (name === '') {
     return undefined;
   }

@@ -20,6 +20,12 @@ const refspecPattern = /^(\+?)(refs\/[^:]+):(refs\/[^:]+)$/u;
 const refCharacters = /^[\w./-]+$/u;
 const ownedPrefix = 'refs/beuve/';
 
+/** The remote to fetch from, and the refspecs to fetch into `refs/beuve/`. */
+export interface RefFetch {
+  readonly remote: string;
+  readonly refspecs: readonly string[];
+}
+
 /**
  * Fetches `refspecs` (`[+]refs/<src>:refs/beuve/<dst>`) from `remote` (a configured remote's name
  * or a credential-free `https://` URL) without a shell: no tags, no `FETCH_HEAD`, no submodules,
@@ -34,8 +40,7 @@ const ownedPrefix = 'refs/beuve/';
  */
 export async function fetchRefs(
   repository: GitRepository,
-  remote: string,
-  refspecs: readonly string[],
+  { remote, refspecs }: RefFetch,
   options: FetchRefsOptions = {},
 ): Promise<Result<void, GitError>> {
   const invalid = remoteProblem(remote) ?? refspecsProblem(refspecs);

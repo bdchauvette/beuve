@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 
 import type { CommitSha } from './object-id.ts';
 import { replayChanges } from './replay-changes.ts';
+import type { ReplayOutcome } from './replay-changes.ts';
 import type { TestRepository } from './testing/test-repository.ts';
 import { test } from './testing/test.ts';
 
@@ -62,9 +63,13 @@ describe('replayChanges', () => {
   });
 });
 
-async function fork(
-  repo: TestRepository,
-): Promise<{ readonly from: CommitSha; readonly to: CommitSha }> {
+/** A base commit and a topic commit on top of it. */
+interface Fork {
+  readonly from: CommitSha;
+  readonly to: CommitSha;
+}
+
+async function fork(repo: TestRepository): Promise<Fork> {
   repo.write('a.txt', '1\n2\n3\n');
   const from = await repo.commit('base');
   await repo.git('switch', '--quiet', '--create', 'topic');
@@ -74,7 +79,9 @@ async function fork(
   return { from, to };
 }
 
-function cleanReplay(result: Awaited<ReturnType<typeof replayChanges>>): { readonly tree: string } {
+function cleanReplay(
+  result: Awaited<ReturnType<typeof replayChanges>>,
+): Extract<ReplayOutcome, { kind: 'clean' }> {
   if (!result.ok || result.value.kind !== 'clean') {
     throw new Error('expected a clean replay');
   }

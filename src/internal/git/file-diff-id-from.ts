@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { DiffFile } from './diff-model.ts';
+import type { DiffFile, DiffLine } from './diff-model.ts';
 
 /**
  * The identity of one file's diff, for matching it across heads (ADR 0064): the SHA-256 of its
@@ -20,9 +20,7 @@ export function fileDiffIdFrom(file: DiffFile): string {
   for (const hunk of file.hunks) {
     for (const line of hunk.lines) {
       if (line.kind !== 'context') {
-        hash.update(
-          `${line.kind === 'added' ? '+' : '-'}${line.noNewline ? '!' : ' '}${line.content}\n`,
-        );
+        hash.update(hashedLine(line));
       }
     }
   }
@@ -53,4 +51,17 @@ function modeChangeOf(file: DiffFile): string {
       return `${file.oldMode}>${file.newMode}`;
     }
   }
+}
+
+/** A changed line as hashed: its sign, `!` when it lacks a final newline, and its content. */
+function hashedLine(line: Exclude<DiffLine, { kind: 'context' }>): string {
+  let sign = '-';
+  if (line.kind === 'added') {
+    sign = '+';
+  }
+  let mark = ' ';
+  if (line.noNewline) {
+    mark = '!';
+  }
+  return `${sign}${mark}${line.content}\n`;
 }

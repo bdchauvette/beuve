@@ -34,6 +34,6 @@ export function planWorktreePath(
     .replaceAll(unsafeNameCharacters, '-')
     .replace(leadingDotsOrDashes, '');
   const digest = createHash('sha256').update(repositoryRoot).digest('hex').slice(0, 12);
-  const directory = name === '' ? digest : `${name}-${digest}`;
+  const directory = [name, digest].filter((part) => part !== '').join('-');
   return ok(path.join(path.resolve(root), directory, commit));
 }

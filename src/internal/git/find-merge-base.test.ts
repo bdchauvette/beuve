@@ -10,14 +10,17 @@ describe('findMergeBase', () => {
     const topic = await repo.commit('topic');
     await repo.git('switch', '--quiet', 'main');
     const main = await repo.commit('main');
-    await expect(findMergeBase(git, main, topic)).resolves.toStrictEqual({ ok: true, value: fork });
+    await expect(findMergeBase(git, [main, topic])).resolves.toStrictEqual({
+      ok: true,
+      value: fork,
+    });
   });
 
   test('reports unrelated histories', async ({ expect, repo, repository: git }) => {
     const main = await repo.commit('main');
     await repo.git('switch', '--quiet', '--orphan', 'other');
     const other = await repo.commit('other');
-    await expect(findMergeBase(git, main, other)).resolves.toStrictEqual({
+    await expect(findMergeBase(git, [main, other])).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'no-merge-base', left: main, right: other },
     });

@@ -20,9 +20,13 @@ export async function buildLineMapping(
   if (!from.ok) {
     return undefined;
   }
-  const files = await diffObjects(repository, from.value, toHeadSha as CommitSha, {
-    contextLines: 0,
-  });
+  const files = await diffObjects(
+    repository,
+    { from: from.value, to: toHeadSha as CommitSha },
+    {
+      contextLines: 0,
+    },
+  );
   if (!files.ok) {
     return undefined;
   }

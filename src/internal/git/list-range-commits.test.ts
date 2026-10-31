@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { listRangeCommits } from './list-range-commits.ts';
 import { test } from './testing/test.ts';
 
@@ -19,7 +21,7 @@ describe('listRangeCommits', () => {
 
     const listed = await listRangeCommits(git, { base, head: second });
     expect(listed).toMatchObject({ ok: true, value: { truncated: false } });
-    const commits = listed.ok ? listed.value.commits : [];
+    const { commits } = okValueFrom(listed);
     expect(
       commits.map(({ sha, parent, subject }) => {
         return [sha, parent, subject];

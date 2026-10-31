@@ -24,7 +24,10 @@ export function parseTreeObject(
   let offset = 0;
   while (offset < buffer.length) {
     const modeEnd = buffer.indexOf(space, offset);
-    const nameEnd = modeEnd === -1 ? -1 : buffer.indexOf(0, modeEnd + 1);
+    if (modeEnd === -1) {
+      return undefined;
+    }
+    const nameEnd = buffer.indexOf(0, modeEnd + 1);
     if (nameEnd === -1 || nameEnd + 1 + hashBytes > buffer.length) {
       return undefined;
     }

@@ -14,8 +14,7 @@ import { parseCommitSha } from './parse-commit-sha.ts';
  */
 export async function findMergeBase(
   repository: GitRepository,
-  left: CommitSha,
-  right: CommitSha,
+  [left, right]: readonly [CommitSha, CommitSha],
 ): Promise<Result<CommitSha, GitError>> {
   const args = ['merge-base', '--end-of-options', left, right];
   const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });

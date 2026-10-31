@@ -21,6 +21,12 @@ export interface DiffObjectsOptions {
   readonly ignoreWhitespace?: boolean;
 }
 
+/** The commit or tree a diff starts from, and the one it goes to. */
+export interface ObjectRange {
+  readonly from: CommitSha | TreeSha;
+  readonly to: CommitSha | TreeSha;
+}
+
 /**
  * Diffs two commits or trees directly (`from` → `to`, no merge-base), with rename detection and
  * full blob names, and parses the patch. External diff drivers and textconv filters are disabled
@@ -28,8 +34,7 @@ export interface DiffObjectsOptions {
  */
 export async function diffObjects(
   repository: GitRepository,
-  from: CommitSha | TreeSha,
-  to: CommitSha | TreeSha,
+  { from, to }: ObjectRange,
   options: DiffObjectsOptions = {},
 ): Promise<Result<readonly DiffFile[], GitError>> {
   const contextLines = options.contextLines ?? 3;
@@ -50,24 +55,21 @@ export async function diffObjects(
     '--src-prefix=a/',
     '--dst-prefix=b/',
     `--unified=${String(contextLines)}`,
-    ...(options.ignoreWhitespace === true ? ['--ignore-all-space'] : []),
-    '--end-of-options',
-    from,
-    to,
-    '--',
-    ...(options.paths ?? []),
   ];
+  if (options.ignoreWhitespace === true) {
+    args.push('--ignore-all-space');
+  }
+  args.push('--end-of-options', from, to, '--', ...(options.paths ?? []));
   const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
   if (!output.ok) {
     return output;
   }
   const parsed = parseUnifiedDiff(output.value);
+  if (parsed.ok && options.ignoreWhitespace === true) {
+    return ok(parsed.value.filter((file) => hasVisibleChange(file)));
+  }
   if (parsed.ok) {
-    return ok(
-      options.ignoreWhitespace === true
-        ? parsed.value.filter((file) => hasVisibleChange(file))
-        : parsed.value,
-    );
+    return ok(parsed.value);
   }
   return err({
     kind: 'unexpected-output',

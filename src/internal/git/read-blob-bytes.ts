@@ -14,6 +14,12 @@ export type BlobBytes =
   | { readonly kind: 'missing' }
   | { readonly kind: 'not-a-blob'; readonly type: string };
 
+export interface ReadBlobOptions {
+  /** A larger blob answers `too-large` without being read. */
+  readonly maxBytes: number;
+  readonly signal?: AbortSignal | undefined;
+}
+
 /**
  * One blob's raw content (no filters, no textconv) on the repository's warm
  * `cat-file --batch-command` (ADR 0087), sized first so a blob over `maxBytes` is never read.
@@ -21,7 +27,7 @@ export type BlobBytes =
 export async function readBlobBytes(
   repository: GitRepository,
   objectId: string,
-  options: { readonly maxBytes: number; readonly signal?: AbortSignal | undefined },
+  options: ReadBlobOptions,
 ): Promise<Result<BlobBytes, GitError>> {
   if (!isObjectId(objectId)) {
     return err({ kind: 'invalid-argument', argument: objectId, reason: 'not a full object id' });
@@ -40,18 +46,16 @@ export async function readBlobBytes(
       return ok({ kind: 'missing' });
     }
     case 'too-large': {
-      return ok(
-        object.type === 'blob'
-          ? { kind: 'too-large', size: object.size, limit: object.limit }
-          : { kind: 'not-a-blob', type: object.type },
-      );
+      if (object.type !== 'blob') {
+        return ok({ kind: 'not-a-blob', type: object.type });
+      }
+      return ok({ kind: 'too-large', size: object.size, limit: object.limit });
     }
     case 'content': {
-      return ok(
-        object.type === 'blob'
-          ? { kind: 'bytes', bytes: object.bytes }
-          : { kind: 'not-a-blob', type: object.type },
-      );
+      if (object.type !== 'blob') {
+        return ok({ kind: 'not-a-blob', type: object.type });
+      }
+      return ok({ kind: 'bytes', bytes: object.bytes });
     }
   }
 }

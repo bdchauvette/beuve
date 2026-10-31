@@ -7,7 +7,7 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { openRepository } from '../open-repository.ts';
 import type { GitRepository } from '../open-repository.ts';
 import { createRepositoryTemplates } from './create-repository-templates.ts';
-import type { RepositoryTemplates } from './create-repository-templates.ts';
+import type { RepositoryTemplates, TemplateCopy } from './create-repository-templates.ts';
 import type { RepositoryTemplate, TestRepository } from './test-repository.ts';
 
 /** Hands out repositories for one test, each in its own directory under the test's `tempDir`. */
@@ -15,10 +15,7 @@ export interface TestRepositories {
   /** An empty repository on `main`. */
   readonly create: () => Promise<TestRepository>;
   /** A copy of `template`, built once per worker, and the data its build returned. */
-  readonly fromTemplate: <T>(template: RepositoryTemplate<T>) => Promise<{
-    readonly repo: TestRepository;
-    readonly value: T;
-  }>;
+  readonly fromTemplate: <T>(template: RepositoryTemplate<T>) => Promise<TemplateCopy<T>>;
 }
 
 /**
@@ -35,9 +32,7 @@ export const test = baseTest
   })
   .extend('repositories', ({ tempDir, repositoryTemplates, signal }): TestRepositories => {
     let count = 0;
-    const fromTemplate = async <T>(
-      template: RepositoryTemplate<T>,
-    ): Promise<{ readonly repo: TestRepository; readonly value: T }> => {
+    const fromTemplate = async <T>(template: RepositoryTemplate<T>): Promise<TemplateCopy<T>> => {
       count += 1;
       const home = path.join(tempDir, `repository-${String(count)}`);
       mkdirSync(home);

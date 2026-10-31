@@ -54,7 +54,7 @@ describe('createSessionWorktrees', () => {
   }) => {
     const { c1, c2 } = await twoCommits(repo);
     const server = closing(await startHoldServer(signal));
-    const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+    const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
       kind: 'git',
       holds: [['worktree', 'remove']],
     });
@@ -111,7 +111,7 @@ describe('createSessionWorktrees', () => {
   }) => {
     const { c1, c2 } = await twoCommits(repo);
     const server = closing(await startHoldServer(signal));
-    const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+    const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
       kind: 'git',
       holds: [['worktree', 'add']],
     });
@@ -140,7 +140,9 @@ describe('createSessionWorktrees', () => {
     signal,
   }) => {
     const server = closing(await startHoldServer(signal));
-    const smudge = writeHoldScript(repo.scratch(), 'smudge', server.port, { kind: 'smudge' });
+    const smudge = writeHoldScript({ directory: repo.scratch(), name: 'smudge' }, server.port, {
+      kind: 'smudge',
+    });
     repo.write('.gitattributes', 'held.txt filter=hold\n');
     repo.write('a.txt', 'a\n');
     repo.write('held.txt', 'held\n');

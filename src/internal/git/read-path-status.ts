@@ -32,7 +32,10 @@ export async function readPathStatus(
     { policy: { kind: 'read' } },
   );
   if (status.ok) {
-    return ok(status.value.trim() === '' ? 'clean' : 'modified');
+    if (status.value.trim() === '') {
+      return ok('clean');
+    }
+    return ok('modified');
   }
   return status;
 }

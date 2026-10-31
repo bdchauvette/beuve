@@ -63,7 +63,7 @@ describe('attributeHunks', () => {
     await repo.git('mv', 'app.txt', 'main.txt');
     const renamed = await repo.commit('rename');
 
-    const files = okValueFrom(await diffObjects(repository, base, renamed));
+    const files = okValueFrom(await diffObjects(repository, { from: base, to: renamed }));
     const { commits } = okValueFrom(await listRangeCommits(repository, { base, head: renamed }));
     const [file] = attributeHunks(files, commits);
     expect(file?.commits).toStrictEqual([edited, renamed]);
@@ -96,7 +96,7 @@ async function appFile(repo: TestRepository, git: GitRepository): Promise<AppFil
     },
     attribute: async (head, from = base): Promise<ReturnType<typeof attributeHunks>> => {
       const { commits } = okValueFrom(await listRangeCommits(git, { base, head }));
-      const files = okValueFrom(await diffObjects(git, from, head, { contextLines: 1 }));
+      const files = okValueFrom(await diffObjects(git, { from, to: head }, { contextLines: 1 }));
       return attributeHunks(files, commits);
     },
   };

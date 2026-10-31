@@ -55,7 +55,7 @@ describe('fileDiffIdFrom', () => {
       ),
     )[0];
     const joined = modified('a.ts', ['-x', '+y', 'mid', '-p', '+q']);
-    expect(split === undefined ? '' : fileDiffIdFrom(split)).toBe(fileDiffIdFrom(joined));
+    expect(idOf(split)).toBe(fileDiffIdFrom(joined));
   });
 
   test('sees a mode change and a binary content change', ({ expect }) => {
@@ -72,12 +72,8 @@ describe('fileDiffIdFrom', () => {
     };
     const first = binary('2222222');
     const second = binary('3333333');
-    expect(executable === undefined ? '' : fileDiffIdFrom(executable)).not.toBe(
-      fileDiffIdFrom(plain),
-    );
-    expect(first === undefined ? '' : fileDiffIdFrom(first)).not.toBe(
-      second === undefined ? '' : fileDiffIdFrom(second),
-    );
+    expect(idOf(executable)).not.toBe(fileDiffIdFrom(plain));
+    expect(idOf(first)).not.toBe(idOf(second));
   });
 });
 
@@ -105,4 +101,12 @@ function modified(path: string, lines: readonly string[], start = 1): DiffFile {
     throw new Error('no file parsed');
   }
   return file;
+}
+
+/** The file's diff id, or `''` when the patch parsed to no file. */
+function idOf(file: DiffFile | undefined): string {
+  if (file === undefined) {
+    return '';
+  }
+  return fileDiffIdFrom(file);
 }

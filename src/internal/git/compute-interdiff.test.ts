@@ -3,7 +3,7 @@ import { describe } from 'vitest';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { computeInterdiff } from './compute-interdiff.ts';
-import type { DiffFile } from './diff-model.ts';
+import type { DiffFile, DiffLine } from './diff-model.ts';
 import { diffObjects } from './diff-objects.ts';
 import type { CommitSha } from './object-id.ts';
 import type { ReviewRange } from './review-range.ts';
@@ -19,14 +19,17 @@ describe('computeInterdiff', () => {
     const previous = await reviewedBranch(repo);
     repo.write('feature.rs', lines(['pub fn feature() -> u8 {', '  2', '}']));
     const head = await repo.commit('fixup');
-    const result = await computeInterdiff(git, previous, { base: previous.base, head });
+    const result = await computeInterdiff(git, {
+      previous: previous,
+      next: { base: previous.base, head },
+    });
     expect(result).toMatchObject({
       ok: true,
       value: { kind: 'exact', nextMergeBase: previous.base },
     });
     expect(summary(okValueFrom(result).files)).toStrictEqual([['feature.rs', ['-  1', '+  2']]]);
 
-    await expect(computeInterdiff(git, previous, previous)).resolves.toMatchObject({
+    await expect(computeInterdiff(git, { previous, next: previous })).resolves.toMatchObject({
       ok: true,
       value: { kind: 'exact', files: [] },
     });
@@ -44,14 +47,14 @@ describe('computeInterdiff', () => {
     const head = await amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
     const next = { base: newBase, head };
 
-    const result = await computeInterdiff(git, previous, next);
+    const result = await computeInterdiff(git, { previous, next });
     expect(result).toMatchObject({
       ok: true,
       value: { kind: 'rebased', previousMergeBase: previous.base, nextMergeBase: newBase },
     });
     expect(summary(okValueFrom(result).files)).toStrictEqual([['feature.rs', ['-  1', '+  42']]]);
 
-    const naive = await diffObjects(git, previous.head, head);
+    const naive = await diffObjects(git, { from: previous.head, to: head });
     expect(summary(okValueFrom(naive)).map(([path]) => path)).toStrictEqual([
       'feature.rs',
       'lib.rs',
@@ -65,7 +68,9 @@ describe('computeInterdiff', () => {
     await repo.git('switch', '--quiet', 'topic');
     await repo.git('rebase', '--quiet', 'main');
     const head = (await repo.git('rev-parse', 'HEAD')) as CommitSha;
-    await expect(computeInterdiff(git, previous, { base: newBase, head })).resolves.toMatchObject({
+    await expect(
+      computeInterdiff(git, { previous: previous, next: { base: newBase, head } }),
+    ).resolves.toMatchObject({
       ok: true,
       value: { kind: 'rebased', files: [] },
     });
@@ -82,7 +87,10 @@ describe('computeInterdiff', () => {
     await repo.git('rebase', '--quiet', 'main');
     const head = await amendFeature(repo, lines(['pub fn feature() -> u8 {', '  42', '}']));
     const older = { ...git, version: { major: 2, minor: 39, patch: 3, raw: 'git version 2.39.3' } };
-    const result = await computeInterdiff(older, previous, { base: newBase, head });
+    const result = await computeInterdiff(older, {
+      previous: previous,
+      next: { base: newBase, head },
+    });
     expect(result).toMatchObject({ ok: true, value: { kind: 'rebased' } });
     expect(summary(okValueFrom(result).files)).toStrictEqual([['feature.rs', ['-  1', '+  42']]]);
   });
@@ -100,7 +108,10 @@ describe('computeInterdiff', () => {
     await repo.git('rebase', '--quiet', '--strategy-option=theirs', 'main');
     const head = (await repo.git('rev-parse', 'HEAD')) as CommitSha;
 
-    const result = await computeInterdiff(git, previous, { base: newBase, head });
+    const result = await computeInterdiff(git, {
+      previous: previous,
+      next: { base: newBase, head },
+    });
     expect(result).toMatchObject({
       ok: true,
       value: { kind: 'fallback', reason: { kind: 'conflicts', paths: ['app.rs'] } },
@@ -126,7 +137,7 @@ describe('computeInterdiff', () => {
       version: { major: 2, minor: 37, patch: 0, raw: 'git version 2.37.0' },
     };
     await expect(
-      computeInterdiff(ancient, previous, { base: newBase, head }),
+      computeInterdiff(ancient, { previous: previous, next: { base: newBase, head } }),
     ).resolves.toMatchObject({
       ok: true,
       value: { kind: 'fallback', reason: { kind: 'git-too-old', required: '2.38' } },
@@ -142,12 +153,12 @@ function lines(content: readonly string[]): string {
 function summary(files: readonly DiffFile[]): [string, string[]][] {
   return files.map((file) => {
     return [
-      'path' in file ? file.path : file.newPath,
+      pathOf(file),
       file.hunks.flatMap((hunk) => {
         return hunk.lines
           .filter((line) => line.kind !== 'context')
           .map((line) => {
-            return `${line.kind === 'added' ? '+' : '-'}${line.content}`;
+            return `${signOf(line)}${line.content}`;
           });
       }),
     ];
@@ -183,4 +194,18 @@ async function amendFeature(repo: TestRepository, content: string): Promise<Comm
   repo.write('feature.rs', content);
   await repo.git('commit', '--quiet', '--amend', '--no-edit', '--all');
   return (await repo.git('rev-parse', 'HEAD')) as CommitSha;
+}
+
+function pathOf(file: DiffFile): string {
+  if ('path' in file) {
+    return file.path;
+  }
+  return file.newPath;
+}
+
+function signOf(line: DiffLine): string {
+  if (line.kind === 'added') {
+    return '+';
+  }
+  return '-';
 }

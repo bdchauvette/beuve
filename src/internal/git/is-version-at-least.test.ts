@@ -6,11 +6,13 @@ import { test } from './testing/test.ts';
 
 describe('isVersionAtLeast', () => {
   test('compares major then minor', ({ expect }) => {
-    expect(isVersionAtLeast(version(), 2, 38)).toBe(true);
-    expect(isVersionAtLeast(version(), 2, 39)).toBe(true);
-    expect(isVersionAtLeast(version(), 2, 40)).toBe(false);
-    expect(isVersionAtLeast(version(), 1, 99)).toBe(true);
-    expect(isVersionAtLeast({ ...version(), major: 3, minor: 0 }, 2, 40)).toBe(true);
+    expect(isVersionAtLeast(version(), { major: 2, minor: 38 })).toBe(true);
+    expect(isVersionAtLeast(version(), { major: 2, minor: 39 })).toBe(true);
+    expect(isVersionAtLeast(version(), { major: 2, minor: 40 })).toBe(false);
+    expect(isVersionAtLeast(version(), { major: 1, minor: 99 })).toBe(true);
+    expect(isVersionAtLeast({ ...version(), major: 3, minor: 0 }, { major: 2, minor: 40 })).toBe(
+      true,
+    );
   });
 });
 

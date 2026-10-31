@@ -8,7 +8,13 @@ import process from 'node:process';
  * (killing its git), as a crashing `cat-file` would. Returns the `/bin/sh` launcher to use as
  * `gitBinary`. Crashes are counted in a file beside it, so restarts see the count.
  */
-export function writeCrashingGit(directory: string, crashOn: string, times: number): string {
+/** What makes the wrapper crash: a line containing `crashOn`, the first `times` times. */
+export interface CrashPlan {
+  readonly crashOn: string;
+  readonly times: number;
+}
+
+export function writeCrashingGit(directory: string, { crashOn, times }: CrashPlan): string {
   const script = path.join(directory, 'crashing-git.mjs');
   const config = JSON.stringify({ crashOn, times, counter: path.join(directory, 'crashes') });
   writeFileSync(

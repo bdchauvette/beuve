@@ -84,7 +84,7 @@ describe('createFileServices (integration: SQLite + git)', () => {
 /** `git check-attr --source` needs git 2.40; older gits report nothing. */
 async function expectedAttributes(repo: TestRepository): Promise<object> {
   const version = parseGitVersion(await repo.git('--version'));
-  if (version === undefined || !isVersionAtLeast(version, 2, 40)) {
+  if (version === undefined || !isVersionAtLeast(version, { major: 2, minor: 40 })) {
     return { generated: [], notGenerated: [], noDiff: [] };
   }
   return {

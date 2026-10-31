@@ -23,11 +23,14 @@ function revision(text: string): RevisionName {
 }
 
 /** A repository with a text file, a binary file and an 8 MiB file on `main`. */
-async function objects(repo: TestRepository): Promise<{
+/** The commit, and the object ids of its text and its 8 MiB file. */
+interface TestObjects {
   readonly commit: CommitSha;
   readonly text: string;
   readonly big: string;
-}> {
+}
+
+async function objects(repo: TestRepository): Promise<TestObjects> {
   repo.write('src/a.ts', 'export const a = 1;\n');
   repo.write('bin.dat', Uint8Array.from([0, 0x0d, 0x0a, 0xff, 0x0a, 0]));
   repo.write('big.txt', 'x'.repeat(8 * 1024 * 1024));
@@ -235,7 +238,7 @@ describe('GitObjectReader', () => {
   }) => {
     const { text } = await objects(repo);
     await using server = await startHoldServer(signal);
-    const hold = writeHoldScript(tempDir, 'git', server.port, {
+    const hold = writeHoldScript({ directory: tempDir, name: 'git' }, server.port, {
       kind: 'git',
       holds: [['cat-file']],
     });
@@ -261,7 +264,7 @@ describe('GitObjectReader', () => {
     signal,
   }) => {
     const { commit, text } = await objects(repo);
-    const crashOnce = writeCrashingGit(tempDir, text, 1);
+    const crashOnce = writeCrashingGit(tempDir, { crashOn: text, times: 1 });
     await using objectsReader = reader(repo, { gitBinary: crashOnce });
     const [read, tree] = await Promise.all([
       objectsReader.read({ kind: 'object', oid: text }, { signal }),
@@ -279,7 +282,7 @@ describe('GitObjectReader', () => {
     signal,
   }) => {
     const { commit, text } = await objects(repo);
-    const crashTwice = writeCrashingGit(tempDir, text, 2);
+    const crashTwice = writeCrashingGit(tempDir, { crashOn: text, times: 2 });
     await using objectsReader = reader(repo, { gitBinary: crashTwice });
     await expect(
       objectsReader.info({ kind: 'object', oid: text }, { signal }),

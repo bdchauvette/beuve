@@ -49,14 +49,29 @@ export function parseWorktreeList(text: string): readonly Worktree[] | undefined
 
 const zeroIdPattern = /^0+$/u;
 
+/** Why a worktree is locked or prunable, as git wrote it. */
+interface WorktreeReason {
+  readonly reason: string;
+}
+
+function checkoutOf(
+  attributes: ReadonlyMap<string, string>,
+  branch: string | undefined,
+): Worktree['checkout'] {
+  if (attributes.has('bare')) {
+    return { kind: 'bare' };
+  }
+  if (branch === undefined) {
+    return { kind: 'detached' };
+  }
+  return { kind: 'branch', ref: branch };
+}
+
 function parseRecord(fields: readonly string[]): Worktree | undefined {
   const attributes = new Map<string, string>();
   for (const field of fields) {
-    const space = field.indexOf(' ');
-    attributes.set(
-      space === -1 ? field : field.slice(0, space),
-      space === -1 ? '' : field.slice(space + 1),
-    );
+    const [key = '', ...value] = field.split(' ');
+    attributes.set(key, value.join(' '));
   }
   const path = attributes.get('worktree');
   if (path === undefined || path === '') {
@@ -64,21 +79,21 @@ function parseRecord(fields: readonly string[]): Worktree | undefined {
   }
   const head = parseCommitSha(attributes.get('HEAD') ?? '');
   const branch = attributes.get('branch');
-  const reason = (key: string): { readonly reason: string } | undefined => {
+  const reason = (key: string): WorktreeReason | undefined => {
     const value = attributes.get(key);
     if (value === undefined) {
       return undefined;
     }
     return { reason: value };
   };
+  let shownHead = head;
+  if (head !== undefined && zeroIdPattern.test(head)) {
+    shownHead = undefined;
+  }
   return {
     path,
-    head: head === undefined || zeroIdPattern.test(head) ? undefined : head,
-    checkout: attributes.has('bare')
-      ? { kind: 'bare' }
-      : branch === undefined
-        ? { kind: 'detached' }
-        : { kind: 'branch', ref: branch },
+    head: shownHead,
+    checkout: checkoutOf(attributes, branch),
     locked: reason('locked'),
     prunable: reason('prunable'),
   };

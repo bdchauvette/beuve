@@ -12,7 +12,7 @@ import { pairCommits } from './pair-commits.ts';
 import type { CommitPairing } from './pair-commits.ts';
 import type { GitVersion } from './parse-git-version.ts';
 import { replayChanges } from './replay-changes.ts';
-import type { ReviewRange } from './review-range.ts';
+import type { ReviewRanges } from './review-range.ts';
 
 /**
  * A pairing, with the per-commit interdiff of a `modified` pair: the previous commit's change
@@ -51,8 +51,7 @@ export interface CommitPairsOptions extends DiffObjectsOptions {
  */
 export async function computeCommitPairs(
   repository: GitRepository,
-  previous: ReviewRange,
-  next: ReviewRange,
+  { previous, next }: ReviewRanges,
   options: CommitPairsOptions = {},
 ): Promise<Result<CommitPairs, GitError>> {
   const listed = await Promise.all([
@@ -80,15 +79,15 @@ export async function computeCommitPairs(
       continue;
     }
     interdiffs += 1;
-    const interdiff = await pairInterdiff(repository, pairing.previous, pairing.next, options);
+    const interdiff = await pairInterdiff(repository, pairing, options);
     if (!interdiff.ok) {
       return interdiff;
     }
-    pairs.push(
-      interdiff.value.kind === 'clean' && interdiff.value.files.length === 0
-        ? { kind: 'unchanged', previous: pairing.previous, next: pairing.next }
-        : { ...pairing, interdiff: interdiff.value },
-    );
+    if (interdiff.value.kind === 'clean' && interdiff.value.files.length === 0) {
+      pairs.push({ kind: 'unchanged', previous: pairing.previous, next: pairing.next });
+    } else {
+      pairs.push({ ...pairing, interdiff: interdiff.value });
+    }
   }
   return ok({
     pairs,
@@ -97,10 +96,15 @@ export async function computeCommitPairs(
   });
 }
 
+/** A commit of the previous range and its partner in the next one. */
+interface RangeCommitPair {
+  readonly previous: RangeCommit;
+  readonly next: RangeCommit;
+}
+
 async function pairInterdiff(
   repository: GitRepository,
-  previous: RangeCommit,
-  next: RangeCommit,
+  { previous, next }: RangeCommitPair,
   options: DiffObjectsOptions,
 ): Promise<Result<CommitInterdiff, GitError>> {
   const replay = await replayChanges(repository, {
@@ -114,12 +118,16 @@ async function pairInterdiff(
   const outcome = replay.value;
   switch (outcome.kind) {
     case 'clean': {
-      const files = await diffObjects(repository, outcome.tree, next.sha, {
-        ...(options.contextLines !== undefined && { contextLines: options.contextLines }),
-        ...(options.ignoreWhitespace !== undefined && {
-          ignoreWhitespace: options.ignoreWhitespace,
-        }),
-      });
+      const files = await diffObjects(
+        repository,
+        { from: outcome.tree, to: next.sha },
+        {
+          ...(options.contextLines !== undefined && { contextLines: options.contextLines }),
+          ...(options.ignoreWhitespace !== undefined && {
+            ignoreWhitespace: options.ignoreWhitespace,
+          }),
+        },
+      );
       if (files.ok) {
         return ok({ kind: 'clean', files: files.value });
       }

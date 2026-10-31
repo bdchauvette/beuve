@@ -36,7 +36,11 @@ export async function startHoldServer(signal: AbortSignal): Promise<HoldServer> 
     const ended = new Promise<'terminated' | 'closed'>((resolve) => {
       socket.once('close', () => {
         sockets.delete(socket);
-        resolve(wasTerminated ? 'terminated' : 'closed');
+        if (wasTerminated) {
+          resolve('terminated');
+        } else {
+          resolve('closed');
+        }
       });
     });
     socket.on('error', () => {

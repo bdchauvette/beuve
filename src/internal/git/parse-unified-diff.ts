@@ -54,16 +54,17 @@ interface Headers {
 
 const diffHeaderPrefix = 'diff --git ';
 const devNull = '/dev/null';
+const trailingTab = /\t$/u;
 const submoduleMode = '160000';
 
 function parseFile(cursor: Cursor): Result<DiffFile, DiffParseError> {
   const start = cursor.index;
   const header = cursor.lines[start] ?? '';
+  if (header.startsWith('diff --') && !header.startsWith(diffHeaderPrefix)) {
+    return failure(cursor, 'combined diffs are not supported');
+  }
   if (!header.startsWith(diffHeaderPrefix)) {
-    const message = header.startsWith('diff --')
-      ? 'combined diffs are not supported'
-      : 'expected "diff --git"';
-    return failure(cursor, message);
+    return failure(cursor, 'expected "diff --git"');
   }
   cursor.index += 1;
 
@@ -146,8 +147,10 @@ function withHeader(headers: Headers, line: string): Headers | undefined {
     if (!line.startsWith(prefix)) {
       continue;
     }
-    const raw = line.slice(prefix.length);
-    const value = type === 'path' ? unquoteGitPath(raw) : raw;
+    let value: string | undefined = line.slice(prefix.length);
+    if (type === 'path') {
+      value = unquoteGitPath(value);
+    }
     if (value === undefined || (type === 'mode' && !modePattern.test(value))) {
       return undefined;
     }
@@ -174,7 +177,10 @@ function withIndexLine(headers: Headers, rest: string): Headers | undefined {
 function parsePathLines(cursor: Cursor, headers: Headers): Result<Headers, DiffParseError> {
   const minus = sidePath(cursor.lines[cursor.index]?.slice(4) ?? '', 'a/');
   const plusLine = cursor.lines[cursor.index + 1] ?? '';
-  const plus = plusLine.startsWith('+++ ') ? sidePath(plusLine.slice(4), 'b/') : undefined;
+  let plus: string | undefined;
+  if (plusLine.startsWith('+++ ')) {
+    plus = sidePath(plusLine.slice(4), 'b/');
+  }
   if (minus === undefined || plus === undefined) {
     return failure(cursor, 'malformed "---"/"+++" lines');
   }
@@ -183,8 +189,8 @@ function parsePathLines(cursor: Cursor, headers: Headers): Result<Headers, DiffP
 }
 
 /** The path, or {@link devNull}. Git appends a tab to names containing spaces, for GNU patch. */
-function sidePath(raw: string, prefix: string): string | undefined {
-  const name = raw.endsWith('\t') ? raw.slice(0, -1) : raw;
+function sidePath(raw: string, prefix: 'a/' | 'b/'): string | undefined {
+  const name = raw.replace(trailingTab, '');
   if (name === devNull) {
     return devNull;
   }
@@ -222,7 +228,7 @@ function parseHunk(cursor: Cursor): Result<DiffHunk, DiffParseError> {
     return failure(cursor, `expected a hunk header: ${header}`);
   }
   cursor.index += 1;
-  const lines = parseHunkLines(cursor, oldRange, newRange);
+  const lines = parseHunkLines(cursor, { old: oldRange, new: newRange });
   if (!lines.ok) {
     return lines;
   }
@@ -258,10 +264,15 @@ function parseRange(text = ''): Range | undefined {
   return { start: Number(start), count: Number(count) };
 }
 
+/** A hunk header's old and new line ranges. */
+interface HunkRanges {
+  readonly old: Range;
+  readonly new: Range;
+}
+
 function parseHunkLines(
   cursor: Cursor,
-  oldRange: Range,
-  newRange: Range,
+  { old: oldRange, new: newRange }: HunkRanges,
 ): Result<readonly DiffLine[], DiffParseError> {
   const lines: DiffLine[] = [];
   let oldLine = oldRange.start;
@@ -403,7 +414,10 @@ function splitHeaderPaths(text: string): readonly [string, string] | undefined {
     Number.isSafeInteger(half) &&
     text.charAt(half) === ' ' &&
     text.slice(2, half) === text.slice(half + 3);
-  const separator = isEvenSplit ? half : text.indexOf(' b/');
+  let separator = text.indexOf(' b/');
+  if (isEvenSplit) {
+    separator = half;
+  }
   if (separator === -1) {
     return undefined;
   }

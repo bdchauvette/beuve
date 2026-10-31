@@ -177,9 +177,13 @@ async function diffFull(
   if (!fork.ok) {
     return gitFailure(context.logger, fork.error);
   }
-  const files = await diffObjects(repository, fork.value.forkPoint, headSha, {
-    ignoreWhitespace: isIgnoringWhitespace,
-  });
+  const files = await diffObjects(
+    repository,
+    { from: fork.value.forkPoint, to: headSha },
+    {
+      ignoreWhitespace: isIgnoringWhitespace,
+    },
+  );
   return files.ok
     ? ok({
         scope,
@@ -223,19 +227,27 @@ async function diffInterdiff(
   }
   const previous = { base: range.fromBaseSha, head: range.fromHeadSha };
   const next = { base: fork.value.forkPoint, head: range.toHeadSha };
-  const pairs = await computeCommitPairs(repository, previous, next, {
-    ignoreWhitespace: isIgnoringWhitespace,
-  });
+  const pairs = await computeCommitPairs(
+    repository,
+    { previous, next },
+    {
+      ignoreWhitespace: isIgnoringWhitespace,
+    },
+  );
   if (!pairs.ok) {
     return gitFailure(context.logger, pairs.error);
   }
   const usablePairs = pairs.value.truncated ? undefined : pairs.value;
-  const interdiff = await computeInterdiff(repository, previous, next, {
-    ignoreWhitespace: isIgnoringWhitespace,
-    pairedCommits: (usablePairs?.pairs ?? [])
-      .filter((pair) => pair.kind === 'unchanged' || pair.kind === 'modified')
-      .map((pair) => ({ parent: pair.previous.parent, commit: pair.previous.sha })),
-  });
+  const interdiff = await computeInterdiff(
+    repository,
+    { previous, next },
+    {
+      ignoreWhitespace: isIgnoringWhitespace,
+      pairedCommits: (usablePairs?.pairs ?? [])
+        .filter((pair) => pair.kind === 'unchanged' || pair.kind === 'modified')
+        .map((pair) => ({ parent: pair.previous.parent, commit: pair.previous.sha })),
+    },
+  );
   if (!interdiff.ok) {
     return gitFailure(context.logger, interdiff.error);
   }

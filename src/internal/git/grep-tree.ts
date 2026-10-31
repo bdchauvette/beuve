@@ -66,13 +66,14 @@ export async function grepTree(
     '--no-column',
     '--no-textconv',
     '--no-recurse-submodules',
-    ...(query.ignoreCase ? ['-i'] : []),
-    '-e',
-    query.pattern,
-    commit,
-    '--',
-    ...(query.scope === undefined ? [] : [query.scope]),
   ];
+  if (query.ignoreCase) {
+    args.push('-i');
+  }
+  args.push('-e', query.pattern, commit, '--');
+  if (query.scope !== undefined) {
+    args.push(query.scope);
+  }
   const parser = new GrepOutputParser(`${commit}:`, query);
   const streamed = await repository[gitRunner].stream(args, {
     policy: { kind: 'read' },
@@ -112,7 +113,10 @@ class GrepOutputParser {
   }
 
   #keep(part: Buffer): void {
-    const room = this.#field === 2 ? this.#query.maxLineChars * 4 - this.#kept : part.length;
+    let room = part.length;
+    if (this.#field === 2) {
+      room = this.#query.maxLineChars * 4 - this.#kept;
+    }
     if (room <= 0) {
       return;
     }
@@ -127,7 +131,10 @@ class GrepOutputParser {
     this.#kept = 0;
     switch (this.#field) {
       case 0: {
-        this.#path = text.startsWith(this.#prefix) ? text.slice(this.#prefix.length) : text;
+        this.#path = text;
+        if (text.startsWith(this.#prefix)) {
+          this.#path = text.slice(this.#prefix.length);
+        }
         this.#field = 1;
         return 'more';
       }
@@ -162,13 +169,12 @@ class GrepOutputParser {
   push(chunk: Buffer): 'more' | 'stop' {
     let offset = 0;
     while (offset < chunk.length) {
-      const terminator = this.#field === 2 ? 0x0a : 0;
-      const end = chunk.indexOf(terminator, offset);
-      const stop = end === -1 ? chunk.length : end;
-      this.#keep(chunk.subarray(offset, stop));
+      const end = chunk.indexOf(fieldTerminators[this.#field], offset);
       if (end === -1) {
+        this.#keep(chunk.subarray(offset));
         return 'more';
       }
+      this.#keep(chunk.subarray(offset, end));
       offset = end + 1;
       if (this.#endField() === 'stop') {
         return 'stop';
@@ -177,3 +183,6 @@ class GrepOutputParser {
     return 'more';
   }
 }
+
+/** `git grep -z --null` ends the path and the line number with NUL, and the matched line with LF. */
+const fieldTerminators = [0, 0, 0x0a] as const;

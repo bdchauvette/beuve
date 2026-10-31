@@ -12,12 +12,11 @@ import { parseGitVersion } from './parse-git-version.ts';
 import type { GitVersion } from './parse-git-version.ts';
 import { execGit } from './exec-git.ts';
 import { gitRunner } from './git-runner.ts';
-import type { GitRunner, ObjectReads } from './git-runner.ts';
+import type { GitRunner, GitRunOptions, ObjectReads } from './git-runner.ts';
 import { GitObjectReader } from './git-object-reader.ts';
 import type { ObjectReaderPool } from './object-reader-pool.ts';
 import type { ObjectContent, ObjectLookup } from './object-spec.ts';
 import { streamGit } from './stream-git.ts';
-import type { InterruptionPolicy } from './interruption-policy.ts';
 import { runGit } from './run-git.ts';
 
 /** The absolute top-level directory of a non-bare repository's main worktree, as git reports it. */
@@ -87,25 +86,26 @@ export async function openRepository(
   const runIn = async (
     cwd: string,
     args: readonly string[],
-    policy: InterruptionPolicy,
-    signal?: AbortSignal,
+    { policy, signal }: GitRunOptions,
   ): Promise<Result<string, GitError>> => {
     return runGit({ ...options, cwd, args, policy, signal: signalFor(signal) });
   };
 
-  const probed =
-    options.probe === undefined
-      ? await probeRepository(directory, async (cwd, args) => {
-          return runIn(cwd, args, { kind: 'read' }, options.signal);
-        })
-      : ok(options.probe);
+  let probed: Result<RepositoryProbe, GitError>;
+  if (options.probe === undefined) {
+    probed = await probeRepository(directory, async (cwd, args) => {
+      return runIn(cwd, args, { policy: { kind: 'read' }, signal: options.signal });
+    });
+  } else {
+    probed = ok(options.probe);
+  }
   if (!probed.ok) {
     return probed;
   }
   const { root, version } = probed.value;
   const runner: GitRunner = {
     run: async (args, runOptions): Promise<Result<string, GitError>> => {
-      return runIn(root, args, runOptions.policy, runOptions.signal);
+      return runIn(root, args, runOptions);
     },
     exec: async (args, execOptions): Promise<Result<Buffer, GitError>> => {
       return execGit({
@@ -171,10 +171,7 @@ async function probeRepository(
   }
   const version = parseGitVersion(versionOutput.value);
   const required = `${String(minimumVersion.major)}.${String(minimumVersion.minor)}`;
-  if (
-    version === undefined ||
-    !isVersionAtLeast(version, minimumVersion.major, minimumVersion.minor)
-  ) {
+  if (version === undefined || !isVersionAtLeast(version, minimumVersion)) {
     return err({ kind: 'unsupported-git-version', found: version, required });
   }
   const topLevel = await run(directory, ['rev-parse', '--show-toplevel']);

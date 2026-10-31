@@ -20,7 +20,7 @@ export function parseGitVersion(text: string): GitVersion | undefined {
   return {
     major: Number(major),
     minor: Number(minor),
-    patch: patch === '' ? 0 : Number(patch),
+    patch: Number(patch),
     raw,
   };
 }

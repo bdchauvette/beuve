@@ -54,9 +54,13 @@ describe('inspectBranches', () => {
 });
 
 /** A repository whose `main` has one commit, `base`, dated 2026-01-01 (a template). */
-async function datedBase(
-  repositories: TestRepositories,
-): Promise<{ readonly repo: TestRepository; readonly git: GitRepository }> {
+/** A test repository, and it opened for the git domain. */
+interface OpenedRepository {
+  readonly repo: TestRepository;
+  readonly git: GitRepository;
+}
+
+async function datedBase(repositories: TestRepositories): Promise<OpenedRepository> {
   const { repo } = await repositories.fromTemplate({
     name: 'inspect-branches: dated base',
     build: async (template): Promise<void> => {

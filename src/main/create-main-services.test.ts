@@ -220,7 +220,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     await repo.commit('pr1 (#1)');
     await repo.git('update-ref', 'refs/review/base', 'main');
     await repo.git('switch', '--quiet', 'pr2');
-    setLine(repo, 'b.txt', 25, 'pr2-b25');
+    setLine(repo, { file: 'b.txt', line: 25, content: 'pr2-b25' });
     const fixup = await repo.commit('pr2: b25');
 
     const retargeted = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));

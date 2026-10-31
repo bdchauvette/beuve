@@ -134,9 +134,7 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
   }
 
   async #request<T extends Answer>(
-    command: Pending['command'],
-    line: string,
-    expected: ObjectInfo | undefined,
+    { command, line, expected }: Pick<Pending, 'command' | 'line' | 'expected'>,
     signal: AbortSignal | undefined,
   ): Promise<Result<T, GitError>> {
     if (this.#isDisposed || signal?.aborted === true) {
@@ -194,11 +192,13 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
   #owedBytes(): number {
     let owed = 0;
     for (const pending of this.#queue) {
-      if (pending.isAbandoned && pending.expected !== undefined) {
-        owed +=
-          this.#body?.pending === pending
-            ? this.#body.info.size + 1 - this.#body.received
-            : pending.expected.size + 1;
+      if (!pending.isAbandoned || pending.expected === undefined) {
+        continue;
+      }
+      if (this.#body?.pending === pending) {
+        owed += this.#body.info.size + 1 - this.#body.received;
+      } else {
+        owed += pending.expected.size + 1;
       }
     }
     return owed;
@@ -266,11 +266,11 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
     });
     child.once('error', (error: NodeJS.ErrnoException) => {
       if (this.#child === child) {
-        this.#failAll(
-          error.code === 'ENOENT'
-            ? { kind: 'git-not-found', gitBinary: this.#gitBinary }
-            : this.#failure(undefined, undefined, error.message),
-        );
+        if (error.code === 'ENOENT') {
+          this.#failAll({ kind: 'git-not-found', gitBinary: this.#gitBinary });
+        } else {
+          this.#failAll(this.#failure(undefined, undefined, error.message));
+        }
       }
     });
     child.once('exit', (code, signal) => {
@@ -366,7 +366,10 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
       pending.settle(result);
     }
     clearTimeout(this.#watchdog);
-    this.#watchdog = this.#queue.length === 0 ? undefined : this.#armWatchdog();
+    this.#watchdog = undefined;
+    if (this.#queue.length > 0) {
+      this.#watchdog = this.#armWatchdog();
+    }
     this.#settleIdle();
   }
 
@@ -518,7 +521,10 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
         reason: 'not a valid object spec',
       });
     }
-    return this.#request<ObjectLookup>('info', line, undefined, options.signal);
+    return this.#request<ObjectLookup>(
+      { command: 'info', line, expected: undefined },
+      options.signal,
+    );
   }
 
   /** The object's content, or `too-large` past `maxBytes` (then only its `info` was asked). */
@@ -535,7 +541,10 @@ export class GitObjectReader implements ObjectReads, AsyncDisposable {
     if (size > maxBytes) {
       return ok({ kind: 'too-large', oid, type, size, limit: maxBytes });
     }
-    return this.#request<ObjectContent>('contents', oid, { oid, type, size }, options.signal);
+    return this.#request<ObjectContent>(
+      { command: 'contents', line: oid, expected: { oid, type, size } },
+      options.signal,
+    );
   }
 
   /** Answers every request `aborted`, stops the process and waits until it has exited. */

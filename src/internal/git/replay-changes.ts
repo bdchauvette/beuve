@@ -36,12 +36,12 @@ export async function replayChanges(
   request: ReplayRequest,
 ): Promise<Result<ReplayOutcome, GitError>> {
   const { version } = repository;
-  if (!isVersionAtLeast(version, 2, 38)) {
+  if (!isVersionAtLeast(version, { major: 2, minor: 38 })) {
     return ok({ kind: 'unsupported', version, required: '2.38' });
   }
-  const canNameBase = isVersionAtLeast(version, 2, 40);
+  const canNameBase = isVersionAtLeast(version, { major: 2, minor: 40 });
   if (!canNameBase) {
-    const implied = await findMergeBase(repository, request.onto, request.to);
+    const implied = await findMergeBase(repository, [request.onto, request.to]);
     if (!implied.ok && implied.error.kind !== 'no-merge-base') {
       return implied;
     }
@@ -49,17 +49,11 @@ export async function replayChanges(
       return ok({ kind: 'unsupported', version, required: '2.40' });
     }
   }
-  const args = [
-    'merge-tree',
-    '--write-tree',
-    '--name-only',
-    '-z',
-    '--no-messages',
-    ...(canNameBase ? [`--merge-base=${request.from}`] : []),
-    '--end-of-options',
-    request.onto,
-    request.to,
-  ];
+  const args = ['merge-tree', '--write-tree', '--name-only', '-z', '--no-messages'];
+  if (canNameBase) {
+    args.push(`--merge-base=${request.from}`);
+  }
+  args.push('--end-of-options', request.onto, request.to);
   const output = await repository[gitRunner].run(args, { policy: { kind: 'owned-write' } });
   if (output.ok) {
     return parseMergeTreeOutput(args, output.value, false);
@@ -82,9 +76,8 @@ function parseMergeTreeOutput(
     return err({ kind: 'unexpected-output', args, message: `not a tree id: ${tree}` });
   }
   const paths = [...new Set(rest.filter((path) => path !== ''))];
-  return ok(
-    isConflicted
-      ? { kind: 'conflicted', tree: tree as TreeSha, paths }
-      : { kind: 'clean', tree: tree as TreeSha },
-  );
+  if (isConflicted) {
+    return ok({ kind: 'conflicted', tree: tree as TreeSha, paths });
+  }
+  return ok({ kind: 'clean', tree: tree as TreeSha });
 }

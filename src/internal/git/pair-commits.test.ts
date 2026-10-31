@@ -10,14 +10,26 @@ import { test } from './testing/test.ts';
 
 describe('pairCommits', () => {
   test('pairs equal patch-ids first, in order, even when reordered', ({ expect }) => {
-    const previous = [commit('a', 'one', ['+x'], 'p1'), commit('b', 'two', ['+y'], 'p2')];
-    const next = [commit('c', 'two', ['+y'], 'p2'), commit('d', 'one', ['+x'], 'p1')];
+    const previous = [
+      commit({ sha: 'a', subject: 'one', changes: ['+x'], patchId: 'p1' }),
+      commit({ sha: 'b', subject: 'two', changes: ['+y'], patchId: 'p2' }),
+    ];
+    const next = [
+      commit({ sha: 'c', subject: 'two', changes: ['+y'], patchId: 'p2' }),
+      commit({ sha: 'd', subject: 'one', changes: ['+x'], patchId: 'p1' }),
+    ];
     expect(describePairs(pairCommits(previous, next))).toStrictEqual(['b=c', 'a=d']);
   });
 
   test('pairs duplicated patches positionally', ({ expect }) => {
-    const previous = [commit('a', 'x', ['+1'], 'p'), commit('b', 'x', ['+1'], 'p')];
-    const next = [commit('c', 'x', ['+1'], 'p'), commit('d', 'x', ['+1'], 'p')];
+    const previous = [
+      commit({ sha: 'a', subject: 'x', changes: ['+1'], patchId: 'p' }),
+      commit({ sha: 'b', subject: 'x', changes: ['+1'], patchId: 'p' }),
+    ];
+    const next = [
+      commit({ sha: 'c', subject: 'x', changes: ['+1'], patchId: 'p' }),
+      commit({ sha: 'd', subject: 'x', changes: ['+1'], patchId: 'p' }),
+    ];
     expect(describePairs(pairCommits(previous, next))).toStrictEqual(['a=c', 'b=d']);
   });
 
@@ -25,12 +37,20 @@ describe('pairCommits', () => {
     expect,
   }) => {
     const previous = [
-      commit('a', 'parse input', ['+line 1', '+line 2', '+line 3', '+line 4']),
-      commit('b', 'add cache', ['+cache 1', '+cache 2']),
+      commit({
+        sha: 'a',
+        subject: 'parse input',
+        changes: ['+line 1', '+line 2', '+line 3', '+line 4'],
+      }),
+      commit({ sha: 'b', subject: 'add cache', changes: ['+cache 1', '+cache 2'] }),
     ];
     const next = [
-      commit('c', 'parse input, handle errors', ['+line 1', '+line 2', '+line 3', '+line 5']),
-      commit('d', 'docs', ['+readme']),
+      commit({
+        sha: 'c',
+        subject: 'parse input, handle errors',
+        changes: ['+line 1', '+line 2', '+line 3', '+line 5'],
+      }),
+      commit({ sha: 'd', subject: 'docs', changes: ['+readme'] }),
     ];
     const pairs = pairCommits(previous, next);
     expect(describePairs(pairs)).toStrictEqual(['a~c', '-b', '+d']);
@@ -40,27 +60,36 @@ describe('pairCommits', () => {
   test('accepts a lower overlap when the subject is unchanged, but not for unrelated commits', ({
     expect,
   }) => {
-    const previous = [commit('a', 'fix login', ['+a', '+b', '+c', '+d', '+e'])];
-    const rewritten = [commit('b', 'fix login', ['+a', '+v', '+w', '+x', '+y'])];
+    const previous = [
+      commit({ sha: 'a', subject: 'fix login', changes: ['+a', '+b', '+c', '+d', '+e'] }),
+    ];
+    const rewritten = [
+      commit({ sha: 'b', subject: 'fix login', changes: ['+a', '+v', '+w', '+x', '+y'] }),
+    ];
     expect(describePairs(pairCommits(previous, rewritten))).toStrictEqual(['a~b']);
-    const renamed = [commit('b', 'fix sign-in', ['+a', '+v', '+w', '+x', '+y'])];
+    const renamed = [
+      commit({ sha: 'b', subject: 'fix sign-in', changes: ['+a', '+v', '+w', '+x', '+y'] }),
+    ];
     expect(describePairs(pairCommits(previous, renamed))).toStrictEqual(['-a', '+b']);
   });
 
   test('places dropped commits before the next pair that follows them', ({ expect }) => {
     const previous = [
-      commit('a', 'one', ['+1'], 'p1'),
-      commit('b', 'two', ['+2'], 'p2'),
-      commit('c', 'three', ['+3'], 'p3'),
+      commit({ sha: 'a', subject: 'one', changes: ['+1'], patchId: 'p1' }),
+      commit({ sha: 'b', subject: 'two', changes: ['+2'], patchId: 'p2' }),
+      commit({ sha: 'c', subject: 'three', changes: ['+3'], patchId: 'p3' }),
     ];
-    const next = [commit('d', 'one', ['+1'], 'p1'), commit('e', 'three', ['+3'], 'p3')];
+    const next = [
+      commit({ sha: 'd', subject: 'one', changes: ['+1'], patchId: 'p1' }),
+      commit({ sha: 'e', subject: 'three', changes: ['+3'], patchId: 'p3' }),
+    ];
     expect(describePairs(pairCommits(previous, next))).toStrictEqual(['a=d', '-b', 'c=e']);
   });
 
   test('pairs empty commits by subject', ({ expect }) => {
-    const previous = [commit('a', 'bump', [])];
-    const same = [commit('b', 'bump', [])];
-    const other = [commit('b', 'other', [])];
+    const previous = [commit({ sha: 'a', subject: 'bump', changes: [] })];
+    const same = [commit({ sha: 'b', subject: 'bump', changes: [] })];
+    const other = [commit({ sha: 'b', subject: 'other', changes: [] })];
     expect(describePairs(pairCommits(previous, same))).toStrictEqual(['a=b']);
     expect(describePairs(pairCommits(previous, other))).toStrictEqual(['-a', '+b']);
   });
@@ -86,12 +115,15 @@ function describePairs(pairs: ReturnType<typeof pairCommits<PairableCommit>>): s
   });
 }
 
-function commit(
-  sha: string,
-  subject: string,
-  changes: readonly string[],
-  patchId = `id-${sha}`,
-): PairableCommit {
+/** A commit to pair: its id, subject, the `+`/`-` lines it changes and its patch id. */
+interface TestCommit {
+  readonly sha: string;
+  readonly subject: string;
+  readonly changes: readonly string[];
+  readonly patchId?: string;
+}
+
+function commit({ sha, subject, changes, patchId = `id-${sha}` }: TestCommit): PairableCommit {
   const added = changes.filter((line) => line.startsWith('+')).length;
   const removed = changes.length - added;
   const text = [
@@ -103,11 +135,13 @@ function commit(
     ...changes,
     '',
   ].join('\n');
-  const files = okValueFrom(parseUnifiedDiff(changes.length === 0 ? '' : text));
+  if (changes.length === 0) {
+    return { sha: sha as CommitSha, subject, patchId: undefined, files: [] };
+  }
   return {
     sha: sha as CommitSha,
     subject,
-    patchId: changes.length === 0 ? undefined : patchId,
-    files: files,
+    patchId,
+    files: okValueFrom(parseUnifiedDiff(text)),
   };
 }

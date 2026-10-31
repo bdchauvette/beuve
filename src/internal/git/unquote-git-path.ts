@@ -30,7 +30,11 @@ export function unquoteGitPath(text: string): string | undefined {
   let index = 0;
   while (index < body.length) {
     const backslash = body.indexOf('\\', index);
-    const literal = body.slice(index, backslash === -1 ? body.length : backslash);
+    let end = backslash;
+    if (end === -1) {
+      end = body.length;
+    }
+    const literal = body.slice(index, end);
     if (literal.includes('"')) {
       return undefined;
     }
@@ -39,7 +43,7 @@ export function unquoteGitPath(text: string): string | undefined {
       break;
     }
     const octal = octalPattern.exec(body.slice(backslash + 1, backslash + 4));
-    const escaped = octal === null ? escapes.get(body.charAt(backslash + 1)) : undefined;
+    const escaped = escapes.get(body.charAt(backslash + 1));
     if (octal !== null) {
       bytes.push(Number.parseInt(octal[0], 8));
       index = backslash + 4;

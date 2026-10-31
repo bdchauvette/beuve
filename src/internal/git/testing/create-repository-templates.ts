@@ -15,7 +15,13 @@ export interface RepositoryTemplates {
     template: RepositoryTemplate<T>,
     home: string,
     signal?: AbortSignal,
-  ) => Promise<{ readonly repo: TestRepository; readonly value: T }>;
+  ) => Promise<TemplateCopy<T>>;
+}
+
+/** A repository copied from a template, and the data the template's build returned. */
+export interface TemplateCopy<T> {
+  readonly repo: TestRepository;
+  readonly value: T;
 }
 
 interface Built {
@@ -55,7 +61,7 @@ export function createRepositoryTemplates(root: string): RepositoryTemplates {
       template: RepositoryTemplate<T>,
       home: string,
       signal?: AbortSignal,
-    ): Promise<{ readonly repo: TestRepository; readonly value: T }> => {
+    ): Promise<TemplateCopy<T>> => {
       const source = await build(template);
       cpSync(source.directory, path.join(home, 'repo'), {
         recursive: true,

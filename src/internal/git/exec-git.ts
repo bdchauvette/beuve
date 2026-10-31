@@ -64,13 +64,13 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
     timeout,
     maxBufferBytes,
     input: request.input,
-    signal: policy.kind === 'atomic' ? undefined : signal,
+    signal: interruptibleBy(policy, signal),
   });
   request.logger?.debug('git', {
     args: request.args,
     cwd: request.cwd,
     duration: stopwatch.elapsed(),
-    exitCode: outcome.error === null ? 0 : outcome.error.code,
+    exitCode: loggedExitCode(outcome.error),
   });
   if (outcome.error?.code === 'ABORT_ERR' && policy.kind === 'owned-write') {
     await policy.cleanup?.();
@@ -109,16 +109,30 @@ interface ExecOutcome {
   readonly stderr: string;
 }
 
+/** How one git process runs: where, for how long, with what output cap, input and signal. */
+interface ExecSettings {
+  readonly cwd: string;
+  readonly timeout: Temporal.Duration;
+  readonly maxBufferBytes: number;
+  readonly input: string | undefined;
+  readonly signal: AbortSignal | undefined;
+}
+
+/** An `atomic` command runs to the end once started; the others stop on the signal. */
+function interruptibleBy(
+  policy: InterruptionPolicy,
+  signal: AbortSignal | undefined,
+): AbortSignal | undefined {
+  if (policy.kind === 'atomic') {
+    return undefined;
+  }
+  return signal;
+}
+
 async function execute(
   file: string,
   args: readonly string[],
-  options: {
-    readonly cwd: string;
-    readonly timeout: Temporal.Duration;
-    readonly maxBufferBytes: number;
-    readonly input: string | undefined;
-    readonly signal: AbortSignal | undefined;
-  },
+  options: ExecSettings,
 ): Promise<ExecOutcome> {
   const finished = Promise.withResolvers<ExecOutcome>();
   const child = execFile(
@@ -141,14 +155,14 @@ async function execute(
   );
   // On an abort, execFile answers as soon as it has sent the signal; git may still be removing
   // its lock files. A child that never started (no pid) has nothing to wait for.
-  const exited =
-    child.pid === undefined
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => {
-          child.once('exit', () => {
-            resolve();
-          });
-        });
+  let exited = Promise.resolve();
+  if (child.pid !== undefined) {
+    exited = new Promise<void>((resolve) => {
+      child.once('exit', () => {
+        resolve();
+      });
+    });
+  }
   child.stdin?.on('error', ignoreBrokenPipe);
   child.stdin?.end(options.input);
   const [outcome] = await Promise.all([finished.promise, exited]);
@@ -194,7 +208,7 @@ async function classifyFailure(
   return {
     kind: 'command-failed',
     args,
-    exitCode: typeof code === 'number' ? code : undefined,
+    exitCode: exitCodeOf(code),
     signal: error?.signal ?? undefined,
     stdout: stdout.toString('utf8'),
     stderr: stderr.trim(),
@@ -208,4 +222,20 @@ async function isDirectory(directory: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** What the debug log records: 0 for success, else execFile's `code`. */
+function loggedExitCode(error: ExecFileException | null): ExecFileException['code'] {
+  if (error === null) {
+    return 0;
+  }
+  return error.code;
+}
+
+/** execFile's `code` is the exit code for a process that ran, and a string for one that didn't. */
+function exitCodeOf(code: ExecFileException['code']): number | undefined {
+  if (typeof code === 'number') {
+    return code;
+  }
+  return undefined;
 }

@@ -10,6 +10,11 @@ import type { CommitSha } from './object-id.ts';
 import type { ObjectSpec } from './object-spec.ts';
 import type { GitRepository } from './open-repository.ts';
 import type { TreeBlob } from './list-tree-blobs.ts';
+
+/** A blob in a tree, with its file mode. */
+export interface TreeBlobEntry extends TreeBlob {
+  readonly mode: string;
+}
 import { parseLsTreeEntry } from './parse-ls-tree-entry.ts';
 import { parseTreeObject } from './parse-tree-object.ts';
 import { parseTreePath } from './parse-tree-path.ts';
@@ -32,7 +37,7 @@ export async function findTreeBlob(
   repository: GitRepository,
   commit: CommitSha,
   path: string,
-): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
+): Promise<Result<TreeBlobEntry | undefined, GitError>> {
   const treePath = parseTreePath(path);
   if (treePath === undefined) {
     return findWithLsTree(repository, commit, path);
@@ -44,14 +49,14 @@ async function findInParentTree(
   repository: GitRepository,
   commit: CommitSha,
   file: string,
-): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
+): Promise<Result<TreeBlobEntry | undefined, GitError>> {
   const directory = path.posix.dirname(file);
   const name = path.posix.basename(file);
   const parent = parseTreePath(directory);
-  const spec: ObjectSpec =
-    parent === undefined
-      ? { kind: 'ref', ref: commit, peel: 'tree' }
-      : { kind: 'path', commit, path: parent };
+  let spec: ObjectSpec = { kind: 'ref', ref: commit, peel: 'tree' };
+  if (parent !== undefined) {
+    spec = { kind: 'path', commit, path: parent };
+  }
   const tree = await repository[gitRunner].objects.read(spec, { maxBytes: maxTreeBytes });
   if (!tree.ok) {
     return tree;
@@ -71,18 +76,17 @@ async function findInParentTree(
     });
   }
   const entry = entries.find((candidate) => candidate.name === name);
-  return ok(
-    entry === undefined || entry.mode === treeMode || entry.mode === gitlinkMode
-      ? undefined
-      : { path: file, mode: entry.mode, objectId: entry.objectId },
-  );
+  if (entry === undefined || entry.mode === treeMode || entry.mode === gitlinkMode) {
+    return ok(undefined);
+  }
+  return ok({ path: file, mode: entry.mode, objectId: entry.objectId });
 }
 
 async function findWithLsTree(
   repository: GitRepository,
   commit: CommitSha,
   path: string,
-): Promise<Result<(TreeBlob & { readonly mode: string }) | undefined, GitError>> {
+): Promise<Result<TreeBlobEntry | undefined, GitError>> {
   const output = await repository[gitRunner].exec(
     ['ls-tree', '-z', '--end-of-options', commit, '--', path],
     { policy: { kind: 'read' } },

@@ -20,7 +20,7 @@ describe('diffObjects', () => {
     repo.write('kept.txt', 'one\nTWO\n');
     repo.write('space name.txt', 'y\n');
     const to = await repo.commit('to');
-    const result = await diffObjects(git, from, to);
+    const result = await diffObjects(git, { from, to });
     expect(result).toMatchObject({
       ok: true,
       value: [
@@ -43,9 +43,9 @@ describe('diffObjects', () => {
     repo.write('code.py', 'a\nif x:\n    y = 1\nz\nnew\n');
     repo.write('spaces.txt', 'one   \n');
     const to = await repo.commit('to');
-    const shown = await diffObjects(git, from, to);
+    const shown = await diffObjects(git, { from, to });
     expect(shown).toMatchObject({ ok: true, value: [{ path: 'code.py' }, { path: 'spaces.txt' }] });
-    const ignored = await diffObjects(git, from, to, { ignoreWhitespace: true });
+    const ignored = await diffObjects(git, { from, to }, { ignoreWhitespace: true });
     expect(ignored).toMatchObject({
       ok: true,
       value: [{ path: 'code.py', hunks: [{ newStart: 2, newCount: 4 }] }],
@@ -69,11 +69,11 @@ describe('diffObjects', () => {
     repo.write('a.txt', '1\n2\nthree\n4\n5\n');
     repo.write('*.txt', 'STAR\n');
     const to = await repo.commit('to');
-    const result = await diffObjects(git, from, to, { paths: ['*.txt'], contextLines: 0 });
+    const result = await diffObjects(git, { from, to }, { paths: ['*.txt'], contextLines: 0 });
     expect(result).toMatchObject({ ok: true, value: [{ path: '*.txt' }] });
-    const narrow = await diffObjects(git, from, to, { paths: ['a.txt'], contextLines: 0 });
+    const narrow = await diffObjects(git, { from, to }, { paths: ['a.txt'], contextLines: 0 });
     expect(narrow).toMatchObject({ ok: true, value: [{ hunks: [{ oldStart: 3, oldCount: 1 }] }] });
-    await expect(diffObjects(git, from, to, { contextLines: -1 })).resolves.toMatchObject({
+    await expect(diffObjects(git, { from, to }, { contextLines: -1 })).resolves.toMatchObject({
       ok: false,
       error: { kind: 'invalid-argument' },
     });
@@ -95,7 +95,7 @@ describe('diffObjects', () => {
     const to = await repo.commit('to');
     await repo.git('config', 'diff.evil.textconv', program);
     await repo.git('config', 'diff.external', program);
-    const result = await diffObjects(git, from, to);
+    const result = await diffObjects(git, { from, to });
     expect(result).toMatchObject({
       ok: true,
       value: [{ hunks: [{ lines: [{ content: 'before' }, { content: 'after' }] }] }],

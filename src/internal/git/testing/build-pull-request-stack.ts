@@ -1,5 +1,6 @@
 import type { CommitSha } from '../object-id.ts';
 import { setLine } from './set-line.ts';
+import type { LineEdit } from './set-line.ts';
 import type { TestRepository } from './test-repository.ts';
 
 /**
@@ -18,24 +19,14 @@ export interface PullRequestStack {
   readonly pr2: readonly CommitSha[];
   readonly pr3: readonly CommitSha[];
   /** Rewrites line `line` (1-based) of `file` in the worktree. */
-  readonly setLine: (file: string, line: number, content: string) => void;
+  readonly setLine: (edit: LineEdit) => void;
   /** `setLine` then commit, returning the commit. */
-  readonly commitLine: (
-    file: string,
-    line: number,
-    content: string,
-    message: string,
-  ) => Promise<CommitSha>;
+  readonly commitLine: (edit: LineEdit, message: string) => Promise<CommitSha>;
 }
 
 export async function buildPullRequestStack(repo: TestRepository): Promise<PullRequestStack> {
-  const commitLine = async (
-    file: string,
-    line: number,
-    content: string,
-    message: string,
-  ): Promise<CommitSha> => {
-    setLine(repo, file, line, content);
+  const commitLine = async (edit: LineEdit, message: string): Promise<CommitSha> => {
+    setLine(repo, edit);
     return repo.commit(message);
   };
 
@@ -46,23 +37,23 @@ export async function buildPullRequestStack(repo: TestRepository): Promise<PullR
   const root = await repo.commit('base');
   await repo.git('switch', '--quiet', '--create', 'pr1');
   const pr1 = [
-    await commitLine('a.txt', 5, 'pr1-a5', 'pr1: a5'),
-    await commitLine('a.txt', 15, 'pr1-a15', 'pr1: a15'),
+    await commitLine({ file: 'a.txt', line: 5, content: 'pr1-a5' }, 'pr1: a5'),
+    await commitLine({ file: 'a.txt', line: 15, content: 'pr1-a15' }, 'pr1: a15'),
   ];
   await repo.git('switch', '--quiet', '--create', 'pr2');
   const pr2 = [
-    await commitLine('b.txt', 5, 'pr2-b5', 'pr2: b5'),
-    await commitLine('b.txt', 20, 'pr2-b20', 'pr2: b20'),
+    await commitLine({ file: 'b.txt', line: 5, content: 'pr2-b5' }, 'pr2: b5'),
+    await commitLine({ file: 'b.txt', line: 20, content: 'pr2-b20' }, 'pr2: b20'),
   ];
   await repo.git('switch', '--quiet', '--create', 'pr3');
-  const pr3 = [await commitLine('c.txt', 10, 'pr3-c10', 'pr3: c10')];
+  const pr3 = [await commitLine({ file: 'c.txt', line: 10, content: 'pr3-c10' }, 'pr3: c10')];
   return {
     root,
     pr1,
     pr2,
     pr3,
-    setLine: (file, line, content): void => {
-      setLine(repo, file, line, content);
+    setLine: (edit): void => {
+      setLine(repo, edit);
     },
     commitLine,
   };

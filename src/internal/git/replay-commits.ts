@@ -29,7 +29,7 @@ export async function replayCommits(
   onto: CommitSha,
   steps: readonly ReplayStep[],
 ): Promise<Result<ReplayOutcome, GitError>> {
-  if (!isVersionAtLeast(repository.version, 2, 40)) {
+  if (!isVersionAtLeast(repository.version, { major: 2, minor: 40 })) {
     return ok({ kind: 'unsupported', version: repository.version, required: '2.40' });
   }
   let current = onto;

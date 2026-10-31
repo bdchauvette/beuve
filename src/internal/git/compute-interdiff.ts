@@ -12,7 +12,7 @@ import type { GitVersion } from './parse-git-version.ts';
 import { replayChanges } from './replay-changes.ts';
 import { replayCommits } from './replay-commits.ts';
 import type { ReplayStep } from './replay-commits.ts';
-import type { ReviewRange } from './review-range.ts';
+import type { ReviewRange, ReviewRanges } from './review-range.ts';
 
 /**
  * What the author changed between two revisions of a pull request.
@@ -66,22 +66,21 @@ export interface Interoptions extends DiffObjectsOptions {
  */
 export async function computeInterdiff(
   repository: GitRepository,
-  previous: ReviewRange,
-  next: ReviewRange,
+  { previous, next }: ReviewRanges,
   options: Interoptions = {},
 ): Promise<Result<Interdiff, GitError>> {
-  const previousMergeBase = await findMergeBase(repository, previous.base, previous.head);
+  const previousMergeBase = await findMergeBase(repository, [previous.base, previous.head]);
   if (!previousMergeBase.ok) {
     return previousMergeBase;
   }
-  const nextMergeBase = await findMergeBase(repository, next.base, next.head);
+  const nextMergeBase = await findMergeBase(repository, [next.base, next.head]);
   if (!nextMergeBase.ok) {
     return nextMergeBase;
   }
   const common = { previous, next, nextMergeBase: nextMergeBase.value };
 
   if (previousMergeBase.value === nextMergeBase.value) {
-    const files = await diffObjects(repository, previous.head, next.head, options);
+    const files = await diffObjects(repository, { from: previous.head, to: next.head }, options);
     if (files.ok) {
       return ok({ ...common, kind: 'exact', files: files.value });
     }
@@ -100,7 +99,7 @@ export async function computeInterdiff(
     tree: TreeSha,
     method: 'range' | 'commit-pairs',
   ): Promise<Result<Interdiff, GitError>> => {
-    const files = await diffObjects(repository, tree, next.head, options);
+    const files = await diffObjects(repository, { from: tree, to: next.head }, options);
     if (files.ok) {
       return ok({
         ...common,
@@ -131,11 +130,17 @@ export async function computeInterdiff(
     }
   }
 
-  const reason: InterdiffFallbackReason =
-    outcome.kind === 'conflicted'
-      ? { kind: 'conflicts', paths: outcome.paths }
-      : { kind: 'git-too-old', version: outcome.version, required: outcome.required };
-  const files = await diffObjects(repository, nextMergeBase.value, next.head, options);
+  let reason: InterdiffFallbackReason;
+  if (outcome.kind === 'conflicted') {
+    reason = { kind: 'conflicts', paths: outcome.paths };
+  } else {
+    reason = { kind: 'git-too-old', version: outcome.version, required: outcome.required };
+  }
+  const files = await diffObjects(
+    repository,
+    { from: nextMergeBase.value, to: next.head },
+    options,
+  );
   if (files.ok) {
     return ok({
       ...common,

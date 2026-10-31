@@ -26,5 +26,8 @@ export async function listTreePaths(
     return output;
   }
   const text = output.value.toString('utf8');
-  return ok(text === '' ? [] : text.replace(trailingNul, '').split('\0'));
+  if (text === '') {
+    return ok([]);
+  }
+  return ok(text.replace(trailingNul, '').split('\0'));
 }

@@ -21,7 +21,7 @@ export async function readDiffAttributes(
   commit: CommitSha,
   paths: readonly string[],
 ): Promise<Result<ReadonlyMap<string, DiffAttributes>, GitError>> {
-  if (!isVersionAtLeast(repository.version, 2, 40)) {
+  if (!isVersionAtLeast(repository.version, { major: 2, minor: 40 })) {
     return err({ kind: 'unsupported-git-version', found: repository.version, required: '2.40' });
   }
   if (paths.length === 0) {

@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 import { readBlobs } from './read-blobs.ts';
 import { test } from './testing/test.ts';
 
@@ -35,7 +37,7 @@ describe('readBlobs', () => {
       { maxBlobBytes: 100 },
     );
     expect(result.ok).toBe(true);
-    const contents = result.ok ? result.value : new Map();
+    const contents = okValueFrom(result);
     expect(contents.get(await blob('a.ts'))).toStrictEqual({
       kind: 'text',
       text: 'export const a = "é";\n',

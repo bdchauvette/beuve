@@ -82,9 +82,13 @@ async function fetchAndVerify(
   }
   const { args, headRef, baseRef } = plan.value;
   const refspecs = args.slice(args.indexOf('--end-of-options') + 2);
-  const fetched = await fetchRefs(input.repository, input.remote, refspecs, {
-    signal: input.signal,
-  });
+  const fetched = await fetchRefs(
+    input.repository,
+    { remote: input.remote, refspecs },
+    {
+      signal: input.signal,
+    },
+  );
   if (!fetched.ok) {
     input.logger.warn('github: fetch failed', { error: fetched.error });
     return err(githubFailure('fetch-failed', describeFetchError(input.remote, fetched.error)));

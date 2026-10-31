@@ -31,7 +31,9 @@ describe('fetchRefs', () => {
       '+refs/pull/7/head:refs/beuve/pr/7/head',
       '+refs/heads/main:refs/beuve/pr/7/base',
     ];
-    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
+    await expect(
+      fetchRefs(git, { remote: 'origin', refspecs: spec }, { signal }),
+    ).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
@@ -43,7 +45,9 @@ describe('fetchRefs', () => {
     await upstream.git('commit', '--quiet', '--amend', '--message', 'rewritten');
     const second = await upstream.git('rev-parse', 'HEAD');
     await upstream.git('push', '--quiet', '--force', bare, 'topic:refs/pull/7/head');
-    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
+    await expect(
+      fetchRefs(git, { remote: 'origin', refspecs: spec }, { signal }),
+    ).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
@@ -65,22 +69,32 @@ describe('fetchRefs', () => {
   }) => {
     const { upstream, clone, git, bare } = await withRemote(repositories);
     const server = closing(await startHoldServer(signal));
-    const uploadPack = writeHoldScript(upstream.scratch(), 'upload-pack', server.port, {
-      kind: 'upload-pack',
-    });
+    const uploadPack = writeHoldScript(
+      { directory: upstream.scratch(), name: 'upload-pack' },
+      server.port,
+      {
+        kind: 'upload-pack',
+      },
+    );
     await clone.git('remote', 'add', 'slow', bare);
     await clone.git('config', 'remote.slow.uploadpack', uploadPack.command);
     const spec = ['+refs/heads/main:refs/beuve/pr/7/base'];
     const controller = new AbortController();
-    const fetching = fetchRefs(git, 'slow', spec, {
-      signal: AbortSignal.any([signal, controller.signal]),
-    });
+    const fetching = fetchRefs(
+      git,
+      { remote: 'slow', refspecs: spec },
+      {
+        signal: AbortSignal.any([signal, controller.signal]),
+      },
+    );
     const held = await server.next();
     controller.abort();
     await expect(fetching).resolves.toMatchObject({ ok: false, error: { kind: 'aborted' } });
     await expect(held.ended).resolves.toBeDefined();
     await expect(leftovers(clone)).resolves.toStrictEqual([]);
-    await expect(fetchRefs(git, 'origin', spec, { signal })).resolves.toStrictEqual({
+    await expect(
+      fetchRefs(git, { remote: 'origin', refspecs: spec }, { signal }),
+    ).resolves.toStrictEqual({
       ok: true,
       value: undefined,
     });
@@ -97,16 +111,36 @@ describe('fetchRefs', () => {
   }) => {
     const { git } = await withRemote(repositories);
     const refused = [
-      await fetchRefs(git, 'origin', ['+refs/pull/1/head:refs/heads/main'], { signal }),
-      await fetchRefs(git, '--upload-pack=touch /tmp/x', ['refs/pull/1/head:refs/beuve/x'], {
-        signal,
-      }),
-      await fetchRefs(git, 'origin', ['refs/pull/*/head:refs/beuve/*'], { signal }),
-      await fetchRefs(git, 'origin', ['refs/pull/1/../head:refs/beuve/x'], { signal }),
-      await fetchRefs(git, 'https://user:secret@github.com/o/r.git', ['refs/a:refs/beuve/a'], {
-        signal,
-      }),
-      await fetchRefs(git, 'origin', [], { signal }),
+      await fetchRefs(
+        git,
+        { remote: 'origin', refspecs: ['+refs/pull/1/head:refs/heads/main'] },
+        { signal },
+      ),
+      await fetchRefs(
+        git,
+        { remote: '--upload-pack=touch /tmp/x', refspecs: ['refs/pull/1/head:refs/beuve/x'] },
+        {
+          signal,
+        },
+      ),
+      await fetchRefs(
+        git,
+        { remote: 'origin', refspecs: ['refs/pull/*/head:refs/beuve/*'] },
+        { signal },
+      ),
+      await fetchRefs(
+        git,
+        { remote: 'origin', refspecs: ['refs/pull/1/../head:refs/beuve/x'] },
+        { signal },
+      ),
+      await fetchRefs(
+        git,
+        { remote: 'https://user:secret@github.com/o/r.git', refspecs: ['refs/a:refs/beuve/a'] },
+        {
+          signal,
+        },
+      ),
+      await fetchRefs(git, { remote: 'origin', refspecs: [] }, { signal }),
     ];
     for (const result of refused) {
       expect(result).toMatchObject({ ok: false, error: { kind: 'invalid-argument' } });
@@ -119,9 +153,13 @@ describe('fetchRefs', () => {
     signal,
   }) => {
     const { git } = await withRemote(repositories);
-    const missing = await fetchRefs(git, 'origin', ['+refs/pull/9/head:refs/beuve/pr/9/head'], {
-      signal,
-    });
+    const missing = await fetchRefs(
+      git,
+      { remote: 'origin', refspecs: ['+refs/pull/9/head:refs/beuve/pr/9/head'] },
+      {
+        signal,
+      },
+    );
     expect(missing).toMatchObject({ ok: false, error: { kind: 'command-failed' } });
   });
 });

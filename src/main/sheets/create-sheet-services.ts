@@ -68,10 +68,14 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       if (!fork.ok) {
         return gitFailure(context.logger, fork.error);
       }
-      const files = await diffObjects(repository, fork.value.forkPoint, commit.value.sha, {
-        paths: [path],
-        contextLines: 0,
-      });
+      const files = await diffObjects(
+        repository,
+        { from: fork.value.forkPoint, to: commit.value.sha },
+        {
+          paths: [path],
+          contextLines: 0,
+        },
+      );
       if (!files.ok) {
         return gitFailure(context.logger, files.error);
       }

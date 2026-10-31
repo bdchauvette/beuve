@@ -136,7 +136,7 @@ async function heldDiffs(
   repo.write('f.txt', '2\n');
   await repo.commit('change');
   const server = closing(await startHoldServer(signal));
-  const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+  const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
     kind: 'git',
     holds: [['diff', '--no-color']],
   });

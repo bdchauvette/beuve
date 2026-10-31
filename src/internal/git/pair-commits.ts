@@ -38,9 +38,9 @@ export function pairCommits<C extends PairableCommit>(
   const partnerOfNext = new Map<number, number>();
   const partnerOfPrevious = new Map<number, number>();
   const similarityOfNext = new Map<number, number>();
-  const link = (previousIndex: number, nextIndex: number): void => {
-    partnerOfNext.set(nextIndex, previousIndex);
-    partnerOfPrevious.set(previousIndex, nextIndex);
+  const link = ({ i, j }: IndexPair): void => {
+    partnerOfNext.set(j, i);
+    partnerOfPrevious.set(i, j);
   };
 
   for (const [nextIndex, commit] of next.entries()) {
@@ -48,7 +48,7 @@ export function pairCommits<C extends PairableCommit>(
       return !partnerOfPrevious.has(index) && isSamePatch(candidate, commit);
     });
     if (previousIndex !== -1) {
-      link(previousIndex, nextIndex);
+      link({ i: previousIndex, j: nextIndex });
     }
   }
 
@@ -64,14 +64,14 @@ export function pairCommits<C extends PairableCommit>(
         continue;
       }
       const similarity = dice(previousLines[i] ?? new Map(), nextLines[j] ?? new Map());
-      const isSameSubject = oldCommit.subject === newCommit.subject;
-      const threshold = isSameSubject ? minimumSimilaritySameSubject : minimumSimilarity;
-      if (similarity >= threshold) {
-        candidates.push({ i, j, similarity, score: similarity + (isSameSubject ? 0.3 : 0) });
+      if (oldCommit.subject === newCommit.subject && similarity >= minimumSimilaritySameSubject) {
+        candidates.push({ i, j, similarity, score: similarity + sameSubjectBonus });
+      } else if (oldCommit.subject !== newCommit.subject && similarity >= minimumSimilarity) {
+        candidates.push({ i, j, similarity, score: similarity });
       }
     }
   }
-  const distance = (candidate: { i: number; j: number }): number => {
+  const distance = (candidate: IndexPair): number => {
     return Math.abs(
       candidate.i / Math.max(previous.length, 1) - candidate.j / Math.max(next.length, 1),
     );
@@ -84,11 +84,11 @@ export function pairCommits<C extends PairableCommit>(
       continue;
     }
 
-    link(candidate.i, candidate.j);
+    link(candidate);
     similarityOfNext.set(candidate.j, candidate.similarity);
   }
 
-  return orderPairings(previous, next, partnerOfNext, similarityOfNext);
+  return orderPairings({ previous, next }, { partnerOfNext, similarityOfNext });
 }
 
 function isSamePatch(previous: PairableCommit, next: PairableCommit): boolean {
@@ -105,14 +105,14 @@ function isSamePatch(previous: PairableCommit, next: PairableCommit): boolean {
 function changedLines(files: readonly DiffFile[]): ReadonlyMap<string, number> {
   const counts = new Map<string, number>();
   for (const file of files) {
-    const path = 'newPath' in file ? file.newPath : file.path;
+    const path = newPathOf(file);
     for (const hunk of file.hunks) {
       for (const line of hunk.lines) {
         if (line.kind === 'context') {
           continue;
         }
 
-        const key = `${path}\0${line.kind === 'added' ? '+' : '-'}${line.content.trim()}`;
+        const key = `${path}\0${signs[line.kind]}${line.content.trim()}`;
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
@@ -137,12 +137,39 @@ function dice(left: ReadonlyMap<string, number>, right: ReadonlyMap<string, numb
   return (2 * shared) / (leftSize + rightSize);
 }
 
+/** Indexes into the previous series (`i`) and the next one (`j`). */
+interface IndexPair {
+  readonly i: number;
+  readonly j: number;
+}
+
+/** Both series of commits, oldest first. */
+interface Series<C> {
+  readonly previous: readonly C[];
+  readonly next: readonly C[];
+}
+
+/** By index into the next series: the previous commit paired with it, and their similarity. */
+interface Links {
+  readonly partnerOfNext: ReadonlyMap<number, number>;
+  readonly similarityOfNext: ReadonlyMap<number, number>;
+}
+
+const sameSubjectBonus = 0.3;
+
+const signs = { added: '+', removed: '-' } as const;
+
+function newPathOf(file: DiffFile): string {
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
+}
+
 /** `git range-diff`'s output order: a dropped commit shows as soon as its predecessors have. */
 function orderPairings<C extends PairableCommit>(
-  previous: readonly C[],
-  next: readonly C[],
-  partnerOfNext: ReadonlyMap<number, number>,
-  similarityOfNext: ReadonlyMap<number, number>,
+  { previous, next }: Series<C>,
+  { partnerOfNext, similarityOfNext }: Links,
 ): readonly CommitPairing<C>[] {
   const pairings: CommitPairing<C>[] = [];
   const paired = new Set(partnerOfNext.values());
@@ -166,16 +193,19 @@ function orderPairings<C extends PairableCommit>(
     }
     const commit = next[j];
     const partner = partnerOfNext.get(j);
-    const partnerCommit = partner === undefined ? undefined : previous[partner];
-    if (commit === undefined || partner === undefined || partnerCommit === undefined) {
+    if (commit === undefined || partner === undefined) {
+      continue;
+    }
+    const partnerCommit = previous[partner];
+    if (partnerCommit === undefined) {
       continue;
     }
     const similarity = similarityOfNext.get(j);
-    pairings.push(
-      similarity === undefined
-        ? { kind: 'unchanged', previous: partnerCommit, next: commit }
-        : { kind: 'modified', previous: partnerCommit, next: commit, similarity },
-    );
+    if (similarity === undefined) {
+      pairings.push({ kind: 'unchanged', previous: partnerCommit, next: commit });
+    } else {
+      pairings.push({ kind: 'modified', previous: partnerCommit, next: commit, similarity });
+    }
     shown.add(partner);
     j += 1;
   }

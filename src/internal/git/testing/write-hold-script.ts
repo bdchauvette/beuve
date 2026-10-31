@@ -26,14 +26,19 @@ export interface HoldScript {
   readonly terminations: () => readonly string[];
 }
 
+/** The directory the fake goes in, and the name it is run by. */
+export interface HoldScriptPlace {
+  readonly directory: string;
+  readonly name: string;
+}
+
 /**
  * Writes a hold-until-signal fake to `directory` as `<name>`: each process it starts connects to
  * the {@link HoldServer} on `port` and waits there until the test releases it. On SIGTERM while
  * held it records its pid and exits with 143, as git does.
  */
 export function writeHoldScript(
-  directory: string,
-  name: string,
+  { directory, name }: HoldScriptPlace,
   port: number,
   role: HoldRole,
 ): HoldScript {

@@ -23,8 +23,7 @@ describe('parseTreeObject', () => {
         { signal },
       ),
     );
-    const bytes = 'bytes' in read ? read.bytes : Buffer.alloc(0);
-    expect(parseTreeObject(bytes, 20)).toStrictEqual([
+    expect(parseTreeObject(bytesOf(read), 20)).toStrictEqual([
       { mode: '040000', name: 'dir', objectId: await repo.git('rev-parse', 'HEAD:dir') },
       { mode: '100644', name: 'file.ts', objectId: await repo.git('rev-parse', 'HEAD:file.ts') },
       {
@@ -42,3 +41,10 @@ describe('parseTreeObject', () => {
     expect(parseTreeObject(Buffer.alloc(0), 20)).toStrictEqual([]);
   });
 });
+
+function bytesOf(read: object): Uint8Array {
+  if ('bytes' in read && read.bytes instanceof Uint8Array) {
+    return read.bytes;
+  }
+  return Buffer.alloc(0);
+}

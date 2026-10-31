@@ -26,11 +26,11 @@ export async function diffRange(
   range: ReviewRange,
   options: DiffObjectsOptions = {},
 ): Promise<Result<RangeDiff, GitError>> {
-  const mergeBase = await findMergeBase(repository, range.base, range.head);
+  const mergeBase = await findMergeBase(repository, [range.base, range.head]);
   if (!mergeBase.ok) {
     return mergeBase;
   }
-  const files = await diffObjects(repository, mergeBase.value, range.head, options);
+  const files = await diffObjects(repository, { from: mergeBase.value, to: range.head }, options);
   if (files.ok) {
     return ok({ range, mergeBase: mergeBase.value, files: files.value });
   }

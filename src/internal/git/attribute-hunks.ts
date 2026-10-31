@@ -100,7 +100,11 @@ function renamePaths(paths: ReadonlySet<string>, files: readonly DiffFile[]): Se
   const renamed = new Set<string>();
   for (const path of paths) {
     const file = files.find((candidate) => oldSidePath(candidate) === path);
-    renamed.add(file === undefined || file.status === 'deleted' ? path : newSidePath(file));
+    if (file === undefined || file.status === 'deleted') {
+      renamed.add(path);
+    } else {
+      renamed.add(newSidePath(file));
+    }
   }
   return renamed;
 }
@@ -133,7 +137,10 @@ function merge(target: Map<string, Set<number>>, path: string, keys: Iterable<nu
  */
 function hunkKeys(hunk: DiffHunk): number[] {
   const keys: number[] = [];
-  let cursor = hunk.newCount === 0 ? hunk.newStart : hunk.newStart - 1;
+  let cursor = hunk.newStart - 1;
+  if (hunk.newCount === 0) {
+    cursor = hunk.newStart;
+  }
   let pendingPoint: number | undefined;
   for (const line of hunk.lines) {
     if (line.kind === 'removed') {
@@ -161,7 +168,7 @@ function hunkKeys(hunk: DiffHunk): number[] {
  */
 function mapKey(key: number, hunks: readonly DiffHunk[]): number | undefined {
   const isPoint = key % 2 === 1;
-  const line = (isPoint ? key - 1 : key) / 2;
+  const line = Math.floor(key / 2);
   if (isPoint && line === 0) {
     return key;
   }

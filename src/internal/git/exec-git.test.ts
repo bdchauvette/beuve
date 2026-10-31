@@ -13,7 +13,7 @@ describe('execGit interruption policies', () => {
     signal,
   }) => {
     const server = closing(await startHoldServer(signal));
-    const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+    const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
       kind: 'git',
       holds: [['status']],
     });
@@ -42,7 +42,7 @@ describe('execGit interruption policies', () => {
     signal,
   }) => {
     const server = closing(await startHoldServer(signal));
-    const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+    const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
       kind: 'git',
       holds: [['fetch']],
     });
@@ -94,7 +94,7 @@ describe('execGit interruption policies', () => {
   }) => {
     await repo.commit('first');
     const server = closing(await startHoldServer(signal));
-    const git = writeHoldScript(repo.scratch(), 'git', server.port, {
+    const git = writeHoldScript({ directory: repo.scratch(), name: 'git' }, server.port, {
       kind: 'git',
       holds: [['tag']],
     });

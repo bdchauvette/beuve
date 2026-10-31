@@ -190,9 +190,13 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
   }) => {
     const { clone } = world;
     const server = closing(await startHoldServer(signal));
-    const uploadPack = writeHoldScript(clone.scratch(), 'upload-pack', server.port, {
-      kind: 'upload-pack',
-    });
+    const uploadPack = writeHoldScript(
+      { directory: clone.scratch(), name: 'upload-pack' },
+      server.port,
+      {
+        kind: 'upload-pack',
+      },
+    );
     await clone.git('config', 'remote.origin.uploadpack', uploadPack.command);
     const handlers = createIpcHandlers(services, appInfo(), {}, new RequestScopes());
     const window = { webContentsId: 1 };

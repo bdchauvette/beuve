@@ -26,7 +26,7 @@ describe('replayCommits', () => {
       { parent: first, commit: second },
     ]);
     expect(replayed).toMatchObject({ ok: true, value: { kind: 'clean' } });
-    const tree = replayed.ok && replayed.value.kind === 'clean' ? replayed.value.tree : '';
+    const tree = cleanTreeOf(replayed);
     await expect(repo.git('show', `${tree}:a.txt`)).resolves.toBe(
       '1\none\n3\n4\nfive\n6\n7\neight\n9',
     );
@@ -52,3 +52,10 @@ describe('replayCommits', () => {
     ).resolves.toMatchObject({ ok: true, value: { kind: 'conflicted', paths: ['a.txt'] } });
   });
 });
+
+function cleanTreeOf(result: Awaited<ReturnType<typeof replayCommits>>): string {
+  if (!result.ok || result.value.kind !== 'clean') {
+    throw new Error('expected a clean replay');
+  }
+  return result.value.tree;
+}

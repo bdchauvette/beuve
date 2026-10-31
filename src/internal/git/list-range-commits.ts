@@ -91,11 +91,10 @@ export async function listRangeCommits(
   if (!parsed.ok) {
     return parsed;
   }
-  const isTruncated = parsed.value.length > maxCommits;
-  return ok({
-    commits: isTruncated ? parsed.value.slice(1) : parsed.value,
-    truncated: isTruncated,
-  });
+  if (parsed.value.length > maxCommits) {
+    return ok({ commits: parsed.value.slice(1), truncated: true });
+  }
+  return ok({ commits: parsed.value, truncated: false });
 }
 
 function parsePatchIds(output: string): ReadonlyMap<string, string> {
@@ -143,7 +142,11 @@ function parseLog(
       .slice(index + 3, end)
       .join('\n')
       .replaceAll(/^\n+|\n+$/gu, '');
-    const files = parseUnifiedDiff(patch === '' ? '' : `${patch}\n`);
+    let terminated = patch;
+    if (patch !== '') {
+      terminated = `${patch}\n`;
+    }
+    const files = parseUnifiedDiff(terminated);
     if (!files.ok) {
       return unexpected(args, `${sha}: line ${String(files.error.line)}: ${files.error.message}`);
     }

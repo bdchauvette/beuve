@@ -1,6 +1,7 @@
 import { describe } from 'vitest';
 
 import { isVersionAtLeast } from './is-version-at-least.ts';
+import type { GitVersion } from './parse-git-version.ts';
 import { readDiffAttributes } from './read-diff-attributes.ts';
 import { test } from './testing/test.ts';
 
@@ -30,27 +31,27 @@ describe('readDiffAttributes', () => {
       'src/main.ts',
       'gone/deleted.ts',
     ]);
-    expect(read).toMatchObject(
-      isVersionAtLeast(git.version, 2, 40)
-        ? {
-            ok: true,
-            value: new Map(
-              Object.entries({
-                'gen/api.ts': { generated: true },
-                'gen/keep.ts': { generated: false },
-                'src/a b.snap': { diff: false },
-              }),
-            ),
-          }
-        : { ok: false, error: { kind: 'unsupported-git-version' } },
+    const attributes = new Map(
+      Object.entries({
+        'gen/api.ts': { generated: true },
+        'gen/keep.ts': { generated: false },
+        'src/a b.snap': { diff: false },
+      }),
     );
+    expect(read).toMatchObject(onGit240(git.version, { ok: true, value: attributes }));
   });
 
   test('answers an empty map for no paths', async ({ expect, repo, repository: git }) => {
     const head = await repo.commit('empty');
     const read = await readDiffAttributes(git, head, []);
-    expect(read.ok ? read.value.size : read.error.kind).toBe(
-      isVersionAtLeast(git.version, 2, 40) ? 0 : 'unsupported-git-version',
-    );
+    expect(read).toMatchObject(onGit240(git.version, { ok: true, value: new Map() }));
   });
 });
+
+/** `answer` on git 2.40 or later, which reads attributes; older git refuses. */
+function onGit240(version: GitVersion, answer: object): object {
+  if (isVersionAtLeast(version, { major: 2, minor: 40 })) {
+    return answer;
+  }
+  return { ok: false, error: { kind: 'unsupported-git-version' } };
+}

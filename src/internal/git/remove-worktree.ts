@@ -40,11 +40,15 @@ export async function removeWorktree(
       reason: 'cannot remove the main worktree',
     });
   }
-  const force = options.force === true ? ['--force'] : [];
-  const removed = await repository[gitRunner].exec(
-    ['worktree', 'remove', ...force, '--end-of-options', worktreePath],
-    { policy: { kind: 'atomic' }, timeout: removalTimeout },
-  );
+  const args = ['worktree', 'remove'];
+  if (options.force === true) {
+    args.push('--force');
+  }
+  args.push('--end-of-options', worktreePath);
+  const removed = await repository[gitRunner].exec(args, {
+    policy: { kind: 'atomic' },
+    timeout: removalTimeout,
+  });
   if (removed.ok) {
     return ok(undefined);
   }
