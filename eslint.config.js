@@ -229,6 +229,34 @@ export default defineConfig(
       curly: ['off', 'all'],
       'max-params': 'off',
       '@typescript-eslint/max-params': ['off', { max: 3 }],
+      // Wants the ternaries `local/no-ternary-outside-templates` bans, and its fix writes them.
+      'unicorn/prefer-ternary': 'off',
+    },
+  },
+
+  {
+    // ADR 0086 phase 2, switched on where the repo is already fixed.
+    name: 'beuve/style-rules-phase-2-shared',
+    files: [
+      'src/x/**',
+      'src/git/**',
+      'src/jsonrpc/**',
+      'src/sqlite/**',
+      'src/release/**',
+      'src/testing/**',
+      'scripts/**',
+      'eslint-local-rules/**',
+      'types/**',
+      ...configFiles,
+    ],
+    rules: {
+      'local/no-ternary-outside-templates': 'error',
+      'no-nested-ternary': 'error',
+      'local/arrow-body-braces': 'error',
+      'local/no-inline-object-type-in-signature': 'error',
+      'local/no-same-type-positional-params': 'error',
+      curly: ['error', 'all'],
+      '@typescript-eslint/max-params': ['error', { max: 3 }],
     },
   },
 
