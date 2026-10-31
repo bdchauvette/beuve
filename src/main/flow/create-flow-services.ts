@@ -19,6 +19,7 @@ import { ok } from '#x/result/ok.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 import { flowChangedLinesFrom } from './flow-changed-lines-from.ts';
 
@@ -56,7 +57,7 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
       if (!diff.ok) {
         return diff;
       }
-      const file = diff.value.files.find((candidate) => headPath(candidate) === path);
+      const file = diff.value.files.find((candidate) => headPathOf(candidate) === path);
       if (file === undefined) {
         return err({ code: 'not-found', message: 'that file is not in the review' });
       }
@@ -145,13 +146,6 @@ function baseObjectOf(file: DiffFile): string {
     return '';
   }
   return file.oldObject ?? '';
-}
-
-function headPath(file: DiffFile): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }
 
 function failed(failure: FlowFailureKind, message: string): IpcResult<FlowGraphResponse> {

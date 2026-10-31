@@ -23,6 +23,7 @@ import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 import { findPackageRoots } from './find-package-roots.ts';
 
@@ -95,7 +96,7 @@ export function createFileServices(options: FileServicesOptions): FileServices {
       if (!diff.ok) {
         return diff;
       }
-      const file = diff.value.files.find((candidate) => headPath(candidate) === path);
+      const file = diff.value.files.find((candidate) => headPathOf(candidate) === path);
       if (file === undefined) {
         return err({ code: 'not-found', message: 'that file is not in the review' });
       }
@@ -128,7 +129,7 @@ export function createFileServices(options: FileServicesOptions): FileServices {
         return diff;
       }
       const { repository, session } = diff.value.refreshed;
-      const paths = diff.value.files.map((file) => headPath(file));
+      const paths = diff.value.files.map((file) => headPathOf(file));
       const key = [repository.root, session.headSha, ...paths].join('\0');
       const cached = attributes.get(key);
       if (cached !== undefined) {
@@ -159,13 +160,6 @@ function attributeListsFrom(read: ReadonlyMap<string, DiffAttributes>): Attribut
     notGenerated: where((value) => value.generated === false),
     noDiff: where((value) => value.diff === false),
   };
-}
-
-function headPath(file: DiffFile): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }
 
 function blobId(file: DiffFile, side: 'old' | 'new'): string | undefined {

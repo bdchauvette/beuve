@@ -40,6 +40,7 @@ import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees } from '../worktrees/create-session-worktrees.ts';
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 import { describeTraceError } from './describe-trace-error.ts';
 import { findTestFiles } from './find-test-files.ts';
@@ -571,13 +572,6 @@ function unsupportedLanguage(filePath: string): Failed {
 function suggestTestName(filePath: string): string {
   const { dir, name, ext } = path.posix.parse(filePath);
   return path.posix.join(dir, `${name}.test${ext}`);
-}
-
-function headPathOf(file: ReviewDiff['files'][number]): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }
 
 function failed(failure: TraceFailureKind, message: string): Failed {

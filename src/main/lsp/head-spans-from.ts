@@ -1,5 +1,6 @@
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import type { ChangedLineSpan, ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 /**
  * The head-side lines each file of a review changed, for badging call hierarchy nodes: runs of
@@ -15,13 +16,6 @@ export function headSpansFrom(files: readonly DiffFile[]): ChangedLines {
     spans.set(headPathOf(file), fileSpans(file));
   }
   return spans;
-}
-
-function headPathOf(file: DiffFile): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }
 
 function fileSpans(file: DiffFile): ChangedLineSpan[] {

@@ -1,5 +1,6 @@
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import type { LineSpan } from '#internal/ura/build-github-review.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 /**
  * The head-side spans of a pull request's diff hunks, per path (ADR 0023): the only lines GitHub
@@ -24,11 +25,4 @@ export function commentableRangesFrom(
     }
   }
   return ranges;
-}
-
-function headPathOf(file: DiffFile): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }

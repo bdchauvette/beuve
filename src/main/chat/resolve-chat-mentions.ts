@@ -13,6 +13,7 @@ import type { Result } from '#x/result/result.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
+import { headPathOf } from '../sessions/head-path-of.ts';
 
 /** The mentions as stored with the question, and their text for the prompt, in the same order. */
 export interface ResolvedMentions {
@@ -161,16 +162,13 @@ function blobInDiff(files: readonly DiffFile[], mention: ChatMentionView): strin
 
 function diffSideOf(file: DiffFile, side: ChatMentionView['side']): DiffSide {
   if (side === 'head') {
-    return { path: newPathOf(file), isAbsent: file.status === 'deleted', objectId: file.newObject };
+    return {
+      path: headPathOf(file),
+      isAbsent: file.status === 'deleted',
+      objectId: file.newObject,
+    };
   }
   return { path: oldPathOf(file), isAbsent: file.status === 'added', objectId: file.oldObject };
-}
-
-function newPathOf(file: DiffFile): string {
-  if ('newPath' in file) {
-    return file.newPath;
-  }
-  return file.path;
 }
 
 function oldPathOf(file: DiffFile): string {
