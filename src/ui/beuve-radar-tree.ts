@@ -163,9 +163,9 @@ export class BeuveRadarTree extends LitElement {
     return shown === undefined || shown.endsWith('/') ? undefined : restoreFormatControls(shown);
   }
 
-  /** Focuses `path`'s row, for the palette's unchanged files. */
+  /** Focuses `path`'s row and scrolls it into view, for the palette's unchanged files. */
   revealPath(path: string): void {
-    this.fileTree?.focusPath(revealFormatControls(path));
+    this.fileTree?.scrollToPath(revealFormatControls(path));
   }
 
   protected override updated(changed: PropertyValues<this>): void {
