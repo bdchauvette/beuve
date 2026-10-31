@@ -1,6 +1,6 @@
 # 0086. Style rules for ternaries, arrow bodies and function signatures
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 
 ## Context
@@ -9,9 +9,15 @@ Four patterns keep producing code that is hard to read or easy to get wrong: ter
 
 ## Decision
 
-Phase 1 (this change) adds the rules and their tests, registered at level `off` in `eslint.config.js` (block `beuve/style-rules-phase-2`). Phase 2 switches them on and fixes the whole repo in one change, once other work has landed. This ADR stays Proposed until then.
+Phase 1 added the rules and their tests at level `off`. Phase 2 fixed the repo area by area and switched them on for the whole repo in `eslint.config.js` (block `beuve/style-rules`).
 
-Rules to enable in phase 2:
+The user decided the open questions:
+
+- Ternaries are allowed directly in Lit template slots, and nowhere else; nested ternaries nowhere.
+- Of the same-type parameter pairs, `from`/`to` and `then`/`now` are excluded; `actual`/`expected` and `key`/`value` are included.
+- A function whose signature something else dictates, a library's callback passed as an argument or the value of an explicitly typed binding, is exempt from `max-params` as well as from the same-type rule.
+
+The rules:
 
 - **`local/no-ternary-outside-templates`** replaces core `no-ternary`. A conditional expression is allowed only in an expression slot of a Lit `html` or `svg` tagged template (text, attribute, property and boolean bindings), with no function boundary between the two, so a ternary in a `.map` callback inside a template is reported. The tag must be `html`/`svg` and, when imported, come from `lit`/`lit-html`. TypeScript conditional types are unaffected. No autofix. **Lit ternaries are allowed** because they are the idiom for bindings.
 - **`no-nested-ternary`** (core) forbids nesting everywhere, templates included.

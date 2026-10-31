@@ -216,94 +216,23 @@ export default defineConfig(
   },
 
   {
-    // Phase 2 of ADR 0086: switched on, and the whole repo fixed, in a later change. The levels
-    // here are 'off' so the rules are registered and measurable with `--rule`.
-    name: 'beuve/style-rules-phase-2',
+    // ADR 0086: no ternaries outside Lit templates, block bodies for non-trivial arrows, named
+    // types and few, unswappable parameters in signatures.
+    name: 'beuve/style-rules',
     plugins: { local: localRulesPlugin },
     rules: {
-      'local/no-ternary-outside-templates': 'off',
-      'no-nested-ternary': 'off',
-      'local/arrow-body-braces': 'off',
-      'local/no-inline-object-type-in-signature': 'off',
-      'local/no-same-type-positional-params': 'off',
-      curly: ['off', 'all'],
+      'local/no-ternary-outside-templates': 'error',
+      'no-nested-ternary': 'error',
+      'local/arrow-body-braces': 'error',
+      'local/no-inline-object-type-in-signature': 'error',
+      'local/no-same-type-positional-params': 'error',
+      curly: ['error', 'all'],
       'max-params': 'off',
       '@typescript-eslint/max-params': 'off',
-      // ADR 0086: typescript-eslint's rule, without callbacks and typed values whose shape is dictated.
-      'local/max-params': ['off', { max: 3 }],
+      // typescript-eslint's rule, without the callbacks and typed values whose shape is dictated.
+      'local/max-params': ['error', { max: 3 }],
       // Wants the ternaries `local/no-ternary-outside-templates` bans, and its fix writes them.
       'unicorn/prefer-ternary': 'off',
-    },
-  },
-
-  {
-    // ADR 0086 phase 2, switched on where the repo is already fixed.
-    name: 'beuve/style-rules-phase-2-shared',
-    files: [
-      'src/x/**',
-      'src/git/**',
-      'src/jsonrpc/**',
-      'src/sqlite/**',
-      'src/release/**',
-      'src/testing/**',
-      'scripts/**',
-      'eslint-local-rules/**',
-      'types/**',
-      ...configFiles,
-    ],
-    rules: {
-      'local/no-ternary-outside-templates': 'error',
-      'no-nested-ternary': 'error',
-      'local/arrow-body-braces': 'error',
-      'local/no-inline-object-type-in-signature': 'error',
-      'local/no-same-type-positional-params': 'error',
-      curly: ['error', 'all'],
-      'local/max-params': ['error', { max: 3 }],
-    },
-  },
-
-  {
-    // ADR 0086 phase 2, area by area: the renderer and the preload are clean.
-    name: 'beuve/style-rules-ui',
-    files: ['src/ui/**/*.ts', 'src/preload/**/*.ts'],
-    rules: {
-      'local/no-ternary-outside-templates': 'error',
-      'no-nested-ternary': 'error',
-      'local/arrow-body-braces': 'error',
-      'local/no-inline-object-type-in-signature': 'error',
-      'local/no-same-type-positional-params': 'error',
-      curly: ['error', 'all'],
-      'local/max-params': ['error', { max: 3 }],
-    },
-  },
-
-  {
-    // ADR 0086 phase 2, area by area: the domains, their testing/ directories and tests are clean.
-    name: 'beuve/style-rules-phase-2-internal',
-    files: ['src/internal/**/*.ts'],
-    rules: {
-      'local/no-ternary-outside-templates': 'error',
-      'no-nested-ternary': 'error',
-      'local/arrow-body-braces': 'error',
-      'local/no-inline-object-type-in-signature': 'error',
-      'local/no-same-type-positional-params': 'error',
-      curly: ['error', 'all'],
-      'local/max-params': ['error', { max: 3 }],
-    },
-  },
-
-  {
-    // ADR 0086 phase 2, area by area: the composition root and the IPC contract are clean.
-    name: 'beuve/style-rules-phase-2-main',
-    files: ['src/main/**/*.ts', 'src/contract/**/*.ts'],
-    rules: {
-      'local/no-ternary-outside-templates': 'error',
-      'no-nested-ternary': 'error',
-      'local/arrow-body-braces': 'error',
-      'local/no-inline-object-type-in-signature': 'error',
-      'local/no-same-type-positional-params': 'error',
-      curly: ['error', 'all'],
-      'local/max-params': ['error', { max: 3 }],
     },
   },
 
