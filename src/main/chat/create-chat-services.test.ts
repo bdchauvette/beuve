@@ -172,15 +172,13 @@ describe(
         'queued',
       ]);
 
+      // The preamble text is discarded when the next message starts, a separate stream line after the
+      // tool call ends. Cancelling before that keeps the text part and the parts assertion below flakes.
       await waitUntil(() => {
         return events.some((event) => {
-          return (
-            event.messageId === first.answer.id &&
-            event.type === 'part-end' &&
-            event.part.kind === 'tool-call'
-          );
+          return event.messageId === first.answer.id && event.type === 'part-discard';
         });
-      }, 'the first answer to read');
+      }, 'the first answer to read and start its next message');
       claude.rescript(['a', 'b', 'c'], 0);
       expect(okValueFrom(chat.cancel({ messageId: first.answer.id }))).toStrictEqual({
         cancelled: true,
