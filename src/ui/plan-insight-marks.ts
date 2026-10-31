@@ -31,23 +31,25 @@ export function planInsightMarks(
       marks.set(line, finding.severity);
     }
   }
-  return Array.from(marks, ([line, severity]) => ({ line, severity })).toSorted(
-    (a, b) => a.line - b.line,
-  );
+  return Array.from(marks, ([line, severity]) => {
+    return { line, severity };
+  }).toSorted((a, b) => {
+    return a.line - b.line;
+  });
 }
 
 function firstShownLine(
   hunks: readonly DiffHunkView[],
-  range: { readonly startLine: number; readonly endLine: number },
+  range: Pick<ChatFindingView, 'startLine' | 'endLine'>,
 ): number | undefined {
-  let first: number | undefined;
-  for (const hunk of hunks) {
-    const hunkEnd = hunk.newStart + hunk.newCount - 1;
-    if (hunk.newCount === 0 || range.endLine < hunk.newStart || range.startLine > hunkEnd) {
-      continue;
-    }
-    const line = Math.max(range.startLine, hunk.newStart);
-    first = first === undefined ? line : Math.min(first, line);
+  const starts = hunks
+    .filter((hunk) => {
+      const hunkEnd = hunk.newStart + hunk.newCount - 1;
+      return hunk.newCount > 0 && range.endLine >= hunk.newStart && range.startLine <= hunkEnd;
+    })
+    .map((hunk) => Math.max(range.startLine, hunk.newStart));
+  if (starts.length === 0) {
+    return undefined;
   }
-  return first;
+  return Math.min(...starts);
 }

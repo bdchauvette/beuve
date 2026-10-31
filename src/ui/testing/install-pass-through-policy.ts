@@ -6,7 +6,11 @@
  */
 export function installPassThroughPolicy(): void {
   globalThis.trustedTypes?.createPolicy('default', {
-    createHTML: (html: string): string => html,
-    createScriptURL: (url: string): string => url,
+    createHTML: (html: string): string => {
+      return html;
+    },
+    createScriptURL: (url: string): string => {
+      return url;
+    },
   });
 }

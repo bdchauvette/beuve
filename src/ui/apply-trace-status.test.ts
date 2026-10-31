@@ -17,7 +17,10 @@ function result(): TraceResultView {
     duration: 'PT0.012S',
   };
 }
-function echo(): { sessionId: string; runId: string; path: string; line: number } {
+/** The request fields every status for a run repeats. */
+type TraceEcho = Pick<TraceStatusView, 'sessionId' | 'runId' | 'path' | 'line'>;
+
+function echo(): TraceEcho {
   return { sessionId: 's1', runId: 'r1', path: 'src/a.ts', line: 5 };
 }
 function loading(): TraceState {

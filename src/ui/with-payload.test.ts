@@ -8,7 +8,10 @@ import { withPayload } from './with-payload.ts';
 
 function lineFrom({ line }: ActionData): number | undefined {
   const parsed = Number(line);
-  return line === undefined || !Number.isSafeInteger(parsed) ? undefined : parsed;
+  if (line === undefined || !Number.isSafeInteger(parsed)) {
+    return undefined;
+  }
+  return parsed;
 }
 
 describe('withPayload', () => {

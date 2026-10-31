@@ -37,17 +37,20 @@ export function reduceChatTranscript(
     case 'loaded': {
       const local = state.entries.filter((entry) => entry.kind !== 'message');
       const live = new Map(
-        state.entries.flatMap((entry) =>
-          entry.kind === 'message' && isUnfinished(entry.message)
-            ? [[entry.id, entry] as const]
-            : [],
-        ),
+        state.entries.flatMap((entry) => {
+          if (entry.kind === 'message' && isUnfinished(entry.message)) {
+            return [[entry.id, entry] as const];
+          }
+          return [];
+        }),
       );
       // A running request here is newer than the stored preview, which lags by up to a second.
-      const entries = action.messages.map(
-        (message): MessageChatEntry =>
-          (isUnfinished(message) ? live.get(message.id) : undefined) ?? entryFrom(message),
-      );
+      const entries = action.messages.map((message): MessageChatEntry => {
+        if (isUnfinished(message)) {
+          return live.get(message.id) ?? entryFrom(message);
+        }
+        return entryFrom(message);
+      });
       return replayPending({ entries: [...entries, ...local], pending: state.pending });
     }
     case 'asked': {
@@ -67,11 +70,12 @@ export function reduceChatTranscript(
       }
       return {
         ...state,
-        entries: state.entries.map((entry) =>
-          entry.kind === 'message' && entry.id === event.messageId
-            ? applyStreamEvent(entry, event)
-            : entry,
-        ),
+        entries: state.entries.map((entry) => {
+          if (entry.kind === 'message' && entry.id === event.messageId) {
+            return applyStreamEvent(entry, event);
+          }
+          return entry;
+        }),
       };
     }
     case 'compacted': {
@@ -80,12 +84,18 @@ export function reduceChatTranscript(
       }
       const entry = entryFrom(action.summary);
       const at = state.entries.findIndex((item) => item.kind === 'compaction');
-      const entries =
-        at === -1
-          ? [...state.entries, entry]
-          : state.entries.flatMap((item, index) =>
-              index === at ? [entry] : item.kind === 'compaction' ? [] : [item],
-            );
+      if (at === -1) {
+        return { ...state, entries: [...state.entries, entry] };
+      }
+      const entries = state.entries.flatMap((item, index) => {
+        if (index === at) {
+          return [entry];
+        }
+        if (item.kind === 'compaction') {
+          return [];
+        }
+        return [item];
+      });
       return { ...state, entries };
     }
     case 'cleared': {
@@ -100,17 +110,20 @@ function applyStreamEvent(entry: MessageChatEntry, event: ChatStreamEvent): Mess
   if (event.type === 'message') {
     const { activity, ...rest } = entry;
     const replaced = { ...rest, message: event.message };
-    return activity !== undefined && isUnfinished(event.message)
-      ? { ...replaced, activity }
-      : replaced;
+    if (activity !== undefined && isUnfinished(event.message)) {
+      return { ...replaced, activity };
+    }
+    return replaced;
   }
   if (!isUnfinished(message)) {
     return entry;
   }
-  const withParts = (parts: readonly ChatPartView[]): MessageChatEntry => ({
-    ...entry,
-    message: { ...message, parts },
-  });
+  const withParts = (parts: readonly ChatPartView[]): MessageChatEntry => {
+    return {
+      ...entry,
+      message: { ...message, parts },
+    };
+  };
   switch (event.type) {
     case 'status': {
       const activity = event.activity ?? entry.activity;
@@ -121,24 +134,32 @@ function applyStreamEvent(entry: MessageChatEntry, event: ChatStreamEvent): Mess
       };
     }
     case 'part-start': {
-      return message.parts.some((part) => part.id === event.part.id)
-        ? entry
-        : withParts([...message.parts, event.part]);
+      if (message.parts.some((part) => part.id === event.part.id)) {
+        return entry;
+      }
+      return withParts([...message.parts, event.part]);
     }
     case 'text-delta': {
       return withParts(
-        message.parts.map((part) =>
-          part.id === event.partId && part.kind === 'text'
-            ? { ...part, text: part.text + event.text }
-            : part,
-        ),
+        message.parts.map((part) => {
+          if (part.id === event.partId && part.kind === 'text') {
+            return { ...part, text: part.text + event.text };
+          }
+          return part;
+        }),
       );
     }
     case 'part-end': {
+      if (message.parts.every((part) => part.id !== event.part.id)) {
+        return withParts([...message.parts, event.part]);
+      }
       return withParts(
-        message.parts.some((part) => part.id === event.part.id)
-          ? message.parts.map((part) => (part.id === event.part.id ? event.part : part))
-          : [...message.parts, event.part],
+        message.parts.map((part) => {
+          if (part.id === event.part.id) {
+            return event.part;
+          }
+          return part;
+        }),
       );
     }
     case 'part-discard': {

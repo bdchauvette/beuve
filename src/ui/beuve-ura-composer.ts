@@ -221,12 +221,11 @@ export class BeuveUraComposer extends LitElement {
             this.severity = (event.target as HTMLSelectElement).value as UraSeverityView;
           }}
         >
-          ${severities.map(
-            (severity) =>
-              html`<option value=${severity} ?selected=${severity === this.severity}>
-                ${severity}
-              </option>`,
-          )}
+          ${severities.map((severity) => {
+            return html`<option value=${severity} ?selected=${severity === this.severity}>
+              ${severity}
+            </option>`;
+          })}
         </select>
         <input aria-label="Title" placeholder="Title" maxlength="200" autocomplete="off" />
       </div>
@@ -247,7 +246,7 @@ export class BeuveUraComposer extends LitElement {
         <button
           type="submit"
           class="primary"
-          title=${`Stage (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})`}
+          title="Stage (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})"
           ?disabled=${this.saving}
         >
           ${this.saving ? 'Staging…' : 'Stage'}

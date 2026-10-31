@@ -1,5 +1,7 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
+import { firstHunkLine } from './first-hunk-line.ts';
+
 /**
  * The head line (1-based) that base line `line` of `file` became: the same line for unchanged
  * lines inside or between hunks, and for a deleted line the head line just before the gap (line
@@ -20,11 +22,11 @@ export function headNumberFromBase(file: DiffFileView, line: number): number | u
       if (hunk === undefined) {
         break;
       }
-      const start = hunk.oldCount === 0 ? hunk.oldStart + 1 : hunk.oldStart;
+      const start = firstHunkLine({ start: hunk.oldStart, count: hunk.oldCount });
       if (line < start) {
         break;
       }
-      newLine = hunk.newCount === 0 ? hunk.newStart + 1 : hunk.newStart;
+      newLine = firstHunkLine({ start: hunk.newStart, count: hunk.newCount });
       oldLine = start;
       isInHunk = true;
       continue;

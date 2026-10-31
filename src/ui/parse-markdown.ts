@@ -32,17 +32,23 @@ const syntaxOnly = /^(?:[\s#>*+\-_=`~|:]*|\s*\d{1,9}[.)]?\s*)$/u;
  */
 export function parseMarkdown(source: string, options: MarkdownOptions = {}): MarkdownBlock[] {
   const isProvisional = options.isProvisional ?? false;
-  const text = isProvisional ? withoutSyntaxOnlyEnd(source) : source;
+  let text = source;
+  if (isProvisional) {
+    text = withoutSyntaxOnlyEnd(source);
+  }
   const { blocks } = splitMarkdownBlocks(text, { isFinal: true });
-  return blocks.flatMap((block, index) =>
-    parseBlock(block, isProvisional && index === blocks.length - 1),
-  );
+  return blocks.flatMap((block, index) => {
+    return parseBlock(block, isProvisional && index === blocks.length - 1);
+  });
 }
 
 /** Drops an unfinished last line that is only block syntax so far. */
 function withoutSyntaxOnlyEnd(source: string): string {
   const lineStart = source.lastIndexOf('\n') + 1;
-  return syntaxOnly.test(source.slice(lineStart)) ? source.slice(0, lineStart) : source;
+  if (syntaxOnly.test(source.slice(lineStart))) {
+    return source.slice(0, lineStart);
+  }
+  return source;
 }
 
 function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
@@ -52,7 +58,9 @@ function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
     return [];
   }
   const kind = classifyMarkdownLine(first);
-  const inline = (text: string): MarkdownInline[] => parseMarkdownInline(text, { isProvisional });
+  const inline = (text: string): MarkdownInline[] => {
+    return parseMarkdownInline(text, { isProvisional });
+  };
   switch (kind.kind) {
     case 'blank': {
       return [];
@@ -75,39 +83,57 @@ function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
     }
     case 'text': {
       return [tableFrom(lines, isProvisional) ?? paragraphFrom(lines, isProvisional)].flatMap(
-        (block) => block ?? [],
+        (block) => {
+          return block ?? [];
+        },
       );
     }
   }
 }
 
 function linesOf(source: string): string[] {
-  const lines = source.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
+  const lines = source.split('\n').map((line) => {
+    if (line.endsWith('\r')) {
+      return line.slice(0, -1);
+    }
+    return line;
+  });
   if (lines.at(-1) === '') {
     lines.pop();
   }
   return lines;
 }
 
-function codeBlockFrom(
-  lines: readonly string[],
-  open: Extract<MarkdownLine, { kind: 'fence' }>,
-): MarkdownBlock {
+/** A line that opens or closes a fenced code block. */
+type FenceLine = Extract<MarkdownLine, { kind: 'fence' }>;
+
+function codeBlockFrom(lines: readonly string[], open: FenceLine): MarkdownBlock {
   const body = lines.slice(1);
-  const last = body.at(-1);
-  const closing = last === undefined ? undefined : classifyMarkdownLine(last);
-  const isClosed =
-    closing?.kind === 'fence' &&
-    closing.info === '' &&
-    closing.fence.startsWith(open.fence.charAt(0)) &&
-    closing.fence.length >= open.fence.length;
-  const content = isClosed ? body.slice(0, -1) : body;
+  const isClosed = isClosingFence(body.at(-1), open);
+  let content = body;
+  if (isClosed) {
+    content = body.slice(0, -1);
+  }
   return {
     kind: 'code',
     info: open.info.split(whitespace, 1)[0] ?? '',
     text: content.map((line) => dedent(line, open.indent)).join('\n'),
     closed: isClosed,
   };
+}
+
+/** A bare fence at least as long as `open`, of its character. */
+function isClosingFence(last: string | undefined, open: FenceLine): boolean {
+  if (last === undefined) {
+    return false;
+  }
+  const closing = classifyMarkdownLine(last);
+  return (
+    closing.kind === 'fence' &&
+    closing.info === '' &&
+    closing.fence.startsWith(open.fence.charAt(0)) &&
+    closing.fence.length >= open.fence.length
+  );
 }
 
 /** Removes up to `columns` columns of leading spaces (a tab counts to the next multiple of 4). */
@@ -157,11 +183,13 @@ function listsFrom(lines: readonly string[], first: Item, isProvisional: boolean
       lists.push({ first: item.line, items: [blocks] });
     }
   }
-  return lists.map(({ first: line, items: listItems }): MarkdownBlock => ({
-    kind: 'list',
-    ...(line.start !== undefined && { start: line.start }),
-    items: listItems,
-  }));
+  return lists.map(({ first: line, items: listItems }): MarkdownBlock => {
+    return {
+      kind: 'list',
+      ...(line.start !== undefined && { start: line.start }),
+      items: listItems,
+    };
+  });
 }
 
 /** A header row, a delimiter row with as many columns, then body rows; else `undefined`. */
@@ -177,9 +205,9 @@ function tableFrom(lines: readonly string[], isProvisional: boolean): MarkdownBl
   }
   const cells = (row: string, isLast: boolean): MarkdownInline[][] => {
     const found = tableCellsFrom(row);
-    return alignments.map((_alignment, column) =>
-      parseMarkdownInline(found[column] ?? '', { isProvisional: isProvisional && isLast }),
-    );
+    return alignments.map((_alignment, column) => {
+      return parseMarkdownInline(found[column] ?? '', { isProvisional: isProvisional && isLast });
+    });
   };
   return {
     kind: 'table',

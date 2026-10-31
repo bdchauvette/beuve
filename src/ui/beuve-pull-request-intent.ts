@@ -197,7 +197,9 @@ export class BeuvePullRequestIntent extends LitElement {
       }
       case 'list': {
         return html`<ul>
-          ${block.items.map((item) => html`<li>${item.map((span) => this.renderSpan(span))}</li>`)}
+          ${block.items.map((item) => {
+            return html`<li>${item.map((span) => this.renderSpan(span))}</li>`;
+          })}
         </ul>`;
       }
       case 'code': {

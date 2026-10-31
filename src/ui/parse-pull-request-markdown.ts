@@ -33,25 +33,31 @@ export function parsePullRequestMarkdown(body: string): BodyBlock[] {
     .replaceAll(sentinelCharacters, '')
     .replaceAll(
       markdownLink,
-      (
-        whole: string,
-        text: string | undefined,
-        href: string | undefined,
-        bare: string | undefined,
-      ) => {
-        const url = bare?.replace(trailingPunctuation, '') ?? href ?? '';
-        const rest = bare === undefined ? '' : bare.slice(url.length);
+      (whole: string, ...[text, href = '', bare]: (string | undefined)[]): string => {
+        if (bare === undefined) {
+          links.push({ kind: 'link', text: text ?? href, href });
+          literals.push(whole);
+          return `${String(links.length - 1)}`;
+        }
+        const url = bare.replace(trailingPunctuation, '');
         links.push({ kind: 'link', text: text ?? url, href: url });
-        literals.push(bare === undefined ? whole : url);
-        return `${String(links.length - 1)}${rest}`;
+        literals.push(url);
+        return `${String(links.length - 1)}${bare.slice(url.length)}`;
       },
     );
-  const restore = (text: string): string =>
-    text.replaceAll(sentinel, (_whole: string, index: string) => literals[Number(index)] ?? '');
-  const spansFrom = (spans: readonly InlineSpan[]): BodySpan[] =>
-    spans.flatMap((span) =>
-      span.kind === 'text' ? splitLinks(span.text, links) : { ...span, text: restore(span.text) },
-    );
+  const restore = (text: string): string => {
+    return text.replaceAll(sentinel, (_whole: string, index: string): string => {
+      return literals[Number(index)] ?? '';
+    });
+  };
+  const spansFrom = (spans: readonly InlineSpan[]): BodySpan[] => {
+    return spans.flatMap((span) => {
+      if (span.kind === 'text') {
+        return splitLinks(span.text, links);
+      }
+      return { ...span, text: restore(span.text) };
+    });
+  };
   return parseMarkdownSubset(source).map((block) => blockFrom(block, spansFrom, restore));
 }
 

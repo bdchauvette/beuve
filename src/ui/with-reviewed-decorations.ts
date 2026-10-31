@@ -16,13 +16,26 @@ export function withReviewedDecorations(
   }
   const merged = new Map(decorations);
   for (const [path, mark] of marked) {
+    const { sign, why } = markLabelsOf(mark);
     const base = decorations.get(path);
-    const sign = mark === 'yes' ? '✓' : '◦';
-    const why = mark === 'yes' ? 'Reviewed' : 'Changed since you marked it reviewed';
-    merged.set(path, {
-      text: base === undefined ? sign : `${sign} ${base.text}`,
-      title: base === undefined ? why : `${why}. ${base.title}`,
-    });
+    if (base === undefined) {
+      merged.set(path, { text: sign, title: why });
+    } else {
+      merged.set(path, { text: `${sign} ${base.text}`, title: `${why}. ${base.title}` });
+    }
   }
   return merged;
+}
+
+/** The sign in front of a marked file, and what its tooltip says. */
+interface MarkLabels {
+  readonly sign: string;
+  readonly why: string;
+}
+
+function markLabelsOf(mark: FileReviewStateView): MarkLabels {
+  if (mark === 'yes') {
+    return { sign: '✓', why: 'Reviewed' };
+  }
+  return { sign: '◦', why: 'Changed since you marked it reviewed' };
 }

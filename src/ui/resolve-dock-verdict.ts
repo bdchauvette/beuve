@@ -1,5 +1,7 @@
 import type { UraVerdictView } from '#contract/ipc-contract.ts';
 
+import { nounFor } from './noun-for.ts';
+
 /** The verdict the dock exports with, and why a chosen one was refused. */
 export interface DockVerdict {
   readonly value: UraVerdictView;
@@ -18,14 +20,19 @@ export function resolveDockVerdict(
   blockers: number,
 ): DockVerdict {
   if (chosen === 'approve' && blockers > 0) {
-    const staged = blockers === 1 ? 'a blocker is' : `${String(blockers)} blockers are`;
+    const staged = nounFor(blockers, {
+      one: 'a blocker is',
+      other: `${String(blockers)} blockers are`,
+    });
+    const them = nounFor(blockers, { one: 'it', other: 'them' });
     return {
       value: derived,
       source: 'derived',
-      refusal: `Can't approve while ${staged} staged: withdraw ${blockers === 1 ? 'it' : 'them'} or lower the severity.`,
+      refusal: `Can't approve while ${staged} staged: withdraw ${them} or lower the severity.`,
     };
   }
-  return chosen === undefined || chosen === derived
-    ? { value: derived, source: 'derived' }
-    : { value: chosen, source: 'chosen' };
+  if (chosen === undefined || chosen === derived) {
+    return { value: derived, source: 'derived' };
+  }
+  return { value: chosen, source: 'chosen' };
 }

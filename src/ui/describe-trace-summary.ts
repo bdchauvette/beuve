@@ -1,5 +1,6 @@
 import type { TraceResultView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
 import { formatIsoDuration } from './format-iso-duration.ts';
 import type { TraceCase } from './plan-trace-timeline.ts';
 
@@ -12,13 +13,16 @@ export function describeTraceSummary(
   const names = result.functions.map((fn) => fn.name).join(', ');
   const failed = cases.filter((testCase) => testCase.status === 'failed').length;
   const reached = cases.filter((testCase) => testCase.rows.length > 0).length;
-  const count = cases.length;
-  return [
-    names === '' ? 'No function traced' : `Traced ${names}`,
-    `${String(count)} ${count === 1 ? 'test' : 'tests'}, ${String(reached)} reached it`,
-    failed > 0 ? `${String(failed)} failed` : '',
-    formatIsoDuration(result.duration, locale),
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
+  const parts: string[] = [];
+  if (names === '') {
+    parts.push('No function traced');
+  } else {
+    parts.push(`Traced ${names}`);
+  }
+  parts.push(`${countNoun(cases.length, 'test')}, ${String(reached)} reached it`);
+  if (failed > 0) {
+    parts.push(`${String(failed)} failed`);
+  }
+  parts.push(formatIsoDuration(result.duration, locale));
+  return parts.filter((part) => part !== '').join(' · ');
 }

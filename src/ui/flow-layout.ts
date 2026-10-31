@@ -81,7 +81,11 @@ export function flowLayout(input: FlowLayoutInput): FlowLayout {
   if (count === 0) {
     return { width: margin * 2, height: margin * 2, nodes: [], edges: [] };
   }
-  const index = new Map(input.nodes.map((node, position) => [node.id, position]));
+  const index = new Map(
+    input.nodes.map((node, position) => {
+      return [node.id, position];
+    }),
+  );
   const edges: IndexedEdge[] = [];
   for (const edge of input.edges) {
     const from = index.get(edge.from);
@@ -96,7 +100,7 @@ export function flowLayout(input: FlowLayoutInput): FlowLayout {
   const graph = buildLayeredGraph(input.nodes, forward, layerOf);
   orderLayers(graph);
   placeHorizontally(graph);
-  return buildResult(input.nodes, edges, back, graph, layerOf);
+  return buildResult({ nodes: input.nodes, edges, back, graph, layerOf });
 }
 
 interface IndexedEdge {
@@ -125,7 +129,9 @@ function findBackEdges(
   edges: readonly IndexedEdge[],
 ): Set<number> {
   const back = new Set<number>();
-  const outgoing: number[][] = nodes.map(() => []);
+  const outgoing: number[][] = nodes.map(() => {
+    return [];
+  });
   for (const [position, edge] of edges.entries()) {
     if (edge.kind === 'loop-back') {
       back.add(position);
@@ -140,19 +146,24 @@ function findBackEdges(
   ];
   for (const root of roots) {
     if (state[root] === 0) {
-      visitDepthFirst(root, edges, outgoing, state, back);
+      visitDepthFirst(root, { edges, outgoing, state, back });
     }
   }
   return back;
 }
 
-function visitDepthFirst(
-  root: number,
-  edges: readonly IndexedEdge[],
-  outgoing: readonly (readonly number[])[],
-  state: number[],
-  back: Set<number>,
-): void {
+/**
+ * A depth-first search for back edges: the edges, each node's outgoing edge indices, each
+ * node's state (0 unseen, 1 on the stack, 2 done), and the back edges found so far.
+ */
+interface BackEdgeSearch {
+  readonly edges: readonly IndexedEdge[];
+  readonly outgoing: readonly (readonly number[])[];
+  readonly state: number[];
+  readonly back: Set<number>;
+}
+
+function visitDepthFirst(root: number, { edges, outgoing, state, back }: BackEdgeSearch): void {
   const stack: { node: number; next: number }[] = [{ node: root, next: 0 }];
   state[root] = 1;
   for (let top = stack.at(-1); top !== undefined; top = stack.at(-1)) {
@@ -211,8 +222,12 @@ function buildLayeredGraph(
 ): LayeredGraph {
   const layer = [...layerOf];
   const width = nodes.map((node) => estimateWidth(node));
-  const up: number[][] = nodes.map(() => []);
-  const down: number[][] = nodes.map(() => []);
+  const up: number[][] = nodes.map(() => {
+    return [];
+  });
+  const down: number[][] = nodes.map(() => {
+    return [];
+  });
   const chains: number[][] = [];
   for (const edge of forward) {
     const chain = [edge.from];
@@ -253,8 +268,10 @@ function buildLayeredGraph(
 }
 
 function estimateWidth(node: FlowLayoutNode): number {
-  const marker = markedKinds.has(node.kind) ? markerWidth : 0;
-  const estimate = Math.round(node.label.length * charWidth) + labelPadding + marker;
+  let estimate = Math.round(node.label.length * charWidth) + labelPadding;
+  if (markedKinds.has(node.kind)) {
+    estimate += markerWidth;
+  }
   return Math.min(maxWidth, Math.max(minWidth, estimate));
 }
 
@@ -271,17 +288,27 @@ function orderLayers(graph: LayeredGraph): void {
       for (const [at, node] of layer.entries()) {
         positions.set(node, at);
       }
-      const neighbourLayer = graph.layers[value + (isDownward ? -1 : 1)];
+      let neighbourLayer = graph.layers[value + 1];
+      if (isDownward) {
+        neighbourLayer = graph.layers[value - 1];
+      }
       if (neighbourLayer === undefined) {
         continue;
       }
-      const neighbourPosition = new Map(neighbourLayer.map((node, at) => [node, at]));
-      const links = isDownward ? graph.up : graph.down;
+      const neighbourPosition = new Map(
+        neighbourLayer.map((node, at) => {
+          return [node, at];
+        }),
+      );
+      const links = sweepLinks(graph, isDownward);
       const keyed = layer.map((node) => {
         const at = (links[node] ?? [])
           .map((other) => neighbourPosition.get(other))
           .filter((found) => found !== undefined);
-        const mean = at.length === 0 ? (positions.get(node) ?? 0) : average(at);
+        let mean = positions.get(node) ?? 0;
+        if (at.length > 0) {
+          mean = average(at);
+        }
         return { node, mean, at: positions.get(node) ?? 0 };
       });
       keyed.sort((left, right) => left.mean - right.mean || left.at - right.at);
@@ -291,9 +318,11 @@ function orderLayers(graph: LayeredGraph): void {
 }
 
 function placeHorizontally(graph: LayeredGraph): void {
-  const rowWidths = graph.layers.map((layer) =>
-    layer.reduce((sum, node) => sum + (graph.width[node] ?? 0) + nodeGap, -nodeGap),
-  );
+  const rowWidths = graph.layers.map((layer) => {
+    return layer.reduce((sum, node) => {
+      return sum + (graph.width[node] ?? 0) + nodeGap;
+    }, -nodeGap);
+  });
   const widest = Math.max(...rowWidths);
   for (const [value, layer] of graph.layers.entries()) {
     let left = (widest - (rowWidths[value] ?? 0)) / 2;
@@ -306,10 +335,17 @@ function placeHorizontally(graph: LayeredGraph): void {
     const isDownward = sweep % 2 === 0;
     const order = sweepOrder(graph.layers.length, isDownward);
     for (const value of order) {
-      const links = isDownward ? graph.up : graph.down;
-      spreadLayer(graph, graph.layers[value] ?? [], links);
+      spreadLayer(graph, graph.layers[value] ?? [], sweepLinks(graph, isDownward));
     }
   }
+}
+
+/** The links a sweep follows: to the layer above going down, to the one below going up. */
+function sweepLinks(graph: LayeredGraph, isDownward: boolean): readonly (readonly number[])[] {
+  if (isDownward) {
+    return graph.up;
+  }
+  return graph.down;
 }
 
 /** Moves each node of a layer towards its neighbours, then removes overlaps from both sides. */
@@ -320,10 +356,16 @@ function spreadLayer(
 ): void {
   const desired = layer.map((node) => {
     const centers = (links[node] ?? []).map((other) => graph.center[other] ?? 0);
-    return centers.length === 0 ? (graph.center[node] ?? 0) : average(centers);
+    if (centers.length === 0) {
+      return graph.center[node] ?? 0;
+    }
+    return average(centers);
   });
-  const separation = (at: number): number =>
-    ((graph.width[layer[at] ?? 0] ?? 0) + (graph.width[layer[at + 1] ?? 0] ?? 0)) / 2 + nodeGap;
+  const separation = (at: number): number => {
+    return (
+      ((graph.width[layer[at] ?? 0] ?? 0) + (graph.width[layer[at + 1] ?? 0] ?? 0)) / 2 + nodeGap
+    );
+  };
   const leftPacked = [...desired];
   for (let at = 1; at < layer.length; at++) {
     leftPacked[at] = Math.max(leftPacked[at] ?? 0, (leftPacked[at - 1] ?? 0) + separation(at - 1));
@@ -337,13 +379,16 @@ function spreadLayer(
   }
 }
 
-function buildResult(
-  nodes: readonly FlowLayoutNode[],
-  edges: readonly IndexedEdge[],
-  back: ReadonlySet<number>,
-  graph: LayeredGraph,
-  layerOf: readonly number[],
-): FlowLayout {
+/** Everything the layout found, ready to be turned into positions and routes. */
+interface LayoutParts {
+  readonly nodes: readonly FlowLayoutNode[];
+  readonly edges: readonly IndexedEdge[];
+  readonly back: ReadonlySet<number>;
+  readonly graph: LayeredGraph;
+  readonly layerOf: readonly number[];
+}
+
+function buildResult({ nodes, edges, back, graph, layerOf }: LayoutParts): FlowLayout {
   const shift =
     margin - Math.min(...graph.center.map((center, node) => center - (graph.width[node] ?? 0) / 2));
   const boxes = graph.center.map((center, node) => {
@@ -355,13 +400,16 @@ function buildResult(
     };
   });
   const forward = edges
-    .map((edge, position) => ({ edge, position }))
+    .map((edge, position) => {
+      return { edge, position };
+    })
     .filter(({ position }) => !back.has(position));
   const ports = assignPorts(
     forward.map(({ edge }) => edge),
     graph,
     boxes,
   );
+  const scene: NeighbourScene = { forward: forward.map(({ edge }) => edge), boxes, nodes };
   const positioned = nodes.map((node, position) => {
     const box = boxes[position] ?? { x: 0, y: 0, width: 0 };
     return {
@@ -371,32 +419,27 @@ function buildResult(
       width: box.width,
       height: nodeHeight,
       layer: layerOf[position] ?? 0,
-      successors: neighbours(
-        position,
-        forward.map(({ edge }) => edge),
-        'to',
-        boxes,
-        nodes,
-      ),
-      predecessors: neighbours(
-        position,
-        forward.map(({ edge }) => edge),
-        'from',
-        boxes,
-        nodes,
-      ),
+      successors: neighbours(position, 'to', scene),
+      predecessors: neighbours(position, 'from', scene),
     };
   });
   const maxRight = Math.max(...boxes.slice(0, graph.count).map((box) => box.x + box.width));
   const lanes = laneOrder(edges, back, layerOf);
   const routed: (PositionedFlowEdge | undefined)[] = edges.map((edge, position) => {
     if (back.has(position)) {
-      return routeBack(edge, lanes.get(position) ?? 0, boxes, maxRight, graph.count);
+      return routeBack(edge, lanes.get(position) ?? 0, { boxes, maxRight, realCount: graph.count });
     }
     const slot = forward.findIndex((item) => item.position === position);
-    return routeForward(edge, graph.chains[slot] ?? [], ports.get(slot), boxes, slot);
+    return routeForward(
+      edge,
+      { chain: graph.chains[slot] ?? [], ports: ports.get(slot), slot },
+      boxes,
+    );
   });
-  const right = maxRight + (lanes.size === 0 ? 0 : (lanes.size + 1) * laneGap);
+  let right = maxRight;
+  if (lanes.size > 0) {
+    right += (lanes.size + 1) * laneGap;
+  }
   const bottom = Math.max(...boxes.slice(0, graph.count).map((box) => box.y)) + nodeHeight;
   return {
     width: Math.ceil(right + margin),
@@ -452,10 +495,13 @@ function spreadPorts(
   const ports = new Map<number, number>();
   for (const [node, slots] of slotsByNode) {
     const box = boxes[node] ?? { x: 0, y: 0, width: 0 };
-    const ordered = slots.toSorted(
-      (left, right) => (towards.get(left) ?? 0) - (towards.get(right) ?? 0) || left - right,
-    );
-    const step = ordered.length > 1 ? Math.min(18, (box.width - 20) / (ordered.length - 1)) : 0;
+    const ordered = slots.toSorted((left, right) => {
+      return (towards.get(left) ?? 0) - (towards.get(right) ?? 0) || left - right;
+    });
+    let step = 0;
+    if (ordered.length > 1) {
+      step = Math.min(18, (box.width - 20) / (ordered.length - 1));
+    }
     for (const [at, slot] of ordered.entries()) {
       ports.set(slot, box.x + box.width / 2 + (at - (ordered.length - 1) / 2) * step);
     }
@@ -463,12 +509,18 @@ function spreadPorts(
   return ports;
 }
 
+/** A forward edge's way down: its chain through dummy nodes, its ports, and its slot. */
+interface ForwardRoute {
+  readonly chain: readonly number[];
+  readonly ports: EdgePorts | undefined;
+  /** The edge's index among forward edges, which staggers its horizontal runs. */
+  readonly slot: number;
+}
+
 function routeForward(
   edge: IndexedEdge,
-  chain: readonly number[],
-  ports: EdgePorts | undefined,
+  { chain, ports, slot }: ForwardRoute,
   boxes: readonly Box[],
-  slot: number,
 ): PositionedFlowEdge {
   const source = boxes[edge.from] ?? { x: 0, y: 0, width: 0 };
   const target = boxes[edge.to] ?? { x: 0, y: 0, width: 0 };
@@ -504,59 +556,59 @@ function routeForward(
  * two labels of a decision (`yes` left, `no` right) diverge instead of colliding. An edge that
  * starts by running straight down gets its label beside that run.
  */
-function placeForwardLabel(points: readonly FlowPoint[]): {
-  labelAt: FlowPoint;
-  labelAnchor: 'start' | 'end';
-} {
+function placeForwardLabel(points: readonly FlowPoint[]): EdgeLabelPlace {
   const [start = { x: 0, y: 0 }, bend = start, turn = bend] = points;
   const direction = Math.sign(turn.x - bend.x);
   if (direction === 0 || bend.x !== start.x) {
     return { labelAt: { x: start.x + 4, y: start.y + 12 }, labelAnchor: 'start' };
   }
-  return {
-    labelAt: { x: bend.x + direction * 4, y: bend.y - 4 },
-    labelAnchor: direction < 0 ? 'end' : 'start',
-  };
+  const labelAt = { x: bend.x + direction * 4, y: bend.y - 4 };
+  if (direction < 0) {
+    return { labelAt, labelAnchor: 'end' };
+  }
+  return { labelAt, labelAnchor: 'start' };
 }
+
+/** Where an edge's label goes, and which end of the text sits there. */
+type EdgeLabelPlace = Pick<PositionedFlowEdge, 'labelAt' | 'labelAnchor'>;
 
 /**
  * Back edges climb a lane right of the drawing. They leave and enter through a node's right side
  * when nothing else sits on that side of its row; otherwise they leave through the bottom and
  * enter through the top, along the gaps between rows, so they never run through another node.
  */
+/** The boxes back edges route around: all of them, the real nodes' right edge, and their count. */
+interface BackDrawing {
+  readonly boxes: readonly Box[];
+  readonly maxRight: number;
+  readonly realCount: number;
+}
+
+/** A back edge's lane: its x, the real nodes' rows, and how far below and above a row it turns. */
+interface BackLane {
+  readonly x: number;
+  readonly rows: readonly Box[];
+  readonly below: number;
+  readonly above: number;
+}
+
 function routeBack(
   edge: IndexedEdge,
   lane: number,
-  boxes: readonly Box[],
-  maxRight: number,
-  realCount: number,
+  { boxes, maxRight, realCount }: BackDrawing,
 ): PositionedFlowEdge {
   const source = boxes[edge.from] ?? { x: 0, y: 0, width: 0 };
   const target = boxes[edge.to] ?? { x: 0, y: 0, width: 0 };
-  const rows = boxes.slice(0, realCount);
-  const laneX = maxRight + laneGap * (lane + 1);
   const below = layerGap - 10 - (lane % 3) * 3;
-  const above = layerGap - below;
-  const leave: FlowPoint[] = isClearRight(source, rows)
-    ? [
-        { x: source.x + source.width, y: source.y + nodeHeight / 2 },
-        { x: laneX, y: source.y + nodeHeight / 2 },
-      ]
-    : [
-        { x: source.x + source.width / 2, y: source.y + nodeHeight },
-        { x: source.x + source.width / 2, y: source.y + nodeHeight + below },
-        { x: laneX, y: source.y + nodeHeight + below },
-      ];
-  const enter: FlowPoint[] = isClearRight(target, rows)
-    ? [
-        { x: laneX, y: target.y + nodeHeight / 2 },
-        { x: target.x + target.width, y: target.y + nodeHeight / 2 },
-      ]
-    : [
-        { x: laneX, y: target.y - above },
-        { x: target.x + target.width / 2, y: target.y - above },
-        { x: target.x + target.width / 2, y: target.y },
-      ];
+  const route: BackLane = {
+    x: maxRight + laneGap * (lane + 1),
+    rows: boxes.slice(0, realCount),
+    below,
+    above: layerGap - below,
+  };
+  const laneX = route.x;
+  const leave = leavePoints(source, route);
+  const enter = enterPoints(target, route);
   return {
     from: edge.source.from,
     to: edge.source.to,
@@ -566,6 +618,36 @@ function routeBack(
     labelAt: { x: laneX + 4, y: (leave.at(-1)?.y ?? source.y) - 4 },
     labelAnchor: 'start',
   };
+}
+
+/** Out through the right side when that side of the row is clear, else down through the bottom. */
+function leavePoints(source: Box, lane: BackLane): FlowPoint[] {
+  if (isClearRight(source, lane.rows)) {
+    return [
+      { x: source.x + source.width, y: source.y + nodeHeight / 2 },
+      { x: lane.x, y: source.y + nodeHeight / 2 },
+    ];
+  }
+  return [
+    { x: source.x + source.width / 2, y: source.y + nodeHeight },
+    { x: source.x + source.width / 2, y: source.y + nodeHeight + lane.below },
+    { x: lane.x, y: source.y + nodeHeight + lane.below },
+  ];
+}
+
+/** In through the right side when that side of the row is clear, else down through the top. */
+function enterPoints(target: Box, lane: BackLane): FlowPoint[] {
+  if (isClearRight(target, lane.rows)) {
+    return [
+      { x: lane.x, y: target.y + nodeHeight / 2 },
+      { x: target.x + target.width, y: target.y + nodeHeight / 2 },
+    ];
+  }
+  return [
+    { x: lane.x, y: target.y - lane.above },
+    { x: target.x + target.width / 2, y: target.y - lane.above },
+    { x: target.x + target.width / 2, y: target.y },
+  ];
 }
 
 /** Nothing else sits to the right of `box` in its row. */
@@ -584,17 +666,25 @@ function laneOrder(
     return Math.abs((layerOf[edge?.from ?? 0] ?? 0) - (layerOf[edge?.to ?? 0] ?? 0));
   };
   const ordered = [...back].toSorted((left, right) => span(left) - span(right) || left - right);
-  return new Map(ordered.map((position, lane) => [position, lane]));
+  return new Map(
+    ordered.map((position, lane) => {
+      return [position, lane];
+    }),
+  );
 }
 
-function neighbours(
-  node: number,
-  forward: readonly IndexedEdge[],
-  side: 'from' | 'to',
-  boxes: readonly Box[],
-  nodes: readonly FlowLayoutNode[],
-): number[] {
-  const other = side === 'to' ? 'from' : 'to';
+/** What finding a node's neighbours needs: the forward edges, the boxes and the nodes. */
+interface NeighbourScene {
+  readonly forward: readonly IndexedEdge[];
+  readonly boxes: readonly Box[];
+  readonly nodes: readonly FlowLayoutNode[];
+}
+
+const oppositeEnds = { from: 'to', to: 'from' } as const;
+
+function neighbours(node: number, side: 'from' | 'to', scene: NeighbourScene): number[] {
+  const { forward, boxes, nodes } = scene;
+  const other = oppositeEnds[side];
   const found = forward.filter((edge) => edge[other] === node).map((edge) => edge[side]);
   const unique = [...new Set(found)];
   unique.sort((left, right) => (boxes[left]?.x ?? 0) - (boxes[right]?.x ?? 0));
@@ -624,7 +714,11 @@ function simplify(points: readonly FlowPoint[]): FlowPoint[] {
 }
 
 function average(values: readonly number[]): number {
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+  return (
+    values.reduce((sum, value) => {
+      return sum + value;
+    }, 0) / values.length
+  );
 }
 
 function indices(length: number): number[] {
@@ -633,7 +727,10 @@ function indices(length: number): number[] {
 
 function sweepOrder(length: number, isDownward: boolean): number[] {
   const order = indices(length);
-  return isDownward ? order : order.toReversed();
+  if (isDownward) {
+    return order;
+  }
+  return order.toReversed();
 }
 
 /** A small per-edge vertical offset so horizontal runs of different edges rarely coincide. */

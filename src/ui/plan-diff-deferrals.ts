@@ -87,7 +87,9 @@ export function planDiffDeferrals(
     const isLarge = rows > limits.maxRows || characters > limits.maxCharacters;
     const isGuessed = !notGenerated.has(file.path);
     const name = file.path.slice(file.path.lastIndexOf('/') + 1);
-    const plan = ((): { reason: DeferralReason; why: string } | undefined => {
+    /** Why a file is deferred, and the sentence that says so. */
+    type DeferralCause = Pick<DiffDeferral, 'reason' | 'why'>;
+    const plan = ((): DeferralCause | undefined => {
       if (noDiff.has(file.path)) {
         return { reason: 'no-diff', why: '.gitattributes turns this file’s diff off (-diff).' };
       }
@@ -100,9 +102,10 @@ export function planDiffDeferrals(
       if (isGuessed && generatedPatterns.some((pattern) => pattern.test(file.path))) {
         return { reason: 'generated', why: 'This file looks generated (by its name).' };
       }
-      return isLarge
-        ? { reason: 'large', why: 'Large diffs are not rendered by default.' }
-        : undefined;
+      if (isLarge) {
+        return { reason: 'large', why: 'Large diffs are not rendered by default.' };
+      }
+      return undefined;
     })();
     if (plan === undefined) {
       continue;

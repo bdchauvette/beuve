@@ -131,9 +131,9 @@ export class BeuveSheetCode extends LitElement {
   }
 
   private async syncGutter(): Promise<void> {
-    const root = await waitFor(
-      () => this.renderRoot.querySelector('diffs-container')?.shadowRoot ?? undefined,
-    );
+    const root = await waitFor(() => {
+      return this.renderRoot.querySelector('diffs-container')?.shadowRoot ?? undefined;
+    });
     if (root === undefined) {
       return;
     }
@@ -218,18 +218,21 @@ export class BeuveSheetCode extends LitElement {
     }
     if (changed.has('selected') || changed.has('library') || changed.has('cacheKey')) {
       const { selected } = this;
-      this.view.setSelectedLines(
+      if (selected === undefined) {
         // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
-        selected === undefined ? null : { start: selected.start, end: selected.end },
-      );
+        this.view.setSelectedLines(null);
+      } else {
+        this.view.setSelectedLines({ start: selected.start, end: selected.end });
+      }
     }
     void this.syncGutter();
   }
 
   override render(): TemplateResult {
-    return this.hasFailed || (this.compact && this.library === undefined)
-      ? html`<pre class="plain">${this.contents}</pre>`
-      : html`<div class="code"></div>`;
+    if (this.hasFailed || (this.compact && this.library === undefined)) {
+      return html`<pre class="plain">${this.contents}</pre>`;
+    }
+    return html`<div class="code"></div>`;
   }
 }
 

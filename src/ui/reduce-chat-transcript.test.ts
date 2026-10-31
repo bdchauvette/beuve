@@ -223,7 +223,10 @@ function statusesAlong(actions: readonly ChatTranscriptAction[]): string[] {
 /** The second entry's message: the answer, after the question. */
 function answerIn(state: ChatTranscript): ChatMessageView | undefined {
   const entry = state.entries[1];
-  return entry?.kind === 'message' ? entry.message : undefined;
+  if (entry?.kind === 'message') {
+    return entry.message;
+  }
+  return undefined;
 }
 
 function messageFrom(message: ChatMessageView): ChatEntry {

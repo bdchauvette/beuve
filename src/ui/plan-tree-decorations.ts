@@ -1,5 +1,7 @@
 import type { ImpactView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+
 /** A row decoration's text lane, as `@pierre/trees` renders it. */
 export interface TreeDecoration {
   readonly text: string;
@@ -27,7 +29,12 @@ export function planTreeDecorations(
     }
     const percentiles = file.functions
       .filter((fn) => fn.inDiff && fn.change !== 'removed' && fn.change !== 'unchanged')
-      .map((fn) => ('percentile' in fn ? fn.percentile : 0));
+      .map((fn) => {
+        if ('percentile' in fn) {
+          return fn.percentile;
+        }
+        return 0;
+      });
     if (percentiles.length > 0) {
       perFile.set(file.path, { percentile: Math.max(...percentiles), findings: 0 });
     }
@@ -64,16 +71,13 @@ interface Tally {
 }
 
 function decorate(tally: Tally, scope: string, cognitiveMax: number): TreeDecoration {
-  const percentile = Math.round(tally.percentile);
-  const findings =
-    tally.findings === 0
-      ? ''
-      : `; ${String(tally.findings)} ${tally.findings === 1 ? 'function' : 'functions'} over cognitive ${String(cognitiveMax)}`;
+  const percentile = `p${String(Math.round(tally.percentile))}`;
+  const ranks = `ImpactGate: the most complex changed function in ${scope} ranks at percentile ${String(Math.round(tally.percentile))}`;
+  if (tally.findings === 0) {
+    return { text: percentile, title: ranks };
+  }
   return {
-    text:
-      tally.findings === 0
-        ? `p${String(percentile)}`
-        : `p${String(percentile)} ▲${String(tally.findings)}`,
-    title: `ImpactGate: the most complex changed function in ${scope} ranks at percentile ${String(percentile)}${findings}`,
+    text: `${percentile} ▲${String(tally.findings)}`,
+    title: `${ranks}; ${countNoun(tally.findings, 'function')} over cognitive ${String(cognitiveMax)}`,
   };
 }

@@ -26,6 +26,22 @@ import { describeGithubAuth } from './describe-github-auth.ts';
  * trusted to run their tests (each removable). Every change is saved at once through the settings
  * channels, which also tell the main window; the window is read again when it regains focus.
  */
+/** A checkbox row: its label, the note beside it, its state, and the change it asks for. */
+interface CheckRow {
+  readonly label: string;
+  readonly detail: string;
+  readonly isOn: boolean;
+  readonly change: (isOn: boolean) => SetDiffDisplayRequest;
+}
+
+/** One radio button: its group, its label, whether it is chosen, and the change it asks for. */
+interface RadioChoice {
+  readonly name: string;
+  readonly label: string;
+  readonly isOn: boolean;
+  readonly change: SetDiffDisplayRequest;
+}
+
 @customElement('beuve-settings-view')
 export class BeuveSettingsView extends LitElement {
   static override styles = css`
@@ -184,19 +200,36 @@ export class BeuveSettingsView extends LitElement {
       bridge.invoke('editor:get-settings'),
       bridge.invoke('trace:list-trust'),
     ]);
-    this.display = display.ok ? display.value : this.display;
-    this.editors = editors.ok ? editors.value : this.editors;
-    this.trusted = trusted.ok ? trusted.value : this.trusted;
+    if (display.ok) {
+      this.display = display.value;
+    }
+    if (editors.ok) {
+      this.editors = editors.value;
+    }
+    if (trusted.ok) {
+      this.trusted = trusted.value;
+    }
     this.error =
       [display, editors, trusted]
-        .map((result) => (result.ok ? '' : result.error.message))
+        .map((result) => {
+          if (result.ok) {
+            return '';
+          }
+          return result.error.message;
+        })
         .find((message) => message !== '') ?? '';
     const [github, claude] = await Promise.all([
       bridge.invoke('github:auth-status', {}),
       bridge.invoke('claude:status'),
     ]);
-    this.github = github.ok ? github.value : undefined;
-    this.claude = claude.ok ? claude.value : undefined;
+    this.github = undefined;
+    if (github.ok) {
+      this.github = github.value;
+    }
+    this.claude = undefined;
+    if (claude.ok) {
+      this.claude = claude.value;
+    }
   }
 
   private async setDisplay(change: SetDiffDisplayRequest): Promise<void> {
@@ -255,12 +288,14 @@ export class BeuveSettingsView extends LitElement {
                 ? html`<option value="" selected disabled>The first one installed</option>`
                 : nothing
             }
-            ${(this.editors?.editors ?? []).map(
-              (editor) =>
-                html`<option value=${editor.id} ?selected=${editor.id === this.editors?.preferred}>
-                  ${editor.name}${editor.installed ? '' : ' (not found)'}
-                </option>`,
-            )}
+            ${(this.editors?.editors ?? []).map((editor) => {
+              return html`<option
+                value=${editor.id}
+                ?selected=${editor.id === this.editors?.preferred}
+              >
+                ${editor.name}${editor.installed ? '' : ' (not found)'}
+              </option>`;
+            })}
           </select>
         </div>
         <div class="row">
@@ -273,20 +308,29 @@ export class BeuveSettingsView extends LitElement {
               });
             }}
           >
-            ${orders.map(
-              ([mode, label]) =>
-                html`<option value=${mode} ?selected=${(display.reviewOrder ?? 'path') === mode}>
-                  ${label}
-                </option>`,
-            )}
+            ${orders.map(([mode, label]) => {
+              return html`<option
+                value=${mode}
+                ?selected=${(display.reviewOrder ?? 'path') === mode}
+              >
+                ${label}
+              </option>`;
+            })}
           </select>
         </div>
-        ${this.renderCheck('Skip reviewed files', 'In Next and Previous Change and File', display.skipReviewed === true, (isOn) => ({ skipReviewed: isOn }))}
+        ${this.renderCheck({
+          label: 'Skip reviewed files',
+          detail: 'In Next and Previous Change and File',
+          isOn: display.skipReviewed === true,
+          change: (isOn) => {
+            return { skipReviewed: isOn };
+          },
+        })}
         <div class="row">
           <span>Open definitions in</span>
           <span class="choices">
-            ${this.renderRadio('sheets', 'Sheet windows', (display.sheets ?? 'window') === 'window', { sheets: 'window' })}
-            ${this.renderRadio('sheets', 'Over the diff', display.sheets === 'inline', { sheets: 'inline' })}
+            ${this.renderRadio({ name: 'sheets', label: 'Sheet windows', isOn: (display.sheets ?? 'window') === 'window', change: { sheets: 'window' } })}
+            ${this.renderRadio({ name: 'sheets', label: 'Over the diff', isOn: display.sheets === 'inline', change: { sheets: 'inline' } })}
           </span>
         </div>
       </div>`;
@@ -298,32 +342,48 @@ export class BeuveSettingsView extends LitElement {
         <div class="row">
           <span>Show changes</span>
           <span class="choices">
-            ${this.renderRadio('layout', 'Side by side', display.layout === 'split', { layout: 'split' })}
-            ${this.renderRadio('layout', 'Inline', display.layout === 'unified', { layout: 'unified' })}
+            ${this.renderRadio({ name: 'layout', label: 'Side by side', isOn: display.layout === 'split', change: { layout: 'split' } })}
+            ${this.renderRadio({ name: 'layout', label: 'Inline', isOn: display.layout === 'unified', change: { layout: 'unified' } })}
           </span>
         </div>
-        ${this.renderCheck('Hide whitespace changes', 'Computed by git diff -w', display.ignoreWhitespace, (isOn) => ({ ignoreWhitespace: isOn }))}
-        ${this.renderCheck('Show generated files', 'Expanded instead of collapsed', display.showGenerated, (isOn) => ({ showGenerated: isOn }))}
-        ${this.renderCheck('Show review insights', 'Findings as notes on the diff lines', display.showInsights, (isOn) => ({ showInsights: isOn }))}
+        ${this.renderCheck({
+          label: 'Hide whitespace changes',
+          detail: 'Computed by git diff -w',
+          isOn: display.ignoreWhitespace,
+          change: (isOn) => {
+            return { ignoreWhitespace: isOn };
+          },
+        })}
+        ${this.renderCheck({
+          label: 'Show generated files',
+          detail: 'Expanded instead of collapsed',
+          isOn: display.showGenerated,
+          change: (isOn) => {
+            return { showGenerated: isOn };
+          },
+        })}
+        ${this.renderCheck({
+          label: 'Show review insights',
+          detail: 'Findings as notes on the diff lines',
+          isOn: display.showInsights,
+          change: (isOn) => {
+            return { showInsights: isOn };
+          },
+        })}
       </div>
       <h2>Window</h2>
       <div class="group">
         <div class="row">
           <span>Sidebar</span>
           <span class="choices">
-            ${this.renderRadio('side', 'On the left', display.sidebarSide === 'left', { sidebarSide: 'left' })}
-            ${this.renderRadio('side', 'On the right', display.sidebarSide === 'right', { sidebarSide: 'right' })}
+            ${this.renderRadio({ name: 'side', label: 'On the left', isOn: display.sidebarSide === 'left', change: { sidebarSide: 'left' } })}
+            ${this.renderRadio({ name: 'side', label: 'On the right', isOn: display.sidebarSide === 'right', change: { sidebarSide: 'right' } })}
           </span>
         </div>
       </div>`;
   }
 
-  private renderCheck(
-    label: string,
-    detail: string,
-    isOn: boolean,
-    change: (isOn: boolean) => SetDiffDisplayRequest,
-  ): TemplateResult {
+  private renderCheck({ label, detail, isOn, change }: CheckRow): TemplateResult {
     return html`<div class="row">
       <label>
         <input
@@ -339,12 +399,7 @@ export class BeuveSettingsView extends LitElement {
     </div>`;
   }
 
-  private renderRadio(
-    name: string,
-    label: string,
-    isOn: boolean,
-    change: SetDiffDisplayRequest,
-  ): TemplateResult {
+  private renderRadio({ name, label, isOn, change }: RadioChoice): TemplateResult {
     return html`<label>
       <input
         type="radio"
@@ -363,27 +418,35 @@ export class BeuveSettingsView extends LitElement {
    * (ADR 0070); main stores them with `safeStorage` and never sends them back to this page.
    */
   private renderAccounts(): TemplateResult {
-    const github = this.github === undefined ? undefined : describeGithubAuth(this.github);
-    const claude = this.claude === undefined ? undefined : describeClaudeStatus(this.claude);
     return html`<h2>Accounts</h2>
       <div class="group">
         <div class="row" data-provider="github">
           <span>GitHub</span>
-          <span>
-            <span class=${github?.tone ?? 'muted'}
-              >${github === undefined ? 'Checking…' : github.text.replace(githubPrefix, '')}</span
-            >
-            <div class="detail">${github?.title ?? ''}</div>
-          </span>
+          <span>${this.renderGithub()}</span>
         </div>
         <div class="row" data-provider="claude">
           <span>Claude Code</span>
-          <span>
-            <span class=${claude?.tone ?? 'muted'}>${claude?.text ?? 'Checking…'}</span>
-            <div class="detail">${claude?.detail ?? ''}</div>
-          </span>
+          <span>${this.renderClaude()}</span>
         </div>
       </div>`;
+  }
+
+  private renderGithub(): TemplateResult {
+    if (this.github === undefined) {
+      return renderChecking();
+    }
+    const github = describeGithubAuth(this.github);
+    return html`<span class=${github.tone}>${github.text.replace(githubPrefix, '')}</span>
+      <div class="detail">${github.title}</div>`;
+  }
+
+  private renderClaude(): TemplateResult {
+    if (this.claude === undefined) {
+      return renderChecking();
+    }
+    const claude = describeClaudeStatus(this.claude);
+    return html`<span class=${claude.tone}>${claude.text}</span>
+      <div class="detail">${claude.detail}</div>`;
   }
 
   private renderTrust(): TemplateResult {
@@ -394,20 +457,19 @@ export class BeuveSettingsView extends LitElement {
             ? html`<p class="empty">
                 No repository may run its tests for trace probes. Run Trace Probe asks first.
               </p>`
-            : this.trusted.map(
-                (entry) =>
-                  html`<div class="row trusted">
-                    <span class="path" title=${entry.remoteUrl ?? ''}>${entry.repositoryPath}</span>
-                    <span class="detail">since ${entry.trustedAt.slice(0, 10)}</span>
-                    <button
-                      type="button"
-                      data-action="remove-trust"
-                      data-path=${entry.repositoryPath}
-                    >
-                      Remove
-                    </button>
-                  </div>`,
-              )
+            : this.trusted.map((entry) => {
+                return html`<div class="row trusted">
+                  <span class="path" title=${entry.remoteUrl ?? ''}>${entry.repositoryPath}</span>
+                  <span class="detail">since ${entry.trustedAt.slice(0, 10)}</span>
+                  <button
+                    type="button"
+                    data-action="remove-trust"
+                    data-path=${entry.repositoryPath}
+                  >
+                    Remove
+                  </button>
+                </div>`;
+              })
         }
       </div>`;
   }
@@ -446,6 +508,12 @@ const orders: readonly (readonly [ReviewOrderMode, string])[] = [
   ['imports', 'Imports (what a file uses comes first)'],
   ['calls', 'Calls (asks the language server)'],
 ];
+
+/** An account row before its status has arrived. */
+function renderChecking(): TemplateResult {
+  return html`<span class="muted">Checking…</span>
+    <div class="detail"></div>`;
+}
 
 declare global {
   interface HTMLElementTagNameMap {

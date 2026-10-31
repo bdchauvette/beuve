@@ -1,4 +1,5 @@
 import { createInlineNode } from './create-inline-node.ts';
+import { createTextSpan } from './create-text-span.ts';
 import { describeInsight } from './describe-insight.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
@@ -16,7 +17,10 @@ export function createInsightElement(insight: ReviewInsight, isOpen: boolean): H
   const { finding } = insight;
   const labels = describeInsight(finding);
   const root = document.createElement('div');
-  root.className = `insight ${finding.severity}${labels.isUnconfirmed ? ' unconfirmed' : ''}`;
+  root.classList.add('insight', finding.severity);
+  if (labels.isUnconfirmed) {
+    root.classList.add('unconfirmed');
+  }
   root.dataset['action'] = 'insight';
   root.dataset['insightKey'] = insight.key;
 
@@ -29,22 +33,15 @@ export function createInsightElement(insight: ReviewInsight, isOpen: boolean): H
     .map((span) => span.text)
     .join('');
   line.setAttribute('aria-label', `${labels.summary}: ${plainTitle}`);
-  const category = textSpan('insight-category', labels.category);
+  const category = createTextSpan({ className: 'insight-category', text: labels.category });
   const title = document.createElement('span');
   title.className = 'insight-title';
   title.append(...parseInlineTitle(finding.title).map((span) => createInlineNode(span)));
   line.append(category, title);
   if (labels.isUnconfirmed) {
-    line.append(textSpan('insight-flag', 'unconfirmed'));
+    line.append(createTextSpan({ className: 'insight-flag', text: 'unconfirmed' }));
   }
   root.append(line);
   setInsightOpen(root, insight, isOpen);
   return root;
-}
-
-function textSpan(className: string, text: string): HTMLElement {
-  const span = document.createElement('span');
-  span.className = className;
-  span.textContent = text;
-  return span;
 }

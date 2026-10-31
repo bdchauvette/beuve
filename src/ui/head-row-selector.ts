@@ -17,6 +17,15 @@ const lineTypes: Readonly<Record<RowKind, string>> = {
  * rows carry base numbers, so a head line is only ever looked up on the right.
  */
 export function headRowSelector(style: DiffLayoutView, kind: RowKind, line: number): string {
-  const column = style === 'unified' ? 'unified' : kind === 'deletions' ? 'deletions' : 'additions';
-  return `code[data-${column}] [data-line='${String(line)}'][data-line-type='${lineTypes[kind]}']`;
+  return `code[data-${columnOf(style, kind)}] [data-line='${String(line)}'][data-line-type='${lineTypes[kind]}']`;
+}
+
+function columnOf(style: DiffLayoutView, kind: RowKind): string {
+  if (style === 'unified') {
+    return 'unified';
+  }
+  if (kind === 'deletions') {
+    return 'deletions';
+  }
+  return 'additions';
 }

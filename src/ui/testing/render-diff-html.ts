@@ -27,8 +27,10 @@ export async function renderDiffHtml(patch: string, options: DiffHtmlOptions): P
   if (parsed === undefined) {
     throw new TypeError(`@pierre/diffs found no file in ${JSON.stringify(patch)}`);
   }
-  const metadata =
-    options.language === undefined ? parsed : setLanguageOverride(parsed, options.language);
+  let metadata = parsed;
+  if (options.language !== undefined) {
+    metadata = setLanguageOverride(parsed, options.language);
+  }
   const renderer = new DiffHunksRenderer({
     theme: 'pierre-light',
     preferredHighlighter: 'shiki-js',
@@ -39,12 +41,18 @@ export async function renderDiffHtml(patch: string, options: DiffHtmlOptions): P
   });
   try {
     const result = await renderer.asyncRender(metadata);
-    const header = result.headerElement === undefined ? [] : [hastToHtml(result.headerElement)];
+    const html: string[] = [];
+    if (result.headerElement !== undefined) {
+      html.push(hastToHtml(result.headerElement));
+    }
     const columns = (['unified', 'deletions', 'additions'] as const)
-      .map((type) => ({ type, ast: renderer.renderCodeAST(type, result) }))
+      .map((type) => {
+        return { type, ast: renderer.renderCodeAST(type, result) };
+      })
       .filter((column) => column.ast !== undefined)
       .map(({ type, ast = [] }) => renderer.renderPartialHTML(ast, type));
-    return { name: metadata.name, previousName: metadata.prevName, html: [...header, ...columns] };
+    html.push(...columns);
+    return { name: metadata.name, previousName: metadata.prevName, html };
   } finally {
     renderer.cleanUp();
   }

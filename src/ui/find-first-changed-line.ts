@@ -1,3 +1,6 @@
+import { firstHunkLine } from './first-hunk-line.ts';
+import type { HunkSpan } from './first-hunk-line.ts';
+
 /**
  * The head-side line (1-based) of a patch's first change: the first added line, or for a deletion
  * the head line just before the gap. With `hunkIndex`, only that hunk (zero-based) is searched.
@@ -15,7 +18,7 @@ export function findFirstChangedLine(patch: string, hunkIndex?: number): number 
         return undefined;
       }
       hunkStart = header.start;
-      nextLine = header.count === 0 ? hunkStart + 1 : hunkStart;
+      nextLine = firstHunkLine(header);
       continue;
     }
     if (nextLine === undefined || (hunkIndex !== undefined && hunk !== hunkIndex)) {
@@ -25,7 +28,10 @@ export function findFirstChangedLine(patch: string, hunkIndex?: number): number 
       return nextLine;
     }
     if (text.startsWith('-')) {
-      return hunkStart === 0 ? undefined : Math.max(hunkStart, nextLine - 1);
+      if (hunkStart === 0) {
+        return undefined;
+      }
+      return Math.max(hunkStart, nextLine - 1);
     }
     if (text.startsWith(' ')) {
       nextLine += 1;
@@ -35,7 +41,7 @@ export function findFirstChangedLine(patch: string, hunkIndex?: number): number 
 }
 
 /** The new side of `@@ -a,b +c,d @@`: `c` and `d` (1 when omitted). */
-function parseHunkHeader(text: string): { start: number; count: number } | undefined {
+function parseHunkHeader(text: string): HunkSpan | undefined {
   if (!text.startsWith('@@ ')) {
     return undefined;
   }

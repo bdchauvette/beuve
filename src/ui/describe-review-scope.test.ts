@@ -2,11 +2,14 @@ import { describe } from 'vitest';
 
 import { test } from './testing/test.ts';
 
-import type { InterdiffFallbackView } from '#contract/ipc-contract.ts';
+import type { InterdiffFallbackView, ReviewScope } from '#contract/ipc-contract.ts';
 
 import { describeReviewScope } from './describe-review-scope.ts';
 
-function from(): { fromBaseSha: string; fromHeadSha: string } {
+/** The checkpoint an interdiff starts from. */
+type Checkpoint = Pick<Extract<ReviewScope, { kind: 'interdiff' }>, 'fromBaseSha' | 'fromHeadSha'>;
+
+function from(): Checkpoint {
   return { fromBaseSha: 'a'.repeat(40), fromHeadSha: 'b'.repeat(40) };
 }
 

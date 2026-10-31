@@ -148,21 +148,25 @@ export class BeuveKeybindingOverlay extends LitElement {
             ×
           </button>
         </header>
-        ${sections.map(
-          (section) => html`
+        ${sections.map((section) => {
+          return html`
             <h2>${section.title}</h2>
             <table>
-              ${section.rows.map(
-                (row) => html`
+              ${section.rows.map((row) => {
+                return html`
                   <tr>
                     <td>${row.title}</td>
-                    <td class="keys">${row.keys.map((key) => html`<kbd>${key}</kbd>`)}</td>
+                    <td class="keys">
+                      ${row.keys.map((key) => {
+                        return html`<kbd>${key}</kbd>`;
+                      })}
+                    </td>
                   </tr>
-                `,
-              )}
+                `;
+              })}
             </table>
-          `,
-        )}
+          `;
+        })}
       </div>
     `;
   }

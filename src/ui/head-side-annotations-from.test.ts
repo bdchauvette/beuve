@@ -23,11 +23,9 @@ describe('headSideAnnotationsFrom', () => {
       { id: 'd', lineStart: 1, lineEnd: 23 },
     ];
     expect(
-      headSideAnnotationsFrom(hunks(), notes).map(({ side, lineNumber, metadata }) => [
-        side,
-        lineNumber,
-        metadata.id,
-      ]),
+      headSideAnnotationsFrom(hunks(), notes).map(({ side, lineNumber, metadata }) => {
+        return [side, lineNumber, metadata.id];
+      }),
     ).toStrictEqual([
       ['additions', 2, 'a'],
       ['additions', 23, 'b'],

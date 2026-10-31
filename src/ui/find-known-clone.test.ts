@@ -15,7 +15,14 @@ function local(): SessionSummary {
     updatedAt: '2026-10-02T00:00:00Z',
   };
 }
-function pull(id: string, repoPath: string, updatedAt: string): SessionSummary {
+/** What tells one pull request session from another here. */
+interface PullSession {
+  readonly id: string;
+  readonly repoPath: string;
+  readonly updatedAt: string;
+}
+
+function pull({ id, repoPath, updatedAt }: PullSession): SessionSummary {
   return {
     id,
     source: {
@@ -38,8 +45,8 @@ describe('findKnownClone', () => {
   test('uses the most recent pull request session of the same repository', ({ expect }) => {
     const sessions = [
       local(),
-      pull('old', '/old/hello', '2026-10-01T00:00:00Z'),
-      pull('new', '/new/hello', '2026-10-05T00:00:00Z'),
+      pull({ id: 'old', repoPath: '/old/hello', updatedAt: '2026-10-01T00:00:00Z' }),
+      pull({ id: 'new', repoPath: '/new/hello', updatedAt: '2026-10-05T00:00:00Z' }),
     ];
     expect(findKnownClone(sessions, { host: 'github.com', owner: 'octo-org', repo: 'HELLO' })).toBe(
       '/new/hello',

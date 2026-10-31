@@ -36,9 +36,10 @@ export function applyTraceStatus(
           repositoryPath: event.repositoryPath ?? '',
         };
       }
-      return event.result === undefined
-        ? { path, line, status: 'error', failure: event.failure, message: event.message }
-        : { path, line, status: 'ready', result: event.result, note: event.message };
+      if (event.result === undefined) {
+        return { path, line, status: 'error', failure: event.failure, message: event.message };
+      }
+      return { path, line, status: 'ready', result: event.result, note: event.message };
     }
   }
 }

@@ -81,7 +81,11 @@ describe('planReviewStream', () => {
     expect,
   }) => {
     const plan = planReviewStream(review(), order(), 'c2');
-    expect(plan.files.map(({ path, hunks }) => [path, hunks.length])).toStrictEqual([
+    expect(
+      plan.files.map(({ path, hunks }) => {
+        return [path, hunks.length];
+      }),
+    ).toStrictEqual([
       ['src/a.ts', 1],
       ['package.json', 1],
     ]);

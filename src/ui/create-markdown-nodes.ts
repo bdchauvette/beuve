@@ -5,8 +5,13 @@ export interface MarkdownRenderers {
   /** A `[[…]]` line citation as written: a pill, a dimmed marker or plain text (ADR 0031). */
   readonly marker: (text: string) => Node;
   /** A fenced code block; `closed` is false while its closing fence is still to come. */
-  readonly code: (block: Extract<MarkdownBlock, { kind: 'code' }>) => Element;
+  readonly code: (block: CodeBlock) => Element;
 }
+
+/** A fenced code block of a parsed answer. */
+export type CodeBlock = Extract<MarkdownBlock, { kind: 'code' }>;
+
+type TableBlock = Extract<MarkdownBlock, { kind: 'table' }>;
 
 /**
  * DOM nodes for parsed Markdown (ADR 0073), built with `createElement` and text nodes only: no
@@ -37,10 +42,7 @@ function blockNode(block: MarkdownBlock, renderers: MarkdownRenderers): Element 
       return renderers.code(block);
     }
     case 'list': {
-      const list = document.createElement(block.start === undefined ? 'ul' : 'ol');
-      if (block.start !== undefined && block.start !== 1) {
-        list.setAttribute('start', String(block.start));
-      }
+      const list = listElement(block.start);
       for (const item of block.items) {
         const element = document.createElement('li');
         element.append(...createMarkdownNodes(item, renderers));
@@ -62,10 +64,19 @@ function blockNode(block: MarkdownBlock, renderers: MarkdownRenderers): Element 
   }
 }
 
-function tableNode(
-  block: Extract<MarkdownBlock, { kind: 'table' }>,
-  renderers: MarkdownRenderers,
-): Element {
+/** `<ul>` for a bullet list, `<ol>` numbered from `start` for an ordered one. */
+function listElement(start: number | undefined): HTMLElement {
+  if (start === undefined) {
+    return document.createElement('ul');
+  }
+  const list = document.createElement('ol');
+  if (start !== 1) {
+    list.setAttribute('start', String(start));
+  }
+  return list;
+}
+
+function tableNode(block: TableBlock, renderers: MarkdownRenderers): Element {
   const row = (cells: readonly (readonly MarkdownInline[])[], tag: 'th' | 'td'): HTMLElement => {
     const element = document.createElement('tr');
     for (const [column, cell] of cells.entries()) {

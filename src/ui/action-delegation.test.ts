@@ -9,7 +9,9 @@ import { test } from './testing/test.ts';
 function hostOf(tree: ActionTree): DelegationHost {
   return Object.assign(new EventTarget(), {
     renderRoot: tree.root,
-    addController: (): undefined => undefined,
+    addController: (): undefined => {
+      return;
+    },
   }) as unknown as DelegationHost;
 }
 

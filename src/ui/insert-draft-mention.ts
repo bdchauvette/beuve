@@ -1,6 +1,7 @@
 import type { ChatMentionView } from '#contract/ipc-contract.ts';
 
 import type { DraftPart, DraftState } from './chat-draft.ts';
+import { draftLength } from './draft-length.ts';
 
 /**
  * Puts a chip at the caret, splitting the text there, with a space on either side unless one is
@@ -12,7 +13,7 @@ export function insertDraftMention(state: DraftState, mention: ChatMentionView):
   const after: DraftPart[] = [];
   let position = 0;
   for (const part of state.parts) {
-    const length = part.kind === 'text' ? part.text.length : 1;
+    const length = draftLength([part]);
     if (position + length <= state.caret) {
       before.push(part);
     } else if (position >= state.caret) {
@@ -28,14 +29,18 @@ export function insertDraftMention(state: DraftState, mention: ChatMentionView):
   const next = after[0];
   const isSpaceBeforeMissing = previous !== undefined && !isEndingInSpace(previous);
   const isSpaceAfterMissing = next === undefined || !isStartingWithSpace(next);
-  const parts = mergeText([
-    ...before,
-    ...(isSpaceBeforeMissing ? [space] : []),
-    { kind: 'mention', mention },
-    ...(isSpaceAfterMissing ? [space] : []),
-    ...after,
-  ]);
-  return { parts, caret: length(before) + (isSpaceBeforeMissing ? 1 : 0) + 2 };
+  const inserted: DraftPart[] = [...before];
+  let caret = draftLength(before) + 2;
+  if (isSpaceBeforeMissing) {
+    inserted.push(space);
+    caret += 1;
+  }
+  inserted.push({ kind: 'mention', mention });
+  if (isSpaceAfterMissing) {
+    inserted.push(space);
+  }
+  inserted.push(...after);
+  return { parts: mergeText(inserted), caret };
 }
 
 const space: DraftPart = { kind: 'text', text: ' ' };
@@ -48,10 +53,6 @@ function isEndingInSpace(part: DraftPart): boolean {
 
 function isStartingWithSpace(part: DraftPart): boolean {
   return part.kind === 'text' && leadingSpace.test(part.text);
-}
-
-function length(parts: readonly DraftPart[]): number {
-  return parts.reduce((sum, part) => sum + (part.kind === 'text' ? part.text.length : 1), 0);
 }
 
 function mergeText(parts: readonly DraftPart[]): DraftPart[] {

@@ -1,5 +1,8 @@
 import type { GithubReviewPreviewView, UraVerdictView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+import { nounFor } from './noun-for.ts';
+
 const events: Readonly<Record<UraVerdictView, string>> = {
   approve: 'Approve',
   comment: 'Comment',
@@ -12,18 +15,23 @@ const events: Readonly<Record<UraVerdictView, string>> = {
  */
 export function describeReviewPreview(preview: GithubReviewPreviewView): string {
   const { inlineCount, bodyCount, alreadyPostedCount } = preview;
-  const parts = [
-    inlineCount > 0 ? plural(inlineCount, 'inline comment') : '',
-    bodyCount > 0 ? `${String(bodyCount)} in the review body` : '',
-  ].filter((part) => part !== '');
-  const what = parts.length === 0 ? 'No new items, only the verdict' : parts.join(' and ');
-  const earlier =
-    alreadyPostedCount === 0
-      ? ''
-      : ` ${plural(alreadyPostedCount, 'item')} already posted ${alreadyPostedCount === 1 ? 'stays' : 'stay'} out.`;
-  return `${what}, as ${events[preview.verdict]}, on ${preview.headSha.slice(0, 12)}.${earlier}`;
+  const parts: string[] = [];
+  if (inlineCount > 0) {
+    parts.push(countNoun(inlineCount, 'inline comment'));
+  }
+  if (bodyCount > 0) {
+    parts.push(`${String(bodyCount)} in the review body`);
+  }
+  if (parts.length === 0) {
+    parts.push('No new items, only the verdict');
+  }
+  return `${parts.join(' and ')}, as ${events[preview.verdict]}, on ${preview.headSha.slice(0, 12)}.${earlierText(alreadyPostedCount)}`;
 }
 
-function plural(count: number, noun: string): string {
-  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+function earlierText(alreadyPostedCount: number): string {
+  if (alreadyPostedCount === 0) {
+    return '';
+  }
+  const stay = nounFor(alreadyPostedCount, { one: 'stays', other: 'stay' });
+  return ` ${countNoun(alreadyPostedCount, 'item')} already posted ${stay} out.`;
 }

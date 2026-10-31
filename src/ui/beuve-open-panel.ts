@@ -7,6 +7,7 @@ import type {
   CreateLocalSessionRequest,
   IpcResult,
   OpenPullRequestRequest,
+  PullRequestBadgeView,
   RepositoryInspectionView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -270,11 +271,10 @@ export class BeuveOpenPanel extends LitElement {
 
   private readonly onQueryKeyDown = (event: KeyboardEvent): void => {
     const rows = this.rows();
-    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-    if (step !== undefined || (event.ctrlKey && (event.key === 'n' || event.key === 'p'))) {
+    const step = cursorStep(event);
+    if (step !== undefined) {
       event.preventDefault();
-      const delta = step ?? (event.key === 'n' ? 1 : -1);
-      this.cursor = (this.cursor + delta + rows.length) % rows.length;
+      this.cursor = (this.cursor + step + rows.length) % rows.length;
       return;
     }
     if (event.key === 'Enter') {
@@ -311,10 +311,10 @@ export class BeuveOpenPanel extends LitElement {
   private readonly onPullRefInput = (event: InputEvent): void => {
     this.pullRef = (event.currentTarget as HTMLInputElement).value;
     const parsed = parseOpenQuery(this.pullRef);
-    const clone =
-      parsed.kind === 'pull-request' && this.clonePath === ''
-        ? findKnownClone(this.sessions, parsed)
-        : undefined;
+    if (parsed.kind !== 'pull-request' || this.clonePath !== '') {
+      return;
+    }
+    const clone = findKnownClone(this.sessions, parsed);
     if (clone === undefined) {
       return;
     }
@@ -426,20 +426,30 @@ export class BeuveOpenPanel extends LitElement {
 
   private rows(): Row[] {
     const parsed = parseOpenQuery(this.text);
-    const filter = parsed.kind === 'filter' ? parsed.text : '';
-    const isRecent = parsed.kind === 'empty' || parsed.kind === 'filter';
-    return [
-      ...(parsed.kind === 'pull-request' ? [{ kind: 'open-pull', query: parsed } as const] : []),
-      ...(parsed.kind === 'path' ? [{ kind: 'open-folder', path: parsed.path } as const] : []),
-      ...(isRecent
-        ? rankRecentSessions(this.sessions, filter).map((session): Row => ({
-            kind: 'session',
-            session,
-          }))
-        : []),
-      { kind: 'step', step: 'pull' },
-      { kind: 'step', step: 'local' },
-    ];
+    const rows: Row[] = [];
+    switch (parsed.kind) {
+      case 'pull-request': {
+        rows.push({ kind: 'open-pull', query: parsed });
+        break;
+      }
+      case 'path': {
+        rows.push({ kind: 'open-folder', path: parsed.path });
+        break;
+      }
+      case 'empty':
+      case 'filter': {
+        let filter = '';
+        if (parsed.kind === 'filter') {
+          filter = parsed.text;
+        }
+        for (const session of rankRecentSessions(this.sessions, filter)) {
+          rows.push({ kind: 'session', session });
+        }
+        break;
+      }
+    }
+    rows.push({ kind: 'step', step: 'pull' }, { kind: 'step', step: 'local' });
+    return rows;
   }
 
   /** `edit` (Shift+Enter, or Change… on a link) opens the pull request step instead of opening at once. */
@@ -489,10 +499,7 @@ export class BeuveOpenPanel extends LitElement {
     const view = inspected.value;
     this.inspection = view;
     this.headRef = view.currentBranch ?? 'HEAD';
-    this.baseRef =
-      view.defaultBase === undefined || view.defaultBase === this.headRef
-        ? (view.branches.find((branch) => branch.name !== this.headRef)?.name ?? '')
-        : view.defaultBase;
+    this.baseRef = baseFor(view, this.headRef);
     void this.updateComplete.then(() => {
       this.renderRoot.querySelector<HTMLInputElement>('input[name=head]')?.select();
     });
@@ -507,11 +514,10 @@ export class BeuveOpenPanel extends LitElement {
   }
 
   private renderRow(row: Row, index: number, rows: readonly Row[]): TemplateResult {
-    const selected = index === this.cursor ? 'true' : 'false';
     const isSeparated = row.kind === 'step' && rows[index - 1]?.kind !== 'step' && index > 0;
     return html`<li
       role="option"
-      aria-selected=${selected}
+      aria-selected=${index === this.cursor ? 'true' : 'false'}
       class=${isSeparated ? 'separated' : ''}
       data-action="row"
       data-index=${index}
@@ -553,15 +559,16 @@ export class BeuveOpenPanel extends LitElement {
         return this.renderSession(row.session);
       }
       case 'step': {
-        return row.step === 'pull'
-          ? html`<span class="glyph">PR</span>
-              <span class="line">Pull request…</span>
-              <span class="when"></span>
-              <span class="detail">A GitHub link or owner/repo#n, fetched into a local clone</span>`
-          : html`<span class="glyph">git</span>
-              <span class="line">Local branch…</span>
-              <span class="when"></span>
-              <span class="detail">Any folder in a repository; compare a head with a base</span>`;
+        if (row.step === 'pull') {
+          return html`<span class="glyph">PR</span>
+            <span class="line">Pull request…</span>
+            <span class="when"></span>
+            <span class="detail">A GitHub link or owner/repo#n, fetched into a local clone</span>`;
+        }
+        return html`<span class="glyph">git</span>
+          <span class="line">Local branch…</span>
+          <span class="when"></span>
+          <span class="detail">Any folder in a repository; compare a head with a base</span>`;
       }
     }
   }
@@ -570,18 +577,15 @@ export class BeuveOpenPanel extends LitElement {
     const { source } = session;
     const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
     const when = formatRelativeTime(session.updatedAt, this.now);
-    const reviewed = session.lastReviewedSha === undefined ? 'not reviewed yet' : 'reviewed';
+    const reviewed = reviewedText(session);
     if (source.kind === 'github-pull-request') {
       const { pullRequest } = session;
-      const badge = pullRequest === undefined ? undefined : describePullRequestState(pullRequest);
       return html`<span class="glyph">#${source.number}</span>
         <span class="line">${pullRequest?.title ?? `${source.owner}/${source.repo}`}</span>
         <span class="when">${when}</span>
         <span class="detail"
           >${
-            badge === undefined
-              ? nothing
-              : html`<span class="state ${badge.tone}">${badge.label}</span> · `
+            pullRequest === undefined ? nothing : renderStateBadge(pullRequest)
           }${source.owner}/${source.repo}
           · into ${pullRequest?.baseBranch ?? 'base'} · ${folder} · ${reviewed}</span
         >`;
@@ -682,6 +686,22 @@ export class BeuveOpenPanel extends LitElement {
     `;
   }
 
+  /** What inspecting the folder found: its root and branch, or why it failed. */
+  private renderInspection(view: RepositoryInspectionView | undefined): TemplateResult {
+    if (this.inspectError !== '') {
+      return html`<p class="error">${this.inspectError}</p>`;
+    }
+    if (view === undefined) {
+      return html``;
+    }
+    return html`<p class="note">
+      ${view.root === this.repoPath ? 'A repository' : view.root}${
+        view.currentBranch === undefined ? nothing : html` · on ${view.currentBranch}`
+      }
+      · ${view.branches.length} branches
+    </p>`;
+  }
+
   private renderLocal(): TemplateResult {
     const view = this.inspection;
     const branches = view?.branches ?? [];
@@ -702,18 +722,7 @@ export class BeuveOpenPanel extends LitElement {
           />
           <button type="button" @click=${this.onChooseRepo}>Choose…</button>
         </div>
-        ${
-          this.inspectError === ''
-            ? view === undefined
-              ? nothing
-              : html`<p class="note">
-                  ${view.root === this.repoPath ? 'A repository' : view.root}${
-                    view.currentBranch === undefined ? nothing : html` · on ${view.currentBranch}`
-                  }
-                  · ${branches.length} branches
-                </p>`
-            : html`<p class="error">${this.inspectError}</p>`
-        }
+        ${this.renderInspection(view)}
         <label for="head">Review</label>
         <div class="refs">
           <input
@@ -744,7 +753,9 @@ export class BeuveOpenPanel extends LitElement {
           />
         </div>
         <datalist id="branches">
-          ${branches.map((branch) => html`<option value=${branch.name}></option>`)}
+          ${branches.map((branch) => {
+            return html`<option value=${branch.name}></option>`;
+          })}
         </datalist>
         <p class="note">Shows what the head changed since it forked from the base.</p>
         <div class="actions">
@@ -772,11 +783,11 @@ export class BeuveOpenPanel extends LitElement {
 
   override focus(): void {
     void this.updateComplete.then(() => {
-      const target =
-        this.step === 'list'
-          ? (this.renderRoot.querySelector<HTMLInputElement>(':scope .query') ?? undefined)
-          : (this.renderRoot.querySelector<HTMLInputElement>(':scope form input') ?? undefined);
-      target?.focus();
+      let selector = ':scope form input';
+      if (this.step === 'list') {
+        selector = ':scope .query';
+      }
+      this.renderRoot.querySelector<HTMLInputElement>(selector)?.focus();
     });
   }
 
@@ -792,10 +803,16 @@ export class BeuveOpenPanel extends LitElement {
   showPullStep(ref: string, clone?: string): void {
     this.pullRef = ref;
     this.clonePath = clone ?? '';
-    this.cloneNote = clone === undefined ? '' : 'The clone you used last time for this repository.';
+    this.cloneNote = '';
+    if (clone !== undefined) {
+      this.cloneNote = 'The clone you used last time for this repository.';
+    }
     this.step = 'pull';
     void this.updateComplete.then(() => {
-      const selector = ref === '' ? 'input[name=ref]' : 'input[name=clone]';
+      let selector = 'input[name=clone]';
+      if (ref === '') {
+        selector = 'input[name=ref]';
+      }
       this.renderRoot.querySelector<HTMLInputElement>(selector)?.focus();
     });
   }
@@ -831,11 +848,47 @@ export class BeuveOpenPanel extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('pullFailure') && this.pullFailure !== undefined && this.step !== 'pull') {
       const parsed = parseOpenQuery(this.text);
-      this.showPullStep(parsed.kind === 'pull-request' ? parsed.ref : this.pullRef, undefined);
+      let ref = this.pullRef;
+      if (parsed.kind === 'pull-request') {
+        ref = parsed.ref;
+      }
+      this.showPullStep(ref, undefined);
     }
     const rows = this.rows();
     this.cursor = Math.min(this.cursor, rows.length - 1);
   }
+}
+
+const arrowSteps: Readonly<Record<string, number>> = { ArrowDown: 1, ArrowUp: -1 };
+const controlSteps: Readonly<Record<string, number>> = { n: 1, p: -1 };
+
+/** How far a key moves the list's cursor: the arrows, or Ctrl+N and Ctrl+P. */
+function cursorStep(event: KeyboardEvent): number | undefined {
+  const step = arrowSteps[event.key];
+  if (step !== undefined || !event.ctrlKey) {
+    return step;
+  }
+  return controlSteps[event.key];
+}
+
+/** The repository's default base, or another branch when that is the head itself. */
+function baseFor(view: RepositoryInspectionView, headRef: string): string {
+  if (view.defaultBase !== undefined && view.defaultBase !== headRef) {
+    return view.defaultBase;
+  }
+  return view.branches.find((branch) => branch.name !== headRef)?.name ?? '';
+}
+
+function reviewedText(session: SessionSummary): string {
+  if (session.lastReviewedSha === undefined) {
+    return 'not reviewed yet';
+  }
+  return 'reviewed';
+}
+
+function renderStateBadge(pullRequest: PullRequestBadgeView): TemplateResult {
+  const badge = describePullRequestState(pullRequest);
+  return html`<span class="state ${badge.tone}">${badge.label}</span> · `;
 }
 
 declare global {

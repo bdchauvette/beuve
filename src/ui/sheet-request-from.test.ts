@@ -2,19 +2,18 @@ import { describe } from 'vitest';
 
 import { test } from './testing/test.ts';
 
+import type { DefinitionView, SheetRangeView } from '#contract/ipc-contract.ts';
+
 import { sheetRequestFrom } from './sheet-request-from.ts';
 
-function fixture(): {
-  sha: string;
-  range: { startLine: number; startCharacter: number; endLine: number; endCharacter: number };
-  token: {
-    startLine: number;
-    startCharacter: number;
-    endLine: number;
-    endCharacter: number;
-    text: string;
-  };
-} {
+/** A definition answer's commit, the range of each target, and the token asked about. */
+interface Fixture {
+  readonly sha: string;
+  readonly range: SheetRangeView;
+  readonly token: NonNullable<DefinitionView['token']>;
+}
+
+function fixture(): Fixture {
   return {
     sha: 'c'.repeat(40),
     range: { startLine: 3, startCharacter: 16, endLine: 3, endCharacter: 24 },

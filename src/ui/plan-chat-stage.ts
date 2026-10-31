@@ -1,4 +1,4 @@
-import type { UraAnchorView } from '#contract/ipc-contract.ts';
+import type { ChatCitationView, ChatMessageView, UraAnchorView } from '#contract/ipc-contract.ts';
 
 import type { ChatEntry } from './chat-entry.ts';
 import { chatTextFrom } from './chat-text-from.ts';
@@ -54,29 +54,36 @@ export function planChatStage(
   return {
     messageId,
     headSha: message.headSha,
-    anchor:
-      anchored === undefined
-        ? { kind: 'change' }
-        : {
-            kind: 'lines',
-            path: anchored.path,
-            startLine: anchored.startLine,
-            endLine: anchored.endLine,
-          },
+    anchor: anchorOf(anchored),
     severity: 'question',
-    title:
-      message.answerKind === 'abstract'
-        ? 'Summary of the change (beuve, from the diff)'
-        : titleOf(precedingQuestion(entries.slice(0, index))),
+    title: stagedTitle(message, entries.slice(0, index)),
     body,
   };
 }
 
+function anchorOf(citation: ChatCitationView | undefined): UraAnchorView {
+  if (citation === undefined) {
+    return { kind: 'change' };
+  }
+  const { path, startLine, endLine } = citation;
+  return { kind: 'lines', path, startLine, endLine };
+}
+
+function stagedTitle(message: ChatMessageView, before: readonly ChatEntry[]): string {
+  if (message.answerKind === 'abstract') {
+    return 'Summary of the change (beuve, from the diff)';
+  }
+  return titleOf(precedingQuestion(before));
+}
+
 function precedingQuestion(before: readonly ChatEntry[]): string {
-  const asked = before.findLast(
-    (entry) => entry.kind === 'message' && entry.message.role === 'user',
-  );
-  return asked?.kind === 'message' ? chatTextFrom(asked.message.parts) : '';
+  const asked = before.findLast((entry) => {
+    return entry.kind === 'message' && entry.message.role === 'user';
+  });
+  if (asked?.kind === 'message') {
+    return chatTextFrom(asked.message.parts);
+  }
+  return '';
 }
 
 function titleOf(question: string): string {
@@ -84,5 +91,8 @@ function titleOf(question: string): string {
   if (text === '') {
     return 'Question from the chat';
   }
-  return text.length > titleLength ? `${text.slice(0, titleLength - 1).trimEnd()}…` : text;
+  if (text.length > titleLength) {
+    return `${text.slice(0, titleLength - 1).trimEnd()}…`;
+  }
+  return text;
 }

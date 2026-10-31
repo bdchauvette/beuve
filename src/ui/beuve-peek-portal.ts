@@ -301,7 +301,10 @@ export class BeuvePeekPortal extends LitElement {
   }
 
   private renderChildren(node: CallHierarchyNodeView): TemplateResult {
-    const children = this.peek?.status === 'ready' ? this.peek.children.get(node.id) : undefined;
+    if (this.peek?.status !== 'ready') {
+      return html`<p class="note">Loading callers…</p>`;
+    }
+    const children = this.peek.children.get(node.id);
     if (children === undefined || children.status === 'loading') {
       return html`<p class="note">Loading callers…</p>`;
     }
@@ -312,9 +315,9 @@ export class BeuvePeekPortal extends LitElement {
       return html`<p class="note">No callers found.</p>`;
     }
     return html`<ul role="group">
-      ${children.calls.map((call: CallHierarchyCallView) =>
-        this.renderNode(call.node, call.callSiteLines),
-      )}
+      ${children.calls.map((call: CallHierarchyCallView) => {
+        return this.renderNode(call.node, call.callSiteLines);
+      })}
     </ul>`;
   }
 
@@ -331,11 +334,14 @@ export class BeuvePeekPortal extends LitElement {
       return html``;
     }
     this.shownNodes.clear();
-    const target =
-      peek.status === 'ready' ? html`<code>${pathText(peek.root.name)}</code>` : 'the change';
     return html`
       <div class="heading" role="heading" aria-level="3">
-        <span>Callers of ${target}</span>
+        <span
+          >Callers of
+          ${
+            peek.status === 'ready' ? html`<code>${pathText(peek.root.name)}</code>` : 'the change'
+          }</span
+        >
         <span class="spacer"></span>
         <button
           type="button"
@@ -357,13 +363,25 @@ export class BeuvePeekPortal extends LitElement {
 }
 
 function rootId(peek: PeekState | undefined): string | undefined {
-  return peek?.status === 'ready' ? peek.root.id : undefined;
+  if (peek?.status === 'ready') {
+    return peek.root.id;
+  }
+  return undefined;
 }
 
 function location(node: CallHierarchyNodeView, callSiteLines: readonly number[]): string {
-  const file = node.file.kind === 'workspace' ? node.file.path : node.file.uri;
-  const sites = callSiteLines.length === 0 ? '' : ` · calls at ${callSiteLines.join(', ')}`;
-  return `${node.kind} · ${file}:${String(node.selectionLine)}${sites}`;
+  const at = `${node.kind} · ${fileOf(node)}:${String(node.selectionLine)}`;
+  if (callSiteLines.length === 0) {
+    return at;
+  }
+  return `${at} · calls at ${callSiteLines.join(', ')}`;
+}
+
+function fileOf(node: CallHierarchyNodeView): string {
+  if (node.file.kind === 'workspace') {
+    return node.file.path;
+  }
+  return node.file.uri;
 }
 
 declare global {

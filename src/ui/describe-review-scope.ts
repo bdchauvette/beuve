@@ -1,5 +1,7 @@
 import type { InterdiffFallbackView, ReviewScope } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+
 /** A one-line label for what the diff stream shows, e.g. "Interdiff · rebased". */
 export function describeReviewScope(scope: ReviewScope): string {
   switch (scope.kind) {
@@ -17,9 +19,10 @@ export function describeReviewScope(scope: ReviewScope): string {
         }
         case 'rebased': {
           // ADR 0054: the range replay conflicted, so the reviewed commits were replayed one by one.
-          return outcome.replay === 'commit-pairs'
-            ? 'Interdiff · rebased · replayed commit by commit'
-            : 'Interdiff · rebased';
+          if (outcome.replay === 'commit-pairs') {
+            return 'Interdiff · rebased · replayed commit by commit';
+          }
+          return 'Interdiff · rebased';
         }
         case 'fallback': {
           return `Full review · interdiff unavailable: ${fallbackReason(outcome.reason)}`;
@@ -33,7 +36,7 @@ function fallbackReason(reason: InterdiffFallbackView): string {
   switch (reason.kind) {
     case 'conflicts': {
       const count = reason.paths.length;
-      return `the rebase conflicts in ${String(count)} ${count === 1 ? 'file' : 'files'}`;
+      return `the rebase conflicts in ${countNoun(count, 'file')}`;
     }
     case 'git-too-old': {
       return `needs git ${reason.required} (have ${reason.version})`;

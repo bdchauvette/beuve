@@ -44,8 +44,10 @@ export function sheetGutterCssFrom(input: SheetGutterInput): string {
   }
   const matchLines = new Set(input.matchLines);
   for (const line of matchLines) {
-    const tint =
-      line === input.currentMatchLine ? 'var(--beuve-accent-soft)' : 'var(--beuve-scrim-soft)';
+    let tint = 'var(--beuve-scrim-soft)';
+    if (line === input.currentMatchLine) {
+      tint = 'var(--beuve-accent-soft)';
+    }
     rules.push(`${row(line)}{background-image:linear-gradient(${tint},${tint})}`);
   }
   return rules.join('\n');
@@ -59,10 +61,13 @@ function row(line: number): string {
   return `[data-line='${String(line)}']`;
 }
 
-function forEachLine(
-  span: { readonly startLine: number; readonly endLine: number },
-  visit: (line: number) => void,
-): void {
+/** Lines `startLine`–`endLine`, 1-based and inclusive. */
+interface LineSpan {
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+function forEachLine(span: LineSpan, visit: (line: number) => void): void {
   for (let line = span.startLine; line <= span.endLine; line += 1) {
     visit(line);
   }

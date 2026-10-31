@@ -343,7 +343,7 @@ async function checkDiffStream(
       expectNone(
         findings,
         `${view} card ${JSON.stringify(file.path)}: markup its twin ${JSON.stringify(file.twin)} lacks`,
-        extraMarkup([rendered.get(file.path) ?? ''], [twin]),
+        extraMarkup({ hostile: [rendered.get(file.path) ?? ''], benign: [twin] }),
       );
     }
     await expectSafe(run, main, `diff stream (${view})`);

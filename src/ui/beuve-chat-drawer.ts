@@ -14,13 +14,15 @@ import type {
 import './beuve-sheet-code.ts';
 import type { DraftPart, DraftState } from './chat-draft.ts';
 import type { ChatEntry, MessageChatEntry } from './chat-entry.ts';
+import { countNoun } from './count-noun.ts';
 import { describeChatPlaceholder } from './describe-chat-placeholder.ts';
 import { describeChatReview } from './describe-chat-review.ts';
 import type { FindingLabels } from './describe-chat-review.ts';
 import { ActionDelegation } from './action-delegation.ts';
 import { citationMarker } from './citation-marker.ts';
 import type { DelegatedActions } from './delegate-actions.ts';
-import type { MarkdownRenderers } from './create-markdown-nodes.ts';
+import type { CodeBlock, MarkdownRenderers } from './create-markdown-nodes.ts';
+import { draftLength } from './draft-length.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeMention } from './describe-mention.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
@@ -33,7 +35,6 @@ import { isActiveRequest } from './is-active-request.ts';
 import { MarkdownView } from './markdown-view.ts';
 import { planMessageParts } from './plan-message-parts.ts';
 import type { MessageBlock, StepPart } from './plan-message-parts.ts';
-import type { MarkdownBlock } from './markdown-tree.ts';
 import { snippetPathFrom } from './snippet-path-from.ts';
 import { textPartStream } from './text-part-stream.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
@@ -672,7 +673,10 @@ export class BeuveChatDrawer extends LitElement {
   };
 
   private readonly onEditorClick = (event: MouseEvent): void => {
-    const chip = event.target instanceof Element ? event.target.closest('.chip') : undefined;
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const chip = event.target.closest('.chip');
     if (chip instanceof HTMLElement) {
       event.preventDefault();
       this.showChip(chip);
@@ -781,7 +785,10 @@ export class BeuveChatDrawer extends LitElement {
     const nodes = this.editorElement()?.childNodes ?? [];
     for (const node of nodes) {
       const mention = this.chipMentions.get(node);
-      const text = node.nodeName === 'BR' ? '' : (node.textContent ?? '');
+      let text = node.textContent ?? '';
+      if (node.nodeName === 'BR') {
+        text = '';
+      }
       if (mention !== undefined) {
         parts.push({ kind: 'mention', mention });
       } else if (text !== '') {
@@ -804,9 +811,12 @@ export class BeuveChatDrawer extends LitElement {
     }
     this.selectChip(undefined);
     editor.replaceChildren(
-      ...draft.parts.map((part) =>
-        part.kind === 'text' ? document.createTextNode(part.text) : this.chipNode(part.mention),
-      ),
+      ...draft.parts.map((part) => {
+        if (part.kind === 'text') {
+          return document.createTextNode(part.text);
+        }
+        return this.chipNode(part.mention);
+      }),
     );
     this.syncEmpty();
     if (this.shadowRoot?.activeElement === editor) {
@@ -844,10 +854,7 @@ export class BeuveChatDrawer extends LitElement {
         return position;
       }
       if (child === range.startContainer || child.contains(range.startContainer)) {
-        return (
-          position +
-          (child.nodeType === Node.TEXT_NODE ? range.startOffset : range.startOffset > 0 ? 1 : 0)
-        );
+        return position + offsetWithin(child, range.startOffset);
       }
       position += this.nodeLength(child);
     }
@@ -858,7 +865,10 @@ export class BeuveChatDrawer extends LitElement {
     if (this.chipMentions.has(node)) {
       return 1;
     }
-    return node.nodeName === 'BR' ? 0 : (node.textContent ?? '').length;
+    if (node.nodeName === 'BR') {
+      return 0;
+    }
+    return (node.textContent ?? '').length;
   }
 
   private placeCaret(caret: number): void {
@@ -897,9 +907,9 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   private syncEmpty(): void {
-    this.isDraftEmpty = this.readParts().every(
-      (part) => part.kind === 'text' && part.text.trim() === '',
-    );
+    this.isDraftEmpty = this.readParts().every((part) => {
+      return part.kind === 'text' && part.text.trim() === '';
+    });
   }
 
   /** The chip node just before (`-1`) or after (`1`) a collapsed caret, if there is one. */
@@ -910,12 +920,18 @@ export class BeuveChatDrawer extends LitElement {
     if (caret === undefined || editor === undefined || selection?.isCollapsed !== true) {
       return undefined;
     }
-    const target = step === -1 ? caret - 1 : caret;
+    let target = caret;
+    if (step === -1) {
+      target -= 1;
+    }
     let position = 0;
     for (const child of editor.childNodes) {
       const length = this.nodeLength(child);
       if (target >= position && target < position + length) {
-        return this.chipMentions.has(child) && child instanceof HTMLElement ? child : undefined;
+        if (this.chipMentions.has(child) && child instanceof HTMLElement) {
+          return child;
+        }
+        return undefined;
       }
       position += length;
     }
@@ -930,16 +946,23 @@ export class BeuveChatDrawer extends LitElement {
 
   /** ←/→ beside a chip selects it; again moves past it. */
   private stepOverChip(event: KeyboardEvent, chip: HTMLElement | undefined): void {
-    const step = event.key === 'ArrowLeft' ? -1 : 1;
+    let step: -1 | 1 = 1;
+    if (event.key === 'ArrowLeft') {
+      step = -1;
+    }
     const editor = this.editorElement();
     if (chip !== undefined && editor !== undefined) {
       event.preventDefault();
       const index = [...editor.childNodes].indexOf(chip);
-      const before = [...editor.childNodes]
-        .slice(0, index)
-        .reduce((sum, node) => sum + this.nodeLength(node), 0);
+      const before = [...editor.childNodes].slice(0, index).reduce((sum, node) => {
+        return sum + this.nodeLength(node);
+      }, 0);
       this.selectChip(undefined);
-      this.placeCaret(step === -1 ? before : before + 1);
+      if (step === -1) {
+        this.placeCaret(before);
+      } else {
+        this.placeCaret(before + 1);
+      }
       this.rememberCaret();
       return;
     }
@@ -955,19 +978,21 @@ export class BeuveChatDrawer extends LitElement {
   private removeChip(event: KeyboardEvent, chip: HTMLElement | undefined): void {
     const parts = this.readParts();
     const caret = this.caretOffset() ?? 0;
-    const direction = event.key === 'Backspace' ? 'backward' : 'forward';
+    let direction: 'backward' | 'forward' = 'forward';
+    if (event.key === 'Backspace') {
+      direction = 'backward';
+    }
     let next: DraftState | undefined;
     if (chip === undefined) {
-      next =
-        this.selection()?.isCollapsed === true
-          ? removeDraftMention({ parts, caret }, direction)
-          : undefined;
+      if (this.selection()?.isCollapsed === true) {
+        next = removeDraftMention({ parts, caret }, direction);
+      }
     } else {
-      const editor = this.editorElement();
-      const index = editor === undefined ? -1 : [...editor.childNodes].indexOf(chip);
-      const position = [...(editor?.childNodes ?? [])]
-        .slice(0, Math.max(0, index))
-        .reduce((sum, node) => sum + this.nodeLength(node), 0);
+      const nodes = [...(this.editorElement()?.childNodes ?? [])];
+      const index = nodes.indexOf(chip);
+      const position = nodes.slice(0, Math.max(0, index)).reduce((sum, node) => {
+        return sum + this.nodeLength(node);
+      }, 0);
       next = removeDraftMention({ parts, caret: position }, 'forward');
     }
     if (next === undefined) {
@@ -1001,13 +1026,14 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   private isAnswering(): boolean {
-    return this.transcript.some(
-      (entry) =>
+    return this.transcript.some((entry) => {
+      return (
         (entry.kind === 'message' &&
           entry.message.role === 'assistant' &&
           (entry.message.status === 'queued' || isActiveRequest(entry.message))) ||
-        (entry.kind === 'compaction' && entry.status === 'running'),
-    );
+        (entry.kind === 'compaction' && entry.status === 'running')
+      );
+    });
   }
 
   /** Questions whose answer still waits in the queue, to the answer's id. */
@@ -1029,12 +1055,14 @@ export class BeuveChatDrawer extends LitElement {
 
   /** The mention part `partId` of message `messageId` in the transcript. */
   private mentionOf(messageId: string, partId: string | undefined): ChatMentionView | undefined {
-    const entry = this.transcript.find(
-      (candidate): candidate is MessageChatEntry =>
-        candidate.kind === 'message' && candidate.id === messageId,
-    );
+    const entry = this.transcript.find((candidate): candidate is MessageChatEntry => {
+      return candidate.kind === 'message' && candidate.id === messageId;
+    });
     const part = entry?.message.parts.find((candidate) => candidate.id === partId);
-    return part?.kind === 'mention' ? part.mention : undefined;
+    if (part?.kind === 'mention') {
+      return part.mention;
+    }
+    return undefined;
   }
 
   private renderEntry(entry: ChatEntry): TemplateResult {
@@ -1044,29 +1072,32 @@ export class BeuveChatDrawer extends LitElement {
       }
       case 'note': {
         return html`<div class="entry note ${entry.tone}">
-          ${entry.lines.map((line) => html`<p>${line}</p>`)}
+          ${entry.lines.map((line) => {
+            return html`<p>${line}</p>`;
+          })}
         </div>`;
       }
       case 'message': {
         return this.renderMessage(entry);
       }
       case 'compaction': {
-        return entry.status === 'running'
-          ? html`<div class="entry status" role="status">
-              <span>Compacting the conversation…</span>
-              <button
-                type="button"
-                class="action"
-                data-nav
-                data-action="cancel-compaction"
-                title="Stop compacting; nothing is stored"
-              >
-                Cancel
-              </button>
-            </div>`
-          : html`<div class="entry note error">
-              <p>${entry.message ?? 'Compaction failed.'}</p>
-            </div>`;
+        if (entry.status === 'running') {
+          return html`<div class="entry status" role="status">
+            <span>Compacting the conversation…</span>
+            <button
+              type="button"
+              class="action"
+              data-nav
+              data-action="cancel-compaction"
+              title="Stop compacting; nothing is stored"
+            >
+              Cancel
+            </button>
+          </div>`;
+        }
+        return html`<div class="entry note error">
+          <p>${entry.message ?? 'Compaction failed.'}</p>
+        </div>`;
       }
     }
   }
@@ -1079,7 +1110,7 @@ export class BeuveChatDrawer extends LitElement {
     }
     const earlier = this.transcript.slice(0, boundary);
     const later = this.transcript.slice(boundary);
-    const count = `${String(compactedMessages)} ${compactedMessages === 1 ? 'message' : 'messages'}`;
+    const count = countNoun(compactedMessages, 'message');
     return html`
       <button
         type="button"
@@ -1111,11 +1142,17 @@ export class BeuveChatDrawer extends LitElement {
     }
     if (message.role !== 'assistant') {
       // No whitespace around the parts: the question is shown pre-wrapped.
-      const parts = message.parts.map((part) =>
-        part.kind === 'mention' ? this.renderChip(message.id, part.id, part.mention) : textOf(part),
-      );
+      const parts = message.parts.map((part) => {
+        if (part.kind === 'mention') {
+          return this.renderChip(message.id, part);
+        }
+        return textOf(part);
+      });
       const answerId = this.queued.get(message.id);
-      const shown = answerId === undefined ? parts : [...parts, this.renderQueuedTag(answerId)];
+      const shown: (TemplateResult | string)[] = parts;
+      if (answerId !== undefined) {
+        shown.push(this.renderQueuedTag(answerId));
+      }
       return html`<p class="entry you">${shown}</p>`;
     }
     if (message.status === 'queued') {
@@ -1149,10 +1186,13 @@ export class BeuveChatDrawer extends LitElement {
     const { part } = block;
     switch (part.kind) {
       case 'text': {
-        const live = isActiveRequest(message)
-          ? { messageId: message.id, partId: part.id }
-          : undefined;
-        return html`${this.markdownFor(`${message.id}:${part.id}`, part.text, message.citations, live)}`;
+        const source = { source: part.text, citations: message.citations };
+        const key = `${message.id}:${part.id}`;
+        if (isActiveRequest(message)) {
+          const live = { messageId: message.id, partId: part.id };
+          return html`${this.markdownFor(key, { ...source, live })}`;
+        }
+        return html`${this.markdownFor(key, source)}`;
       }
       case 'error': {
         return html`<div class="status error" role="alert">${part.message}</div>`;
@@ -1168,34 +1208,33 @@ export class BeuveChatDrawer extends LitElement {
    * What the model did, in order: open while the request runs, then folded into its one-line
    * label. Tool descriptions say what was looked at, never what was found.
    */
-  private renderSteps(
-    block: Extract<MessageBlock, { kind: 'steps' }>,
-    isOpen: boolean,
-  ): TemplateResult {
+  private renderSteps(block: StepsBlock, isOpen: boolean): TemplateResult {
     const items = html`<ul class="steps-list">
-      ${block.parts.map((part) =>
-        part.kind === 'tool-call'
-          ? html`<li class="step ${part.state}" data-part-id=${part.id}>
-              <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
-              <span class="step-name">${part.description}</span>
-              <span class="visually-hidden">${stepStates[part.state]}</span>
-            </li>`
-          : html`<li class="step reasoning ${part.state}" data-part-id=${part.id}>
-              <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
-              <span class="step-name"
-                >${part.state === 'running' ? 'Thinking' : 'Thought'}${
-                  part.summary === undefined ? '' : `: ${part.summary}`
-                }</span
-              >
-            </li>`,
-      )}
+      ${block.parts.map((part) => {
+        if (part.kind === 'tool-call') {
+          return html`<li class="step ${part.state}" data-part-id=${part.id}>
+            <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
+            <span class="step-name">${part.description}</span>
+            <span class="visually-hidden">${stepStates[part.state]}</span>
+          </li>`;
+        }
+        return html`<li class="step reasoning ${part.state}" data-part-id=${part.id}>
+          <span class="step-mark" aria-hidden="true">${stepMarks[part.state]}</span>
+          <span class="step-name"
+            >${part.state === 'running' ? 'Thinking' : 'Thought'}${
+              part.summary === undefined ? '' : `: ${part.summary}`
+            }</span
+          >
+        </li>`;
+      })}
     </ul>`;
-    return isOpen
-      ? html`<div class="steps">${items}</div>`
-      : html`<details class="steps">
-          <summary>${block.label}</summary>
-          ${items}
-        </details>`;
+    if (isOpen) {
+      return html`<div class="steps">${items}</div>`;
+    }
+    return html`<details class="steps">
+      <summary>${block.label}</summary>
+      ${items}
+    </details>`;
   }
 
   private renderMessageStatus(message: ChatMessageView, activity?: string): TemplateResult {
@@ -1227,17 +1266,19 @@ export class BeuveChatDrawer extends LitElement {
         </div>`;
       }
       case 'done': {
-        return chatTextFrom(message.parts).trim() === ''
-          ? html``
-          : this.renderStageButton(
-              message.id,
-              'Stage this answer as a question in the review dock',
-            );
+        if (chatTextFrom(message.parts).trim() === '') {
+          return html``;
+        }
+        return this.renderStageButton(
+          message,
+          'Stage this answer as a question in the review dock',
+        );
       }
     }
   }
 
-  private renderStageButton(messageId: string, title: string): TemplateResult {
+  private renderStageButton(message: ChatMessageView, title: string): TemplateResult {
+    const messageId = message.id;
     const isStaged = this.stagedMessageIds.has(messageId);
     return html`<div class="status">
       <button
@@ -1255,11 +1296,10 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   private renderSummary(message: ChatMessageView): TemplateResult {
-    const text = this.markdownFor(
-      `${message.id}:summary`,
-      chatTextFrom(message.parts),
-      message.citations,
-    );
+    const text = this.markdownFor(`${message.id}:summary`, {
+      source: chatTextFrom(message.parts),
+      citations: message.citations,
+    });
     return html`<div class="entry summary" role="group" aria-label="Conversation summary">
       <div
         class="label"
@@ -1271,7 +1311,8 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
-  private renderChip(messageId: string, partId: string, mention: ChatMentionView): TemplateResult {
+  private renderChip(messageId: string, part: MentionPart): TemplateResult {
+    const { mention } = part;
     const { label, title } = describeMention(mention);
     return html`<button
       type="button"
@@ -1279,7 +1320,7 @@ export class BeuveChatDrawer extends LitElement {
       data-nav
       data-action="mention"
       data-message-id=${messageId}
-      data-part-id=${partId}
+      data-part-id=${part.id}
       data-side=${mention.side}
       title="${title} (show it)"
     >
@@ -1294,12 +1335,7 @@ export class BeuveChatDrawer extends LitElement {
    * a streamed part once its message ends included, is shown whole through the same parser with
    * a pill for each of `citations`; an unchanged render is skipped.
    */
-  private markdownFor(
-    key: string,
-    source: string,
-    citations: readonly ChatCitationView[],
-    live?: { readonly messageId: string; readonly partId: string },
-  ): HTMLElement {
+  private markdownFor(key: string, { source, citations, live }: MarkdownSource): HTMLElement {
     this.renderedMarkdown.add(key);
     const entry = this.markdownViews.get(key) ?? this.createMarkdownEntry(key);
     const subscribe = this.subscribeChatStream;
@@ -1325,10 +1361,7 @@ export class BeuveChatDrawer extends LitElement {
       shown.citations !== citations ||
       shown.diffPaths !== this.diffPaths
     ) {
-      entry.view.show(
-        source,
-        this.markdownRenderers(citations, live === undefined ? 'final' : 'streaming'),
-      );
+      entry.view.show(source, this.markdownRenderers(citations, renderModeOf(live)));
       entry.shown = { source, citations, diffPaths: this.diffPaths };
     }
     return entry.view.element;
@@ -1355,7 +1388,11 @@ export class BeuveChatDrawer extends LitElement {
     citations: readonly ChatCitationView[],
     mode: 'final' | 'streaming',
   ): MarkdownRenderers {
-    const known = new Map(citations.map((citation) => [citationMarker(citation), citation]));
+    const known = new Map(
+      citations.map((citation) => {
+        return [citationMarker(citation), citation];
+      }),
+    );
     return {
       marker: (text): Node => {
         const citation = known.get(text);
@@ -1421,10 +1458,20 @@ export class BeuveChatDrawer extends LitElement {
   private renderReviewAnswer(message: ChatMessageView, review: ChatReviewView): TemplateResult {
     const labels = describeChatReview(review);
     const blocks = planMessageParts(message.parts);
-    const findings = message.parts.flatMap((part) => (part.kind === 'finding' ? part.finding : []));
+    const findings = message.parts.flatMap((part) => {
+      if (part.kind === 'finding') {
+        return part.finding;
+      }
+      return [];
+    });
     return html`<div class="entry answer done" role="group" aria-label="Review">
       <div class="review-head">Review · ${labels.summary}</div>
-      ${blocks.flatMap((block) => (block.kind === 'steps' ? [this.renderSteps(block, false)] : []))}
+      ${blocks.flatMap((block) => {
+        if (block.kind === 'steps') {
+          return [this.renderSteps(block, false)];
+        }
+        return [];
+      })}
       ${
         findings.length === 0
           ? html`<p class="muted">
@@ -1434,9 +1481,14 @@ export class BeuveChatDrawer extends LitElement {
           : html`<ol class="findings">
               ${findings.map((index) => {
                 const finding = review.findings[index];
-                return finding === undefined
-                  ? nothing
-                  : this.renderFinding(message.id, index, finding, labels.findings[index]);
+                if (finding === undefined) {
+                  return nothing;
+                }
+                return this.renderFinding(message.id, {
+                  index,
+                  finding,
+                  labels: labels.findings[index],
+                });
               })}
             </ol>`
       }
@@ -1446,9 +1498,7 @@ export class BeuveChatDrawer extends LitElement {
 
   private renderFinding(
     messageId: string,
-    index: number,
-    finding: ChatFindingView,
-    labels: FindingLabels | undefined,
+    { index, finding, labels }: ShownFinding,
   ): TemplateResult {
     const citation = {
       path: finding.path,
@@ -1466,8 +1516,14 @@ export class BeuveChatDrawer extends LitElement {
           ${finding.check === 'confirmed' ? '✓ confirmed' : labels?.check}
         </span>
       </div>
-      <div class="finding-title">${this.markdownFor(`${key}:title`, finding.title, [])}</div>
-      ${finding.body.trim() === '' ? nothing : this.markdownFor(`${key}:body`, finding.body, [])}
+      <div class="finding-title">
+        ${this.markdownFor(`${key}:title`, { source: finding.title, citations: [] })}
+      </div>
+      ${
+        finding.body.trim() === ''
+          ? nothing
+          : this.markdownFor(`${key}:body`, { source: finding.body, citations: [] })
+      }
       <div class="status">
         ${this.renderPill(citation)}
         <button
@@ -1488,11 +1544,10 @@ export class BeuveChatDrawer extends LitElement {
 
   /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
   private renderAbstract(message: ChatMessageView): TemplateResult {
-    const text = this.markdownFor(
-      `${message.id}:abstract`,
-      chatTextFrom(message.parts),
-      message.citations,
-    );
+    const text = this.markdownFor(`${message.id}:abstract`, {
+      source: chatTextFrom(message.parts),
+      citations: message.citations,
+    });
     return html`<div class="entry abstract" role="group" aria-label="Summary of the change">
       <div
         class="label"
@@ -1501,14 +1556,14 @@ export class BeuveChatDrawer extends LitElement {
         Summary of the change · from the diff
       </div>
       ${text}
-      ${this.renderStageButton(message.id, 'Stage this summary as a comment in the review dock')}
+      ${this.renderStageButton(message, 'Stage this summary as a comment in the review dock')}
     </div>`;
   }
 
   private renderQueue(): TemplateResult | typeof nothing {
-    const waiting = this.transcript.filter(
-      (entry) => entry.kind === 'message' && entry.message.status === 'queued',
-    ).length;
+    const waiting = this.transcript.filter((entry) => {
+      return entry.kind === 'message' && entry.message.status === 'queued';
+    }).length;
     if (waiting === 0) {
       return nothing;
     }
@@ -1531,7 +1586,9 @@ export class BeuveChatDrawer extends LitElement {
     await this.updateComplete;
     const key = `${messageId}:${String(finding)}`;
     const item = [...this.renderRoot.querySelectorAll<HTMLElement>('[data-finding]')].find(
-      (element) => element.dataset['finding'] === key,
+      (element) => {
+        return element.dataset['finding'] === key;
+      },
     );
     if (item === undefined) {
       return;
@@ -1552,11 +1609,7 @@ export class BeuveChatDrawer extends LitElement {
   setDraft(text: string, mentions: readonly ChatMentionView[]): void {
     void this.updateComplete.then(() => {
       const parts = draftPartsFrom(text, mentions);
-      const caret = parts.reduce(
-        (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
-        0,
-      );
-      this.renderDraft({ parts, caret });
+      this.renderDraft({ parts, caret: draftLength(parts) });
       this.focus();
     });
   }
@@ -1569,9 +1622,15 @@ export class BeuveChatDrawer extends LitElement {
   async addMention(mention: ChatMentionView): Promise<'added' | 'duplicate' | 'full'> {
     await this.updateComplete;
     const parts = this.readParts();
-    const mentions = parts.flatMap((part) => (part.kind === 'mention' ? [part.mention] : []));
-    const key = (item: ChatMentionView): string =>
-      [item.path, item.side, item.startLine ?? '', item.endLine ?? '', item.sha].join('\0');
+    const mentions = parts.flatMap((part) => {
+      if (part.kind === 'mention') {
+        return [part.mention];
+      }
+      return [];
+    });
+    const key = (item: ChatMentionView): string => {
+      return [item.path, item.side, item.startLine ?? '', item.endLine ?? '', item.sha].join('\0');
+    };
     if (mentions.some((item) => key(item) === key(mention))) {
       this.focus();
       return 'duplicate';
@@ -1580,10 +1639,7 @@ export class BeuveChatDrawer extends LitElement {
       this.focus();
       return 'full';
     }
-    const length = parts.reduce(
-      (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
-      0,
-    );
+    const length = draftLength(parts);
     const caret = Math.min(this.savedCaret ?? length, length);
     const next = insertDraftMention({ parts, caret }, mention);
     this.renderDraft(next);
@@ -1603,10 +1659,7 @@ export class BeuveChatDrawer extends LitElement {
     if (this.shadowRoot?.activeElement !== editor) {
       editor.focus(options);
     }
-    const length = this.readParts().reduce(
-      (sum, part) => sum + (part.kind === 'text' ? part.text.length : 1),
-      0,
-    );
+    const length = draftLength(this.readParts());
     if (this.caretOffset() === undefined || this.savedCaret !== undefined) {
       this.placeCaret(Math.min(this.savedCaret ?? length, length));
     }
@@ -1714,7 +1767,10 @@ const stepStates: Readonly<Record<StepPart['state'], string>> = {
 
 /** A question's text part, or nothing for any other part (questions hold text and mentions). */
 function textOf(part: ChatPartView): string {
-  return part.kind === 'text' ? part.text : '';
+  if (part.kind === 'text') {
+    return part.text;
+  }
+  return '';
 }
 
 /** The id of the summary the transcript folds at, to unfold afresh when it changes. */
@@ -1740,6 +1796,47 @@ function startedLabel(message: ChatMessageView): string {
 }
 
 /** A rendered Markdown text of the transcript. */
+type MentionPart = Extract<ChatPartView, { kind: 'mention' }>;
+type StepsBlock = Extract<MessageBlock, { kind: 'steps' }>;
+
+/** The text part of a running request, whose deltas stream in. */
+interface LivePart {
+  readonly messageId: string;
+  readonly partId: string;
+}
+
+/** Markdown to show, the citations its markers may name, and the part it streams from. */
+interface MarkdownSource {
+  readonly source: string;
+  readonly citations: readonly ChatCitationView[];
+  readonly live?: LivePart;
+}
+
+/** One finding of a `/review` answer, its place in the answer, and its labels. */
+interface ShownFinding {
+  readonly index: number;
+  readonly finding: ChatFindingView;
+  readonly labels: FindingLabels | undefined;
+}
+
+function renderModeOf(live: LivePart | undefined): 'final' | 'streaming' {
+  if (live === undefined) {
+    return 'final';
+  }
+  return 'streaming';
+}
+
+/** The caret's offset inside `child`: within a text node, else before (0) or after (1) it. */
+function offsetWithin(child: Node, offset: number): number {
+  if (child.nodeType === Node.TEXT_NODE) {
+    return offset;
+  }
+  if (offset > 0) {
+    return 1;
+  }
+  return 0;
+}
+
 interface MarkdownEntry {
   readonly view: MarkdownView;
   /** Stops the text part's stream; set while it streams, and after, until the message ends. */
@@ -1763,7 +1860,7 @@ function markerNode(text: string): Node {
 }
 
 /** A fenced block: highlighted once closed (ADR 0025's Alabaster themes), plain while open. */
-function codeBlockNode(block: Extract<MarkdownBlock, { kind: 'code' }>): Element {
+function codeBlockNode(block: CodeBlock): Element {
   if (!block.closed) {
     const pre = document.createElement('pre');
     pre.className = 'open';

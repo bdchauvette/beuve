@@ -1,11 +1,16 @@
+/** The list's cursor row and how many rows it has. */
+export interface ListCursor {
+  readonly cursor: number;
+  readonly count: number;
+}
+
 /**
  * The row a key moves the commit-pair list's cursor to: `ArrowDown` and `ArrowUp` step
  * (clamped), `Home`/`End` jump. `undefined` for any other key, so the caller leaves it alone.
  */
 export function moveCommitPairCursor(
-  cursor: number,
-  count: number,
   key: string,
+  { cursor, count }: ListCursor,
 ): number | undefined {
   if (count === 0) {
     return undefined;

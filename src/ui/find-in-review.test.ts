@@ -9,12 +9,10 @@ import { createDiffFileView } from './testing/create-diff-file-view.ts';
 
 function files(): DiffFileView[] {
   return [
-    createDiffFileView(
-      'src/a.ts',
-      [' const total = 1;', '-let Total = 2;', '+const total = 3;'],
-      10,
-    ),
-    createDiffFileView('src/b.ts', ['+total total', ' unchanged'], 1),
+    createDiffFileView('src/a.ts', [' const total = 1;', '-let Total = 2;', '+const total = 3;'], {
+      start: 10,
+    }),
+    createDiffFileView('src/b.ts', ['+total total', ' unchanged']),
   ];
 }
 
@@ -31,9 +29,11 @@ describe('findInReview', () => {
 
   test('matches case only when asked', ({ expect }) => {
     const hits = findInReview(files(), 'Total', { isCaseSensitive: true });
-    expect(hits.map((hit) => [hit.path, hit.side, hit.line])).toStrictEqual([
-      ['src/a.ts', 'base', 11],
-    ]);
+    expect(
+      hits.map((hit) => {
+        return [hit.path, hit.side, hit.line];
+      }),
+    ).toStrictEqual([['src/a.ts', 'base', 11]]);
   });
 
   test('ignores the git and hunk headers', ({ expect }) => {
@@ -60,7 +60,11 @@ describe('findInReview', () => {
         '',
       ].join('\n'),
     };
-    expect(findInReview([file], 'hit').map((hit) => [hit.side, hit.line])).toStrictEqual([
+    expect(
+      findInReview([file], 'hit').map((hit) => {
+        return [hit.side, hit.line];
+      }),
+    ).toStrictEqual([
       ['head', 2],
       ['head', 40],
       ['head', 41],

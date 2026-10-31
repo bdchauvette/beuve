@@ -1,15 +1,17 @@
+/** Which item moves, which way, and which items may trade places with it. */
+export interface UraMove {
+  readonly id: string;
+  readonly step: 1 | -1;
+  readonly movable: ReadonlySet<string>;
+}
+
 /**
  * The dock order after moving `id` one place (`step` is 1 or -1) among the `movable` items: it
  * swaps with the nearest movable neighbour in that direction, so staged items reorder around
  * withdrawn ones without disturbing them. The order is returned unchanged at either end, or when
  * `id` isn't movable.
  */
-export function moveUraItem(
-  order: readonly string[],
-  id: string,
-  step: 1 | -1,
-  movable: ReadonlySet<string>,
-): string[] {
+export function moveUraItem(order: readonly string[], { id, step, movable }: UraMove): string[] {
   const moved = [...order];
   const from = moved.indexOf(id);
   if (from === -1 || !movable.has(id)) {

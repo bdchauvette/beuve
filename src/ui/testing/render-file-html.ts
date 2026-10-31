@@ -14,8 +14,11 @@ export async function renderFileHtml(file: FileContents): Promise<readonly strin
   });
   try {
     const result = await renderer.asyncRender(file);
-    const header = result.headerAST === undefined ? [] : [hastToHtml(result.headerAST)];
-    return [...header, hastToHtml(renderer.renderCodeAST(result))];
+    const code = hastToHtml(renderer.renderCodeAST(result));
+    if (result.headerAST === undefined) {
+      return [code];
+    }
+    return [hastToHtml(result.headerAST), code];
   } finally {
     renderer.cleanUp();
   }

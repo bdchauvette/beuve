@@ -10,7 +10,7 @@ import type {
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
-import type { CommandId } from '#contract/command-catalog.ts';
+import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
 
 import './beuve-patch-preview.ts';
 import { ActionDelegation } from './action-delegation.ts';
@@ -363,7 +363,10 @@ export class BeuveUraDock extends LitElement {
       this.moveCursor(step);
       return;
     }
-    const key = event.altKey ? `Alt+${event.key}` : event.key;
+    let key = event.key;
+    if (event.altKey) {
+      key = `Alt+${event.key}`;
+    }
     const id = inPlaceKeys[key];
     if (id === undefined) {
       return;
@@ -404,7 +407,9 @@ export class BeuveUraDock extends LitElement {
       new ActionDelegation(this, {
         click: {
           item: withPayload(
-            ({ itemId }) => this.itemOf(itemId),
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
             (found): void => {
               this.cursor = this.ordered().indexOf(found);
             },
@@ -417,7 +422,9 @@ export class BeuveUraDock extends LitElement {
             this.closeEditor();
           },
           'edit-suggestion': withPayload(
-            ({ itemId }) => this.itemOf(itemId),
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
             (found, event): void => {
               event.stopPropagation();
               this.closeEditor();
@@ -425,14 +432,18 @@ export class BeuveUraDock extends LitElement {
             },
           ),
           'remove-suggestion': withPayload(
-            ({ itemId }) => this.itemOf(itemId),
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
             (found, event): void => {
               event.stopPropagation();
               this.emit('beuve-ura-update', { itemId: found.id, suggestedPatch: '' });
             },
           ),
           export: withPayload(
-            ({ target }) => exports.find((entry) => entry.target === target)?.target,
+            ({ target }) => {
+              return exports.find((entry) => entry.target === target)?.target;
+            },
             (target): void => {
               this.exportTo(target);
             },
@@ -440,7 +451,9 @@ export class BeuveUraDock extends LitElement {
         },
         dblclick: {
           item: withPayload(
-            ({ itemId }) => this.itemOf(itemId),
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
             (found): void => {
               this.emit('beuve-ura-jump', { item: found });
             },
@@ -448,7 +461,9 @@ export class BeuveUraDock extends LitElement {
         },
         submit: {
           editor: withPayload(
-            ({ itemId }) => this.itemOf(itemId),
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
             (found, event, form): void => {
               event.preventDefault();
               this.saveEditor(found, form as HTMLFormElement);
@@ -485,12 +500,21 @@ export class BeuveUraDock extends LitElement {
 
   /** Open in Editor: the item's file at its current first line (line 1 for file notes and outdated items). */
   private openInEditor(item: UraItemView): void {
-    const target = item.placement.kind === 'current' ? item.placement.anchor : item.anchor;
+    const { placement } = item;
+    if (placement.kind !== 'current') {
+      if (item.anchor.kind !== 'change') {
+        this.emit('beuve-open-editor', { path: item.anchor.path, line: 1 });
+      }
+      return;
+    }
+    const target = placement.anchor;
     if (target.kind === 'change') {
       return;
     }
-    const line =
-      target.kind === 'lines' && item.placement.kind === 'current' ? target.startLine : 1;
+    let line = 1;
+    if (target.kind === 'lines') {
+      line = target.startLine;
+    }
     this.emit('beuve-open-editor', { path: target.path, line });
   }
 
@@ -503,7 +527,7 @@ export class BeuveUraDock extends LitElement {
       this.items.filter((entry) => entry.status.kind === 'staged').map((entry) => entry.id),
     );
     const order = this.items.map((entry) => entry.id);
-    const moved = moveUraItem(order, item.id, step, staged);
+    const moved = moveUraItem(order, { id: item.id, step, movable: staged });
     if (moved.every((id, index) => id === order[index])) {
       return;
     }
@@ -516,10 +540,21 @@ export class BeuveUraDock extends LitElement {
   }
 
   private toggleEditor(item: UraItemView): void {
-    this.editingId = this.editingId === item.id ? undefined : item.id;
-    if (this.editingId !== undefined) {
-      void this.focusEditor();
+    if (this.editingId === item.id) {
+      this.editingId = undefined;
+      return;
     }
+    this.editingId = item.id;
+    void this.focusEditor();
+  }
+
+  /** Withdraw or Mark Addressed, or back to staged when the item is that already. */
+  private toggleStatus(item: UraItemView, status: 'withdrawn' | 'addressed'): void {
+    if (item.status.kind === status) {
+      this.transition(item, 'staged');
+      return;
+    }
+    this.transition(item, status);
   }
 
   private async focusEditor(): Promise<void> {
@@ -546,7 +581,10 @@ export class BeuveUraDock extends LitElement {
     const data = new FormData(form);
     const field = (name: string): string => {
       const value = data.get(name);
-      return typeof value === 'string' ? value : '';
+      if (typeof value === 'string') {
+        return value;
+      }
+      return '';
     };
     const title = field('title').trim();
     if (title === '') {
@@ -568,7 +606,10 @@ export class BeuveUraDock extends LitElement {
   }
 
   private chooseVerdict(value: string): void {
-    const chosen = value === '' ? undefined : (value as UraVerdictView);
+    let chosen: UraVerdictView | undefined;
+    if (value !== '') {
+      chosen = value as UraVerdictView;
+    }
     const resolved = resolveDockVerdict(chosen, this.derivedVerdict, this.blockers());
     this.verdictRefusal = resolved.refusal ?? '';
     if (resolved.refusal === undefined) {
@@ -588,12 +629,7 @@ export class BeuveUraDock extends LitElement {
   private renderItem(item: UraItemView, index: number): TemplateResult {
     const labels = describeUraItem(item);
     const isDone = item.status.kind !== 'staged';
-    const status =
-      item.status.kind === 'withdrawn'
-        ? 'withdrawn'
-        : item.status.kind === 'addressed'
-          ? 'addressed'
-          : '';
+    const status = statusText(item);
     return html`<li
       class="${index === this.cursor ? 'cursor' : ''} ${isDone ? 'done' : ''}"
       data-action="item"
@@ -641,12 +677,11 @@ export class BeuveUraDock extends LitElement {
     return html`<form class="editor" data-action="editor" data-item-id=${item.id}>
       <div class="row">
         <select name="severity" aria-label="Severity">
-          ${severities.map(
-            (severity) =>
-              html`<option value=${severity} ?selected=${severity === item.severity}>
-                ${severity}
-              </option>`,
-          )}
+          ${severities.map((severity) => {
+            return html`<option value=${severity} ?selected=${severity === item.severity}>
+              ${severity}
+            </option>`;
+          })}
         </select>
         <input name="title" aria-label="Title" maxlength="200" .value=${item.title} />
       </div>
@@ -708,37 +743,29 @@ export class BeuveUraDock extends LitElement {
           </option>
           ${(['approve', 'comment', 'request-changes'] as const)
             .filter((value) => value !== this.derivedVerdict)
-            .map(
-              (value) =>
-                html`<option value=${value} ?selected=${this.chosenVerdict === value}>
-                  ${verdictLabels[value]}
-                </option>`,
-            )}
+            .map((value) => {
+              return html`<option value=${value} ?selected=${this.chosenVerdict === value}>
+                ${verdictLabels[value]}
+              </option>`;
+            })}
         </select>
       </label>
-      ${
-        this.verdictRefusal === ''
-          ? this.verdictNotice === ''
-            ? nothing
-            : html`<p class="note" role="status">${this.verdictNotice}</p>`
-          : html`<p class="note error" role="alert">${this.verdictRefusal}</p>`
-      }
+      ${this.renderVerdictNote()}
       ${this.github === undefined ? nothing : this.renderGithub(this.github)}
       <div class="exports">
         ${exports
           .filter((entry) => entry.target !== 'github' || this.github === undefined)
-          .map(
-            (entry) =>
-              html`<button
-                type="button"
-                title=${entry.title}
-                ?disabled=${!this.hasSession || this.exporting}
-                data-action="export"
-                data-target=${entry.target}
-              >
-                ${entry.label}
-              </button>`,
-          )}
+          .map((entry) => {
+            return html`<button
+              type="button"
+              title=${entry.title}
+              ?disabled=${!this.hasSession || this.exporting}
+              data-action="export"
+              data-target=${entry.target}
+            >
+              ${entry.label}
+            </button>`;
+          })}
       </div>
       ${
         this.notice === undefined
@@ -865,7 +892,18 @@ export class BeuveUraDock extends LitElement {
 
   private saveKey(): string {
     const platform = keyPlatformOf(this.platform);
-    return displayAccelerator(platform === 'mac' ? 'Cmd+Return' : 'Ctrl+Return', platform);
+    return displayAccelerator(saveAccelerators[platform], platform);
+  }
+
+  /** Why the chosen verdict was refused, else what changed it. */
+  private renderVerdictNote(): TemplateResult {
+    if (this.verdictRefusal !== '') {
+      return html`<p class="note error" role="alert">${this.verdictRefusal}</p>`;
+    }
+    if (this.verdictNotice !== '') {
+      return html`<p class="note" role="status">${this.verdictNotice}</p>`;
+    }
+    return html``;
   }
 
   /** Runs a Review ▸ Note command, or Open in Editor, on the item under the cursor. */
@@ -876,10 +914,15 @@ export class BeuveUraDock extends LitElement {
       case 'dock-move': {
         return true;
       }
-      case 'dock-move-up':
+      case 'dock-move-up': {
+        if (current !== undefined) {
+          this.move(current, -1);
+        }
+        return true;
+      }
       case 'dock-move-down': {
         if (current !== undefined) {
-          this.move(current, id === 'dock-move-down' ? 1 : -1);
+          this.move(current, 1);
         }
         return true;
       }
@@ -903,13 +946,13 @@ export class BeuveUraDock extends LitElement {
       }
       case 'dock-withdraw': {
         if (current !== undefined) {
-          this.transition(current, current.status.kind === 'withdrawn' ? 'staged' : 'withdrawn');
+          this.toggleStatus(current, 'withdrawn');
         }
         return true;
       }
       case 'dock-addressed': {
         if (current !== undefined) {
-          this.transition(current, current.status.kind === 'addressed' ? 'staged' : 'addressed');
+          this.toggleStatus(current, 'addressed');
         }
         return true;
       }
@@ -996,6 +1039,19 @@ function isTextEntry(event: KeyboardEvent): boolean {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
+}
+
+const saveAccelerators: Readonly<Record<KeyPlatform, string>> = {
+  mac: 'Cmd+Return',
+  linux: 'Ctrl+Return',
+};
+
+/** The status word on a finished item; none on a staged one. */
+function statusText(item: UraItemView): string {
+  if (item.status.kind === 'withdrawn' || item.status.kind === 'addressed') {
+    return item.status.kind;
+  }
+  return '';
 }
 
 declare global {

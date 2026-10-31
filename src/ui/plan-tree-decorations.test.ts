@@ -19,11 +19,16 @@ function snapshot(): FunctionSnapshotView {
   return { startLine: 1, endLine: 3, metrics: metrics() };
 }
 
+/** How a function changed, how complex it ranks, and whether the diff shows it. */
+interface FunctionShape {
+  readonly change: 'added' | 'modified' | 'unchanged';
+  readonly percentile: number;
+  readonly where?: 'in-diff' | 'outside-diff';
+}
+
 function fn(
   name: string,
-  change: 'added' | 'modified' | 'unchanged',
-  percentile: number,
-  where: 'in-diff' | 'outside-diff' = 'in-diff',
+  { change, percentile, where = 'in-diff' }: FunctionShape,
 ): FunctionImpactView {
   const common = {
     name,
@@ -32,7 +37,10 @@ function fn(
     head: snapshot(),
     percentile,
   };
-  return change === 'added' ? { ...common, change } : { ...common, change, base: snapshot() };
+  if (change === 'added') {
+    return { ...common, change };
+  }
+  return { ...common, change, base: snapshot() };
 }
 
 function analyzed(path: string, functions: FunctionImpactView[]): FileImpactView {
@@ -105,12 +113,12 @@ describe('planTreeDecorations', () => {
     const impact = impactOf(
       [
         analyzed('web/a.ts', [
-          fn('x', 'added', 40),
-          fn('y', 'unchanged', 99),
-          fn('z', 'modified', 70, 'outside-diff'),
+          fn('x', { change: 'added', percentile: 40 }),
+          fn('y', { change: 'unchanged', percentile: 99 }),
+          fn('z', { change: 'modified', percentile: 70, where: 'outside-diff' }),
         ]),
-        analyzed('web/b.ts', [fn('w', 'modified', 96.4)]),
-        analyzed('top.ts', [fn('v', 'added', 10)]),
+        analyzed('web/b.ts', [fn('w', { change: 'modified', percentile: 96.4 })]),
+        analyzed('top.ts', [fn('v', { change: 'added', percentile: 10 })]),
         { status: 'skipped', path: 'img.png', reason: 'binary' },
       ],
       [finding(96.4), finding(80)],

@@ -107,13 +107,16 @@ export class BeuveFlowPortal extends LitElement {
     if (flow === undefined) {
       return html``;
     }
-    const target =
-      flow.status === 'ready' && flow.graph.name !== ''
-        ? html`<code>${flow.graph.name}</code>`
-        : 'the function';
     return html`
       <div class="heading" role="heading" aria-level="3">
-        <span>Control flow of ${target}</span>
+        <span
+          >Control flow of
+          ${
+            flow.status === 'ready' && flow.graph.name !== ''
+              ? html`<code>${flow.graph.name}</code>`
+              : 'the function'
+          }</span
+        >
         <span class="spacer"></span>
         <button
           type="button"

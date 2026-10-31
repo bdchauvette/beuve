@@ -70,10 +70,14 @@ const groupOrder: readonly PaletteGroup[] = ['open', 'files', 'review', 'command
 export function planPalette(input: string, sources: PaletteSources): PaletteEntry[] {
   const prefix = input.trimStart().charAt(0);
   const only = palettePrefixes[prefix];
-  const text = (only === undefined ? input : input.trimStart().slice(1)).trim();
-  const groups = only === undefined ? groupOrder : [only];
-  const limit = only === undefined ? mixedLimit : groupLimit;
-  return groups.flatMap((group) => rank(candidates(group, text, sources), text, limit));
+  if (only === undefined) {
+    const text = input.trim();
+    return groupOrder.flatMap((group) => {
+      return rank(candidates(group, text, sources), text, mixedLimit);
+    });
+  }
+  const text = input.trimStart().slice(1).trim();
+  return rank(candidates(only, text, sources), text, groupLimit);
 }
 
 interface Candidate {
@@ -90,20 +94,29 @@ function rank(candidates: readonly Candidate[], text: string, limit: number): Pa
       if (candidate.pinned === true) {
         return { entry: { ...candidate.entry, matches: [] }, score: Infinity, order };
       }
-      const match = fuzzyMatch(text, candidate.searchText ?? candidate.entry.title);
+      const match = fuzzyMatch({
+        query: text,
+        text: candidate.searchText ?? candidate.entry.title,
+      });
+      if (match === undefined) {
+        return;
+      }
       const isTitle =
         candidate.searchText === undefined || candidate.searchText === candidate.entry.title;
-      return match === undefined
-        ? undefined
-        : {
-            entry: { ...candidate.entry, matches: isTitle ? match.indices : [] },
-            score: match.score,
-            order,
-          };
+      let matches: readonly number[] = [];
+      if (isTitle) {
+        matches = match.indices;
+      }
+      return { entry: { ...candidate.entry, matches }, score: match.score, order };
     })
     .filter((scoredEntry) => scoredEntry !== undefined);
   return scored
-    .toSorted((a, b) => (text === '' ? a.order - b.order : b.score - a.score || a.order - b.order))
+    .toSorted((a, b) => {
+      if (text === '') {
+        return a.order - b.order;
+      }
+      return b.score - a.score || a.order - b.order;
+    })
     .slice(0, limit)
     .map(({ entry }) => entry);
 }
@@ -132,13 +145,7 @@ function commandCandidates(
   return commands
     .filter((command) => command.run.kind !== 'none' && command.id !== 'palette')
     .map((command) => {
-      const [key] = acceleratorsFor(command, platform);
-      const keys =
-        key === undefined
-          ? command.slash === undefined
-            ? []
-            : [command.slash]
-          : [displayAccelerator(key, platform)];
+      const keys = commandKeys(command, platform);
       const menu = command.menu?.menu;
       return {
         entry: {
@@ -153,6 +160,18 @@ function commandCandidates(
     });
 }
 
+/** The command's first shortcut, else its slash command, as the palette row shows it. */
+function commandKeys(command: CommandDefinition, platform: KeyPlatform): string[] {
+  const [key] = acceleratorsFor(command, platform);
+  if (key !== undefined) {
+    return [displayAccelerator(key, platform)];
+  }
+  if (command.slash !== undefined) {
+    return [command.slash];
+  }
+  return [];
+}
+
 function openCandidates(text: string, sessions: readonly SessionSummary[]): Candidate[] {
   const parsed = parseOpenQuery(text);
   const pasted: Candidate[] = [];
@@ -164,7 +183,7 @@ function openCandidates(text: string, sessions: readonly SessionSummary[]): Cand
         id: 'open:pasted-pull',
         group: 'open',
         title: `Open ${parsed.owner}/${parsed.repo}#${String(parsed.number)}`,
-        detail: repoPath === undefined ? 'choose the local clone' : `into ${shortenPath(repoPath)}`,
+        detail: cloneDetail(repoPath),
         action: { kind: 'open-pull', ref: parsed.ref, ...(repoPath !== undefined && { repoPath }) },
       },
     });
@@ -178,6 +197,9 @@ function openCandidates(text: string, sessions: readonly SessionSummary[]): Cand
         action: { kind: 'open-step', step: 'local', path: parsed.path },
       },
     });
+  }
+  if (parsed.kind === 'pull-request' || parsed.kind === 'path') {
+    return pasted;
   }
   const recent = sessions
     .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -202,7 +224,14 @@ function openCandidates(text: string, sessions: readonly SessionSummary[]): Cand
       },
     },
   ];
-  return parsed.kind === 'pull-request' || parsed.kind === 'path' ? pasted : [...recent, ...steps];
+  return [...recent, ...steps];
+}
+
+function cloneDetail(repoPath: string | undefined): string {
+  if (repoPath === undefined) {
+    return 'choose the local clone';
+  }
+  return `into ${shortenPath(repoPath)}`;
 }
 
 function sessionCandidate(session: SessionSummary): Candidate {
@@ -239,41 +268,54 @@ function fileCandidates(
   trackedPaths: readonly string[],
 ): Candidate[] {
   const changed = new Set(files.map((file) => file.path));
-  const changedCandidates = files.map((file): Candidate => ({
-    searchText: file.path,
-    entry: {
-      id: `file:${file.path}`,
-      group: 'files',
-      title: file.path,
-      detail: `${file.status} · +${String(file.additions)} −${String(file.deletions)}`,
-      action: { kind: 'file', path: file.path, isChanged: true },
-    },
-  }));
+  const changedCandidates = files.map((file): Candidate => {
+    return {
+      searchText: file.path,
+      entry: {
+        id: `file:${file.path}`,
+        group: 'files',
+        title: file.path,
+        detail: `${file.status} · +${String(file.additions)} −${String(file.deletions)}`,
+        action: { kind: 'file', path: file.path, isChanged: true },
+      },
+    };
+  });
   const others = trackedPaths
     .filter((path) => !changed.has(path))
-    .map((path): Candidate => ({
-      searchText: path,
-      entry: {
-        id: `file:${path}`,
-        group: 'files',
-        title: path,
-        detail: 'unchanged',
-        action: { kind: 'file', path, isChanged: false },
-      },
-    }));
+    .map((path): Candidate => {
+      return {
+        searchText: path,
+        entry: {
+          id: `file:${path}`,
+          group: 'files',
+          title: path,
+          detail: 'unchanged',
+          action: { kind: 'file', path, isChanged: false },
+        },
+      };
+    });
   return [...changedCandidates, ...others];
 }
 
 function reviewCandidates(items: readonly UraItemView[]): Candidate[] {
   return items
     .filter((item) => item.status.kind === 'staged')
-    .map((item): Candidate => ({
-      entry: {
-        id: `ura:${item.id}`,
-        group: 'review',
-        title: item.title === '' ? '(untitled note)' : item.title,
-        detail: `staged ${item.severity}`,
-        action: { kind: 'ura-item', itemId: item.id },
-      },
-    }));
+    .map((item): Candidate => {
+      return {
+        entry: {
+          id: `ura:${item.id}`,
+          group: 'review',
+          title: noteTitle(item),
+          detail: `staged ${item.severity}`,
+          action: { kind: 'ura-item', itemId: item.id },
+        },
+      };
+    });
+}
+
+function noteTitle(item: UraItemView): string {
+  if (item.title === '') {
+    return '(untitled note)';
+  }
+  return item.title;
 }

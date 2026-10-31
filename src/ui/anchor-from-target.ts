@@ -12,22 +12,26 @@ export function anchorFromTarget(target: ReviewTarget): UraAnchorView {
     return { kind: 'change' };
   }
   const { path } = target.file;
-  const lines = (start: number, end: number): UraAnchorView => ({
-    kind: 'lines',
-    path,
-    startLine: start,
-    endLine: end,
-  });
+  const lines = (start: number, end: number): UraAnchorView => {
+    return {
+      kind: 'lines',
+      path,
+      startLine: start,
+      endLine: end,
+    };
+  };
   switch (target.kind) {
     case 'selection': {
-      return target.head === undefined
-        ? { kind: 'file', path }
-        : lines(target.head.start, target.head.end);
+      if (target.head === undefined) {
+        return { kind: 'file', path };
+      }
+      return lines(target.head.start, target.head.end);
     }
     case 'hunk': {
-      return target.file.status === 'deleted'
-        ? { kind: 'file', path }
-        : lines(target.head?.start ?? target.line, target.head?.end ?? target.line);
+      if (target.file.status === 'deleted') {
+        return { kind: 'file', path };
+      }
+      return lines(target.head?.start ?? target.line, target.head?.end ?? target.line);
     }
     case 'line': {
       return lines(target.line, target.line);

@@ -38,23 +38,25 @@ export function editTargetFrom(
   if (cursor === undefined || anchor.kind !== 'lines') {
     return undefined;
   }
-  const item = items.find(
-    ({ status, headSha: itemHead, anchor: own, placement }) =>
+  const item = items.find(({ status, headSha: itemHead, anchor: own, placement }) => {
+    return (
       status.kind === 'staged' &&
       itemHead === headSha &&
       placement.kind === 'current' &&
       own.kind === 'lines' &&
       own.path === path &&
       own.startLine <= cursor &&
-      cursor <= own.endLine,
-  );
-  return item?.anchor.kind === 'lines'
-    ? {
-        path,
-        startLine: item.anchor.startLine,
-        endLine: item.anchor.endLine,
-        itemId: item.id,
-        ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
-      }
-    : { path, startLine: anchor.startLine, endLine: anchor.endLine };
+      cursor <= own.endLine
+    );
+  });
+  if (item?.anchor.kind === 'lines') {
+    return {
+      path,
+      startLine: item.anchor.startLine,
+      endLine: item.anchor.endLine,
+      itemId: item.id,
+      ...(item.suggestedPatch !== undefined && { patch: item.suggestedPatch }),
+    };
+  }
+  return { path, startLine: anchor.startLine, endLine: anchor.endLine };
 }

@@ -42,10 +42,9 @@ function untouched(): FunctionImpactView {
   return { ...handle(), name: 'other', inDiff: false };
 }
 
-function analyzed(
-  functions: readonly FunctionImpactView[],
-  changed: number,
-): Extract<FileImpactView, { status: 'analyzed' }> {
+type AnalyzedImpact = Extract<FileImpactView, { status: 'analyzed' }>;
+
+function analyzed(functions: readonly FunctionImpactView[], changed: number): AnalyzedImpact {
   return {
     status: 'analyzed',
     path: 'src/auth.ts',
@@ -146,10 +145,12 @@ describe('planImpactChip', () => {
   });
 
   test('notes parse errors and functions beyond the first eight', ({ expect }) => {
-    const many = Array.from({ length: 10 }, (_, index) => ({
-      ...added(),
-      name: `f${String(index)}`,
-    }));
+    const many = Array.from({ length: 10 }, (_, index) => {
+      return {
+        ...added(),
+        name: `f${String(index)}`,
+      };
+    });
     const chip = planImpactChip({ ...analyzed(many, 10), parseErrors: true }, [], undefined);
     expect(chip?.rows).toHaveLength(8);
     expect(chip?.summary).toBe('Cognitive +20 · max 22 · 10 functions changed');

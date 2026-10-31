@@ -9,5 +9,7 @@ export function withoutStagedInsights(
   insights: readonly ReviewInsight[],
   staged: ReadonlySet<string>,
 ): ReviewInsight[] {
-  return insights.filter((insight) => insight.sources.every((source) => !staged.has(source)));
+  return insights.filter((insight) => {
+    return insight.sources.every((source) => !staged.has(source));
+  });
 }

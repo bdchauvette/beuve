@@ -40,7 +40,9 @@ export const commandRegistry: readonly CommandDefinition[] = Object.freeze(regis
 
 function registered(): CommandDefinition[] {
   const table = behaviours();
-  return commandCatalog.map((command): CommandDefinition => ({ ...command, ...table[command.id] }));
+  return commandCatalog.map((command): CommandDefinition => {
+    return { ...command, ...table[command.id] };
+  });
 }
 
 function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {

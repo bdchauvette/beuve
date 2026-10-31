@@ -22,6 +22,12 @@ import { zoneStyles } from './zone-styles.ts';
  * Requirements mapping arrives later. The tree emits `beuve-tree-select`, the intent
  * `beuve-open-link` and `beuve-open-stack`.
  */
+/** A toggle button's label and its tooltip. */
+interface ButtonText {
+  readonly label: string;
+  readonly title: string;
+}
+
 @customElement('beuve-intent-sidebar')
 export class BeuveIntentSidebar extends LitElement {
   static override styles = [
@@ -117,8 +123,11 @@ export class BeuveIntentSidebar extends LitElement {
       <div class="files-header">
         <span>Files</span>
         <span class="segments" role="group" aria-label="Files shown">
-          ${this.renderMode('neighborhood', 'All', 'Show the changed files with their neighbours')}
-          ${this.renderMode('diff-only', 'Changed', 'Show changed files only')}
+          ${this.renderMode('neighborhood', {
+            label: 'All',
+            title: 'Show the changed files with their neighbours',
+          })}
+          ${this.renderMode('diff-only', { label: 'Changed', title: 'Show changed files only' })}
         </span>
       </div>
       <beuve-radar-tree
@@ -132,7 +141,7 @@ export class BeuveIntentSidebar extends LitElement {
     </section>`;
   }
 
-  private renderMode(mode: RadarTreeMode, label: string, title: string): TemplateResult {
+  private renderMode(mode: RadarTreeMode, { label, title }: ButtonText): TemplateResult {
     return html`<button
       type="button"
       title=${title}

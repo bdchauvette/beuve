@@ -16,9 +16,10 @@ export function pathText(text: string): TemplateResult {
   if (revealed === text) {
     return html`${text}`;
   }
-  return html`${revealed
-    .split(escape)
-    .map((part, index) =>
-      index % 2 === 1 ? html`<span class="format-control">${part}</span>` : part,
-    )}`;
+  return html`${revealed.split(escape).map((part, index) => {
+    if (index % 2 === 1) {
+      return html`<span class="format-control">${part}</span>`;
+    }
+    return part;
+  })}`;
 }

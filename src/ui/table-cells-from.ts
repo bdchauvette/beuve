@@ -7,7 +7,10 @@ export function tableCellsFrom(line: string): string[] {
   const row = line.trim();
   const cells: string[] = [];
   let cell = '';
-  let index = row.startsWith('|') ? 1 : 0;
+  let index = 0;
+  if (row.startsWith('|')) {
+    index = 1;
+  }
   while (index < row.length) {
     const character = row.charAt(index);
     if (character === '\\' && index + 1 < row.length) {

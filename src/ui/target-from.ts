@@ -1,6 +1,7 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
 import { findFirstChangedLine } from './find-first-changed-line.ts';
+import type { HunkSpan } from './first-hunk-line.ts';
 import { headNumberFromBase } from './head-number-from-base.ts';
 
 /** A line range selected in a diff card, as `@pierre/diffs` reports it. */
@@ -96,29 +97,32 @@ export function targetFrom(state: TargetState): ReviewTarget {
     kind: 'hunk',
     file,
     index: state.hunk,
-    head:
-      hunk.newCount === 0
-        ? undefined
-        : { start: hunk.newStart, end: hunk.newStart + hunk.newCount - 1 },
-    base:
-      hunk.oldCount === 0
-        ? undefined
-        : { start: hunk.oldStart, end: hunk.oldStart + hunk.oldCount - 1 },
+    head: rangeOf({ start: hunk.newStart, count: hunk.newCount }),
+    base: rangeOf({ start: hunk.oldStart, count: hunk.oldCount }),
     line: Math.max(1, findFirstChangedLine(file.patch, state.hunk) ?? hunk.newStart),
   };
+}
+
+/** The lines a hunk side covers; `undefined` for an empty side. */
+function rangeOf(span: HunkSpan): LineRange | undefined {
+  if (span.count === 0) {
+    return undefined;
+  }
+  return { start: span.start, end: span.start + span.count - 1 };
 }
 
 function selectionTarget(file: DiffFileView, selection: SelectedLines): ReviewTarget {
   const startSide = selection.side ?? 'additions';
   const endSide = selection.endSide ?? startSide;
-  const headOf = (line: number, side: 'additions' | 'deletions'): number | undefined =>
-    side === 'additions' ? Math.max(1, line) : headNumberFromBase(file, Math.max(1, line));
+  const headOf = (line: number, side: 'additions' | 'deletions'): number | undefined => {
+    if (side === 'additions') {
+      return Math.max(1, line);
+    }
+    return headNumberFromBase(file, Math.max(1, line));
+  };
   const first = headOf(selection.start, startSide);
   const last = headOf(selection.end, endSide);
-  const head =
-    first === undefined || last === undefined
-      ? undefined
-      : { start: Math.min(first, last), end: Math.max(first, last) };
+  const head = rangeBetween(first, last);
   const isBase = startSide === 'deletions' && endSide === 'deletions';
   if (isBase) {
     const start = Math.max(1, Math.min(selection.start, selection.end));
@@ -133,4 +137,12 @@ function selectionTarget(file: DiffFileView, selection: SelectedLines): ReviewTa
   }
   const range = head ?? { start: 1, end: 1 };
   return { kind: 'selection', file, side: 'head', start: range.start, end: range.end, head: range };
+}
+
+/** The lines from `first` to `last` in either order; `undefined` when either end has no line. */
+function rangeBetween(first: number | undefined, last: number | undefined): LineRange | undefined {
+  if (first === undefined || last === undefined) {
+    return undefined;
+  }
+  return { start: Math.min(first, last), end: Math.max(first, last) };
 }

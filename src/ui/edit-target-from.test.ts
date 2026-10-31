@@ -39,15 +39,20 @@ function file(): DiffFileView {
   };
 }
 
+/** The focused hunk and the selection, if any. */
+interface Focus {
+  readonly hunk: number;
+  readonly selection?: SelectedLines;
+}
+
 function planned(
-  activeHunk: number,
-  selection: SelectedLines | undefined,
+  { hunk, selection }: Focus,
   items: Parameters<typeof editTargetFrom>[1],
   overrides: Partial<DiffFileView> = {},
 ): EditTarget | undefined {
   const target = targetFrom({
     file: { ...file(), ...overrides },
-    hunk: activeHunk,
+    hunk,
     selection,
     line: undefined,
     collapsed: false,
@@ -57,12 +62,14 @@ function planned(
 
 describe('editTargetFrom', () => {
   test('edits the focused hunk, or the head-side selection, as a new suggestion', ({ expect }) => {
-    expect(planned(0, undefined, [])).toStrictEqual({
+    expect(planned({ hunk: 0 }, [])).toStrictEqual({
       path: 'src/a.ts',
       startLine: 1,
       endLine: 6,
     });
-    expect(planned(0, { start: 5, end: 6, side: 'additions' }, [])).toStrictEqual({
+    expect(
+      planned({ hunk: 0, selection: { start: 5, end: 6, side: 'additions' } }, []),
+    ).toStrictEqual({
       path: 'src/a.ts',
       startLine: 5,
       endLine: 6,
@@ -76,7 +83,7 @@ describe('editTargetFrom', () => {
       anchor,
       suggestedPatch: '@@ -2 +2 @@\n-two\n+2\n',
     });
-    expect(planned(0, undefined, [item])).toStrictEqual({
+    expect(planned({ hunk: 0 }, [item])).toStrictEqual({
       path: 'src/a.ts',
       startLine: 2,
       endLine: 4,
@@ -96,12 +103,12 @@ describe('editTargetFrom', () => {
         anchor: { kind: 'lines', path: 'src/a.ts', startLine: 5, endLine: 6 },
       }),
     ];
-    expect(planned(0, undefined, items)?.itemId).toBeUndefined();
+    expect(planned({ hunk: 0 }, items)?.itemId).toBeUndefined();
   });
 
   test('has nothing to edit without a hunk, or on a deleted file', ({ expect }) => {
-    expect(planned(-1, undefined, [])).toBeUndefined();
-    expect(planned(0, undefined, [], { status: 'deleted' })).toBeUndefined();
-    expect(planned(0, undefined, [], { binary: true })).toBeUndefined();
+    expect(planned({ hunk: -1 }, [])).toBeUndefined();
+    expect(planned({ hunk: 0 }, [], { status: 'deleted' })).toBeUndefined();
+    expect(planned({ hunk: 0 }, [], { binary: true })).toBeUndefined();
   });
 });

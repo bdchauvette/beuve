@@ -82,27 +82,33 @@ export function parseChatCommand(input: string): ChatCommand {
       if (args.length === 0) {
         return { kind: 'clear', queuedOnly: false };
       }
-      return args.length === 1 && args[0]?.toLowerCase() === 'queue'
-        ? { kind: 'clear', queuedOnly: true }
-        : invalid('/clear takes nothing, or queue to drop only the waiting questions.');
+      if (args.length === 1 && args[0]?.toLowerCase() === 'queue') {
+        return { kind: 'clear', queuedOnly: true };
+      }
+      return invalid('/clear takes nothing, or queue to drop only the waiting questions.');
     }
     case '/summarize':
     case '/abstract': {
-      return args.length === 0
-        ? { kind: 'summarize' }
-        : invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
+      if (args.length === 0) {
+        return { kind: 'summarize' };
+      }
+      return invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
     }
     case '/compact': {
-      return args.length === 0
-        ? { kind: 'compact' }
-        : invalid('/compact takes no arguments. Type /help for the commands.');
+      if (args.length === 0) {
+        return { kind: 'compact' };
+      }
+      return invalid('/compact takes no arguments. Type /help for the commands.');
     }
     case '/trust':
     case '/untrust': {
-      const kind = name.toLowerCase() === '/trust' ? 'trust' : 'untrust';
-      return args.length === 0
-        ? { kind }
-        : invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
+      if (args.length > 0) {
+        return invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
+      }
+      if (name.toLowerCase() === '/trust') {
+        return { kind: 'trust' };
+      }
+      return { kind: 'untrust' };
     }
     case '/editor': {
       return parseEditor(args);
@@ -126,19 +132,21 @@ export function parseChatCommand(input: string): ChatCommand {
       return parseReview(args);
     }
     case '/sheets': {
-      const choice = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
       if (args.length === 0) {
         return { kind: 'sheets' };
       }
-      return choice === 'window' || choice === 'inline'
-        ? { kind: 'sheets', mode: choice }
-        : invalid('/sheets takes window or inline, e.g. /sheets inline.');
+      const choice = soleArgument(args);
+      if (choice === 'window' || choice === 'inline') {
+        return { kind: 'sheets', mode: choice };
+      }
+      return invalid('/sheets takes window or inline, e.g. /sheets inline.');
     }
     case '/sidebar': {
       const [side] = args;
-      return args.length === 1 && (side === 'left' || side === 'right')
-        ? { kind: 'sidebar', side }
-        : invalid('/sidebar takes left or right.');
+      if (args.length === 1 && (side === 'left' || side === 'right')) {
+        return { kind: 'sidebar', side };
+      }
+      return invalid('/sidebar takes left or right.');
     }
     default: {
       return { kind: 'invalid', message: `Unknown command ${name}. Type /help for the commands.` };
@@ -157,10 +165,11 @@ function parseEditor(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'editor' };
   }
-  const editorId = args.length === 1 ? editorAliases[(args[0] ?? '').toLowerCase()] : undefined;
-  return editorId === undefined
-    ? invalid('/editor takes zed, vscode or cursor, e.g. /editor zed.')
-    : { kind: 'editor', editorId };
+  const editorId = editorAliases[soleArgument(args)];
+  if (editorId === undefined) {
+    return invalid('/editor takes zed, vscode or cursor, e.g. /editor zed.');
+  }
+  return { kind: 'editor', editorId };
 }
 
 const layoutAliases: Readonly<Record<string, DiffLayoutView>> = {
@@ -174,10 +183,11 @@ function parseDiff(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'diff' };
   }
-  const layout = args.length === 1 ? layoutAliases[(args[0] ?? '').toLowerCase()] : undefined;
-  return layout === undefined
-    ? invalid('/diff takes split or inline, e.g. /diff inline.')
-    : { kind: 'diff', layout };
+  const layout = layoutAliases[soleArgument(args)];
+  if (layout === undefined) {
+    return invalid('/diff takes split or inline, e.g. /diff inline.');
+  }
+  return { kind: 'diff', layout };
 }
 
 const whitespaceAliases: Readonly<Record<string, boolean>> = {
@@ -197,21 +207,22 @@ function parseGenerated(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'generated' };
   }
-  const showGenerated =
-    args.length === 1 ? generatedAliases[(args[0] ?? '').toLowerCase()] : undefined;
-  return showGenerated === undefined
-    ? invalid('/generated takes show or hide, e.g. /generated show.')
-    : { kind: 'generated', showGenerated };
+  const showGenerated = generatedAliases[soleArgument(args)];
+  if (showGenerated === undefined) {
+    return invalid('/generated takes show or hide, e.g. /generated show.');
+  }
+  return { kind: 'generated', showGenerated };
 }
 
 function parseInsights(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'insights' };
   }
-  const choice = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
-  return choice === 'show' || choice === 'hide'
-    ? { kind: 'insights', showInsights: choice === 'show' }
-    : invalid('/insights takes show or hide, e.g. /insights hide.');
+  const choice = soleArgument(args);
+  if (choice === 'show' || choice === 'hide') {
+    return { kind: 'insights', showInsights: choice === 'show' };
+  }
+  return invalid('/insights takes show or hide, e.g. /insights hide.');
 }
 
 const orderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls']);
@@ -220,10 +231,11 @@ function parseOrder(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'order' };
   }
-  const mode = args.length === 1 ? (args[0] ?? '').toLowerCase() : '';
-  return isOrderMode(mode)
-    ? { kind: 'order', mode }
-    : invalid('/order takes path, imports or calls, e.g. /order imports.');
+  const mode = soleArgument(args);
+  if (isOrderMode(mode)) {
+    return { kind: 'order', mode };
+  }
+  return invalid('/order takes path, imports or calls, e.g. /order imports.');
 }
 
 function isOrderMode(value: string): value is ReviewOrderMode {
@@ -234,10 +246,11 @@ function parseWhitespace(args: readonly string[]): ChatCommand {
   if (args.length === 0) {
     return { kind: 'whitespace' };
   }
-  const ignore = args.length === 1 ? whitespaceAliases[(args[0] ?? '').toLowerCase()] : undefined;
-  return ignore === undefined
-    ? invalid('/whitespace takes ignore or show, e.g. /whitespace ignore.')
-    : { kind: 'whitespace', ignoreWhitespace: ignore };
+  const ignore = whitespaceAliases[soleArgument(args)];
+  if (ignore === undefined) {
+    return invalid('/whitespace takes ignore or show, e.g. /whitespace ignore.');
+  }
+  return { kind: 'whitespace', ignoreWhitespace: ignore };
 }
 
 function parseReview(args: readonly string[]): ChatCommand {
@@ -261,7 +274,11 @@ function parseReview(args: readonly string[]): ChatCommand {
       if (arg !== '--effort' && !arg.startsWith('--effort=')) {
         return invalid(`/review has no option ${arg}. Type /help for its options.`);
       }
-      const value = arg === '--effort' ? args[(index += 1)] : arg.slice('--effort='.length);
+      let value: string | undefined = arg.slice('--effort='.length);
+      if (arg === '--effort') {
+        index += 1;
+        value = args[index];
+      }
       if (value === undefined || !isEffort(value)) {
         return invalid('--effort takes low, medium or high, e.g. /review --effort=high.');
       }
@@ -287,6 +304,15 @@ function parseReview(args: readonly string[]): ChatCommand {
 
 function isEffort(value: string): value is ReviewEffort {
   return efforts.has(value);
+}
+
+/** The one argument, lowercased; `''` for none or several. */
+function soleArgument(args: readonly string[]): string {
+  const [only] = args;
+  if (only === undefined || args.length !== 1) {
+    return '';
+  }
+  return only.toLowerCase();
 }
 
 function invalid(message: string): ChatCommand {

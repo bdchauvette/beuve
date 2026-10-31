@@ -29,27 +29,36 @@ export function parseOpenQuery(input: string): OpenQuery {
   if (text === '') {
     return { kind: 'empty' };
   }
-  const parts = text.startsWith('https://') ? fromUrl(text) : fromShorthand(text);
+  const parts = partsFrom(text);
   if (parts !== undefined) {
-    const [host, owner, repo, number] = parts;
-    return pullRequest(text, host.toLowerCase(), owner, repo, number);
+    return pullRequest(text, parts);
   }
-  return text === '~' || text.startsWith('/') || text.startsWith('~/')
-    ? { kind: 'path', path: text }
-    : { kind: 'filter', text };
+  if (text === '~' || text.startsWith('/') || text.startsWith('~/')) {
+    return { kind: 'path', path: text };
+  }
+  return { kind: 'filter', text };
 }
 
-function pullRequest(
-  ref: string,
-  host: string,
-  owner: string,
-  repo: string,
-  number: string,
-): OpenQuery {
+function partsFrom(text: string): Parts | undefined {
+  if (text.startsWith('https://')) {
+    return fromUrl(text);
+  }
+  return fromShorthand(text);
+}
+
+function pullRequest(ref: string, [host, owner, repo, number]: Parts): OpenQuery {
   const value = Number(number);
-  return Number.isSafeInteger(value) && value > 0
-    ? { kind: 'pull-request', ref, host, owner, repo: repo.replace(gitSuffix, ''), number: value }
-    : { kind: 'filter', text: ref };
+  if (Number.isSafeInteger(value) && value > 0) {
+    return {
+      kind: 'pull-request',
+      ref,
+      host: host.toLowerCase(),
+      owner,
+      repo: repo.replace(gitSuffix, ''),
+      number: value,
+    };
+  }
+  return { kind: 'filter', text: ref };
 }
 
 type Parts = readonly [host: string, owner: string, repo: string, number: string];
@@ -60,9 +69,10 @@ function fromUrl(text: string): Parts | undefined {
   }
   const url = new URL(text);
   const [owner = '', repo = '', kind, number = ''] = url.pathname.split('/').slice(1);
-  return kind === 'pull' && owner !== '' && repo !== '' && digits.test(number)
-    ? [url.hostname, owner, repo, number]
-    : undefined;
+  if (kind === 'pull' && owner !== '' && repo !== '' && digits.test(number)) {
+    return [url.hostname, owner, repo, number];
+  }
+  return undefined;
 }
 
 function fromShorthand(text: string): Parts | undefined {
@@ -75,5 +85,8 @@ function fromShorthand(text: string): Parts | undefined {
   if (segments.length === 2) {
     return ['github.com', first, second, number];
   }
-  return third !== undefined && segments.length === 3 ? [first, second, third, number] : undefined;
+  if (third !== undefined && segments.length === 3) {
+    return [first, second, third, number];
+  }
+  return undefined;
 }

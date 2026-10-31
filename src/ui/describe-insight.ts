@@ -22,10 +22,9 @@ export function describeInsight(finding: ChatFindingView): InsightLabels {
   const severity = severities[finding.severity];
   const category = finding.category.replaceAll('-', ' ');
   const isUnconfirmed = finding.check === 'unconfirmed';
-  return {
-    severity,
-    category,
-    isUnconfirmed,
-    summary: `${severity} insight, ${category}${isUnconfirmed ? ', unconfirmed' : ''}`,
-  };
+  const said = [`${severity} insight`, category];
+  if (isUnconfirmed) {
+    said.push('unconfirmed');
+  }
+  return { severity, category, isUnconfirmed, summary: said.join(', ') };
 }

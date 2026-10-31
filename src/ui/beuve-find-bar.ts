@@ -2,7 +2,14 @@ import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { withShortcut } from './with-shortcut.ts';
+
 const stepKeys: ReadonlySet<string> = new Set(['Enter', 'F3', 'ArrowDown', 'ArrowUp']);
+
+/** Find Next (1) or Find Previous (-1). */
+export interface FindStepDetail {
+  readonly step: 1 | -1;
+}
 
 /** What the reviewer typed into the find bar. */
 export interface FindQueryDetail {
@@ -88,7 +95,11 @@ export class BeuveFindBar extends LitElement {
     }
     event.preventDefault();
     const isBack = event.shiftKey || event.key === 'ArrowUp';
-    this.emit('beuve-find-step', { step: isBack ? -1 : 1 });
+    if (isBack) {
+      this.emit('beuve-find-step', { step: -1 });
+    } else {
+      this.emit('beuve-find-step', { step: 1 });
+    }
   };
 
   @property() accessor query = '';
@@ -120,8 +131,14 @@ export class BeuveFindBar extends LitElement {
     if (this.count === 0) {
       return 'No results';
     }
-    const total = `${String(this.count)}${this.isCapped ? '+' : ''}`;
-    return this.current === -1 ? `${total} found` : `${String(this.current + 1)} of ${total}`;
+    let total = String(this.count);
+    if (this.isCapped) {
+      total += '+';
+    }
+    if (this.current === -1) {
+      return `${total} found`;
+    }
+    return `${String(this.current + 1)} of ${total}`;
   }
 
   /** Focuses the query and selects it, so typing replaces it. */
@@ -149,7 +166,7 @@ export class BeuveFindBar extends LitElement {
       >
       <button
         type="button"
-        title=${withKey('Previous', this.shortcuts.previous)}
+        title=${withShortcut({ label: 'Previous', shortcut: this.shortcuts.previous })}
         aria-label="Previous match"
         @click=${(): void => {
           this.emit('beuve-find-step', { step: -1 });
@@ -159,7 +176,7 @@ export class BeuveFindBar extends LitElement {
       </button>
       <button
         type="button"
-        title=${withKey('Next', this.shortcuts.next)}
+        title=${withShortcut({ label: 'Next', shortcut: this.shortcuts.next })}
         aria-label="Next match"
         @click=${(): void => {
           this.emit('beuve-find-step', { step: 1 });
@@ -169,7 +186,7 @@ export class BeuveFindBar extends LitElement {
       </button>
       <button
         type="button"
-        title=${withKey('Match Case', this.shortcuts.matchCase)}
+        title=${withShortcut({ label: 'Match Case', shortcut: this.shortcuts.matchCase })}
         aria-pressed=${this.isCaseSensitive ? 'true' : 'false'}
         @click=${(): void => {
           this.emitQuery(this.query, !this.isCaseSensitive);
@@ -189,10 +206,6 @@ export class BeuveFindBar extends LitElement {
         ×
       </button>`;
   }
-}
-
-function withKey(label: string, key: string): string {
-  return key === '' ? label : `${label} (${key})`;
 }
 
 declare global {

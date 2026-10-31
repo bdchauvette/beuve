@@ -2,6 +2,8 @@ import { describe } from 'vitest';
 
 import { test } from './testing/test.ts';
 
+import type { SheetMarksView } from '#contract/ipc-contract.ts';
+
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 
 describe('sheetGutterCssFrom', () => {
@@ -51,6 +53,6 @@ describe('sheetGutterCssFrom', () => {
   });
 });
 
-function noMarks(): { added: never[]; modified: never[]; deletedAt: never[] } {
+function noMarks(): SheetMarksView {
   return { added: [], modified: [], deletedAt: [] };
 }

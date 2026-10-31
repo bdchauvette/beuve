@@ -10,13 +10,21 @@ export function sheetRequestFrom(
   definition: DefinitionView,
 ): OpenSheetRequest | string {
   const target = definition.targets.find((candidate) => candidate.file.kind === 'workspace');
-  const named = definition.token === undefined ? 'this line' : `“${definition.token.text}”`;
   if (target?.file.kind !== 'workspace') {
+    const named = tokenName(definition);
     const [outside] = definition.targets;
-    return outside?.file.kind === 'external'
-      ? `${named} is defined outside the repository (${outside.file.uri}).`
-      : `The language server knows no definition for ${named}.`;
+    if (outside?.file.kind === 'external') {
+      return `${named} is defined outside the repository (${outside.file.uri}).`;
+    }
+    return `The language server knows no definition for ${named}.`;
   }
   const { file, ...range } = target;
   return { sessionId, sha: definition.sha, path: file.path, range };
+}
+
+function tokenName(definition: DefinitionView): string {
+  if (definition.token === undefined) {
+    return 'this line';
+  }
+  return `“${definition.token.text}”`;
 }

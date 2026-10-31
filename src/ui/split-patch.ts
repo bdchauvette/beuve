@@ -1,3 +1,5 @@
+import { linesOf } from './lines-of.ts';
+
 /** How a line of a unified diff renders. */
 export type PatchLineKind = 'meta' | 'hunk' | 'added' | 'removed' | 'context' | 'note';
 
@@ -11,14 +13,16 @@ export interface PatchLine {
  * header (`diff --git`, `index`, `---`, `+++`), so `---`/`+++` there never count as changes.
  */
 export function splitPatch(patch: string): PatchLine[] {
-  const texts = patch.endsWith('\n') ? patch.slice(0, -1).split('\n') : patch.split('\n');
   let isInHunk = false;
-  return texts.map((text): PatchLine => {
+  return linesOf(patch).map((text): PatchLine => {
     if (text.startsWith('@@')) {
       isInHunk = true;
       return { kind: 'hunk', text };
     }
-    return { kind: isInHunk ? hunkLineKind(text) : 'meta', text };
+    if (!isInHunk) {
+      return { kind: 'meta', text };
+    }
+    return { kind: hunkLineKind(text), text };
   });
 }
 

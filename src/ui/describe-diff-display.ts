@@ -15,19 +15,39 @@ export function describeDiffDisplay(
   display: Pick<DiffDisplayView, 'layout' | 'ignoreWhitespace'>,
   isNarrow: boolean,
 ): DiffDisplayLabel {
-  const isSplit = display.layout === 'split';
-  const layout = isSplit ? (isNarrow ? 'Inline (narrow)' : 'Split') : 'Inline';
-  const text = display.ignoreWhitespace ? `${layout} · whitespace hidden` : layout;
-  const layoutTitle = isSplit
-    ? isNarrow
-      ? 'Side by side is preferred, but the window is too narrow, so diffs are inline until it widens.'
-      : 'Changes side by side; new and deleted files use the full width.'
-    : 'Changes inline, in one column.';
-  const whitespaceTitle = display.ignoreWhitespace
-    ? 'Whitespace-only changes are hidden (git diff -w); line numbers are unchanged.'
-    : 'Whitespace changes are shown.';
-  return {
-    text,
-    title: `${layoutTitle} ${whitespaceTitle} s toggles split/inline, w toggles whitespace.`,
-  };
+  const layout = layoutLabels[shownLayout(display, isNarrow)];
+  const keys = 's toggles split/inline, w toggles whitespace.';
+  if (display.ignoreWhitespace) {
+    return {
+      text: `${layout.text} · whitespace hidden`,
+      title: `${layout.title} Whitespace-only changes are hidden (git diff -w); line numbers are unchanged. ${keys}`,
+    };
+  }
+  return { text: layout.text, title: `${layout.title} Whitespace changes are shown. ${keys}` };
+}
+
+/** How diffs are laid out right now: split, inline by choice, or inline for want of room. */
+type ShownLayout = 'split' | 'narrow' | 'inline';
+
+const layoutLabels: Readonly<Record<ShownLayout, DiffDisplayLabel>> = {
+  split: {
+    text: 'Split',
+    title: 'Changes side by side; new and deleted files use the full width.',
+  },
+  narrow: {
+    text: 'Inline (narrow)',
+    title:
+      'Side by side is preferred, but the window is too narrow, so diffs are inline until it widens.',
+  },
+  inline: { text: 'Inline', title: 'Changes inline, in one column.' },
+};
+
+function shownLayout(display: Pick<DiffDisplayView, 'layout'>, isNarrow: boolean): ShownLayout {
+  if (display.layout !== 'split') {
+    return 'inline';
+  }
+  if (isNarrow) {
+    return 'narrow';
+  }
+  return 'split';
 }

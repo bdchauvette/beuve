@@ -7,6 +7,7 @@ import type {
   ModelEffortView,
   ModelEntryInput,
   ModelEntryView,
+  ModelExecutableView,
   ModelKind,
   ModelRegistryView,
   ModelRole,
@@ -257,12 +258,7 @@ export class BeuveModelSettings extends LitElement {
     this.draft = {
       id: undefined,
       kind,
-      label:
-        kind === 'openai-compatible'
-          ? 'Local model'
-          : kind === 'claude-agent-sdk'
-            ? 'Claude Code (API key)'
-            : 'Claude Code',
+      label: newLabels[kind],
       model: '',
       effort: '',
       contextWindowTokens: '',
@@ -276,22 +272,7 @@ export class BeuveModelSettings extends LitElement {
   private startEdit(entry: ModelEntryView): void {
     this.apiKey = '';
     this.remoteModels = [];
-    this.draft = {
-      id: entry.id,
-      kind: entry.kind,
-      label: entry.label,
-      model: entry.model ?? '',
-      effort: entry.effort ?? '',
-      contextWindowTokens:
-        entry.contextWindowTokens === undefined ? '' : String(entry.contextWindowTokens),
-      baseUrl: entry.kind === 'openai-compatible' ? entry.baseUrl : 'http://localhost:11434/v1',
-      tools: entry.kind === 'openai-compatible' && entry.tools,
-      executable: entry.kind === 'claude-agent-sdk' ? entry.executable.source : 'installed',
-      executablePath:
-        entry.kind === 'claude-agent-sdk' && entry.executable.source === 'installed'
-          ? (entry.executable.path ?? '')
-          : '',
-    };
+    this.draft = draftFrom(entry);
   }
 
   private edit(change: Partial<Draft>): void {
@@ -337,7 +318,10 @@ export class BeuveModelSettings extends LitElement {
     });
     if (listed?.ok === true) {
       this.remoteModels = listed.value.models;
-      this.error = listed.value.models.length === 0 ? 'The server lists no models.' : '';
+      this.error = '';
+      if (listed.value.models.length === 0) {
+        this.error = 'The server lists no models.';
+      }
     } else if (listed !== undefined) {
       this.error = `${listed.error.message} Type the model id instead.`;
     }
@@ -346,12 +330,12 @@ export class BeuveModelSettings extends LitElement {
   private async test(id: string): Promise<void> {
     this.tests = { ...this.tests, [id]: 'Testing…' };
     const tested = await this.api?.invoke('models:test', { id });
-    const line =
-      tested === undefined
-        ? ''
-        : tested.ok
-          ? describeModelTest(tested.value).text
-          : tested.error.message;
+    let line = '';
+    if (tested?.ok === true) {
+      line = describeModelTest(tested.value).text;
+    } else if (tested !== undefined) {
+      line = tested.error.message;
+    }
     this.tests = { ...this.tests, [id]: line };
   }
 
@@ -395,12 +379,11 @@ export class BeuveModelSettings extends LitElement {
                   this.newKind = (event.target as HTMLSelectElement).value as ModelKind;
                 }}
               >
-                ${kinds.map(
-                  ([kind, label]) =>
-                    html`<option value=${kind} ?selected=${kind === this.newKind}>
-                      ${label}
-                    </option>`,
-                )}
+                ${kinds.map(([kind, label]) => {
+                  return html`<option value=${kind} ?selected=${kind === this.newKind}>
+                    ${label}
+                  </option>`;
+                })}
               </select>
               <button
                 type="button"
@@ -419,14 +402,8 @@ export class BeuveModelSettings extends LitElement {
   private renderForm(draft: Draft, registry: ModelRegistryView): TemplateResult {
     const entry = registry.entries.find((candidate) => candidate.id === draft.id);
     const isRemote = draft.kind === 'openai-compatible' && isRemoteBaseUrl(draft.baseUrl);
-    const text = (
-      label: string,
-      value: string,
-      change: (value: string) => Partial<Draft>,
-      placeholder = '',
-      list?: string,
-    ): TemplateResult =>
-      html`<div class="row">
+    const text = ({ label, value, change, placeholder = '', list }: TextField): TemplateResult => {
+      return html`<div class="row">
         <label>${label} </label>
         <input
           type="text"
@@ -439,6 +416,7 @@ export class BeuveModelSettings extends LitElement {
           }}
         />
       </div>`;
+    };
     return html`<h2>${draft.id === undefined ? 'Add Model' : 'Edit Model'}</h2>
       <div class="group" data-section="model-form">
         <div class="row">
@@ -448,10 +426,23 @@ export class BeuveModelSettings extends LitElement {
             <div class="detail">${kinds.find(([kind]) => kind === draft.kind)?.[2] ?? ''}</div>
           </span>
         </div>
-        ${text('Name', draft.label, (label) => ({ label }))}
+        ${text({
+          label: 'Name',
+          value: draft.label,
+          change: (label) => {
+            return { label };
+          },
+        })}
         ${
           draft.kind === 'openai-compatible'
-            ? html`${text('Base URL', draft.baseUrl, (baseUrl) => ({ baseUrl }), 'http://localhost:11434/v1')}
+            ? html`${text({
+                  label: 'Base URL',
+                  value: draft.baseUrl,
+                  change: (baseUrl) => {
+                    return { baseUrl };
+                  },
+                  placeholder: 'http://localhost:11434/v1',
+                })}
                 ${
                   isRemote
                     ? html`<div class="row">
@@ -463,9 +454,19 @@ export class BeuveModelSettings extends LitElement {
                       </div>`
                     : nothing
                 }
-                ${text('Model', draft.model, (model) => ({ model }), 'e.g. qwen3:8b', 'remote-models')}
+                ${text({
+                  label: 'Model',
+                  value: draft.model,
+                  change: (model) => {
+                    return { model };
+                  },
+                  placeholder: 'e.g. qwen3:8b',
+                  list: 'remote-models',
+                })}
                 <datalist id="remote-models">
-                  ${this.remoteModels.map((model) => html`<option value=${model}></option>`)}
+                  ${this.remoteModels.map((model) => {
+                    return html`<option value=${model}></option>`;
+                  })}
                 </datalist>
                 <div class="row">
                   <span></span>
@@ -491,42 +492,46 @@ export class BeuveModelSettings extends LitElement {
                     the selected lines only.</span
                   >
                 </div>`
-            : text(
-                'Model',
-                draft.model,
-                (model) => ({ model }),
-                draft.kind === 'claude-agent-sdk' ? 'claude-opus-5-5' : 'Claude Code’s default',
-              )
+            : text({
+                label: 'Model',
+                value: draft.model,
+                change: (model) => {
+                  return { model };
+                },
+                placeholder:
+                  draft.kind === 'claude-agent-sdk' ? 'claude-opus-5-5' : 'Claude Code’s default',
+              })
         }
         ${
           draft.kind === 'claude-agent-sdk'
             ? html`<div class="row">
                   <span>Claude Code</span>
                   <span class="choices">
-                    ${(['installed', 'bundled'] as const).map(
-                      (source) =>
-                        html`<label>
-                          <input
-                            type="radio"
-                            name="executable"
-                            .checked=${draft.executable === source}
-                            ?disabled=${source === 'bundled' && !registry.hasBundledClaudeCode}
-                            data-action="executable"
-                            data-source=${source}
-                          />
-                          ${source === 'installed' ? 'Installed' : 'Bundled'}
-                        </label>`,
-                    )}
+                    ${(['installed', 'bundled'] as const).map((source) => {
+                      return html`<label>
+                        <input
+                          type="radio"
+                          name="executable"
+                          .checked=${draft.executable === source}
+                          ?disabled=${source === 'bundled' && !registry.hasBundledClaudeCode}
+                          data-action="executable"
+                          data-source=${source}
+                        />
+                        ${source === 'installed' ? 'Installed' : 'Bundled'}
+                      </label>`;
+                    })}
                   </span>
                 </div>
                 ${
                   draft.executable === 'installed'
-                    ? text(
-                        'Path to claude',
-                        draft.executablePath,
-                        (executablePath) => ({ executablePath }),
-                        'Found automatically',
-                      )
+                    ? text({
+                        label: 'Path to claude',
+                        value: draft.executablePath,
+                        change: (executablePath) => {
+                          return { executablePath };
+                        },
+                        placeholder: 'Found automatically',
+                      })
                     : nothing
                 }`
             : nothing
@@ -542,12 +547,11 @@ export class BeuveModelSettings extends LitElement {
             <option value="" ?selected=${draft.effort === ''}>
               ${draft.kind === 'openai-compatible' ? 'Not sent' : 'Default'}
             </option>
-            ${efforts.map(
-              (effort) =>
-                html`<option value=${effort} ?selected=${draft.effort === effort}>
-                  ${effort}
-                </option>`,
-            )}
+            ${efforts.map((effort) => {
+              return html`<option value=${effort} ?selected=${draft.effort === effort}>
+                ${effort}
+              </option>`;
+            })}
           </select>
         </div>
         <div class="row">
@@ -592,7 +596,7 @@ export class BeuveModelSettings extends LitElement {
           autocomplete="off"
           spellcheck="false"
           .value=${this.apiKey}
-          placeholder=${hasKey ? 'Set — type to replace' : draft.kind === 'openai-compatible' ? 'Optional' : 'Not set'}
+          placeholder=${keyPlaceholder(draft, hasKey)}
           ?disabled=${storage === 'unavailable'}
           @input=${(event: Event): void => {
             this.apiKey = (event.target as HTMLInputElement).value;
@@ -625,42 +629,27 @@ export class BeuveModelSettings extends LitElement {
           }
         </span>
       </div>
-      ${
-        storage === 'basic'
-          ? html`<div class="row">
-              <span></span>
-              <span class="detail warn"
-                >No keyring was found, so keys are encrypted with a fixed key on this machine.</span
-              >
-            </div>`
-          : storage === 'unavailable'
-            ? html`<div class="row">
-                <span></span>
-                <span class="detail warn"
-                  >Keys can’t be stored: no keychain or keyring is available.</span
-                >
-              </div>`
-            : nothing
-      }`;
+      ${renderStorageWarning(storage)}`;
   }
 
   private renderRoles(registry: ModelRegistryView): TemplateResult {
     return html`<h2>Model for</h2>
       <div class="group" data-section="roles">
-        ${modelRoles.map(
-          (role) =>
-            html`<div class="row">
-              <label for=${`role-${role}`}>${roleLabels[role]}</label>
-              <select id=${`role-${role}`} data-action="role" data-role=${role}>
-                ${registry.entries.map(
-                  (entry) =>
-                    html`<option value=${entry.id} ?selected=${registry.roles[role] === entry.id}>
-                      ${entry.label}
-                    </option>`,
-                )}
-              </select>
-            </div>`,
-        )}
+        ${modelRoles.map((role) => {
+          return html`<div class="row">
+            <label for=${`role-${role}`}>${roleLabels[role]}</label>
+            <select id=${`role-${role}`} data-action="role" data-role=${role}>
+              ${registry.entries.map((entry) => {
+                return html`<option
+                  value=${entry.id}
+                  ?selected=${registry.roles[role] === entry.id}
+                >
+                  ${entry.label}
+                </option>`;
+              })}
+            </select>
+          </div>`;
+        })}
       </div>`;
   }
 
@@ -722,6 +711,98 @@ const roleLabels: Readonly<Record<ModelRole, string>> = {
 };
 
 /** What `models:save` gets from the form: empty fields left out, the number parsed. */
+/** A new entry's name until the reviewer types one. */
+const newLabels: Readonly<Record<ModelKind, string>> = {
+  'openai-compatible': 'Local model',
+  'claude-agent-sdk': 'Claude Code (API key)',
+  'claude-code-cli': 'Claude Code',
+};
+
+/** A text row of the model form. */
+interface TextField {
+  readonly label: string;
+  readonly value: string;
+  readonly change: (value: string) => Partial<Draft>;
+  readonly placeholder?: string;
+  /** The id of a `<datalist>` to suggest from. */
+  readonly list?: string;
+}
+
+function draftFrom(entry: ModelEntryView): Draft {
+  const draft: Draft = {
+    id: entry.id,
+    kind: entry.kind,
+    label: entry.label,
+    model: entry.model ?? '',
+    effort: entry.effort ?? '',
+    contextWindowTokens: entry.contextWindowTokens?.toString() ?? '',
+    baseUrl: 'http://localhost:11434/v1',
+    tools: false,
+    executable: 'installed',
+    executablePath: '',
+  };
+  switch (entry.kind) {
+    case 'openai-compatible': {
+      return { ...draft, baseUrl: entry.baseUrl, tools: entry.tools };
+    }
+    case 'claude-agent-sdk': {
+      const { executable } = entry;
+      if (executable.source === 'installed') {
+        return { ...draft, executable: 'installed', executablePath: executable.path ?? '' };
+      }
+      return { ...draft, executable: 'bundled' };
+    }
+    case 'claude-code-cli': {
+      return draft;
+    }
+  }
+}
+
+function keyPlaceholder(draft: Draft, hasKey: boolean): string {
+  if (hasKey) {
+    return 'Set — type to replace';
+  }
+  if (draft.kind === 'openai-compatible') {
+    return 'Optional';
+  }
+  return 'Not set';
+}
+
+/** What the key field warns about where keys are stored: nothing for a real keychain. */
+function renderStorageWarning(
+  storage: ModelRegistryView['keyStorage'] | undefined,
+): TemplateResult {
+  switch (storage) {
+    case 'basic': {
+      return html`<div class="row">
+        <span></span>
+        <span class="detail warn"
+          >No keyring was found, so keys are encrypted with a fixed key on this machine.</span
+        >
+      </div>`;
+    }
+    case 'unavailable': {
+      return html`<div class="row">
+        <span></span>
+        <span class="detail warn">Keys can’t be stored: no keychain or keyring is available.</span>
+      </div>`;
+    }
+    default: {
+      return html``;
+    }
+  }
+}
+
+function executableFrom(
+  executable: Draft['executable'],
+  executablePath: string,
+): ModelExecutableView {
+  if (executable === 'bundled') {
+    return { source: 'bundled' };
+  }
+  return { source: 'installed', ...(executablePath !== '' && { path: executablePath }) };
+}
+
 function entryFrom(draft: Draft): ModelEntryInput {
   const tokens = Math.trunc(Number(draft.contextWindowTokens.trim() || 'NaN'));
   const common = {
@@ -741,10 +822,7 @@ function entryFrom(draft: Draft): ModelEntryInput {
         ...common,
         kind: 'claude-agent-sdk',
         ...(model !== '' && { model }),
-        executable:
-          draft.executable === 'bundled'
-            ? { source: 'bundled' }
-            : { source: 'installed', ...(executablePath !== '' && { path: executablePath }) },
+        executable: executableFrom(draft.executable, executablePath),
       };
     }
     case 'openai-compatible': {

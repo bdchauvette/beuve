@@ -24,7 +24,11 @@ export function groupStable<T>(
   const stable = new Map<string, readonly T[]>();
   for (const [key, group] of groups) {
     const before = previous.get(key);
-    stable.set(key, before !== undefined && isSameMembers(before, group) ? before : group);
+    if (before !== undefined && isSameMembers(before, group)) {
+      stable.set(key, before);
+    } else {
+      stable.set(key, group);
+    }
   }
   return stable;
 }

@@ -29,29 +29,49 @@ export function shortcutSectionsFor(
   catalog: readonly CatalogCommand[],
   platform: KeyPlatform,
 ): ShortcutSection[] {
-  const menuOf = (command: CatalogCommand): TopMenu | undefined =>
-    (platform === 'linux' ? (command.linuxMenu ?? command.menu) : command.menu)?.menu;
+  const menuOf = (command: CatalogCommand): TopMenu | undefined => {
+    if (platform === 'linux') {
+      return (command.linuxMenu ?? command.menu)?.menu;
+    }
+    return command.menu?.menu;
+  };
   const keyed = catalog
-    .map((command) => ({
-      command,
-      keys: acceleratorsFor(command, platform).map((key) => displayAccelerator(key, platform)),
-    }))
+    .map((command) => {
+      return {
+        command,
+        keys: acceleratorsFor(command, platform).map((key) => displayAccelerator(key, platform)),
+      };
+    })
     .filter(({ keys }) => keys.length > 0);
-  const menus = menuTitles.map(([menu, title]): ShortcutSection => ({
-    title,
-    rows: keyed
-      .filter(({ command }) => menuOf(command) === menu)
-      .map(({ command, keys }) => ({ title: command.title, keys })),
-  }));
-  const areas = [...new Set(catalog.flatMap((command) => command.inPlace?.area ?? []))];
-  const inPlace = areas.map((area): ShortcutSection => ({
-    title: area,
-    rows: catalog
-      .filter((command) => command.inPlace?.area === area)
-      .map((command) => ({
-        title: command.title,
-        keys: (command.inPlace?.keys ?? []).map((key) => displayAccelerator(key, platform)),
-      })),
-  }));
+  const menus = menuTitles.map(([menu, title]): ShortcutSection => {
+    return {
+      title,
+      rows: keyed
+        .filter(({ command }) => menuOf(command) === menu)
+        .map(({ command, keys }) => {
+          return { title: command.title, keys };
+        }),
+    };
+  });
+  const areas = [
+    ...new Set(
+      catalog.flatMap((command) => {
+        return command.inPlace?.area ?? [];
+      }),
+    ),
+  ];
+  const inPlace = areas.map((area): ShortcutSection => {
+    return {
+      title: area,
+      rows: catalog
+        .filter((command) => command.inPlace?.area === area)
+        .map((command) => {
+          return {
+            title: command.title,
+            keys: (command.inPlace?.keys ?? []).map((key) => displayAccelerator(key, platform)),
+          };
+        }),
+    };
+  });
   return [...menus, ...inPlace].filter((section) => section.rows.length > 0);
 }

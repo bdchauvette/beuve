@@ -105,11 +105,12 @@ export class BeuveStatusBar extends LitElement {
 
   private renderAttention(): TemplateResult | typeof nothing {
     const chip = describeAttention(this.attention);
-    return chip === undefined
-      ? nothing
-      : html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
-          >${chip.text}</span
-        >`;
+    if (chip === undefined) {
+      return nothing;
+    }
+    return html`<span class="attention ${chip.isYours ? 'yours' : ''}" title=${chip.title}
+      >${chip.text}</span
+    >`;
   }
 
   private renderCi(ci: CiStatusView): TemplateResult {

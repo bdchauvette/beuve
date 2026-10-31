@@ -14,14 +14,11 @@ export interface ActionTree {
   element: (data: Record<string, string>, parent?: FakeElement, scope?: unknown) => FakeElement;
   /**
    * Dispatches a bubbling event of `type` at `target` with `init`'s properties, whose
-   * `composedPath()` runs from `target` through its ancestors to the root and then `beyond`.
+   * `composedPath()` runs from `target` through its ancestors to the root.
    */
-  dispatch: (
-    type: string,
-    target: FakeElement,
-    init?: Readonly<Record<string, unknown>>,
-    beyond?: readonly FakeElement[],
-  ) => Event;
+  dispatch: (type: string, target: FakeElement, init?: Readonly<Record<string, unknown>>) => Event;
+  /** {@link dispatch} without properties, whose path goes on from the root through `beyond`. */
+  dispatchBeyond: (type: string, target: FakeElement, beyond: readonly FakeElement[]) => Event;
 }
 
 /** A fresh {@link ActionTree}. */
@@ -35,7 +32,9 @@ export function actionTree(): ActionTree {
     const created: FakeElement = {
       dataset: { ...data },
       parent,
-      getRootNode: (): unknown => scope,
+      getRootNode: (): unknown => {
+        return scope;
+      },
       contains: (other): boolean => {
         for (let node = other as FakeElement | undefined; node !== undefined; node = node.parent) {
           if (node === created) {
@@ -47,11 +46,10 @@ export function actionTree(): ActionTree {
     };
     return created;
   };
-  const dispatch = (
+  const dispatchThrough = (
     type: string,
     target: FakeElement,
-    init: Readonly<Record<string, unknown>> = {},
-    beyond: readonly FakeElement[] = [],
+    { init = {}, beyond = [] }: DispatchOptions,
   ): Event => {
     const path: unknown[] = [];
     for (let node: FakeElement | undefined = target; node !== undefined; node = node.parent) {
@@ -61,9 +59,28 @@ export function actionTree(): ActionTree {
     for (const [key, value] of Object.entries(init)) {
       Object.defineProperty(event, key, { value });
     }
-    Object.defineProperty(event, 'composedPath', { value: () => [...path, root, ...beyond] });
+    Object.defineProperty(event, 'composedPath', {
+      value: () => {
+        return [...path, root, ...beyond];
+      },
+    });
     root.dispatchEvent(event);
     return event;
   };
-  return { root, element, dispatch };
+  return {
+    root,
+    element,
+    dispatch: (type, target, init): Event => {
+      return dispatchThrough(type, target, { init: init ?? {} });
+    },
+    dispatchBeyond: (type, target, beyond): Event => {
+      return dispatchThrough(type, target, { beyond });
+    },
+  };
+}
+
+/** The event's own properties, and the elements its path crosses after the root. */
+interface DispatchOptions {
+  readonly init?: Readonly<Record<string, unknown>>;
+  readonly beyond?: readonly FakeElement[];
 }

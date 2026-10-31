@@ -1,4 +1,13 @@
+import { firstHunkLine } from './first-hunk-line.ts';
+import { linesOf } from './lines-of.ts';
+
 const hunkHeader = /^@@ -([\d,]+) \+[\d,]+ @@/u;
+
+/** A suggested patch, and the head file it was made against. */
+export interface PatchOnHead {
+  readonly head: string;
+  readonly patch: string;
+}
 
 /**
  * The head file with a suggested patch applied, so re-editing a suggestion (ADR 0043) starts
@@ -6,10 +15,10 @@ const hunkHeader = /^@@ -([\d,]+) \+[\d,]+ @@/u;
  * head exactly; `undefined` when the patch doesn't apply (then the editor starts from the head).
  * A `\ No newline at end of file` after an added last line drops the final newline.
  */
-export function applySuggestedPatch(head: string, patch: string): string | undefined {
-  const source = head.endsWith('\n') ? head.slice(0, -1).split('\n') : head.split('\n');
+export function applySuggestedPatch({ head, patch }: PatchOnHead): string | undefined {
+  const source = linesOf(head);
   const isHeadEmpty = head === '';
-  const lines = patch.endsWith('\n') ? patch.slice(0, -1).split('\n') : patch.split('\n');
+  const lines = linesOf(patch);
   const output: string[] = [];
   let next = 0;
   let hasFinalNewline = head.endsWith('\n') || isHeadEmpty;
@@ -19,9 +28,7 @@ export function applySuggestedPatch(head: string, patch: string): string | undef
     const header = hunkHeader.exec(line);
     if (header !== null) {
       const [start = '', count = '1'] = (header[1] ?? '').split(',', 2);
-      const oldStart = Number(start);
-      const oldCount = Number(count);
-      const first = oldCount === 0 ? oldStart : oldStart - 1;
+      const first = firstHunkLine({ start: Number(start), count: Number(count) }) - 1;
       if (first < next || first > source.length) {
         return undefined;
       }
@@ -55,10 +62,18 @@ export function applySuggestedPatch(head: string, patch: string): string | undef
     }
     next += 1;
   }
-  output.push(...(isHeadEmpty ? [] : source.slice(next)));
+  if (!isHeadEmpty) {
+    output.push(...source.slice(next));
+  }
   if (next < source.length) {
     hasFinalNewline = head.endsWith('\n');
   }
   const text = output.join('\n');
-  return output.length === 0 ? '' : hasFinalNewline ? `${text}\n` : text;
+  if (output.length === 0) {
+    return '';
+  }
+  if (hasFinalNewline) {
+    return `${text}\n`;
+  }
+  return text;
 }

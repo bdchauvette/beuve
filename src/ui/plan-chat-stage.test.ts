@@ -7,7 +7,13 @@ import type { ChatMessageView } from '#contract/ipc-contract.ts';
 import type { ChatEntry } from './chat-entry.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 
-function base(): { sessionId: string; headSha: string; createdAt: string } {
+/** The fields every message in these tests shares. */
+type MessageBase = Pick<ChatMessageView, 'sessionId' | 'headSha' | 'createdAt'>;
+
+/** A reply's fields, with its whole text in place of parts. */
+type ReplyFields = Partial<ChatMessageView> & { readonly text?: string };
+
+function base(): MessageBase {
   return { sessionId: 's1', headSha: 'b'.repeat(40), createdAt: '2026-10-28T12:00:00.000Z' };
 }
 function diff(): Set<string> {
@@ -99,10 +105,7 @@ function ask(content: string): ChatEntry {
   });
 }
 
-function reply({
-  text = 'Because.',
-  ...overrides
-}: Partial<ChatMessageView> & { readonly text?: string }): ChatEntry {
+function reply({ text = 'Because.', ...overrides }: ReplyFields): ChatEntry {
   return entry({
     ...base(),
     id: 'a',

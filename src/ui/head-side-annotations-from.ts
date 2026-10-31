@@ -26,11 +26,13 @@ export function headSideAnnotationsFrom<T extends HeadSideRange>(
   hunks: readonly DiffHunkView[],
   notes: readonly T[],
 ): HeadSideAnnotation<T>[] {
-  return notes.map((note) => ({
-    side: 'additions',
-    lineNumber: lastShownLine(hunks, note) ?? 0,
-    metadata: note,
-  }));
+  return notes.map((note) => {
+    return {
+      side: 'additions',
+      lineNumber: lastShownLine(hunks, note) ?? 0,
+      metadata: note,
+    };
+  });
 }
 
 function lastShownLine(hunks: readonly DiffHunkView[], range: HeadSideRange): number | undefined {

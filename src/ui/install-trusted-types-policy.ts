@@ -19,10 +19,12 @@ const navigatingElements: readonly SanitizerElement[] = [
   'textarea',
   'meta',
   'link',
-  ...['a', 'animate', 'animateMotion', 'animateTransform', 'set'].map((name) => ({
-    name,
-    namespace: svgNamespace,
-  })),
+  ...['a', 'animate', 'animateMotion', 'animateTransform', 'set'].map((name) => {
+    return {
+      name,
+      namespace: svgNamespace,
+    };
+  }),
 ];
 /**
  * Parsed once at install: if the script or the link survives, the parse ignored the sanitizer. No
@@ -59,7 +61,9 @@ export function installTrustedTypesPolicy(): void {
   const parse = sanitizingParser(factory, parsers as DocumentParsers);
   const worker = new URL(highlighterWorker, document.baseURI).href;
   factory.createPolicy('default', {
-    createHTML: (html: string): string => withoutForeignUses(parse(html)).body.getHTML(),
+    createHTML: (html: string): string => {
+      return withoutForeignUses(parse(html)).body.getHTML();
+    },
     createScriptURL: (url: string): string => {
       if (URL.parse(url, document.baseURI)?.href !== worker) {
         throw new TypeError(`beuve loads no script from ${url}`);
@@ -102,12 +106,15 @@ function sanitizingParser(
 ): (html: string) => Document {
   try {
     const input = factory.createPolicy('beuve-sanitizer-input', {
-      createHTML: (html: string): string => html,
+      createHTML: (html: string): string => {
+        return html;
+      },
     });
     const sanitizer = librarySanitizer();
-    const parse = (html: string): Document =>
+    const parse = (html: string): Document => {
       // eslint-disable-next-line no-restricted-syntax -- the sanctioned parse: a sanitizer, a pass-through input policy, then `withoutForeignUses`.
-      parser.parseHTMLUnsafe(input.createHTML(html), { sanitizer });
+      return parser.parseHTMLUnsafe(input.createHTML(html), { sanitizer });
+    };
     if (!isSanitized(parse(selfTestHtml))) {
       throw new TypeError('its parseHTMLUnsafe ignores the sanitizer');
     }

@@ -1,5 +1,7 @@
 import type { CommitPairView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+
 /** What one row of the commit-pair list shows. */
 export interface CommitPairRow {
   readonly id: string;
@@ -28,7 +30,10 @@ export function describeCommitPair(pair: CommitPairView): CommitPairRow {
   const shown = pair.next ?? pair.previous;
   const additions = shown?.additions ?? 0;
   const deletions = shown?.deletions ?? 0;
-  const stats = additions + deletions === 0 ? '' : `+${String(additions)} −${String(deletions)}`;
+  let stats = '';
+  if (additions + deletions > 0) {
+    stats = `+${String(additions)} −${String(deletions)}`;
+  }
   return {
     id: pair.id,
     kind: pair.kind,
@@ -42,43 +47,55 @@ export function describeCommitPair(pair: CommitPairView): CommitPairRow {
 }
 
 function short(sha: string | undefined): string {
-  return sha === undefined ? '·' : sha.slice(0, 7);
+  if (sha === undefined) {
+    return '·';
+  }
+  return sha.slice(0, 7);
 }
 
 function describeTitle(pair: CommitPairView): string {
-  const lines = [
-    pair.previous === undefined ? undefined : `was ${pair.previous.sha}`,
-    pair.next === undefined ? undefined : `now ${pair.next.sha}`,
-    pair.previous === undefined ||
-    pair.next === undefined ||
-    pair.previous.subject === pair.next.subject
-      ? undefined
-      : `previously “${pair.previous.subject}”`,
-    pair.similarity === undefined
-      ? undefined
-      : `${String(Math.round(pair.similarity * 100))}% of changed lines in common`,
-    describeInterdiff(pair),
-  ];
-  return lines.filter((line) => line !== undefined).join('\n');
+  const { previous, next } = pair;
+  const lines: string[] = [];
+  if (previous !== undefined) {
+    lines.push(`was ${previous.sha}`);
+  }
+  if (next !== undefined) {
+    lines.push(`now ${next.sha}`);
+  }
+  if (previous !== undefined && next !== undefined && previous.subject !== next.subject) {
+    lines.push(`previously “${previous.subject}”`);
+  }
+  if (pair.similarity !== undefined) {
+    lines.push(`${String(Math.round(pair.similarity * 100))}% of changed lines in common`);
+  }
+  const interdiff = describeInterdiff(pair);
+  if (interdiff !== undefined) {
+    lines.push(interdiff);
+  }
+  return lines.join('\n');
 }
 
 function describeInterdiff(pair: CommitPairView): string | undefined {
   const { interdiff } = pair;
   if (interdiff === undefined) {
-    return pair.kind === 'dropped' ? 'no longer in this pull request' : undefined;
+    if (pair.kind === 'dropped') {
+      return 'no longer in this pull request';
+    }
+    return undefined;
   }
   switch (interdiff.kind) {
     case 'clean': {
       const count = interdiff.files.length;
-      return `changed since review in ${String(count)} ${count === 1 ? 'file' : 'files'}`;
+      return `changed since review in ${countNoun(count, 'file')}`;
     }
     case 'conflicts': {
       return `rebased with conflicts in ${interdiff.paths.join(', ')}`;
     }
     case 'unavailable': {
-      return interdiff.reason === 'git-too-old'
-        ? 'no per-commit interdiff: git is too old'
-        : 'no per-commit interdiff: too many changed commits';
+      if (interdiff.reason === 'git-too-old') {
+        return 'no per-commit interdiff: git is too old';
+      }
+      return 'no per-commit interdiff: too many changed commits';
     }
   }
 }

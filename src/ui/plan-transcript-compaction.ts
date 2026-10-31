@@ -13,12 +13,14 @@ export interface TranscriptCompaction {
  * "Compacted · N messages" divider. Pure.
  */
 export function planTranscriptCompaction(entries: readonly ChatEntry[]): TranscriptCompaction {
-  const boundary = entries.findLastIndex(
-    (entry) => entry.kind === 'message' && entry.message.role === 'summary',
-  );
-  const compactedMessages =
-    boundary === -1
-      ? 0
-      : entries.slice(0, boundary).filter((entry) => entry.kind === 'message').length;
+  const boundary = entries.findLastIndex((entry) => {
+    return entry.kind === 'message' && entry.message.role === 'summary';
+  });
+  if (boundary === -1) {
+    return { boundary, compactedMessages: 0 };
+  }
+  const compactedMessages = entries
+    .slice(0, boundary)
+    .filter((entry) => entry.kind === 'message').length;
   return { boundary, compactedMessages };
 }

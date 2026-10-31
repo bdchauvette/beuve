@@ -41,31 +41,54 @@ export function textmateThemeFrom(
       'editor.background': palette.background,
     },
     tokenColors: [
-      rule('Comments', palette.comment, ['comment', 'punctuation.definition.comment']),
-      rule('Strings', palette.string, [
-        'string',
-        'constant.character.escape',
-        'constant.other.placeholder',
-        'constant.character.format.placeholder',
-        'markup.inline.raw',
-      ]),
-      rule('Constants', palette.constant, ['constant']),
-      rule('Definitions', palette.definition, [
-        'entity.name',
-        'entity.name.type.class',
-        'entity.name.type.interface',
-        'entity.name.type.alias',
-        'entity.name.type.enum',
-        'entity.name.type.struct',
-        'entity.name.type.trait',
-      ]),
-      rule('Plain: uses of names and template code', palette.foreground, plainScopes),
+      rule({
+        name: 'Comments',
+        foreground: palette.comment,
+        scope: ['comment', 'punctuation.definition.comment'],
+      }),
+      rule({
+        name: 'Strings',
+        foreground: palette.string,
+        scope: [
+          'string',
+          'constant.character.escape',
+          'constant.other.placeholder',
+          'constant.character.format.placeholder',
+          'markup.inline.raw',
+        ],
+      }),
+      rule({ name: 'Constants', foreground: palette.constant, scope: ['constant'] }),
+      rule({
+        name: 'Definitions',
+        foreground: palette.definition,
+        scope: [
+          'entity.name',
+          'entity.name.type.class',
+          'entity.name.type.interface',
+          'entity.name.type.alias',
+          'entity.name.type.enum',
+          'entity.name.type.struct',
+          'entity.name.type.trait',
+        ],
+      }),
+      rule({
+        name: 'Plain: uses of names and template code',
+        foreground: palette.foreground,
+        scope: plainScopes,
+      }),
     ],
   };
 }
 
-function rule(name: string, color: string, scope: readonly string[]): TextmateRule {
-  return { name, scope: [...scope], settings: { foreground: color } };
+/** A rule's name, its color, and the scopes it colors. */
+interface RuleParts {
+  readonly name: string;
+  readonly foreground: string;
+  readonly scope: readonly string[];
+}
+
+function rule({ name, foreground, scope }: RuleParts): TextmateRule {
+  return { name, scope: [...scope], settings: { foreground } };
 }
 
 const plainScopes: readonly string[] = [

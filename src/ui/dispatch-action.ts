@@ -51,7 +51,10 @@ export function dispatchAction(
       continue;
     }
     const action = target.dataset['action'];
-    const handler = action === undefined ? undefined : handlers[action];
+    if (action === undefined) {
+      continue;
+    }
+    const handler = handlers[action];
     if (handler === undefined) {
       continue;
     }

@@ -33,7 +33,13 @@ export function findInReview(
 ): ReviewMatch[] {
   const limit = options.limit ?? defaultLimit;
   const isCaseSensitive = options.isCaseSensitive ?? false;
-  const needle = isCaseSensitive ? query : query.toLowerCase();
+  const folded = (value: string): string => {
+    if (isCaseSensitive) {
+      return value;
+    }
+    return value.toLowerCase();
+  };
+  const needle = folded(query);
   const matches: ReviewMatch[] = [];
   if (needle === '') {
     return matches;
@@ -54,9 +60,13 @@ export function findInReview(
         isInHunk &&= marker === '\\';
         continue;
       }
-      const side = marker === '-' ? 'base' : 'head';
-      const line = side === 'base' ? oldLine : newLine;
-      const text = isCaseSensitive ? raw.slice(1) : raw.slice(1).toLowerCase();
+      let side: ReviewMatch['side'] = 'head';
+      let line = newLine;
+      if (marker === '-') {
+        side = 'base';
+        line = oldLine;
+      }
+      const text = folded(raw.slice(1));
       for (
         let column = text.indexOf(needle);
         column !== -1;
@@ -67,8 +77,12 @@ export function findInReview(
           return matches;
         }
       }
-      oldLine += marker === '+' ? 0 : 1;
-      newLine += marker === '-' ? 0 : 1;
+      if (marker !== '+') {
+        oldLine += 1;
+      }
+      if (marker !== '-') {
+        newLine += 1;
+      }
     }
   }
   return matches;
@@ -82,7 +96,8 @@ function parseHunkStarts(text: string): readonly [number, number] | undefined {
   const [, oldSide = '', newSide = ''] = text.split(' ', 3);
   const oldStart = Number(oldSide.slice(1).split(',', 1)[0]);
   const newStart = Number(newSide.slice(1).split(',', 1)[0]);
-  return newSide.startsWith('+') && Number.isSafeInteger(oldStart) && Number.isSafeInteger(newStart)
-    ? [oldStart, newStart]
-    : undefined;
+  if (newSide.startsWith('+') && Number.isSafeInteger(oldStart) && Number.isSafeInteger(newStart)) {
+    return [oldStart, newStart];
+  }
+  return undefined;
 }

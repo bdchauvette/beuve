@@ -19,7 +19,9 @@ function fakeBridge(
       await Promise.resolve();
       return answers[channel] as never;
     },
-    on: () => stayUnsubscribed,
+    on: (): (() => void) => {
+      return stayUnsubscribed;
+    },
   };
 }
 
@@ -62,7 +64,7 @@ function definitionAnswer(): unknown {
 describe('runSheetAction', () => {
   test('opens the definition of the target line in a new sheet window', async ({ expect }) => {
     const calls: [string, unknown][] = [];
-    const file = createDiffFileView('src/handler.ts', [' a', '+b'], 3);
+    const file = createDiffFileView('src/handler.ts', [' a', '+b'], { start: 3 });
     const outcome = await runSheetAction(
       contextWith({ 'lsp:definition': definitionAnswer(), 'sheet:open': { ok: true } }, calls),
       { kind: 'definition', target: { kind: 'line', file, line: 4 } },
@@ -93,7 +95,7 @@ describe('runSheetAction', () => {
 
   test('shows the definition inline when sheets open over the diff', async ({ expect }) => {
     const calls: [string, unknown][] = [];
-    const file = createDiffFileView('src/handler.ts', [' a'], 1);
+    const file = createDiffFileView('src/handler.ts', [' a']);
     const outcome = await runSheetAction(
       contextWith({ 'lsp:definition': definitionAnswer() }, calls, 'inline'),
       { kind: 'type-definition', target: { kind: 'line', file, line: 1 } },
@@ -114,7 +116,7 @@ describe('runSheetAction', () => {
   }) => {
     const calls: [string, unknown][] = [];
     const url = `https://github.com/o/r/blob/${'b'.repeat(40)}/src/a.ts#L2`;
-    const file = createDiffFileView('src/a.ts', [' a', '-b', '+c'], 1);
+    const file = createDiffFileView('src/a.ts', [' a', '-b', '+c']);
     const copied = await runSheetAction(
       contextWith(
         {

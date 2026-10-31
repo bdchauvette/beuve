@@ -12,13 +12,15 @@ describe('planTraceTimeline', () => {
   }) => {
     const cases = planTraceTimeline(createTraceResultView(), 'en');
     expect(
-      cases.map(({ title, status, duration, failure, dropped }) => ({
-        title,
-        status,
-        duration,
-        failure,
-        dropped,
-      })),
+      cases.map(({ title, status, duration, failure, dropped }) => {
+        return {
+          title,
+          status,
+          duration,
+          failure,
+          dropped,
+        };
+      }),
     ).toStrictEqual([
       {
         title: 'clamp › caps high values',
@@ -40,15 +42,9 @@ describe('planTraceTimeline', () => {
   test('renders each step with its depth, line, hunk flag and outcome', ({ expect }) => {
     const [first] = planTraceTimeline(createTraceResultView());
     expect(
-      first?.rows.map((row) => [
-        row.depth,
-        row.line,
-        row.inHunk,
-        row.tag,
-        row.text,
-        row.result,
-        row.tone,
-      ]),
+      first?.rows.map((row) => {
+        return [row.depth, row.line, row.inHunk, row.tag, row.text, row.result, row.tone];
+      }),
     ).toStrictEqual([
       [0, 1, false, 'call', 'clamp(value=12, high=10)', '', 'neutral'],
       [0, 2, false, 'if', 'value < low', 'false · else', 'skipped'],

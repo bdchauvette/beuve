@@ -13,9 +13,12 @@ export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {
     return { tone: 'error', text: response.message };
   }
   const where = `${revealFormatControls(response.path)}:${String(response.line)}`;
-  const copy =
-    response.location === 'beuve-checkout'
-      ? ' (beuve checkout of the reviewed head, not your working tree)'
-      : '';
-  return { tone: 'info', text: `Opened ${where} in ${response.editorName}${copy}.` };
+  const opened = `Opened ${where} in ${response.editorName}`;
+  if (response.location === 'beuve-checkout') {
+    return {
+      tone: 'info',
+      text: `${opened} (beuve checkout of the reviewed head, not your working tree).`,
+    };
+  }
+  return { tone: 'info', text: `${opened}.` };
 }

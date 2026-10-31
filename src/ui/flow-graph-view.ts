@@ -56,6 +56,16 @@ const markers: Readonly<Record<string, string | undefined>> = {
  * the review changed in the diff "added" colour. Nodes are focusable; arrow keys walk the flow and
  * Enter fires `flow-node-activate` so Zone 2 can jump to the code.
  */
+/** Kinds drawn as rounded pills rather than boxes. */
+const roundedKinds: ReadonlySet<string> = new Set([
+  'condition',
+  'loop',
+  'switch',
+  'case',
+  'entry',
+  'exit',
+]);
+
 @customElement('beuve-flow-graph')
 export class FlowGraphView extends LitElement {
   static override styles = css`
@@ -237,8 +247,9 @@ export class FlowGraphView extends LitElement {
   constructor() {
     super();
     // ADR 0074: the nodes, through one listener per type.
-    const nodeOf = ({ nodeId }: ActionData): FlowViewNode | undefined =>
-      this.graph?.nodes.find((candidate) => String(candidate.id) === nodeId);
+    const nodeOf = ({ nodeId }: ActionData): FlowViewNode | undefined => {
+      return this.graph?.nodes.find((candidate) => String(candidate.id) === nodeId);
+    };
     this.addController(
       new ActionDelegation(this, {
         click: {
@@ -261,12 +272,10 @@ export class FlowGraphView extends LitElement {
   }
 
   private renderEdge(edge: PositionedFlowEdge): TemplateResult {
-    const path = edge.points
-      .map((point, at) => `${at === 0 ? 'M' : 'L'}${String(point.x)} ${String(point.y)}`)
-      .join(' ');
+    const path = `M${edge.points.map((point) => `${String(point.x)} ${String(point.y)}`).join(' L')}`;
     const label = edgeLabels[edge.kind];
     return svg`
-      <path class=${`edge ${edge.kind}${edge.back ? ' back' : ''}`} d=${path} marker-end="url(#arrow)"></path>
+      <path class="edge ${edge.kind}${edge.back ? ' back' : ''}" d=${path} marker-end="url(#arrow)"></path>
       ${label === undefined ? nothing : svg`<text class="edge-label" text-anchor=${edge.labelAnchor} x=${edge.labelAt.x} y=${edge.labelAt.y}>${label}</text>`}
     `;
   }
@@ -279,21 +288,19 @@ export class FlowGraphView extends LitElement {
       return svg``;
     }
     const marker = markers[node.kind];
-    const radius = ['condition', 'loop', 'switch', 'case', 'entry', 'exit'].includes(node.kind)
-      ? positioned.height / 2
-      : 3;
-    const lines =
-      node.startLine === node.endLine
-        ? `line ${String(node.startLine)}`
-        : `lines ${String(node.startLine)} to ${String(node.endLine)}`;
+    let radius = 3;
+    if (roundedKinds.has(node.kind)) {
+      radius = positioned.height / 2;
+    }
+    const lines = linesOf(node);
     return svg`
       <g
-        class=${`node ${node.kind}${node.changed ? ' changed' : ''}`}
+        class="node ${node.kind}${node.changed ? ' changed' : ''}"
         role="button"
         tabindex=${node.id === this.activeId ? 0 : -1}
         data-node-id=${node.id}
         data-action="node"
-        aria-label=${`${node.kind} ${node.label}, ${lines}${node.changed ? ', changed' : ''}`}
+        aria-label="${node.kind} ${node.label}, ${lines}${node.changed ? ', changed' : ''}"
       >
         <title>${lines}</title>
         <rect
@@ -348,7 +355,11 @@ export class FlowGraphView extends LitElement {
 
   /** Down and up follow the flow; left and right step between the branches of the same decision. */
   private neighbour(key: string, id: number): number | undefined {
-    const nodes = new Map((this.layout?.nodes ?? []).map((node) => [node.id, node]));
+    const nodes = new Map(
+      (this.layout?.nodes ?? []).map((node) => {
+        return [node.id, node];
+      }),
+    );
     const current = nodes.get(id);
     switch (key) {
       case 'ArrowDown': {
@@ -360,9 +371,15 @@ export class FlowGraphView extends LitElement {
       case 'ArrowLeft':
       case 'ArrowRight': {
         const parent = current?.predecessors[0];
-        const siblings = parent === undefined ? [] : (nodes.get(parent)?.successors ?? []);
+        if (parent === undefined) {
+          return undefined;
+        }
+        const siblings = nodes.get(parent)?.successors ?? [];
         const at = siblings.indexOf(id);
-        return siblings[at + (key === 'ArrowRight' ? 1 : -1)];
+        if (key === 'ArrowRight') {
+          return siblings[at + 1];
+        }
+        return siblings[at - 1];
       }
       default: {
         return undefined;
@@ -402,7 +419,11 @@ export class FlowGraphView extends LitElement {
     if (!changed.has('graph')) {
       return;
     }
-    this.layout = this.graph === undefined ? undefined : flowLayout(this.graph);
+    if (this.graph === undefined) {
+      this.layout = undefined;
+    } else {
+      this.layout = flowLayout(this.graph);
+    }
     this.activeId = this.graph?.nodes[0]?.id;
   }
 
@@ -412,11 +433,15 @@ export class FlowGraphView extends LitElement {
     if (graph === undefined || layout === undefined || graph.nodes.length === 0) {
       return html`<p class="empty">No control flow to show.</p>`;
     }
-    const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+    const byId = new Map(
+      graph.nodes.map((node) => {
+        return [node.id, node];
+      }),
+    );
     return html`
       <svg
         role="group"
-        aria-label=${`Control flow of ${graph.name === '' ? 'the function' : graph.name}`}
+        aria-label="Control flow of ${graph.name === '' ? 'the function' : graph.name}"
         width=${layout.width}
         height=${layout.height}
         viewBox=${`0 0 ${String(layout.width)} ${String(layout.height)}`}
@@ -440,6 +465,14 @@ export class FlowGraphView extends LitElement {
       ${this.renderLegend()}
     `;
   }
+}
+
+/** `line 4`, or `lines 4 to 9`. */
+function linesOf(node: FlowViewNode): string {
+  if (node.startLine === node.endLine) {
+    return `line ${String(node.startLine)}`;
+  }
+  return `lines ${String(node.startLine)} to ${String(node.endLine)}`;
 }
 
 declare global {

@@ -11,5 +11,8 @@ export function safeHrefFrom(destination: string): string | undefined {
     return undefined;
   }
   const url = new URL(trimmed);
-  return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
+  if (url.protocol === 'http:' || url.protocol === 'https:') {
+    return url.href;
+  }
+  return undefined;
 }

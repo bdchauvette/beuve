@@ -3,7 +3,7 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { flowLayout } from './flow-layout.ts';
-import type { FlowLayout, FlowLayoutInput } from './flow-layout.ts';
+import type { FlowLayout, FlowLayoutInput, FlowPoint, PositionedFlowNode } from './flow-layout.ts';
 
 function ifElse(): FlowLayoutInput {
   return {
@@ -238,7 +238,7 @@ function boxCrossings(layout: FlowLayout): string[] {
     for (const node of others) {
       for (const [at, from] of edge.points.entries()) {
         const to = edge.points[at + 1];
-        if (to !== undefined && isInsideBox(from, to, node)) {
+        if (to !== undefined && isInsideBox({ from, to }, node)) {
           crossings.push(`${String(edge.from)} -> ${String(edge.to)} through ${String(node.id)}`);
         }
       }
@@ -247,12 +247,14 @@ function boxCrossings(layout: FlowLayout): string[] {
   return crossings;
 }
 
+/** One straight piece of an edge. */
+interface Segment {
+  readonly from: FlowPoint;
+  readonly to: FlowPoint;
+}
+
 /** Whether an axis-aligned segment passes through the inside of a box. */
-function isInsideBox(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  box: { x: number; y: number; width: number; height: number },
-): boolean {
+function isInsideBox({ from, to }: Segment, box: PositionedFlowNode): boolean {
   const left = Math.min(from.x, to.x);
   const right = Math.max(from.x, to.x);
   const top = Math.min(from.y, to.y);

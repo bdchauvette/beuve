@@ -62,7 +62,11 @@ function matchRuns(lines: readonly PatchLine[]): PatchLine[] {
       }
       index += 1;
     }
-    result.push(...(isPlain ? diffRun(removed, added) : rebuildRun(lines, index)));
+    if (isPlain) {
+      result.push(...diffRun({ removed, added }));
+    } else {
+      result.push(...rebuildRun(lines, index));
+    }
   }
   return result;
 }
@@ -76,7 +80,13 @@ function rebuildRun(lines: readonly PatchLine[], end: number): PatchLine[] {
   return lines.slice(start, end);
 }
 
-function diffRun(removed: readonly string[], added: readonly string[]): PatchLine[] {
+/** A run of changed lines: what it removed and what it added, markers dropped. */
+interface ChangeRun {
+  readonly removed: readonly string[];
+  readonly added: readonly string[];
+}
+
+function diffRun({ removed, added }: ChangeRun): PatchLine[] {
   const common = longestCommonSubsequence(removed, added);
   const result: PatchLine[] = [];
   let from = 0;
@@ -106,17 +116,20 @@ function longestCommonSubsequence(
   a: readonly string[],
   b: readonly string[],
 ): (readonly [number, number])[] {
-  const table = [...a, ''].map(() => [...b.map(() => 0), 0]);
+  const table = [...a, ''].map(() => {
+    return [...b.map(() => 0), 0];
+  });
   for (let i = a.length - 1; i >= 0; i -= 1) {
     for (let j = b.length - 1; j >= 0; j -= 1) {
       const row = table[i];
       if (row === undefined) {
         continue;
       }
-      row[j] =
-        a[i] === b[j]
-          ? (table[i + 1]?.[j + 1] ?? 0) + 1
-          : Math.max(table[i + 1]?.[j] ?? 0, row[j + 1] ?? 0);
+      if (a[i] === b[j]) {
+        row[j] = (table[i + 1]?.[j + 1] ?? 0) + 1;
+      } else {
+        row[j] = Math.max(table[i + 1]?.[j] ?? 0, row[j + 1] ?? 0);
+      }
     }
   }
   const pairs: (readonly [number, number])[] = [];

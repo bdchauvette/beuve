@@ -35,12 +35,22 @@ export function displayAccelerator(accelerator: string, platform: KeyPlatform): 
   const parts = accelerator.split(separator);
   const key = parts.at(-1) ?? '';
   const modifiers = new Set(parts.slice(0, -1));
-  const names = keyNames[key];
-  const shown = names === undefined ? key : platform === 'mac' ? names[0] : names[1];
+  const shown = keyName(key, platform);
   if (platform === 'mac') {
     const ordered = macOrder.filter((modifier) => modifiers.has(modifier));
     return `${ordered.map((modifier) => macModifiers[modifier] ?? modifier).join('')}${shown}`;
   }
   const ordered = linuxOrder.filter((modifier) => modifiers.has(modifier));
   return [...ordered, shown].join('+');
+}
+
+function keyName(key: string, platform: KeyPlatform): string {
+  const names = keyNames[key];
+  if (names === undefined) {
+    return key;
+  }
+  if (platform === 'mac') {
+    return names[0];
+  }
+  return names[1];
 }

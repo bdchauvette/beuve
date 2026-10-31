@@ -7,11 +7,19 @@ import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import { test } from './testing/test.ts';
 
 /** A stand-in for the bridge's `chat:stream` subscription that the test pushes events into. */
-function fakeChannel(): {
+interface FakeChannel {
   readonly subscribe: ChatStreamSubscribe;
   readonly push: (event: ChatStreamEvent) => void;
   readonly listeners: () => number;
-} {
+}
+
+/** Which part of which answer a delta extends. */
+interface DeltaPlace {
+  readonly partId: string;
+  readonly messageId?: string;
+}
+
+function fakeChannel(): FakeChannel {
   const listeners = new Set<(event: ChatStreamEvent) => void>();
   return {
     subscribe: (listener): (() => void) => {
@@ -25,11 +33,13 @@ function fakeChannel(): {
         listener(event);
       }
     },
-    listeners: (): number => listeners.size,
+    listeners: (): number => {
+      return listeners.size;
+    },
   };
 }
 
-function delta(partId: string, text: string, messageId = 'a1'): ChatStreamEvent {
+function delta(text: string, { partId, messageId = 'a1' }: DeltaPlace): ChatStreamEvent {
   return { sessionId: 's1', messageId, type: 'text-delta', partId, text };
 }
 
@@ -55,10 +65,10 @@ describe('textPartStream', () => {
       signal,
     });
     const read = readAll(stream);
-    channel.push(delta('p2', 'trims '));
-    channel.push(delta('p3', 'other part'));
-    channel.push(delta('p2', 'other message', 'a2'));
-    channel.push(delta('p2', 'input.'));
+    channel.push(delta('trims ', { partId: 'p2' }));
+    channel.push(delta('other part', { partId: 'p3' }));
+    channel.push(delta('other message', { partId: 'p2', messageId: 'a2' }));
+    channel.push(delta('input.', { partId: 'p2' }));
     channel.push({
       sessionId: 's1',
       messageId: 'a1',
@@ -80,7 +90,7 @@ describe('textPartStream', () => {
     const discarded = readAll(
       textPartStream(channel.subscribe, { messageId: 'a2', partId: 'p1', signal }),
     );
-    channel.push(delta('p1', 'Looking.', 'a2'));
+    channel.push(delta('Looking.', { partId: 'p1', messageId: 'a2' }));
     channel.push({ sessionId: 's1', messageId: 'a2', type: 'part-discard', partId: 'p1' });
     channel.push({
       sessionId: 's1',

@@ -80,9 +80,10 @@ async function define(
     return { kind: 'notice', notice: { tone: 'error', text: answer.error.message } };
   }
   const request = sheetRequestFrom(context.sessionId, answer.value);
-  return typeof request === 'string'
-    ? info(request)
-    : open({ ...context, headSha: request.sha }, { path: request.path, range: request.range });
+  if (typeof request === 'string') {
+    return info(request);
+  }
+  return open({ ...context, headSha: request.sha }, { path: request.path, range: request.range });
 }
 
 async function open(context: SheetActionContext, place: SheetPlace): Promise<SheetOutcome> {
@@ -95,11 +96,10 @@ async function open(context: SheetActionContext, place: SheetPlace): Promise<She
     path: place.path,
     ...(place.range !== undefined && { range: place.range }),
   });
-  return opened.ok
-    ? info(
-        `Opened ${revealFormatControls(place.path)}${place.range === undefined ? '' : `:${String(place.range.startLine)}`} in a sheet.`,
-      )
-    : { kind: 'notice', notice: { tone: 'error', text: opened.error.message } };
+  if (opened.ok) {
+    return info(`Opened ${placeText(place)} in a sheet.`);
+  }
+  return { kind: 'notice', notice: { tone: 'error', text: opened.error.message } };
 }
 
 async function link(
@@ -112,15 +112,19 @@ async function link(
     return info('Pick a file or lines to link to.');
   }
   const { side, ...where } = place;
-  const request = {
+  let sha = context.headSha;
+  if (side === 'base') {
+    sha = context.baseSha;
+  }
+  let channel: 'remote:permalink' | 'remote:open-permalink' = 'remote:permalink';
+  if (isOpening) {
+    channel = 'remote:open-permalink';
+  }
+  const answer = await context.bridge.invoke(channel, {
     sessionId: context.sessionId,
-    sha: side === 'base' ? context.baseSha : context.headSha,
+    sha,
     ...where,
-  };
-  const answer = await context.bridge.invoke(
-    isOpening ? 'remote:open-permalink' : 'remote:permalink',
-    request,
-  );
+  });
   if (!answer.ok) {
     return { kind: 'notice', notice: { tone: 'error', text: answer.error.message } };
   }
@@ -128,15 +132,29 @@ async function link(
     return info(describeLink(answer.value, isOpening));
   }
   const copied = await context.bridge.invoke('clipboard:write-text', { text: answer.value.url });
-  return copied.ok
-    ? info(`Copied ${answer.value.url}`)
-    : { kind: 'notice', notice: { tone: 'error', text: copied.error.message } };
+  if (copied.ok) {
+    return info(`Copied ${answer.value.url}`);
+  }
+  return { kind: 'notice', notice: { tone: 'error', text: copied.error.message } };
+}
+
+/** The path, with the line a range starts on. */
+function placeText(place: SheetPlace): string {
+  const path = revealFormatControls(place.path);
+  if (place.range === undefined) {
+    return path;
+  }
+  return `${path}:${String(place.range.startLine)}`;
 }
 
 function describeLink(link: PermalinkView, isOpening: boolean): string {
-  return link.kind === 'link'
-    ? `${isOpening ? 'Opened' : 'Link:'} ${link.url}`
-    : 'This repository has no GitHub remote to link to.';
+  if (link.kind !== 'link') {
+    return 'This repository has no GitHub remote to link to.';
+  }
+  if (isOpening) {
+    return `Opened ${link.url}`;
+  }
+  return `Link: ${link.url}`;
 }
 
 function info(text: string): SheetOutcome {

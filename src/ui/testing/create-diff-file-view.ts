@@ -1,5 +1,12 @@
 import type { DiffFileView } from '#contract/ipc-contract.ts';
 
+/** Where {@link createDiffFileView}'s hunk starts, and fields to set over the computed ones. */
+export interface DiffFileViewOptions {
+  /** The hunk's first line on both sides; 1 by default. */
+  readonly start?: number;
+  readonly overrides?: Partial<DiffFileView>;
+}
+
 /**
  * A modified file at `path` whose patch is one hunk of `body` lines (each starting with ` `, `+`
  * or `-`) from line `start` on both sides, with its counts, hunk and git header filled in.
@@ -7,8 +14,7 @@ import type { DiffFileView } from '#contract/ipc-contract.ts';
 export function createDiffFileView(
   path: string,
   body: readonly string[],
-  start = 1,
-  overrides: Partial<DiffFileView> = {},
+  { start = 1, overrides = {} }: DiffFileViewOptions = {},
 ): DiffFileView {
   const oldCount = body.filter((line) => !line.startsWith('+')).length;
   const newCount = body.filter((line) => !line.startsWith('-')).length;

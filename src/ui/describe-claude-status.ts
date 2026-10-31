@@ -23,7 +23,8 @@ export function describeClaudeStatus(status: ClaudeStatusView): AccountLine {
     return { tone: 'warn', text: 'Claude Code not found', detail: status.message };
   }
   const where = `${status.command} (${sources[status.source] ?? status.source})`;
-  return status.version === undefined
-    ? { tone: 'muted', text: 'Claude Code found; it did not report a version', detail: where }
-    : { tone: 'ok', text: status.version, detail: where };
+  if (status.version === undefined) {
+    return { tone: 'muted', text: 'Claude Code found; it did not report a version', detail: where };
+  }
+  return { tone: 'ok', text: status.version, detail: where };
 }

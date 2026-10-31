@@ -46,10 +46,11 @@ export function htmlStructureFrom(html: string): HtmlStructure {
   let index = 0;
   while (index < html.length) {
     const open = html.indexOf('<', index);
-    text += decodedFrom(html.slice(index, open === -1 ? html.length : open));
     if (open === -1) {
+      text += decodedFrom(html.slice(index));
       break;
     }
+    text += decodedFrom(html.slice(index, open));
     const tag = tagAt(html, open);
     if (tag === undefined) {
       text += '<';
@@ -64,7 +65,10 @@ export function htmlStructureFrom(html: string): HtmlStructure {
       continue;
     }
     const close = html.toLowerCase().indexOf(`</${tag.rawText}`, index);
-    index = close === -1 ? html.length : close;
+    if (close === -1) {
+      break;
+    }
+    index = close;
   }
   return { markup: [...markup].toSorted((a, b) => a.localeCompare(b, 'en')), text };
 }
@@ -74,26 +78,25 @@ function decodedFrom(data: string): string {
   let decoded = '';
   let last = 0;
   for (const match of data.matchAll(reference)) {
-    const [whole, hex, decimal, named] = match;
-    decoded += data.slice(last, match.index) + referenceValue(whole, hex, decimal, named);
-    last = match.index + whole.length;
+    decoded += data.slice(last, match.index) + referenceValue(match);
+    last = match.index + match[0].length;
   }
   return decoded + data.slice(last);
 }
 
-function referenceValue(
-  whole: string,
-  hex: string | undefined,
-  decimal: string | undefined,
-  named: string | undefined,
-): string {
+/** The character a `&#x…;`, `&#…;` or `&name;` match stands for; unknown names stay as written. */
+function referenceValue(match: RegExpExecArray): string {
+  const [whole, hex, decimal, named] = match;
   if (hex !== undefined) {
     return String.fromCodePoint(Number.parseInt(hex, 16));
   }
   if (decimal !== undefined) {
     return String.fromCodePoint(Number(decimal));
   }
-  return named === undefined ? whole : (namedReferences[named.toLowerCase()] ?? whole);
+  if (named === undefined) {
+    return whole;
+  }
+  return namedReferences[named.toLowerCase()] ?? whole;
 }
 
 interface Tag {
@@ -109,22 +112,34 @@ function tagAt(html: string, open: number): Tag | undefined {
   const next = html[open + 1] ?? '';
   if (html.startsWith('<!--', open)) {
     const close = html.indexOf('-->', open + 4);
-    return { markup: ['<!…>'], end: close === -1 ? html.length : close + 3 };
+    if (close === -1) {
+      return { markup: ['<!…>'], end: html.length };
+    }
+    return { markup: ['<!…>'], end: close + 3 };
   }
   if (next === '!' || next === '?') {
     return { markup: [`<${next}…>`], end: pastGreaterThan(html, open) };
   }
   if (next === '/') {
     // An end tag adds nothing; `</` followed by anything but a letter is a bogus comment.
-    const isEndTag = asciiLetter.test(html[open + 2] ?? '');
-    return { markup: isEndTag ? [] : ['</…>'], end: pastGreaterThan(html, open) };
+    const end = pastGreaterThan(html, open);
+    if (asciiLetter.test(html[open + 2] ?? '')) {
+      return { markup: [], end };
+    }
+    return { markup: ['</…>'], end };
   }
-  return asciiLetter.test(next) ? startTagAt(html, open) : undefined;
+  if (asciiLetter.test(next)) {
+    return startTagAt(html, open);
+  }
+  return undefined;
 }
 
 function pastGreaterThan(html: string, from: number): number {
   const close = html.indexOf('>', from);
-  return close === -1 ? html.length : close + 1;
+  if (close === -1) {
+    return html.length;
+  }
+  return close + 1;
 }
 
 /** A start tag: its name, then attributes as the tokenizer's attribute states read them. */
@@ -137,9 +152,9 @@ function startTagAt(html: string, open: number): Tag {
     }
     return html.slice(from, index);
   };
-  const tagName = readWhile(
-    (character) => !isSpace(character) && !'/>'.includes(character),
-  ).toLowerCase();
+  const tagName = readWhile((character) => {
+    return !isSpace(character) && !'/>'.includes(character);
+  }).toLowerCase();
   const markup = [tagName];
   for (;;) {
     readWhile((character) => isSpace(character) || character === '/');

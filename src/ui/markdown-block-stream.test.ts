@@ -35,21 +35,28 @@ function textStream(deltas: readonly string[]): ReadableStream<string> {
 }
 
 /** The finished blocks, in order, and the last tail's blocks. */
-function rendered(chunks: readonly MarkdownChunk[]): {
+interface Rendered {
   readonly blocks: MarkdownBlock[];
   readonly tail: readonly MarkdownBlock[] | undefined;
-} {
+}
+
+function rendered(chunks: readonly MarkdownChunk[]): Rendered {
   return {
-    blocks: chunks.flatMap((chunk) => (chunk.kind === 'block' ? chunk.blocks : [])),
+    blocks: chunks.flatMap((chunk) => {
+      if (chunk.kind === 'block') {
+        return chunk.blocks;
+      }
+      return [];
+    }),
     tail: chunks.findLast((chunk) => chunk.kind === 'tail')?.blocks,
   };
 }
 
 /** `text` in pieces of `size` characters. */
 function piecesOf(text: string, size: number): string[] {
-  return Array.from({ length: Math.ceil(text.length / size) }, (_piece, index) =>
-    text.slice(index * size, (index + 1) * size),
-  );
+  return Array.from({ length: Math.ceil(text.length / size) }, (_piece, index) => {
+    return text.slice(index * size, (index + 1) * size);
+  });
 }
 
 describe('MarkdownBlockStream', () => {
@@ -58,7 +65,11 @@ describe('MarkdownBlockStream', () => {
     signal,
   }) => {
     const chunks = await streamed(['# Title\n\nSome **bo', 'ld** text\n\n- a\n', '- b'], signal);
-    expect(chunks.map((chunk) => [chunk.kind, chunk.source])).toStrictEqual([
+    expect(
+      chunks.map((chunk) => {
+        return [chunk.kind, chunk.source];
+      }),
+    ).toStrictEqual([
       ['block', '# Title\n'],
       ['tail', 'Some **bo'],
       ['block', 'Some **bold** text\n'],
@@ -78,7 +89,12 @@ describe('MarkdownBlockStream', () => {
       ['Some **bold and `co', 'de` text\n```ts\nconst a = 1;\n'],
       signal,
     );
-    const tails = chunks.flatMap((chunk) => (chunk.kind === 'tail' ? [chunk.blocks] : []));
+    const tails = chunks.flatMap((chunk) => {
+      if (chunk.kind === 'tail') {
+        return [chunk.blocks];
+      }
+      return [];
+    });
     expect(tails[0]).toStrictEqual([
       {
         kind: 'paragraph',
@@ -115,9 +131,9 @@ describe('MarkdownBlockStream', () => {
     const source = sampleMarkdown();
     const expected = { blocks: parseMarkdown(source), tail: [] };
     const results = await Promise.all(
-      Array.from({ length: source.length + 1 }, async (_offset, offset) =>
-        rendered(await streamed([source.slice(0, offset), source.slice(offset)], signal)),
-      ),
+      Array.from({ length: source.length + 1 }, async (_offset, offset) => {
+        return rendered(await streamed([source.slice(0, offset), source.slice(offset)], signal));
+      }),
     );
     expect(results.filter((result) => !isSameTree(result, expected))).toStrictEqual([]);
   });

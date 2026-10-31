@@ -108,7 +108,7 @@ describe('delegateActions', () => {
       },
       { signal },
     );
-    tree.dispatch('click', plain, {}, [outside]);
+    tree.dispatchBeyond('click', plain, [outside]);
     expect(runs).toStrictEqual([]);
   });
 
@@ -262,7 +262,11 @@ describe('delegateActions', () => {
       { signal },
     );
     const event = new Event('click', { bubbles: true });
-    Object.defineProperty(event, 'composedPath', { value: () => [button, host] });
+    Object.defineProperty(event, 'composedPath', {
+      value: () => {
+        return [button, host];
+      },
+    });
     host.dispatchEvent(event);
     expect(runs).toStrictEqual(['open']);
   });

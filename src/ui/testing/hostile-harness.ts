@@ -58,10 +58,10 @@ export class HostileHarness {
     entry: HostileDiffCase,
   ): Promise<HarnessVerdict> {
     const [hostile, benign] = await Promise.all([
-      this.renderDiff(library, entry.hostile, entry.options),
-      this.renderDiff(library, entry.benign, entry.options),
+      this.renderDiff(library, { patch: entry.hostile, options: entry.options }),
+      this.renderDiff(library, { patch: entry.benign, options: entry.options }),
     ]);
-    return verdict(titleOf(group, entry, entry.options), hostile, benign, entry.visible);
+    return verdict(titleOf(group, entry, entry.options), { hostile, benign }, entry.visible);
   }
 
   private async fileVerdict(
@@ -73,7 +73,7 @@ export class HostileHarness {
       this.renderFile(library, entry.hostile),
       this.renderFile(library, entry.benign),
     ]);
-    return verdict(titleOf(group, entry), hostile, benign, entry.visible);
+    return verdict(titleOf(group, entry), { hostile, benign }, entry.visible);
   }
 
   /**
@@ -87,21 +87,26 @@ export class HostileHarness {
     entry: HostileInput,
     render: (which: 'hostile' | 'benign', isDrawn: () => boolean) => Promise<Rendered>,
   ): Promise<HarnessVerdict> {
-    const hostile = await withConsoleErrors(async (errors) =>
-      render('hostile', () => errors.length > 0),
+    const hostile = await withConsoleErrors(async (errors) => {
+      return render('hostile', () => errors.length > 0);
+    });
+    const benign = await withConsoleErrors(async (errors) => {
+      return render('benign', () => errors.length > 0);
+    });
+    const base = verdict(
+      titleOf(group, entry),
+      { hostile: hostile.rendered, benign: benign.rendered },
+      [],
     );
-    const benign = await withConsoleErrors(async (errors) =>
-      render('benign', () => errors.length > 0),
-    );
-    const base = verdict(titleOf(group, entry), hostile.rendered, benign.rendered, []);
     const reported = hostile.errors.join('\n');
+    if (reported.includes(unknownLanguage)) {
+      return base;
+    }
     return {
       ...base,
       failures: [
         ...base.failures,
-        ...(reported.includes(unknownLanguage)
-          ? []
-          : [`no "${unknownLanguage}" error, but ${JSON.stringify(reported)}`]),
+        `no "${unknownLanguage}" error, but ${JSON.stringify(reported)}`,
       ],
     };
   }
@@ -115,24 +120,29 @@ export class HostileHarness {
     entries: readonly HostileFileCase[],
   ): Promise<readonly HarnessVerdict[]> {
     const [hostile, benign] = await Promise.all([
-      this.renderCodeBlocks(entries.map((entry) => ({ info: entry.text, code: entry.text }))),
-      this.renderCodeBlocks(entries.map(() => ({ info: 'ts', code: 'benign' }))),
-    ]);
-    return entries.map((entry, index) =>
-      verdict(
-        titleOf('codeBlocks', entry),
-        hostile[index] ?? missing,
-        benign[index] ?? missing,
-        entry.visible,
+      this.renderCodeBlocks(
+        entries.map((entry) => {
+          return { info: entry.text, code: entry.text };
+        }),
       ),
-    );
+      this.renderCodeBlocks(
+        entries.map(() => {
+          return { info: 'ts', code: 'benign' };
+        }),
+      ),
+    ]);
+    return entries.map((entry, index) => {
+      return verdict(
+        titleOf('codeBlocks', entry),
+        { hostile: hostile[index] ?? missing, benign: benign[index] ?? missing },
+        entry.visible,
+      );
+    });
   }
 
   private async renderDiff(
     library: typeof Diffs,
-    patch: string,
-    options: DiffHtmlOptions,
-    isDrawn?: () => boolean,
+    { patch, options, isDrawn }: DiffRender,
   ): Promise<Rendered> {
     const host = this.host();
     const parsed = library.processFile(patch, { cacheKey: crypto.randomUUID(), isGitDiff: true });
@@ -149,13 +159,11 @@ export class HostileHarness {
       overflow: 'scroll',
     });
     this.views.push(diff);
-    diff.render({
-      fileDiff:
-        options.language === undefined
-          ? parsed
-          : library.setLanguageOverride(parsed, options.language),
-      containerWrapper: host,
-    });
+    let fileDiff = parsed;
+    if (options.language !== undefined) {
+      fileDiff = library.setLanguageOverride(parsed, options.language);
+    }
+    diff.render({ fileDiff, containerWrapper: host });
     return settled(host, isDrawn);
   }
 
@@ -177,19 +185,19 @@ export class HostileHarness {
   }
 
   /** Answers in a real chat drawer, one code block each, and each block once it has settled. */
-  private async renderCodeBlocks(
-    blocks: readonly { readonly info: string; readonly code: string }[],
-  ): Promise<readonly Rendered[]> {
+  private async renderCodeBlocks(blocks: readonly CodeFence[]): Promise<readonly Rendered[]> {
     const drawer = document.createElement('beuve-chat-drawer');
     drawer.transcript = blocks.map((block, index): ChatEntry => answerWith(index, block));
     this.root.append(drawer);
     await drawer.updateComplete;
     const found = [...drawer.renderRoot.querySelectorAll<HTMLElement>('.code-block')];
     if (found.length !== blocks.length) {
-      return blocks.map(() => ({
-        ...missing,
-        failures: [`the drawer shows ${String(found.length)} code blocks`],
-      }));
+      return blocks.map(() => {
+        return {
+          ...missing,
+          failures: [`the drawer shows ${String(found.length)} code blocks`],
+        };
+      });
     }
     return Promise.all(found.map(async (block) => settled(block)));
   }
@@ -230,19 +238,15 @@ export class HostileHarness {
         );
       }
       case 'diffLanguages': {
-        return inTurn(corpus.diffLanguages, async (entry) =>
-          this.failureVerdict(group, entry, async (which, isDrawn) =>
-            this.renderDiff(
-              library,
-              entry.patch,
-              {
-                ...entry.options,
-                language: which === 'hostile' ? entry.options.language : 'benign-language',
-              },
+        return inTurn(corpus.diffLanguages, async (entry) => {
+          return this.failureVerdict(group, entry, async (which, isDrawn) => {
+            return this.renderDiff(library, {
+              patch: entry.patch,
+              options: { ...entry.options, language: twinLanguage(which, entry.options.language) },
               isDrawn,
-            ),
-          ),
-        );
+            });
+          });
+        });
       }
       case 'sheets': {
         return Promise.all(
@@ -253,15 +257,15 @@ export class HostileHarness {
         return this.codeBlockVerdicts(corpus.codeBlocks);
       }
       case 'sheetLanguages': {
-        return inTurn(corpus.sheetLanguages, async (entry) =>
-          this.failureVerdict(group, entry, async (which, isDrawn) =>
-            this.renderFile(
+        return inTurn(corpus.sheetLanguages, async (entry) => {
+          return this.failureVerdict(group, entry, async (which, isDrawn) => {
+            return this.renderFile(
               library,
-              { ...entry.file, lang: which === 'hostile' ? entry.file.lang : 'benign-language' },
+              { ...entry.file, lang: twinLanguage(which, entry.file.lang) },
               isDrawn,
-            ),
-          ),
-        );
+            );
+          });
+        });
       }
     }
   }
@@ -284,15 +288,49 @@ interface Rendered {
 
 const missing: Rendered = { html: '', rows: 0, failures: ['nothing rendered'] };
 
+/** A patch to render as a diff card, how, and when the render counts as drawn. */
+interface DiffRender {
+  readonly patch: string;
+  readonly options: DiffHtmlOptions;
+  readonly isDrawn?: () => boolean;
+}
+
+/** A fenced code block's info string and contents. */
+interface CodeFence {
+  readonly info: string;
+  readonly code: string;
+}
+
+/** A hostile render and its benign twin's. */
+interface RenderedTwins {
+  readonly hostile: Rendered;
+  readonly benign: Rendered;
+}
+
+/** A render, and what `console.error` was called with meanwhile. */
+interface RenderedWithErrors {
+  readonly rendered: Rendered;
+  readonly errors: readonly string[];
+}
+
+/** The hostile case's language, or a plain unknown one for its benign twin. */
+function twinLanguage(which: 'hostile' | 'benign', hostile: string): string {
+  if (which === 'hostile') {
+    return hostile;
+  }
+  return 'benign-language';
+}
+
 function titleOf(group: HarnessGroup, entry: HostileInput, options?: DiffHtmlOptions): string {
-  const view = options === undefined ? '' : ` (${options.diffStyle}, ${options.hunkSeparators})`;
-  return `${group} ${entry.label}${view}`;
+  if (options === undefined) {
+    return `${group} ${entry.label}`;
+  }
+  return `${group} ${entry.label} (${options.diffStyle}, ${options.hunkSeparators})`;
 }
 
 function verdict(
   title: string,
-  hostile: Rendered,
-  benign: Rendered,
+  { hostile, benign }: RenderedTwins,
   visible: readonly string[],
 ): HarnessVerdict {
   const text = visibleText([hostile.html]);
@@ -301,7 +339,9 @@ function verdict(
     failures: [
       ...hostile.failures,
       ...benign.failures.map((failure) => `benign twin: ${failure}`),
-      ...extraMarkup([hostile.html], [benign.html]).map((entry) => `extra markup: ${entry}`),
+      ...extraMarkup({ hostile: [hostile.html], benign: [benign.html] }).map((entry): string => {
+        return `extra markup: ${entry}`;
+      }),
       ...visible
         .filter((entry) => !text.includes(entry))
         .map((entry) => `not visible as text: ${JSON.stringify(entry)}`),
@@ -309,10 +349,7 @@ function verdict(
   };
 }
 
-function answerWith(
-  index: number,
-  block: { readonly info: string; readonly code: string },
-): ChatEntry {
+function answerWith(index: number, block: CodeFence): ChatEntry {
   const id = `answer-${String(index)}`;
   return {
     id,
@@ -349,7 +386,7 @@ async function inTurn<T>(
  */
 async function withConsoleErrors(
   render: (errors: readonly string[]) => Promise<Rendered>,
-): Promise<{ readonly rendered: Rendered; readonly errors: readonly string[] }> {
+): Promise<RenderedWithErrors> {
   const errors: string[] = [];
   const original = console.error;
   using restore = new DisposableStack();
@@ -375,8 +412,15 @@ async function settled(host: HTMLElement, isDrawn?: () => boolean): Promise<Rend
     });
     const html = host.getHTML({ shadowRoots: shadowRootsUnder(host) });
     const rows = countRows(host);
-    const isDone = isDrawn === undefined ? rows > 0 : isDrawn();
-    stable = html === last && isDone ? stable + 1 : 0;
+    let isDone = rows > 0;
+    if (isDrawn !== undefined) {
+      isDone = isDrawn();
+    }
+    if (html === last && isDone) {
+      stable += 1;
+    } else {
+      stable = 0;
+    }
     last = html;
     if (stable >= stablePolls) {
       return { html, rows, failures: [] };
@@ -386,16 +430,16 @@ async function settled(host: HTMLElement, isDrawn?: () => boolean): Promise<Rend
 }
 
 function shadowRootsUnder(start: Element | ShadowRoot): ShadowRoot[] {
-  return [...start.querySelectorAll('*')].flatMap((element) =>
-    element.shadowRoot === null
-      ? []
-      : [element.shadowRoot, ...shadowRootsUnder(element.shadowRoot)],
-  );
+  return [...start.querySelectorAll('*')].flatMap((element) => {
+    if (element.shadowRoot === null) {
+      return [];
+    }
+    return [element.shadowRoot, ...shadowRootsUnder(element.shadowRoot)];
+  });
 }
 
 function countRows(host: HTMLElement): number {
-  return [host, ...shadowRootsUnder(host)].reduce(
-    (total, root) => total + root.querySelectorAll('[data-line]').length,
-    0,
-  );
+  return [host, ...shadowRootsUnder(host)].reduce((total, root) => {
+    return total + root.querySelectorAll('[data-line]').length;
+  }, 0);
 }

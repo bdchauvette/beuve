@@ -3,16 +3,13 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { stepSheetHistory } from './step-sheet-history.ts';
-import type { SheetHistory, SheetPlace } from './step-sheet-history.ts';
+import type { SheetHistory, SheetHistoryStep, SheetPlace } from './step-sheet-history.ts';
 
 function place(path: string, line?: number): SheetPlace {
-  return {
-    path,
-    range:
-      line === undefined
-        ? undefined
-        : { startLine: line, startCharacter: 0, endLine: line, endCharacter: 4 },
-  };
+  if (line === undefined) {
+    return { path, range: undefined };
+  }
+  return { path, range: { startLine: line, startCharacter: 0, endLine: line, endCharacter: 4 } };
 }
 
 function start(): SheetHistory {
@@ -51,6 +48,6 @@ describe('stepSheetHistory', () => {
   });
 });
 
-function visit(next: SheetPlace): { readonly kind: 'visit'; readonly place: SheetPlace } {
+function visit(next: SheetPlace): SheetHistoryStep {
   return { kind: 'visit', place: next };
 }

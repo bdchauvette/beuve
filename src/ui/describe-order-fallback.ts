@@ -11,7 +11,8 @@ const reasons: Readonly<Record<NonNullable<ReviewOrderView['fallback']>['kind'],
  * answered, so imports`; `undefined` when the order is the one asked for. Pure.
  */
 export function describeOrderFallback(order: ReviewOrderView | undefined): string | undefined {
-  return order?.fallback === undefined || order.mode === order.requestedMode
-    ? undefined
-    : `${order.requestedMode}: ${reasons[order.fallback.kind]}, so ${order.mode}`;
+  if (order?.fallback === undefined || order.mode === order.requestedMode) {
+    return undefined;
+  }
+  return `${order.requestedMode}: ${reasons[order.fallback.kind]}, so ${order.mode}`;
 }

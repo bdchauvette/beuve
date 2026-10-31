@@ -20,7 +20,8 @@ import type { SheetMatch } from './find-sheet-matches.ts';
 import { sheetRequestFrom } from './sheet-request-from.ts';
 import { sheetTitleFrom } from './sheet-title-from.ts';
 import { stepSheetHistory } from './step-sheet-history.ts';
-import type { SheetHistory, SheetPlace } from './step-sheet-history.ts';
+import { withShortcut } from './with-shortcut.ts';
+import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-history.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 
@@ -198,7 +199,7 @@ export class BeuveSheetView extends LitElement {
     event.preventDefault();
     this.syncMenuState();
     void this.api.invoke('menu:context', {
-      kind: isTypingNow(this.shadowRoot) ? 'text' : 'sheet',
+      kind: contextMenuKind(this.shadowRoot),
       x: event.clientX,
       y: event.clientY,
     });
@@ -249,12 +250,6 @@ export class BeuveSheetView extends LitElement {
   @state() accessor movedHead: string | undefined;
 
   private renderFind(find: FindState): TemplateResult {
-    const count =
-      find.query === ''
-        ? ''
-        : find.matches.length === 0
-          ? 'no matches'
-          : `${String(find.index + 1)} of ${String(find.matches.length)}`;
     return html`<div class="find">
       <input
         type="search"
@@ -268,7 +263,11 @@ export class BeuveSheetView extends LitElement {
           if (event.key === 'Enter') {
             event.preventDefault();
             event.stopPropagation();
-            this.moveMatch(event.shiftKey ? -1 : 1);
+            if (event.shiftKey) {
+              this.moveMatch(-1);
+            } else {
+              this.moveMatch(1);
+            }
           } else if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
@@ -277,7 +276,7 @@ export class BeuveSheetView extends LitElement {
           }
         }}
       />
-      <span>${count}</span>
+      <span>${matchCount(find)}</span>
     </div>`;
   }
 
@@ -318,9 +317,10 @@ export class BeuveSheetView extends LitElement {
   }
 
   private headNote(): string {
-    return this.movedHead === undefined
-      ? `${this.sha.slice(0, 7)} · read-only`
-      : `The session head has moved on to ${this.movedHead.slice(0, 7)} since this was printed.`;
+    if (this.movedHead === undefined) {
+      return `${this.sha.slice(0, 7)} · read-only`;
+    }
+    return `The session head has moved on to ${this.movedHead.slice(0, 7)} since this was printed.`;
   }
 
   /** The sheet's in-place keys (ADR 0068): ↑/↓ and Home/End move the line cursor, Esc closes. */
@@ -364,10 +364,14 @@ export class BeuveSheetView extends LitElement {
       ]),
     ].toSorted((left, right) => left - right);
     const from = this.cursor?.start ?? 0;
-    const next =
-      step === 1 ? starts.find((line) => line > from) : starts.findLast((line) => line < from);
+    let next = starts.findLast((line) => line < from);
+    let edge = 'No more changes above.';
+    if (step === 1) {
+      next = starts.find((line) => line > from);
+      edge = 'No more changes below.';
+    }
     if (next === undefined) {
-      this.note(step === 1 ? 'No more changes below.' : 'No more changes above.', false);
+      this.note(edge, false);
       return;
     }
     this.notice = undefined;
@@ -380,13 +384,19 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     const { canGoBack, canGoForward } = this.historyState();
-    const conditions: MenuCondition[] = [
-      'session',
-      ...(this.loaded.status === 'ready' ? (['file'] as const) : []),
-      ...(canGoBack ? (['back'] as const) : []),
-      ...(canGoForward ? (['forward'] as const) : []),
-      ...(isTypingNow(this.shadowRoot) ? (['text-focus'] as const) : []),
-    ];
+    const conditions: MenuCondition[] = ['session'];
+    if (this.loaded.status === 'ready') {
+      conditions.push('file');
+    }
+    if (canGoBack) {
+      conditions.push('back');
+    }
+    if (canGoForward) {
+      conditions.push('forward');
+    }
+    if (isTypingNow(this.shadowRoot)) {
+      conditions.push('text-focus');
+    }
     const key = conditions.join(' ');
     if (key === this.lastMenuState) {
       return;
@@ -400,7 +410,10 @@ export class BeuveSheetView extends LitElement {
   }
 
   private lineCount(): number {
-    return this.loaded.status === 'ready' ? this.loaded.file.contents.split('\n').length : 1;
+    if (this.loaded.status === 'ready') {
+      return this.loaded.file.contents.split('\n').length;
+    }
+    return 1;
   }
 
   private moveCursor(delta: number): void {
@@ -418,8 +431,10 @@ export class BeuveSheetView extends LitElement {
   }
 
   private search(query: string): void {
-    const matches =
-      this.loaded.status === 'ready' ? findSheetMatches(this.loaded.file.contents, query) : [];
+    let matches: readonly SheetMatch[] = [];
+    if (this.loaded.status === 'ready') {
+      matches = findSheetMatches({ query, text: this.loaded.file.contents });
+    }
     const from = this.cursor?.start ?? 1;
     const index = Math.max(
       0,
@@ -495,14 +510,18 @@ export class BeuveSheetView extends LitElement {
     }
     this.loaded = { status: 'ready', file: file.value };
     this.printedHead ??= file.value.headSha;
-    this.find = this.find === undefined ? undefined : { ...this.find, matches: [], index: 0 };
     if (this.find !== undefined) {
+      this.find = { ...this.find, matches: [], index: 0 };
       this.search(this.find.query);
     }
     const { range } = place;
-    this.cursor = range === undefined ? undefined : { start: range.startLine, end: range.endLine };
-    this.column =
-      range === undefined ? undefined : { line: range.startLine, character: range.startCharacter };
+    if (range === undefined) {
+      this.cursor = undefined;
+      this.column = undefined;
+    } else {
+      this.cursor = { start: range.startLine, end: range.endLine };
+      this.column = { line: range.startLine, character: range.startCharacter };
+    }
     await this.updateComplete;
     await this.code()?.updateComplete;
     void this.code()?.reveal(range?.startLine ?? 1);
@@ -518,13 +537,12 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     this.note('Asking the language server…', false);
-    const column = this.column?.line === line ? this.column.character : undefined;
     const answer = await api.invoke('lsp:definition', {
       sessionId: this.sessionId,
       sha: this.sha,
       path: place.path,
       line,
-      ...(column !== undefined && { character: column }),
+      ...(this.column?.line === line && { character: this.column.character }),
       kind,
     });
     if (!answer.ok) {
@@ -563,10 +581,11 @@ export class BeuveSheetView extends LitElement {
         endLine: this.cursor.end,
       }),
     };
-    const link = await api.invoke(
-      isOpening ? 'remote:open-permalink' : 'remote:permalink',
-      request,
-    );
+    let channel: 'remote:permalink' | 'remote:open-permalink' = 'remote:permalink';
+    if (isOpening) {
+      channel = 'remote:open-permalink';
+    }
+    const link = await api.invoke(channel, request);
     if (!link.ok) {
       this.note(link.error.message, true);
       return;
@@ -576,7 +595,11 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     const copied = await api.invoke('clipboard:write-text', { text: link.value.url });
-    this.note(copied.ok ? `Copied ${link.value.url}` : copied.error.message, !copied.ok);
+    if (copied.ok) {
+      this.note(`Copied ${link.value.url}`, false);
+    } else {
+      this.note(copied.error.message, true);
+    }
   }
 
   private async checkHead(): Promise<void> {
@@ -586,7 +609,10 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     const head = await api.invoke('sheet:get-head', { sessionId: this.sessionId });
-    this.movedHead = head.ok && head.value.headSha !== printedHead ? head.value.headSha : undefined;
+    this.movedHead = undefined;
+    if (head.ok && head.value.headSha !== printedHead) {
+      this.movedHead = head.value.headSha;
+    }
   }
 
   private note(text: string, isError: boolean): void {
@@ -606,9 +632,12 @@ export class BeuveSheetView extends LitElement {
         });
         return true;
       }
-      case 'find-next':
+      case 'find-next': {
+        this.moveMatch(1);
+        return true;
+      }
       case 'find-previous': {
-        this.moveMatch(id === 'find-next' ? 1 : -1);
+        this.moveMatch(-1);
         return true;
       }
       case 'find-selection': {
@@ -623,14 +652,20 @@ export class BeuveSheetView extends LitElement {
         this.step(id);
         return true;
       }
-      case 'next-hunk':
-      case 'previous-hunk': {
-        this.moveToMark(id === 'next-hunk' ? 1 : -1);
+      case 'next-hunk': {
+        this.moveToMark(1);
         return true;
       }
-      case 'open-definition':
+      case 'previous-hunk': {
+        this.moveToMark(-1);
+        return true;
+      }
+      case 'open-definition': {
+        void this.jump('definition');
+        return true;
+      }
       case 'open-type-definition': {
-        void this.jump(id === 'open-definition' ? 'definition' : 'type-definition');
+        void this.jump('type-definition');
         return true;
       }
       case 'copy-permalink':
@@ -645,7 +680,7 @@ export class BeuveSheetView extends LitElement {
   }
 
   /** Whether Back and Forward have somewhere to go. */
-  historyState(): { readonly canGoBack: boolean; readonly canGoForward: boolean } {
+  historyState(): SheetHistoryState {
     const { index, places } = this.history;
     return { canGoBack: index > 0, canGoForward: index < places.length - 1 };
   }
@@ -690,7 +725,10 @@ export class BeuveSheetView extends LitElement {
   override render(): TemplateResult {
     const place = this.current();
     const line = this.cursor?.start ?? place?.range?.startLine;
-    const title = place === undefined ? '' : sheetTitleFrom(place.path, this.sha, line);
+    let title = '';
+    if (place !== undefined) {
+      title = sheetTitleFrom({ path: place.path, sha: this.sha, line });
+    }
     if (title !== '' && this.mode === 'window') {
       document.title = revealFormatControls(title);
     }
@@ -699,7 +737,7 @@ export class BeuveSheetView extends LitElement {
       <header>
         <button
           type="button"
-          title=${withKey('Back', this.shortcuts.back)}
+          title=${withShortcut({ label: 'Back', shortcut: this.shortcuts.back })}
           aria-label="Back"
           ?disabled=${index === 0}
           @click=${(): void => {
@@ -710,7 +748,7 @@ export class BeuveSheetView extends LitElement {
         </button>
         <button
           type="button"
-          title=${withKey('Forward', this.shortcuts.forward)}
+          title=${withShortcut({ label: 'Forward', shortcut: this.shortcuts.forward })}
           aria-label="Forward"
           ?disabled=${index >= places.length - 1}
           @click=${(): void => {
@@ -723,7 +761,7 @@ export class BeuveSheetView extends LitElement {
         <span class="stamp">printed ${this.printedAt}</span>
         <button
           type="button"
-          title=${withKey('Copy GitHub Permalink', this.shortcuts.copyLink)}
+          title=${withShortcut({ label: 'Copy GitHub Permalink', shortcut: this.shortcuts.copyLink })}
           @click=${(): void => {
             void this.permalink(false);
           }}
@@ -763,7 +801,10 @@ function lineRange(lines: SheetSelectDetail): SheetRangeView {
 function describePermalink(link: PermalinkView, isOpening: boolean): string {
   switch (link.kind) {
     case 'link': {
-      return isOpening ? `Opened ${link.url}` : link.url;
+      if (isOpening) {
+        return `Opened ${link.url}`;
+      }
+      return link.url;
     }
     case 'no-remote': {
       return 'This repository has no GitHub remote to link to.';
@@ -771,8 +812,23 @@ function describePermalink(link: PermalinkView, isOpening: boolean): string {
   }
 }
 
-function withKey(label: string, key: string): string {
-  return key === '' ? label : `${label} (${key})`;
+/** The find bar's count: none before a query, else where the current match is. */
+function matchCount(find: FindState): string {
+  if (find.query === '') {
+    return '';
+  }
+  if (find.matches.length === 0) {
+    return 'no matches';
+  }
+  return `${String(find.index + 1)} of ${String(find.matches.length)}`;
+}
+
+/** The text field's context menu while typing, the sheet's otherwise. */
+function contextMenuKind(root: ShadowRoot | null): 'text' | 'sheet' {
+  if (isTypingNow(root)) {
+    return 'text';
+  }
+  return 'sheet';
 }
 
 function isTypingNow(root: ShadowRoot | null): boolean {

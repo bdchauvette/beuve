@@ -6,7 +6,9 @@ import { test } from './testing/test.ts';
 import { permalinkPlaceFrom } from './permalink-place-from.ts';
 
 function file(): ReturnType<typeof createDiffFileView> {
-  return createDiffFileView('src/new.ts', [' a', '-b', '+c'], 1, { oldPath: 'src/old.ts' });
+  return createDiffFileView('src/new.ts', [' a', '-b', '+c'], {
+    overrides: { oldPath: 'src/old.ts' },
+  });
 }
 
 describe('permalinkPlaceFrom', () => {
@@ -46,7 +48,7 @@ describe('permalinkPlaceFrom', () => {
   });
 
   test('links a deleted file on its base side', ({ expect }) => {
-    const deleted = createDiffFileView('src/new.ts', ['-a'], 1, { status: 'deleted' });
+    const deleted = createDiffFileView('src/new.ts', ['-a'], { overrides: { status: 'deleted' } });
     expect(permalinkPlaceFrom({ kind: 'file', file: deleted, line: undefined })).toStrictEqual({
       side: 'base',
       path: 'src/new.ts',

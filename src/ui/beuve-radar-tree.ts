@@ -120,7 +120,9 @@ export class BeuveRadarTree extends LitElement {
       flattenEmptyDirectories: true,
       stickyFolders: true,
       gitStatus: shownGitStatus(plan.gitStatus),
-      renderRowDecoration: (context): FileTreeRowDecoration | null => this.decorate(context),
+      renderRowDecoration: (context): FileTreeRowDecoration | null => {
+        return this.decorate(context);
+      },
       onSelectionChange: (selected): void => {
         this.select(selected);
       },
@@ -132,14 +134,20 @@ export class BeuveRadarTree extends LitElement {
     const decoration = this.decorations.get(
       restoreFormatControls(item.path).replace(trailingSlash, ''),
     );
-    // eslint-disable-next-line unicorn/no-null -- the library's "no decoration" is null.
-    return decoration === undefined ? null : { text: decoration.text, title: decoration.title };
+    if (decoration === undefined) {
+      // eslint-disable-next-line unicorn/no-null -- the library's "no decoration" is null.
+      return null;
+    }
+    return { text: decoration.text, title: decoration.title };
   }
 
   private select(selected: readonly string[]): void {
     const [shown] = selected;
-    const path = shown === undefined ? undefined : restoreFormatControls(shown);
-    if (path === undefined || !this.reviewed.has(path)) {
+    if (shown === undefined) {
+      return;
+    }
+    const path = restoreFormatControls(shown);
+    if (!this.reviewed.has(path)) {
       return;
     }
     this.dispatchEvent(
@@ -160,7 +168,10 @@ export class BeuveRadarTree extends LitElement {
   /** The file whose row has keyboard focus, for Add to Chat (ADR 0046); `undefined` on a folder. */
   focusedPath(): string | undefined {
     const shown = this.fileTree?.getFocusedPath() ?? undefined;
-    return shown === undefined || shown.endsWith('/') ? undefined : restoreFormatControls(shown);
+    if (shown === undefined || shown.endsWith('/')) {
+      return undefined;
+    }
+    return restoreFormatControls(shown);
   }
 
   /** Focuses `path`'s row and scrolls it into view, for the palette's unchanged files. */
@@ -194,9 +205,12 @@ export class BeuveRadarTree extends LitElement {
       planTreeDecorations(this.impact, plan.packageOf),
       this.reviewMarks,
     );
-    const gitStatus = plan.gitStatus.map((entry) =>
-      this.generatedPaths.has(entry.path) ? { ...entry, status: 'ignored' as const } : entry,
-    );
+    const gitStatus = plan.gitStatus.map((entry) => {
+      if (this.generatedPaths.has(entry.path)) {
+        return { ...entry, status: 'ignored' as const };
+      }
+      return entry;
+    });
     this.reviewed.clear();
     for (const file of this.files) {
       this.reviewed.add(file.path);
@@ -232,7 +246,9 @@ export class BeuveRadarTree extends LitElement {
 
 /** Git status entries keyed by the paths the tree shows. */
 function shownGitStatus(entries: RadarTreePlan['gitStatus']): RadarTreePlan['gitStatus'] {
-  return entries.map((entry) => ({ ...entry, path: revealFormatControls(entry.path) }));
+  return entries.map((entry) => {
+    return { ...entry, path: revealFormatControls(entry.path) };
+  });
 }
 
 declare global {

@@ -15,7 +15,14 @@ function local(): SessionSummary {
     updatedAt: '2026-10-02T00:00:00Z',
   };
 }
-function pull(id: string, repoPath: string, updatedAt: string): SessionSummary {
+/** What tells one pull request session from another here. */
+interface PullSession {
+  readonly id: string;
+  readonly repoPath: string;
+  readonly updatedAt: string;
+}
+
+function pull({ id, repoPath, updatedAt }: PullSession): SessionSummary {
   return {
     id,
     source: {
@@ -36,7 +43,10 @@ function pull(id: string, repoPath: string, updatedAt: string): SessionSummary {
 
 describe('rankRecentSessions', () => {
   test('orders by last update and filters on every word', ({ expect }) => {
-    const sessions = [local(), pull('p', '/code/hello', '2026-10-03T00:00:00Z')];
+    const sessions = [
+      local(),
+      pull({ id: 'p', repoPath: '/code/hello', updatedAt: '2026-10-03T00:00:00Z' }),
+    ];
     expect(rankRecentSessions(sessions, '').map((s) => s.id)).toStrictEqual(['p', 'l']);
     expect(rankRecentSessions(sessions, 'TAX hello').map((s) => s.id)).toStrictEqual(['p']);
     expect(rankRecentSessions(sessions, 'layout').map((s) => s.id)).toStrictEqual(['l']);

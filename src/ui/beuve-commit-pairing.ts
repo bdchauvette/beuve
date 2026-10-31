@@ -5,6 +5,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { CommitPairView } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
+import { countNoun } from './count-noun.ts';
 import { describeCommitPair } from './describe-commit-pair.ts';
 import type { CommitPairRow } from './describe-commit-pair.ts';
 import { moveCommitPairCursor } from './move-commit-pair-cursor.ts';
@@ -142,7 +143,10 @@ export class BeuveCommitPairing extends LitElement {
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
-    const moved = moveCommitPairCursor(this.cursor, this.pairs.length, event.key);
+    const moved = moveCommitPairCursor(event.key, {
+      cursor: this.cursor,
+      count: this.pairs.length,
+    });
     if (moved !== undefined) {
       event.preventDefault();
       this.cursor = moved;
@@ -222,7 +226,11 @@ export class BeuveCommitPairing extends LitElement {
     if (!row.isFilterable) {
       return;
     }
-    this.emit(row.id === this.selectedId ? undefined : row.id);
+    if (row.id === this.selectedId) {
+      this.emit(undefined);
+      return;
+    }
+    this.emit(row.id);
   }
 
   private emit(pairId: string | undefined): void {
@@ -236,7 +244,7 @@ export class BeuveCommitPairing extends LitElement {
     const changed = rows.filter((row) => row.kind !== 'unchanged').length;
     return html`<header>
       <span>
-        ${rows.length} ${rows.length === 1 ? 'commit' : 'commits'}
+        ${countNoun(rows.length, 'commit')}
         ${changed === 0 ? '· none changed' : `· ${String(changed)} changed`}
       </span>
       ${

@@ -3,11 +3,18 @@ import type { MarkdownLine } from './classify-markdown-line.ts';
 import { tableAlignmentsFrom } from './table-alignments-from.ts';
 import { tableCellsFrom } from './table-cells-from.ts';
 
+const finalReturn = /\r$/u;
+
 export interface SplitMarkdown {
   /** The source of each top-level block that later text can no longer change, in order. */
   readonly blocks: readonly string[];
   /** The rest, from the start of the block still open (or the unfinished last line) on. */
   readonly rest: string;
+}
+
+/** Whether `source` is the whole text, or more may follow its last line. */
+export interface SplitOptions {
+  readonly isFinal: boolean;
 }
 
 type OpenBlock =
@@ -27,10 +34,7 @@ type OpenBlock =
  * extent depends only on its own lines and the one after it, so splitting a text in pieces gives
  * the same blocks as splitting it whole. Pure.
  */
-export function splitMarkdownBlocks(
-  source: string,
-  options: { readonly isFinal: boolean },
-): SplitMarkdown {
+export function splitMarkdownBlocks(source: string, options: SplitOptions): SplitMarkdown {
   const blocks: string[] = [];
   let open: OpenBlock | undefined;
   let start = 0;
@@ -84,17 +88,25 @@ export function splitMarkdownBlocks(
     } else if (verdict === 'last') {
       commit(line.end);
     } else {
-      commit(state.kind === 'list' ? state.end : line.start);
+      commit(blockEnd(state, line.start));
       begin(line, kind);
     }
   }
   if (options.isFinal) {
     if (open !== undefined) {
-      commit(open.kind === 'list' ? open.end : source.length);
+      commit(blockEnd(open, source.length));
     }
     return { blocks, rest: '' };
   }
   return { blocks, rest: source.slice(start) };
+}
+
+/** Where `open` ends, given where the next block starts: a list leaves its trailing blank lines out. */
+function blockEnd(open: OpenBlock, next: number): number {
+  if (open.kind === 'list') {
+    return open.end;
+  }
+  return next;
 }
 
 interface Line {
@@ -113,9 +125,13 @@ function linesOf(source: string, isFinal: boolean): Line[] {
     if (lineBreak === -1 && !isFinal) {
       break;
     }
-    const end = lineBreak === -1 ? source.length : lineBreak + 1;
-    const raw = source.slice(start, lineBreak === -1 ? source.length : lineBreak);
-    lines.push({ text: raw.endsWith('\r') ? raw.slice(0, -1) : raw, start, end });
+    let textEnd = source.length;
+    let end = source.length;
+    if (lineBreak !== -1) {
+      textEnd = lineBreak;
+      end = lineBreak + 1;
+    }
+    lines.push({ text: source.slice(start, textEnd).replace(finalReturn, ''), start, end });
     start = end;
   }
   return lines;
@@ -125,26 +141,39 @@ function linesOf(source: string, isFinal: boolean): Line[] {
 function continues(open: OpenBlock, line: Line, kind: MarkdownLine): 'yes' | 'no' | 'last' {
   switch (open.kind) {
     case 'fence': {
-      return kind.kind === 'fence' &&
+      if (
+        kind.kind === 'fence' &&
         kind.info === '' &&
         kind.fence.startsWith(open.fence.charAt(0)) &&
         kind.fence.length >= open.fence.length
-        ? 'last'
-        : 'yes';
+      ) {
+        return 'last';
+      }
+      return 'yes';
     }
     case 'paragraph': {
-      return kind.kind === 'text' || isTableStart(open, line) ? 'yes' : 'no';
+      if (kind.kind === 'text' || isTableStart(open, line)) {
+        return 'yes';
+      }
+      return 'no';
     }
     case 'table': {
-      return kind.kind === 'text' && line.text.includes('|') ? 'yes' : 'no';
+      if (kind.kind === 'text' && line.text.includes('|')) {
+        return 'yes';
+      }
+      return 'no';
     }
     case 'quote': {
-      return kind.kind === 'quote' ? 'yes' : 'no';
+      if (kind.kind === 'quote') {
+        return 'yes';
+      }
+      return 'no';
     }
     case 'list': {
-      return kind.kind === 'blank' || kind.kind === 'item' || kind.indent > open.indent
-        ? 'yes'
-        : 'no';
+      if (kind.kind === 'blank' || kind.kind === 'item' || kind.indent > open.indent) {
+        return 'yes';
+      }
+      return 'no';
     }
   }
 }
@@ -152,10 +181,16 @@ function continues(open: OpenBlock, line: Line, kind: MarkdownLine): 'yes' | 'no
 function grown(open: OpenBlock, line: Line, kind: MarkdownLine): OpenBlock {
   switch (open.kind) {
     case 'paragraph': {
-      return isTableStart(open, line) ? { kind: 'table' } : { ...open, lines: open.lines + 1 };
+      if (isTableStart(open, line)) {
+        return { kind: 'table' };
+      }
+      return { ...open, lines: open.lines + 1 };
     }
     case 'list': {
-      return kind.kind === 'blank' ? open : { ...open, end: line.end };
+      if (kind.kind === 'blank') {
+        return open;
+      }
+      return { ...open, end: line.end };
     }
     case 'fence':
     case 'table':
@@ -166,7 +201,9 @@ function grown(open: OpenBlock, line: Line, kind: MarkdownLine): OpenBlock {
 }
 
 /** A one-line paragraph with pipes, then a delimiter row with as many columns: a table. */
-function isTableStart(open: Extract<OpenBlock, { kind: 'paragraph' }>, line: Line): boolean {
+type OpenParagraph = Extract<OpenBlock, { kind: 'paragraph' }>;
+
+function isTableStart(open: OpenParagraph, line: Line): boolean {
   return (
     open.lines === 1 &&
     open.first.includes('|') &&

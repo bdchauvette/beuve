@@ -32,7 +32,10 @@ export class ActionDelegation implements ReactiveController {
   hostConnected(): void {
     this.controller?.abort();
     this.controller = new AbortController();
-    const root = this.on === 'host' ? this.host : this.host.renderRoot;
+    let root: EventTarget = this.host.renderRoot;
+    if (this.on === 'host') {
+      root = this.host;
+    }
     delegateActions(root, this.actions, { signal: this.controller.signal });
   }
 

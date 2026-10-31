@@ -106,16 +106,19 @@ export class MarkdownView {
     const kept = new Map(
       this.blocks
         .filter((block) => !block.source.includes('[['))
-        .map((block) => [block.source, block] as const),
+        .map((block) => {
+          return [block.source, block] as const;
+        }),
     );
     this.replaceWith(
-      splitMarkdownBlocks(source, { isFinal: true }).blocks.map(
-        (block): ShownBlock =>
+      splitMarkdownBlocks(source, { isFinal: true }).blocks.map((block): ShownBlock => {
+        return (
           kept.get(block) ?? {
             source: block,
             nodes: createMarkdownNodes(parseMarkdown(block), renderers),
-          },
-      ),
+          }
+        );
+      }),
     );
   }
 }

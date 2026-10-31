@@ -22,8 +22,9 @@ export function uraMarkersFrom(path: string, items: readonly UraItemView[]): Ura
     if (anchor.kind === 'lines' && anchor.path === path) {
       return [{ lineStart: anchor.startLine, lineEnd: anchor.endLine, item }];
     }
-    return anchor.kind === 'file' && anchor.path === path
-      ? [{ lineStart: 0, lineEnd: 0, item }]
-      : [];
+    if (anchor.kind === 'file' && anchor.path === path) {
+      return [{ lineStart: 0, lineEnd: 0, item }];
+    }
+    return [];
   });
 }

@@ -1,4 +1,4 @@
-import type { SheetApi } from '#contract/ipc-contract.ts';
+import type { SheetApi, SheetRangeView } from '#contract/ipc-contract.ts';
 
 import type { CommandId } from '#contract/command-catalog.ts';
 
@@ -35,21 +35,21 @@ function shortcut(id: CommandId): string {
   return shortcutOf(id, keyPlatformOf(navigator.platform));
 }
 
-function rangeFrom(
-  params: URLSearchParams,
-):
-  { startLine: number; startCharacter: number; endLine: number; endCharacter: number } | undefined {
+function rangeFrom(params: URLSearchParams): SheetRangeView | undefined {
   const [startLine, startCharacter, endLine, endCharacter] = [
     'startLine',
     'startCharacter',
     'endLine',
     'endCharacter',
   ].map((name) => Math.trunc(Number(params.get(name) ?? NaN)));
-  return startLine === undefined ||
+  if (
+    startLine === undefined ||
     startCharacter === undefined ||
     endLine === undefined ||
     endCharacter === undefined ||
     [startLine, startCharacter, endLine, endCharacter].some((value) => Number.isNaN(value))
-    ? undefined
-    : { startLine, startCharacter, endLine, endCharacter };
+  ) {
+    return undefined;
+  }
+  return { startLine, startCharacter, endLine, endCharacter };
 }

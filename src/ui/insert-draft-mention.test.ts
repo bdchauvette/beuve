@@ -4,6 +4,7 @@ import { test } from './testing/test.ts';
 
 import type { ChatMentionView } from '#contract/ipc-contract.ts';
 
+import type { DraftPart } from './chat-draft.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
 
 function mention(): ChatMentionView {
@@ -15,8 +16,8 @@ function mention(): ChatMentionView {
     sha: 'c'.repeat(40),
   };
 }
-function chip(): { readonly kind: 'mention'; readonly mention: ChatMentionView } {
-  return { kind: 'mention', mention: mention() } as const;
+function chip(): DraftPart {
+  return { kind: 'mention', mention: mention() };
 }
 
 describe('insertDraftMention', () => {

@@ -94,6 +94,24 @@ export interface EditSession {
   readonly error: string;
 }
 
+/** Sent when an edit is cancelled, with a note for the status bar (`''` for none). */
+export interface SuggestionCancelDetail {
+  readonly message: string;
+}
+
+/** Sent by "Load diff" (or its undo) on a card. */
+export interface DiffToggleDetail {
+  readonly path: string;
+  readonly expand: boolean;
+}
+
+/** Lines `start`–`end` of one side of a card's file. */
+export interface SideLines {
+  readonly start: number;
+  readonly end: number;
+  readonly side: 'head' | 'base';
+}
+
 /** Sent when an Suggest Edit edit is saved: the edited range and its suggested patch. */
 export interface SuggestionSaveDetail {
   readonly target: EditTarget;
@@ -114,6 +132,9 @@ interface CardSlot {
 }
 
 const noInsights: readonly ReviewInsight[] = [];
+
+/** The `@pierre/diffs` side that holds each side's lines. */
+const librarySides = { head: 'additions', base: 'deletions' } as const;
 
 const estimatedLineHeight = 20;
 const estimatedSeparatorHeight = 32;
@@ -770,10 +791,12 @@ export class BeuveFileCard extends LitElement {
       range.start === step?.start &&
       range.end === step.end &&
       (range.side ?? 'additions') === step.side;
-    this.lineSelection = isStep ? undefined : range;
-    if (!isStep) {
-      this.focusedLine = undefined;
+    if (isStep) {
+      this.lineSelection = undefined;
+      return;
     }
+    this.lineSelection = range;
+    this.focusedLine = undefined;
   };
 
   /**
@@ -972,16 +995,16 @@ export class BeuveFileCard extends LitElement {
   }
 
   private syncDiff(
-    library: typeof Diffs,
     changed: PropertyValues<this>,
-    container: HTMLElement,
-    metadata: FileDiffMetadata,
+    { library, container, metadata }: DiffMount,
   ): void {
     const isNew = this.diff === undefined;
     this.diff ??= this.createDiff(library);
     const annotations = headSideAnnotationsFrom(this.file?.hunks ?? [], this.notes());
     const isNewInput = ['file', 'mounted', 'library', 'uraItems', 'insights', 'composer'].some(
-      (key) => changed.has(key as keyof BeuveFileCard),
+      (key) => {
+        return changed.has(key as keyof BeuveFileCard);
+      },
     );
     if (isNew || isNewInput) {
       this.diff.render({
@@ -999,9 +1022,10 @@ export class BeuveFileCard extends LitElement {
     if (isActivatedBySelecting) {
       return;
     }
-    const step = this.active
-      ? planHunkSteps(metadata.hunks, this.diffStyle)[this.activeHunk]
-      : undefined;
+    let step: HunkStep | undefined;
+    if (this.active) {
+      step = planHunkSteps(metadata.hunks, this.diffStyle)[this.activeHunk];
+    }
     this.programmaticStep = step;
     this.lineSelection = undefined;
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
@@ -1011,26 +1035,33 @@ export class BeuveFileCard extends LitElement {
   /** Staged URA markers first, then the composer, each under its last line. */
   private notes(): CardSlot[] {
     const path = this.file?.path ?? '';
-    const composer = this.composer?.path === path ? this.composer : undefined;
-    const composerLines =
-      composer?.anchor.kind === 'lines'
-        ? { lineStart: composer.anchor.startLine, lineEnd: composer.anchor.endLine }
-        : { lineStart: 0, lineEnd: 0 };
-    return [
-      ...uraMarkersFrom(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => ({
-        lineStart,
-        lineEnd,
-        note: { kind: 'ura', item },
-      })),
-      ...this.insights.map((insight): CardSlot => ({
-        lineStart: insight.finding.startLine,
-        lineEnd: insight.finding.endLine,
-        note: { kind: 'insight', insight },
-      })),
-      ...(composer === undefined
-        ? []
-        : [{ ...composerLines, note: { kind: 'composer' } } as const]),
+    const slots: CardSlot[] = [
+      ...uraMarkersFrom(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => {
+        return {
+          lineStart,
+          lineEnd,
+          note: { kind: 'ura', item },
+        };
+      }),
+      ...this.insights.map((insight): CardSlot => {
+        return {
+          lineStart: insight.finding.startLine,
+          lineEnd: insight.finding.endLine,
+          note: { kind: 'insight', insight },
+        };
+      }),
     ];
+    const { composer } = this;
+    if (composer?.path !== path) {
+      return slots;
+    }
+    if (composer.anchor.kind === 'lines') {
+      const { startLine, endLine } = composer.anchor;
+      slots.push({ lineStart: startLine, lineEnd: endLine, note: { kind: 'composer' } });
+    } else {
+      slots.push({ lineStart: 0, lineEnd: 0, note: { kind: 'composer' } });
+    }
+    return slots;
   }
 
   private createDiff(library: typeof Diffs): FileDiff<CardSlot> {
@@ -1053,10 +1084,13 @@ export class BeuveFileCard extends LitElement {
           this.addToChat(range);
         },
         ...(loader !== undefined && {
-          loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> =>
-            loadFiles(loader, fileDiff),
+          loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> => {
+            return loadFiles(loader, fileDiff);
+          },
         }),
-        renderAnnotation: (annotation): HTMLElement => this.noteElement(annotation.metadata.note),
+        renderAnnotation: (annotation): HTMLElement => {
+          return this.noteElement(annotation.metadata.note);
+        },
         onPostRender: (_node, _instance, phase): void => {
           if (phase !== 'mount') {
             return;
@@ -1177,13 +1211,14 @@ export class BeuveFileCard extends LitElement {
   }
 
   /** The insight note `element` is in, and its insight. */
-  private insightOf(
-    element: HTMLElement,
-  ): { readonly note: HTMLElement; readonly insight: ReviewInsight } | undefined {
+  private insightOf(element: HTMLElement): InsightNote | undefined {
     const note = element.closest<HTMLElement>('[data-insight-key]');
     const key = note?.dataset['insightKey'];
     const insight = this.insights.find((candidate) => candidate.key === key);
-    return note === null || insight === undefined ? undefined : { note, insight };
+    if (note === null || insight === undefined) {
+      return undefined;
+    }
+    return { note, insight };
   }
 
   /** Expands or collapses (`undefined`: toggles) the note `element` is in, and remembers it. */
@@ -1280,11 +1315,10 @@ export class BeuveFileCard extends LitElement {
     if (chip === undefined) {
       return nothing;
     }
-    const label = chip.tone === 'warning' ? `ImpactGate: ${chip.label}` : 'ImpactGate details';
     return html`<button
         type="button"
         class="impact-chip ${chip.tone}"
-        aria-label=${label}
+        aria-label=${chip.tone === 'warning' ? `ImpactGate: ${chip.label}` : 'ImpactGate details'}
         aria-haspopup="dialog"
         aria-controls="impact-popover"
         data-action="impact-chip"
@@ -1347,20 +1381,19 @@ export class BeuveFileCard extends LitElement {
                 </tr>
               </thead>
               <tbody>
-                ${chip.rows.map(
-                  (row) =>
-                    html`<tr class=${row.trend === undefined ? '' : 'breach'}>
-                      <td class="fn" title=${row.name}>${row.name}</td>
-                      <td>${row.lines}</td>
-                      <td>
-                        ${row.before === undefined ? 'new' : String(row.before)} →
-                        ${row.after === undefined ? 'removed' : String(row.after)}${
-                          row.trend === undefined ? '' : ` · ${row.trend}`
-                        }
-                      </td>
-                      <td>${row.percentile === undefined ? '' : String(row.percentile)}</td>
-                    </tr>`,
-                )}
+                ${chip.rows.map((row) => {
+                  return html`<tr class=${row.trend === undefined ? '' : 'breach'}>
+                    <td class="fn" title=${row.name}>${row.name}</td>
+                    <td>${row.lines}</td>
+                    <td>
+                      ${row.before === undefined ? 'new' : String(row.before)} →
+                      ${row.after === undefined ? 'removed' : String(row.after)}${
+                        row.trend === undefined ? '' : ` · ${row.trend}`
+                      }
+                    </td>
+                    <td>${row.percentile === undefined ? '' : String(row.percentile)}</td>
+                  </tr>`;
+                })}
               </tbody>
             </table>`
       }
@@ -1372,11 +1405,7 @@ export class BeuveFileCard extends LitElement {
             : html`<button
                 type="button"
                 ?disabled=${unstaged.length === 0}
-                title=${
-                  unstaged.length === 0
-                    ? 'Staged in the review dock'
-                    : `Stage ${unstaged.length === 1 ? 'this finding' : `these ${String(unstaged.length)} findings`} in the review dock`
-                }
+                title=${stageFindingsTitle(unstaged.length)}
                 data-action="impact-stage"
               >
                 ${unstaged.length === 0 ? 'Staged' : 'Stage'}
@@ -1385,10 +1414,13 @@ export class BeuveFileCard extends LitElement {
       </div>`;
   }
 
-  private impactParts(): { chip: HTMLElement; popover: HTMLElement } | undefined {
+  private impactParts(): ImpactParts | undefined {
     const chip = this.renderRoot.querySelector<HTMLElement>('.impact-chip');
     const popover = this.renderRoot.querySelector<HTMLElement>('.impact-popover');
-    return chip === null || popover === null ? undefined : { chip, popover };
+    if (chip === null || popover === null) {
+      return undefined;
+    }
+    return { chip, popover };
   }
 
   /** Opens the popover in the top layer, under the chip and inside the window. */
@@ -1407,7 +1439,10 @@ export class BeuveFileCard extends LitElement {
     const left = Math.max(8, Math.min(anchor.right - width, innerWidth - width - 8));
     const below = anchor.bottom + 4;
     const height = popover.getBoundingClientRect().height;
-    const top = below + height > innerHeight - 8 ? Math.max(8, anchor.top - height - 4) : below;
+    let top = below;
+    if (below + height > innerHeight - 8) {
+      top = Math.max(8, anchor.top - height - 4);
+    }
     popover.style.left = `${String(Math.round(left))}px`;
     popover.style.top = `${String(Math.round(top))}px`;
     this.impactAnchorTop = anchor.top;
@@ -1437,14 +1472,15 @@ export class BeuveFileCard extends LitElement {
   }
 
   private isStaged(finding: ImpactFindingView): boolean {
-    return this.uraItems.some(
-      ({ origin, status, anchor }) =>
+    return this.uraItems.some(({ origin, status, anchor }) => {
+      return (
         origin.kind === 'impact-finding' &&
         status.kind !== 'withdrawn' &&
         origin.functionName === finding.functionName &&
         anchor.kind === 'lines' &&
-        anchor.path === finding.path,
-    );
+        anchor.path === finding.path
+      );
+    });
   }
 
   private renderCode(file: DiffFileView): TemplateResult | typeof nothing {
@@ -1460,12 +1496,13 @@ export class BeuveFileCard extends LitElement {
     if (file.hunks.length === 0) {
       return html`<p class="empty">${file.binary ? 'Binary file' : 'No textual changes'}</p>`;
     }
-    return this.mounted
-      ? html`${keyed(this.codeGeneration, html`<div class="code"></div>`)}`
-      : html`<div
-          class="code placeholder"
-          style=${styleMap({ height: `${String(this.measuredHeight ?? estimateHeight(file))}px` })}
-        ></div>`;
+    if (this.mounted) {
+      return html`${keyed(this.codeGeneration, html`<div class="code"></div>`)}`;
+    }
+    return html`<div
+      class="code placeholder"
+      style=${styleMap({ height: `${String(this.measuredHeight ?? estimateHeight(file))}px` })}
+    ></div>`;
   }
 
   private renderTag(): TemplateResult | typeof nothing {
@@ -1485,37 +1522,40 @@ export class BeuveFileCard extends LitElement {
   /** A check before the status of a file marked reviewed (ADR 0064). */
 
   private renderReviewedMark(): TemplateResult | typeof nothing {
-    return this.reviewed === 'yes'
-      ? html`<button
-          type="button"
-          class="reviewed-mark"
-          title=${`Reviewed — click to unmark (${shortcutOf('toggle-reviewed', keyPlatformOf(navigator.platform))})`}
-          aria-label="Reviewed; unmark"
-          data-action="unmark"
-        >
-          ${checkIcon}
-        </button>`
-      : nothing;
+    if (this.reviewed === 'yes') {
+      return html`<button
+        type="button"
+        class="reviewed-mark"
+        title=${`Reviewed — click to unmark (${shortcutOf('toggle-reviewed', keyPlatformOf(navigator.platform))})`}
+        aria-label="Reviewed; unmark"
+        data-action="unmark"
+      >
+        ${checkIcon}
+      </button>`;
+    }
+    return nothing;
   }
 
   /** Marked reviewed, but the file's diff is not the one that was reviewed any more. */
   private renderChangedSince(): TemplateResult | typeof nothing {
-    return this.reviewed === 'changed-since'
-      ? html`<span class="changed-since" title="Changed since you reviewed it"
-          >changed since reviewed</span
-        >`
-      : nothing;
+    if (this.reviewed === 'changed-since') {
+      return html`<span class="changed-since" title="Changed since you reviewed it"
+        >changed since reviewed</span
+      >`;
+    }
+    return nothing;
   }
 
   /** "2 insights" on a collapsed card: its findings are on lines the reviewer cannot see yet (ADR 0061). */
   private renderInsightBadge(): TemplateResult | typeof nothing {
-    return this.collapsed && this.insights.length > 0
-      ? html`<span
-          class="tag insight-badge"
-          title="/review findings on this file's lines; load the diff to read them"
-          >${describeInsightCount(this.insights.length)}</span
-        >`
-      : nothing;
+    if (this.collapsed && this.insights.length > 0) {
+      return html`<span
+        class="tag insight-badge"
+        title="/review findings on this file's lines; load the diff to read them"
+        >${describeInsightCount(this.insights.length)}</span
+      >`;
+    }
+    return nothing;
   }
 
   private expand(event: Event): void {
@@ -1532,13 +1572,15 @@ export class BeuveFileCard extends LitElement {
   /** What a collapsed card says instead of its diff: why, how big, and how to load it. */
   private renderCollapsed(): TemplateResult {
     const { deferral } = this;
-    const size =
-      deferral === undefined
-        ? ''
-        : `${countFormat.format(deferral.rows)} lines · ${formatSize(deferral.characters)}`;
     return html`<div class="collapsed-body">
       <span class="why">${deferral?.why ?? 'Collapsed.'}</span>
-      ${size === '' ? nothing : html`<span class="size">${size}</span>`}
+      ${
+        deferral === undefined
+          ? nothing
+          : html`<span class="size"
+              >${countFormat.format(deferral.rows)} lines · ${formatSize(deferral.characters)}</span
+            >`
+      }
       <button
         type="button"
         title=${`Expand File (${shortcutOf('expand', keyPlatformOf(navigator.platform))})`}
@@ -1555,10 +1597,9 @@ export class BeuveFileCard extends LitElement {
       ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
-${splitPatch(file.patch).map(
-          (line) =>
-            html`<span class="line ${line.kind}">${line.text === '' ? ' ' : line.text}</span>`,
-        )}</pre>`;
+${splitPatch(file.patch).map((line) => {
+          return html`<span class="line ${line.kind}">${line.text === '' ? ' ' : line.text}</span>`;
+        })}</pre>`;
   }
 
   /** ⌘/Ctrl+Enter: the edit as a patch of the target lines, unless it strays outside them. */
@@ -1570,7 +1611,12 @@ ${splitPatch(file.patch).map(
       }
       return;
     }
-    const plan = buildSuggestedPatch(file?.path ?? '', editHead, editor.getText(), edit.target);
+    const plan = buildSuggestedPatch({
+      path: file?.path ?? '',
+      head: editHead,
+      edited: editor.getText(),
+      range: edit.target,
+    });
     switch (plan.kind) {
       case 'outside': {
         this.edit = { ...edit, error: plan.message };
@@ -1623,21 +1669,9 @@ ${splitPatch(file.patch).map(
     if (edit === undefined) {
       return nothing;
     }
-    const { startLine, endLine } = edit.target;
-    const lines =
-      startLine === endLine
-        ? `line ${String(startLine)}`
-        : `lines ${String(startLine)}–${String(endLine)}`;
-    const what = `${edit.target.itemId === undefined ? 'Suggesting' : 'Editing the suggestion for'} ${lines}`;
-    const state =
-      edit.phase === 'loading'
-        ? 'Opening the editor…'
-        : edit.phase === 'failed'
-          ? ''
-          : 'Your files are never written';
     return html`<div class="edit-bar" role="status">
-      <span class="what">${what}</span>
-      <span>${state}</span>
+      <span class="what">${editDescription(edit.target)}</span>
+      <span>${editPhaseNotes[edit.phase]}</span>
       ${edit.error === '' ? nothing : html`<span class="error" role="alert">${edit.error}</span>`}
     </div>`;
   }
@@ -1645,7 +1679,11 @@ ${splitPatch(file.patch).map(
   /** Scrolls a row (or the card) into view vertically, keeping the code's horizontal scroll. */
   private scrollToRow(row: Element | undefined): void {
     const left = this.diff?.getCodeScrollLeft();
-    (row ?? this).scrollIntoView({ block: row === undefined ? 'start' : 'center' });
+    if (row === undefined) {
+      this.scrollIntoView({ block: 'start' });
+    } else {
+      row.scrollIntoView({ block: 'center' });
+    }
     if (left !== undefined) {
       this.diff?.setCodeScrollLeft(left);
     }
@@ -1682,15 +1720,16 @@ ${splitPatch(file.patch).map(
    * Scrolls to lines `start`–`end` of one side and selects them, for a chat chip: head lines as
    * Open in Editor and citations find them, base lines by their own numbers on the deleted side.
    */
-  async revealRange(start: number, end: number, side: 'head' | 'base'): Promise<void> {
+  async revealRange({ start, end, side }: SideLines): Promise<void> {
     this.mounted = true;
     await this.updateComplete;
-    const row = await waitFor(() =>
-      side === 'base'
-        ? this.findRow('deletions', start)
-        : (this.findRow('additions', start) ?? this.findRow('context', start)),
-    );
-    const librarySide = side === 'base' ? 'deletions' : 'additions';
+    const row = await waitFor(() => {
+      if (side === 'base') {
+        return this.findRow('deletions', start);
+      }
+      return this.findRow('additions', start) ?? this.findRow('context', start);
+    });
+    const librarySide = librarySides[side];
     const range: SelectedLines = { start, end, side: librarySide, endSide: librarySide };
     this.programmaticStep = undefined;
     this.diff?.setSelectedLines(range);
@@ -1745,10 +1784,10 @@ ${splitPatch(file.patch).map(
       }
       const editor = new module.Editor<'file-diff', CardSlot>('file-diff');
       editor.edit(diff);
-      const suggested =
-        target.patch === undefined
-          ? undefined
-          : applySuggestedPatch(pair.newContents, target.patch);
+      let suggested: string | undefined;
+      if (target.patch !== undefined) {
+        suggested = applySuggestedPatch({ head: pair.newContents, patch: target.patch });
+      }
       if (suggested !== undefined && suggested !== pair.newContents) {
         // Re-editing starts from the suggestion; undo goes back to the head.
         const end = { line: pair.newContents.split('\n').length, character: 0 };
@@ -1763,11 +1802,11 @@ ${splitPatch(file.patch).map(
       await this.revealLine(target.startLine);
     } catch (error: unknown) {
       this.endEdit();
-      this.edit = {
-        target,
-        phase: 'failed',
-        error: Error.isError(error) ? error.message : 'The editor could not start.',
-      };
+      let message = 'The editor could not start.';
+      if (Error.isError(error)) {
+        message = error.message;
+      }
+      this.edit = { target, phase: 'failed', error: message };
     }
   }
 
@@ -1784,10 +1823,13 @@ ${splitPatch(file.patch).map(
   async revealLine(line: number | undefined): Promise<void> {
     this.mounted = true;
     await this.updateComplete;
-    const row =
-      line === undefined
-        ? undefined
-        : await waitFor(() => this.findRow('additions', line) ?? this.findRow('context', line));
+    if (line === undefined) {
+      this.scrollToRow(undefined);
+      return;
+    }
+    const row = await waitFor(() => {
+      return this.findRow('additions', line) ?? this.findRow('context', line);
+    });
     this.scrollToRow(row);
   }
 
@@ -1796,13 +1838,16 @@ ${splitPatch(file.patch).map(
     this.mounted = true;
     this.activeHunk = index;
     await this.updateComplete;
-    const step =
-      this.metadata === undefined
-        ? undefined
-        : planHunkSteps(this.metadata.hunks, this.diffStyle)[index];
-    const row =
-      step === undefined ? undefined : await waitFor(() => this.findRow(step.side, step.start));
-    this.scrollToRow(row);
+    let step: HunkStep | undefined;
+    if (this.metadata !== undefined) {
+      step = planHunkSteps(this.metadata.hunks, this.diffStyle)[index];
+    }
+    if (step === undefined) {
+      this.scrollToRow(undefined);
+      return;
+    }
+    const { side, start } = step;
+    this.scrollToRow(await waitFor(() => this.findRow(side, start)));
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -1835,7 +1880,9 @@ ${splitPatch(file.patch).map(
       this.diff !== undefined
     ) {
       const height = this.codeHeight;
-      this.measuredHeight = height === undefined || height === 0 ? this.measuredHeight : height;
+      if (height !== undefined && height !== 0) {
+        this.measuredHeight = height;
+      }
       this.unobserveCode();
       this.diff.cleanUp();
       this.diff = undefined;
@@ -1847,8 +1894,10 @@ ${splitPatch(file.patch).map(
       return;
     }
     const { file, library } = this;
-    this.metadata =
-      file === undefined || library === undefined ? undefined : metadataFrom(library, file);
+    this.metadata = undefined;
+    if (file !== undefined && library !== undefined) {
+      this.metadata = metadataFrom(library, file);
+    }
     this.isFallback = false;
   }
 
@@ -1871,7 +1920,7 @@ ${splitPatch(file.patch).map(
     }
     this.observeCode(container);
     try {
-      this.syncDiff(library, changed, container, metadata);
+      this.syncDiff(changed, { library, container, metadata });
       this.syncInsightMarks();
     } catch {
       this.diff?.cleanUp();
@@ -1941,7 +1990,10 @@ function uraMarkerElement(item: UraItemView): HTMLElement {
   marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}`;
   const kind = document.createElement('span');
   kind.className = 'ura-kind';
-  kind.textContent = `Staged · ${labels.severity}${item.suggestedPatch === undefined ? '' : ' · suggestion'}`;
+  kind.textContent = `Staged · ${labels.severity}`;
+  if (item.suggestedPatch !== undefined) {
+    kind.textContent += ' · suggestion';
+  }
   const title = document.createElement('span');
   title.className = 'ura-title';
   title.append(...parseInlineTitle(item.title).map((span) => createInlineNode(span)));
@@ -1973,7 +2025,10 @@ async function loadDiffs(): Promise<typeof Diffs> {
 
 async function loadDiffsOnce(): Promise<typeof Diffs> {
   const [library, workers] = await Promise.all([loadDiffsLibrary(), loadWorkerModule()]);
-  shared.pool = workers === undefined ? undefined : startWorkerPool(workers);
+  shared.pool = undefined;
+  if (workers !== undefined) {
+    shared.pool = startWorkerPool(workers);
+  }
   return library;
 }
 
@@ -1996,7 +2051,9 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
   const url = new URL('diff-worker/worker.js', document.baseURI);
   return new workers.WorkerPoolManager(
     {
-      workerFactory: (): Worker => new Worker(url, { type: 'module', name: 'beuve-highlighter' }),
+      workerFactory: (): Worker => {
+        return new Worker(url, { type: 'module', name: 'beuve-highlighter' });
+      },
       poolSize: workerCount,
       mainThreadMaxCharacters,
       onWorkerError: (event): void => {
@@ -2036,9 +2093,10 @@ function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetada
     return undefined;
   }
   const language = library.getFiletypeFromFileName(file.path);
-  return Object.hasOwn(highlightedLanguages, language)
-    ? metadata
-    : library.setLanguageOverride(metadata, 'text');
+  if (Object.hasOwn(highlightedLanguages, language)) {
+    return metadata;
+  }
+  return library.setLanguageOverride(metadata, 'text');
 }
 
 async function loadFiles(
@@ -2050,13 +2108,66 @@ async function loadFiles(
     throw new Error('beuve could not load this file to expand it');
   }
   const newFile = { name: fileDiff.name, contents: pair.newContents };
-  return pair.oldContents === undefined
-    ? // eslint-disable-next-line unicorn/no-null -- the library marks a pure rename's old side with null.
-      { oldFile: null, newFile }
-    : {
-        oldFile: { name: fileDiff.prevName ?? fileDiff.name, contents: pair.oldContents },
-        newFile,
-      };
+  if (pair.oldContents === undefined) {
+    // eslint-disable-next-line unicorn/no-null -- the library marks a pure rename's old side with null.
+    return { oldFile: null, newFile };
+  }
+  return {
+    oldFile: { name: fileDiff.prevName ?? fileDiff.name, contents: pair.oldContents },
+    newFile,
+  };
+}
+
+/** Where a card's diff renders: the library, the element it fills, and the parsed file. */
+interface DiffMount {
+  readonly library: typeof Diffs;
+  readonly container: HTMLElement;
+  readonly metadata: FileDiffMetadata;
+}
+
+/** An insight's note element, and the insight it shows. */
+interface InsightNote {
+  readonly note: HTMLElement;
+  readonly insight: ReviewInsight;
+}
+
+/** The ImpactGate chip and its popover. */
+interface ImpactParts {
+  readonly chip: HTMLElement;
+  readonly popover: HTMLElement;
+}
+
+function stageFindingsTitle(unstaged: number): string {
+  if (unstaged === 0) {
+    return 'Staged in the review dock';
+  }
+  if (unstaged === 1) {
+    return 'Stage this finding in the review dock';
+  }
+  return `Stage these ${String(unstaged)} findings in the review dock`;
+}
+
+const editPhaseNotes: Readonly<Record<EditSession['phase'], string>> = {
+  loading: 'Opening the editor…',
+  editing: 'Your files are never written',
+  failed: '',
+};
+
+/** What the edit bar says is being edited: a new suggestion, or the item's own. */
+function editDescription(target: EditTarget): string {
+  const lines = editedLines(target);
+  if (target.itemId === undefined) {
+    return `Suggesting ${lines}`;
+  }
+  return `Editing the suggestion for ${lines}`;
+}
+
+/** `line 12`, or `lines 12–15`. */
+function editedLines({ startLine, endLine }: EditTarget): string {
+  if (startLine === endLine) {
+    return `line ${String(startLine)}`;
+  }
+  return `lines ${String(startLine)}–${String(endLine)}`;
 }
 
 const estimatedHeights = new WeakMap<DiffFileView, number>();
@@ -2067,9 +2178,9 @@ function estimateHeight(file: DiffFileView): number {
   if (known !== undefined) {
     return known;
   }
-  const lines = splitPatch(file.patch).filter(
-    (line) => line.kind !== 'meta' && line.kind !== 'hunk',
-  ).length;
+  const lines = splitPatch(file.patch).filter((line) => {
+    return line.kind !== 'meta' && line.kind !== 'hunk';
+  }).length;
   const height = lines * estimatedLineHeight + file.hunks.length * estimatedSeparatorHeight;
   estimatedHeights.set(file, height);
   return height;
@@ -2078,9 +2189,10 @@ function estimateHeight(file: DiffFileView): number {
 const countFormat = new Intl.NumberFormat('en');
 
 function formatSize(characters: number): string {
-  return characters < 1024 * 1024
-    ? `${String(Math.max(1, Math.round(characters / 1024)))} KB`
-    : `${(characters / 1024 / 1024).toFixed(1)} MB`;
+  if (characters < 1024 * 1024) {
+    return `${String(Math.max(1, Math.round(characters / 1024)))} KB`;
+  }
+  return `${(characters / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /** Polls a few animation frames for a value that a later render sets. */

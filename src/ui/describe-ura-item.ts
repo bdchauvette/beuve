@@ -41,22 +41,35 @@ export function describeUraItem(item: UraItemView): UraItemLabels {
   const { placement } = item;
   return {
     severity: severities[item.severity],
-    anchor: formatAnchor(placement.kind === 'current' ? placement.anchor : item.anchor),
-    origin:
-      item.origin.kind === 'chat-answer' && item.origin.finding !== undefined
-        ? 'review finding'
-        : origins[item.origin.kind],
+    anchor: formatAnchor(currentAnchor(item)),
+    origin: originOf(item),
     ...(placement.kind === 'outdated' && { outdated: outdatedReasons[placement.reason] }),
   };
+}
+
+/** Where the item sits on the current head, or where it was made when it no longer maps. */
+function currentAnchor(item: UraItemView): UraAnchorView {
+  if (item.placement.kind === 'current') {
+    return item.placement.anchor;
+  }
+  return item.anchor;
+}
+
+function originOf(item: UraItemView): string {
+  if (item.origin.kind === 'chat-answer' && item.origin.finding !== undefined) {
+    return 'review finding';
+  }
+  return origins[item.origin.kind];
 }
 
 function formatAnchor(anchor: UraAnchorView): string {
   switch (anchor.kind) {
     case 'lines': {
       const { path, startLine, endLine } = anchor;
-      return startLine === endLine
-        ? `${path}:${String(startLine)}`
-        : `${path}:${String(startLine)}-${String(endLine)}`;
+      if (startLine === endLine) {
+        return `${path}:${String(startLine)}`;
+      }
+      return `${path}:${String(startLine)}-${String(endLine)}`;
     }
     case 'file': {
       return anchor.path;

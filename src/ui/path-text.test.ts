@@ -29,16 +29,29 @@ describe('pathText (ADR 0082)', () => {
   });
 });
 
+/** An escaped character as `pathText` renders it, by what the escape shows. */
+interface EscapePart {
+  readonly escape: unknown;
+}
+
 /** The text and escape spans a `pathText` template renders, empty text left out. */
-function partsOf(result: TemplateResult): readonly (string | { readonly escape: unknown })[] {
+function partsOf(result: TemplateResult): readonly (string | EscapePart)[] {
   const [parts] = result.values as [readonly (string | TemplateResult)[]];
   return parts
     .filter((part) => part !== '')
-    .map((part) =>
-      typeof part === 'string'
-        ? part
-        : { escape: part.strings.join('').includes('format-control') ? part.values[0] : part },
-    );
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      return { escape: escapedValue(part) };
+    });
+}
+
+function escapedValue(part: TemplateResult): unknown {
+  if (part.strings.join('').includes('format-control')) {
+    return part.values[0];
+  }
+  return part;
 }
 
 /** A character by code point, so this file holds none of the characters it tests. */

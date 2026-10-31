@@ -419,9 +419,9 @@ export class BeuveTracePortal extends LitElement {
         testCase.rows.length === 0
           ? html`<p class="quiet">This test never reached the traced code.</p>`
           : html`<ol>
-              ${testCase.rows.map((row, rowIndex) =>
-                this.renderRow(row, `${String(caseIndex)}:${String(rowIndex)}`),
-              )}
+              ${testCase.rows.map((row, rowIndex) => {
+                return this.renderRow(row, `${String(caseIndex)}:${String(rowIndex)}`);
+              })}
             </ol>`
       }
       ${
@@ -496,7 +496,9 @@ export class BeuveTracePortal extends LitElement {
             trace.testFiles === undefined
               ? nothing
               : html`<ul class="files">
-                  ${trace.testFiles.map((file) => html`<li>${pathText(file)}</li>`)}
+                  ${trace.testFiles.map((file) => {
+                    return html`<li>${pathText(file)}</li>`;
+                  })}
                 </ul>`
           }`;
       }

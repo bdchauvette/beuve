@@ -52,6 +52,7 @@ import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
+import { countNoun } from './count-noun.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -76,6 +77,7 @@ import type { CommandDefinition } from './command-registry.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { menuStateFrom } from './menu-state-from.ts';
+import type { MenuStateInput } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader } from './beuve-file-card.ts';
@@ -122,6 +124,147 @@ const impactGrace = Temporal.Duration.from({ milliseconds: 1500 });
  * keys the shell already handles. Owns all bridge calls and session state; zones are
  * presentational and report user intent with events.
  */
+/** The file the diff stream is on, if any. */
+interface ActiveFileDetail {
+  readonly path: string | undefined;
+}
+
+/** Lines a diff card adds to the chat. */
+interface ChatAddDetail {
+  readonly target: MentionTarget;
+}
+
+/** A citation pill to open. */
+interface ChatCiteDetail {
+  readonly citation: ChatCitationView;
+}
+
+/** A context chip to show in the diff. */
+interface ChatMentionDetail {
+  readonly mention: ChatMentionView;
+}
+
+/** A question and its context chips. */
+interface ChatSubmitDetail {
+  readonly text: string;
+  readonly mentions?: readonly ChatMentionView[];
+}
+
+/** A file and line to open in the editor. */
+interface EditorOpenDetail {
+  readonly path: string;
+  readonly line: number;
+}
+
+/** A file to mark reviewed, or to unmark. */
+interface FileReviewedDetail {
+  readonly path: string;
+  readonly reviewed: boolean;
+}
+
+/** One finding of a `/review` answer: its message and its index. */
+interface FindingRefDetail {
+  readonly messageId: string;
+  readonly finding: number;
+}
+
+/** Post the staged review to GitHub, with this verdict over the derived one. */
+interface GithubPostDetail {
+  readonly verdict?: UraVerdictView | undefined;
+}
+
+/** A file and, if any, the line a portal opens at. */
+interface LineRequestDetail {
+  readonly path: string;
+  readonly line: number | undefined;
+}
+
+/** A chat message, by id. */
+interface MessageIdDetail {
+  readonly messageId: string;
+}
+
+/** The palette entry the reviewer ran. */
+interface PaletteRunDetail {
+  readonly action: PaletteAction;
+}
+
+/** A call hierarchy node to expand. */
+interface PeekExpandDetail {
+  readonly nodeId: string;
+}
+
+/** A session the open panel or the palette picked. */
+interface SessionIdDetail {
+  readonly sessionId: string;
+}
+
+/** A stacked pull request, by its ref. */
+interface StackRefDetail {
+  readonly ref: string;
+}
+
+/** An ImpactGate finding to stage: its file and function. */
+interface StageFindingDetail {
+  readonly path: string;
+  readonly functionName: string;
+}
+
+/** The radar tree mode chosen in its header. */
+interface TreeModeDetail {
+  readonly mode: RadarTreeMode;
+}
+
+/** A file picked in the radar tree. */
+interface TreeSelectDetail {
+  readonly path: string;
+}
+
+/** Where to export the staged review. */
+interface UraExportDetail {
+  readonly target: UraExportTarget;
+}
+
+/** A staged item, by id. */
+interface UraItemIdDetail {
+  readonly itemId: string;
+}
+
+/** A staged item to show in the diff. */
+interface UraJumpDetail {
+  readonly item: UraItemView;
+}
+
+/** The dock order after a move. */
+interface UraReorderDetail {
+  readonly itemIds: readonly string[];
+}
+
+/** A staged item and the status it moves to. */
+interface UraTransitionDetail {
+  readonly itemId: string;
+  readonly to: 'staged' | 'withdrawn' | 'addressed';
+}
+
+/** The fields of a staged item the dock edited. */
+interface UraUpdateDetail {
+  readonly itemId: string;
+  readonly title?: string;
+  readonly body?: string;
+  readonly severity?: UraSeverityView;
+  readonly suggestedPatch?: string;
+}
+
+/** The verdict the reviewer chose; `undefined` goes back to the derived one. */
+interface UraVerdictDetail {
+  readonly verdict: UraVerdictView | undefined;
+}
+
+/** A link to open. */
+interface UrlDetail {
+  readonly url: string;
+}
+
 @customElement('beuve-app')
 export class BeuveApp extends LitElement {
   static override styles = css`
@@ -376,7 +519,7 @@ export class BeuveApp extends LitElement {
     void this.openRepository(event.detail);
   };
 
-  private readonly onSelectSession = (event: CustomEvent<{ sessionId: string }>): void => {
+  private readonly onSelectSession = (event: CustomEvent<SessionIdDetail>): void => {
     void this.selectSession(event.detail.sessionId);
   };
 
@@ -385,7 +528,7 @@ export class BeuveApp extends LitElement {
   };
 
   /** A stack chip: the neighbour lives in the same repository, so it uses the same clone. */
-  private readonly onOpenStack = (event: CustomEvent<{ ref: string }>): void => {
+  private readonly onOpenStack = (event: CustomEvent<StackRefDetail>): void => {
     const source = this.review?.session.source;
     void this.openPullRequest({
       ref: event.detail.ref,
@@ -397,11 +540,11 @@ export class BeuveApp extends LitElement {
   private readonly subscribeChatStream: ChatStreamSubscribe | undefined =
     subscribeChatStreamOf(beuveBridge());
 
-  private readonly onOpenLink = (event: CustomEvent<{ url: string }>): void => {
+  private readonly onOpenLink = (event: CustomEvent<UrlDetail>): void => {
     void this.openLink(event.detail.url);
   };
 
-  private readonly onOpenChatLink = (event: CustomEvent<{ url: string }>): void => {
+  private readonly onOpenChatLink = (event: CustomEvent<UrlDetail>): void => {
     void this.openUrl(event.detail.url);
   };
 
@@ -409,9 +552,7 @@ export class BeuveApp extends LitElement {
     void this.previewGithubReview();
   };
 
-  private readonly onGithubPost = (
-    event: CustomEvent<{ verdict?: UraVerdictView | undefined }>,
-  ): void => {
+  private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
     void this.postGithubReview(event.detail.verdict);
   };
 
@@ -423,9 +564,7 @@ export class BeuveApp extends LitElement {
     void this.markReviewed();
   };
 
-  private readonly onPeekRequest = (
-    event: CustomEvent<{ path: string; line: number | undefined }>,
-  ): void => {
+  private readonly onPeekRequest = (event: CustomEvent<LineRequestDetail>): void => {
     void this.openPeek(event.detail.path, event.detail.line);
   };
 
@@ -438,7 +577,7 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
-  private readonly onPeekExpand = (event: CustomEvent<{ nodeId: string }>): void => {
+  private readonly onPeekExpand = (event: CustomEvent<PeekExpandDetail>): void => {
     void this.expandPeek(event.detail.nodeId);
   };
 
@@ -446,9 +585,7 @@ export class BeuveApp extends LitElement {
     this.peek = undefined;
   };
 
-  private readonly onFlowRequest = (
-    event: CustomEvent<{ path: string; line: number | undefined }>,
-  ): void => {
+  private readonly onFlowRequest = (event: CustomEvent<LineRequestDetail>): void => {
     void this.openFlow(event.detail.path, event.detail.line);
   };
 
@@ -456,9 +593,7 @@ export class BeuveApp extends LitElement {
     this.flow = undefined;
   };
 
-  private readonly onTraceRequest = (
-    event: CustomEvent<{ path: string; line: number | undefined }>,
-  ): void => {
+  private readonly onTraceRequest = (event: CustomEvent<LineRequestDetail>): void => {
     void this.openTrace(event.detail.path, event.detail.line);
   };
 
@@ -472,19 +607,17 @@ export class BeuveApp extends LitElement {
 
   private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
 
-  private readonly onChatSubmit = (
-    event: CustomEvent<{ text: string; mentions?: readonly ChatMentionView[] }>,
-  ): void => {
+  private readonly onChatSubmit = (event: CustomEvent<ChatSubmitDetail>): void => {
     this.submitChat(event.detail.text, event.detail.mentions ?? []);
   };
 
   /** A context chip, in the input or the transcript: show its lines in the diff. */
-  private readonly onChatMention = (event: CustomEvent<{ mention: ChatMentionView }>): void => {
+  private readonly onChatMention = (event: CustomEvent<ChatMentionDetail>): void => {
     this.openMention(event.detail.mention);
   };
 
   /** The gutter's chat button on a diff card. */
-  private readonly onChatAdd = (event: CustomEvent<{ target: MentionTarget }>): void => {
+  private readonly onChatAdd = (event: CustomEvent<ChatAddDetail>): void => {
     void this.addToChat(event.detail.target);
   };
 
@@ -499,59 +632,51 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
-  private readonly onChatCancel = (event: CustomEvent<{ messageId: string }>): void => {
+  private readonly onChatCancel = (event: CustomEvent<MessageIdDetail>): void => {
     void beuveBridge()?.invoke('chat:cancel', { messageId: event.detail.messageId });
   };
 
-  private readonly onChatStage = (event: CustomEvent<{ messageId: string }>): void => {
+  private readonly onChatStage = (event: CustomEvent<MessageIdDetail>): void => {
     void this.stageChatAnswer(event.detail.messageId);
   };
 
-  private readonly onChatStageFinding = (
-    event: CustomEvent<{ messageId: string; finding: number }>,
-  ): void => {
+  private readonly onChatStageFinding = (event: CustomEvent<FindingRefDetail>): void => {
     void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
   };
 
-  private readonly onInsightStage = (
-    event: CustomEvent<{ messageId: string; finding: number }>,
-  ): void => {
+  private readonly onInsightStage = (event: CustomEvent<FindingRefDetail>): void => {
     event.stopPropagation();
     void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
   };
 
   /** "Show in chat" on a diff note: the chat tab opens at that finding; the diff keeps the focus. */
-  private readonly onInsightShowInChat = (
-    event: CustomEvent<{ messageId: string; finding: number }>,
-  ): void => {
+  private readonly onInsightShowInChat = (event: CustomEvent<FindingRefDetail>): void => {
     event.stopPropagation();
     this.sidebarHidden = false;
     this.sidebarTab = 'chat';
-    void this.updateComplete.then(async () =>
-      this.chatDrawer()?.revealFinding(event.detail.messageId, event.detail.finding),
-    );
+    void this.updateComplete.then(async () => {
+      return this.chatDrawer()?.revealFinding(event.detail.messageId, event.detail.finding);
+    });
   };
 
   private readonly onChatClearQueue = (): void => {
     void this.clearChat(true);
   };
 
-  private readonly onChatCite = (event: CustomEvent<{ citation: ChatCitationView }>): void => {
+  private readonly onChatCite = (event: CustomEvent<ChatCiteDetail>): void => {
     this.openCitation(event.detail.citation);
   };
 
-  private readonly onOpenEditor = (event: CustomEvent<{ path: string; line: number }>): void => {
+  private readonly onOpenEditor = (event: CustomEvent<EditorOpenDetail>): void => {
     void this.openInEditor(event.detail.path, event.detail.line);
   };
 
   /** File Reviewed in the stream: mark the file reviewed or take the mark back (ADR 0064). */
-  private readonly onFileReviewed = (
-    event: CustomEvent<{ path: string; reviewed: boolean }>,
-  ): void => {
+  private readonly onFileReviewed = (event: CustomEvent<FileReviewedDetail>): void => {
     void this.setFileReviewed(event.detail.path, event.detail.reviewed);
   };
 
-  private readonly onActiveFile = (event: CustomEvent<{ path: string | undefined }>): void => {
+  private readonly onActiveFile = (event: CustomEvent<ActiveFileDetail>): void => {
     this.activePath = event.detail.path;
     this.scheduleMenuSync();
   };
@@ -566,11 +691,11 @@ export class BeuveApp extends LitElement {
     this.releaseImpact?.();
   };
 
-  private readonly onTreeMode = (event: CustomEvent<{ mode: RadarTreeMode }>): void => {
+  private readonly onTreeMode = (event: CustomEvent<TreeModeDetail>): void => {
     this.treeMode = event.detail.mode;
   };
 
-  private readonly onTreeSelect = (event: CustomEvent<{ path: string }>): void => {
+  private readonly onTreeSelect = (event: CustomEvent<TreeSelectDetail>): void => {
     this.jumpNonce += 1;
     this.fileJump = { path: event.detail.path, nonce: this.jumpNonce };
   };
@@ -596,27 +721,22 @@ export class BeuveApp extends LitElement {
       sessionId: review.session.id,
       path,
     });
-    return pair.ok ? pair.value : undefined;
+    if (pair.ok) {
+      return pair.value;
+    }
+    return undefined;
   };
 
   private readonly onUraCreate = (event: CustomEvent<UraCreateRequest>): void => {
     void this.createUraItem(event.detail);
   };
 
-  private readonly onUraUpdate = (
-    event: CustomEvent<{
-      itemId: string;
-      title?: string;
-      body?: string;
-      severity?: UraSeverityView;
-      suggestedPatch?: string;
-    }>,
-  ): void => {
+  private readonly onUraUpdate = (event: CustomEvent<UraUpdateDetail>): void => {
     void this.uraCall(async (bridge) => bridge.invoke('ura:update', event.detail));
   };
 
   /** The dock's "Edit suggestion": the stream opens Suggest Edit on the item's lines (ADR 0043). */
-  private readonly onUraEditSuggestion = (event: CustomEvent<{ itemId: string }>): void => {
+  private readonly onUraEditSuggestion = (event: CustomEvent<UraItemIdDetail>): void => {
     this.jumpNonce += 1;
     this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
     this.focusedZone = 'diff';
@@ -631,48 +751,56 @@ export class BeuveApp extends LitElement {
     void this.setDisplay(event.detail);
   };
 
-  private readonly onUraTransition = (
-    event: CustomEvent<{ itemId: string; to: 'staged' | 'withdrawn' | 'addressed' }>,
-  ): void => {
+  private readonly onUraTransition = (event: CustomEvent<UraTransitionDetail>): void => {
     void this.transitionUraItem(event.detail.itemId, event.detail.to);
   };
 
-  private readonly onUraReorder = (event: CustomEvent<{ itemIds: readonly string[] }>): void => {
+  private readonly onUraReorder = (event: CustomEvent<UraReorderDetail>): void => {
     const { review } = this;
     if (review === undefined) {
       return;
     }
-    const byId = new Map(this.uraItems.map((item) => [item.id, item]));
-    this.uraItems = event.detail.itemIds.flatMap((id) => byId.get(id) ?? []);
-    void this.uraCall(async (bridge) =>
-      bridge.invoke('ura:reorder', { sessionId: review.session.id, itemIds: event.detail.itemIds }),
+    const byId = new Map(
+      this.uraItems.map((item) => {
+        return [item.id, item];
+      }),
     );
+    this.uraItems = event.detail.itemIds.flatMap((id) => {
+      return byId.get(id) ?? [];
+    });
+    void this.uraCall(async (bridge) => {
+      return bridge.invoke('ura:reorder', {
+        sessionId: review.session.id,
+        itemIds: event.detail.itemIds,
+      });
+    });
   };
 
-  private readonly onUraExport = (event: CustomEvent<{ target: UraExportTarget }>): void => {
+  private readonly onUraExport = (event: CustomEvent<UraExportDetail>): void => {
     void this.exportUra(event.detail.target);
   };
 
-  private readonly onUraSetVerdict = (
-    event: CustomEvent<{ verdict: UraVerdictView | undefined }>,
-  ): void => {
+  private readonly onUraSetVerdict = (event: CustomEvent<UraVerdictDetail>): void => {
     const { review } = this;
     if (review === undefined) {
       return;
     }
     const { verdict } = event.detail;
-    void this.uraCall(async (bridge) =>
-      bridge.invoke('ura:set-verdict', {
+    void this.uraCall(async (bridge) => {
+      return bridge.invoke('ura:set-verdict', {
         sessionId: review.session.id,
         expectedHeadSha: review.headSha,
         ...(verdict !== undefined && { verdict }),
-      }),
-    );
+      });
+    });
   };
 
-  private readonly onUraJump = (event: CustomEvent<{ item: UraItemView }>): void => {
-    const { placement, anchor } = event.detail.item;
-    const target = placement.kind === 'current' ? placement.anchor : anchor;
+  private readonly onUraJump = (event: CustomEvent<UraJumpDetail>): void => {
+    const { placement } = event.detail.item;
+    let target = event.detail.item.anchor;
+    if (placement.kind === 'current') {
+      target = placement.anchor;
+    }
     if (target.kind === 'change') {
       return;
     }
@@ -685,19 +813,20 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
-  private readonly onStageFinding = (
-    event: CustomEvent<{ path: string; functionName: string }>,
-  ): void => {
+  private readonly onStageFinding = (event: CustomEvent<StageFindingDetail>): void => {
     const { review } = this;
     if (review === undefined) {
       return;
     }
-    void this.uraCall(async (bridge) =>
-      bridge.invoke('ura:stage-impact-finding', { sessionId: review.session.id, ...event.detail }),
-    );
+    void this.uraCall(async (bridge) => {
+      return bridge.invoke('ura:stage-impact-finding', {
+        sessionId: review.session.id,
+        ...event.detail,
+      });
+    });
   };
 
-  private readonly onPaletteRun = (event: CustomEvent<{ action: PaletteAction }>): void => {
+  private readonly onPaletteRun = (event: CustomEvent<PaletteRunDetail>): void => {
     this.paletteText = undefined;
     void this.runPaletteAction(event.detail.action);
   };
@@ -734,14 +863,20 @@ export class BeuveApp extends LitElement {
     const chosen = await beuveBridge()?.invoke('dialog:choose-folder', {
       ...(defaultPath !== undefined && { defaultPath }),
     });
-    return chosen?.ok === true && chosen.value.kind === 'chosen' ? chosen.value.path : undefined;
+    if (chosen?.ok === true && chosen.value.kind === 'chosen') {
+      return chosen.value.path;
+    }
+    return undefined;
   };
 
-  private readonly inspectRepository: RepositoryInspector = async (path) =>
-    (await beuveBridge()?.invoke('repository:inspect', { path })) ?? {
-      ok: false,
-      error: { code: 'not-wired', message: 'no Electron bridge' },
-    };
+  private readonly inspectRepository: RepositoryInspector = async (path) => {
+    return (
+      (await beuveBridge()?.invoke('repository:inspect', { path })) ?? {
+        ok: false,
+        error: { code: 'not-wired', message: 'no Electron bridge' },
+      }
+    );
+  };
 
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor overlayOpen = false;
@@ -895,7 +1030,10 @@ export class BeuveApp extends LitElement {
     }
     this.applySessions(sessions);
     const editors = await bridge.invoke('editor:get-settings');
-    this.editorSettings = editors.ok ? editors.value : undefined;
+    this.editorSettings = undefined;
+    if (editors.ok) {
+      this.editorSettings = editors.value;
+    }
     const display = await bridge.invoke('display:get');
     if (display.ok) {
       this.applyDisplay(display.value);
@@ -927,7 +1065,9 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return;
     }
-    const auth = await bridge.invoke('github:auth-status', host === undefined ? {} : { host });
+    const auth = await bridge.invoke('github:auth-status', {
+      ...(host !== undefined && { host }),
+    });
     if (auth.ok) {
       this.githubAuth = auth.value;
     }
@@ -1073,10 +1213,11 @@ export class BeuveApp extends LitElement {
       this.githubPost = { kind: 'failed', text: preview.value.message };
       return;
     }
-    this.githubPost =
-      this.review.headSha === preview.value.headSha
-        ? { kind: 'confirm', preview: preview.value }
-        : { kind: 'head-moved' };
+    if (this.review.headSha !== preview.value.headSha) {
+      this.githubPost = { kind: 'head-moved' };
+      return;
+    }
+    this.githubPost = { kind: 'confirm', preview: preview.value };
   }
 
   /** Posts on the head the confirmation showed; one post at a time (ADR 0078). */
@@ -1086,8 +1227,10 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined || githubPost.kind === 'busy') {
       return;
     }
-    const expectedHeadSha =
-      githubPost.kind === 'confirm' ? githubPost.preview.headSha : review.headSha;
+    let expectedHeadSha = review.headSha;
+    if (githubPost.kind === 'confirm') {
+      expectedHeadSha = githubPost.preview.headSha;
+    }
     this.githubPost = { kind: 'busy', text: 'Posting to GitHub…' };
     const posted = await bridge.invoke('github:post-review', {
       sessionId: review.session.id,
@@ -1107,16 +1250,17 @@ export class BeuveApp extends LitElement {
         this.onGithubHeadMoved(review.session.id);
         return;
       }
-      this.githubPost =
-        result.failure === 'own-pull-request'
-          ? { kind: 'own-pull-request', message: result.message }
-          : { kind: 'failed', text: result.message };
+      if (result.failure === 'own-pull-request') {
+        this.githubPost = { kind: 'own-pull-request', message: result.message };
+      } else {
+        this.githubPost = { kind: 'failed', text: result.message };
+      }
       return;
     }
-    const moved =
-      result.movedToBody === 0
-        ? ''
-        : ` GitHub refused ${String(result.movedToBody)} inline, so they went into the body.`;
+    let moved = '';
+    if (result.movedToBody > 0) {
+      moved = ` GitHub refused ${String(result.movedToBody)} inline, so they went into the body.`;
+    }
     this.githubPost = {
       kind: 'posted',
       url: result.url,
@@ -1140,9 +1284,11 @@ export class BeuveApp extends LitElement {
       return;
     }
     const opened = await bridge.invoke('editor:open', { sessionId: review.session.id, path, line });
-    this.showNotice(
-      opened.ok ? describeEditorOpen(opened.value) : { tone: 'error', text: opened.error.message },
-    );
+    if (opened.ok) {
+      this.showNotice(describeEditorOpen(opened.value));
+    } else {
+      this.showNotice({ tone: 'error', text: opened.error.message });
+    }
   }
 
   private applyDisplay(display: DiffDisplayView): void {
@@ -1164,10 +1310,12 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return undefined;
     }
-    const isQuery = Object.keys(change).length === 0;
-    const result = isQuery
-      ? await bridge.invoke('display:get')
-      : await bridge.invoke('display:set', change);
+    let result: IpcResult<DiffDisplayView>;
+    if (Object.keys(change).length === 0) {
+      result = await bridge.invoke('display:get');
+    } else {
+      result = await bridge.invoke('display:set', change);
+    }
     if (!result.ok) {
       this.showNotice({ tone: 'error', text: result.error.message });
       return undefined;
@@ -1207,10 +1355,12 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return;
     }
-    const result =
-      editorId === undefined
-        ? await bridge.invoke('editor:get-settings')
-        : await bridge.invoke('editor:set-preferred', { editorId });
+    let result: IpcResult<EditorSettingsView>;
+    if (editorId === undefined) {
+      result = await bridge.invoke('editor:get-settings');
+    } else {
+      result = await bridge.invoke('editor:set-preferred', { editorId });
+    }
     if (!result.ok) {
       this.note('error', result.error.message);
       return;
@@ -1230,9 +1380,10 @@ export class BeuveApp extends LitElement {
 
   private async listSessions(): Promise<IpcResult<readonly SessionSummary[]>> {
     const bridge = beuveBridge();
-    return bridge === undefined
-      ? { ok: false, error: { code: 'not-wired', message: 'no Electron bridge' } }
-      : bridge.invoke('session:list');
+    if (bridge === undefined) {
+      return { ok: false, error: { code: 'not-wired', message: 'no Electron bridge' } };
+    }
+    return bridge.invoke('session:list');
   }
 
   private async refreshSessions(): Promise<void> {
@@ -1263,7 +1414,10 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.openDialog = false;
-    const shownHead = this.review?.session.id === sessionId ? this.review.headSha : undefined;
+    let shownHead: string | undefined;
+    if (this.review?.session.id === sessionId) {
+      shownHead = this.review.headSha;
+    }
     if (sessionId !== this.selectedId) {
       this.review = undefined;
       this.order = undefined;
@@ -1352,11 +1506,18 @@ export class BeuveApp extends LitElement {
     if (this.review !== review) {
       return;
     }
-    this.impact = impact.ok && impact.value.headSha === review.headSha ? impact.value : undefined;
+    this.impact = undefined;
+    if (impact.ok && impact.value.headSha === review.headSha) {
+      this.impact = impact.value;
+    }
   }
 
   private applyMarks(review: ReviewView): void {
-    this.reviewMarks = new Map(review.files.map((file) => [file.path, file.reviewed ?? 'no']));
+    this.reviewMarks = new Map(
+      review.files.map((file) => {
+        return [file.path, file.reviewed ?? 'no'];
+      }),
+    );
     this.reviewProgress = review.reviewProgress;
   }
 
@@ -1421,8 +1582,10 @@ export class BeuveApp extends LitElement {
 
   private reviewDeferrals(): typeof this.deferralPlan {
     const files = this.review?.files;
-    const attributes =
-      this.fileAttributes?.headSha === this.review?.headSha ? this.fileAttributes : undefined;
+    let attributes = this.fileAttributes;
+    if (attributes?.headSha !== this.review?.headSha) {
+      attributes = undefined;
+    }
     if (this.deferralPlan.files === files && this.deferralPlan.attributes === attributes) {
       return this.deferralPlan;
     }
@@ -1595,13 +1758,14 @@ export class BeuveApp extends LitElement {
     if (next?.status === 'ready') {
       const tests = next.result.timelines.length;
       const took = formatIsoDuration(next.result.duration);
-      this.showNotice({
-        tone: next.note === undefined ? 'info' : 'error',
-        text:
-          next.note === undefined
-            ? `Trace ready: ${String(tests)} ${tests === 1 ? 'test' : 'tests'} in ${took}.`
-            : `Trace ready, but some tests failed (${took}).`,
-      });
+      if (next.note === undefined) {
+        this.showNotice({
+          tone: 'info',
+          text: `Trace ready: ${countNoun(tests, 'test')} in ${took}.`,
+        });
+      } else {
+        this.showNotice({ tone: 'error', text: `Trace ready, but some tests failed (${took}).` });
+      }
     } else if (next?.status === 'error') {
       this.showNotice({ tone: 'error', text: `Trace probe: ${next.message}` });
     }
@@ -1623,12 +1787,11 @@ export class BeuveApp extends LitElement {
     }
     const { repositoryPath } = before.value;
     if (before.value.trusted === isTrusting) {
-      this.note(
-        'info',
-        isTrusting
-          ? `${repositoryPath} is already trusted. /untrust withdraws it.`
-          : `${repositoryPath} is not trusted.`,
-      );
+      if (isTrusting) {
+        this.note('info', `${repositoryPath} is already trusted. /untrust withdraws it.`);
+      } else {
+        this.note('info', `${repositoryPath} is not trusted.`);
+      }
       return;
     }
     const changed = await bridge.invoke('trace:set-trust', { sessionId, trusted: isTrusting });
@@ -1636,15 +1799,15 @@ export class BeuveApp extends LitElement {
       this.note('error', changed.error.message);
       return;
     }
-    this.note(
-      'info',
-      ...(isTrusting
-        ? [
-            `Trusted ${repositoryPath}.`,
-            'Run Trace Probe now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
-          ]
-        : [`No longer trusting ${repositoryPath}. Run Trace Probe will ask again.`]),
-    );
+    if (isTrusting) {
+      this.note(
+        'info',
+        `Trusted ${repositoryPath}.`,
+        'Run Trace Probe now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
+      );
+    } else {
+      this.note('info', `No longer trusting ${repositoryPath}. Run Trace Probe will ask again.`);
+    }
     if (!isTrusting) {
       this.closeTrace();
     }
@@ -1656,10 +1819,12 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined || peek?.status !== 'ready') {
       return;
     }
-    const withChildren = (state: PeekState, children: PeekChildren): PeekState =>
-      state.status === 'ready'
-        ? { ...state, children: new Map(state.children).set(nodeId, children) }
-        : state;
+    const withChildren = (state: PeekState, children: PeekChildren): PeekState => {
+      if (state.status === 'ready') {
+        return { ...state, children: new Map(state.children).set(nodeId, children) };
+      }
+      return state;
+    };
     this.peek = withChildren(peek, { status: 'loading' });
     const answer = await bridge.invoke('lsp:call-hierarchy', {
       sessionId: review.session.id,
@@ -1673,12 +1838,11 @@ export class BeuveApp extends LitElement {
     if (current?.status !== 'ready' || current.root.id !== peek.root.id) {
       return;
     }
-    this.peek = withChildren(
-      current,
-      answer.ok
-        ? { status: 'ready', calls: answer.value.calls }
-        : { status: 'error', message: answer.error.message },
-    );
+    if (answer.ok) {
+      this.peek = withChildren(current, { status: 'ready', calls: answer.value.calls });
+    } else {
+      this.peek = withChildren(current, { status: 'error', message: answer.error.message });
+    }
   }
 
   /** Reads the peek state afresh after an await, when it may have changed. */
@@ -1751,14 +1915,16 @@ export class BeuveApp extends LitElement {
       }
       case 'diff': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.runDisplayCommand(command.layout === undefined ? {} : { layout: command.layout });
+        void this.runDisplayCommand({
+          ...(command.layout !== undefined && { layout: command.layout }),
+        });
         return;
       }
       case 'generated': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay(
-          command.showGenerated === undefined ? {} : { showGenerated: command.showGenerated },
-        ).then((display) => {
+        void this.setDisplay({
+          ...(command.showGenerated !== undefined && { showGenerated: command.showGenerated }),
+        }).then((display) => {
           if (display !== undefined) {
             this.note('info', `${describeGenerated(display.showGenerated)}.`);
           }
@@ -1767,15 +1933,10 @@ export class BeuveApp extends LitElement {
       }
       case 'sheets': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay(command.mode === undefined ? {} : { sheets: command.mode }).then(
+        void this.setDisplay({ ...(command.mode !== undefined && { sheets: command.mode }) }).then(
           (display) => {
             if (display !== undefined) {
-              this.note(
-                'info',
-                display.sheets === 'inline'
-                  ? 'Definitions open over the diff.'
-                  : 'Definitions open in a new sheet window each.',
-              );
+              this.note('info', describeSheets(display.sheets));
             }
           },
         );
@@ -1783,9 +1944,9 @@ export class BeuveApp extends LitElement {
       }
       case 'insights': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay(
-          command.showInsights === undefined ? {} : { showInsights: command.showInsights },
-        ).then((display) => {
+        void this.setDisplay({
+          ...(command.showInsights !== undefined && { showInsights: command.showInsights }),
+        }).then((display) => {
           if (display !== undefined) {
             this.note('info', `${describeInsights(display.showInsights)}.`);
           }
@@ -1794,11 +1955,11 @@ export class BeuveApp extends LitElement {
       }
       case 'whitespace': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.runDisplayCommand(
-          command.ignoreWhitespace === undefined
-            ? {}
-            : { ignoreWhitespace: command.ignoreWhitespace },
-        );
+        void this.runDisplayCommand({
+          ...(command.ignoreWhitespace !== undefined && {
+            ignoreWhitespace: command.ignoreWhitespace,
+          }),
+        });
         return;
       }
       case 'trust':
@@ -1819,13 +1980,13 @@ export class BeuveApp extends LitElement {
       }
       case 'order': {
         this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay(command.mode === undefined ? {} : { reviewOrder: command.mode }).then(
-          (display) => {
-            if (display !== undefined) {
-              this.note('info', `${describeOrder(display.reviewOrder)}.`);
-            }
-          },
-        );
+        void this.setDisplay({
+          ...(command.mode !== undefined && { reviewOrder: command.mode }),
+        }).then((display) => {
+          if (display !== undefined) {
+            this.note('info', `${describeOrder(display.reviewOrder)}.`);
+          }
+        });
         return;
       }
       case 'sidebar': {
@@ -1893,9 +2054,10 @@ export class BeuveApp extends LitElement {
       this.note('error', 'Open a review session first, then ask your question.');
       return;
     }
-    const focusPath = review.files.some((file) => file.path === this.activePath)
-      ? this.activePath
-      : undefined;
+    let focusPath: string | undefined;
+    if (review.files.some((file) => file.path === this.activePath)) {
+      focusPath = this.activePath;
+    }
     const asked = await bridge.invoke('chat:ask', {
       sessionId: review.session.id,
       question,
@@ -1931,26 +2093,28 @@ export class BeuveApp extends LitElement {
       this.dispatchChat({ kind: 'compacted', summary: compacted.value.summary });
       return;
     }
-    const failure = compacted.ok
-      ? compacted.value.outcome === 'failed'
-        ? compacted.value.errorMessage
-        : undefined
-      : compacted.error.message;
+    let failure: string | undefined;
+    if (!compacted.ok) {
+      failure = compacted.error.message;
+    } else if (compacted.value.outcome === 'failed') {
+      failure = compacted.value.errorMessage;
+    }
     this.setEntries(
       this.chat.entries.flatMap((entry): ChatEntry[] => {
         if (entry.id !== entryId || entry.kind !== 'compaction') {
           return [entry];
         }
-        return failure === undefined
-          ? [
-              {
-                id: entryId,
-                kind: 'note',
-                tone: 'info',
-                lines: ['Compaction stopped; nothing was stored.'],
-              },
-            ]
-          : [{ ...entry, status: 'failed', message: failure }];
+        if (failure === undefined) {
+          return [
+            {
+              id: entryId,
+              kind: 'note',
+              tone: 'info',
+              lines: ['Compaction stopped; nothing was stored.'],
+            },
+          ];
+        }
+        return [{ ...entry, status: 'failed', message: failure }];
       }),
     );
   }
@@ -2038,12 +2202,12 @@ export class BeuveApp extends LitElement {
     await this.uraCall(async (bridge) => {
       const staged = await bridge.invoke('ura:stage-review-finding', { messageId, finding });
       if (staged.ok) {
-        this.dockNotice = {
-          tone: 'info',
-          text: staged.value.created
-            ? `Staged “${staged.value.item.title}”.`
-            : `“${staged.value.item.title}” is already staged.`,
-        };
+        const { title } = staged.value.item;
+        let text = `“${title}” is already staged.`;
+        if (staged.value.created) {
+          text = `Staged “${title}”.`;
+        }
+        this.dockNotice = { tone: 'info', text };
       }
       return staged;
     });
@@ -2079,24 +2243,31 @@ export class BeuveApp extends LitElement {
       if (action?.kind === 'file') {
         return { path: action.path, side: 'head' };
       }
-      const item =
-        action?.kind === 'ura-item'
-          ? this.uraItems.find(({ id }) => id === action.itemId)
-          : undefined;
-      return item === undefined
-        ? 'Pick a file or a staged note in the palette first.'
-        : this.itemTarget(item);
+      if (action?.kind !== 'ura-item') {
+        return 'Pick a file or a staged note in the palette first.';
+      }
+      const item = this.uraItems.find(({ id }) => id === action.itemId);
+      if (item === undefined) {
+        return 'Pick a file or a staged note in the palette first.';
+      }
+      return this.itemTarget(item);
     }
     switch (this.focusedZone) {
       case 'ura': {
         const item = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
-        return item === undefined ? nothingSelected : this.itemTarget(item);
+        if (item === undefined) {
+          return nothingSelected;
+        }
+        return this.itemTarget(item);
       }
       case 'intent': {
         const path = this.renderRoot
           .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
           ?.focusedPath();
-        return path === undefined ? 'Focus a file in the tree to add it.' : { path, side: 'head' };
+        if (path === undefined) {
+          return 'Focus a file in the tree to add it.';
+        }
+        return { path, side: 'head' };
       }
       default: {
         return (
@@ -2113,10 +2284,12 @@ export class BeuveApp extends LitElement {
       return 'That note is outdated: its lines are not at this head.';
     }
     const target = targetFromAnchor(item.placement.anchor, this.review?.files ?? []);
-    return target === undefined
-      ? 'That note’s file is not in this diff.'
-      : (mentionFromTarget(target) ??
-          'That note is on the whole change; pick a line or file note.');
+    if (target === undefined) {
+      return 'That note’s file is not in this diff.';
+    }
+    return (
+      mentionFromTarget(target) ?? 'That note is on the whole change; pick a line or file note.'
+    );
   }
 
   /** Adds a chip for `target` at the review's head (or base) and focuses the chat input. */
@@ -2125,10 +2298,11 @@ export class BeuveApp extends LitElement {
     if (review === undefined) {
       return;
     }
-    const mention: ChatMentionView = {
-      ...target,
-      sha: target.side === 'base' ? review.baseSha : review.headSha,
-    };
+    let sha = review.headSha;
+    if (target.side === 'base') {
+      sha = review.baseSha;
+    }
+    const mention: ChatMentionView = { ...target, sha };
     this.focusSidebar('chat');
     await this.updateComplete;
     const added = await this.chatDrawer()?.addMention(mention);
@@ -2141,11 +2315,14 @@ export class BeuveApp extends LitElement {
 
   /** A chip: show its lines in the diff stream, or say the file is outside the change. */
   private openMention(mention: ChatMentionView): void {
-    const file = this.review?.files.find((candidate) =>
-      mention.side === 'base'
-        ? (candidate.oldPath ?? candidate.path) === mention.path && candidate.status !== 'added'
-        : candidate.path === mention.path && candidate.status !== 'deleted',
-    );
+    const file = this.review?.files.find((candidate) => {
+      if (mention.side === 'base') {
+        return (
+          (candidate.oldPath ?? candidate.path) === mention.path && candidate.status !== 'added'
+        );
+      }
+      return candidate.path === mention.path && candidate.status !== 'deleted';
+    });
     if (file === undefined) {
       this.note(
         'info',
@@ -2171,8 +2348,10 @@ export class BeuveApp extends LitElement {
   private openCitation(citation: ChatCitationView): void {
     const { path, startLine, endLine } = citation;
     if (!this.diffPaths().has(path)) {
-      const lines =
-        startLine === endLine ? String(startLine) : `${String(startLine)}-${String(endLine)}`;
+      let lines = String(startLine);
+      if (startLine !== endLine) {
+        lines += `-${String(endLine)}`;
+      }
       this.note(
         'info',
         `${revealFormatControls(path)}:${lines} is not in this diff: the file is unchanged by the review.`,
@@ -2191,13 +2370,16 @@ export class BeuveApp extends LitElement {
   /** Answers staged in the dock and still staged. */
   private stagedMessageIds(): ReadonlySet<string> {
     return new Set(
-      this.uraItems.flatMap((item) =>
-        item.origin.kind === 'chat-answer' &&
-        item.origin.finding === undefined &&
-        item.status.kind === 'staged'
-          ? item.origin.messageId
-          : [],
-      ),
+      this.uraItems.flatMap((item) => {
+        if (
+          item.origin.kind === 'chat-answer' &&
+          item.origin.finding === undefined &&
+          item.status.kind === 'staged'
+        ) {
+          return item.origin.messageId;
+        }
+        return [];
+      }),
     );
   }
 
@@ -2211,9 +2393,12 @@ export class BeuveApp extends LitElement {
     if (review === undefined || !this.display.showInsights) {
       return noInsights;
     }
-    const messages = this.chat.entries.flatMap((entry): ChatMessageView[] =>
-      entry.kind === 'message' && entry.message.review !== undefined ? [entry.message] : [],
-    );
+    const messages = this.chat.entries.flatMap((entry): ChatMessageView[] => {
+      if (entry.kind === 'message' && entry.message.review !== undefined) {
+        return [entry.message];
+      }
+      return [];
+    });
     const staged = this.stagedFindings();
     const signature = [
       review.headSha,
@@ -2232,13 +2417,16 @@ export class BeuveApp extends LitElement {
   /** `/review` findings staged and still staged, as `messageId:index`. */
   private stagedFindings(): ReadonlySet<string> {
     return new Set(
-      this.uraItems.flatMap((item) =>
-        item.origin.kind === 'chat-answer' &&
-        item.origin.finding !== undefined &&
-        item.status.kind === 'staged'
-          ? `${item.origin.messageId}:${String(item.origin.finding)}`
-          : [],
-      ),
+      this.uraItems.flatMap((item) => {
+        if (
+          item.origin.kind === 'chat-answer' &&
+          item.origin.finding !== undefined &&
+          item.status.kind === 'staged'
+        ) {
+          return `${item.origin.messageId}:${String(item.origin.finding)}`;
+        }
+        return [];
+      }),
     );
   }
 
@@ -2273,17 +2461,21 @@ export class BeuveApp extends LitElement {
       body: request.draft.body,
       ...(request.suggestedPatch !== undefined && { suggestedPatch: request.suggestedPatch }),
     });
-    request.settle(created.ok ? undefined : created.error.message);
-    if (created.ok) {
-      this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
+    if (!created.ok) {
+      request.settle(created.error.message);
+      return;
     }
+    request.settle(undefined);
+    this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
   }
 
   private async transitionUraItem(
     itemId: string,
     to: 'staged' | 'withdrawn' | 'addressed',
   ): Promise<void> {
-    await this.uraCall(async (bridge) => bridge.invoke('ura:transition', { itemId, to }));
+    await this.uraCall(async (bridge) => {
+      return bridge.invoke('ura:transition', { itemId, to });
+    });
   }
 
   /** Runs a dock call; `ura:changed` refreshes the list, and failures show in the dock. */
@@ -2306,8 +2498,11 @@ export class BeuveApp extends LitElement {
     if (result.ok) {
       return;
     }
-    const tone = result.error.code === 'stale-review' ? 'info' : 'error';
-    this.dockNotice = { tone, text: result.error.message };
+    if (result.error.code === 'stale-review') {
+      this.dockNotice = { tone: 'info', text: result.error.message };
+    } else {
+      this.dockNotice = { tone: 'error', text: result.error.message };
+    }
   }
 
   /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */
@@ -2330,13 +2525,19 @@ export class BeuveApp extends LitElement {
     const copied = await bridge.invoke('clipboard:write-text', { text: compiled.value.text });
     this.exporting = false;
     const { itemCount, outdatedCount } = compiled.value;
-    const outdated = outdatedCount === 0 ? '' : `, ${String(outdatedCount)} outdated`;
-    this.dockNotice = copied.ok
-      ? {
-          tone: 'info',
-          text: `Copied ${exportLabels[target]}: ${String(itemCount)} ${itemCount === 1 ? 'item' : 'items'}${outdated}, ${formatBytes(compiled.value.text.length)}.`,
-        }
-      : { tone: 'error', text: `Could not copy: ${copied.error.message}` };
+    if (!copied.ok) {
+      this.dockNotice = { tone: 'error', text: `Could not copy: ${copied.error.message}` };
+      return;
+    }
+    const counts = [countNoun(itemCount, 'item')];
+    if (outdatedCount > 0) {
+      counts.push(`${String(outdatedCount)} outdated`);
+    }
+    counts.push(formatBytes(compiled.value.text.length));
+    this.dockNotice = {
+      tone: 'info',
+      text: `Copied ${exportLabels[target]}: ${counts.join(', ')}.`,
+    };
   }
 
   /** Runs a catalog command `beuve-app` handles itself (ADR 0068). */
@@ -2358,16 +2559,16 @@ export class BeuveApp extends LitElement {
         }
         this.openDialog = false;
         this.overlayOpen = false;
-        this.paletteText = id === 'palette' ? '' : '@';
+        this.paletteText = paletteOpenings[id];
         return;
       }
-      case 'cycle-zone':
+      case 'cycle-zone': {
+        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, 1);
+        this.refocusZone();
+        return;
+      }
       case 'cycle-zone-back': {
-        this.focusedZone = cycleZone(
-          this.zoneOrder(),
-          this.focusedZone,
-          id === 'cycle-zone' ? 1 : -1,
-        );
+        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, -1);
         this.refocusZone();
         return;
       }
@@ -2392,7 +2593,11 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'tree-mode': {
-        this.treeMode = this.treeMode === 'diff-only' ? 'neighborhood' : 'diff-only';
+        if (this.treeMode === 'diff-only') {
+          this.treeMode = 'neighborhood';
+        } else {
+          this.treeMode = 'diff-only';
+        }
         return;
       }
       case 'toggle-sidebar': {
@@ -2403,12 +2608,15 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'flip-sidebar': {
-        void this.setSidebarSide(this.sidebarSide === 'right' ? 'left' : 'right');
+        void this.setSidebarSide(otherSides[this.sidebarSide]);
         return;
       }
-      case 'sidebar-left':
+      case 'sidebar-left': {
+        void this.setSidebarSide('left');
+        return;
+      }
       case 'sidebar-right': {
-        void this.setSidebarSide(id === 'sidebar-left' ? 'left' : 'right');
+        void this.setSidebarSide('right');
         return;
       }
       case 'sidebar-overview': {
@@ -2436,9 +2644,12 @@ export class BeuveApp extends LitElement {
         this.stream()?.runCommand(id);
         return;
       }
-      case 'diff-split':
+      case 'diff-split': {
+        void this.setDisplay({ layout: 'split' });
+        return;
+      }
       case 'diff-inline': {
-        void this.setDisplay({ layout: id === 'diff-split' ? 'split' : 'unified' });
+        void this.setDisplay({ layout: 'unified' });
         return;
       }
       case 'whitespace': {
@@ -2463,9 +2674,12 @@ export class BeuveApp extends LitElement {
         void this.setDisplay({ reviewOrder: orderActions[id] });
         return;
       }
-      case 'sheets-window':
+      case 'sheets-window': {
+        void this.setDisplay({ sheets: 'window' });
+        return;
+      }
       case 'sheets-inline': {
-        void this.setDisplay({ sheets: id === 'sheets-window' ? 'window' : 'inline' });
+        void this.setDisplay({ sheets: 'inline' });
         return;
       }
       case 'editor-zed':
@@ -2540,7 +2754,10 @@ export class BeuveApp extends LitElement {
 
   private focusedSheet(): BeuveSheetView | undefined {
     const sheet = this.renderRoot.querySelector<BeuveSheetView>('beuve-sheet-view') ?? undefined;
-    return sheet?.matches(':focus-within') === true ? sheet : undefined;
+    if (sheet?.matches(':focus-within') === true) {
+      return sheet;
+    }
+    return undefined;
   }
 
   private stream(): BeuveDiffStream | undefined {
@@ -2549,9 +2766,12 @@ export class BeuveApp extends LitElement {
 
   /** The file focused in the tree, while the tree has the focus. */
   private treePath(): string | undefined {
-    return this.focusedZone === 'intent'
-      ? this.renderRoot.querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')?.focusedPath()
-      : undefined;
+    if (this.focusedZone === 'intent') {
+      return this.renderRoot
+        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
+        ?.focusedPath();
+    }
+    return undefined;
   }
 
   /** Open in Editor: the dock's note, the tree's file or the diff's line, by focus. */
@@ -2574,9 +2794,9 @@ export class BeuveApp extends LitElement {
       this.closeTrace();
       return;
     }
-    const running = this.chat.entries.find(
-      (entry) => entry.kind === 'message' && isActiveRequest(entry.message),
-    );
+    const running = this.chat.entries.find((entry) => {
+      return entry.kind === 'message' && isActiveRequest(entry.message);
+    });
     if (running?.kind === 'message') {
       void beuveBridge()?.invoke('chat:cancel', { messageId: running.message.id });
     }
@@ -2623,10 +2843,10 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return;
     }
-    const dock =
-      this.focusedZone === 'ura'
-        ? this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem()
-        : undefined;
+    let dock: UraItemView | undefined;
+    if (this.focusedZone === 'ura') {
+      dock = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
+    }
     const treePath = this.treePath();
     const markedPath = treePath ?? this.activePath;
     const sheet = this.focusedSheet();
@@ -2635,13 +2855,13 @@ export class BeuveApp extends LitElement {
       activePath: treePath ?? this.activePath,
       isActiveReviewed: markedPath !== undefined && this.reviewMarks.get(markedPath) === 'yes',
       focusedZone: this.focusedZone,
-      dockItem: dock === undefined ? undefined : { isAddressed: dock.status.kind === 'addressed' },
+      dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
       isBusy:
         this.trace?.status === 'loading' ||
-        this.chat.entries.some(
-          (entry) => entry.kind === 'message' && isActiveRequest(entry.message),
-        ),
+        this.chat.entries.some((entry) => {
+          return entry.kind === 'message' && isActiveRequest(entry.message);
+        }),
       isPullRequest: this.pullRequest !== undefined,
       stagedCount: this.stagedCount(),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -2698,7 +2918,10 @@ export class BeuveApp extends LitElement {
     const isHeader = path.some((element) => element.classList.contains('header'));
     this.stream()?.activateCard(card);
     this.focusedZone = 'diff';
-    return isHeader ? 'file' : 'line';
+    if (isHeader) {
+      return 'file';
+    }
+    return 'line';
   }
 
   /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
@@ -2932,12 +3155,7 @@ export class BeuveApp extends LitElement {
     return {
       target: `${source.owner}/${source.repo}#${String(source.number)}`,
       isSignedIn: auth?.kind === 'signed-in' && auth.host === source.host,
-      signInHint:
-        auth?.kind === 'signed-out'
-          ? auth.remedy === undefined
-            ? auth.message
-            : `sign in first: run ${auth.remedy}.`
-          : 'checking GitHub sign-in…',
+      signInHint: signInHintOf(auth),
       post: this.githubPost,
     };
   }
@@ -3147,8 +3365,8 @@ export class BeuveApp extends LitElement {
 
   /** Intent and files, the review and the chat as quiet tabs (1, 2, 3). */
   private renderTabs(): TemplateResult {
-    const tab = (zone: SidebarZone, label: string, extra: string): TemplateResult =>
-      html`<button
+    const tab = (zone: SidebarZone, label: string, count = 0): TemplateResult => {
+      return html`<button
         type="button"
         role="tab"
         aria-selected=${this.sidebarTab === zone ? 'true' : 'false'}
@@ -3156,12 +3374,13 @@ export class BeuveApp extends LitElement {
           this.focusSidebar(zone);
         }}
       >
-        ${label}${extra === '' ? nothing : html`<span class="count">${extra}</span>`}
+        ${label}${count === 0 ? nothing : html`<span class="count">${count}</span>`}
       </button>`;
+    };
     const staged = this.stagedCount();
     return html`<nav class="tabs" role="tablist" aria-label="Sidebar">
-      ${tab('intent', this.pullRequest === undefined ? 'Files' : 'Intent & files', '')}
-      ${tab('ura', 'Review', staged === 0 ? '' : String(staged))} ${tab('chat', 'Chat', '')}
+      ${tab('intent', this.pullRequest === undefined ? 'Files' : 'Intent & files')}
+      ${tab('ura', 'Review', staged)} ${tab('chat', 'Chat')}
     </nav>`;
   }
 
@@ -3173,13 +3392,17 @@ export class BeuveApp extends LitElement {
 
   override render(): TemplateResult {
     const hasSidebar = this.review !== undefined && !this.sidebarHidden;
-    const workspace = [hasSidebar ? '' : 'solo', this.sidebarSide === 'left' ? 'left' : '']
-      .filter((name) => name !== '')
-      .join(' ');
+    const workspace: string[] = [];
+    if (!hasSidebar) {
+      workspace.push('solo');
+    }
+    if (this.sidebarSide === 'left') {
+      workspace.push('left');
+    }
     const focused = zones.find(({ id }) => id === this.focusedZone);
     return html`
       ${this.renderTitlebar()}
-      <div class="workspace ${workspace}">
+      <div class="workspace ${workspace.join(' ')}">
         <div class="main">${this.renderDiff()}</div>
         ${hasSidebar ? this.renderSidebar() : nothing}
       </div>
@@ -3256,9 +3479,9 @@ export class BeuveApp extends LitElement {
       this.renderRoot.querySelector('beuve-command-palette')?.focus();
       return;
     }
-    const isRelevant = ['focusedZone', 'sidebarHidden'].some((key) =>
-      changed.has(key as keyof BeuveApp),
-    );
+    const isRelevant = ['focusedZone', 'sidebarHidden'].some((key) => {
+      return changed.has(key as keyof BeuveApp);
+    });
     if (!isRelevant || this.paletteText !== undefined || this.openDialog) {
       return;
     }
@@ -3271,24 +3494,63 @@ export class BeuveApp extends LitElement {
 
 type SidebarZone = Exclude<ZoneId, 'diff'>;
 
+const paletteOpenings: Readonly<Record<'palette' | 'go-to-file', string>> = {
+  palette: '',
+  'go-to-file': '@',
+};
+
+const otherSides: Readonly<Record<SidebarSideView, SidebarSideView>> = {
+  left: 'right',
+  right: 'left',
+};
+
+function describeSheets(sheets: DiffDisplayView['sheets']): string {
+  if (sheets === 'inline') {
+    return 'Definitions open over the diff.';
+  }
+  return 'Definitions open in a new sheet window each.';
+}
+
+/** What the dock's cursor item enables in the menus, while the dock has the focus. */
+function dockItemOf(item: UraItemView | undefined): MenuStateInput['dockItem'] {
+  if (item === undefined) {
+    return undefined;
+  }
+  return { isAddressed: item.status.kind === 'addressed' };
+}
+
+/** What to do before posting to GitHub: sign in, or wait for the check. */
+function signInHintOf(auth: GithubAuthStatusView | undefined): string {
+  if (auth?.kind !== 'signed-out') {
+    return 'checking GitHub sign-in…';
+  }
+  if (auth.remedy === undefined) {
+    return auth.message;
+  }
+  return `sign in first: run ${auth.remedy}.`;
+}
+
 function describeGenerated(isShown: boolean): string {
-  return isShown
-    ? 'Generated files: shown (/generated hide collapses them)'
-    : 'Generated files: collapsed (/generated show expands them)';
+  if (isShown) {
+    return 'Generated files: shown (/generated hide collapses them)';
+  }
+  return 'Generated files: collapsed (/generated show expands them)';
 }
 
 const noInsights: readonly ReviewInsight[] = [];
 
 function describeInsights(isShown: boolean): string {
-  return isShown
-    ? 'Review insights: shown on the diff (/insights hide removes them)'
-    : 'Review insights: hidden (/insights show brings them back)';
+  if (isShown) {
+    return 'Review insights: shown on the diff (/insights hide removes them)';
+  }
+  return 'Review insights: hidden (/insights show brings them back)';
 }
 
 function describeSkipReviewed(isSkipping: boolean | undefined): string {
-  return isSkipping === true
-    ? 'Next and Previous Change skip files marked reviewed'
-    : 'Next and Previous Change stop at every file, reviewed or not';
+  if (isSkipping === true) {
+    return 'Next and Previous Change skip files marked reviewed';
+  }
+  return 'Next and Previous Change stop at every file, reviewed or not';
 }
 
 function describeOrder(mode: ReviewOrderMode = 'path'): string {
@@ -3335,15 +3597,21 @@ function peekStateFrom(
     return { path, line, status: 'error', message: answer.error.message };
   }
   const { root, calls } = answer.value;
-  return root === undefined
-    ? { path, line, status: 'error', message: 'The language server found nothing callable here.' }
-    : {
-        path,
-        line,
-        status: 'ready',
-        root,
-        children: new Map([[root.id, { status: 'ready', calls }]]),
-      };
+  if (root === undefined) {
+    return {
+      path,
+      line,
+      status: 'error',
+      message: 'The language server found nothing callable here.',
+    };
+  }
+  return {
+    path,
+    line,
+    status: 'ready',
+    root,
+    children: new Map([[root.id, { status: 'ready', calls }]]),
+  };
 }
 
 function flowStateFrom(
@@ -3354,9 +3622,10 @@ function flowStateFrom(
   if (!answer.ok) {
     return { path, line, status: 'error', message: answer.error.message };
   }
-  return answer.value.kind === 'graph'
-    ? { path, line, status: 'ready', graph: answer.value.graph }
-    : { path, line, status: 'error', message: flowFailureText[answer.value.failure] };
+  if (answer.value.kind === 'graph') {
+    return { path, line, status: 'ready', graph: answer.value.graph };
+  }
+  return { path, line, status: 'error', message: flowFailureText[answer.value.failure] };
 }
 
 const flowFailureText: Readonly<Record<FlowFailureKind, string>> = {
@@ -3374,9 +3643,10 @@ const exportLabels: Readonly<Record<UraExportTarget, string>> = {
 };
 
 function formatBytes(characters: number): string {
-  return characters < 1024
-    ? `${String(characters)} characters`
-    : `${(characters / 1024).toFixed(1)} K characters`;
+  if (characters < 1024) {
+    return `${String(characters)} characters`;
+  }
+  return `${(characters / 1024).toFixed(1)} K characters`;
 }
 
 const nothingSelected =
@@ -3385,9 +3655,10 @@ const nothingSelected =
 /** Whether the focus, through shadow roots, is in a field that takes typing. */
 /** The bridge's `chat:stream` subscription, as `textPartStream` takes it. */
 function subscribeChatStreamOf(bridge: BeuveApi | undefined): ChatStreamSubscribe | undefined {
-  return bridge === undefined
-    ? undefined
-    : (listener): (() => void) => bridge.on('chat:stream', listener);
+  if (bridge === undefined) {
+    return undefined;
+  }
+  return (listener): (() => void) => bridge.on('chat:stream', listener);
 }
 
 function isTextFocused(): boolean {

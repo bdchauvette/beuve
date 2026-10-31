@@ -1,5 +1,6 @@
 import type { TraceEntryView, TraceResultView, TraceTimelineView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
 import { formatIsoDuration } from './format-iso-duration.ts';
 
 /** How a row reads at a glance: what happened and how it went. */
@@ -46,7 +47,7 @@ export function planTraceTimeline(
     const rows = timeline.entries.map((entry) => rowFrom(entry, result));
     return {
       key: `${String(index)}:${timeline.file}:${timeline.titles.join('\0')}`,
-      title: timeline.titles.length === 0 ? 'Outside any test' : timeline.titles.join(' › '),
+      title: timelineTitle(timeline.titles),
       status: timeline.status,
       duration: formatIsoDuration(timeline.duration, locale),
       failure: firstLine(timeline.failure ?? ''),
@@ -74,7 +75,7 @@ function rowFrom(entry: TraceEntryView, result: TraceResultView): TraceRow {
       return { ...base, ...branchFrom(entry) };
     }
     case 'loop': {
-      const times = `${String(entry.iterations)} ${entry.iterations === 1 ? 'iteration' : 'iterations'}`;
+      const times = countNoun(entry.iterations, 'iteration');
       return { ...base, tag: 'loop', text: entry.label, result: times, tone: 'neutral' };
     }
     case 'return': {
@@ -82,7 +83,7 @@ function rowFrom(entry: TraceEntryView, result: TraceResultView): TraceRow {
         ...base,
         tag: 'return',
         text: entry.value.preview,
-        result: entry.implicit ? 'implicit' : '',
+        result: flag(entry.implicit, 'implicit'),
         tone: 'neutral',
       };
     }
@@ -91,25 +92,46 @@ function rowFrom(entry: TraceEntryView, result: TraceResultView): TraceRow {
         ...base,
         tag: 'throw',
         text: entry.value.preview,
-        result: entry.propagated ? 'passes through' : '',
+        result: flag(entry.propagated, 'passes through'),
         tone: 'danger',
       };
     }
   }
 }
 
-function branchFrom(
-  entry: Extract<TraceEntryView, { kind: 'branch' }>,
-): Pick<TraceRow, 'tag' | 'text' | 'result' | 'tone'> {
+/** A test case's name from its `describe` titles; no titles means no test. */
+function timelineTitle(titles: readonly string[]): string {
+  if (titles.length === 0) {
+    return 'Outside any test';
+  }
+  return titles.join(' › ');
+}
+
+/** `word` when `isSet`, else nothing. */
+function flag(isSet: boolean, word: string): string {
+  if (isSet) {
+    return word;
+  }
+  return '';
+}
+
+const conditionTags: Readonly<Record<'if' | 'ternary', string>> = {
+  if: 'if',
+  ternary: '?:',
+};
+
+/** A branch entry of the trace. */
+type BranchEntry = Extract<TraceEntryView, { kind: 'branch' }>;
+
+function branchFrom(entry: BranchEntry): Pick<TraceRow, 'tag' | 'text' | 'result' | 'tone'> {
   switch (entry.construct) {
     case 'if':
     case 'ternary': {
-      return {
-        tag: entry.construct === 'if' ? 'if' : '?:',
-        text: entry.label,
-        result: entry.taken ? 'true · then' : 'false · else',
-        tone: entry.taken ? 'taken' : 'skipped',
-      };
+      const tag = conditionTags[entry.construct];
+      if (entry.taken) {
+        return { tag, text: entry.label, result: 'true · then', tone: 'taken' };
+      }
+      return { tag, text: entry.label, result: 'false · else', tone: 'skipped' };
     }
     case 'switch':
     case 'catch': {
@@ -128,7 +150,10 @@ function branchFrom(
 }
 
 function truncate(text: string, limit: number): string {
-  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
+  if (text.length <= limit) {
+    return text;
+  }
+  return `${text.slice(0, limit - 1)}…`;
 }
 
 function firstLine(text: string): string {

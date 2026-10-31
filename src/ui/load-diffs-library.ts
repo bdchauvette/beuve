@@ -22,9 +22,9 @@ async function importWithThemes(): Promise<typeof Diffs> {
   for (const type of ['light', 'dark'] as const) {
     const name = diffsThemeNames[type];
     // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
-    library.registerCustomTheme(name, async (): Promise<TextmateTheme> =>
-      textmateThemeFrom(name, type, syntaxPalettes[type]),
-    );
+    library.registerCustomTheme(name, async (): Promise<TextmateTheme> => {
+      return textmateThemeFrom(name, type, syntaxPalettes[type]);
+    });
   }
   return library;
 }

@@ -3,5 +3,8 @@
  * word. While an answer runs, what is sent waits in the queue (ADR 0057).
  */
 export function describeChatPlaceholder(isAnswering: boolean): string {
-  return isAnswering ? 'Ask; it waits its turn' : 'Ask, or / for commands';
+  if (isAnswering) {
+    return 'Ask; it waits its turn';
+  }
+  return 'Ask, or / for commands';
 }

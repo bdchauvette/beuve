@@ -13,13 +13,7 @@ export interface GithubAuthLine {
  */
 export function describeGithubAuth(auth: GithubAuthStatusView): GithubAuthLine {
   if (auth.kind === 'signed-in') {
-    const who = auth.login === undefined ? 'signed in' : `@${auth.login}`;
-    const scopes = auth.scopes === undefined ? '' : `\nScopes: ${auth.scopes.join(', ')}`;
-    return {
-      tone: auth.problem === undefined ? 'ok' : 'warn',
-      text: `GitHub: ${who} via gh`,
-      title: `${auth.host}${scopes}${auth.problem === undefined ? '' : `\n${auth.problem}`}`,
-    };
+    return signedIn(auth);
   }
   switch (auth.reason) {
     case 'not-logged-in':
@@ -27,7 +21,7 @@ export function describeGithubAuth(auth: GithubAuthStatusView): GithubAuthLine {
       return {
         tone: 'warn',
         text: 'GitHub: not signed in — run gh auth login',
-        title: auth.remedy === undefined ? auth.message : `Run: ${auth.remedy}`,
+        title: remedyOf(auth),
       };
     }
     case 'cli-not-installed': {
@@ -39,4 +33,31 @@ export function describeGithubAuth(auth: GithubAuthStatusView): GithubAuthLine {
       return { tone: 'muted', text: 'GitHub: unavailable', title: auth.message };
     }
   }
+}
+
+type SignedIn = Extract<GithubAuthStatusView, { kind: 'signed-in' }>;
+type SignedOut = Extract<GithubAuthStatusView, { kind: 'signed-out' }>;
+
+function signedIn(auth: SignedIn): GithubAuthLine {
+  let who = 'signed in';
+  if (auth.login !== undefined) {
+    who = `@${auth.login}`;
+  }
+  const title = [auth.host];
+  if (auth.scopes !== undefined) {
+    title.push(`Scopes: ${auth.scopes.join(', ')}`);
+  }
+  const text = `GitHub: ${who} via gh`;
+  if (auth.problem !== undefined) {
+    title.push(auth.problem);
+    return { tone: 'warn', text, title: title.join('\n') };
+  }
+  return { tone: 'ok', text, title: title.join('\n') };
+}
+
+function remedyOf(auth: SignedOut): string {
+  if (auth.remedy === undefined) {
+    return auth.message;
+  }
+  return `Run: ${auth.remedy}`;
 }

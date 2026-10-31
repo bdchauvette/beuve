@@ -23,5 +23,8 @@ const extension = /^[a-z0-9+#-]{1,16}$/u;
 export function snippetPathFrom(info: string): string {
   const language = info.trim().toLowerCase();
   const named = extensions[language] ?? language;
-  return `snippet.${extension.test(named) ? named : 'txt'}`;
+  if (!extension.test(named)) {
+    return 'snippet.txt';
+  }
+  return `snippet.${named}`;
 }

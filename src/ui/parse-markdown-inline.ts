@@ -9,8 +9,13 @@ export interface InlineOptions {
   readonly isProvisional?: boolean;
 }
 
-interface Context {
+/** A text and the end (exclusive) of the range being parsed in it. */
+interface Scan {
   readonly text: string;
+  readonly end: number;
+}
+
+interface Context extends Scan {
   readonly isProvisional: boolean;
   readonly isInLink: boolean;
 }
@@ -25,7 +30,13 @@ interface Step {
  * Parses what starts at `at`: a step, `stop` (a provisional end that is hidden until more of
  * it arrives) or `undefined` when nothing starts there and the character is text.
  */
-type Construct = (context: Context, at: number, to: number) => Step | 'stop' | undefined;
+type Construct = (context: Context, at: number) => Step | 'stop' | undefined;
+
+/** A link destination's URL, and just past it. */
+interface UrlSpan {
+  readonly url: string;
+  readonly end: number;
+}
 
 const marker = /\[\[[^[\]\n]{1,512}\]\]/uy;
 const unfinishedMarker = /\[\[[^[\]\n]*\]?$/uy;
@@ -35,6 +46,8 @@ const urlTrailer = /[.,;:!?'"*_~]+$/u;
 const punctuation = /[!-/:-@[-`{-~]/u;
 const wordCharacter = /[\p{L}\p{N}]/u;
 const whitespace = /\s/u;
+const bracketDepth: Readonly<Record<string, number>> = { '[': 1, ']': -1 };
+const parenDepth: Readonly<Record<string, number>> = { '(': 1, ')': -1 };
 
 /**
  * Parses the inline Markdown of one block (ADR 0073): backslash escapes, code spans, `**strong**`
@@ -45,16 +58,22 @@ const whitespace = /\s/u;
  * written shows its text, and a citation still being written is hidden (ADR 0031). Pure.
  */
 export function parseMarkdownInline(text: string, options: InlineOptions = {}): MarkdownInline[] {
-  const context = { text, isProvisional: options.isProvisional ?? false, isInLink: false };
-  return parseRange(context, 0, text.length);
+  const context = {
+    text,
+    end: text.length,
+    isProvisional: options.isProvisional ?? false,
+    isInLink: false,
+  };
+  return parseRange(context, 0);
 }
 
-function parseRange(context: Context, from: number, to: number): MarkdownInline[] {
+/** The nodes from `from` to the context's end. */
+function parseRange(context: Context, from: number): MarkdownInline[] {
   const nodes: MarkdownInline[] = [];
   let index = from;
-  while (index < to) {
+  while (index < context.end) {
     const character = context.text.charAt(index);
-    const step = constructs[character]?.(context, index, to) ?? {
+    const step = constructs[character]?.(context, index) ?? {
       nodes: [{ kind: 'text', text: character }],
       next: index + 1,
     };
@@ -79,68 +98,82 @@ function appendInline(nodes: MarkdownInline[], node: MarkdownInline): void {
   }
 }
 
-/** Whether `to` is the end of a provisional text: only there may a construct be unfinished. */
-function isOpenEnd(context: Context, to: number): boolean {
-  return context.isProvisional && to === context.text.length;
+/** Whether the range ends a provisional text: only there may a construct be unfinished. */
+function isOpenEnd(context: Context): boolean {
+  return context.isProvisional && context.end === context.text.length;
 }
 
-function escapeAt(context: Context, at: number, to: number): Step | 'stop' | undefined {
+function escapeAt(context: Context, at: number): Step | 'stop' | undefined {
   const next = context.text.charAt(at + 1);
-  if (at + 1 < to && punctuation.test(next)) {
+  if (at + 1 < context.end && punctuation.test(next)) {
     return { nodes: [{ kind: 'text', text: next }], next: at + 2 };
   }
-  return isOpenEnd(context, to) && at + 1 === to ? 'stop' : undefined;
+  if (isOpenEnd(context) && at + 1 === context.end) {
+    return 'stop';
+  }
+  return undefined;
 }
 
-function codeAt(context: Context, at: number, to: number): Step | 'stop' {
-  const { text } = context;
-  const ticks = runLength(text, at, to);
-  const close = closingTicks(text, at + ticks, to, ticks);
+function codeAt(context: Context, at: number): Step | 'stop' {
+  const { text, end } = context;
+  const ticks = runLength(context, at);
+  const close = closingTicks(context, at);
   if (close !== undefined) {
     return {
       nodes: [{ kind: 'code', text: codeText(text.slice(at + ticks, close)) }],
       next: close + ticks,
     };
   }
-  if (!isOpenEnd(context, to)) {
+  if (!isOpenEnd(context)) {
     return { nodes: [{ kind: 'text', text: text.slice(at, at + ticks) }], next: at + ticks };
   }
-  const rest = text.slice(at + ticks, to);
-  return rest === '' ? 'stop' : { nodes: [{ kind: 'code', text: codeText(rest) }], next: to };
+  const rest = text.slice(at + ticks, end);
+  if (rest === '') {
+    return 'stop';
+  }
+  return { nodes: [{ kind: 'code', text: codeText(rest) }], next: end };
 }
 
-function bracketAt(context: Context, at: number, to: number): Step | 'stop' | undefined {
-  const { text } = context;
-  const cited = matchAt(marker, text, at, to);
+function bracketAt(context: Context, at: number): Step | 'stop' | undefined {
+  const cited = matchAt(marker, context, at);
   if (cited !== undefined) {
     return { nodes: [{ kind: 'marker', text: cited }], next: at + cited.length };
   }
-  const isOpen = isOpenEnd(context, to);
-  if (isOpen && matchAt(unfinishedMarker, text, at, to) !== undefined) {
+  const isOpen = isOpenEnd(context);
+  if (isOpen && matchAt(unfinishedMarker, context, at) !== undefined) {
     return 'stop';
   }
   if (context.isInLink) {
     return undefined;
   }
-  const link = linkAt(text, at, to);
-  const label = (end: number): MarkdownInline[] =>
-    parseRange({ ...context, isInLink: true }, at + 1, end);
+  const link = linkAt(context, at);
+  const label = (end: number): MarkdownInline[] => {
+    return parseRange({ ...context, end, isInLink: true }, at + 1);
+  };
   if (link.kind === 'link') {
     const children = label(link.labelEnd);
-    const nodes: MarkdownInline[] =
-      link.href === undefined ? children : [{ kind: 'link', href: link.href, children }];
-    return { nodes, next: link.end };
+    if (link.href === undefined) {
+      return { nodes: children, next: link.end };
+    }
+    return { nodes: [{ kind: 'link', href: link.href, children }], next: link.end };
   }
   // `[text` or `[text](http…` still being written: its text, never its syntax.
-  return isOpen && link.kind === 'unfinished'
-    ? { nodes: label(link.labelEnd ?? to), next: to }
-    : undefined;
+  if (isOpen && link.kind === 'unfinished') {
+    return { nodes: label(link.labelEnd ?? context.end), next: context.end };
+  }
+  return undefined;
 }
 
-function autolinkAt(context: Context, at: number, to: number): Step | undefined {
-  const url = context.isInLink ? undefined : matchAt(autolink, context.text, at, to);
-  const href = url === undefined ? undefined : safeHrefFrom(url.slice(1, -1));
-  if (url === undefined || href === undefined) {
+function autolinkAt(context: Context, at: number): Step | undefined {
+  if (context.isInLink) {
+    return undefined;
+  }
+  const url = matchAt(autolink, context, at);
+  if (url === undefined) {
+    return undefined;
+  }
+  const href = safeHrefFrom(url.slice(1, -1));
+  if (href === undefined) {
     return undefined;
   }
   return {
@@ -150,13 +183,12 @@ function autolinkAt(context: Context, at: number, to: number): Step | undefined 
 }
 
 /** A bare `http(s)://` URL, without trailing punctuation or a `)` it doesn't open. */
-function bareUrlAt(context: Context, at: number, to: number): Step | undefined {
-  const { text } = context;
-  if (context.isInLink || wordCharacter.test(text.charAt(at - 1))) {
+function bareUrlAt(context: Context, at: number): Step | undefined {
+  if (context.isInLink || wordCharacter.test(context.text.charAt(at - 1))) {
     return undefined;
   }
-  let url = matchAt(bareUrl, text, at, to)?.replace(urlTrailer, '') ?? '';
-  while (url.endsWith(')') && count(url, '(') < count(url, ')')) {
+  let url = matchAt(bareUrl, context, at)?.replace(urlTrailer, '') ?? '';
+  while (url.endsWith(')') && isOverclosed(url)) {
     url = url.slice(0, -1).replace(urlTrailer, '');
   }
   const href = safeHrefFrom(url);
@@ -175,34 +207,50 @@ function bareUrlAt(context: Context, at: number, to: number): Step | undefined {
  * preceded by a non-space, skipping code spans, citations and escapes. Provisionally, an
  * unclosed strong run, or emphasis opened after a space, runs to the end.
  */
-function emphasisAt(context: Context, at: number, to: number): Step | 'stop' {
+function emphasisAt(context: Context, at: number): Step | 'stop' {
   const { text } = context;
   const character = text.charAt(at);
-  const length = runLength(text, at, to);
-  const isOpen = isOpenEnd(context, to);
-  if (isOpen && at + length === to) {
+  const length = runLength(context, at);
+  const isOpen = isOpenEnd(context);
+  if (isOpen && at + length === context.end) {
     return 'stop';
   }
   const next = text.charAt(at + length);
   const previous = text.charAt(at - 1);
+  const literal: Step = {
+    nodes: [{ kind: 'text', text: text.slice(at, at + length) }],
+    next: at + length,
+  };
   const canOpen =
     length <= 3 &&
     next !== '' &&
     !whitespace.test(next) &&
     !(character === '_' && wordCharacter.test(previous));
-  const close = canOpen ? closingRun(text, at + length, to, character, length) : undefined;
-  const isLikely = length >= 2 || previous === '' || whitespace.test(previous);
-  if (!canOpen || (close === undefined && !(isOpen && isLikely))) {
-    return { nodes: [{ kind: 'text', text: text.slice(at, at + length) }], next: at + length };
+  if (!canOpen) {
+    return literal;
   }
-  const children = parseRange(context, at + length, close ?? to);
-  const node: MarkdownInline =
-    length === 1
-      ? { kind: 'emphasis', children }
-      : length === 2
-        ? { kind: 'strong', children }
-        : { kind: 'strong', children: [{ kind: 'emphasis', children }] };
-  return { nodes: [node], next: close === undefined ? to : close + length };
+  const close = closingRun(context, at);
+  const isLikely = length >= 2 || previous === '' || whitespace.test(previous);
+  if (close === undefined && !(isOpen && isLikely)) {
+    return literal;
+  }
+  const children = parseRange({ ...context, end: close ?? context.end }, at + length);
+  const node = emphasisNode(length, children);
+  if (close === undefined) {
+    return { nodes: [node], next: context.end };
+  }
+  return { nodes: [node], next: close + length };
+}
+
+/** Emphasis for one marker, strong for two, both for three. */
+function emphasisNode(length: number, children: MarkdownInline[]): MarkdownInline {
+  if (length === 1) {
+    return { kind: 'emphasis', children };
+  }
+  if (length === 2) {
+    return { kind: 'strong', children };
+  }
+  return { kind: 'strong', children: [{ kind: 'emphasis', children }] };
 }
 
 const constructs: Readonly<Partial<Record<string, Construct>>> = Object.freeze({
@@ -215,19 +263,24 @@ const constructs: Readonly<Partial<Record<string, Construct>>> = Object.freeze({
   _: emphasisAt,
 });
 
-function runLength(text: string, at: number, to: number): number {
+/** How many times the character at `at` repeats from there. */
+function runLength(scan: Scan, at: number): number {
   let end = at;
-  while (end < to && text.charAt(end) === text.charAt(at)) {
+  while (end < scan.end && scan.text.charAt(end) === scan.text.charAt(at)) {
     end += 1;
   }
   return end - at;
 }
 
-/** Where a run of exactly `ticks` backticks starts, after `from`. */
-function closingTicks(text: string, from: number, to: number, ticks: number): number | undefined {
-  let index = from;
-  while (index < to) {
-    const length = text.charAt(index) === '`' ? runLength(text, index, to) : 0;
+/** Where the run of backticks that closes the one at `opener` starts. */
+function closingTicks(scan: Scan, opener: number): number | undefined {
+  const ticks = runLength(scan, opener);
+  let index = opener + ticks;
+  while (index < scan.end) {
+    let length = 0;
+    if (scan.text.charAt(index) === '`') {
+      length = runLength(scan, index);
+    }
     if (length === ticks) {
       return index;
     }
@@ -239,28 +292,34 @@ function closingTicks(text: string, from: number, to: number, ticks: number): nu
 /** A code span's text: line breaks are spaces, and one space each side is padding. */
 function codeText(raw: string): string {
   const text = raw.replaceAll('\n', ' ');
-  return text.length >= 2 && text.startsWith(' ') && text.endsWith(' ') && text.trim() !== ''
-    ? text.slice(1, -1)
-    : text;
+  if (text.length >= 2 && text.startsWith(' ') && text.endsWith(' ') && text.trim() !== '') {
+    return text.slice(1, -1);
+  }
+  return text;
 }
 
-function matchAt(pattern: RegExp, text: string, at: number, to: number): string | undefined {
+function matchAt(pattern: RegExp, scan: Scan, at: number): string | undefined {
   pattern.lastIndex = at;
-  return pattern.exec(text.slice(0, to))?.[0];
+  return pattern.exec(scan.text.slice(0, scan.end))?.[0];
 }
 
 /** Just past an escape, a closed code span or a citation at `at`; `undefined` if none is there. */
-function skipAtom(text: string, at: number, to: number): number | undefined {
-  const character = text.charAt(at);
+function skipAtom(scan: Scan, at: number): number | undefined {
+  const character = scan.text.charAt(at);
   if (character === '\\') {
     return at + 2;
   }
   if (character === '`') {
-    const ticks = runLength(text, at, to);
-    return (closingTicks(text, at + ticks, to, ticks) ?? at) + ticks;
+    return (closingTicks(scan, at) ?? at) + runLength(scan, at);
   }
-  const cited = character === '[' ? matchAt(marker, text, at, to) : undefined;
-  return cited === undefined ? undefined : at + cited.length;
+  if (character !== '[') {
+    return undefined;
+  }
+  const cited = matchAt(marker, scan, at);
+  if (cited === undefined) {
+    return undefined;
+  }
+  return at + cited.length;
 }
 
 type LinkMatch =
@@ -275,16 +334,18 @@ type LinkMatch =
     };
 
 /** `[label](destination "title")` at `at`; the label may hold code spans and nested brackets. */
-function linkAt(text: string, at: number, to: number): LinkMatch {
-  const labelEnd = labelEndAt(text, at + 1, to);
+function linkAt(scan: Scan, at: number): LinkMatch {
+  const labelEnd = labelEndAt(scan, at + 1);
   if (labelEnd === undefined) {
     return { kind: 'unfinished' };
   }
-  if (labelEnd + 1 >= to) {
+  if (labelEnd + 1 >= scan.end) {
     return { kind: 'unfinished', labelEnd };
   }
-  const destination =
-    text.charAt(labelEnd + 1) === '(' ? destinationAt(text, labelEnd + 2, to) : undefined;
+  if (scan.text.charAt(labelEnd + 1) !== '(') {
+    return { kind: 'none' };
+  }
+  const destination = destinationAt(scan, labelEnd + 2);
   if (destination === 'unfinished') {
     return { kind: 'unfinished', labelEnd };
   }
@@ -296,86 +357,106 @@ function linkAt(text: string, at: number, to: number): LinkMatch {
 }
 
 /** The `]` that closes a label opened just before `from`, skipping atoms and nested brackets. */
-function labelEndAt(text: string, from: number, to: number): number | undefined {
+function labelEndAt(scan: Scan, from: number): number | undefined {
   let depth = 0;
   let index = from;
-  while (index < to) {
-    const skipped = skipAtom(text, index, to);
-    const character = skipped === undefined ? text.charAt(index) : '';
+  while (index < scan.end) {
+    const skipped = skipAtom(scan, index);
+    if (skipped !== undefined) {
+      index = skipped;
+      continue;
+    }
+    const character = scan.text.charAt(index);
     if (character === ']' && depth === 0) {
       return index;
     }
-    depth += character === '[' ? 1 : character === ']' ? -1 : 0;
-    index = skipped ?? index + 1;
+    depth += bracketDepth[character] ?? 0;
+    index += 1;
   }
   return undefined;
 }
 
 /** `url "title")` from just after the `(`: the URL and just past the `)`. */
-function destinationAt(
-  text: string,
-  from: number,
-  to: number,
-): 'unfinished' | { readonly url: string; readonly end: number } | undefined {
-  const start = skipSpaces(text, from, to);
-  const isAngled = text.charAt(start) === '<';
-  const urlEnd = isAngled ? text.indexOf('>', start) : plainUrlEnd(text, start, to);
-  if (urlEnd === -1 || urlEnd >= to) {
+function destinationAt(scan: Scan, from: number): UrlSpan | 'unfinished' | undefined {
+  const { text, end } = scan;
+  const found = urlAt(scan, skipSpaces(scan, from));
+  if (found === undefined) {
     return 'unfinished';
   }
-  const url = text.slice(isAngled ? start + 1 : start, urlEnd);
-  let index = skipSpaces(text, isAngled ? urlEnd + 1 : urlEnd, to);
+  let index = skipSpaces(scan, found.end);
   const quote = text.charAt(index);
   if (quote === '"' || quote === "'") {
     const close = text.indexOf(quote, index + 1);
-    if (close === -1 || close >= to) {
+    if (close === -1 || close >= end) {
       return 'unfinished';
     }
-    index = skipSpaces(text, close + 1, to);
+    index = skipSpaces(scan, close + 1);
   }
-  if (index >= to) {
+  if (index >= end) {
     return 'unfinished';
   }
-  return text.charAt(index) === ')' ? { url, end: index + 1 } : undefined;
+  if (text.charAt(index) === ')') {
+    return { url: found.url, end: index + 1 };
+  }
+  return undefined;
 }
 
-/** Where an unbracketed URL ends: at a space or a `)` it didn't open; `to` if neither came. */
-function plainUrlEnd(text: string, from: number, to: number): number {
+/** The URL at `start`, `<…>` or bare, and just past it; `undefined` when the text ends first. */
+function urlAt(scan: Scan, start: number): UrlSpan | undefined {
+  const { text, end } = scan;
+  if (text.charAt(start) === '<') {
+    const close = text.indexOf('>', start);
+    if (close === -1 || close >= end) {
+      return undefined;
+    }
+    return { url: text.slice(start + 1, close), end: close + 1 };
+  }
+  const urlEnd = plainUrlEnd(scan, start);
+  if (urlEnd >= end) {
+    return undefined;
+  }
+  return { url: text.slice(start, urlEnd), end: urlEnd };
+}
+
+/** Where an unbracketed URL ends: at a space or a `)` it didn't open; the range's end if neither came. */
+function plainUrlEnd(scan: Scan, from: number): number {
   let depth = 0;
-  for (let index = from; index < to; index += 1) {
-    const character = text.charAt(index);
+  for (let index = from; index < scan.end; index += 1) {
+    const character = scan.text.charAt(index);
     if (whitespace.test(character) || (character === ')' && depth === 0)) {
       return index;
     }
-    depth += character === '(' ? 1 : character === ')' ? -1 : 0;
+    depth += parenDepth[character] ?? 0;
   }
-  return to;
+  return scan.end;
 }
 
-function skipSpaces(text: string, from: number, to: number): number {
+function skipSpaces(scan: Scan, from: number): number {
   let index = from;
-  while (index < to && whitespace.test(text.charAt(index))) {
+  while (index < scan.end && whitespace.test(scan.text.charAt(index))) {
     index += 1;
   }
   return index;
 }
 
-function count(text: string, character: string): number {
-  return text.split(character).length - 1;
+/** Whether `url` closes more parentheses than it opens. */
+function isOverclosed(url: string): boolean {
+  return url.split('(').length < url.split(')').length;
 }
 
-function closingRun(
-  text: string,
-  from: number,
-  to: number,
-  character: string,
-  length: number,
-): number | undefined {
+/** Where the run that closes the emphasis run at `opener` starts. */
+function closingRun(scan: Scan, opener: number): number | undefined {
+  const { text } = scan;
+  const character = text.charAt(opener);
+  const length = runLength(scan, opener);
+  const from = opener + length;
   let index = from;
-  while (index < to) {
-    const skipped = skipAtom(text, index, to);
-    const run =
-      skipped === undefined && text.charAt(index) === character ? runLength(text, index, to) : 0;
+  while (index < scan.end) {
+    const skipped = skipAtom(scan, index);
+    let run = 0;
+    if (skipped === undefined && text.charAt(index) === character) {
+      run = runLength(scan, index);
+    }
     const isCloser =
       run === length &&
       index > from &&

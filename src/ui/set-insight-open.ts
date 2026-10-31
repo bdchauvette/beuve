@@ -1,4 +1,5 @@
 import { createInlineNode } from './create-inline-node.ts';
+import { createTextSpan } from './create-text-span.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { parseMarkdownSubset } from './parse-markdown-subset.ts';
 import type { InlineSpan, MarkdownBlock } from './parse-markdown-subset.ts';
@@ -27,21 +28,24 @@ function createBody(insight: ReviewInsight): HTMLElement {
   text.append(...parseMarkdownSubset(finding.body).map((block) => blockNode(block)));
   const actions = document.createElement('div');
   actions.className = 'insight-actions';
-  const stage = actionButton(
-    'insight-stage',
-    'Stage',
-    'Stage this finding on its lines in the review dock',
-  );
-  const show = actionButton(
-    'insight-show',
-    'Show in chat',
-    'Show this finding in the chat transcript',
-  );
+  const stage = actionButton({
+    action: 'insight-stage',
+    label: 'Stage',
+    title: 'Stage this finding on its lines in the review dock',
+  });
+  const show = actionButton({
+    action: 'insight-show',
+    label: 'Show in chat',
+    title: 'Show this finding in the chat transcript',
+  });
   const confidence = Math.round(finding.confidence * 100);
   actions.append(
     stage,
     show,
-    textSpan('insight-meta', `${String(confidence)}% confidence · ${finding.check}`),
+    createTextSpan({
+      className: 'insight-meta',
+      text: `${String(confidence)}% confidence · ${finding.check}`,
+    }),
   );
   body.append(text, actions);
   return body;
@@ -71,14 +75,14 @@ function container(tag: 'p' | 'li', spans: readonly InlineSpan[]): HTMLElement {
   return element;
 }
 
-function textSpan(className: string, text: string): HTMLElement {
-  const span = document.createElement('span');
-  span.className = className;
-  span.textContent = text;
-  return span;
+/** A delegated button (ADR 0074): its `data-action`, its text and its tooltip. */
+interface ActionButtonParts {
+  readonly action: string;
+  readonly label: string;
+  readonly title: string;
 }
 
-function actionButton(action: string, label: string, title: string): HTMLButtonElement {
+function actionButton({ action, label, title }: ActionButtonParts): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset['action'] = action;

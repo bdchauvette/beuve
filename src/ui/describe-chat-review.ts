@@ -1,5 +1,7 @@
 import type { ChatFindingView, ChatReviewView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+
 /** How the transcript labels a `/review` answer (ADR 0055). */
 export interface ChatReviewLabels {
   /** "2 files · 1 finding · 1 dropped as unconfirmed · 2 off the diff". */
@@ -42,36 +44,47 @@ export function describeChatReview(review: ChatReviewView): ChatReviewLabels {
   const { dropped } = review;
   const offDiff = dropped.outsideDiff + dropped.unknownFile;
   const weak = dropped.lowConfidence + dropped.duplicate + dropped.overLimit;
-  const parts = [
-    plural(review.fileCount, 'file'),
-    plural(review.findings.length, 'finding'),
-    ...(dropped.unconfirmed > 0 ? [`${String(dropped.unconfirmed)} dropped as unconfirmed`] : []),
-    ...(offDiff > 0 ? [`${String(offDiff)} off the diff`] : []),
-    ...(weak > 0 ? [`${String(weak)} below the bar`] : []),
-  ];
-  const note =
-    review.reusedFrom === undefined
-      ? review.verification === 'failed'
-        ? 'The verification pass did not finish; findings are unchecked.'
-        : undefined
-      : 'Repeated from the earlier review of this head; /review --fresh reruns it.';
+  const parts = [countNoun(review.fileCount, 'file'), countNoun(review.findings.length, 'finding')];
+  if (dropped.unconfirmed > 0) {
+    parts.push(`${String(dropped.unconfirmed)} dropped as unconfirmed`);
+  }
+  if (offDiff > 0) {
+    parts.push(`${String(offDiff)} off the diff`);
+  }
+  if (weak > 0) {
+    parts.push(`${String(weak)} below the bar`);
+  }
+  const note = reviewNote(review);
   return {
     summary: parts.join(' · '),
     ...(note !== undefined && { note }),
-    findings: review.findings.map((finding) => ({
-      severity: severities[finding.severity],
-      category: finding.category.replaceAll('-', ' '),
-      confidence: `${String(Math.round(finding.confidence * 100))}%`,
-      check: finding.check,
-      checkTitle: checkTitles[finding.check],
-      where:
-        finding.startLine === finding.endLine
-          ? `${finding.path}:${String(finding.startLine)}`
-          : `${finding.path}:${String(finding.startLine)}-${String(finding.endLine)}`,
-    })),
+    findings: review.findings.map((finding) => {
+      return {
+        severity: severities[finding.severity],
+        category: finding.category.replaceAll('-', ' '),
+        confidence: `${String(Math.round(finding.confidence * 100))}%`,
+        check: finding.check,
+        checkTitle: checkTitles[finding.check],
+        where: whereOf(finding),
+      };
+    }),
   };
 }
 
-function plural(count: number, noun: string): string {
-  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+function reviewNote(review: ChatReviewView): string | undefined {
+  if (review.reusedFrom !== undefined) {
+    return 'Repeated from the earlier review of this head; /review --fresh reruns it.';
+  }
+  if (review.verification === 'failed') {
+    return 'The verification pass did not finish; findings are unchecked.';
+  }
+  return undefined;
+}
+
+/** `path:12`, or `path:12-15` for a range. */
+function whereOf(finding: ChatFindingView): string {
+  if (finding.startLine === finding.endLine) {
+    return `${finding.path}:${String(finding.startLine)}`;
+  }
+  return `${finding.path}:${String(finding.startLine)}-${String(finding.endLine)}`;
 }

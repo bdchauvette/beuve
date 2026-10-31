@@ -1,4 +1,5 @@
 import type { DraftPart, DraftState } from './chat-draft.ts';
+import { draftLength } from './draft-length.ts';
 
 /**
  * Backspace (`backward`) or Delete (`forward`) next to a chip removes the whole chip; `undefined`
@@ -8,10 +9,13 @@ export function removeDraftMention(
   state: DraftState,
   direction: 'backward' | 'forward',
 ): DraftState | undefined {
-  const target = direction === 'backward' ? state.caret - 1 : state.caret;
+  let target = state.caret;
+  if (direction === 'backward') {
+    target -= 1;
+  }
   let position = 0;
   for (const [index, part] of state.parts.entries()) {
-    const length = part.kind === 'text' ? part.text.length : 1;
+    const length = draftLength([part]);
     if (target >= position && target < position + length) {
       if (part.kind !== 'mention') {
         return undefined;

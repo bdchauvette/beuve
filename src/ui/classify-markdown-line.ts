@@ -116,16 +116,13 @@ function itemFrom(body: string, indent: number): MarkdownLine | undefined {
   const number = digits.exec(body)?.[0];
   const markerWidth = (number?.length ?? 0) + 1;
   const marker = body.charAt(markerWidth - 1);
-  const isMarker = number === undefined ? '-*+'.includes(marker) : marker === '.' || marker === ')';
   const rest = body.slice(markerWidth);
   const isSpaced = rest === '' || rest.startsWith(' ') || rest.startsWith('\t');
-  if (marker === '' || !isMarker || !isSpaced) {
+  if (marker === '' || !isSpaced || !isItemMarker(marker, number)) {
     return undefined;
   }
   const text = rest.trimStart();
-  const spacing = rest.length - text.length;
-  // A wide gap (or none, on an empty item) means the content starts one column after the marker.
-  const gap = text !== '' && spacing > 0 && spacing <= 4 ? spacing : 1;
+  const gap = contentGap(text, rest.length - text.length);
   return {
     kind: 'item',
     indent,
@@ -134,4 +131,23 @@ function itemFrom(body: string, indent: number): MarkdownLine | undefined {
     contentIndent: indent + markerWidth + gap,
     text: text.trim(),
   };
+}
+
+/** `-`, `*` or `+` for a bullet; `.` or `)` after an ordered item's number. */
+function isItemMarker(marker: string, number: string | undefined): boolean {
+  if (number === undefined) {
+    return '-*+'.includes(marker);
+  }
+  return marker === '.' || marker === ')';
+}
+
+/**
+ * The columns between the marker and the content: the spaces themselves, but a wide gap (or
+ * none, on an empty item) means the content starts one column after the marker.
+ */
+function contentGap(text: string, spacing: number): number {
+  if (text !== '' && spacing > 0 && spacing <= 4) {
+    return spacing;
+  }
+  return 1;
 }

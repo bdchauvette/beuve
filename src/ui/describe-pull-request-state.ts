@@ -12,9 +12,10 @@ export function describePullRequestState(
 ): PullRequestStateBadge {
   switch (pullRequest.state) {
     case 'open': {
-      return pullRequest.isDraft
-        ? { label: 'Draft', tone: 'muted' }
-        : { label: 'Open', tone: 'ok' };
+      if (pullRequest.isDraft) {
+        return { label: 'Draft', tone: 'muted' };
+      }
+      return { label: 'Open', tone: 'ok' };
     }
     case 'merged': {
       return { label: 'Merged', tone: 'merged' };

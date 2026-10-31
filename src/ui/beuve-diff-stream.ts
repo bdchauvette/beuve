@@ -24,8 +24,10 @@ import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
+import { countNoun } from './count-noun.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
-import type { BeuveFindBar, FindQueryDetail } from './beuve-find-bar.ts';
+import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
+import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
 import type {
   BeuveFileCard,
   ComposerState,
@@ -61,6 +63,7 @@ import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import type { TraceState } from './trace-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
+import type { ReviewStops } from './step-review-position-skipping.ts';
 import { formatIsoDuration } from './format-iso-duration.ts';
 import { zoneStyles } from './zone-styles.ts';
 
@@ -446,7 +449,7 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   };
 
-  private readonly onSuggestionCancel = (event: CustomEvent<{ message: string }>): void => {
+  private readonly onSuggestionCancel = (event: CustomEvent<SuggestionCancelDetail>): void => {
     if (event.detail.message !== '') {
       this.notify('info', event.detail.message);
     }
@@ -462,15 +465,18 @@ export class BeuveDiffStream extends LitElement {
     this.isFindCaseSensitive = event.detail.isCaseSensitive;
     this.runFind();
     const first = this.findMatches.findIndex((match) => match.fileIndex >= this.activeIndex);
-    this.showMatch(this.findMatches.length === 0 ? -1 : Math.max(0, first));
+    this.showMatch(Math.max(0, first));
   };
 
-  private readonly onFindStep = (event: CustomEvent<{ step: 1 | -1 }>): void => {
+  private readonly onFindStep = (event: CustomEvent<FindStepDetail>): void => {
     const count = this.findMatches.length;
     if (count === 0) {
       return;
     }
-    const from = this.findIndex === -1 && event.detail.step === -1 ? 0 : this.findIndex;
+    let from = this.findIndex;
+    if (from === -1 && event.detail.step === -1) {
+      from = 0;
+    }
     this.showMatch((from + event.detail.step + count) % count);
   };
 
@@ -480,7 +486,7 @@ export class BeuveDiffStream extends LitElement {
   };
 
   /** "Load diff" on a collapsed card. */
-  private readonly onDiffToggle = (event: CustomEvent<{ path: string; expand: boolean }>): void => {
+  private readonly onDiffToggle = (event: CustomEvent<DiffToggleDetail>): void => {
     const index = this.shownFiles().findIndex((file) => file.path === event.detail.path);
     if (index === -1) {
       return;
@@ -619,7 +625,9 @@ export class BeuveDiffStream extends LitElement {
         click: {
           card: forwardToCard,
           order: withPayload(
-            ({ mode }) => orderModes.find((entry) => entry.mode === mode)?.mode,
+            ({ mode }) => {
+              return orderModes.find((entry) => entry.mode === mode)?.mode;
+            },
             (mode): void => {
               this.chooseOrder(mode);
             },
@@ -673,15 +681,32 @@ export class BeuveDiffStream extends LitElement {
       return;
     }
     const isSkipping = this.display.skipReviewed === true;
-    const next = stepReviewPositionSkipping(
-      files.map((file) => (isByFile || this.isCollapsed(file) ? 0 : file.hunks.length)),
-      files.map((file) => isSkipping && this.reviewMarks.get(file.path) === 'yes'),
-      { file: this.activeIndex, hunk: isByFile ? -1 : this.activeHunk },
-      step,
-    );
+    const stops: ReviewStops = {
+      hunkCounts: files.map((file) => {
+        if (isByFile || this.isCollapsed(file)) {
+          return 0;
+        }
+        return file.hunks.length;
+      }),
+      skipped: files.map((file) => isSkipping && this.reviewMarks.get(file.path) === 'yes'),
+    };
+    let hunk = this.activeHunk;
+    if (isByFile) {
+      hunk = -1;
+    }
+    const next = stepReviewPositionSkipping(stops, { file: this.activeIndex, hunk }, step);
     this.activeIndex = next.file;
     this.activeHunk = next.hunk;
     void this.revealPosition();
+  }
+
+  /** Find Next or Previous: steps through the hits while the find bar is open, else opens it. */
+  private findStep(step: 1 | -1): void {
+    if (this.isFindOpen) {
+      this.onFindStep(new CustomEvent('beuve-find-step', { detail: { step } }));
+    } else {
+      void this.openFind();
+    }
   }
 
   private cards(): NodeListOf<BeuveFileCard> {
@@ -746,9 +771,9 @@ export class BeuveDiffStream extends LitElement {
    */
   private applyMarkChanges(previous: ReadonlyMap<string, FileReviewStateView>): void {
     const changed = new Set(
-      [...new Set([...previous.keys(), ...this.reviewMarks.keys()])].filter(
-        (path) => previous.get(path) !== this.reviewMarks.get(path),
-      ),
+      [...new Set([...previous.keys(), ...this.reviewMarks.keys()])].filter((path) => {
+        return previous.get(path) !== this.reviewMarks.get(path);
+      }),
     );
     if (changed.size === 0 || previous.size === 0) {
       return;
@@ -771,14 +796,16 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private setCollapsed(path: string, isCollapsed: boolean): void {
-    const without = (paths: ReadonlySet<string>): ReadonlySet<string> =>
-      new Set([...paths].filter((entry) => entry !== path));
-    this.expandedPaths = isCollapsed
-      ? without(this.expandedPaths)
-      : new Set([...this.expandedPaths, path]);
-    this.collapsedPaths = isCollapsed
-      ? new Set([...this.collapsedPaths, path])
-      : without(this.collapsedPaths);
+    const without = (paths: ReadonlySet<string>): ReadonlySet<string> => {
+      return new Set([...paths].filter((entry) => entry !== path));
+    };
+    if (isCollapsed) {
+      this.expandedPaths = without(this.expandedPaths);
+      this.collapsedPaths = new Set([...this.collapsedPaths, path]);
+    } else {
+      this.expandedPaths = new Set([...this.expandedPaths, path]);
+      this.collapsedPaths = without(this.collapsedPaths);
+    }
   }
 
   private runFind(): void {
@@ -791,13 +818,18 @@ export class BeuveDiffStream extends LitElement {
   /** Reveals hit `index` through the same jump as a citation: its card loads, then the line. */
   private showMatch(index: number): void {
     const match = this.findMatches[index];
-    this.findIndex = match === undefined ? -1 : index;
+    this.findIndex = -1;
     if (match === undefined) {
       return;
     }
+    this.findIndex = index;
     this.activeIndex = match.fileIndex;
     this.activeHunk = -1;
-    void this.revealRange(match.fileIndex, match.line, match.line, match.side);
+    void this.revealRange(match.fileIndex, {
+      start: match.line,
+      end: match.line,
+      side: match.side,
+    });
   }
 
   /** Space: loads a collapsed card's diff, or collapses an open one, and shows its header. */
@@ -863,25 +895,15 @@ export class BeuveDiffStream extends LitElement {
       return;
     }
     if (jump.endLine !== undefined) {
-      void this.revealRange(index, line, jump.endLine, jump.side ?? 'head');
+      void this.revealRange(index, { start: line, end: jump.endLine, side: jump.side ?? 'head' });
       return;
     }
-    void this.revealLine(index, line);
+    void this.loadedCard(index).then(async (card) => card?.focusLine(line));
   }
 
-  private async revealRange(
-    index: number,
-    start: number,
-    end: number,
-    side: 'head' | 'base',
-  ): Promise<void> {
+  private async revealRange(index: number, lines: SideLines): Promise<void> {
     const card = await this.loadedCard(index);
-    await card?.revealRange(start, end, side);
-  }
-
-  private async revealLine(index: number, line: number): Promise<void> {
-    const card = await this.loadedCard(index);
-    await card?.focusLine(line);
+    await card?.revealRange(lines);
   }
 
   /** Open in Editor: asks the shell to open the active card's file in the editor at the cursor line. */
@@ -912,10 +934,10 @@ export class BeuveDiffStream extends LitElement {
   /** Suggest Edit: edits the target's lines, or the staged note under them, on the active card. */
   private editActive(): void {
     const { review } = this;
-    const target =
-      review === undefined
-        ? undefined
-        : editTargetFrom(this.target(), this.uraItems, review.headSha);
+    let target: EditTarget | undefined;
+    if (review !== undefined) {
+      target = editTargetFrom(this.target(), this.uraItems, review.headSha);
+    }
     if (target === undefined) {
       this.notify(
         'info',
@@ -929,11 +951,15 @@ export class BeuveDiffStream extends LitElement {
   /** The dock asked to (re-)edit an item's suggestion: its file, its lines, attached to it. */
   private async editItem(itemId: string): Promise<void> {
     const item = this.uraItems.find((entry) => entry.id === itemId);
-    const anchor = item?.placement.kind === 'current' ? item.placement.anchor : undefined;
-    const index =
-      anchor?.kind === 'lines'
-        ? this.shownFiles().findIndex((file) => file.path === anchor.path)
-        : -1;
+    let anchor: UraAnchorView | undefined;
+    if (item?.placement.kind === 'current') {
+      anchor = item.placement.anchor;
+    }
+    let index = -1;
+    if (anchor?.kind === 'lines') {
+      const { path } = anchor;
+      index = this.shownFiles().findIndex((file) => file.path === path);
+    }
     if (index === -1 || item === undefined || anchor?.kind !== 'lines') {
       this.notify('error', 'That note is not on a line of this diff, so it cannot be edited here.');
       return;
@@ -993,7 +1019,11 @@ export class BeuveDiffStream extends LitElement {
 
   private async revealComposer(anchor: UraAnchorView): Promise<void> {
     const card = await this.loadedCard(this.activeIndex);
-    await card?.revealLine(anchor.kind === 'lines' ? anchor.endLine : undefined);
+    if (anchor.kind === 'lines') {
+      await card?.revealLine(anchor.endLine);
+    } else {
+      await card?.revealLine(undefined);
+    }
     const element = await waitForComposer(card);
     element?.focus();
   }
@@ -1113,13 +1143,14 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private renderWelcome(): TemplateResult {
-    const note = this.loading ? 'Loading review…' : this.error || this.sessionNote;
     return html`
       <div class="body welcome">
         <div>
           <h1>No review session open</h1>
           <p>Open a local repository or pick a session in the Intent sidebar.</p>
-          <span class="note ${this.error === '' ? '' : 'error'}">${note}</span>
+          <span class="note ${this.error === '' ? '' : 'error'}"
+            >${this.loading ? 'Loading review…' : this.error || this.sessionNote}</span
+          >
         </div>
       </div>
     `;
@@ -1127,23 +1158,21 @@ export class BeuveDiffStream extends LitElement {
 
   private refreshSlices(): void {
     const { slices, uraItems, impact, insights } = this;
-    this.slices = {
-      insights,
-      insightsByPath:
-        slices.insights === insights
-          ? slices.insightsByPath
-          : groupStable(insights, insightPaths, slices.insightsByPath),
-      uraItems,
-      uraItemsByPath:
-        slices.uraItems === uraItems
-          ? slices.uraItemsByPath
-          : groupStable(uraItems, uraItemPaths, slices.uraItemsByPath),
-      impact,
-      impactByPath:
-        slices.impact === impact
-          ? slices.impactByPath
-          : new Map((impact?.files ?? []).map((entry) => [entry.path, entry])),
-    };
+    let { insightsByPath, uraItemsByPath, impactByPath } = slices;
+    if (slices.insights !== insights) {
+      insightsByPath = groupStable(insights, insightPaths, slices.insightsByPath);
+    }
+    if (slices.uraItems !== uraItems) {
+      uraItemsByPath = groupStable(uraItems, uraItemPaths, slices.uraItemsByPath);
+    }
+    if (slices.impact !== impact) {
+      impactByPath = new Map(
+        (impact?.files ?? []).map((entry) => {
+          return [entry.path, entry];
+        }),
+      );
+    }
+    this.slices = { insights, insightsByPath, uraItems, uraItemsByPath, impact, impactByPath };
   }
 
   /**
@@ -1152,20 +1181,18 @@ export class BeuveDiffStream extends LitElement {
    */
   private renderSaveProgress(review: ReviewView, isUpToDate: boolean): TemplateResult {
     const saved = this.savedProgress;
-    const savedSha =
-      saved?.sha === review.headSha
-        ? saved.sha
-        : isUpToDate
-          ? review.session.lastReviewedSha
-          : undefined;
+    let savedSha: string | undefined;
+    if (saved?.sha === review.headSha) {
+      savedSha = saved.sha;
+    } else if (isUpToDate) {
+      savedSha = review.session.lastReviewedSha;
+    }
     if (savedSha !== undefined && !this.marking) {
-      const time =
-        saved?.sha === savedSha
-          ? ` · ${saved.at
-              .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-              .toPlainTime()
-              .toString({ smallestUnit: 'minute' })}`
-          : '';
+      let time = '';
+      if (saved?.sha === savedSha) {
+        const at = saved.at.toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainTime();
+        time = ` · ${at.toString({ smallestUnit: 'minute' })}`;
+      }
       return html`<span class="saved" title="Next time, show only what changed since this point"
         >Progress saved · ${savedSha.slice(0, 7)}${time}</span
       >`;
@@ -1188,8 +1215,12 @@ export class BeuveDiffStream extends LitElement {
     this.refreshSlices();
     const { uraItemsByPath, insightsByPath, impactByPath } = this.slices;
     const plan = this.plan();
-    const additions = review.files.reduce((sum, file) => sum + file.additions, 0);
-    const deletions = review.files.reduce((sum, file) => sum + file.deletions, 0);
+    const additions = review.files.reduce((sum, file) => {
+      return sum + file.additions;
+    }, 0);
+    const deletions = review.files.reduce((sum, file) => {
+      return sum + file.deletions;
+    }, 0);
     const isUpToDate = review.scope.kind === 'up-to-date';
     return html`
       <div class="summary">
@@ -1229,9 +1260,11 @@ export class BeuveDiffStream extends LitElement {
                 <div class="cards">
                   ${repeat(
                     plan.files,
-                    (file) => file.path,
-                    (file, index) =>
-                      html`${this.renderGroupLabel(plan, index)}<beuve-file-card
+                    (file) => {
+                      return file.path;
+                    },
+                    (file, index) => {
+                      return html`${this.renderGroupLabel(plan, index)}<beuve-file-card
                           .file=${file}
                           .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
                           .cognitiveLimit=${this.impact?.cognitiveMax}
@@ -1252,7 +1285,8 @@ export class BeuveDiffStream extends LitElement {
                           ?active=${index === this.activeIndex}
                           data-action="card"
                           data-index=${index}
-                        ></beuve-file-card>`,
+                        ></beuve-file-card>`;
+                    },
                   )}
                 </div>`
         }
@@ -1262,36 +1296,38 @@ export class BeuveDiffStream extends LitElement {
 
   private renderProgress(): TemplateResult | typeof nothing {
     const line = describeReviewProgress(this.reviewProgress);
-    return line === undefined
-      ? nothing
-      : html`<span class="progress" title=${line.title}>${line.text}</span>`;
+    if (line === undefined) {
+      return nothing;
+    }
+    return html`<span class="progress" title=${line.title}>${line.text}</span>`;
   }
 
   /** Path / Imports / Calls (ADR 0065); a quiet note says when the order fell back. */
   private renderOrder(): TemplateResult {
     const requested = this.display.reviewOrder ?? 'path';
-    const fallback = describeOrderFallback(
-      this.order?.headSha === this.review?.headSha ? this.order : undefined,
-    );
+    let order = this.order;
+    if (order?.headSha !== this.review?.headSha) {
+      order = undefined;
+    }
+    const fallback = describeOrderFallback(order);
     return html`<span
       class="order"
       role="radiogroup"
       aria-label="File order"
       title="The order files are listed in; config and mechanical files go last (/order)"
     >
-      ${orderModes.map(
-        ({ mode, label }) =>
-          html`<button
-            type="button"
-            role="radio"
-            tabindex="-1"
-            aria-checked=${mode === requested ? 'true' : 'false'}
-            data-action="order"
-            data-mode=${mode}
-          >
-            ${label}
-          </button>`,
-      )}
+      ${orderModes.map(({ mode, label }) => {
+        return html`<button
+          type="button"
+          role="radio"
+          tabindex="-1"
+          aria-checked=${mode === requested ? 'true' : 'false'}
+          data-action="order"
+          data-mode=${mode}
+        >
+          ${label}
+        </button>`;
+      })}
       ${fallback === undefined ? nothing : html`<span class="fallback">${fallback}</span>`}
     </span>`;
   }
@@ -1310,7 +1346,10 @@ export class BeuveDiffStream extends LitElement {
 
   private renderGroupLabel(plan: ReviewStreamPlan, index: number): TemplateResult | typeof nothing {
     const label = plan.groupLabels.get(index);
-    return label === undefined ? nothing : html`<div class="group">${label}</div>`;
+    if (label === undefined) {
+      return nothing;
+    }
+    return html`<div class="group">${label}</div>`;
   }
 
   /** An interdiff's commits paired with the reviewed ones (ADR 0054), folded until asked for. */
@@ -1363,8 +1402,7 @@ export class BeuveDiffStream extends LitElement {
     return html`<span
       class="impact ${count > 0 ? 'warning' : ''}"
       title="ImpactGate computed in ${formatIsoDuration(impact.compute)}"
-      >ImpactGate:
-      ${count === 0 ? 'no findings' : `${String(count)} ${count === 1 ? 'finding' : 'findings'}`}</span
+      >ImpactGate: ${count === 0 ? 'no findings' : countNoun(count, 'finding')}</span
     >`;
   }
 
@@ -1379,7 +1417,10 @@ export class BeuveDiffStream extends LitElement {
     const files = this.shownFiles();
     // A cursor still at the top (nothing stepped to yet) stays at the top of the new order.
     const isAtTop = this.activeIndex === 0 && this.activeHunk === -1;
-    const kept = isSameHead && !isAtTop ? files.findIndex((file) => file.path === activePath) : -1;
+    let kept = -1;
+    if (isSameHead && !isAtTop) {
+      kept = files.findIndex((file) => file.path === activePath);
+    }
     if (kept === this.activeIndex && !changed.has('review') && !changed.has('pairFilter')) {
       return;
     }
@@ -1418,11 +1459,20 @@ export class BeuveDiffStream extends LitElement {
    */
   runCommand(id: CommandId): boolean {
     switch (id) {
-      case 'next-hunk':
-      case 'previous-hunk':
-      case 'next-file':
+      case 'next-hunk': {
+        this.step(1, false);
+        return true;
+      }
+      case 'previous-hunk': {
+        this.step(-1, false);
+        return true;
+      }
+      case 'next-file': {
+        this.step(1, true);
+        return true;
+      }
       case 'previous-file': {
-        this.step(id.startsWith('next') ? 1 : -1, id.endsWith('file'));
+        this.step(-1, true);
         return true;
       }
       case 'expand':
@@ -1467,15 +1517,12 @@ export class BeuveDiffStream extends LitElement {
         this.toggleReviewed();
         return true;
       }
-      case 'find-next':
+      case 'find-next': {
+        this.findStep(1);
+        return true;
+      }
       case 'find-previous': {
-        if (this.isFindOpen) {
-          this.onFindStep(
-            new CustomEvent('beuve-find-step', { detail: { step: id === 'find-next' ? 1 : -1 } }),
-          );
-        } else {
-          void this.openFind();
-        }
+        this.findStep(-1);
         return true;
       }
       case 'find-selection': {
@@ -1483,7 +1530,7 @@ export class BeuveDiffStream extends LitElement {
         if (selected !== '' && !selected.includes('\n')) {
           this.findQuery = selected;
           this.runFind();
-          this.showMatch(this.findMatches.length === 0 ? -1 : 0);
+          this.showMatch(0);
         }
         void this.openFind();
         return true;
@@ -1551,8 +1598,9 @@ export class BeuveDiffStream extends LitElement {
       this.runFind();
     }
     const path = this.composer?.path;
-    const isShown = this.shownFiles().some((file) => file.path === path);
-    this.composer = isShown ? this.composer : undefined;
+    if (this.shownFiles().every((file) => file.path !== path)) {
+      this.composer = undefined;
+    }
   }
 
   protected override updated(changed: PropertyValues<this>): void {
@@ -1593,10 +1641,13 @@ function isGenerated(deferral: DiffDeferral | undefined): boolean {
  * (its markers follow the placement, its ImpactGate chip the original anchor).
  */
 function uraItemPaths(item: UraItemView): string[] {
-  const placed = item.placement.kind === 'current' ? item.placement.anchor : undefined;
+  const anchors = [item.anchor];
+  if (item.placement.kind === 'current') {
+    anchors.push(item.placement.anchor);
+  }
   const paths: string[] = [];
-  for (const anchor of [item.anchor, placed]) {
-    if (anchor !== undefined && anchor.kind !== 'change') {
+  for (const anchor of anchors) {
+    if (anchor.kind !== 'change') {
       paths.push(anchor.path);
     }
   }
@@ -1625,14 +1676,18 @@ async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLEle
 
 /** Short shas of what the diff spans: fork point to head, or last reviewed head to head. */
 function rangeLabel(review: ReviewView): string {
-  const from = review.scope.kind === 'interdiff' ? review.scope.fromHeadSha : review.baseSha;
+  let from = review.baseSha;
+  if (review.scope.kind === 'interdiff') {
+    from = review.scope.fromHeadSha;
+  }
   return `${from.slice(0, 8)}..${review.headSha.slice(0, 8)}`;
 }
 
 function rangeTitle(review: ReviewView): string {
-  return review.scope.kind === 'interdiff'
-    ? `Changes since reviewed head ${review.scope.fromHeadSha}, now at ${review.headSha} (forked from ${review.baseSha})`
-    : `${review.baseSha}..${review.headSha}`;
+  if (review.scope.kind === 'interdiff') {
+    return `Changes since reviewed head ${review.scope.fromHeadSha}, now at ${review.headSha} (forked from ${review.baseSha})`;
+  }
+  return `${review.baseSha}..${review.headSha}`;
 }
 
 /** Runs a card's own action for an event the stream's delegated listener caught on it. */

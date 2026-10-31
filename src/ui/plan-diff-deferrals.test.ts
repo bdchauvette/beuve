@@ -59,7 +59,9 @@ describe('planDiffDeferrals', () => {
     expect,
   }) => {
     const files = ['gen/api.ts', 'snap/a.snap', 'dist/app.min.js', 'x/__generated__/y.ts'].map(
-      (path) => createDiffFileView(path, small()),
+      (path) => {
+        return createDiffFileView(path, small());
+      },
     );
     const deferrals = planDiffDeferrals(
       files,
@@ -98,7 +100,7 @@ describe('planDiffDeferrals', () => {
   });
 
   test('never defers a file without hunks', ({ expect }) => {
-    const binary = createDiffFileView('yarn.lock', [], 1, { hunks: [], binary: true });
+    const binary = createDiffFileView('yarn.lock', [], { overrides: { hunks: [], binary: true } });
     expect(planDiffDeferrals([binary], undefined).size).toBe(0);
   });
 });

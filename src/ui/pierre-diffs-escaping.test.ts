@@ -22,7 +22,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ text: name, options, hostile, benign, visible }, { expect }) => {
       const rendered = await renderDiffHtml(hostile, options);
       const twin = await renderDiffHtml(benign, options);
-      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered.html, benign: twin.html })).toStrictEqual([]);
       expect(rendered.name).toBe(name);
       expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
@@ -33,7 +33,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ text: name, options, hostile, benign, visible }, { expect }) => {
       const rendered = await renderDiffHtml(hostile, options);
       const twin = await renderDiffHtml(benign, options);
-      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered.html, benign: twin.html })).toStrictEqual([]);
       expect([rendered.previousName, rendered.name]).toStrictEqual([`${name}.old.ts`, name]);
       expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
@@ -44,7 +44,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ options, hostile, benign, visible }, { expect }) => {
       const rendered = await renderDiffHtml(hostile, options);
       const twin = await renderDiffHtml(benign, options);
-      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered.html, benign: twin.html })).toStrictEqual([]);
       expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
   );
@@ -54,7 +54,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ options, hostile, benign }, { expect }) => {
       const rendered = await renderDiffHtml(hostile, options);
       const twin = await renderDiffHtml(benign, options);
-      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered.html, benign: twin.html })).toStrictEqual([]);
     },
   );
 
@@ -80,7 +80,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ hostile, benign, visible }, { expect }) => {
       const rendered = await renderFileHtml(hostile);
       const twin = await renderFileHtml(benign);
-      expect(extraMarkup(rendered, twin)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered, benign: twin })).toStrictEqual([]);
       expect(missingFrom(visibleText(rendered), visible)).toStrictEqual([]);
     },
   );
@@ -90,7 +90,7 @@ describe('@pierre/diffs escapes hostile input', () => {
     async ({ hostile, benign, visible }, { expect }) => {
       const rendered = await renderFileHtml(hostile);
       const twin = await renderFileHtml(benign);
-      expect(extraMarkup(rendered, twin)).toStrictEqual([]);
+      expect(extraMarkup({ hostile: rendered, benign: twin })).toStrictEqual([]);
       expect(missingFrom(visibleText(rendered), visible)).toStrictEqual([]);
     },
   );
@@ -162,12 +162,15 @@ describe('the structural oracle', () => {
     async ({ text: name }, { expect }) => {
       const options: DiffHtmlOptions = { diffStyle: 'unified', hunkSeparators: 'line-info' };
       const benign = await renderDiffHtml(hostileCorpus().fileNames.at(0)?.benign ?? '', options);
-      const inText = benign.html.map((html) => html.replace('benign.ts', () => name));
-      const inAttribute = benign.html.map((html) =>
-        html.replace('data-title=""', () => `data-title="${name}"`),
-      );
-      const hasExtraMarkup = (broken: readonly string[]): boolean =>
-        extraMarkup(broken, benign.html).length > 0;
+      const inText = benign.html.map((html) => {
+        return html.replace('benign.ts', () => name);
+      });
+      const inAttribute = benign.html.map((html) => {
+        return html.replace('data-title=""', () => `data-title="${name}"`);
+      });
+      const hasExtraMarkup = (broken: readonly string[]): boolean => {
+        return extraMarkup({ hostile: broken, benign: benign.html }).length > 0;
+      };
       const isCaughtInText =
         hasExtraMarkup(inText) || !visibleText(inText).includes(inParsedText(name));
       // Raw `<` starting a tag, or a reference that decodes, in text; a raw `"` in an attribute.

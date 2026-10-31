@@ -18,15 +18,21 @@ export function tableAlignmentsFrom(line: string): TableAlignment[] | undefined 
       return undefined;
     }
     const [, left, right] = delimiter;
-    alignments.push(
-      left === ':' && right === ':'
-        ? 'center'
-        : right === ':'
-          ? 'right'
-          : left === ':'
-            ? 'left'
-            : undefined,
-    );
+    alignments.push(alignmentOf(left, right));
   }
   return alignments;
+}
+
+/** A delimiter cell's colons: both for centered, one on its side, none for the default. */
+function alignmentOf(left: string | undefined, right: string | undefined): TableAlignment {
+  if (left === ':' && right === ':') {
+    return 'center';
+  }
+  if (right === ':') {
+    return 'right';
+  }
+  if (left === ':') {
+    return 'left';
+  }
+  return undefined;
 }

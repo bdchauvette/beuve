@@ -12,6 +12,12 @@ export interface SheetHistory {
   readonly index: number;
 }
 
+/** Whether Back and Forward have somewhere to go. */
+export interface SheetHistoryState {
+  readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
+}
+
 export type SheetHistoryStep =
   | { readonly kind: 'visit'; readonly place: SheetPlace }
   | { readonly kind: 'back' }
@@ -36,12 +42,16 @@ export function stepSheetHistory(history: SheetHistory, step: SheetHistoryStep):
       return { places, index: places.length - 1 };
     }
     case 'back': {
-      return history.index > 0 ? { ...history, index: history.index - 1 } : history;
+      if (history.index > 0) {
+        return { ...history, index: history.index - 1 };
+      }
+      return history;
     }
     case 'forward': {
-      return history.index < history.places.length - 1
-        ? { ...history, index: history.index + 1 }
-        : history;
+      if (history.index < history.places.length - 1) {
+        return { ...history, index: history.index + 1 };
+      }
+      return history;
     }
   }
 }

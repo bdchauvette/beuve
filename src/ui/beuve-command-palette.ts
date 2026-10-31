@@ -200,7 +200,11 @@ export class BeuveCommandPalette extends LitElement {
     const count = this.entries.length;
     if ((isNext || isPrevious) && count > 0) {
       event.preventDefault();
-      this.cursor = (this.cursor + (isNext ? 1 : -1) + count) % count;
+      let step = -1;
+      if (isNext) {
+        step = 1;
+      }
+      this.cursor = (this.cursor + step + count) % count;
       this.scrollCursorIntoView();
       return;
     }
@@ -298,7 +302,11 @@ export class BeuveCommandPalette extends LitElement {
       ${
         entry.keys === undefined || entry.keys.length === 0
           ? nothing
-          : html`<span class="keys">${entry.keys.map((key) => html`<kbd>${key}</kbd>`)}</span>`
+          : html`<span class="keys"
+              >${entry.keys.map((key) => {
+                return html`<kbd>${key}</kbd>`;
+              })}</span
+            >`
       }
     </li>`;
   }
@@ -336,24 +344,22 @@ export class BeuveCommandPalette extends LitElement {
             ? html`<p class="empty">Nothing matches.</p>`
             : html`<ol role="listbox">
                 ${this.entries.map((entry, index) => {
-                  const label =
-                    isNarrowed || entry.group === previous
-                      ? nothing
-                      : html`<li class="group" role="presentation">
-                          ${groupLabels[entry.group]}
-                        </li>`;
+                  const isNewGroup = !isNarrowed && entry.group !== previous;
                   previous = entry.group;
-                  return html`${label}${this.renderEntry(entry, index)}`;
+                  return html`${
+                    isNewGroup
+                      ? html`<li class="group" role="presentation">${groupLabels[entry.group]}</li>`
+                      : nothing
+                  }${this.renderEntry(entry, index)}`;
                 })}
               </ol>`
         }
         <footer>
-          ${Object.entries(palettePrefixes).map(
-            ([key, group]) =>
-              html`<button type="button" data-action="prefix" data-prefix=${key}>
-                <code>${key}</code> ${groupLabels[group].toLowerCase()}
-              </button>`,
-          )}
+          ${Object.entries(palettePrefixes).map(([key, group]) => {
+            return html`<button type="button" data-action="prefix" data-prefix=${key}>
+              <code>${key}</code> ${groupLabels[group].toLowerCase()}
+            </button>`;
+          })}
         </footer>
       </div>
     `;
@@ -364,7 +370,10 @@ export class BeuveCommandPalette extends LitElement {
       this.text = this.initialText;
       this.cursor = 0;
     }
-    this.entries = this.sources === undefined ? [] : planPalette(this.text, this.sources);
+    this.entries = [];
+    if (this.sources !== undefined) {
+      this.entries = planPalette(this.text, this.sources);
+    }
     this.cursor = Math.max(0, Math.min(this.cursor, this.entries.length - 1));
   }
 }
@@ -375,15 +384,22 @@ export class BeuveCommandPalette extends LitElement {
  * bidi characters as escapes (ADR 0082), one per character so the match indexes still line up.
  */
 function highlight(entry: PaletteEntry): TemplateResult {
-  const show = (text: string): TemplateResult | string =>
-    entry.group === 'files' ? pathText(text) : text;
+  const show = (text: string): TemplateResult | string => {
+    if (entry.group === 'files') {
+      return pathText(text);
+    }
+    return text;
+  };
   if (entry.matches.length === 0) {
     return html`${show(entry.title)}`;
   }
   const marked = new Set(entry.matches);
-  return html`${Array.from(entry.title, (character, index) =>
-    marked.has(index) ? html`<b>${show(character)}</b>` : show(character),
-  )}`;
+  return html`${Array.from(entry.title, (character, index) => {
+    if (marked.has(index)) {
+      return html`<b>${show(character)}</b>`;
+    }
+    return show(character);
+  })}`;
 }
 
 declare global {

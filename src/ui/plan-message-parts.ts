@@ -1,5 +1,7 @@
 import type { ChatPartView } from '#contract/ipc-contract.ts';
 
+import { nounFor } from './noun-for.ts';
+
 /** Reasoning and tool-call parts, shown together as what the model did. */
 export type StepPart = Extract<ChatPartView, { kind: 'reasoning' | 'tool-call' }>;
 
@@ -39,15 +41,17 @@ export function planMessageParts(parts: readonly ChatPartView[]): MessageBlock[]
 function labelOf(steps: readonly StepPart[]): string {
   const tools = steps.filter((part) => part.kind === 'tool-call');
   const failed = tools.filter((part) => part.state === 'failed').length;
-  const labels = [
-    ...(steps.some((part) => part.kind === 'reasoning') ? ['Thought'] : []),
-    ...(tools.length === 0
-      ? []
-      : [
-          `${String(tools.length)} tool ${tools.length === 1 ? 'call' : 'calls'}${
-            failed === 0 ? '' : ` (${String(failed)} failed)`
-          }`,
-        ]),
-  ];
+  const labels: string[] = [];
+  if (steps.some((part) => part.kind === 'reasoning')) {
+    labels.push('Thought');
+  }
+  if (tools.length > 0) {
+    const calls = `${String(tools.length)} tool ${nounFor(tools.length, 'call')}`;
+    if (failed === 0) {
+      labels.push(calls);
+    } else {
+      labels.push(`${calls} (${String(failed)} failed)`);
+    }
+  }
   return labels.join(' · ');
 }

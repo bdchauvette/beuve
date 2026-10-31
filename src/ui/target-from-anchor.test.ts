@@ -3,6 +3,7 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 import { createTwoHunkFileView } from './testing/create-two-hunk-file-view.ts';
+import { definedValue } from './testing/defined-value.ts';
 import { mentionFromTarget } from './mention-from-target.ts';
 import { targetFromAnchor } from './target-from-anchor.ts';
 
@@ -20,7 +21,7 @@ describe('targetFromAnchor', () => {
       end: 3,
       head: { start: 2, end: 3 },
     });
-    expect(target === undefined ? undefined : mentionFromTarget(target)).toStrictEqual({
+    expect(mentionFromTarget(definedValue(target))).toStrictEqual({
       path: 'src/a.ts',
       side: 'head',
       startLine: 2,
@@ -32,7 +33,7 @@ describe('targetFromAnchor', () => {
     const file = createTwoHunkFileView({ status: 'deleted', oldPath: 'src/old.ts' });
     const target = targetFromAnchor({ kind: 'file', path: 'src/a.ts' }, [file]);
     expect(target).toStrictEqual({ kind: 'file', file, line: 1 });
-    expect(target === undefined ? undefined : mentionFromTarget(target)).toStrictEqual({
+    expect(mentionFromTarget(definedValue(target))).toStrictEqual({
       path: 'src/old.ts',
       side: 'base',
     });

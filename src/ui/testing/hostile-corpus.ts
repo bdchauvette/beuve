@@ -84,59 +84,77 @@ export function hostileCorpus(): HostileCorpus {
   return {
     names,
     contents,
-    fileNames: inEveryView(names).map((input) => ({
-      ...input,
-      hostile: patchNamed(input.text, input.text),
-      benign: patchNamed('benign.ts', 'benign.ts'),
-      visible: [inParsedText(input.text)],
-    })),
-    renames: names.map((input) => ({
-      ...input,
-      options: { diffStyle: 'split', hunkSeparators: 'line-info' },
-      hostile: patchNamed(`${input.text}.old.ts`, input.text),
-      benign: patchNamed('benign.old.ts', 'benign.ts'),
-      visible: [inParsedText(input.text)],
-    })),
-    lines: inEveryView(contents).map((input) => ({
-      ...input,
-      hostile: patchWithLine(input.text),
-      benign: patchWithLine('benign'),
-      visible: [inParsedText(input.text)],
-    })),
-    hunkContexts: inEveryView(contents).map((input) => ({
-      ...input,
-      hostile: patchWithContext(input.text),
-      benign: patchWithContext('benign'),
-      visible: [],
-    })),
-    shownHunkContexts: contents.map((input) => ({
-      ...input,
-      options: { diffStyle: 'unified', hunkSeparators: 'metadata' },
-      hostile: patchWithContext(input.text),
-      benign: patchWithContext('benign'),
-      visible: [`function f() { ${inParsedText(input.text)}`],
-    })),
-    diffLanguages: contents.map((input) => ({
-      ...input,
-      options: { diffStyle: 'unified', hunkSeparators: 'line-info', language: input.text },
-      patch: patchWithLine('const a = 1;'),
-    })),
-    sheets: names.map((input) => ({
-      ...input,
-      hostile: { name: input.text, contents: everyLine },
-      benign: { name: 'benign.ts', contents: 'benign\n'.repeat(20) },
-      visible: [inParsedText(input.text), inParsedText(everyLine.replaceAll('\n', ''))],
-    })),
-    codeBlocks: contents.map((input) => ({
-      ...input,
-      hostile: { name: snippetPathFrom(input.text), contents: input.text },
-      benign: { name: snippetPathFrom('ts'), contents: 'benign' },
-      visible: [inParsedText(input.text)],
-    })),
-    sheetLanguages: contents.map((input) => ({
-      ...input,
-      file: { name: 'a.ts', contents: 'const a = 1;', lang: input.text },
-    })),
+    fileNames: inEveryView(names).map((input) => {
+      return {
+        ...input,
+        hostile: patchNamed({ oldPath: input.text, newPath: input.text }),
+        benign: patchNamed({ oldPath: 'benign.ts', newPath: 'benign.ts' }),
+        visible: [inParsedText(input.text)],
+      };
+    }),
+    renames: names.map((input) => {
+      return {
+        ...input,
+        options: { diffStyle: 'split', hunkSeparators: 'line-info' },
+        hostile: patchNamed({ oldPath: `${input.text}.old.ts`, newPath: input.text }),
+        benign: patchNamed({ oldPath: 'benign.old.ts', newPath: 'benign.ts' }),
+        visible: [inParsedText(input.text)],
+      };
+    }),
+    lines: inEveryView(contents).map((input) => {
+      return {
+        ...input,
+        hostile: patchWithLine(input.text),
+        benign: patchWithLine('benign'),
+        visible: [inParsedText(input.text)],
+      };
+    }),
+    hunkContexts: inEveryView(contents).map((input) => {
+      return {
+        ...input,
+        hostile: patchWithContext(input.text),
+        benign: patchWithContext('benign'),
+        visible: [],
+      };
+    }),
+    shownHunkContexts: contents.map((input) => {
+      return {
+        ...input,
+        options: { diffStyle: 'unified', hunkSeparators: 'metadata' },
+        hostile: patchWithContext(input.text),
+        benign: patchWithContext('benign'),
+        visible: [`function f() { ${inParsedText(input.text)}`],
+      };
+    }),
+    diffLanguages: contents.map((input) => {
+      return {
+        ...input,
+        options: { diffStyle: 'unified', hunkSeparators: 'line-info', language: input.text },
+        patch: patchWithLine('const a = 1;'),
+      };
+    }),
+    sheets: names.map((input) => {
+      return {
+        ...input,
+        hostile: { name: input.text, contents: everyLine },
+        benign: { name: 'benign.ts', contents: 'benign\n'.repeat(20) },
+        visible: [inParsedText(input.text), inParsedText(everyLine.replaceAll('\n', ''))],
+      };
+    }),
+    codeBlocks: contents.map((input) => {
+      return {
+        ...input,
+        hostile: { name: snippetPathFrom(input.text), contents: input.text },
+        benign: { name: snippetPathFrom('ts'), contents: 'benign' },
+        visible: [inParsedText(input.text)],
+      };
+    }),
+    sheetLanguages: contents.map((input) => {
+      return {
+        ...input,
+        file: { name: 'a.ts', contents: 'const a = 1;', lang: input.text },
+      };
+    }),
   };
 }
 
@@ -178,22 +196,27 @@ function hostileContents(): readonly HostileInput[] {
   ];
 }
 
-/** Each of `inputs` in split and unified views, with the card's separators and with hunk headers. */
-function inEveryView(
-  inputs: readonly HostileInput[],
-): readonly (HostileInput & { readonly options: DiffHtmlOptions })[] {
-  return inputs.flatMap((input) =>
-    (['split', 'unified'] as const).flatMap((diffStyle) =>
-      (['line-info', 'metadata'] as const).map((hunkSeparators) => ({
-        ...input,
-        options: { diffStyle, hunkSeparators },
-      })),
-    ),
-  );
+/** A hostile input and one way to render it. */
+interface HostileInputInView extends HostileInput {
+  readonly options: DiffHtmlOptions;
 }
 
-function patchNamed(oldPath: string, newPath: string): string {
-  return createGitPatch({ ...benignChange(), oldPath, newPath });
+/** Each of `inputs` in split and unified views, with the card's separators and with hunk headers. */
+function inEveryView(inputs: readonly HostileInput[]): readonly HostileInputInView[] {
+  return inputs.flatMap((input) => {
+    return (['split', 'unified'] as const).flatMap((diffStyle) => {
+      return (['line-info', 'metadata'] as const).map((hunkSeparators) => {
+        return {
+          ...input,
+          options: { diffStyle, hunkSeparators },
+        };
+      });
+    });
+  });
+}
+
+function patchNamed(paths: Pick<GitPatchInput, 'oldPath' | 'newPath'>): string {
+  return createGitPatch({ ...benignChange(), ...paths });
 }
 
 function patchWithLine(payload: string): string {

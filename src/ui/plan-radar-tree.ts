@@ -32,15 +32,29 @@ export interface RadarTreeInput {
  */
 export function planRadarTree(input: RadarTreeInput, mode: RadarTreeMode): RadarTreePlan {
   const changed = input.files.map((file) => file.path);
-  const paths = mode === 'diff-only' ? changed : [...new Set([...input.paths, ...changed])];
+  const paths = treePaths(input, mode);
   const expanded = new Set(changed.flatMap((path) => ancestorsOf(path)));
   const roots = input.packageRoots.toSorted((a, b) => b.length - a.length);
   return {
     paths,
     expandedPaths: [...expanded].toSorted((a, b) => a.localeCompare(b)),
-    gitStatus: input.files.map((file) => ({ path: file.path, status: gitStatusOf(file.status) })),
-    packageOf: new Map(changed.map((path) => [path, innermostRoot(roots, path)])),
+    gitStatus: input.files.map((file) => {
+      return { path: file.path, status: gitStatusOf(file.status) };
+    }),
+    packageOf: new Map(
+      changed.map((path) => {
+        return [path, innermostRoot(roots, path)];
+      }),
+    ),
   };
+}
+
+function treePaths(input: RadarTreeInput, mode: RadarTreeMode): readonly string[] {
+  const changed = input.files.map((file) => file.path);
+  if (mode === 'diff-only') {
+    return changed;
+  }
+  return [...new Set([...input.paths, ...changed])];
 }
 
 /** `a/b/c.ts` → `a`, `a/b`. */
@@ -54,5 +68,8 @@ function innermostRoot(rootsLongestFirst: readonly string[], path: string): stri
 }
 
 function gitStatusOf(status: DiffFileView['status']): RadarGitStatus {
-  return status === 'copied' ? 'added' : status;
+  if (status === 'copied') {
+    return 'added';
+  }
+  return status;
 }

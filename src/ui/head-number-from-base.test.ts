@@ -30,9 +30,11 @@ describe('headNumberFromBase', () => {
   test('places lines around a pure addition, whose base start is the line before it', ({
     expect,
   }) => {
-    const file = createDiffFileView('a.ts', [], 1, {
-      hunks: [{ oldStart: 5, oldCount: 0, newStart: 6, newCount: 2, header: '@@ -5,0 +6,2 @@' }],
-      patch: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -5,0 +6,2 @@\n+x\n+y\n',
+    const file = createDiffFileView('a.ts', [], {
+      overrides: {
+        hunks: [{ oldStart: 5, oldCount: 0, newStart: 6, newCount: 2, header: '@@ -5,0 +6,2 @@' }],
+        patch: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -5,0 +6,2 @@\n+x\n+y\n',
+      },
     });
     expect(headNumberFromBase(file, 5)).toBe(5);
     expect(headNumberFromBase(file, 6)).toBe(8);

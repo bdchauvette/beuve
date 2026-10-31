@@ -1,4 +1,4 @@
-import type { TraceEntryView, TraceResultView } from '#contract/ipc-contract.ts';
+import type { TraceEntryView, TraceResultView, TraceValueView } from '#contract/ipc-contract.ts';
 
 /**
  * A probe result for `clamp` in `src/math.ts` (lines 1–9) with two tests: one passing whose eight
@@ -36,7 +36,7 @@ export function createTraceResultView(): TraceResultView {
 function createEntries(): TraceEntryView[] {
   return [
     {
-      ...base(1, 1),
+      ...base({ seq: 1, line: 1 }),
       kind: 'enter',
       label: 'clamp',
       args: [
@@ -44,37 +44,59 @@ function createEntries(): TraceEntryView[] {
         { name: 'high', value: summary('10') },
       ],
     },
-    { ...base(2, 2), kind: 'branch', construct: 'if', label: 'value < low', taken: false },
     {
-      ...base(3, 5, 0, true),
+      ...base({ seq: 2, line: 2 }),
+      kind: 'branch',
+      construct: 'if',
+      label: 'value < low',
+      taken: false,
+    },
+    {
+      ...base({ seq: 3, line: 5, inHunk: true }),
       kind: 'branch',
       construct: 'if',
       label: 'value > high',
       taken: true,
     },
-    { ...base(4, 6, 1, true), kind: 'loop', label: 'for (const x of xs)', iterations: 3 },
     {
-      ...base(5, 7, 1),
+      ...base({ seq: 4, line: 6, depth: 1, inHunk: true }),
+      kind: 'loop',
+      label: 'for (const x of xs)',
+      iterations: 3,
+    },
+    {
+      ...base({ seq: 5, line: 7, depth: 1 }),
       kind: 'branch',
       construct: 'switch',
       label: 'kind',
       value: summary('"a"'),
     },
-    { ...base(6, 8, 1), kind: 'branch', construct: 'case', label: 'case "a"' },
-    { ...base(7, 9), kind: 'return', value: summary('10'), implicit: false },
-    { ...base(8, 9), kind: 'throw', value: summary('Error: no'), propagated: true },
+    {
+      ...base({ seq: 6, line: 8, depth: 1 }),
+      kind: 'branch',
+      construct: 'case',
+      label: 'case "a"',
+    },
+    { ...base({ seq: 7, line: 9 }), kind: 'return', value: summary('10'), implicit: false },
+    { ...base({ seq: 8, line: 9 }), kind: 'throw', value: summary('Error: no'), propagated: true },
   ];
 }
 
-function summary(preview: string): { type: string; preview: string } {
+function summary(preview: string): TraceValueView {
   return { type: 'number', preview };
 }
 
-function base(
-  seq: number,
-  line: number,
-  depth = 0,
-  isInHunk = false,
-): Pick<TraceEntryView, 'seq' | 'fn' | 'line' | 'depth' | 'inHunk' | 'label'> {
-  return { seq, fn: 0, line, depth, inHunk: isInHunk, label: '' };
+/** Where an entry sits: its order, line and call depth, and whether the hunk holds it. */
+interface EntryPlace {
+  readonly seq: number;
+  readonly line: number;
+  readonly depth?: number;
+  readonly inHunk?: boolean;
+}
+
+/** The fields every entry kind shares. */
+type EntryBase = Pick<TraceEntryView, 'seq' | 'fn' | 'line' | 'depth' | 'inHunk' | 'label'>;
+
+function base({ seq, line, depth = 0, inHunk = false }: EntryPlace): EntryBase {
+  return { seq, fn: 0, line, depth, inHunk, label: '' };
 }

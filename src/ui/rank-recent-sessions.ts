@@ -26,14 +26,17 @@ export function rankRecentSessions(
 }
 
 function searchText(session: SessionSummary): string {
+  return searchParts(session).join(' ').toLowerCase();
+}
+
+function searchParts(session: SessionSummary): readonly string[] {
   const { source } = session;
-  const parts =
-    source.kind === 'github-pull-request'
-      ? [
-          session.pullRequest?.title ?? '',
-          `${source.owner}/${source.repo}#${String(source.number)}`,
-          source.repoPath,
-        ]
-      : [source.repoPath, source.baseRef, source.headRef];
-  return parts.join(' ').toLowerCase();
+  if (source.kind === 'github-pull-request') {
+    return [
+      session.pullRequest?.title ?? '',
+      `${source.owner}/${source.repo}#${String(source.number)}`,
+      source.repoPath,
+    ];
+  }
+  return [source.repoPath, source.baseRef, source.headRef];
 }

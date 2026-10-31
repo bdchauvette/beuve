@@ -1,3 +1,5 @@
+import type { HunkSpan } from './first-hunk-line.ts';
+
 /** Head lines a suggestion replaces, 1-based and inclusive. */
 export interface EditedRange {
   readonly startLine: number;
@@ -12,6 +14,16 @@ export type SuggestedPatchPlan =
   | { readonly kind: 'patch'; readonly text: string }
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'outside'; readonly message: string };
+
+/** An inline edit of the head file at `path`, the lines it may change, and the context to keep. */
+export interface SuggestedEdit {
+  readonly path: string;
+  readonly head: string;
+  readonly edited: string;
+  readonly range: EditedRange;
+  /** Unchanged lines around the hunk; 3 by default. */
+  readonly contextLines?: number;
+}
 
 interface SplitText {
   readonly lines: readonly string[];
@@ -29,13 +41,13 @@ const noNewline = '\\ No newline at end of file';
  * lines. Lines keep a trailing `\r`; a missing final newline gets git's marker. Pure; main
  * validates the result again with the URA domain's `parseSuggestedPatch`.
  */
-export function buildSuggestedPatch(
-  path: string,
-  head: string,
-  edited: string,
-  range: EditedRange,
+export function buildSuggestedPatch({
+  path,
+  head,
+  edited,
+  range,
   contextLines = 3,
-): SuggestedPatchPlan {
+}: SuggestedEdit): SuggestedPatchPlan {
   const before = splitText(head);
   const after = splitText(edited);
   const prefix = range.startLine - 1;
@@ -66,21 +78,25 @@ export function buildSuggestedPatch(
   const oldStart = prefix - leading.length + 1;
   const oldCount = leading.length + removed.length + trailing.length;
   const newCount = leading.length + added.length + trailing.length;
-  const body = [
-    ...leading.map((line) => ` ${line}`),
-    ...removed.map((line) => `-${line}`),
-    ...(suffix === 0 && !before.endsWithNewline && removed.length > 0 ? [noNewline] : []),
-    ...added.map((line) => `+${line}`),
-    ...(suffix === 0 && !after.endsWithNewline && added.length > 0 ? [noNewline] : []),
-    ...trailing.map((line) => ` ${line}`),
-    ...(isAtEnd && suffix > 0 && !before.endsWithNewline ? [noNewline] : []),
-  ];
+  const body = leading.map((line) => ` ${line}`);
+  body.push(...removed.map((line) => `-${line}`));
+  if (suffix === 0 && !before.endsWithNewline && removed.length > 0) {
+    body.push(noNewline);
+  }
+  body.push(...added.map((line) => `+${line}`));
+  if (suffix === 0 && !after.endsWithNewline && added.length > 0) {
+    body.push(noNewline);
+  }
+  body.push(...trailing.map((line) => ` ${line}`));
+  if (isAtEnd && suffix > 0 && !before.endsWithNewline) {
+    body.push(noNewline);
+  }
   return {
     kind: 'patch',
     text: [
       `--- a/${path}`,
       `+++ b/${path}`,
-      `@@ -${side(oldStart, oldCount)} +${side(oldStart, newCount)} @@`,
+      `@@ -${side({ start: oldStart, count: oldCount })} +${side({ start: oldStart, count: newCount })} @@`,
       ...body,
       '',
     ].join('\n'),
@@ -104,6 +120,9 @@ function isSameLines(a: readonly string[], b: readonly string[]): boolean {
 }
 
 /** `start,count`, with git's convention that an empty side starts at the line before it. */
-function side(start: number, count: number): string {
-  return `${String(count === 0 ? start - 1 : start)},${String(count)}`;
+function side({ start, count }: HunkSpan): string {
+  if (count === 0) {
+    return `${String(start - 1)},0`;
+  }
+  return `${String(start)},${String(count)}`;
 }

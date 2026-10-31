@@ -30,14 +30,15 @@ export function mergeReviewInsights(
   headSha: string,
 ): ReviewInsight[] {
   const answers = messages
-    .filter(
-      (message) =>
+    .filter((message) => {
+      return (
         message.role === 'assistant' &&
         message.answerKind === 'review' &&
         message.status === 'done' &&
         message.review !== undefined &&
-        message.headSha === headSha,
-    )
+        message.headSha === headSha
+      );
+    })
     .toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
   const kept: Entry[] = [];
   for (const answer of answers) {

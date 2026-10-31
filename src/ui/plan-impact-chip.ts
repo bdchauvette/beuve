@@ -1,9 +1,12 @@
 import type {
   FileImpactView,
   FunctionImpactView,
+  FunctionSnapshotView,
   ImpactFindingView,
   ImpactSkipReason,
 } from '#contract/ipc-contract.ts';
+
+import { countNoun } from './count-noun.ts';
 
 /** One changed function in the ImpactGate popover. */
 export interface ImpactChipRow {
@@ -61,16 +64,17 @@ export function planImpactChip(
   limit: number | undefined,
 ): ImpactChip | undefined {
   if (file === undefined || file.status === 'skipped') {
-    return file?.status === 'skipped' && file.reason !== 'unsupported-language'
-      ? {
-          tone: 'skipped',
-          label: 'skipped',
-          summary: `ImpactGate skipped this file: ${skipLabel[file.reason]}.`,
-          rows: [],
-          findings: [],
-          note: '',
-        }
-      : undefined;
+    if (file?.status === 'skipped' && file.reason !== 'unsupported-language') {
+      return {
+        tone: 'skipped',
+        label: 'skipped',
+        summary: `ImpactGate skipped this file: ${skipLabel[file.reason]}.`,
+        rows: [],
+        findings: [],
+        note: '',
+      };
+    }
+    return undefined;
   }
   const own = findings
     .filter((finding) => finding.path === file.path)
@@ -79,35 +83,43 @@ export function planImpactChip(
   if (own.length === 0 && aggregate.changedFunctions === 0) {
     return undefined;
   }
-  const byName = new Map(own.map((finding) => [finding.functionName, finding]));
+  const byName = new Map(
+    own.map((finding) => {
+      return [finding.functionName, finding];
+    }),
+  );
   const changed = file.functions
     .filter((entry) => entry.inDiff && entry.change !== 'unchanged')
     .toSorted((a, b) => headValue(b) - headValue(a));
   const hidden = Math.max(0, changed.length - maxRows) + (file.omittedFunctions ?? 0);
   const rows = changed.slice(0, maxRows).map((entry) => rowFrom(entry, byName.get(entry.name)));
   const count = aggregate.changedFunctions;
-  const max = limit === undefined ? '' : ` (limit ${String(limit)})`;
-  const summary = `Cognitive ${signed(aggregate.cognitiveDelta)} · max ${String(aggregate.maxCognitive)}${max} · ${String(count)} ${count === 1 ? 'function' : 'functions'} changed`;
-  const notes = [
-    ...(hidden > 0 ? [`${String(hidden)} more not shown.`] : []),
-    ...(file.parseErrors ? ['Syntax errors in this file may skew the metrics.'] : []),
-  ];
+  let max = String(aggregate.maxCognitive);
+  if (limit !== undefined) {
+    max += ` (limit ${String(limit)})`;
+  }
+  const summary = `Cognitive ${signed(aggregate.cognitiveDelta)} · max ${max} · ${countNoun(count, 'function')} changed`;
+  const notes: string[] = [];
+  if (hidden > 0) {
+    notes.push(`${String(hidden)} more not shown.`);
+  }
+  if (file.parseErrors) {
+    notes.push('Syntax errors in this file may skew the metrics.');
+  }
+  const shared = { summary, rows, findings: own, note: notes.join(' ') };
   const [worst] = own;
-  return {
-    tone: worst === undefined ? 'quiet' : 'warning',
-    label:
-      worst === undefined
-        ? ''
-        : `cognitive ${String(worst.value)}${own.length > 1 ? ` +${String(own.length - 1)}` : ''}`,
-    summary,
-    rows,
-    findings: own,
-    note: notes.join(' '),
-  };
+  if (worst === undefined) {
+    return { tone: 'quiet', label: '', ...shared };
+  }
+  let label = `cognitive ${String(worst.value)}`;
+  if (own.length > 1) {
+    label += ` +${String(own.length - 1)}`;
+  }
+  return { tone: 'warning', label, ...shared };
 }
 
 function rowFrom(entry: FunctionImpactView, finding: ImpactFindingView | undefined): ImpactChipRow {
-  const shown = entry.change === 'removed' ? entry.base : entry.head;
+  const shown = snapshotShown(entry);
   return {
     name: entry.name,
     lines: `${String(shown.startLine)}–${String(shown.endLine)}`,
@@ -121,10 +133,24 @@ function rowFrom(entry: FunctionImpactView, finding: ImpactFindingView | undefin
   };
 }
 
+/** The base side of a removed function, the head side of any other. */
+function snapshotShown(entry: FunctionImpactView): FunctionSnapshotView {
+  if (entry.change === 'removed') {
+    return entry.base;
+  }
+  return entry.head;
+}
+
 function headValue(entry: FunctionImpactView): number {
-  return entry.change === 'removed' ? -1 : entry.head.metrics.cognitive;
+  if (entry.change === 'removed') {
+    return -1;
+  }
+  return entry.head.metrics.cognitive;
 }
 
 function signed(value: number): string {
-  return value > 0 ? `+${String(value)}` : String(value);
+  if (value > 0) {
+    return `+${String(value)}`;
+  }
+  return String(value);
 }

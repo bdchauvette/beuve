@@ -27,14 +27,18 @@ export function planReviewStream(
 ): ReviewStreamPlan {
   const ordered = orderedFiles(review, order);
   const attributions = new Map<string, FileAttributionView>(
-    (review.fileAttribution ?? []).map((entry) => [entry.path, entry]),
+    (review.fileAttribution ?? []).map((entry) => {
+      return [entry.path, entry];
+    }),
   );
   const files: DiffFileView[] = [];
   const groupLabels = new Map<number, string>();
   const labelled = new Set<string>();
   for (const { file, group } of ordered) {
-    const shown =
-      pairId === undefined ? file : fileForCommitPair(file, attributions.get(file.path), pairId);
+    let shown: DiffFileView | undefined = file;
+    if (pairId !== undefined) {
+      shown = fileForCommitPair(file, attributions.get(file.path), pairId);
+    }
     if (shown === undefined) {
       continue;
     }
@@ -47,16 +51,28 @@ export function planReviewStream(
   return { files, groupLabels };
 }
 
+/** A file in stream order, under the label of the group it starts, if any. */
+interface OrderedFile {
+  readonly file: DiffFileView;
+  readonly group: string | undefined;
+}
+
 function orderedFiles(
   review: Pick<ReviewView, 'files' | 'headSha'>,
   order: ReviewOrderView | undefined,
-): { file: DiffFileView; group: string | undefined }[] {
+): OrderedFile[] {
   if (order?.headSha !== review.headSha) {
-    return review.files.map((file) => ({ file, group: undefined }));
+    return review.files.map((file) => {
+      return { file, group: undefined };
+    });
   }
-  const byPath = new Map(review.files.map((file) => [file.path, file]));
+  const byPath = new Map(
+    review.files.map((file) => {
+      return [file.path, file];
+    }),
+  );
   const placed = new Set<string>();
-  const entries: { file: DiffFileView; group: string | undefined }[] = [];
+  const entries: OrderedFile[] = [];
   for (const group of order.groups) {
     for (const path of group.paths) {
       const file = byPath.get(path);
@@ -65,7 +81,7 @@ function orderedFiles(
       }
 
       placed.add(path);
-      entries.push({ file, group: group.id === 'changes' ? undefined : group.label });
+      entries.push({ file, group: groupLabel(group) });
     }
   }
   for (const file of review.files) {
@@ -74,4 +90,12 @@ function orderedFiles(
     }
   }
   return entries;
+}
+
+/** The heading a group gets in the stream; the catch-all group of other changes gets none. */
+function groupLabel(group: ReviewOrderView['groups'][number]): string | undefined {
+  if (group.id === 'changes') {
+    return undefined;
+  }
+  return group.label;
 }

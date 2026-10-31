@@ -21,27 +21,28 @@ export function permalinkPlaceFrom(target: ReviewTarget): PermalinkPlace | undef
   const { file } = target;
   const basePath = file.oldPath ?? file.path;
   if (file.status === 'deleted') {
-    return target.kind === 'selection' && target.side === 'base'
-      ? { side: 'base', path: basePath, startLine: target.start, endLine: target.end }
-      : { side: 'base', path: basePath };
+    if (target.kind === 'selection' && target.side === 'base') {
+      return { side: 'base', path: basePath, startLine: target.start, endLine: target.end };
+    }
+    return { side: 'base', path: basePath };
   }
   switch (target.kind) {
     case 'selection': {
-      return target.side === 'base'
-        ? { side: 'base', path: basePath, startLine: target.start, endLine: target.end }
-        : { side: 'head', path: file.path, startLine: target.start, endLine: target.end };
+      if (target.side === 'base') {
+        return { side: 'base', path: basePath, startLine: target.start, endLine: target.end };
+      }
+      return { side: 'head', path: file.path, startLine: target.start, endLine: target.end };
     }
     case 'hunk': {
-      const lines = target.head ?? target.base;
-      const side = target.head === undefined ? 'base' : 'head';
-      return lines === undefined
-        ? { side: 'head', path: file.path }
-        : {
-            side,
-            path: side === 'base' ? basePath : file.path,
-            startLine: lines.start,
-            endLine: lines.end,
-          };
+      if (target.head !== undefined) {
+        const { start, end } = target.head;
+        return { side: 'head', path: file.path, startLine: start, endLine: end };
+      }
+      if (target.base !== undefined) {
+        const { start, end } = target.base;
+        return { side: 'base', path: basePath, startLine: start, endLine: end };
+      }
+      return { side: 'head', path: file.path };
     }
     case 'line': {
       return { side: 'head', path: file.path, startLine: target.line, endLine: target.line };

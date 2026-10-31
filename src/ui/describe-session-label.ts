@@ -11,15 +11,20 @@ export function describeSessionLabel(
   selectedId: string,
   open: SessionSummary | undefined,
 ): string {
-  const session =
-    sessions.find(({ id }) => id === selectedId) ?? (open?.id === selectedId ? open : undefined);
+  let session = sessions.find(({ id }) => id === selectedId);
+  if (session === undefined && open?.id === selectedId) {
+    session = open;
+  }
   if (session === undefined) {
     return 'Open a review…';
   }
   const { source } = session;
   if (source.kind === 'github-pull-request') {
-    const title = session.pullRequest === undefined ? '' : ` ${session.pullRequest.title}`;
-    return `${source.owner}/${source.repo}#${String(source.number)}${title}`;
+    const number = `${source.owner}/${source.repo}#${String(source.number)}`;
+    if (session.pullRequest === undefined) {
+      return number;
+    }
+    return `${number} ${session.pullRequest.title}`;
   }
   const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
   return `${folder} · ${source.headRef} against ${source.baseRef}`;

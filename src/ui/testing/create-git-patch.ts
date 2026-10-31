@@ -30,16 +30,9 @@ const escapes: Readonly<Record<string, string>> = {
 export function createGitPatch(input: GitPatchInput): string {
   const oldCount = input.lines.filter((line) => !line.startsWith('+')).length;
   const newCount = input.lines.filter((line) => !line.startsWith('-')).length;
-  const isRename = input.oldPath !== input.newPath;
   return [
     `diff --git ${gitPathFrom(`a/${input.oldPath}`)} ${gitPathFrom(`b/${input.newPath}`)}`,
-    ...(isRename
-      ? [
-          'similarity index 60%',
-          `rename from ${gitPathFrom(input.oldPath)}`,
-          `rename to ${gitPathFrom(input.newPath)}`,
-        ]
-      : []),
+    ...renameLines(input),
     'index 1111111..2222222 100644',
     `--- ${gitPathFrom(`a/${input.oldPath}`)}`,
     `+++ ${gitPathFrom(`b/${input.newPath}`)}`,
@@ -49,13 +42,33 @@ export function createGitPatch(input: GitPatchInput): string {
   ].join('\n');
 }
 
+function renameLines(input: GitPatchInput): readonly string[] {
+  if (input.oldPath === input.newPath) {
+    return [];
+  }
+  return [
+    'similarity index 60%',
+    `rename from ${gitPathFrom(input.oldPath)}`,
+    `rename to ${gitPathFrom(input.newPath)}`,
+  ];
+}
+
 /** `path` as git prints it: bare, or in quotes with C escapes and octal for other control characters. */
 function gitPathFrom(path: string): string {
   const characters = Array.from(path, (character) => {
+    const escaped = escapes[character];
+    if (escaped !== undefined) {
+      return escaped;
+    }
     const code = character.codePointAt(0) ?? 0;
-    const isControl = code === 0x7f || code < 0x20;
-    return escapes[character] ?? (isControl ? `\\${code.toString(8).padStart(3, '0')}` : character);
+    if (code === 0x7f || code < 0x20) {
+      return `\\${code.toString(8).padStart(3, '0')}`;
+    }
+    return character;
   });
   const body = characters.join('');
-  return body === path ? path : `"${body}"`;
+  if (body === path) {
+    return path;
+  }
+  return `"${body}"`;
 }

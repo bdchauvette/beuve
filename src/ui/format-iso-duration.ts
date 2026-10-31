@@ -8,7 +8,8 @@ export function formatIsoDuration(
   isoDuration: string | undefined,
   locale?: Intl.LocalesArgument,
 ): string {
-  return isoDuration === undefined
-    ? ''
-    : formatDuration(Temporal.Duration.from(isoDuration), locale);
+  if (isoDuration === undefined) {
+    return '';
+  }
+  return formatDuration(Temporal.Duration.from(isoDuration), locale);
 }

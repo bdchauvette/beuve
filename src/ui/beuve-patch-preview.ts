@@ -59,9 +59,9 @@ export class BeuvePatchPreview extends LitElement {
       splitPatch(this.patch).filter((line) => line.kind !== 'meta' && line.kind !== 'hunk'),
     );
     return html`<pre aria-label="Suggested change">
-${lines.map(
-        (line) => html`<span class=${line.kind}>${line.text === '' ? ' ' : line.text}</span>`,
-      )}</pre>`;
+${lines.map((line) => {
+        return html`<span class=${line.kind}>${line.text === '' ? ' ' : line.text}</span>`;
+      })}</pre>`;
   }
 }
 

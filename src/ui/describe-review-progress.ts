@@ -1,5 +1,7 @@
 import type { FileReviewProgressView } from '#contract/ipc-contract.ts';
 
+import { countNoun } from './count-noun.ts';
+
 /** The review header's progress, e.g. `12/30 reviewed`, with the details on hover. */
 export interface ReviewProgressLine {
   readonly text: string;
@@ -17,13 +19,15 @@ export function describeReviewProgress(
     return undefined;
   }
   const { total, reviewed, changedSince, unreviewed } = progress;
-  const parts = [
-    `${String(reviewed)} of ${String(total)} ${total === 1 ? 'file' : 'files'} marked reviewed`,
-    changedSince === 0 ? undefined : `${String(changedSince)} changed since you marked them`,
-    unreviewed === 0 ? undefined : `${String(unreviewed)} not marked`,
-  ];
+  const parts = [`${String(reviewed)} of ${countNoun(total, 'file')} marked reviewed`];
+  if (changedSince !== 0) {
+    parts.push(`${String(changedSince)} changed since you marked them`);
+  }
+  if (unreviewed !== 0) {
+    parts.push(`${String(unreviewed)} not marked`);
+  }
   return {
     text: `${String(reviewed)}/${String(total)} reviewed`,
-    title: `${parts.filter((part) => part !== undefined).join(', ')}. v marks the focused file.`,
+    title: `${parts.join(', ')}. v marks the focused file.`,
   };
 }

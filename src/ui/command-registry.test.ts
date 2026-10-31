@@ -24,21 +24,24 @@ describe('commandRegistry', () => {
   });
 
   test('gives every shortcut a menu item on both platforms (ADR 0068)', ({ expect }) => {
-    const unlisted = commandCatalog.filter(
-      (command) =>
+    const unlisted = commandCatalog.filter((command) => {
+      return (
         (acceleratorsFor(command, 'mac').length > 0 && command.menu === undefined) ||
         (acceleratorsFor(command, 'linux').length > 0 &&
-          (command.linuxMenu ?? command.menu) === undefined),
-    );
+          (command.linuxMenu ?? command.menu) === undefined)
+      );
+    });
     expect(unlisted.map((command) => command.id)).toStrictEqual([]);
   });
 
   test('binds no bare letter, digit or punctuation key', ({ expect }) => {
-    const bare = commandCatalog.flatMap((command) =>
-      [...acceleratorsFor(command, 'mac'), ...acceleratorsFor(command, 'linux')].filter(
-        (key) => !/(?:^|\+)(?:Cmd|Ctrl|Alt)\+/u.test(key) && !/(?:^|\+)F\d+$/u.test(key),
-      ),
-    );
+    const bare = commandCatalog.flatMap((command) => {
+      return [...acceleratorsFor(command, 'mac'), ...acceleratorsFor(command, 'linux')].filter(
+        (key) => {
+          return !/(?:^|\+)(?:Cmd|Ctrl|Alt)\+/u.test(key) && !/(?:^|\+)F\d+$/u.test(key);
+        },
+      );
+    });
     expect(bare).toStrictEqual([]);
   });
 
@@ -50,11 +53,12 @@ describe('commandRegistry', () => {
     ).toStrictEqual([]);
     expect(
       commandRegistry
-        .filter(
-          (command) =>
+        .filter((command) => {
+          return (
             command.run.kind === 'none' &&
-            (command.menu !== undefined || command.keys !== undefined),
-        )
+            (command.menu !== undefined || command.keys !== undefined)
+          );
+        })
         .map((command) => command.id),
     ).toStrictEqual([]);
   });
@@ -63,19 +67,20 @@ describe('commandRegistry', () => {
     const slashes = commandRegistry
       .map((command) => command.slash)
       .filter((slash) => slash !== undefined);
-    const undocumented = slashes.filter((slash) =>
-      chatHelp.every((line) => !line.startsWith(`${slash} — `)),
-    );
+    const undocumented = slashes.filter((slash) => {
+      return chatHelp.every((line) => !line.startsWith(`${slash} — `));
+    });
     expect(undocumented).toStrictEqual([]);
   });
 
   test('runs slash commands that start with their usage', ({ expect }) => {
-    const mismatched = commandRegistry.filter(
-      (command) =>
+    const mismatched = commandRegistry.filter((command) => {
+      return (
         command.run.kind === 'slash' &&
         command.slash !== undefined &&
-        !command.slash.startsWith(command.run.text.trim().split('=', 1)[0] ?? ''),
-    );
+        !command.slash.startsWith(command.run.text.trim().split('=', 1)[0] ?? '')
+      );
+    });
     expect(mismatched).toStrictEqual([]);
   });
 

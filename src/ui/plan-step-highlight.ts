@@ -2,6 +2,11 @@ import type { DiffLayoutView } from '#contract/ipc-contract.ts';
 
 import type { HunkStep } from './plan-hunk-steps.ts';
 
+/** The options `setSelectedLines` takes for the step highlight. */
+export interface StepHighlight {
+  readonly activeLineSide: HunkStep['side'];
+}
+
 /**
  * The options for `setSelectedLines` that confine the Next/Previous Change highlight to the step's own column.
  * Split, a step on the head side would otherwise tint its paired row on the base side too;
@@ -10,6 +15,9 @@ import type { HunkStep } from './plan-hunk-steps.ts';
 export function planStepHighlight(
   style: DiffLayoutView,
   step: HunkStep | undefined,
-): { readonly activeLineSide: HunkStep['side'] } | undefined {
-  return style === 'split' && step !== undefined ? { activeLineSide: step.side } : undefined;
+): StepHighlight | undefined {
+  if (style === 'split' && step !== undefined) {
+    return { activeLineSide: step.side };
+  }
+  return undefined;
 }

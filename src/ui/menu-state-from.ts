@@ -2,6 +2,7 @@ import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import type { DiffDisplayView, EditorId, MenuStateRequest } from '#contract/ipc-contract.ts';
 
 import type { RadarTreeMode } from './plan-radar-tree.ts';
+import type { SheetHistoryState } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 
 /** What the main window knows that decides its menu items (ADR 0068). */
@@ -24,8 +25,7 @@ export interface MenuStateInput {
   readonly preferredEditor: EditorId | undefined;
   readonly isFindCaseSensitive: boolean;
   /** The inline sheet's history, while it has the focus. */
-  readonly sheetHistory:
-    { readonly canGoBack: boolean; readonly canGoForward: boolean } | undefined;
+  readonly sheetHistory: SheetHistoryState | undefined;
 }
 
 /**
@@ -34,8 +34,12 @@ export interface MenuStateInput {
  * Pure.
  */
 export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
-  const has = (condition: MenuCondition, isOn: boolean): MenuCondition[] =>
-    isOn ? [condition] : [];
+  const has = (condition: MenuCondition, isOn: boolean): MenuCondition[] => {
+    if (isOn) {
+      return [condition];
+    }
+    return [];
+  };
   const { display } = input;
   const isFile = input.hasSession && input.activePath !== undefined;
   const conditions: MenuCondition[] = [
