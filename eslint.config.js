@@ -210,6 +210,23 @@ export default defineConfig(
   },
 
   {
+    // Phase 2 of ADR 0086: switched on, and the whole repo fixed, in a later change. The levels
+    // here are 'off' so the rules are registered and measurable with `--rule`.
+    name: 'beuve/style-rules-phase-2',
+    plugins: { local: localRulesPlugin },
+    rules: {
+      'local/no-ternary-outside-templates': 'off',
+      'no-nested-ternary': 'off',
+      'local/arrow-body-braces': 'off',
+      'local/no-inline-object-type-in-signature': 'off',
+      'local/no-same-type-positional-params': 'off',
+      curly: ['off', 'all'],
+      'max-params': 'off',
+      '@typescript-eslint/max-params': ['off', { max: 3 }],
+    },
+  },
+
+  {
     name: 'beuve/conversion-naming',
     // ADR 0062.
     files: nodeFiles,
