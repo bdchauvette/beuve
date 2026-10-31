@@ -45,6 +45,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - No enums, namespaces or parameter properties (`erasableSyntaxOnly`).
 - No comments that restate code. Brief doc comments on exported API.
 - Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#sqlite/`.
+- Files (ADR 0082): replace a file only through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`), with an explicit mode. Anything in `userData` is created 0600 (directories 0700), and a new file there that older installs may hold goes on `secureUserData`'s list. Open a path once and ask the handle (`handle.stat()`), never `stat`/`access`/`existsSync` and then open by path (`local/no-check-then-open`).
 
 ## Tests
 
@@ -64,6 +65,7 @@ Conventions and examples: `docs/testing.md` (ADR 0058; time: ADR 0059). Every te
 
 - Don't use top-level `await` in `src/main/index.ts` before the app is ready: Electron waits for the ESM entry to finish loading before emitting `ready`, so `await app.whenReady()` there deadlocks. Use `app.once('ready', …)` or an async function.
 - The preload is bundled as CommonJS (`dist/preload/index.cjs`) and runs sandboxed: only `electron`'s renderer APIs are available.
+- Show a repository path in the UI through `pathText(path)` (`src/ui/path-text.ts`, with `formatControlStyles` in the element's styles), or `revealFormatControls` for plain text, so bidi and invisible characters show as `⟨U+202E⟩` (ADR 0082). Keep the raw path in the `title`. `@pierre/trees` gets revealed paths and maps them back with `restoreFormatControls`.
 - The renderer CSP in `src/ui/index.html` is strict (`default-src 'none'`). Widen it deliberately, with an ADR.
 - The renderer enforces Trusted Types (ADR 0077): the `default` policy (`src/ui/install-trusted-types-policy.ts`) sanitizes the HTML strings `@pierre/diffs` and `@pierre/trees` assign, and our code never writes HTML strings (lint bans the sinks); to render one, use `element.setHTML(html, { sanitizer })`. Adding a name to the CSP's `trusted-types` list, or a script URL to the policy, needs an ADR.
 - No HTML string sinks in `src/ui` (`innerHTML`, `insertAdjacentHTML`, `unsafeHTML`, …; lint, ADR 0077): build nodes. To render an HTML string, use `element.setHTML(html, { sanitizer })`.

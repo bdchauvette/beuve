@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
  * Opens (creating if needed) a SQLite database at `location`, or an in-memory one for
  * `':memory:'`, with foreign keys enforced and, for files, write-ahead logging. A new file is
  * created owner-only (0600) before SQLite opens it, and SQLite gives its `-wal` and `-shm` files
- * the database's mode (ADR 0081); an existing file keeps its mode.
+ * the database's mode (ADR 0082); an existing file keeps its mode.
  */
 export function openDatabase(location: string): DatabaseSync {
   if (location !== ':memory:') {

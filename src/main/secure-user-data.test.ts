@@ -6,7 +6,7 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 import { secureUserData } from './secure-user-data.ts';
 
-describe('secureUserData (ADR 0081)', () => {
+describe('secureUserData (ADR 0082)', () => {
   test('makes an older install’s directory and known files owner-only', async ({
     expect,
     tempDir,

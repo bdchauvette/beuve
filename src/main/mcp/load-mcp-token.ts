@@ -14,7 +14,7 @@ const tokenPattern = /^[\w-]{43,}$/u;
  * Returns the MCP bearer token stored in `directory`, creating a random 256-bit one on first
  * use (or in place of a malformed one). The file is created owner-only (0600) so other local
  * users can't read it; an older install's looser file is tightened at startup with the rest of
- * `userData` (ADR 0081).
+ * `userData` (ADR 0082).
  */
 export async function loadMcpToken(directory: string): Promise<Result<string, Error>> {
   return fromPromise(readOrCreate(path.join(directory, fileName)), errorFrom);

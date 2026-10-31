@@ -11,7 +11,7 @@ export interface SecuredUserData {
 }
 
 /**
- * Makes beuve's `userData` owner-only (ADR 0081). Electron creates the directory 0700, and every
+ * Makes beuve's `userData` owner-only (ADR 0082). Electron creates the directory 0700, and every
  * file beuve writes there is created 0600, but an older install made `beuve.db`, `settings.json`
  * and `worktrees/` with the default mode (0644 and 0755 under umask 022). On macOS and Linux this
  * creates the directories beuve owns at 0700, then clears the group and other bits of the
