@@ -1765,6 +1765,11 @@ export interface MainCommandRanView {
   readonly ran: true;
 }
 
+/** `sheet:get-head`: the session whose head a sheet follows. */
+export interface SheetHeadRequest {
+  readonly sessionId: string;
+}
+
 /** The answer of a request that opened something outside beuve. */
 export interface OpenedView {
   readonly opened: true;
@@ -2067,7 +2072,7 @@ export interface InvokeChannelMap {
     readonly response: IpcResult<SheetFileView>;
   };
   'sheet:get-head': {
-    readonly request: { readonly sessionId: string };
+    readonly request: SheetHeadRequest;
     readonly response: IpcResult<SheetHeadView>;
   };
   'remote:permalink': {
