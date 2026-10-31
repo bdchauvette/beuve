@@ -11,6 +11,6 @@ export function summarizeSource(text: string, max: number): string {
   if (lines.length <= 1 && first.length <= max) {
     return first;
   }
-  const cut = first.length > max - 1 ? first.slice(0, max - 1) : first;
+  const cut = first.slice(0, max - 1);
   return `${cut.trimEnd()}…`;
 }

@@ -41,7 +41,13 @@ export function buildControlFlowGraph(
   if (body === null) {
     return err({ kind: 'unsupported', reason: 'the function has no body' });
   }
-  return new ControlFlowBuilder(rules, options).build(functionNode, body);
+  return new ControlFlowBuilder(rules, options).build({ node: functionNode, body });
+}
+
+/** A statement, or a function, and the body its header precedes. */
+interface Bodied {
+  readonly node: FlowSyntaxNode;
+  readonly body: FlowSyntaxNode;
 }
 
 /** An edge waiting for its target: the next node created becomes where it points. */
@@ -122,8 +128,7 @@ class ControlFlowBuilder {
       return {
         id: index,
         kind: draft.kind,
-        label:
-          draft.statements > 1 ? `${draft.label} (+${String(draft.statements - 1)})` : draft.label,
+        label: labelOf(draft),
         startLine: draft.startLine,
         endLine: draft.endLine,
         changed: this.touchesChange(draft),
@@ -177,8 +182,10 @@ class ControlFlowBuilder {
       return summarizeSource(own.text, maxLabelLength);
     }
     const parent = functionNode.parent;
-    const field = parent === null ? undefined : this.rules.namers[parent.type];
-    const assigned = fieldOf(parent ?? undefined, field);
+    if (parent === null) {
+      return '';
+    }
+    const assigned = fieldOf(parent, this.rules.namers[parent.type]);
     if (assigned === undefined) {
       return '';
     }
@@ -235,8 +242,7 @@ class ControlFlowBuilder {
   }
 
   private lowerSimple(node: FlowSyntaxNode, pendings: Pending[]): Pending[] {
-    const only = pendings.length === 1 ? pendings[0] : undefined;
-    const open = only?.kind === 'next' ? this.drafts[only.from] : undefined;
+    const open = this.openDraft(pendings);
     if (!this.sealed && open?.kind === 'block') {
       open.statements++;
       this.drafts[open.id] = { ...open, endLine: node.endPosition.row + 1 };
@@ -245,6 +251,15 @@ class ControlFlowBuilder {
     const id = this.addNode('block', summarizeSource(node.text, maxLabelLength), rangeOf(node));
     this.connect(pendings, id);
     return [{ from: id, kind: 'next' }];
+  }
+
+  /** The draft a lone `next` edge waits on: the block a straight-line statement can join. */
+  private openDraft(pendings: readonly Pending[]): Draft | undefined {
+    const [only, ...rest] = pendings;
+    if (only?.kind !== 'next' || rest.length > 0) {
+      return undefined;
+    }
+    return this.drafts[only.from];
   }
 
   private lowerLeaf(
@@ -286,10 +301,18 @@ class ControlFlowBuilder {
     const alternative = node.childForFieldName(rule.alternativeField);
     const whenTrue: Pending[] = [{ from: id, kind: 'true' }];
     const whenFalse: Pending[] = [{ from: id, kind: 'false' }];
-    const thenEnds = consequence === null ? whenTrue : this.lowerStatement(consequence, whenTrue);
-    const elseBody =
-      alternative === null ? undefined : this.unwrap(alternative, rule.alternativeWrapper);
-    const elseEnds = elseBody === undefined ? whenFalse : this.lowerStatement(elseBody, whenFalse);
+    let thenEnds = whenTrue;
+    if (consequence !== null) {
+      thenEnds = this.lowerStatement(consequence, whenTrue);
+    }
+    let elseBody: FlowSyntaxNode | undefined;
+    if (alternative !== null) {
+      elseBody = this.unwrap(alternative, rule.alternativeWrapper);
+    }
+    let elseEnds = whenFalse;
+    if (elseBody !== undefined) {
+      elseEnds = this.lowerStatement(elseBody, whenFalse);
+    }
     return [...thenEnds, ...elseEnds];
   }
 
@@ -303,32 +326,30 @@ class ControlFlowBuilder {
       return this.lowerSimple(node, pendings);
     }
     if (rule.form === 'pre') {
-      return this.lowerPreLoop(node, body, pendings);
+      return this.lowerPreLoop({ node, body }, pendings);
     }
-    return this.lowerPostLoop(node, body, rule, pendings);
+    return this.lowerPostLoop({ node, body }, rule, pendings);
   }
 
-  private lowerPreLoop(node: FlowSyntaxNode, body: FlowSyntaxNode, pendings: Pending[]): Pending[] {
-    const id = this.addNode('loop', this.headerLabel(node, body), headerRange(node, body));
+  private lowerPreLoop(loop: Bodied, pendings: Pending[]): Pending[] {
+    const id = this.addNode('loop', this.headerLabel(loop), headerRange(loop));
     this.connect(pendings, id);
     const scope = this.openJumpScope('loop', id);
-    const ends = this.lowerStatement(body, [{ from: id, kind: 'true' }]);
+    const ends = this.lowerStatement(loop.body, [{ from: id, kind: 'true' }]);
     this.scopes.pop();
     for (const end of ends) {
-      this.addEdge(end.from, id, end.kind === 'next' ? 'loop-back' : end.kind);
+      this.addEdge({ from: end.from, to: id, kind: loopBackKind(end.kind) });
     }
     return [{ from: id, kind: 'false' }, ...scope.breaks];
   }
 
   private lowerPostLoop(
-    node: FlowSyntaxNode,
-    body: FlowSyntaxNode,
+    { node, body }: Bodied,
     rule: Extract<StatementRule, { kind: 'loop' }>,
     pendings: Pending[],
   ): Pending[] {
     const condition = fieldOf(node, rule.conditionField);
-    const label = condition === undefined ? 'while' : `while (${this.conditionLabel(condition)})`;
-    const id = this.addNode('loop', label, rangeOf(condition ?? node));
+    const id = this.addNode('loop', this.postLoopLabel(condition), rangeOf(condition ?? node));
     const firstBodyDraft = this.drafts.length;
     const scope = this.openJumpScope('loop', id);
     this.sealed = true;
@@ -338,7 +359,7 @@ class ControlFlowBuilder {
     this.connect(ends, id);
     const first = this.drafts[firstBodyDraft];
     if (first !== undefined) {
-      this.addEdge(id, first.id, 'loop-back');
+      this.addEdge({ from: id, to: first.id, kind: 'loop-back' });
     }
     return [{ from: id, kind: 'false' }, ...scope.breaks];
   }
@@ -352,7 +373,11 @@ class ControlFlowBuilder {
     if (body === null) {
       return this.lowerSimple(node, pendings);
     }
-    const id = this.addNode('switch', this.headerLabel(node, body), headerRange(node, body));
+    const id = this.addNode(
+      'switch',
+      this.headerLabel({ node, body }),
+      headerRange({ node, body }),
+    );
     this.connect(pendings, id);
     const scope = this.openJumpScope('switch', undefined);
     let fallthrough: Pending[] = [];
@@ -369,14 +394,17 @@ class ControlFlowBuilder {
         this.caseLabel(clause, caseRule),
         caseRange(clause, caseRule),
       );
-      this.addEdge(id, caseId, isDefault ? 'default' : 'case');
+      this.addEdge({ from: id, to: caseId, kind: caseEdgeKind(isDefault) });
       this.connect(fallthrough, caseId);
       const statements = this.caseStatements(clause, caseRule);
       fallthrough = this.lowerStatements(statements, [{ from: caseId, kind: 'next' }]);
     }
     this.scopes.pop();
-    const missing: Pending[] = hasDefault ? [] : [{ from: id, kind: 'default' }];
-    return [...fallthrough, ...scope.breaks, ...missing];
+    const ends = [...fallthrough, ...scope.breaks];
+    if (!hasDefault) {
+      ends.push({ from: id, kind: 'default' });
+    }
+    return ends;
   }
 
   private lowerTry(
@@ -390,36 +418,36 @@ class ControlFlowBuilder {
     }
     const handler = node.childForFieldName(rule.handlerField);
     const finalizer = node.childForFieldName(rule.finalizerField);
-    const tryId = this.addNode('try', 'try', headerRange(node, body));
+    const tryId = this.addNode('try', 'try', headerRange({ node, body }));
     this.connect(pendings, tryId);
-    const catchId =
-      handler === null
-        ? undefined
-        : this.addNode(
-            'catch',
-            this.clauseLabel(handler, rule),
-            headerRange(handler, this.clauseBody(handler, rule)),
-          );
-    const finallyId =
-      finalizer === null
-        ? undefined
-        : this.addNode(
-            'finally',
-            'finally',
-            headerRange(finalizer, this.clauseBody(finalizer, rule)),
-          );
+    let catchId: number | undefined;
+    if (handler !== null) {
+      catchId = this.addNode(
+        'catch',
+        this.clauseLabel(handler, rule),
+        headerRange({ node: handler, body: this.clauseBody(handler, rule) }),
+      );
+    }
+    let finallyId: number | undefined;
+    if (finalizer !== null) {
+      finallyId = this.addNode(
+        'finally',
+        'finally',
+        headerRange({ node: finalizer, body: this.clauseBody(finalizer, rule) }),
+      );
+    }
     const scope: TryScope = { kind: 'try', region: 'body', catchId, finallyId, abrupt: [] };
     this.scopes.push(scope);
     let ends = this.lowerStatement(body, [{ from: tryId, kind: 'next' }]);
     if (handler !== null && catchId !== undefined) {
-      this.addEdge(tryId, catchId, 'exception');
+      this.addEdge({ from: tryId, to: catchId, kind: 'exception' });
       scope.region = 'catch';
       ends = [
         ...ends,
         ...this.lowerStatement(this.clauseBody(handler, rule), [{ from: catchId, kind: 'next' }]),
       ];
     } else if (finallyId !== undefined) {
-      this.addEdge(tryId, finallyId, 'exception');
+      this.addEdge({ from: tryId, to: finallyId, kind: 'exception' });
       scope.abrupt.push({ kind: 'throw', label: undefined });
     }
     this.scopes.pop();
@@ -490,9 +518,8 @@ class ControlFlowBuilder {
     if (request.kind !== 'return' && request.kind !== 'throw') {
       return;
     }
-    const kind = request.kind === 'return' ? 'next' : 'exception';
     for (const source of sources) {
-      this.addEdge(source, this.exitId, kind);
+      this.addEdge({ from: source, to: this.exitId, kind: exitEdgeKinds[request.kind] });
     }
   }
 
@@ -503,7 +530,7 @@ class ControlFlowBuilder {
   ): boolean {
     if (request.kind === 'throw' && scope.region === 'body' && scope.catchId !== undefined) {
       for (const source of sources) {
-        this.addEdge(source, scope.catchId, 'exception');
+        this.addEdge({ from: source, to: scope.catchId, kind: 'exception' });
       }
       return true;
     }
@@ -511,7 +538,7 @@ class ControlFlowBuilder {
       return false;
     }
     for (const source of sources) {
-      this.addEdge(source, scope.finallyId, 'finally');
+      this.addEdge({ from: source, to: scope.finallyId, kind: 'finally' });
     }
     const isKnown = scope.abrupt.some((other) => {
       return other.kind === request.kind && other.label === request.label;
@@ -544,7 +571,7 @@ class ControlFlowBuilder {
     }
     if (request.kind === 'continue' && scope.continueTo !== undefined) {
       for (const source of sources) {
-        this.addEdge(source, scope.continueTo, 'continue');
+        this.addEdge({ from: source, to: scope.continueTo, kind: 'continue' });
       }
       return true;
     }
@@ -560,18 +587,18 @@ class ControlFlowBuilder {
 
   private connect(pendings: readonly Pending[], to: number): void {
     for (const pending of pendings) {
-      this.addEdge(pending.from, to, pending.kind);
+      this.addEdge({ from: pending.from, to, kind: pending.kind });
     }
   }
 
-  private addEdge(from: number, to: number, kind: FlowEdgeKind): void {
-    const key = `${String(from)}>${String(to)}:${kind}`;
+  private addEdge(edge: FlowGraphEdge): void {
+    const key = `${String(edge.from)}>${String(edge.to)}:${edge.kind}`;
     if (this.edgeKeys.has(key)) {
       return;
     }
 
     this.edgeKeys.add(key);
-    this.edges.push({ from, to, kind });
+    this.edges.push(edge);
   }
 
   private statementsOf(block: FlowSyntaxNode): readonly FlowSyntaxNode[] {
@@ -586,14 +613,22 @@ class ControlFlowBuilder {
   }
 
   private conditionLabel(condition: FlowSyntaxNode): string {
-    const text = this.rules.transparent.includes(condition.type)
-      ? condition.text.slice(1, -1)
-      : condition.text;
+    let text = condition.text;
+    if (this.rules.transparent.includes(condition.type)) {
+      text = text.slice(1, -1);
+    }
     return summarizeSource(text, maxLabelLength);
   }
 
-  private headerLabel(node: FlowSyntaxNode, body: FlowSyntaxNode): string {
-    return summarizeSource(textBefore(node, body), maxLabelLength);
+  private postLoopLabel(condition: FlowSyntaxNode | undefined): string {
+    if (condition === undefined) {
+      return 'while';
+    }
+    return `while (${this.conditionLabel(condition)})`;
+  }
+
+  private headerLabel(statement: Bodied): string {
+    return summarizeSource(headerText(statement), maxLabelLength);
   }
 
   private caseLabel(clause: FlowSyntaxNode, rule: CaseRule): string {
@@ -620,12 +655,27 @@ class ControlFlowBuilder {
     clause: FlowSyntaxNode,
     rule: Extract<StatementRule, { kind: 'try' }>,
   ): string {
-    return summarizeSource(textBefore(clause, this.clauseBody(clause, rule)), maxLabelLength);
+    return summarizeSource(
+      headerText({ node: clause, body: this.clauseBody(clause, rule) }),
+      maxLabelLength,
+    );
   }
 
-  build(functionNode: FlowSyntaxNode, body: FlowSyntaxNode): Result<ControlFlowGraph, FlowFailure> {
+  /** A block body's statements, or an arrow's expression body as the value it returns. */
+  private lowerFunctionBody(body: FlowSyntaxNode, start: Pending[]): Pending[] {
+    if (this.rules.blocks.includes(body.type)) {
+      return this.lowerStatements(this.statementsOf(body), start);
+    }
+    return this.lowerLeaf('return', body, start);
+  }
+
+  build({ node: functionNode, body }: Bodied): Result<ControlFlowGraph, FlowFailure> {
     const name = this.nameOf(functionNode);
-    const entry = this.addNode('entry', name === '' ? 'function' : name, {
+    let entryLabel = name;
+    if (entryLabel === '') {
+      entryLabel = 'function';
+    }
+    const entry = this.addNode('entry', entryLabel, {
       startLine: functionNode.startPosition.row + 1,
       endLine: body.startPosition.row + 1,
     });
@@ -634,10 +684,7 @@ class ControlFlowBuilder {
       endLine: functionNode.endPosition.row + 1,
     });
     const start: Pending[] = [{ from: entry, kind: 'next' }];
-    const ends = this.rules.blocks.includes(body.type)
-      ? this.lowerStatements(this.statementsOf(body), start)
-      : this.lowerLeaf('return', body, start);
-    this.connect(ends, this.exitId);
+    this.connect(this.lowerFunctionBody(body, start), this.exitId);
     if (this.drafts.length > this.maxNodes) {
       return err({ kind: 'too-large', nodeLimit: this.maxNodes });
     }
@@ -645,12 +692,39 @@ class ControlFlowBuilder {
   }
 }
 
+const exitEdgeKinds = { return: 'next', throw: 'exception' } as const satisfies Record<
+  'return' | 'throw',
+  FlowEdgeKind
+>;
+
+function labelOf(draft: Draft): string {
+  if (draft.statements > 1) {
+    return `${draft.label} (+${String(draft.statements - 1)})`;
+  }
+  return draft.label;
+}
+
+/** A `next` edge out of a loop body goes back to the loop; a jump keeps its kind. */
+function loopBackKind(kind: FlowEdgeKind): FlowEdgeKind {
+  if (kind === 'next') {
+    return 'loop-back';
+  }
+  return kind;
+}
+
+function caseEdgeKind(isDefault: boolean): FlowEdgeKind {
+  if (isDefault) {
+    return 'default';
+  }
+  return 'case';
+}
+
 function rangeOf(node: FlowSyntaxNode): LineRange {
   return { startLine: node.startPosition.row + 1, endLine: node.endPosition.row + 1 };
 }
 
 /** The lines from the start of `node` to where its `body` begins: the statement's own header. */
-function headerRange(node: FlowSyntaxNode, body: FlowSyntaxNode): LineRange {
+function headerRange({ node, body }: Bodied): LineRange {
   return {
     startLine: node.startPosition.row + 1,
     endLine: Math.max(node.startPosition.row, body.startPosition.row) + 1,
@@ -665,16 +739,16 @@ function caseRange(clause: FlowSyntaxNode, rule: CaseRule): LineRange {
   };
 }
 
-/** The source of `node` that precedes its descendant `child`. */
-function textBefore(node: FlowSyntaxNode, child: FlowSyntaxNode): string {
-  if (child === node) {
+/** The source of `node` that precedes its descendant `body`: the statement's own header. */
+function headerText({ node, body }: Bodied): string {
+  if (body === node) {
     return node.text;
   }
-  const rows = child.startPosition.row - node.startPosition.row;
-  const column =
-    rows === 0
-      ? child.startPosition.column - node.startPosition.column
-      : child.startPosition.column;
+  const rows = body.startPosition.row - node.startPosition.row;
+  let column = body.startPosition.column;
+  if (rows === 0) {
+    column -= node.startPosition.column;
+  }
   const lines = node.text.split('\n');
   let offset = 0;
   for (let row = 0; row < rows; row++) {
