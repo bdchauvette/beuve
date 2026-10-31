@@ -58,11 +58,13 @@ export class KeyedQueue<K, J> {
     if (this.isFull(key)) {
       return false;
     }
-    const queue = this.#queues.getOrInsertComputed(key, () => ({
-      running: undefined,
-      done: Promise.resolve(),
-      waiting: [],
-    }));
+    const queue = this.#queues.getOrInsertComputed(key, () => {
+      return {
+        running: undefined,
+        done: Promise.resolve(),
+        waiting: [],
+      };
+    });
     queue.waiting.push(job);
     this.#pump(key);
     return true;

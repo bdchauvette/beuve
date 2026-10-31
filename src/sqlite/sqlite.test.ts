@@ -41,7 +41,9 @@ describe('openDatabase', () => {
     file.exec('CREATE TABLE t (x INTEGER) STRICT; INSERT INTO t VALUES (1);');
     const modes = readdirSync(tempDir)
       .toSorted((a, b) => a.localeCompare(b))
-      .map((name) => [name, statSync(path.join(tempDir, name)).mode & 0o777]);
+      .map((name) => {
+        return [name, statSync(path.join(tempDir, name)).mode & 0o777];
+      });
     expect(modes).toStrictEqual([
       ['test.db', 0o600],
       ['test.db-shm', 0o600],
@@ -75,7 +77,9 @@ describe('runMigrations', () => {
   test('rolls back a failing migration and leaves it unrecorded', ({ expect, db }) => {
     const migrations = migrationList();
     const broken: Migration = { id: '0003-broken', up: 'CREATE TABLE t (a); NOT VALID SQL;' };
-    expect(() => runMigrations(db, [...migrations, broken])).toThrow('syntax error');
+    expect(() => {
+      return runMigrations(db, [...migrations, broken]);
+    }).toThrow('syntax error');
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE name = 't';").all();
     expect(tables).toStrictEqual([]);
     expect(runMigrations(db, migrations)).toStrictEqual([]);
@@ -103,7 +107,9 @@ describe('runMigrations', () => {
       '0003-copy',
     ]);
     expect(db.prepare('SELECT name FROM copies;').all()).toMatchObject([{ name: 'first' }]);
-    expect(() => runMigrations(db, [...migrations, copy, failing])).toThrow('stop');
+    expect(() => {
+      return runMigrations(db, [...migrations, copy, failing]);
+    }).toThrow('stop');
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'doomed';").all()).toStrictEqual(
       [],
     );
@@ -111,7 +117,9 @@ describe('runMigrations', () => {
 
   test('rejects duplicate ids', ({ expect, db }) => {
     const first = migrationList().slice(0, 1);
-    expect(() => runMigrations(db, [...first, ...first])).toThrow('Duplicate migration id');
+    expect(() => {
+      return runMigrations(db, [...first, ...first]);
+    }).toThrow('Duplicate migration id');
   });
 });
 
@@ -129,12 +137,12 @@ describe('withTransaction', () => {
 
   test('rolls back on throw', ({ expect, db }) => {
     setup(db);
-    expect(() =>
-      withTransaction(db, () => {
+    expect(() => {
+      return withTransaction(db, () => {
         db.exec("INSERT INTO parents VALUES ('a');");
         throw new Error('abort');
-      }),
-    ).toThrow('abort');
+      });
+    }).toThrow('abort');
     expect(count(db)).toMatchObject({ n: 0 });
     expect(db.isTransaction).toBe(false);
   });
@@ -143,12 +151,12 @@ describe('withTransaction', () => {
     setup(db);
     withTransaction(db, () => {
       db.exec("INSERT INTO parents VALUES ('outer');");
-      expect(() =>
-        withTransaction(db, () => {
+      expect(() => {
+        return withTransaction(db, () => {
           db.exec("INSERT INTO parents VALUES ('inner');");
           throw new Error('inner');
-        }),
-      ).toThrow('inner');
+        });
+      }).toThrow('inner');
     });
     expect(db.prepare('SELECT id FROM parents;').all()).toMatchObject([{ id: 'outer' }]);
   });

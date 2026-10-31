@@ -60,7 +60,9 @@ export async function launchElectron(options: LaunchElectronOptions): Promise<La
   });
   const launched: LaunchedElectron = {
     browserUrl: '',
-    output: () => output,
+    output: () => {
+      return output;
+    },
     [Symbol.asyncDispose]: async (): Promise<void> => {
       if (child.exitCode !== null || child.signalCode !== null) {
         return;

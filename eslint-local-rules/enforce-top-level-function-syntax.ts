@@ -85,12 +85,13 @@ function isFunctionValue(node: TSESTree.Expression): boolean {
 }
 
 function isInsideFunction(ancestors: TSESTree.Node[]): boolean {
-  return ancestors.some(
-    (ancestor) =>
+  return ancestors.some((ancestor) => {
+    return (
       ancestor.type === AST_NODE_TYPES.FunctionDeclaration ||
       ancestor.type === AST_NODE_TYPES.FunctionExpression ||
-      ancestor.type === AST_NODE_TYPES.ArrowFunctionExpression,
-  );
+      ancestor.type === AST_NODE_TYPES.ArrowFunctionExpression
+    );
+  });
 }
 
 function isMethodLike(node: TSESTree.FunctionExpression): boolean {

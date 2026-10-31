@@ -25,6 +25,8 @@ describe('encodeIcns', () => {
   });
 
   test('refuses a type that is not four printable characters', ({ expect }) => {
-    expect(() => encodeIcns([{ type: 'ic1', png: new Uint8Array(0) }])).toThrow(RangeError);
+    expect(() => {
+      return encodeIcns([{ type: 'ic1', png: new Uint8Array(0) }]);
+    }).toThrow(RangeError);
   });
 });

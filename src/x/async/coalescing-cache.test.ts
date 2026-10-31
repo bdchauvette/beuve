@@ -29,7 +29,9 @@ function heldComputation(): HeldComputation {
       });
       return Promise.race([held.promise, aborted]);
     },
-    starts: (): number => signals.length,
+    starts: (): number => {
+      return signals.length;
+    },
     signals,
     release: (value): void => {
       held.resolve(value);
@@ -134,7 +136,9 @@ describe('CoalescingCache', () => {
   test('keeps only the values `keep` accepts', async ({ expect, signal }) => {
     const cache = new CoalescingCache<string, string>({
       maxEntries: 4,
-      keep: (value): boolean => value !== 'failed',
+      keep: (value): boolean => {
+        return value !== 'failed';
+      },
     });
     await expect(cache.get('a', immediate('failed'), { signal })).resolves.toBe('failed');
     await expect(cache.get('a', immediate('ok'), { signal })).resolves.toBe('ok');
@@ -145,10 +149,13 @@ describe('CoalescingCache', () => {
     const cache = new CoalescingCache<string, string>({
       maxEntries: 3,
       maxWeight: 10,
-      weigh: (value): number => value.length,
+      weigh: (value): number => {
+        return value.length;
+      },
     });
-    const put = async (key: string, value: string): Promise<string> =>
-      cache.get(key, immediate(value), { signal });
+    const put = async (key: string, value: string): Promise<string> => {
+      return cache.get(key, immediate(value), { signal });
+    };
     await put('a', 'aaaa');
     await put('b', 'bbbb');
     await put('a', 'unused');

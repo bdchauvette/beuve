@@ -53,7 +53,9 @@ function chooseSigning(env: Environment): Signing {
   if (!isSet('CSC_LINK') && !isSet('CSC_NAME')) {
     return { kind: 'ad-hoc' };
   }
-  const complete = notarizationCredentials.find(([, names]) => names.every((name) => isSet(name)));
+  const complete = notarizationCredentials.find(([, names]) => {
+    return names.every((name) => isSet(name));
+  });
   return { kind: 'developer-id', notarization: complete?.[0] };
 }
 

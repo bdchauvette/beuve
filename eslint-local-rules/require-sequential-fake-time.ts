@@ -125,9 +125,12 @@ function callbackOf(
   node: TSESTree.CallExpression,
 ): TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression | undefined {
   return node.arguments.find(
-    (argument): argument is TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression =>
-      argument.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-      argument.type === AST_NODE_TYPES.FunctionExpression,
+    (argument): argument is TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression => {
+      return (
+        argument.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+        argument.type === AST_NODE_TYPES.FunctionExpression
+      );
+    },
   );
 }
 
@@ -163,18 +166,20 @@ function usedFixture(
 }
 
 function isNonConcurrent(node: TSESTree.CallExpression): boolean {
-  return node.arguments.some(
-    (argument) =>
+  return node.arguments.some((argument) => {
+    return (
       argument.type === AST_NODE_TYPES.ObjectExpression &&
-      argument.properties.some(
-        (property) =>
+      argument.properties.some((property) => {
+        return (
           property.type === AST_NODE_TYPES.Property &&
           property.key.type === AST_NODE_TYPES.Identifier &&
           property.key.name === 'concurrent' &&
           property.value.type === AST_NODE_TYPES.Literal &&
-          property.value.value === false,
-      ),
-  );
+          property.value.value === false
+        );
+      })
+    );
+  });
 }
 
 function hasNonConcurrentSuite(node: TSESTree.Node): boolean {

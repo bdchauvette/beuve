@@ -14,6 +14,10 @@ test('zero times is a zero duration', ({ expect }) => {
 });
 
 test('rejects fractions and negatives', ({ expect }) => {
-  expect(() => multiplyDuration(Temporal.Duration.from({ seconds: 1 }), 1.5)).toThrow(RangeError);
-  expect(() => multiplyDuration(Temporal.Duration.from({ seconds: 1 }), -1)).toThrow(RangeError);
+  expect(() => {
+    return multiplyDuration(Temporal.Duration.from({ seconds: 1 }), 1.5);
+  }).toThrow(RangeError);
+  expect(() => {
+    return multiplyDuration(Temporal.Duration.from({ seconds: 1 }), -1);
+  }).toThrow(RangeError);
 });

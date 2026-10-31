@@ -55,9 +55,9 @@ function isImportBinding(scope: TSESLint.Scope.Scope, name: string): boolean {
   while (current !== null) {
     const variable = current.set.get(name);
     if (variable !== undefined) {
-      return variable.defs.some(
-        (definition) => definition.type === TSESLint.Scope.DefinitionType.ImportBinding,
-      );
+      return variable.defs.some((definition) => {
+        return definition.type === TSESLint.Scope.DefinitionType.ImportBinding;
+      });
     }
     current = current.upper;
   }

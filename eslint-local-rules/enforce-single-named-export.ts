@@ -114,9 +114,9 @@ function isTypeOnlyDeclaration(declaration: TSESTree.NamedExportDeclarations): b
 
 function declaredNames(declaration: TSESTree.NamedExportDeclarations): string[] {
   if (declaration.type === AST_NODE_TYPES.VariableDeclaration) {
-    return declaration.declarations.map((declarator) =>
-      declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '{…}',
-    );
+    return declaration.declarations.map((declarator) => {
+      return declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '{…}';
+    });
   }
   if ('id' in declaration && declaration.id?.type === AST_NODE_TYPES.Identifier) {
     return [declaration.id.name];
@@ -129,9 +129,10 @@ function exportedName(node: TSESTree.Identifier | TSESTree.StringLiteral): strin
 }
 
 function hasDefaultExport(program: TSESTree.Program): boolean {
-  return program.body.some(
-    (statement) =>
+  return program.body.some((statement) => {
+    return (
       statement.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
-      statement.type === AST_NODE_TYPES.TSExportAssignment,
-  );
+      statement.type === AST_NODE_TYPES.TSExportAssignment
+    );
+  });
 }

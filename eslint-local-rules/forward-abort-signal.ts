@@ -226,12 +226,12 @@ function candidatesFor(context: Context, types: Types, node: Call): readonly Can
     }
     scope = scope.upper;
   }
-  const underived = found.filter((candidate) =>
-    found.every((other) => other === candidate || !isDerivedFrom(other, candidate)),
-  );
-  return underived.filter(
-    (candidate, index) => underived.findIndex(({ text }) => text === candidate.text) === index,
-  );
+  const underived = found.filter((candidate) => {
+    return found.every((other) => other === candidate || !isDerivedFrom(other, candidate));
+  });
+  return underived.filter((candidate, index) => {
+    return underived.findIndex(({ text }) => text === candidate.text) === index;
+  });
 }
 
 function variableCandidates(
@@ -323,10 +323,9 @@ function patternCandidates(types: Types, fn: FunctionNode): readonly Candidate[]
       parameter.type === AST_NODE_TYPES.AssignmentPattern ? parameter.left : parameter;
     if (
       pattern.type !== AST_NODE_TYPES.ObjectPattern ||
-      pattern.properties.some(
-        (property) =>
-          property.type === AST_NODE_TYPES.RestElement || propertyName(property) === 'signal',
-      )
+      pattern.properties.some((property) => {
+        return property.type === AST_NODE_TYPES.RestElement || propertyName(property) === 'signal';
+      })
     ) {
       continue;
     }
@@ -360,10 +359,9 @@ function fieldCandidates(types: Types, fn: FunctionNode): readonly Candidate[] {
   }
   const read = thisMembersIn(fn);
   const found: Candidate[] = [];
-  const fields = owner.parent.body.filter(
-    (member): member is TSESTree.PropertyDefinition =>
-      member.type === AST_NODE_TYPES.PropertyDefinition && !member.static,
-  );
+  const fields = owner.parent.body.filter((member): member is TSESTree.PropertyDefinition => {
+    return member.type === AST_NODE_TYPES.PropertyDefinition && !member.static;
+  });
   for (const member of fields) {
     const key = fieldKey(member);
     if (key === undefined) {
@@ -472,8 +470,9 @@ function isCandidatePassed(
   candidates: readonly Candidate[],
 ): boolean {
   const texts = new Set(candidates.map(({ text }) => normalized(text)));
-  const isCandidate = (expression: TSESTree.Node | null): boolean =>
-    expression !== null && texts.has(normalized(context.sourceCode.getText(expression)));
+  const isCandidate = (expression: TSESTree.Node | null): boolean => {
+    return expression !== null && texts.has(normalized(context.sourceCode.getText(expression)));
+  };
   const anyArray = abortSignalAnyArray(node);
   return anyArray === undefined
     ? node.arguments.some((arg) => isCandidate(arg))
@@ -493,10 +492,9 @@ function isSatisfied(types: Types, node: Call, slot: Slot): boolean {
     return arg !== undefined;
   }
   if (arg.type === AST_NODE_TYPES.ObjectExpression) {
-    return arg.properties.some(
-      (property) =>
-        property.type === AST_NODE_TYPES.SpreadElement || propertyName(property) === 'signal',
-    );
+    return arg.properties.some((property) => {
+      return property.type === AST_NODE_TYPES.SpreadElement || propertyName(property) === 'signal';
+    });
   }
   const tsNode = types.services.esTreeNodeToTSNodeMap.get(arg);
   return hasSignalProperty(types.checker, types.checker.getTypeAtLocation(tsNode), tsNode);

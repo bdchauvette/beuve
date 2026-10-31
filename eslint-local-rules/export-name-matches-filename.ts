@@ -54,14 +54,16 @@ function runtimeBindings(
   if (declaration === null) {
     return node.specifiers
       .filter((specifier) => specifier.exportKind !== 'type')
-      .map((specifier) => ({
-        node: specifier.exported,
-        name:
-          specifier.exported.type === AST_NODE_TYPES.Identifier
-            ? specifier.exported.name
-            : specifier.exported.value,
-        isClass: false,
-      }));
+      .map((specifier) => {
+        return {
+          node: specifier.exported,
+          name:
+            specifier.exported.type === AST_NODE_TYPES.Identifier
+              ? specifier.exported.name
+              : specifier.exported.value,
+          isClass: false,
+        };
+      });
   }
   switch (declaration.type) {
     case AST_NODE_TYPES.ClassDeclaration:
@@ -82,11 +84,13 @@ function runtimeBindings(
         ? []
         : declaration.declarations
             .filter((declarator) => declarator.id.type === AST_NODE_TYPES.Identifier)
-            .map((declarator) => ({
-              node: declarator.id,
-              name: declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '',
-              isClass: isClassValue(declarator),
-            }));
+            .map((declarator) => {
+              return {
+                node: declarator.id,
+                name: declarator.id.type === AST_NODE_TYPES.Identifier ? declarator.id.name : '',
+                isClass: isClassValue(declarator),
+              };
+            });
     }
     case AST_NODE_TYPES.TSEnumDeclaration:
     case AST_NODE_TYPES.TSImportEqualsDeclaration:

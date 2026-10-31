@@ -25,8 +25,8 @@ export function runMigrations(db: DatabaseSync, migrations: readonly Migration[]
 
   return migrations
     .filter((migration) => !applied.has(migration.id))
-    .map((migration) =>
-      withTransaction(db, () => {
+    .map((migration) => {
+      return withTransaction(db, () => {
         if (typeof migration.up === 'string') {
           db.exec(migration.up);
         } else {
@@ -34,8 +34,8 @@ export function runMigrations(db: DatabaseSync, migrations: readonly Migration[]
         }
         record.run(migration.id, Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }));
         return migration.id;
-      }),
-    );
+      });
+    });
 }
 
 function assertUniqueIds(migrations: readonly Migration[]): void {

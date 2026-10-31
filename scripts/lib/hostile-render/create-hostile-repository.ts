@@ -86,11 +86,13 @@ export async function createHostileRepository(
   const names = corpus.names.filter((input) => isRepositoryPath(input.text));
   const lines = corpus.contents.filter((input) => isRepositoryLine(input.text));
   const named = [...names.map((input) => input.text), ...appOnlyNames];
-  const renamed = names.map((input, index) => ({
-    from: `${renamedDirectory}/${input.text}.old.ts`,
-    to: `${renamedDirectory}/${input.text}`,
-    index,
-  }));
+  const renamed = names.map((input, index) => {
+    return {
+      from: `${renamedDirectory}/${input.text}.old.ts`,
+      to: `${renamedDirectory}/${input.text}`,
+      index,
+    };
+  });
   const renamedBenign = {
     from: `${renamedDirectory}/benign.old.ts`,
     to: `${renamedDirectory}/${benignName}`,
@@ -190,15 +192,14 @@ export async function createHostileRepository(
 function isRepositoryPath(name: string): boolean {
   return (
     !name.includes('\0') &&
-    name
-      .split('/')
-      .every(
-        (component) =>
-          component !== '' &&
-          component !== '.' &&
-          component !== '..' &&
-          new TextEncoder().encode(component).length <= maximumComponentBytes,
-      )
+    name.split('/').every((component) => {
+      return (
+        component !== '' &&
+        component !== '.' &&
+        component !== '..' &&
+        new TextEncoder().encode(component).length <= maximumComponentBytes
+      );
+    })
   );
 }
 
@@ -235,13 +236,15 @@ function renamedFile(index: number, value: number): string {
 function contentsFile(lines: readonly string[], side: 'base' | 'feature'): string {
   const filler = Array.from({ length: fillerLines }, (_, index) => `  // line ${String(index)}`);
   return `${lines
-    .flatMap((line) => [
-      `function f() { ${line}`,
-      ...filler,
-      '}',
-      line,
-      ...(side === 'base' ? [`const a = '${line}';`] : [`const a = "${line}";`, line]),
-    ])
+    .flatMap((line) => {
+      return [
+        `function f() { ${line}`,
+        ...filler,
+        '}',
+        line,
+        ...(side === 'base' ? [`const a = '${line}';`] : [`const a = "${line}";`, line]),
+      ];
+    })
     .join('\n')}\n`;
 }
 

@@ -92,8 +92,9 @@ describe('JsonRpcConnection', () => {
         onNotification: (method, params): void => {
           notifications.push({ method, params });
         },
-        onRequest: (method, params) =>
-          method === 'echo' ? ok(params) : err({ code: -32_601, message: `no ${method}` }),
+        onRequest: (method, params) => {
+          return method === 'echo' ? ok(params) : err({ code: -32_601, message: `no ${method}` });
+        },
       }),
     );
     peer.send({ jsonrpc: '2.0', method: 'hello', params: { a: 1 } });
@@ -135,15 +136,16 @@ describe('JsonRpcConnection', () => {
     let wasAborted = false;
     const peer = closing(
       createFakePeer({
-        onRequest: async (_method, _params, signal) =>
-          new Promise((resolve) => {
+        onRequest: async (_method, _params, signal) => {
+          return new Promise((resolve) => {
             signal.addEventListener('abort', () => {
               wasAborted = true;
               setTimeout(() => {
                 resolve(ok('too late'));
               }, 5);
             });
-          }),
+          });
+        },
       }),
     );
     peer.send({ jsonrpc: '2.0', id: 9, method: 'wait' });

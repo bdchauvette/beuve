@@ -103,10 +103,13 @@ export const noCheckThenOpen = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
       return undefined;
     };
 
-    const ownerOf = (node: TSESTree.Node): TSESTree.Node =>
-      context.sourceCode
-        .getAncestors(node)
-        .findLast((ancestor) => functionTypes.has(ancestor.type)) ?? context.sourceCode.ast;
+    const ownerOf = (node: TSESTree.Node): TSESTree.Node => {
+      return (
+        context.sourceCode
+          .getAncestors(node)
+          .findLast((ancestor) => functionTypes.has(ancestor.type)) ?? context.sourceCode.ast
+      );
+    };
 
     return {
       ImportDeclaration(node): void {

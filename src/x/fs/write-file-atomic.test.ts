@@ -37,7 +37,9 @@ describe('writeFileAtomic', () => {
       const names = await readdir(tempDir);
       const temporary = names.filter((name) => name !== 'secrets.json');
       seen.push({
-        names: temporary.map((name) => (name.startsWith('.secrets.json.') ? 'temporary' : name)),
+        names: temporary.map((name) => {
+          return name.startsWith('.secrets.json.') ? 'temporary' : name;
+        }),
         modes: await Promise.all(temporary.map(async (name) => permissionsOf(tempDir, name))),
         contents: await readFile(file, { encoding: 'utf8', signal }),
       });
@@ -107,7 +109,9 @@ describe('writeFileAtomic', () => {
     const file = path.join(tempDir, 'settings.json');
     const contents = Array.from({ length: 16 }, (_, index) => payload(index));
     await Promise.all(
-      contents.map(async (text) => writeFileAtomic(file, chunked(text), { mode: 0o600, signal })),
+      contents.map(async (text) => {
+        return writeFileAtomic(file, chunked(text), { mode: 0o600, signal });
+      }),
     );
     expect(contents).toContain(await readFile(file, { encoding: 'utf8', signal }));
     await expect(readdir(tempDir)).resolves.toStrictEqual(['settings.json']);

@@ -49,10 +49,12 @@ async function buildIcon(): Promise<void> {
       pngs.set(size, encodePng(render(layers, size)));
     }
   }
-  const entries = icnsTypes.map(([type, size]): IcnsEntry => ({
-    type,
-    png: pngs.get(size) ?? new Uint8Array(0),
-  }));
+  const entries = icnsTypes.map(([type, size]): IcnsEntry => {
+    return {
+      type,
+      png: pngs.get(size) ?? new Uint8Array(0),
+    };
+  });
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, 'icon.icns'), encodeIcns(entries));
   await writeFile(path.join(output, 'icon.png'), pngs.get(canvas) ?? new Uint8Array(0));
@@ -67,8 +69,8 @@ function iconLayers(): readonly Layer[] {
     { color: paper, distance: (x, y): number => roundedBox(x, y, 512, 512, 404, 404, 177) },
     {
       color: ink,
-      distance: (x, y): number =>
-        Math.min(
+      distance: (x, y): number => {
+        return Math.min(
           roundedBox(
             x,
             y,
@@ -80,7 +82,8 @@ function iconLayers(): readonly Layer[] {
           ),
           Math.abs(Math.hypot(x - bowl.x, y - bowl.y) - (bowl.outer + bowl.inner) / 2) -
             (bowl.outer - bowl.inner) / 2,
-        ),
+        );
+      },
     },
     { color: violet, distance: (x, y): number => Math.hypot(x - 690, y - 300) - 48 },
   ];

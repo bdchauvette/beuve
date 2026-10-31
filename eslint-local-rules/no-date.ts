@@ -50,11 +50,12 @@ export const noDate = ESLintUtils.RuleCreator.withoutDocs<[Options], MessageIds>
     const allowedMembers = new Set(['toTemporalInstant', ...(options.allowMembers ?? [])]);
     const allowedGlobalUses = new Set<GlobalUse>(options.allowGlobalUses);
 
-    const isDate = (node: TSESTree.Node): boolean =>
-      isDateType(
+    const isDate = (node: TSESTree.Node): boolean => {
+      return isDateType(
         checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(node)),
         services.program,
       );
+    };
 
     const checkValue = (node: TSESTree.Expression): void => {
       if (isGlobalDateExpression(context, node) || !isDate(node)) {
@@ -117,9 +118,9 @@ function isDateType(type: ts.Type, program: ts.Program): boolean {
   const symbol = type.getSymbol();
   return (
     symbol?.getName() === 'Date' &&
-    (symbol.getDeclarations() ?? []).some((declaration) =>
-      program.isSourceFileDefaultLibrary(declaration.getSourceFile()),
-    )
+    (symbol.getDeclarations() ?? []).some((declaration) => {
+      return program.isSourceFileDefaultLibrary(declaration.getSourceFile());
+    })
   );
 }
 

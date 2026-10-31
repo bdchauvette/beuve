@@ -14,7 +14,9 @@ const fourPrintableCharacters = /^[ -~]{4}$/u;
  * the types matching each PNG's size; nothing is resized or checked beyond the type's shape.
  */
 export function encodeIcns(entries: readonly IcnsEntry[]): Uint8Array {
-  const total = entries.reduce((sum, entry) => sum + headerLength + entry.png.length, headerLength);
+  const total = entries.reduce((sum, entry) => {
+    return sum + headerLength + entry.png.length;
+  }, headerLength);
   const file = Buffer.alloc(total);
   file.write('icns', 0, 'latin1');
   file.writeUInt32BE(total, 4);

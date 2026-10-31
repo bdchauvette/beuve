@@ -216,9 +216,11 @@ function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, finding
       readonly description?: string;
     }[];
     const text = args
-      .map((arg) =>
-        typeof arg.value === 'string' ? arg.value : (arg.description ?? JSON.stringify(arg.value)),
-      )
+      .map((arg) => {
+        return typeof arg.value === 'string'
+          ? arg.value
+          : (arg.description ?? JSON.stringify(arg.value));
+      })
       .join(' ');
     if (text.startsWith(violationMarker)) {
       findings.violations.push(JSON.parse(text.slice(violationMarker.length)) as Violation);
@@ -238,7 +240,9 @@ function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, finding
 
 /** The main window, reloaded so the violation recorder runs before its scripts, with the probe installed. */
 async function openMainWindow(devtools: DevtoolsConnection): Promise<string> {
-  const main = await devtools.waitForPage((url) => url.endsWith('/index.html'), wait());
+  const main = await devtools.waitForPage((url) => {
+    return url.endsWith('/index.html');
+  }, wait());
   const ready = "!!document.querySelector('beuve-app')?.renderRoot";
   await devtools.waitFor(main, ready, wait());
   await devtools.send('Page.reload', { ignoreCache: true }, main);
@@ -538,7 +542,9 @@ async function checkSheetWindow(
     main,
     `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(contents.path)}, range: { startLine: ${String(line)}, startCharacter: 0, endLine: ${String(line)}, endCharacter: 1 } })`,
   );
-  const sheet = await devtools.waitForPage((url) => url.includes('/sheet.html'), wait());
+  const sheet = await devtools.waitForPage((url) => {
+    return url.includes('/sheet.html');
+  }, wait());
   await devtools.waitFor(sheet, "!!document.querySelector('beuve-sheet-view')", wait());
   await devtools.evaluate(sheet, pageProbe);
   if ((await eventually(devtools, sheet, '__hostileProbe.rows() > 0')) === undefined) {
@@ -560,7 +566,9 @@ async function checkSettingsWindow(
   shoot: (sessionId: string, name: string) => Promise<void>,
 ): Promise<void> {
   await devtools.evaluate(main, "document.querySelector('beuve-app').runCommandId('settings')");
-  const settings = await devtools.waitForPage((url) => url.includes('/settings.html'), wait());
+  const settings = await devtools.waitForPage((url) => {
+    return url.includes('/settings.html');
+  }, wait());
   await devtools.waitFor(
     settings,
     "document.querySelector('beuve-settings-view')?.renderRoot?.textContent?.length > 50",
@@ -576,8 +584,9 @@ async function checkSettingsWindow(
  * electron-builder packages.
  */
 async function checkTestBuild(findings: Findings): Promise<void> {
-  const policyOf = async (page: string): Promise<string> =>
-    cspMeta.exec(await readFile(path.join(root, page), 'utf8'))?.[1] ?? '';
+  const policyOf = async (page: string): Promise<string> => {
+    return cspMeta.exec(await readFile(path.join(root, page), 'utf8'))?.[1] ?? '';
+  };
   const [app, harness] = await Promise.all([
     policyOf('dist/ui/index.html'),
     policyOf('dist-test/ui/hostile-harness.html'),
@@ -603,10 +612,9 @@ async function checkTestBuild(findings: Findings): Promise<void> {
 async function openHarness(devtools: DevtoolsConnection, main: string): Promise<string> {
   const page = path.join(root, 'dist-test/ui/hostile-harness.html');
   await devtools.send('Page.navigate', { url: pathToFileURL(page).href }, main);
-  const harness = await devtools.waitForPage(
-    (url) => url.endsWith('/hostile-harness.html'),
-    wait(),
-  );
+  const harness = await devtools.waitForPage((url) => {
+    return url.endsWith('/hostile-harness.html');
+  }, wait());
   await devtools.waitFor(harness, "typeof globalThis.hostileHarness === 'object'", wait());
   await devtools.evaluate(harness, pageProbe);
   return harness;
@@ -665,9 +673,9 @@ async function checkHarness(
     findings.violations.slice(seen).map((violation) => JSON.stringify(violation)),
   );
   const beforeSplice = findings.violations.length;
-  const spliced = [...corpus.names, ...corpus.contents].map(
-    ({ text }) => `<div data-title="${text}"><span data-diff-span="">${text}</span></div>`,
-  );
+  const spliced = [...corpus.names, ...corpus.contents].map(({ text }) => {
+    return `<div data-title="${text}"><span data-diff-span="">${text}</span></div>`;
+  });
   await devtools.evaluate(harness, `__hostileProbe.mount(${JSON.stringify(spliced.join(''))})`);
   await delay(300);
   await expectSafe(devtools, harness, findings, 'hostile strings spliced unescaped into a sink');

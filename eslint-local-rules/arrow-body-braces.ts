@@ -40,7 +40,9 @@ export const arrowBodyBraces = ESLintUtils.RuleCreator.withoutDocs<[], MessageId
             node,
             messageId: 'useBlockBody',
             data: { reason },
-            fix: (fixer) => fixFor(fixer, node, sourceCode),
+            fix: (fixer) => {
+              return fixFor(fixer, node, sourceCode);
+            },
           });
         }
       },

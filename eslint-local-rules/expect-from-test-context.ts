@@ -55,12 +55,12 @@ export const expectFromTestContext = ESLintUtils.RuleCreator.withoutDocs<[], Mes
           return;
         }
         const variable = findVariable(context.sourceCode.getScope(node), node.name);
-        const isImport = variable?.defs.some(
-          (definition) => definition.type === TSESLint.Scope.DefinitionType.ImportBinding,
-        );
-        const isParameter = variable?.defs.every(
-          (definition) => definition.type === TSESLint.Scope.DefinitionType.Parameter,
-        );
+        const isImport = variable?.defs.some((definition) => {
+          return definition.type === TSESLint.Scope.DefinitionType.ImportBinding;
+        });
+        const isParameter = variable?.defs.every((definition) => {
+          return definition.type === TSESLint.Scope.DefinitionType.Parameter;
+        });
         if (isImport !== true && isParameter !== true) {
           context.report({ node, messageId: 'notFromContext' });
         }

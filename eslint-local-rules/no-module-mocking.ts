@@ -79,9 +79,9 @@ function isImportBinding(start: TSESLint.Scope.Scope, name: string): boolean {
   while (scope !== null) {
     const variable = scope.set.get(name);
     if (variable !== undefined) {
-      return variable.defs.some(
-        (definition) => definition.type === TSESLint.Scope.DefinitionType.ImportBinding,
-      );
+      return variable.defs.some((definition) => {
+        return definition.type === TSESLint.Scope.DefinitionType.ImportBinding;
+      });
     }
     scope = scope.upper;
   }

@@ -31,7 +31,11 @@ describe('encodePng', () => {
   });
 
   test('refuses pixels that do not match the size', ({ expect }) => {
-    expect(() => encodePng({ width: 2, height: 2, pixels: new Uint8Array(4) })).toThrow(RangeError);
-    expect(() => encodePng({ width: 0, height: 1, pixels: new Uint8Array(0) })).toThrow(RangeError);
+    expect(() => {
+      return encodePng({ width: 2, height: 2, pixels: new Uint8Array(4) });
+    }).toThrow(RangeError);
+    expect(() => {
+      return encodePng({ width: 0, height: 1, pixels: new Uint8Array(0) });
+    }).toThrow(RangeError);
   });
 });

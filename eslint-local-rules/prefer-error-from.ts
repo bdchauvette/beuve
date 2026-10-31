@@ -128,9 +128,9 @@ function isCatchParameter(identifier: TSESTree.Identifier, scope: TSESLint.Scope
   while (current !== null) {
     const variable = current.set.get(identifier.name);
     if (variable !== undefined) {
-      return variable.defs.some(
-        (definition) => definition.type === TSESLint.Scope.DefinitionType.CatchClause,
-      );
+      return variable.defs.some((definition) => {
+        return definition.type === TSESLint.Scope.DefinitionType.CatchClause;
+      });
     }
     current = current.upper;
   }

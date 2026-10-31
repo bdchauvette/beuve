@@ -29,18 +29,22 @@ const entrypointFiles = [
   'src/main/impact/testing/scripted-impact-worker.ts',
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
-const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => ({
-  name,
-  importNames: ['execFileSync', 'execSync', 'spawnSync'],
-  message:
-    'Synchronous child processes block the worker, so concurrent tests cannot overlap and every test timeout covers the whole file. Use `execFile` from `node:child_process` through `promisify` (ADR 0058).',
-}));
-const renameImports = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => ({
-  name,
-  importNames: ['rename', 'renameSync'],
-  message:
-    'Replace a file through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`): a unique temporary name created exclusively with its mode, fsync, rename, fsync of the directory (ADR 0082).',
-}));
+const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => {
+  return {
+    name,
+    importNames: ['execFileSync', 'execSync', 'spawnSync'],
+    message:
+      'Synchronous child processes block the worker, so concurrent tests cannot overlap and every test timeout covers the whole file. Use `execFile` from `node:child_process` through `promisify` (ADR 0058).',
+  };
+});
+const renameImports = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => {
+  return {
+    name,
+    importNames: ['rename', 'renameSync'],
+    message:
+      'Replace a file through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`): a unique temporary name created exclusively with its mode, fsync, rename, fsync of the directory (ADR 0082).',
+  };
+});
 const timedFiles = ['src/**/*.ts', 'scripts/**/*.ts'];
 const staticOrStandalone =
   'Name a standalone or static conversion `yFrom(x)` or `Y.fromX(x)`, not `toY`; `toY()` is for instance methods (ADR 0062, CLAUDE.md "Conversion naming").';
@@ -94,12 +98,14 @@ const htmlSinkSelectors = [
     message: htmlSinkMessage,
   },
 ];
-const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) =>
-  ['unsafe-html', 'unsafe-svg', 'unsafe-mathml'].map((directive) => ({
-    name: `${root}/directives/${directive}.js`,
-    message: htmlSinkMessage,
-  })),
-);
+const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) => {
+  return ['unsafe-html', 'unsafe-svg', 'unsafe-mathml'].map((directive) => {
+    return {
+      name: `${root}/directives/${directive}.js`,
+      message: htmlSinkMessage,
+    };
+  });
+});
 
 export default defineConfig(
   globalIgnores(['dist/', 'dist-test/', 'out/', 'coverage/', '.claude/worktrees/']),

@@ -124,16 +124,18 @@ function reportUiSize(metafile: Metafile): void {
 }
 
 function kib(metafile: Metafile, files: readonly string[]): string {
-  const bytes = files.reduce((total, file) => total + (metafile.outputs[file]?.bytes ?? 0), 0);
+  const bytes = files.reduce((total, file) => {
+    return total + (metafile.outputs[file]?.bytes ?? 0);
+  }, 0);
   return `${(bytes / 1024).toFixed(0)} KiB`;
 }
 
 async function copyWasmAssets(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true });
   await Promise.all(
-    listWasmAssets().map(async (asset) =>
-      copyFile(asset.sourcePath, path.join(directory, asset.fileName)),
-    ),
+    listWasmAssets().map(async (asset) => {
+      return copyFile(asset.sourcePath, path.join(directory, asset.fileName));
+    }),
   );
 }
 
@@ -240,9 +242,9 @@ function workerOptions(): BuildOptions {
 function curatedShikiPlugin(): Plugin {
   const namespace = 'beuve-curated-shiki';
   const grammars = Object.entries(highlightedLanguages)
-    .map(
-      ([name, grammar]) => `  ${JSON.stringify(name)}: () => import('shiki/langs/${grammar}.mjs'),`,
-    )
+    .map(([name, grammar]) => {
+      return `  ${JSON.stringify(name)}: () => import('shiki/langs/${grammar}.mjs'),`;
+    })
     .join('\n');
   const modules: Record<string, string> = {
     langs: `export const bundledLanguages = {\n${grammars}\n};\n`,
@@ -252,15 +254,19 @@ function curatedShikiPlugin(): Plugin {
   return {
     name: namespace,
     setup: (pluginBuild): void => {
-      pluginBuild.onResolve({ filter: stubbedModules }, (args) => ({
-        path: args.path.startsWith('shiki/') ? args.path.slice('shiki/'.length) : 'themes',
-        namespace,
-      }));
-      pluginBuild.onLoad({ filter: anyPath, namespace }, (args) => ({
-        contents: modules[args.path] ?? '',
-        resolveDir: root,
-        loader: 'js',
-      }));
+      pluginBuild.onResolve({ filter: stubbedModules }, (args) => {
+        return {
+          path: args.path.startsWith('shiki/') ? args.path.slice('shiki/'.length) : 'themes',
+          namespace,
+        };
+      });
+      pluginBuild.onLoad({ filter: anyPath, namespace }, (args) => {
+        return {
+          contents: modules[args.path] ?? '',
+          resolveDir: root,
+          loader: 'js',
+        };
+      });
     },
   };
 }
