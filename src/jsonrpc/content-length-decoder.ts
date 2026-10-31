@@ -52,9 +52,10 @@ export class ContentLengthDecoder {
     const head = this.#compact();
     const end = head.indexOf(headerTerminator);
     if (end === -1) {
-      return head.byteLength > this.#maxHeaderBytes
-        ? err({ kind: 'header-too-large', maxHeaderBytes: this.#maxHeaderBytes })
-        : ok(undefined);
+      if (head.byteLength > this.#maxHeaderBytes) {
+        return err({ kind: 'header-too-large', maxHeaderBytes: this.#maxHeaderBytes });
+      }
+      return ok(undefined);
     }
     const headerLength = end + headerTerminator.byteLength;
     if (headerLength > this.#maxHeaderBytes) {
@@ -76,7 +77,11 @@ export class ContentLengthDecoder {
     const all = this.#compact();
     const taken = all.subarray(0, length);
     const rest = all.subarray(length);
-    this.#chunks = rest.byteLength > 0 ? [rest] : [];
+    if (rest.byteLength > 0) {
+      this.#chunks = [rest];
+    } else {
+      this.#chunks = [];
+    }
     this.#buffered = rest.byteLength;
     return taken;
   }
@@ -125,9 +130,13 @@ function parseContentLength(header: string, maxMessageBytes: number): Result<num
     .split('\r\n')
     .map((line) => {
       const colon = line.indexOf(':');
-      return colon === -1
-        ? { name: line.trim().toLowerCase(), value: '' }
-        : { name: line.slice(0, colon).trim().toLowerCase(), value: line.slice(colon + 1).trim() };
+      if (colon === -1) {
+        return { name: line.trim().toLowerCase(), value: '' };
+      }
+      return {
+        name: line.slice(0, colon).trim().toLowerCase(),
+        value: line.slice(colon + 1).trim(),
+      };
     });
   const field = fields.find(({ name }) => name === 'content-length');
   if (field === undefined) {
@@ -137,7 +146,8 @@ function parseContentLength(header: string, maxMessageBytes: number): Result<num
     return err({ kind: 'invalid-content-length', value: field.value });
   }
   const length = Number(field.value);
-  return length > maxMessageBytes
-    ? err({ kind: 'message-too-large', length, maxMessageBytes })
-    : ok(length);
+  if (length > maxMessageBytes) {
+    return err({ kind: 'message-too-large', length, maxMessageBytes });
+  }
+  return ok(length);
 }

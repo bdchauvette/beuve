@@ -30,8 +30,10 @@ export function createFakePeer(options: Partial<JsonRpcConnectionOptions> = {}):
   const decoder = new ContentLengthDecoder();
   output.on('data', (chunk: Buffer) => {
     const decoded = decoder.push(chunk);
-    const bodies = decoded.ok ? decoded.value : [];
-    for (const body of bodies) {
+    if (!decoded.ok) {
+      return;
+    }
+    for (const body of decoded.value) {
       const message: unknown = JSON.parse(body);
       sent.push(message);
       const waiter = waiters.shift();

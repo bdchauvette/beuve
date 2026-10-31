@@ -38,7 +38,10 @@ describe('writeFileAtomic', () => {
       const temporary = names.filter((name) => name !== 'secrets.json');
       seen.push({
         names: temporary.map((name) => {
-          return name.startsWith('.secrets.json.') ? 'temporary' : name;
+          if (name.startsWith('.secrets.json.')) {
+            return 'temporary';
+          }
+          return name;
         }),
         modes: await Promise.all(temporary.map(async (name) => permissionsOf(tempDir, name))),
         contents: await readFile(file, { encoding: 'utf8', signal }),

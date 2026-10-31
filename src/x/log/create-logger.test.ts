@@ -90,7 +90,12 @@ describe('createLogger', () => {
   });
 });
 
-function capture(): { records: Record<string, unknown>[]; sink: (line: string) => void } {
+interface Capture {
+  readonly records: Record<string, unknown>[];
+  readonly sink: (line: string) => void;
+}
+
+function capture(): Capture {
   const records: Record<string, unknown>[] = [];
   const sink = (line: string): void => {
     records.push(JSON.parse(line) as Record<string, unknown>);

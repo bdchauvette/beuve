@@ -5,5 +5,8 @@ export function andThen<T, U, E, F>(
   result: Result<T, E>,
   next: (value: T) => Result<U, F>,
 ): Result<U, E | F> {
-  return result.ok ? next(result.value) : result;
+  if (result.ok) {
+    return next(result.value);
+  }
+  return result;
 }

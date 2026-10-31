@@ -5,6 +5,7 @@ import { test } from '#testing/test.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
+import type { JsonRpcHandlerOutcome } from './json-rpc-connection.ts';
 import { createFakePeer } from './testing/create-fake-peer.ts';
 describe('JsonRpcConnection', () => {
   test('correlates out-of-order responses with their requests', async ({
@@ -92,9 +93,7 @@ describe('JsonRpcConnection', () => {
         onNotification: (method, params): void => {
           notifications.push({ method, params });
         },
-        onRequest: (method, params) => {
-          return method === 'echo' ? ok(params) : err({ code: -32_601, message: `no ${method}` });
-        },
+        onRequest: echoOnly,
       }),
     );
     peer.send({ jsonrpc: '2.0', method: 'hello', params: { a: 1 } });
@@ -190,3 +189,11 @@ describe('JsonRpcConnection', () => {
     ]);
   });
 });
+
+/** Answers `echo` with its params and any other method with "method not found". */
+function echoOnly(method: string, params: unknown): JsonRpcHandlerOutcome {
+  if (method === 'echo') {
+    return ok(params);
+  }
+  return err({ code: -32_601, message: `no ${method}` });
+}

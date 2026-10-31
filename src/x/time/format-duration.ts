@@ -13,11 +13,12 @@ export function formatDuration(duration: Temporal.Duration, locale?: Intl.Locale
     smallestUnit: 'millisecond',
     roundingMode: 'halfExpand',
   });
-  return rounded.sign === 0
-    ? new Intl.NumberFormat(locale, {
-        style: 'unit',
-        unit: 'millisecond',
-        unitDisplay: 'narrow',
-      }).format(0)
-    : new Intl.DurationFormat(locale, { style: 'narrow' }).format(rounded);
+  if (rounded.sign === 0) {
+    return new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit: 'millisecond',
+      unitDisplay: 'narrow',
+    }).format(0);
+  }
+  return new Intl.DurationFormat(locale, { style: 'narrow' }).format(rounded);
 }

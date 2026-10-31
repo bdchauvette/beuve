@@ -16,5 +16,5 @@ function updateCaskFile(): void {
     return;
   }
   const file = 'Casks/beuve.rb';
-  writeFileSync(file, updateCask(readFileSync(file, 'utf8'), version, sha256));
+  writeFileSync(file, updateCask(readFileSync(file, 'utf8'), { version, sha256 }));
 }

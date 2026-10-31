@@ -11,7 +11,10 @@ export function tailOf(text: string, maxLength: number): string {
     return text;
   }
   const tail = text.slice(text.length - maxLength);
-  return isLowSurrogate(tail.codePointAt(0) ?? 0) ? tail.slice(1) : tail;
+  if (isLowSurrogate(tail.codePointAt(0) ?? 0)) {
+    return tail.slice(1);
+  }
+  return tail;
 }
 
 function isLowSurrogate(unit: number): boolean {

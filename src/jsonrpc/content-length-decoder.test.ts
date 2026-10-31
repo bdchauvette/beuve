@@ -9,11 +9,13 @@ import { ContentLengthDecoder } from './content-length-decoder.ts';
 import { encodeMessage } from './encode-message.ts';
 import type { JsonRpcMessage } from './json-rpc-message.ts';
 
-/** Messages with multi-byte text, and their framed byte stream and bodies. */
-function sample(): {
+interface FramedSample {
   readonly stream: Buffer;
   readonly expected: readonly string[];
-} {
+}
+
+/** Messages with multi-byte text, and their framed byte stream and bodies. */
+function sample(): FramedSample {
   const messages: readonly JsonRpcMessage[] = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: 'file:///tmp/ä' } },
     { jsonrpc: '2.0', method: 'window/logMessage', params: { message: 'emoji 😀 and 𝒳 and €' } },

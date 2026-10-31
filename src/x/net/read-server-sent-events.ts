@@ -18,18 +18,19 @@ export async function* readServerSentEvents(
   let data: string[] = [];
   const take = (line: string): string | undefined => {
     if (line === '') {
-      const event = data.length === 0 ? undefined : data.join('\n');
+      const eventData = data;
       data = [];
-      return event;
+      if (eventData.length === 0) {
+        return undefined;
+      }
+      return eventData.join('\n');
     }
     if (line.startsWith(':')) {
       return undefined;
     }
-    const colon = line.indexOf(':');
-    const field = colon === -1 ? line : line.slice(0, colon);
-    const value = colon === -1 ? '' : line.slice(colon + 1).replace(leadingSpace, '');
+    const [field, ...rest] = line.split(':');
     if (field === 'data') {
-      data.push(value);
+      data.push(rest.join(':').replace(leadingSpace, ''));
     }
     return undefined;
   };

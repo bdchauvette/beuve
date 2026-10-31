@@ -97,12 +97,16 @@ export class JsonRpcConnection {
 
   constructor(options: JsonRpcConnectionOptions) {
     this.#options = options;
-    this.#decoder = new ContentLengthDecoder(
-      options.maxMessageBytes === undefined ? {} : { maxMessageBytes: options.maxMessageBytes },
-    );
+    this.#decoder = new ContentLengthDecoder({
+      ...(options.maxMessageBytes !== undefined && { maxMessageBytes: options.maxMessageBytes }),
+    });
     const { input, output } = options;
     const onData = (chunk: Uint8Array | string): void => {
-      this.#receive(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk);
+      if (typeof chunk === 'string') {
+        this.#receive(new TextEncoder().encode(chunk));
+      } else {
+        this.#receive(chunk);
+      }
     };
     const onEnd = (): void => {
       this.#close({ kind: 'input-ended' });
@@ -160,8 +164,15 @@ export class JsonRpcConnection {
     }
   }
 
+  #pendingFor(id: JsonRpcId | null): PendingRequest | undefined {
+    if (id === null) {
+      return undefined;
+    }
+    return this.#pending.get(id);
+  }
+
   #handleResponse(response: JsonRpcResponse): void {
-    const pending = response.id === null ? undefined : this.#pending.get(response.id);
+    const pending = this.#pendingFor(response.id);
     if (pending === undefined) {
       this.#options.logger?.debug('jsonrpc: response for unknown request', { id: response.id });
       return;
@@ -232,12 +243,12 @@ export class JsonRpcConnection {
   }
 
   #respond(id: JsonRpcId, outcome: JsonRpcHandlerOutcome): void {
-    this.#write(
-      outcome.ok
-        ? // eslint-disable-next-line unicorn/no-null -- a JSON-RPC success must carry `result`.
-          { jsonrpc: '2.0', id, result: outcome.value ?? null }
-        : { jsonrpc: '2.0', id, error: outcome.error },
-    );
+    if (outcome.ok) {
+      // eslint-disable-next-line unicorn/no-null -- a JSON-RPC success must carry `result`.
+      this.#write({ jsonrpc: '2.0', id, result: outcome.value ?? null });
+    } else {
+      this.#write({ jsonrpc: '2.0', id, error: outcome.error });
+    }
   }
 
   #sendCancel(id: JsonRpcId): void {
@@ -302,8 +313,10 @@ export class JsonRpcConnection {
     const timeout =
       options.timeout ?? this.#options.defaultTimeout ?? Temporal.Duration.from({ seconds: 30 });
     const deadline = timeoutSignal(timeout);
-    const stopped =
-      options.signal === undefined ? deadline : AbortSignal.any([options.signal, deadline]);
+    let stopped = deadline;
+    if (options.signal !== undefined) {
+      stopped = AbortSignal.any([options.signal, deadline]);
+    }
     const listeners = new AbortController();
     return new Promise((resolve) => {
       const settle = (outcome: Result<unknown, JsonRpcRequestError>): void => {
@@ -317,22 +330,22 @@ export class JsonRpcConnection {
           if (!this.#pending.has(id)) {
             return;
           }
-          settle(
-            err(
-              stopped.reason === deadline.reason
-                ? { kind: 'timeout', method, timeout }
-                : { kind: 'cancelled', method },
-            ),
-          );
+          if (stopped.reason === deadline.reason) {
+            settle(err({ kind: 'timeout', method, timeout }));
+          } else {
+            settle(err({ kind: 'cancelled', method }));
+          }
           this.#sendCancel(id);
         },
         { once: true, signal: listeners.signal },
       );
       this.#pending.set(id, { method, settle });
-      const request: JsonRpcRequest =
-        params === undefined
-          ? { jsonrpc: '2.0', id, method }
-          : { jsonrpc: '2.0', id, method, params };
+      const request: JsonRpcRequest = {
+        jsonrpc: '2.0',
+        id,
+        method,
+        ...(params !== undefined && { params }),
+      };
       if (!this.#write(request)) {
         settle(err({ kind: 'closed', method }));
       }
@@ -341,9 +354,15 @@ export class JsonRpcConnection {
 
   /** Sends a notification; fails only when the connection is closed. */
   notify(method: string, params?: unknown): Result<undefined, JsonRpcRequestError> {
-    const notification: JsonRpcNotification =
-      params === undefined ? { jsonrpc: '2.0', method } : { jsonrpc: '2.0', method, params };
-    return this.#write(notification) ? ok(undefined) : err({ kind: 'closed', method });
+    const notification: JsonRpcNotification = {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined && { params }),
+    };
+    if (this.#write(notification)) {
+      return ok(undefined);
+    }
+    return err({ kind: 'closed', method });
   }
 
   /**
@@ -360,5 +379,8 @@ function readCancelledId(params: unknown): JsonRpcId | undefined {
     return undefined;
   }
   const { id } = params;
-  return typeof id === 'number' || typeof id === 'string' ? id : undefined;
+  if (typeof id === 'number' || typeof id === 'string') {
+    return id;
+  }
+  return undefined;
 }

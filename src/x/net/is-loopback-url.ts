@@ -9,7 +9,7 @@ export function isLoopbackUrl(url: string): boolean {
   if (host === undefined) {
     return false;
   }
-  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  const bare = withoutBrackets(host);
   if (bare === 'localhost' || bare.endsWith('.localhost')) {
     return true;
   }
@@ -24,4 +24,12 @@ export function isLoopbackUrl(url: string): boolean {
       return false;
     }
   }
+}
+
+/** `::1` for the `[::1]` a URL writes an IPv6 host as. */
+function withoutBrackets(host: string): string {
+  if (host.startsWith('[') && host.endsWith(']')) {
+    return host.slice(1, -1);
+  }
+  return host;
 }

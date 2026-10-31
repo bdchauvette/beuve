@@ -28,9 +28,15 @@ describe('result', () => {
 
 function parse(text: string): Result<number, string> {
   const value = Number(text);
-  return Number.isNaN(value) ? err(`not a number: ${text}`) : ok(value);
+  if (Number.isNaN(value)) {
+    return err(`not a number: ${text}`);
+  }
+  return ok(value);
 }
 
 function positive(n: number): Result<number, string> {
-  return n > 0 ? ok(n) : err('not positive');
+  if (n > 0) {
+    return ok(n);
+  }
+  return err('not positive');
 }

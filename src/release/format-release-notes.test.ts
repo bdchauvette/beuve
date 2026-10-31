@@ -3,12 +3,9 @@ import { describe } from 'vitest';
 import { test } from '#testing/test.ts';
 
 import { formatReleaseNotes } from './format-release-notes.ts';
+import type { ReleaseNotesInput } from './format-release-notes.ts';
 
-function base(): {
-  readonly repository: string;
-  readonly version: string;
-  readonly previousTag: string;
-} {
+function base(): Omit<ReleaseNotesInput, 'commits'> {
   return { repository: 'o/r', version: '1.2.0', previousTag: 'v1.1.0' };
 }
 

@@ -24,9 +24,10 @@ export function parseMessage(body: string): Result<ParsedJsonRpcMessage, string>
     if (id === undefined) {
       return ok({ kind: 'notification', message: { jsonrpc: '2.0', method, params } });
     }
-    return isId(id)
-      ? ok({ kind: 'request', message: { jsonrpc: '2.0', id, method, params } })
-      : err('request id must be a number or a string');
+    if (isId(id)) {
+      return ok({ kind: 'request', message: { jsonrpc: '2.0', id, method, params } });
+    }
+    return err('request id must be a number or a string');
   }
   if (id !== null && !isId(id)) {
     return err('response id must be a number, a string or null');
@@ -35,9 +36,10 @@ export function parseMessage(body: string): Result<ParsedJsonRpcMessage, string>
     return ok({ kind: 'response', message: { jsonrpc: '2.0', id, result: value['result'] } });
   }
   const { error } = value;
-  return isErrorObject(error) && !('result' in value)
-    ? ok({ kind: 'response', message: { jsonrpc: '2.0', id, error } })
-    : err('response must carry exactly one of result or a well-formed error');
+  if (isErrorObject(error) && !('result' in value)) {
+    return ok({ kind: 'response', message: { jsonrpc: '2.0', id, error } });
+  }
+  return err('response must carry exactly one of result or a well-formed error');
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

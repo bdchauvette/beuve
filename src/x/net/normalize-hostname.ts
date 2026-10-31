@@ -10,7 +10,10 @@ export function normalizeHostname(host: string): string | undefined {
     return undefined;
   }
   const labels = lower.split('.');
-  return labels.every((label) => isLabel(label)) ? lower : undefined;
+  if (labels.every((label) => isLabel(label))) {
+    return lower;
+  }
+  return undefined;
 }
 
 function isLabel(label: string): boolean {

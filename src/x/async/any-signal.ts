@@ -6,5 +6,8 @@ export function anySignal(
   ...signals: readonly (AbortSignal | undefined)[]
 ): AbortSignal | undefined {
   const present = [...new Set(signals.filter((signal) => signal !== undefined))];
-  return present.length <= 1 ? present[0] : AbortSignal.any(present);
+  if (present.length <= 1) {
+    return present[0];
+  }
+  return AbortSignal.any(present);
 }

@@ -18,9 +18,10 @@ const endsWithHighSurrogate = /[\uD800-\uDBFF]$/u;
  * to 200 characters and cannot throw, even for a revoked `Proxy` or a getter that throws.
  */
 export function errorFrom(value: unknown): Error {
-  return Error.isError(value)
-    ? value
-    : new Error(`Non-error thrown: ${describe(value)}`, { cause: value });
+  if (Error.isError(value)) {
+    return value;
+  }
+  return new Error(`Non-error thrown: ${describe(value)}`, { cause: value });
 }
 
 function describe(value: unknown): string {
@@ -40,7 +41,10 @@ function describeUnsafely(value: unknown): string {
       return `function ${nameOf(value, 'anonymous')}`;
     }
     case 'object': {
-      return value === null ? 'null' : describeObject(value);
+      if (value === null) {
+        return 'null';
+      }
+      return describeObject(value);
     }
     default: {
       return String(value);
@@ -59,15 +63,21 @@ function describeObject(value: object): string {
     return name;
   }
   const listed = keys.slice(0, maxListedKeys).join(', ');
-  return `${name} with keys ${listed}${keys.length > maxListedKeys ? ', …' : ''}`;
+  if (keys.length > maxListedKeys) {
+    return `${name} with keys ${listed}, …`;
+  }
+  return `${name} with keys ${listed}`;
 }
 
 function nameOf(named: unknown, fallback = 'Object'): string {
-  const name =
-    typeof named === 'function'
-      ? (Object.getOwnPropertyDescriptor(named, 'name')?.value as unknown)
-      : undefined;
-  return typeof name === 'string' && name !== '' ? name : fallback;
+  if (typeof named !== 'function') {
+    return fallback;
+  }
+  const name = Object.getOwnPropertyDescriptor(named, 'name')?.value as unknown;
+  if (typeof name === 'string' && name !== '') {
+    return name;
+  }
+  return fallback;
 }
 
 function quoted(text: string): string {
@@ -79,5 +89,5 @@ function truncated(text: string): string {
     return text;
   }
   const head = text.slice(0, maxDescriptionLength);
-  return `${endsWithHighSurrogate.test(head) ? head.slice(0, -1) : head}…`;
+  return `${head.replace(endsWithHighSurrogate, '')}…`;
 }

@@ -25,6 +25,7 @@ const groups: readonly Group[] = [
 ];
 const otherTitle = 'Other changes';
 const typePattern = /^[a-z]+$/;
+const breakingMark = /!$/;
 const caskBumpPrefix = 'chore(cask):';
 
 /**
@@ -41,9 +42,15 @@ export function formatReleaseNotes(input: ReleaseNotesInput): string {
     const lines = entries
       .filter((entry) => groupTitle(entry.type) === title)
       .map((entry) => `- ${entry.line}`);
-    return lines.length === 0 ? [] : `## ${title}\n\n${lines.join('\n')}`;
+    if (lines.length === 0) {
+      return [];
+    }
+    return `## ${title}\n\n${lines.join('\n')}`;
   });
-  const body = sections.length === 0 ? 'No user-facing changes.' : sections.join('\n\n');
+  let body = 'No user-facing changes.';
+  if (sections.length > 0) {
+    body = sections.join('\n\n');
+  }
   return `${body}\n\n${footer(input)}\n`;
 }
 
@@ -59,17 +66,42 @@ function parseEntry(commit: ReleaseCommit): Entry {
     return other;
   }
   const text = commit.subject.slice(split + 2);
-  const isBreaking = commit.subject.slice(0, split).endsWith('!');
-  const header = commit.subject.slice(0, isBreaking ? split - 1 : split);
-  const open = header.indexOf('(');
-  const type = open === -1 ? header : header.slice(0, open);
-  if (text === '' || !typePattern.test(type) || (open !== -1 && !header.endsWith(')'))) {
+  const prefix = commit.subject.slice(0, split);
+  const isBreaking = prefix.endsWith('!');
+  const header = parseHeader(prefix.replace(breakingMark, ''));
+  if (text === '' || header === undefined || !typePattern.test(header.type)) {
     return other;
   }
-  const scope = open === -1 ? '' : `**${header.slice(open + 1, -1)}:** `;
-  const label = groupTitle(type) === otherTitle ? `${type}: ` : '';
-  const breaking = isBreaking ? '**BREAKING** ' : '';
-  return { type, line: `${breaking}${scope}${label}${text} (${commit.hash})` };
+  const { type, scope } = header;
+  let line = `${text} (${commit.hash})`;
+  if (groupTitle(type) === otherTitle) {
+    line = `${type}: ${line}`;
+  }
+  if (scope !== undefined) {
+    line = `**${scope}:** ${line}`;
+  }
+  if (isBreaking) {
+    line = `**BREAKING** ${line}`;
+  }
+  return { type, line };
+}
+
+interface Header {
+  readonly type: string;
+  /** What the parentheses hold; `undefined` without them. */
+  readonly scope: string | undefined;
+}
+
+/** `type` or `type(scope)`; `undefined` for an unclosed scope. */
+function parseHeader(header: string): Header | undefined {
+  const open = header.indexOf('(');
+  if (open === -1) {
+    return { type: header, scope: undefined };
+  }
+  if (!header.endsWith(')')) {
+    return undefined;
+  }
+  return { type: header.slice(0, open), scope: header.slice(open + 1, -1) };
 }
 
 function groupTitle(type: string): string {
@@ -77,12 +109,10 @@ function groupTitle(type: string): string {
 }
 
 function footer(input: ReleaseNotesInput): string {
-  const { repository, version, previousTag } = input;
+  const { repository } = input;
   const base = `https://github.com/${repository}`;
   const lines = [
-    previousTag === undefined
-      ? `First release.`
-      : `**Full changelog:** ${base}/compare/${previousTag}...v${version}`,
+    changelogLine(input),
     '',
     '## Install',
     '',
@@ -94,4 +124,11 @@ function footer(input: ReleaseNotesInput): string {
     '```',
   ];
   return lines.join('\n');
+}
+
+function changelogLine({ repository, version, previousTag }: ReleaseNotesInput): string {
+  if (previousTag === undefined) {
+    return 'First release.';
+  }
+  return `**Full changelog:** https://github.com/${repository}/compare/${previousTag}...v${version}`;
 }

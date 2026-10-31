@@ -7,11 +7,9 @@
  * cancellation by comparing the combined signal's `reason` with this signal's (ADR 0076).
  */
 export function timeoutSignal(duration: Temporal.Duration): AbortSignal {
-  return AbortSignal.timeout(
-    duration.sign < 0
-      ? 0
-      : duration
-          .round({ smallestUnit: 'milliseconds', roundingMode: 'ceil' })
-          .total('milliseconds'),
-  );
+  if (duration.sign < 0) {
+    return AbortSignal.timeout(0);
+  }
+  const rounded = duration.round({ smallestUnit: 'milliseconds', roundingMode: 'ceil' });
+  return AbortSignal.timeout(rounded.total('milliseconds'));
 }
