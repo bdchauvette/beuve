@@ -12,12 +12,12 @@ import { test } from './testing/test.ts';
 
 test('setFileMark stores a mark and replaces the one for the same path', ({ expect, db, deps }) => {
   const session = storedSession(db, deps);
-  expect(setFileMark(db, mark(session.id, 'src/a.ts', 'a'))).toStrictEqual({
+  expect(setFileMark(db, mark(session.id, { path: 'src/a.ts', seed: 'a' }))).toStrictEqual({
     ok: true,
     value: undefined,
   });
-  setFileMark(db, mark(session.id, 'src/b.ts', 'b'));
-  setFileMark(db, { ...mark(session.id, 'src/a.ts', 'c'), headSha: sha('2') });
+  setFileMark(db, mark(session.id, { path: 'src/b.ts', seed: 'b' }));
+  setFileMark(db, { ...mark(session.id, { path: 'src/a.ts', seed: 'c' }), headSha: sha('2') });
   expect(
     okValueFrom(listFileMarks(db, session.id)).map(({ path, diffId, headSha }) => {
       return [path, diffId[0], headSha[0]];
@@ -30,8 +30,8 @@ test('setFileMark stores a mark and replaces the one for the same path', ({ expe
 
 test('setFileMark moves the mark of a renamed file', ({ expect, db, deps }) => {
   const session = storedSession(db, deps);
-  setFileMark(db, mark(session.id, 'old.ts', 'a'));
-  setFileMark(db, mark(session.id, 'new.ts', 'a'), 'old.ts');
+  setFileMark(db, mark(session.id, { path: 'old.ts', seed: 'a' }));
+  setFileMark(db, mark(session.id, { path: 'new.ts', seed: 'a' }), 'old.ts');
   expect(okValueFrom(listFileMarks(db, session.id)).map(({ path }) => path)).toStrictEqual([
     'new.ts',
   ]);
@@ -39,7 +39,7 @@ test('setFileMark moves the mark of a renamed file', ({ expect, db, deps }) => {
 
 test('setFileMark reports an unknown session', ({ expect, db }) => {
   const sessionId = '00000000-0000-4000-8000-0000000000ff' as SessionId;
-  expect(setFileMark(db, mark(sessionId, 'a.ts', 'a'))).toStrictEqual({
+  expect(setFileMark(db, mark(sessionId, { path: 'a.ts', seed: 'a' }))).toStrictEqual({
     ok: false,
     error: { kind: 'session-not-found', sessionId },
   });
@@ -47,8 +47,8 @@ test('setFileMark reports an unknown session', ({ expect, db }) => {
 
 test('removeFileMarks removes only the named paths of one session', ({ expect, db, deps }) => {
   const session = storedSession(db, deps);
-  setFileMark(db, mark(session.id, 'a.ts', 'a'));
-  setFileMark(db, mark(session.id, 'b.ts', 'b'));
+  setFileMark(db, mark(session.id, { path: 'a.ts', seed: 'a' }));
+  setFileMark(db, mark(session.id, { path: 'b.ts', seed: 'b' }));
   removeFileMarks(db, session.id, ['a.ts', 'missing.ts']);
   expect(okValueFrom(listFileMarks(db, session.id)).map(({ path }) => path)).toStrictEqual([
     'b.ts',
@@ -57,7 +57,7 @@ test('removeFileMarks removes only the named paths of one session', ({ expect, d
 
 test('marks are deleted with their session', ({ expect, db, deps }) => {
   const session = storedSession(db, deps);
-  setFileMark(db, mark(session.id, 'a.ts', 'a'));
+  setFileMark(db, mark(session.id, { path: 'a.ts', seed: 'a' }));
   db.prepare('DELETE FROM sessions;').run();
   expect(okValueFrom(listFileMarks(db, session.id))).toStrictEqual([]);
 });
@@ -78,7 +78,13 @@ function sha(digit: string): CommitSha {
   return digit.repeat(40) as CommitSha;
 }
 
-function mark(sessionId: SessionId, path: string, seed: string): FileMark {
+/** A mark on `path`; `seed` is repeated into its diff id. */
+interface MarkSeed {
+  readonly path: string;
+  readonly seed: string;
+}
+
+function mark(sessionId: SessionId, { path, seed }: MarkSeed): FileMark {
   return {
     sessionId,
     path,

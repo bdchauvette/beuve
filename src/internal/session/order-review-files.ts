@@ -42,9 +42,10 @@ export function orderReviewFiles(
   files: readonly OrderableFile[],
   edges: readonly DependencyEdge[] = [],
 ): readonly OrderedGroup[] {
+  type MechanicalFile = OrderableFile & { readonly mechanical: MechanicalReason };
   const primary = files.filter((file) => file.mechanical === undefined).map((file) => file.path);
   const mechanical = files
-    .filter((file): file is OrderableFile & { readonly mechanical: MechanicalReason } => {
+    .filter((file): file is MechanicalFile => {
       return file.mechanical !== undefined;
     })
     .toSorted((a, b) => {
@@ -54,7 +55,7 @@ export function orderReviewFiles(
   if (primary.length > 0) {
     groups.push({
       id: 'changes',
-      label: edges.length > 0 ? 'Changes, dependencies first' : 'Changes',
+      label: changesLabel(edges),
       paths: dependenciesFirst(primary, edges),
     });
   }
@@ -67,6 +68,13 @@ export function orderReviewFiles(
     });
   }
   return groups;
+}
+
+function changesLabel(edges: readonly DependencyEdge[]): string {
+  if (edges.length > 0) {
+    return 'Changes, dependencies first';
+  }
+  return 'Changes';
 }
 
 function dependenciesFirst(paths: readonly string[], edges: readonly DependencyEdge[]): string[] {
@@ -84,41 +92,35 @@ function dependenciesFirst(paths: readonly string[], edges: readonly DependencyE
   }
   const ordered: string[] = [];
   const state = new Map<string, 'walking' | 'done'>();
+  /** Iterative depth-first post-order from `root`. */
+  const walk = (root: string): void => {
+    if (state.has(root)) {
+      return;
+    }
+    const stack: { readonly path: string; readonly next: string[] }[] = [];
+    const enter = (path: string): void => {
+      state.set(path, 'walking');
+      stack.push({
+        path,
+        next: [...(dependenciesOf.get(path) ?? [])].toSorted(comparePaths).toReversed(),
+      });
+    };
+    enter(root);
+    for (let frame = stack.at(-1); frame !== undefined; frame = stack.at(-1)) {
+      const dependency = frame.next.pop();
+      if (dependency === undefined) {
+        state.set(frame.path, 'done');
+        ordered.push(frame.path);
+        stack.pop();
+      } else if (!state.has(dependency)) {
+        enter(dependency);
+      }
+    }
+  };
   for (const root of sorted) {
-    walk(root, dependenciesOf, state, ordered);
+    walk(root);
   }
   return ordered;
-}
-
-/** Iterative depth-first post-order from `root`. */
-function walk(
-  root: string,
-  dependenciesOf: ReadonlyMap<string, readonly string[]>,
-  state: Map<string, 'walking' | 'done'>,
-  ordered: string[],
-): void {
-  if (state.has(root)) {
-    return;
-  }
-  const stack: { readonly path: string; readonly next: string[] }[] = [];
-  const enter = (path: string): void => {
-    state.set(path, 'walking');
-    stack.push({
-      path,
-      next: [...(dependenciesOf.get(path) ?? [])].toSorted(comparePaths).toReversed(),
-    });
-  };
-  enter(root);
-  for (let frame = stack.at(-1); frame !== undefined; frame = stack.at(-1)) {
-    const dependency = frame.next.pop();
-    if (dependency === undefined) {
-      state.set(frame.path, 'done');
-      ordered.push(frame.path);
-      stack.pop();
-    } else if (!state.has(dependency)) {
-      enter(dependency);
-    }
-  }
 }
 
 /** Code-point order, like git's own file order, whatever the locale. */

@@ -33,10 +33,10 @@ describe('orderReviewFiles', () => {
     const [changes] = orderReviewFiles(
       [file('app.ts'), file('lib/a.ts'), file('lib/b.ts'), file('z-util.ts'), file('other.ts')],
       [
-        edge('app.ts', 'lib/a.ts'),
-        edge('lib/a.ts', 'z-util.ts'),
-        edge('app.ts', 'lib/b.ts'),
-        edge('lib/b.ts', 'z-util.ts'),
+        { dependent: 'app.ts', dependency: 'lib/a.ts' },
+        { dependent: 'lib/a.ts', dependency: 'z-util.ts' },
+        { dependent: 'app.ts', dependency: 'lib/b.ts' },
+        { dependent: 'lib/b.ts', dependency: 'z-util.ts' },
       ],
     );
     expect(changes?.label).toBe('Changes, dependencies first');
@@ -50,7 +50,11 @@ describe('orderReviewFiles', () => {
   });
 
   test('breaks cycles at the first path in sorted order, every time', ({ expect }) => {
-    const edges = [edge('a.ts', 'b.ts'), edge('b.ts', 'c.ts'), edge('c.ts', 'a.ts')];
+    const edges = [
+      { dependent: 'a.ts', dependency: 'b.ts' },
+      { dependent: 'b.ts', dependency: 'c.ts' },
+      { dependent: 'c.ts', dependency: 'a.ts' },
+    ];
     const files = [file('c.ts'), file('a.ts'), file('b.ts')];
     const first = orderReviewFiles(files, edges)[0]?.paths;
     const shuffled = orderReviewFiles(files.toReversed(), edges.toReversed())[0]?.paths;
@@ -62,12 +66,12 @@ describe('orderReviewFiles', () => {
     const [changes] = orderReviewFiles(
       [file('a.ts'), file('b.ts'), file('package.json', 'config')],
       [
-        edge('a.ts', 'a.ts'),
-        edge('a.ts', 'b.ts'),
-        edge('a.ts', 'b.ts'),
-        edge('a.ts', 'package.json'),
-        edge('a.ts', 'unchanged.ts'),
-        edge('unchanged.ts', 'a.ts'),
+        { dependent: 'a.ts', dependency: 'a.ts' },
+        { dependent: 'a.ts', dependency: 'b.ts' },
+        { dependent: 'a.ts', dependency: 'b.ts' },
+        { dependent: 'a.ts', dependency: 'package.json' },
+        { dependent: 'a.ts', dependency: 'unchanged.ts' },
+        { dependent: 'unchanged.ts', dependency: 'a.ts' },
       ],
     );
     expect(changes?.paths).toStrictEqual(['b.ts', 'a.ts']);
@@ -84,7 +88,9 @@ describe('orderReviewFiles', () => {
     const names = Array.from({ length: 20_000 }, (_, index) => {
       return `f${String(index).padStart(5, '0')}.ts`;
     });
-    const chain = names.slice(1).map((name, index) => edge(names[index] ?? '', name));
+    const chain = names.slice(1).map((name, index): DependencyEdge => {
+      return { dependent: names[index] ?? '', dependency: name };
+    });
     const [changes] = orderReviewFiles(
       names.map((name) => file(name)),
       chain,
@@ -96,8 +102,4 @@ describe('orderReviewFiles', () => {
 
 function file(path: string, mechanical?: MechanicalReason): OrderableFile {
   return { path, mechanical };
-}
-
-function edge(dependent: string, dependency: string): DependencyEdge {
-  return { dependent, dependency };
 }

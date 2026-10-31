@@ -33,11 +33,11 @@ export function checkpointFromRow(
   if (typeof sessionId !== 'string' || !isUuid(sessionId)) {
     return corrupt('session_id is not a UUID');
   }
-  const base = parseCommitSha(typeof baseSha === 'string' ? baseSha : '');
+  const base = parseCommitSha(baseSha);
   if (!base.ok) {
     return corrupt('base_sha is not a commit id');
   }
-  const head = parseCommitSha(typeof headSha === 'string' ? headSha : '');
+  const head = parseCommitSha(headSha);
   if (!head.ok) {
     return corrupt('head_sha is not a commit id');
   }

@@ -39,7 +39,7 @@ export function listFileMarks(
     if (typeof diffId !== 'string' || !diffIdPattern.test(diffId)) {
       return corrupt('diff_id is not a SHA-256 digest');
     }
-    const head = parseCommitSha(typeof headSha === 'string' ? headSha : '');
+    const head = parseCommitSha(headSha);
     if (!head.ok) {
       return corrupt('head_sha is not a commit id');
     }

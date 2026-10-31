@@ -1,6 +1,12 @@
 import type { Checkpoint, CheckpointId, ReviewedRange, Session, SessionDeps } from './session.ts';
 import { systemSessionDeps } from './system-session-deps.ts';
 
+/** The session moved to `reviewed`, and the checkpoint that moved it. */
+export interface RecordedCheckpoint {
+  readonly session: Session;
+  readonly checkpoint: Checkpoint;
+}
+
 /**
  * Records that the reviewer has reviewed `reviewed`: usually the head they were shown (which may
  * be older than `session.headSha` if commits arrived meanwhile) and the fork point it was diffed
@@ -10,7 +16,7 @@ export function recordCheckpoint(
   session: Session,
   reviewed: ReviewedRange,
   deps: SessionDeps = systemSessionDeps,
-): { readonly session: Session; readonly checkpoint: Checkpoint } {
+): RecordedCheckpoint {
   const checkpoint: Checkpoint = {
     id: deps.newId() as CheckpointId,
     sessionId: session.id,

@@ -64,7 +64,7 @@ function sessionFromRow(row: Row): Result<Session, CorruptRow> {
   if (typeof source === 'string') {
     return corrupt(source);
   }
-  const sha = parseCommitSha(typeof headSha === 'string' ? headSha : '');
+  const sha = parseCommitSha(headSha);
   if (!sha.ok) {
     return corrupt('head_sha is not a commit id');
   }
