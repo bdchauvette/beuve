@@ -2,6 +2,7 @@ import type { Result } from '#x/result/result.ts';
 
 import type { GitError } from './git-error.ts';
 import type { InterruptionPolicy } from './interruption-policy.ts';
+import type { ObjectContent, ObjectLookup, ObjectReadOptions, ObjectSpec } from './object-spec.ts';
 
 /**
  * The key of a {@link GitRepository}'s raw runner. Only the git domain's typed operations may
@@ -22,6 +23,38 @@ export interface GitRunner {
     args: readonly string[],
     options: GitExecOptions,
   ) => Promise<Result<Buffer, GitError>>;
+  /**
+   * Streams stdout to `onStdout` as it arrives; answering `stop` ends git with SIGTERM and the
+   * call with `stopped`. For output too large to buffer, such as `git grep`. Reads only.
+   */
+  readonly stream: (
+    args: readonly string[],
+    options: GitStreamOptions,
+  ) => Promise<Result<'complete' | 'stopped', GitError>>;
+  /**
+   * The repository's long-lived `git cat-file --batch-command` (ADR 0087), for single objects,
+   * `<commit>:<path>` lookups and ref resolution without a spawn. Every request is a `read`.
+   */
+  readonly objects: ObjectReads;
+}
+
+/** Object lookups on a {@link GitObjectReader}, bound to the handle's own signal. */
+export interface ObjectReads {
+  readonly info: (
+    spec: ObjectSpec,
+    options?: Omit<ObjectReadOptions, 'maxBytes'>,
+  ) => Promise<Result<ObjectLookup, GitError>>;
+  readonly read: (
+    spec: ObjectSpec,
+    options?: ObjectReadOptions,
+  ) => Promise<Result<ObjectContent, GitError>>;
+}
+
+export interface GitStreamOptions {
+  readonly policy: { readonly kind: 'read' };
+  readonly signal?: AbortSignal | undefined;
+  /** Each chunk of stdout, in order. */
+  readonly onStdout: (chunk: Buffer) => 'more' | 'stop';
 }
 
 export interface GitRunOptions {

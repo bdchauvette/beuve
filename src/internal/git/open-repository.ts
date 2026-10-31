@@ -12,7 +12,11 @@ import { parseGitVersion } from './parse-git-version.ts';
 import type { GitVersion } from './parse-git-version.ts';
 import { execGit } from './exec-git.ts';
 import { gitRunner } from './git-runner.ts';
-import type { GitRunner } from './git-runner.ts';
+import type { GitRunner, ObjectReads } from './git-runner.ts';
+import { GitObjectReader } from './git-object-reader.ts';
+import type { ObjectReaderPool } from './object-reader-pool.ts';
+import type { ObjectContent, ObjectLookup } from './object-spec.ts';
+import { streamGit } from './stream-git.ts';
 import type { InterruptionPolicy } from './interruption-policy.ts';
 import { runGit } from './run-git.ts';
 
@@ -49,6 +53,12 @@ export interface OpenRepositoryOptions {
    * gets a fresh handle, bound to its own signal, per request (ADR 0081).
    */
   readonly probe?: RepositoryProbe;
+  /**
+   * Where the handle's `cat-file --batch-command` comes from (ADR 0087): the pool's reader for
+   * the root, shared by every handle on it. Without one, the handle starts its own reader on
+   * first use, which stops as soon as it is idle.
+   */
+  readonly objectReaders?: ObjectReaderPool;
 }
 
 /** Oldest git with every feature used here except `merge-tree --write-tree` (`worktree list -z`). */
@@ -101,8 +111,46 @@ export async function openRepository(
         args,
         signal: signalFor(execOptions.signal),
       }),
+    stream: async (args, streamOptions): Promise<Result<'complete' | 'stopped', GitError>> =>
+      streamGit({
+        ...options,
+        ...streamOptions,
+        cwd: root,
+        args,
+        signal: signalFor(streamOptions.signal),
+      }),
+    objects: boundObjectReads(root, options, signalFor),
   };
   return ok({ root, version, [gitRunner]: runner });
+}
+
+/** Object reads on the pool's reader for `root` (or the handle's own), under the handle's signal. */
+function boundObjectReads(
+  root: string,
+  options: OpenRepositoryOptions,
+  signalFor: (own: AbortSignal | undefined) => AbortSignal | undefined,
+): ObjectReads {
+  let own: GitObjectReader | undefined;
+  const reader = (): GitObjectReader => {
+    const pooled = options.objectReaders?.[gitRunner](root, options.gitBinary);
+    if (pooled !== undefined) {
+      return pooled;
+    }
+    own ??= new GitObjectReader({
+      root,
+      idleTimeout: Temporal.Duration.from({ seconds: 0 }),
+      ...(options.gitBinary !== undefined && { gitBinary: options.gitBinary }),
+      ...(options.timeout !== undefined && { requestTimeout: options.timeout }),
+      ...(options.logger !== undefined && { logger: options.logger }),
+    });
+    return own;
+  };
+  return {
+    info: async (spec, readOptions = {}): Promise<Result<ObjectLookup, GitError>> =>
+      reader().info(spec, { ...readOptions, signal: signalFor(readOptions.signal) }),
+    read: async (spec, readOptions = {}): Promise<Result<ObjectContent, GitError>> =>
+      reader().read(spec, { ...readOptions, signal: signalFor(readOptions.signal) }),
+  };
 }
 
 async function probeRepository(

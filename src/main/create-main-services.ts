@@ -173,12 +173,16 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     heads.trace?.observeHead(sessionId, headSha);
     heads.impact?.observeHead(sessionId, headSha);
   };
-  const caches = createGitCaches({ enabled: options.caching !== false });
+  const caches = createGitCaches({ enabled: options.caching !== false, logger });
   const context: SessionContext = {
     db: options.db,
     logger,
     deps: options.deps ?? systemSessionDeps,
-    git: { ...options.git, logger: options.git?.logger ?? logger },
+    git: {
+      ...options.git,
+      logger: options.git?.logger ?? logger,
+      objectReaders: caches.objectReaders,
+    },
     caches,
     onHeadMoved,
   };
@@ -361,6 +365,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       impactRunner.dispose();
       await multiplexer.dispose();
       await worktrees.settled();
+      await caches[Symbol.asyncDispose]();
     },
   };
 }

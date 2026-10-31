@@ -18,6 +18,7 @@ export async function rebindRepository(
 ): Promise<Result<GitRepository, GitError>> {
   return openRepository(repository.root, {
     ...context.git,
+    objectReaders: context.caches.objectReaders,
     signal: anySignal(context.git.signal, signal),
     probe: { root: repository.root, version: repository.version },
   });

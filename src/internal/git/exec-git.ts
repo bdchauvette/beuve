@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process';
 import type { ExecFileException } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import process from 'node:process';
 
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
@@ -11,6 +10,8 @@ import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import type { GitError } from './git-error.ts';
+import { gitHardeningArgs } from './git-hardening-args.ts';
+import { hardenedGitEnvironment } from './hardened-git-environment.ts';
 import type { InterruptionPolicy } from './interruption-policy.ts';
 
 /** One git invocation. `args` start at the subcommand; hardening options are prepended. */
@@ -37,30 +38,6 @@ const defaultTimeout = Temporal.Duration.from({ seconds: 30 });
 const defaultMaxBufferBytes = 64 * 1024 * 1024;
 
 /**
- * Global options that make git's output predictable and keep repository-controlled config from
- * running programs: no pager, literal pathspecs, unquoted UTF-8 paths, no colour, no fsmonitor
- * or hooks, and standard `a/` `b/` diff prefixes.
- */
-const hardeningArgs = [
-  '--no-pager',
-  '--literal-pathspecs',
-  '-c',
-  'core.quotepath=off',
-  '-c',
-  'core.fsmonitor=false',
-  '-c',
-  'core.hooksPath=/dev/null',
-  '-c',
-  'color.ui=false',
-  '-c',
-  'diff.noprefix=false',
-  '-c',
-  'diff.mnemonicPrefix=false',
-  '-c',
-  'diff.relative=false',
-];
-
-/**
  * Runs git directly (never through a shell) and returns its raw stdout. Inherited `GIT_*`
  * variables are dropped so the caller's environment can't redirect git to another repository,
  * prompts and pagers are disabled, and messages are forced to the C locale so failures can be
@@ -82,7 +59,7 @@ export async function execGit(request: GitRequest): Promise<Result<Buffer, GitEr
   const timeout = request.timeout ?? defaultTimeout;
   const maxBufferBytes = request.maxBufferBytes ?? defaultMaxBufferBytes;
   const stopwatch = new Stopwatch();
-  const outcome = await execute(gitBinary, [...hardeningArgs, ...request.args], {
+  const outcome = await execute(gitBinary, [...gitHardeningArgs, ...request.args], {
     cwd: request.cwd,
     timeout,
     maxBufferBytes,
@@ -147,7 +124,7 @@ async function execute(
     args,
     {
       cwd: options.cwd,
-      env: hardenedEnvironment(),
+      env: hardenedGitEnvironment(),
       timeout: options.timeout.total('milliseconds'),
       killSignal: 'SIGTERM',
       maxBuffer: options.maxBufferBytes,
@@ -174,22 +151,6 @@ async function execute(
   child.stdin?.end(options.input);
   const [outcome] = await Promise.all([finished.promise, exited]);
   return outcome;
-}
-
-function hardenedEnvironment(): NodeJS.ProcessEnv {
-  const inherited = Object.entries(process.env).filter(
-    ([key]) => !key.toUpperCase().startsWith('GIT_'),
-  );
-  return {
-    ...Object.fromEntries(inherited),
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_PAGER: 'cat',
-    PAGER: 'cat',
-    GIT_OPTIONAL_LOCKS: '0',
-    GIT_NO_REPLACE_OBJECTS: '1',
-    LC_ALL: 'C',
-    LANGUAGE: 'C',
-  };
 }
 
 /** git may exit (e.g. on a bad argument) before reading its input; the exit code says why. */

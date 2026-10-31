@@ -7,13 +7,18 @@ import { gitRunner } from './git-runner.ts';
 import type { CommitSha } from './object-id.ts';
 import type { GitRepository } from './open-repository.ts';
 import { parseCommitSha } from './parse-commit-sha.ts';
+import { parseRevisionName } from './parse-revision-name.ts';
+import type { RevisionName } from './parse-revision-name.ts';
 
 const maxRevisionLength = 1024;
 
 /**
  * Resolves an untrusted revision expression (branch, tag, `HEAD~2`, abbreviated sha…) to the
  * full sha of the commit it names. Anything that looks like an option is rejected before git sees
- * it, and `--end-of-options` stops git from reading it as one regardless.
+ * it, and `--end-of-options` stops git from reading it as one regardless. A {@link RevisionName}
+ * is resolved on the repository's warm `cat-file --batch-command` (ADR 0087); anything else
+ * (a reflog entry, a name with `{` or `:`) by a one-off `rev-parse`. Either way the ref is read
+ * afresh, never cached (ADR 0081).
  */
 export async function resolveRevision(
   repository: GitRepository,
@@ -22,6 +27,10 @@ export async function resolveRevision(
   const invalid = revisionProblem(revision);
   if (invalid !== undefined) {
     return err({ kind: 'invalid-argument', argument: revision, reason: invalid });
+  }
+  const name = parseRevisionName(revision);
+  if (name !== undefined) {
+    return resolveWithReader(repository, name, revision);
   }
   const args = ['rev-parse', '--verify', '--quiet', '--end-of-options', revision + '^{commit}'];
   const output = await repository[gitRunner].run(args, { policy: { kind: 'read' } });
@@ -34,6 +43,33 @@ export async function resolveRevision(
   const sha = parseCommitSha(output.value.trim());
   return sha === undefined
     ? err({ kind: 'unexpected-output', args, message: `not an object name: ${output.value}` })
+    : ok(sha);
+}
+
+/** `info <name>^{commit}` on the warm reader: the ref is read afresh, without a spawn. */
+async function resolveWithReader(
+  repository: GitRepository,
+  name: RevisionName,
+  revision: string,
+): Promise<Result<CommitSha, GitError>> {
+  const found = await repository[gitRunner].objects.info({
+    kind: 'ref',
+    ref: name,
+    peel: 'commit',
+  });
+  if (!found.ok) {
+    return found;
+  }
+  if (found.value.kind !== 'found') {
+    return err({ kind: 'unknown-revision', revision });
+  }
+  const sha = parseCommitSha(found.value.oid);
+  return sha === undefined || found.value.type !== 'commit'
+    ? err({
+        kind: 'unexpected-output',
+        args: ['cat-file', '--batch-command'],
+        message: `not a commit: ${found.value.oid}`,
+      })
     : ok(sha);
 }
 

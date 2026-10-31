@@ -13,6 +13,11 @@ export interface TreeBlob {
   readonly objectId: string;
 }
 
+/** A {@link TreeBlob} with its mode: `100644`, `100755` or `120000` (a symbolic link). */
+export interface TreeFile extends TreeBlob {
+  readonly mode: string;
+}
+
 const maxListingBytes = 64 * 1024 * 1024;
 
 /**
@@ -24,7 +29,7 @@ const maxListingBytes = 64 * 1024 * 1024;
 export async function listTreeBlobs(
   repository: GitRepository,
   commit: CommitSha,
-): Promise<Result<readonly TreeBlob[], GitError>> {
+): Promise<Result<readonly TreeFile[], GitError>> {
   const output = await repository[gitRunner].exec(
     ['ls-tree', '-r', '-z', '--end-of-options', commit],
     { policy: { kind: 'read' }, maxBufferBytes: maxListingBytes },
@@ -32,11 +37,11 @@ export async function listTreeBlobs(
   if (!output.ok) {
     return output;
   }
-  const blobs: TreeBlob[] = [];
+  const blobs: TreeFile[] = [];
   for (const line of output.value.toString('utf8').split('\0')) {
     const entry = parseLsTreeEntry(line);
     if (entry?.type === 'blob') {
-      blobs.push({ objectId: entry.objectId, path: entry.path });
+      blobs.push({ objectId: entry.objectId, path: entry.path, mode: entry.mode });
     }
   }
   return ok(blobs);

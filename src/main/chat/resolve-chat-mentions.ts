@@ -4,7 +4,7 @@ import type { ChatSelection } from '#internal/chat/chat-question.ts';
 import { excerptLines } from '#internal/chat/excerpt-lines.ts';
 import { formatMention } from '#internal/chat/format-mention.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
-import { listTreeBlobs } from '#internal/git/list-tree-blobs.ts';
+import { findTreeBlob } from '#internal/git/find-tree-blob.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -41,19 +41,12 @@ export async function resolveChatMentions(
 ): Promise<Result<ResolvedMentions, IpcError>> {
   const { repository, session } = diff.refreshed;
   const shas = { head: session.headSha, base: diff.baseSha };
-  const trees = new Map<string, ReadonlyMap<string, string>>();
-  const treeOf = async (sha: string): Promise<Result<ReadonlyMap<string, string>, IpcError>> => {
-    const cached = trees.get(sha);
-    if (cached !== undefined) {
-      return ok(cached);
-    }
-    const listed = await listTreeBlobs(repository, sha as typeof session.headSha);
-    if (!listed.ok) {
-      return gitFailure(context.logger, listed.error);
-    }
-    const blobs = new Map(listed.value.map((blob) => [blob.path, blob.objectId]));
-    trees.set(sha, blobs);
-    return ok(blobs);
+  const trackedBlob = async (
+    sha: string,
+    path: string,
+  ): Promise<Result<string | undefined, IpcError>> => {
+    const found = await findTreeBlob(repository, sha as typeof session.headSha, path);
+    return found.ok ? ok(found.value?.objectId) : gitFailure(context.logger, found.error);
   };
 
   const objectIds: string[] = [];
@@ -66,11 +59,11 @@ export async function resolveChatMentions(
     }
     let objectId = blobInDiff(diff.files, mention);
     if (objectId === undefined) {
-      const tree = await treeOf(expected);
-      if (!tree.ok) {
-        return tree;
+      const tracked = await trackedBlob(expected, mention.path);
+      if (!tracked.ok) {
+        return tracked;
       }
-      objectId = tree.value.get(mention.path);
+      objectId = tracked.value;
     }
     if (objectId === undefined) {
       return refuse(

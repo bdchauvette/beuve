@@ -5,6 +5,7 @@ import type { Result } from '#x/result/result.ts';
 import type { GitError } from './git-error.ts';
 import { gitRunner } from './git-runner.ts';
 import { isObjectId } from './is-object-id.ts';
+import type { ObjectContent } from './object-spec.ts';
 import type { GitRepository } from './open-repository.ts';
 
 /** A blob to read, by full object name. `mode` is the file mode from the diff, when known. */
@@ -31,21 +32,14 @@ export interface ReadBlobsOptions {
   readonly maxBlobBytes?: number;
 }
 
-interface ObjectInfo {
-  readonly objectId: string;
-  readonly type: string | undefined;
-  readonly size: number;
-}
-
 const defaultMaxBlobBytes = 1024 * 1024;
 const gitlinkMode = '160000';
 const binaryProbeBytes = 8000;
-const headerAllowanceBytes = 160;
 
 /**
- * Reads many blobs with two `git cat-file` processes whatever their number: `--batch-check` for
- * types and sizes, then `--batch` for the text blobs within the limit, parsed by byte count.
- * Results are keyed by object id; duplicates are read once.
+ * Reads many blobs on the repository's warm `cat-file --batch-command` (ADR 0087), all
+ * pipelined: each is sized with `info` first, and only blobs within the limit are read, so a
+ * large one never crosses the pipe. Results are keyed by object id; duplicates are read once.
  */
 export async function readBlobs(
   repository: GitRepository,
@@ -65,123 +59,40 @@ export async function readBlobs(
       pending.add(objectId);
     }
   }
-  if (pending.size === 0) {
-    return ok(contents);
-  }
-  const infos = await checkObjects(repository, [...pending]);
-  if (!infos.ok) {
-    return infos;
-  }
-  const wanted: ObjectInfo[] = [];
-  for (const info of infos.value) {
-    const verdict = classify(info, limit);
-    if (verdict === undefined) {
-      wanted.push(info);
-    } else {
-      contents.set(info.objectId, verdict);
+  const objects = repository[gitRunner].objects;
+  const read = await Promise.all(
+    Array.from(pending, async (oid) => objects.read({ kind: 'object', oid }, { maxBytes: limit })),
+  );
+  for (const [index, objectId] of [...pending].entries()) {
+    const result = read[index];
+    if (result === undefined) {
+      continue;
     }
-  }
-  const read = await readContents(repository, wanted);
-  if (!read.ok) {
-    return read;
-  }
-  for (const [objectId, bytes] of read.value) {
-    contents.set(objectId, contentFrom(bytes));
+    if (!result.ok) {
+      return result;
+    }
+    contents.set(objectId, blobContentFrom(result.value));
   }
   return ok(contents);
 }
 
-async function checkObjects(
-  repository: GitRepository,
-  objectIds: readonly string[],
-): Promise<Result<readonly ObjectInfo[], GitError>> {
-  const args = ['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)', '--buffer'];
-  const output = await repository[gitRunner].exec(args, {
-    policy: { kind: 'read' },
-    input: lines(objectIds),
-  });
-  if (!output.ok) {
-    return output;
-  }
-  const rows = output.value.toString('utf8').split('\n').slice(0, objectIds.length);
-  const infos: ObjectInfo[] = [];
-  for (const [index, objectId] of objectIds.entries()) {
-    const info = parseInfo(rows[index] ?? '', objectId);
-    if (info === undefined) {
-      return err({
-        kind: 'unexpected-output',
-        args,
-        message: `bad batch-check line for ${objectId}`,
-      });
+function blobContentFrom(object: ObjectContent): BlobContent {
+  switch (object.kind) {
+    case 'missing':
+    case 'ambiguous': {
+      return { kind: 'missing' };
     }
-    infos.push(info);
-  }
-  return ok(infos);
-}
-
-function lines(values: readonly string[]): string {
-  return values.map((value) => `${value}\n`).join('');
-}
-
-function parseInfo(row: string, objectId: string): ObjectInfo | undefined {
-  const [name, type, size] = row.split(' ', 3);
-  if (name !== objectId) {
-    return undefined;
-  }
-  if (type === 'missing') {
-    return { objectId, type: undefined, size: 0 };
-  }
-  const bytes = Number(size);
-  return type === undefined || !Number.isSafeInteger(bytes)
-    ? undefined
-    : { objectId, type, size: bytes };
-}
-
-function classify(info: ObjectInfo, limit: number): BlobContent | undefined {
-  if (info.type === undefined) {
-    return { kind: 'missing' };
-  }
-  if (info.type !== 'blob') {
-    return { kind: 'not-a-blob', type: info.type };
-  }
-  return info.size > limit ? { kind: 'too-large', size: info.size, limit } : undefined;
-}
-
-async function readContents(
-  repository: GitRepository,
-  infos: readonly ObjectInfo[],
-): Promise<Result<ReadonlyMap<string, Buffer>, GitError>> {
-  const read = new Map<string, Buffer>();
-  if (infos.length === 0) {
-    return ok(read);
-  }
-  const args = ['cat-file', '--batch', '--buffer'];
-  const total = infos.reduce((sum, info) => sum + info.size + headerAllowanceBytes, 0);
-  const output = await repository[gitRunner].exec(args, {
-    policy: { kind: 'read' },
-    input: lines(infos.map((info) => info.objectId)),
-    maxBufferBytes: total + 1024,
-  });
-  if (!output.ok) {
-    return output;
-  }
-  let offset = 0;
-  for (const info of infos) {
-    const newline = output.value.indexOf(0x0a, offset);
-    const header = newline === -1 ? '' : output.value.toString('utf8', offset, newline);
-    const start = newline + 1;
-    const end = start + info.size;
-    if (header !== `${info.objectId} blob ${String(info.size)}` || output.value[end] !== 0x0a) {
-      return err({
-        kind: 'unexpected-output',
-        args,
-        message: `bad batch record for ${info.objectId}`,
-      });
+    case 'too-large': {
+      return object.type === 'blob'
+        ? { kind: 'too-large', size: object.size, limit: object.limit }
+        : { kind: 'not-a-blob', type: object.type };
     }
-    read.set(info.objectId, output.value.subarray(start, end));
-    offset = end + 1;
+    case 'content': {
+      return object.type === 'blob'
+        ? contentFrom(object.bytes)
+        : { kind: 'not-a-blob', type: object.type };
+    }
   }
-  return ok(read);
 }
 
 function contentFrom(bytes: Buffer): BlobContent {

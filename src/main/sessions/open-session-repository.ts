@@ -24,6 +24,7 @@ export async function openSessionRepository(
     async (shared): Promise<Result<RepositoryProbe, GitError>> => {
       const opened = await openRepository(directory, {
         ...context.git,
+        objectReaders: context.caches.objectReaders,
         signal: anySignal(context.git.signal, shared),
       });
       return opened.ok ? ok({ root: opened.value.root, version: opened.value.version }) : opened;
@@ -38,6 +39,7 @@ export async function openSessionRepository(
   }
   return openRepository(directory, {
     ...context.git,
+    objectReaders: context.caches.objectReaders,
     signal: anySignal(context.git.signal, signal),
     probe: probe.value,
   });
