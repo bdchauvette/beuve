@@ -7,7 +7,7 @@ import { test } from './testing/test.ts';
 
 describe('stageReviewFinding', () => {
   test('stages the finding on its lines, naming its answer and index', ({ expect, deps }) => {
-    expect(stageReviewFinding(finding(), source(), deps)).toMatchObject({
+    expect(stageReviewFinding(finding(), source(), { deps })).toMatchObject({
       ok: true,
       value: {
         sessionId: source().sessionId,
@@ -24,7 +24,7 @@ describe('stageReviewFinding', () => {
 
   test('never blocks by default, and lets the reviewer choose', ({ expect, deps }) => {
     const severity = (value: StageableReviewFinding['severity']): string | undefined => {
-      const result = stageReviewFinding({ ...finding(), severity: value }, source(), deps);
+      const result = stageReviewFinding({ ...finding(), severity: value }, source(), { deps });
       if (result.ok) {
         return result.value.severity;
       }
@@ -35,7 +35,7 @@ describe('stageReviewFinding', () => {
       'issue',
       'nit',
     ]);
-    const chosen = stageReviewFinding(finding(), source(), deps, 'blocker');
+    const chosen = stageReviewFinding(finding(), source(), { deps, severity: 'blocker' });
     expect(chosen.ok && chosen.value.severity).toBe('blocker');
   });
 });

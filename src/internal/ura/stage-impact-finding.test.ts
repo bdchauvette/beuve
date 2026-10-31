@@ -5,6 +5,8 @@ import type { FindingContext, StageableFinding } from './stage-impact-finding.ts
 import { testUraIds } from './testing/test-ura-ids.ts';
 import { test } from './testing/test.ts';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 describe('stageImpactFinding', () => {
   test('stages the finding on its function with its metrics', ({ expect, deps }) => {
     expect(stageImpactFinding(finding(), context(), deps)).toMatchObject({
@@ -43,7 +45,7 @@ describe('stageImpactFinding', () => {
       context(),
       deps,
     );
-    expect(result.ok ? result.value.title : '').toHaveLength(200);
+    expect(okValueFrom(result).title).toHaveLength(200);
     expect(result.ok && result.value.body).toContain('The function is new.');
     expect(result.ok && result.value.body).toContain('1st percentile');
   });

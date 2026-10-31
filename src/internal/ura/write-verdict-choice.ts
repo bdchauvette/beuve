@@ -19,12 +19,15 @@ export function writeVerdictChoice(
   db: DatabaseSync,
   sessionId: SessionId,
   choice: UraVerdictChoice,
-  now: Temporal.Instant,
 ): Result<void, Extract<UraStoreError, { kind: 'session-not-found' }>> {
   const stored = choice.chosen ?? choice.cleared;
   if (stored === undefined || (choice.chosen !== undefined && choice.headSha === undefined)) {
     db.prepare('DELETE FROM ura_verdict_choices WHERE session_id = ?;').run(sessionId);
     return ok(undefined);
+  }
+  let choiceFlag = 0;
+  if (choice.chosen !== undefined) {
+    choiceFlag = 1;
   }
   try {
     db.prepare(
@@ -36,10 +39,10 @@ export function writeVerdictChoice(
              head_sha = excluded.head_sha, updated_at = excluded.updated_at;`,
     ).run({
       session_id: sessionId,
-      is_choice: choice.chosen === undefined ? 0 : 1,
+      is_choice: choiceFlag,
       stored,
       head_sha: choice.headSha ?? '',
-      updated_at: now.toString({ fractionalSecondDigits: 3 }),
+      updated_at: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     });
   } catch (error: unknown) {
     if (sqliteErrorCode(error) === foreignKeyViolation) {

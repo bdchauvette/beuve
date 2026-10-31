@@ -159,13 +159,12 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     headSha: string,
     items: readonly UraItem[],
   ): UraVerdictChoice =>
-    settleVerdictChoice(
-      db,
-      sessionId as SessionId,
+    settleVerdictChoice(db, sessionId as SessionId, {
       headSha,
-      items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
-      Temporal.Now.instant(),
-    );
+      stagedSeverities: items
+        .filter((item) => item.status.kind === 'staged')
+        .map((item) => item.severity),
+    });
 
   const changed = (sessionId: string): void => {
     const items = listUraItems(db, sessionId as SessionId);
@@ -498,8 +497,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const item = stageReviewFinding(
         found,
         { sessionId: answer.sessionId, headSha: answer.headSha, messageId, finding },
-        deps,
-        severity,
+        { deps, severity },
       );
       return staged(item.ok ? stored(stageOnce(item.value)) : uraFailure(logger, item.error));
     },
@@ -561,7 +559,6 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         verdict === undefined || verdict === derived
           ? {}
           : { chosen: verdict, headSha: expectedHeadSha },
-        Temporal.Now.instant(),
       );
       if (!written.ok) {
         return uraFailure(logger, written.error);

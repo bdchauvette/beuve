@@ -20,11 +20,10 @@ export function changeRegionsFrom(hunk: LineMappingHunk): ChangeRegion[] {
     if (hunk.oldCount === 0 && hunk.newCount === 0) {
       return [];
     }
-    const before = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
-    return [{ before, removed: hunk.oldCount, added: hunk.newCount }];
+    return [{ before: firstOldLine(hunk) - 1, removed: hunk.oldCount, added: hunk.newCount }];
   }
   const regions: ChangeRegion[] = [];
-  let nextOld = hunk.oldCount === 0 ? hunk.oldStart + 1 : hunk.oldStart;
+  let nextOld = firstOldLine(hunk);
   let run: { before: number; removed: number; added: number } | undefined;
   for (const line of hunk.lines) {
     if (line.kind === 'context') {
@@ -47,4 +46,12 @@ export function changeRegionsFrom(hunk: LineMappingHunk): ChangeRegion[] {
     regions.push(run);
   }
   return regions;
+}
+
+/** The first old line a hunk touches: `-a,0` inserts after line `a`, so it touches `a + 1`. */
+function firstOldLine(hunk: LineMappingHunk): number {
+  if (hunk.oldCount === 0) {
+    return hunk.oldStart + 1;
+  }
+  return hunk.oldStart;
 }

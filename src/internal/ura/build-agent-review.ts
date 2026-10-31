@@ -90,22 +90,7 @@ export function buildAgentReview(artifact: UraArtifact): AgentReview {
   return {
     schema: 'beuve.ura/1',
     change: {
-      repository:
-        change.kind === 'local'
-          ? {
-              kind: 'local',
-              path: change.repoPath,
-              baseRef: change.baseRef,
-              headRef: change.headRef,
-            }
-          : {
-              kind: 'github-pull-request',
-              path: change.repoPath,
-              baseRef: change.baseRef,
-              owner: change.owner,
-              repo: change.repo,
-              number: change.number,
-            },
+      repository: repositoryFrom(change),
       scope: summary.scope.kind,
       baseSha: summary.baseSha,
       headSha: summary.headSha,
@@ -123,18 +108,48 @@ function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
     id: item.id,
     severity: item.severity,
     origin: originFrom(item.origin),
-    ...(placement.kind === 'current'
-      ? { anchor: anchorFrom(placement.anchor) }
-      : {
-          outdated: {
-            reason: placement.reason,
-            writtenAgainstSha: item.headSha,
-            originalAnchor: anchorFrom(item.anchor),
-          },
-        }),
+    ...placementFrom({ item, placement }),
     title: item.title,
     body: item.body,
     ...(item.suggestion !== undefined && { suggestedPatch: item.suggestion.text }),
+  };
+}
+
+function repositoryFrom(
+  change: UraArtifact['summary']['change'],
+): AgentReview['change']['repository'] {
+  if (change.kind === 'local') {
+    return {
+      kind: 'local',
+      path: change.repoPath,
+      baseRef: change.baseRef,
+      headRef: change.headRef,
+    };
+  }
+  return {
+    kind: 'github-pull-request',
+    path: change.repoPath,
+    baseRef: change.baseRef,
+    owner: change.owner,
+    repo: change.repo,
+    number: change.number,
+  };
+}
+
+/** Where a current item sits, or what an outdated one was written against. */
+function placementFrom({
+  item,
+  placement,
+}: UraEntry): Pick<AgentReviewItem, 'anchor' | 'outdated'> {
+  if (placement.kind === 'current') {
+    return { anchor: anchorFrom(placement.anchor) };
+  }
+  return {
+    outdated: {
+      reason: placement.reason,
+      writtenAgainstSha: item.headSha,
+      originalAnchor: anchorFrom(item.anchor),
+    },
   };
 }
 

@@ -8,27 +8,25 @@ import { test } from './testing/test.ts';
 describe('writeVerdictChoice', () => {
   test('round-trips a choice, replaces it and clears it', ({ expect, db }) => {
     expect(readVerdictChoice(db, session())).toStrictEqual({});
-    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() }, now());
+    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() });
     expect(readVerdictChoice(db, session())).toStrictEqual({ chosen: 'comment', headSha: head() });
-    writeVerdictChoice(db, session(), { chosen: 'approve', headSha: head() }, now());
+    writeVerdictChoice(db, session(), { chosen: 'approve', headSha: head() });
     expect(readVerdictChoice(db, session())).toStrictEqual({ chosen: 'approve', headSha: head() });
-    writeVerdictChoice(db, session(), { cleared: 'blocker-staged' }, now());
+    writeVerdictChoice(db, session(), { cleared: 'blocker-staged' });
     expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'blocker-staged' });
-    writeVerdictChoice(db, session(), { cleared: 'head-moved' }, now());
+    writeVerdictChoice(db, session(), { cleared: 'head-moved' });
     expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'head-moved' });
-    writeVerdictChoice(db, session(), {}, now());
+    writeVerdictChoice(db, session(), {});
     expect(readVerdictChoice(db, session())).toStrictEqual({});
   });
 
   test('refuses an unknown session and cascades with the session', ({ expect, db }) => {
     const other = '99999999-9999-4999-8999-999999999999' as SessionId;
-    expect(
-      writeVerdictChoice(db, other, { chosen: 'comment', headSha: head() }, now()),
-    ).toStrictEqual({
+    expect(writeVerdictChoice(db, other, { chosen: 'comment', headSha: head() })).toStrictEqual({
       ok: false,
       error: { kind: 'session-not-found', sessionId: other },
     });
-    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() }, now());
+    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() });
     db.exec(`DELETE FROM sessions WHERE id = '${session()}';`);
     expect(readVerdictChoice(db, session())).toStrictEqual({});
   });
@@ -38,16 +36,16 @@ describe('writeVerdictChoice', () => {
     db,
   }) => {
     expect(() => {
-      db.exec(insertChoice("'ship-it'", 'NULL'));
+      db.exec(insertChoice({ verdict: "'ship-it'", cleared: 'NULL' }));
     }).toThrow(/CHECK/u);
     expect(() => {
-      db.exec(insertChoice("'approve'", "'blocker-staged'"));
+      db.exec(insertChoice({ verdict: "'approve'", cleared: "'blocker-staged'" }));
     }).toThrow(/CHECK/u);
     expect(() => {
-      db.exec(insertChoice("'approve'", 'NULL', 'NULL'));
+      db.exec(insertChoice({ verdict: "'approve'", cleared: 'NULL', headSha: 'NULL' }));
     }).toThrow(/CHECK/u);
     expect(() => {
-      db.exec(insertChoice('NULL', "'head-moved'"));
+      db.exec(insertChoice({ verdict: 'NULL', cleared: "'head-moved'" }));
     }).toThrow(/CHECK/u);
   });
 });
@@ -60,10 +58,13 @@ function head(): string {
   return 'a'.repeat(40);
 }
 
-function now(): Temporal.Instant {
-  return Temporal.Instant.from('2026-10-28T12:00:00.000Z');
+/** SQL literals for a stored choice's columns. */
+interface ChoiceRow {
+  readonly verdict: string;
+  readonly cleared: string;
+  readonly headSha?: string;
 }
 
-function insertChoice(verdict: string, cleared: string, headSha = `'${head()}'`): string {
+function insertChoice({ verdict, cleared, headSha = `'${head()}'` }: ChoiceRow): string {
   return `INSERT INTO ura_verdict_choices VALUES ('${session()}', ${verdict}, ${cleared}, ${headSha}, '2026-10-28T12:00:00.000Z');`;
 }

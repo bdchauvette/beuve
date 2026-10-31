@@ -24,6 +24,12 @@ export interface ReviewFindingSource {
   readonly finding: number;
 }
 
+export interface ReviewFindingStaging {
+  readonly deps: UraDeps;
+  /** The severity the reviewer picked, instead of the one the finding's own severity maps to. */
+  readonly severity?: UraSeverity | undefined;
+}
+
 const defaultSeverity: Readonly<Record<StageableReviewFinding['severity'], UraSeverity>> = {
   risk: 'issue',
   warning: 'issue',
@@ -38,8 +44,7 @@ const defaultSeverity: Readonly<Record<StageableReviewFinding['severity'], UraSe
 export function stageReviewFinding(
   finding: StageableReviewFinding,
   source: ReviewFindingSource,
-  deps: UraDeps,
-  severity: UraSeverity = defaultSeverity[finding.severity],
+  { deps, severity = defaultSeverity[finding.severity] }: ReviewFindingStaging,
 ): Result<UraItem, UraItemError> {
   return createUraItem(
     {

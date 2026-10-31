@@ -4,7 +4,11 @@ import { describe } from 'vitest';
 import { test } from './testing/test.ts';
 
 function insertRow(db: DatabaseSync, row: Readonly<Record<string, string>>, id?: number): void {
-  db.exec(insertSql(id === undefined ? row : withId(row, id)));
+  if (id === undefined) {
+    db.exec(insertSql(row));
+  } else {
+    db.exec(insertSql(withId(row, id)));
+  }
 }
 
 function insertSql(row: Readonly<Record<string, string>>): string {

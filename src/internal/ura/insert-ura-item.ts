@@ -8,6 +8,15 @@ import { sqliteErrorCode } from '#sqlite/sqlite-error-code.ts';
 import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
+/** Why a second item for the same finding is refused, by where the finding came from. */
+const duplicateReasons: Readonly<
+  Record<UraItem['origin']['kind'], 'review-finding-already-staged' | 'finding-already-staged'>
+> = {
+  'chat-answer': 'review-finding-already-staged',
+  'impact-finding': 'finding-already-staged',
+  human: 'finding-already-staged',
+};
+
 const foreignKeyViolation = 787;
 const primaryKeyViolation = 1555;
 const uniqueViolation = 2067;
@@ -44,11 +53,11 @@ export function insertUraItem(
         return err({ kind: 'duplicate-item', id: item.id, reason: 'id-taken' });
       }
       case uniqueViolation: {
-        const reason =
-          item.origin.kind === 'chat-answer'
-            ? 'review-finding-already-staged'
-            : 'finding-already-staged';
-        return err({ kind: 'duplicate-item', id: item.id, reason });
+        return err({
+          kind: 'duplicate-item',
+          id: item.id,
+          reason: duplicateReasons[item.origin.kind],
+        });
       }
       default: {
         throw error;

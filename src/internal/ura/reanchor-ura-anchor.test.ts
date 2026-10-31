@@ -1,23 +1,28 @@
 import { describe } from 'vitest';
 
+import type { ChangeRegion } from './change-regions-from.ts';
 import type { FileLineMapping, LineMappingHunk } from './line-mapping.ts';
 import { reanchorUraAnchor } from './reanchor-ura-anchor.ts';
 import type { ReanchoredAnchor } from './reanchor-ura-anchor.ts';
 import type { UraAnchor } from './ura-item.ts';
 import { test } from './testing/test.ts';
 
-function lines(startLine: number, endLine: number, path = 'src/a.ts'): UraAnchor {
-  return { kind: 'lines', path, startLine, endLine };
+function lines(start: number, end: number): Extract<UraAnchor, { kind: 'lines' }> {
+  return { kind: 'lines', path: 'src/a.ts', startLine: start, endLine: end };
 }
 
-function current(startLine: number, endLine: number, path = 'src/a.ts'): ReanchoredAnchor {
-  return { kind: 'current', anchor: lines(startLine, endLine, path) };
+function current(start: number, end: number): ReanchoredAnchor {
+  return { kind: 'current', anchor: lines(start, end) };
 }
 
 /** A zero-context hunk: `removed` lines after old line `before` replaced by `added` lines. */
-function change(before: number, removed: number, added: number): LineMappingHunk {
+function change({ before, removed, added }: ChangeRegion): LineMappingHunk {
+  let oldStart = before;
+  if (removed > 0) {
+    oldStart += 1;
+  }
   return {
-    oldStart: removed === 0 ? before : before + 1,
+    oldStart,
     oldCount: removed,
     newStart: 0,
     newCount: added,
@@ -33,52 +38,82 @@ describe('reanchorUraAnchor', () => {
   test('keeps an anchor whose file did not change', ({ expect }) => {
     expect(reanchorUraAnchor(lines(10, 12), [])).toStrictEqual(current(10, 12));
     const other: FileLineMapping[] = [
-      { kind: 'modified', path: 'src/b.ts', hunks: [change(0, 5, 0)] },
+      { kind: 'modified', path: 'src/b.ts', hunks: [change({ before: 0, removed: 5, added: 0 })] },
     ];
     expect(reanchorUraAnchor(lines(10, 12), other)).toStrictEqual(current(10, 12));
   });
 
   test('keeps an anchor when only later lines changed', ({ expect }) => {
-    expect(across(lines(10, 12), change(12, 1, 3), change(20, 1, 3))).toStrictEqual(
+    expect(
+      across(
+        lines(10, 12),
+        change({ before: 12, removed: 1, added: 3 }),
+        change({ before: 20, removed: 1, added: 3 }),
+      ),
+    ).toStrictEqual(current(10, 12));
+  });
+
+  test('shifts by insertions and deletions above the range', ({ expect }) => {
+    expect(across(lines(10, 12), change({ before: 2, removed: 0, added: 3 }))).toStrictEqual(
+      current(13, 15),
+    );
+    expect(across(lines(10, 12), change({ before: 2, removed: 4, added: 0 }))).toStrictEqual(
+      current(6, 8),
+    );
+    expect(
+      across(
+        lines(10, 12),
+        change({ before: 1, removed: 2, added: 5 }),
+        change({ before: 5, removed: 1, added: 0 }),
+      ),
+    ).toStrictEqual(current(12, 14));
+  });
+
+  test('shifts when an edit ends on the line right above the range', ({ expect }) => {
+    expect(across(lines(10, 12), change({ before: 7, removed: 2, added: 1 }))).toStrictEqual(
+      current(9, 11),
+    );
+  });
+
+  test('only moves for insertions directly before or after the range', ({ expect }) => {
+    expect(across(lines(10, 12), change({ before: 9, removed: 0, added: 2 }))).toStrictEqual(
+      current(12, 14),
+    );
+    expect(across(lines(10, 12), change({ before: 12, removed: 0, added: 2 }))).toStrictEqual(
       current(10, 12),
     );
   });
 
-  test('shifts by insertions and deletions above the range', ({ expect }) => {
-    expect(across(lines(10, 12), change(2, 0, 3))).toStrictEqual(current(13, 15));
-    expect(across(lines(10, 12), change(2, 4, 0))).toStrictEqual(current(6, 8));
-    expect(across(lines(10, 12), change(1, 2, 5), change(5, 1, 0))).toStrictEqual(current(12, 14));
-  });
-
-  test('shifts when an edit ends on the line right above the range', ({ expect }) => {
-    expect(across(lines(10, 12), change(7, 2, 1))).toStrictEqual(current(9, 11));
-  });
-
-  test('only moves for insertions directly before or after the range', ({ expect }) => {
-    expect(across(lines(10, 12), change(9, 0, 2))).toStrictEqual(current(12, 14));
-    expect(across(lines(10, 12), change(12, 0, 2))).toStrictEqual(current(10, 12));
-  });
-
   test.for<[string, LineMappingHunk]>([
-    ['the first line replaced', change(9, 1, 1)],
-    ['a middle line deleted', change(10, 1, 0)],
-    ['the last line replaced', change(11, 1, 1)],
-    ['the whole range rewritten', change(5, 10, 2)],
-    ['an edit straddling the start', change(8, 2, 2)],
-    ['an edit straddling the end', change(11, 3, 0)],
-    ['lines inserted after the first line', change(10, 0, 1)],
-    ['lines inserted after the second line', change(11, 0, 4)],
+    ['the first line replaced', change({ before: 9, removed: 1, added: 1 })],
+    ['a middle line deleted', change({ before: 10, removed: 1, added: 0 })],
+    ['the last line replaced', change({ before: 11, removed: 1, added: 1 })],
+    ['the whole range rewritten', change({ before: 5, removed: 10, added: 2 })],
+    ['an edit straddling the start', change({ before: 8, removed: 2, added: 2 })],
+    ['an edit straddling the end', change({ before: 11, removed: 3, added: 0 })],
+    ['lines inserted after the first line', change({ before: 10, removed: 0, added: 1 })],
+    ['lines inserted after the second line', change({ before: 11, removed: 0, added: 4 })],
   ])('is outdated with %s', ([, hunk], { expect }) => {
     expect(across(lines(10, 12), hunk)).toStrictEqual(outdated());
   });
 
   test('is outdated by the first touching hunk even after shifting ones', ({ expect }) => {
-    expect(across(lines(10, 12), change(1, 0, 5), change(10, 1, 1))).toStrictEqual(outdated());
+    expect(
+      across(
+        lines(10, 12),
+        change({ before: 1, removed: 0, added: 5 }),
+        change({ before: 10, removed: 1, added: 1 }),
+      ),
+    ).toStrictEqual(outdated());
   });
 
   test('never outdates a single line by insertion', ({ expect }) => {
-    expect(across(lines(10, 10), change(9, 0, 1))).toStrictEqual(current(11, 11));
-    expect(across(lines(10, 10), change(10, 0, 1))).toStrictEqual(current(10, 10));
+    expect(across(lines(10, 10), change({ before: 9, removed: 0, added: 1 }))).toStrictEqual(
+      current(11, 11),
+    );
+    expect(across(lines(10, 10), change({ before: 10, removed: 0, added: 1 }))).toStrictEqual(
+      current(10, 10),
+    );
   });
 
   test('ignores context lines inside hunks', ({ expect }) => {
@@ -127,9 +162,17 @@ describe('reanchorUraAnchor', () => {
 
   test('follows renames, with or without edits', ({ expect }) => {
     const renamed: FileLineMapping[] = [
-      { kind: 'renamed', oldPath: 'src/a.ts', newPath: 'src/b.ts', hunks: [change(0, 0, 1)] },
+      {
+        kind: 'renamed',
+        oldPath: 'src/a.ts',
+        newPath: 'src/b.ts',
+        hunks: [change({ before: 0, removed: 0, added: 1 })],
+      },
     ];
-    expect(reanchorUraAnchor(lines(10, 12), renamed)).toStrictEqual(current(11, 13, 'src/b.ts'));
+    expect(reanchorUraAnchor(lines(10, 12), renamed)).toStrictEqual({
+      kind: 'current',
+      anchor: { ...lines(11, 13), path: 'src/b.ts' },
+    });
     expect(reanchorUraAnchor({ kind: 'file', path: 'src/a.ts' }, renamed)).toStrictEqual({
       kind: 'current',
       anchor: { kind: 'file', path: 'src/b.ts' },
@@ -140,7 +183,12 @@ describe('reanchorUraAnchor', () => {
     expect,
   }) => {
     const files: FileLineMapping[] = [
-      { kind: 'renamed', oldPath: 'src/z.ts', newPath: 'src/a.ts', hunks: [change(0, 0, 9)] },
+      {
+        kind: 'renamed',
+        oldPath: 'src/z.ts',
+        newPath: 'src/a.ts',
+        hunks: [change({ before: 0, removed: 0, added: 9 })],
+      },
     ];
     expect(reanchorUraAnchor(lines(10, 12), files)).toStrictEqual(current(10, 12));
   });
@@ -154,7 +202,10 @@ describe('reanchorUraAnchor', () => {
 
   test('keeps whole-file anchors through edits, and whole-change anchors always', ({ expect }) => {
     const file: UraAnchor = { kind: 'file', path: 'src/a.ts' };
-    expect(across(file, change(0, 50, 1))).toStrictEqual({ kind: 'current', anchor: file });
+    expect(across(file, change({ before: 0, removed: 50, added: 1 }))).toStrictEqual({
+      kind: 'current',
+      anchor: file,
+    });
     const deleted: FileLineMapping[] = [{ kind: 'deleted', path: 'src/a.ts' }];
     expect(reanchorUraAnchor({ kind: 'change' }, deleted)).toStrictEqual({
       kind: 'current',

@@ -28,11 +28,11 @@ export function reanchorUraAnchor(
   if (file.kind === 'deleted') {
     return { kind: 'outdated', reason: 'file-deleted' };
   }
-  const path = file.kind === 'renamed' ? file.newPath : file.path;
+  const path = newPath(file);
   if (anchor.kind === 'file') {
     return { kind: 'current', anchor: { kind: 'file', path } };
   }
-  const shift = shiftRange(anchor.startLine, anchor.endLine, file.hunks);
+  const shift = shiftRange(anchor, file.hunks);
   if (shift === undefined) {
     return { kind: 'outdated', reason: 'lines-changed' };
   }
@@ -54,10 +54,16 @@ function oldPath(file: FileLineMapping): string {
   return file.path;
 }
 
-/** How far lines `start`–`end` moved, or `undefined` when the change touched them. */
+function newPath(file: Exclude<FileLineMapping, { kind: 'deleted' }>): string {
+  if (file.kind === 'renamed') {
+    return file.newPath;
+  }
+  return file.path;
+}
+
+/** How far the anchored lines moved, or `undefined` when the change touched them. */
 function shiftRange(
-  start: number,
-  end: number,
+  { startLine: start, endLine: end }: Extract<UraAnchor, { kind: 'lines' }>,
   hunks: readonly LineMappingHunk[],
 ): number | undefined {
   let shift = 0;

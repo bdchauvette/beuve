@@ -8,49 +8,65 @@ import { test } from './testing/test.ts';
 
 describe('settleVerdictChoice', () => {
   test('drops an approval once a blocker is staged, and remembers why', ({ expect, db }) => {
-    writeVerdictChoice(db, session(), { chosen: 'approve', headSha: head() }, now());
-    expect(settleVerdictChoice(db, session(), head(), ['nit'], now())).toStrictEqual({
+    writeVerdictChoice(db, session(), { chosen: 'approve', headSha: head() });
+    expect(
+      settleVerdictChoice(db, session(), { headSha: head(), stagedSeverities: ['nit'] }),
+    ).toStrictEqual({
       chosen: 'approve',
       headSha: head(),
     });
-    expect(settleVerdictChoice(db, session(), head(), ['nit', 'blocker'], now())).toStrictEqual({
+    expect(
+      settleVerdictChoice(db, session(), { headSha: head(), stagedSeverities: ['nit', 'blocker'] }),
+    ).toStrictEqual({
       cleared: 'blocker-staged',
     });
     expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'blocker-staged' });
   });
 
   test('keeps choices that a blocker does not contradict', ({ expect, db }) => {
-    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() }, now());
-    expect(settleVerdictChoice(db, session(), head(), ['blocker'], now())).toStrictEqual({
+    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() });
+    expect(
+      settleVerdictChoice(db, session(), { headSha: head(), stagedSeverities: ['blocker'] }),
+    ).toStrictEqual({
       chosen: 'comment',
       headSha: head(),
     });
-    expect(settleVerdictChoice(db, session(), head(), [], now())).toStrictEqual({
+    expect(
+      settleVerdictChoice(db, session(), { headSha: head(), stagedSeverities: [] }),
+    ).toStrictEqual({
       chosen: 'comment',
       headSha: head(),
     });
   });
 
   test('drops any choice once the head has moved, and remembers why', ({ expect, db }) => {
-    writeVerdictChoice(db, session(), { chosen: 'request-changes', headSha: head() }, now());
-    expect(settleVerdictChoice(db, session(), head(), [], now())).toStrictEqual({
+    writeVerdictChoice(db, session(), { chosen: 'request-changes', headSha: head() });
+    expect(
+      settleVerdictChoice(db, session(), { headSha: head(), stagedSeverities: [] }),
+    ).toStrictEqual({
       chosen: 'request-changes',
       headSha: head(),
     });
-    expect(settleVerdictChoice(db, session(), later(), [], now())).toStrictEqual({
+    expect(
+      settleVerdictChoice(db, session(), { headSha: later(), stagedSeverities: [] }),
+    ).toStrictEqual({
       cleared: 'head-moved',
     });
     expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'head-moved' });
-    expect(settleVerdictChoice(db, session(), later(), [], now())).toStrictEqual({
+    expect(
+      settleVerdictChoice(db, session(), { headSha: later(), stagedSeverities: [] }),
+    ).toStrictEqual({
       cleared: 'head-moved',
     });
   });
 
   test('lets a choice made at the new head stand', ({ expect, db }) => {
-    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() }, now());
-    settleVerdictChoice(db, session(), later(), [], now());
-    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: later() }, now());
-    expect(settleVerdictChoice(db, session(), later(), [], now())).toStrictEqual({
+    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: head() });
+    settleVerdictChoice(db, session(), { headSha: later(), stagedSeverities: [] });
+    writeVerdictChoice(db, session(), { chosen: 'comment', headSha: later() });
+    expect(
+      settleVerdictChoice(db, session(), { headSha: later(), stagedSeverities: [] }),
+    ).toStrictEqual({
       chosen: 'comment',
       headSha: later(),
     });
@@ -59,10 +75,6 @@ describe('settleVerdictChoice', () => {
 
 function session(): SessionId {
   return '11111111-1111-4111-8111-111111111111' as SessionId;
-}
-
-function now(): Temporal.Instant {
-  return Temporal.Instant.from('2026-10-28T12:00:00.000Z');
 }
 
 function head(): string {

@@ -15,16 +15,20 @@ export function transitionUraItem(
   now: Temporal.Instant,
 ): Result<UraItem, UraItemError> {
   const from = item.status.kind;
-  const isAllowed = from === 'staged' ? to.kind !== 'staged' : to.kind === 'staged';
-  if (!isAllowed) {
+  if (from === 'staged' && to.kind === 'staged') {
     return err({
       kind: 'invalid-transition',
       from,
       to: to.kind,
-      reason:
-        from === 'staged'
-          ? 'the item is already staged'
-          : `restore the item to staged before marking it ${to.kind}`,
+      reason: 'the item is already staged',
+    });
+  }
+  if (from !== 'staged' && to.kind !== 'staged') {
+    return err({
+      kind: 'invalid-transition',
+      from,
+      to: to.kind,
+      reason: `restore the item to staged before marking it ${to.kind}`,
     });
   }
   return validateUraItem({

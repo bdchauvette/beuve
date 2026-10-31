@@ -87,20 +87,22 @@ function readHeaders(
   if (plus?.startsWith('+++ ') !== true) {
     return err('a "--- " header must be followed by "+++ "');
   }
-  if (!isPathHeader(minus.slice(4), 'a/', path) || !isPathHeader(plus.slice(4), 'b/', path)) {
+  const isPathHeader = (header: string, prefix: 'a/' | 'b/'): boolean => {
+    return header === `${prefix}${path}` || header === path;
+  };
+  if (!isPathHeader(minus.slice(4), 'a/') || !isPathHeader(plus.slice(4), 'b/')) {
     return err(`the patch must change only ${path}`);
   }
   return ok(index + 2);
 }
 
-function isPathHeader(header: string, prefix: string, path: string): boolean {
-  return header === `${prefix}${path}` || header === path;
+/** A hunk and the index of the line after it. */
+interface HunkRead {
+  readonly hunk: PatchHunk;
+  readonly next: number;
 }
 
-function readHunk(
-  lines: readonly string[],
-  start: number,
-): Result<{ hunk: PatchHunk; next: number }, string> {
+function readHunk(lines: readonly string[], start: number): Result<HunkRead, string> {
   const header = lines[start] ?? '';
   if (header.startsWith('diff --git ') || header.startsWith('--- ')) {
     return err('the patch must change only one file');
@@ -130,8 +132,12 @@ function readHunk(
     if (kind === undefined) {
       return err(`line ${String(index)} is not a context, added or removed line`);
     }
-    oldLeft -= kind === 'added' ? 0 : 1;
-    newLeft -= kind === 'removed' ? 0 : 1;
+    if (kind !== 'added') {
+      oldLeft -= 1;
+    }
+    if (kind !== 'removed') {
+      newLeft -= 1;
+    }
     if (oldLeft < 0 || newLeft < 0) {
       return err(`the hunk at line ${String(start + 1)} is longer than its header says`);
     }
@@ -149,7 +155,8 @@ function parseSide(text: string | undefined): [number, number] | undefined {
   if (parts.length === 0 || parts.length > 2 || parts.some((part) => !digits.test(part))) {
     return undefined;
   }
-  return [Number(parts[0]), parts.length === 2 ? Number(parts[1]) : 1];
+  const [start, count = '1'] = parts;
+  return [Number(start), Number(count)];
 }
 
 function lineKind(line: string): PatchLine['kind'] | undefined {
@@ -169,7 +176,10 @@ function lineKind(line: string): PatchLine['kind'] | undefined {
 function checkPlacement(hunks: readonly PatchHunk[], anchor: UraAnchor): string | undefined {
   let previousEnd = 0;
   for (const hunk of hunks) {
-    const first = hunk.oldCount === 0 ? hunk.oldStart + 1 : hunk.oldStart;
+    let first = hunk.oldStart;
+    if (hunk.oldCount === 0) {
+      first += 1;
+    }
     if (first <= previousEnd) {
       return 'hunks must be in order and must not overlap';
     }

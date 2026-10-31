@@ -7,7 +7,7 @@ import { formatImpactOrigin } from './format-impact-origin.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
 import { formatUraSeverity } from './format-ura-severity.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
-import type { UraAnchor, UraItem } from './ura-item.ts';
+import type { PatchHunk, UraAnchor, UraItem } from './ura-item.ts';
 import { uraSeverities } from './ura-severities.ts';
 
 /** One inline comment of a review; `start_*` are present only for multi-line ranges. */
@@ -85,23 +85,21 @@ export function buildGithubReview(
       inline.push(comment);
     }
   }
+  const sections = [header(artifact)];
+  if (general.length > 0) {
+    sections.push('### Not attached to a line', ...general);
+  }
   return {
     commit_id: artifact.summary.headSha,
     event: events[artifact.verdict.value],
-    body: [
-      header(artifact),
-      ...(general.length === 0 ? [] : ['### Not attached to a line', ...general]),
-    ].join('\n\n'),
+    body: sections.join('\n\n'),
     comments: inline,
   };
 }
 
 function header(artifact: UraArtifact): string {
   const { verdict } = artifact;
-  const chosen =
-    verdict.source === 'chosen'
-      ? ` (the reviewer's verdict; the items alone suggest ${verdictLabels[verdict.derived]})`
-      : '';
+  const chosen = chosenNote(verdict);
   const counts = countUraSeverities(artifact.entries);
   const tally = uraSeverities
     .filter((severity) => counts[severity] > 0)
@@ -114,6 +112,14 @@ function header(artifact: UraArtifact): string {
   return `${summary}\n\n${tally}.`;
 }
 
+/** For a verdict the reviewer chose, the one the items alone suggest. */
+function chosenNote(verdict: UraArtifact['verdict']): string {
+  if (verdict.source !== 'chosen') {
+    return '';
+  }
+  return ` (the reviewer's verdict; the items alone suggest ${verdictLabels[verdict.derived]})`;
+}
+
 function commentFrom(
   { item, placement }: UraEntry,
   ranges: GithubReviewOptions['commentableRanges'],
@@ -122,7 +128,7 @@ function commentFrom(
     return undefined;
   }
   const { path, startLine, endLine } = placement.anchor;
-  if (!isCommentable(path, startLine, endLine, ranges)) {
+  if (!isCommentable(placement.anchor, ranges)) {
     return undefined;
   }
   const body = [
@@ -136,14 +142,12 @@ function commentFrom(
 }
 
 function isCommentable(
-  path: string,
-  start: number,
-  end: number,
+  { path, startLine, endLine }: Extract<UraAnchor, { kind: 'lines' }>,
   ranges: GithubReviewOptions['commentableRanges'],
 ): boolean {
   return (
     ranges === undefined ||
-    (ranges.get(path) ?? []).some((range) => range.start <= start && end <= range.end)
+    (ranges.get(path) ?? []).some((range) => range.start <= startLine && endLine <= range.end)
   );
 }
 
@@ -176,24 +180,37 @@ function location(
       return `On \`${revealFormatControls(anchor.path)}\`.`;
     }
     case 'lines': {
-      const outside = ranges === undefined ? '' : " (outside the pull request's diff)";
+      let outside = '';
+      if (ranges !== undefined) {
+        outside = " (outside the pull request's diff)";
+      }
       return `On \`${formatUraAnchor(anchor)}\`${outside}.`;
     }
   }
 }
 
 function details(item: UraItem, isInline: boolean): string[] {
-  const impact = item.origin.kind === 'impact-finding' ? [formatImpactOrigin(item.origin)] : [];
-  const replacement = isInline ? replacementLines(item) : undefined;
-  const patch =
-    item.suggestion === undefined
-      ? []
-      : [
-          replacement === undefined
-            ? fenceCodeBlock('diff', item.suggestion.text)
-            : fenceCodeBlock('suggestion', replacement.join('\n')),
-        ];
-  return [...(item.body.trim() === '' ? [] : [item.body.trim()]), ...impact, ...patch];
+  const parts: string[] = [];
+  const body = item.body.trim();
+  if (body !== '') {
+    parts.push(body);
+  }
+  if (item.origin.kind === 'impact-finding') {
+    parts.push(formatImpactOrigin(item.origin));
+  }
+  if (item.suggestion === undefined) {
+    return parts;
+  }
+  let replacement: string[] | undefined;
+  if (isInline) {
+    replacement = replacementLines(item);
+  }
+  if (replacement === undefined) {
+    parts.push(fenceCodeBlock({ info: 'diff', content: item.suggestion.text }));
+  } else {
+    parts.push(fenceCodeBlock({ info: 'suggestion', content: replacement.join('\n') }));
+  }
+  return parts;
 }
 
 /**
@@ -202,8 +219,13 @@ function details(item: UraItem, isInline: boolean): string[] {
  */
 function replacementLines(item: UraItem): string[] | undefined {
   const { suggestion, anchor } = item;
-  const hunk = suggestion?.hunks.length === 1 ? suggestion.hunks[0] : undefined;
-  if (hunk === undefined || anchor.kind !== 'lines' || !isCovering(hunk, anchor)) {
+  const [hunk, ...others] = suggestion?.hunks ?? [];
+  if (
+    hunk === undefined ||
+    others.length > 0 ||
+    anchor.kind !== 'lines' ||
+    !isCovering(hunk, anchor)
+  ) {
     return undefined;
   }
   const { startLine, endLine } = anchor;
@@ -226,7 +248,7 @@ function replacementLines(item: UraItem): string[] | undefined {
 }
 
 function isCovering(
-  hunk: { readonly oldStart: number; readonly oldCount: number },
+  hunk: Pick<PatchHunk, 'oldStart' | 'oldCount'>,
   anchor: Extract<UraAnchor, { kind: 'lines' }>,
 ): boolean {
   return (

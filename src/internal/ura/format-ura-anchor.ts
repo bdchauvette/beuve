@@ -9,11 +9,11 @@ import type { UraAnchor } from './ura-item.ts';
 export function formatUraAnchor(anchor: UraAnchor): string {
   switch (anchor.kind) {
     case 'lines': {
-      const lines =
-        anchor.startLine === anchor.endLine
-          ? String(anchor.startLine)
-          : `${String(anchor.startLine)}-${String(anchor.endLine)}`;
-      return `${revealFormatControls(anchor.path)}:${lines}`;
+      const path = revealFormatControls(anchor.path);
+      if (anchor.startLine === anchor.endLine) {
+        return `${path}:${String(anchor.startLine)}`;
+      }
+      return `${path}:${String(anchor.startLine)}-${String(anchor.endLine)}`;
     }
     case 'file': {
       return revealFormatControls(anchor.path);

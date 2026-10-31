@@ -6,6 +6,8 @@ import { transitionUraItem } from './transition-ura-item.ts';
 import type { UraStatus } from './ura-item.ts';
 import { test } from './testing/test.ts';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 describe('transitionUraItem', () => {
   test('moves a staged item to addressed or withdrawn, and back', ({ expect }) => {
     const item = createTestUraItem({ suggestion: '@@ -11 +11 @@\n-a\n+b\n' });
@@ -20,7 +22,7 @@ describe('transitionUraItem', () => {
     });
     const withdrawn = transitionUraItem(item, { kind: 'withdrawn' }, later());
     expect(withdrawn.ok && withdrawn.value.status).toStrictEqual({ kind: 'withdrawn' });
-    const restored = done.ok ? transitionUraItem(done.value, { kind: 'staged' }, later()) : done;
+    const restored = transitionUraItem(okValueFrom(done), { kind: 'staged' }, later());
     expect(restored.ok && restored.value.status).toStrictEqual({ kind: 'staged' });
   });
 

@@ -23,11 +23,7 @@ export function renderAgentReviewXml(artifact: UraArtifact): string {
         }),
       ),
     )}/>`,
-    review.items.length === 0 ? `${indent}<items/>` : `${indent}<items>`,
-    ...review.items.flatMap((item) => {
-      return itemElement(item).map((line) => indent.repeat(2) + line);
-    }),
-    ...(review.items.length === 0 ? [] : [`${indent}</items>`]),
+    ...itemsElement(review.items).map((line) => indent + line),
     '</beuve-review>',
   ];
   return `${lines.join('\n')}\n`;
@@ -35,64 +31,89 @@ export function renderAgentReviewXml(artifact: UraArtifact): string {
 
 function changeElement(review: AgentReview): string[] {
   const { change } = review;
-  const { repository } = change;
-  const repositoryAttributes =
-    repository.kind === 'local'
-      ? {
-          kind: repository.kind,
-          path: repository.path,
-          'base-ref': repository.baseRef,
-          'head-ref': repository.headRef,
-        }
-      : {
-          kind: repository.kind,
-          path: repository.path,
-          'base-ref': repository.baseRef,
-          owner: repository.owner,
-          repo: repository.repo,
-          number: repository.number,
-        };
   return [
     `<change${attributes({ scope: change.scope, 'base-sha': change.baseSha, 'head-sha': change.headSha, 'from-head-sha': change.fromHeadSha })}>`,
-    `${indent}<repository${attributes(repositoryAttributes)}/>`,
+    `${indent}<repository${attributes(repositoryAttributes(change.repository))}/>`,
     '</change>',
+  ];
+}
+
+function repositoryAttributes(repository: AgentReview['change']['repository']): Attributes {
+  if (repository.kind === 'local') {
+    return {
+      kind: repository.kind,
+      path: repository.path,
+      'base-ref': repository.baseRef,
+      'head-ref': repository.headRef,
+    };
+  }
+  return {
+    kind: repository.kind,
+    path: repository.path,
+    'base-ref': repository.baseRef,
+    owner: repository.owner,
+    repo: repository.repo,
+    number: repository.number,
+  };
+}
+
+function itemsElement(items: readonly AgentReviewItem[]): string[] {
+  if (items.length === 0) {
+    return ['<items/>'];
+  }
+  return [
+    '<items>',
+    ...items.flatMap((item) => {
+      return itemElement(item).map((line) => indent + line);
+    }),
+    '</items>',
   ];
 }
 
 function itemElement(item: AgentReviewItem): string[] {
   const { origin } = item;
-  const children = [
-    ...(item.anchor === undefined ? [] : [anchorElement('anchor', item.anchor)]),
-    ...(item.outdated === undefined
-      ? []
-      : [
-          `<outdated${attributes({ reason: item.outdated.reason, 'written-against-sha': item.outdated.writtenAgainstSha })}>`,
-          indent + anchorElement('original-anchor', item.outdated.originalAnchor),
-          '</outdated>',
-        ]),
-    `<title>${escapeText(item.title)}</title>`,
-    item.body === '' ? '<body/>' : `<body>${cdata(item.body)}</body>`,
-    ...(origin.kind === 'impact-finding'
-      ? [
-          `<impact${attributes({ metric: origin.metric, function: origin.functionName, value: origin.value, threshold: origin.threshold, percentile: origin.percentile })}/>`,
-        ]
-      : []),
-    ...(item.suggestedPatch === undefined
-      ? []
-      : [`<suggested-patch format="unified-diff">${cdata(item.suggestedPatch)}</suggested-patch>`]),
-  ];
-  const provenance =
-    origin.kind === 'chat-answer'
-      ? {
-          'message-id': origin.messageId,
-          ...(origin.finding !== undefined && { finding: origin.finding }),
-        }
-      : {};
+  const children: string[] = [];
+  if (item.anchor !== undefined) {
+    children.push(anchorElement('anchor', item.anchor));
+  }
+  if (item.outdated !== undefined) {
+    children.push(
+      `<outdated${attributes({ reason: item.outdated.reason, 'written-against-sha': item.outdated.writtenAgainstSha })}>`,
+      indent + anchorElement('original-anchor', item.outdated.originalAnchor),
+      '</outdated>',
+    );
+  }
+  children.push(`<title>${escapeText(item.title)}</title>`, bodyElement(item.body));
+  if (origin.kind === 'impact-finding') {
+    children.push(
+      `<impact${attributes({ metric: origin.metric, function: origin.functionName, value: origin.value, threshold: origin.threshold, percentile: origin.percentile })}/>`,
+    );
+  }
+  if (item.suggestedPatch !== undefined) {
+    children.push(
+      `<suggested-patch format="unified-diff">${cdata(item.suggestedPatch)}</suggested-patch>`,
+    );
+  }
   return [
-    `<item${attributes({ id: item.id, severity: item.severity, origin: origin.kind, ...provenance })}>`,
+    `<item${attributes({ id: item.id, severity: item.severity, origin: origin.kind, ...provenanceOf(origin) })}>`,
     ...children.map((line) => indent + line),
     '</item>',
   ];
+}
+
+function bodyElement(body: string): string {
+  if (body === '') {
+    return '<body/>';
+  }
+  return `<body>${cdata(body)}</body>`;
+}
+
+/** The answer and finding a `chat-answer` item came from. */
+function provenanceOf(origin: AgentReviewItem['origin']): Attributes {
+  if (origin.kind !== 'chat-answer') {
+    return {};
+  }
+  return { 'message-id': origin.messageId, finding: origin.finding };
 }
 
 function anchorElement(name: string, anchor: AgentReviewAnchor): string {
@@ -110,8 +131,11 @@ function anchorElement(name: string, anchor: AgentReviewAnchor): string {
   }
 }
 
+/** Attribute values by name, in order; `undefined` values are left out. */
+type Attributes = Readonly<Record<string, string | number | undefined>>;
+
 /** ` name="value"` pairs in the given order; `undefined` values are left out. */
-function attributes(values: Readonly<Record<string, string | number | undefined>>): string {
+function attributes(values: Attributes): string {
   return Object.entries(values)
     .filter((entry): entry is [string, string | number] => entry[1] !== undefined)
     .map(([name, value]) => ` ${name}="${escapeAttribute(String(value))}"`)
@@ -149,7 +173,11 @@ function sanitize(value: string): string {
       (code >= 0x20 && code <= 0xd7_ff) ||
       (code >= 0xe0_00 && code <= 0xff_fd) ||
       code >= 0x1_00_00;
-    result += isAllowed ? character : '\u{FFFD}';
+    if (isAllowed) {
+      result += character;
+    } else {
+      result += '\u{FFFD}';
+    }
   }
   return result;
 }

@@ -62,10 +62,10 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
   if (input.verdict === 'approve' && blockers.length > 0) {
     return err({ kind: 'approve-with-blockers', itemIds: blockers });
   }
-  const verdict: UraArtifactVerdict =
-    input.verdict === undefined || input.verdict === derived
-      ? { value: derived, source: 'derived' }
-      : { value: input.verdict, source: 'chosen', derived };
+  let verdict: UraArtifactVerdict = { value: derived, source: 'derived' };
+  if (input.verdict !== undefined && input.verdict !== derived) {
+    verdict = { value: input.verdict, source: 'chosen', derived };
+  }
   return ok({
     summary,
     entries: staged.map((item) => {

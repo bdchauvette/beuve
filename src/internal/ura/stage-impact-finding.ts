@@ -3,6 +3,7 @@ import type { Result } from '#x/result/result.ts';
 import { createUraItem } from './create-ura-item.ts';
 import { formatOrdinal } from './format-ordinal.ts';
 import type { CommitSha, SessionId, UraDeps, UraItem, UraItemError } from './ura-item.ts';
+import type { UraSeverity } from './ura-severities.ts';
 
 /** The impact domain's `ImpactFinding` satisfies this structurally. */
 export interface StageableFinding {
@@ -36,7 +37,6 @@ export function stageImpactFinding(
   context: FindingContext,
   deps: UraDeps,
 ): Result<UraItem, UraItemError> {
-  const isWorse = finding.trend === 'introduced' || finding.trend === 'worsened';
   return createUraItem(
     {
       sessionId: context.sessionId,
@@ -47,7 +47,7 @@ export function stageImpactFinding(
         startLine: finding.startLine,
         endLine: finding.endLine,
       },
-      severity: isWorse ? 'issue' : 'nit',
+      severity: severityFor(finding),
       origin: {
         kind: 'impact-finding',
         metric: finding.kind,
@@ -71,11 +71,19 @@ function title(finding: StageableFinding): string {
   return text;
 }
 
+/** A finding that got worse is an issue; one that was already over the limit is a nit. */
+function severityFor(finding: StageableFinding): UraSeverity {
+  if (finding.trend === 'introduced' || finding.trend === 'worsened') {
+    return 'issue';
+  }
+  return 'nit';
+}
+
 function body(finding: StageableFinding): string {
-  const base =
-    finding.baseValue === undefined
-      ? 'The function is new.'
-      : `It was ${String(finding.baseValue)} at the base (${finding.trend}).`;
+  let base = 'The function is new.';
+  if (finding.baseValue !== undefined) {
+    base = `It was ${String(finding.baseValue)} at the base (${finding.trend}).`;
+  }
   return [
     `ImpactGate measured a cognitive complexity of ${String(finding.value)} for \`${finding.functionName}\`, over the limit of ${String(finding.limit)}. ${base}`,
     `It ranks at the ${formatOrdinal(Math.round(finding.percentile))} percentile of the functions in this change.`,

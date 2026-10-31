@@ -21,13 +21,16 @@ export function editUraItem(
   edit: UraItemEdit,
   now: Temporal.Instant,
 ): Result<UraItem, UraItemError> {
-  const suggestion = edit.suggestion ?? item.suggestion?.text;
+  let suggestion = edit.suggestion ?? item.suggestion?.text;
+  if (suggestion === '') {
+    suggestion = undefined;
+  }
   return validateUraItem({
     ...item,
     severity: edit.severity ?? item.severity,
     title: edit.title?.trim() ?? item.title,
     body: edit.body ?? item.body,
-    suggestion: suggestion === '' ? undefined : suggestion,
+    suggestion,
     updatedAt: now.toString({ fractionalSecondDigits: 3 }),
   });
 }

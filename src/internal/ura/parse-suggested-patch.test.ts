@@ -4,6 +4,8 @@ import { parseSuggestedPatch } from './parse-suggested-patch.ts';
 import type { UraAnchor } from './ura-item.ts';
 import { test } from './testing/test.ts';
 
+import { okValueFrom } from '#testing/ok-value-from.ts';
+
 function withHunk(...header: string[]): string {
   return patch(...header, ...hunk());
 }
@@ -61,7 +63,7 @@ describe('parseSuggestedPatch', () => {
 
   test('round-trips its own normalized text', ({ expect }) => {
     const first = parseSuggestedPatch(withHunk(), anchor());
-    const second = first.ok ? parseSuggestedPatch(first.value.text, anchor()) : first;
+    const second = parseSuggestedPatch(okValueFrom(first).text, anchor());
     expect(second).toStrictEqual(first);
   });
 
