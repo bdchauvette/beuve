@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { test as vitestTest, vi } from 'vitest';
 
 import { openDatabase } from '#sqlite/open-database.ts';
+import { removeTree } from '#x/fs/remove-tree.ts';
 import { createLogger } from '#x/log/create-logger.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 
@@ -42,7 +43,8 @@ export interface RecordingLogger {
  * so every fixture is per test unless it is read-only:
  *
  * - `tempRoot` (worker): a real, symlink-free temporary directory removed when the worker ends.
- * - `tempDir`: a fresh empty directory under `tempRoot`, removed after the test.
+ * - `tempDir`: a fresh empty directory under `tempRoot`, removed after the test, read-only
+ *   checkouts in it included (`removeTree`).
  * - `db`: an empty in-memory SQLite database (`openDatabase(':memory:')`), closed after the test.
  * - `logger`: a {@link RecordingLogger}.
  * - `closing`: `closing(resource)` returns `resource` and releases it after the test, last in first
@@ -58,15 +60,15 @@ export const test = vitestTest
   .extend('tempRoot', { scope: 'worker' }, ({}, { onCleanup }) => {
     const prefix = path.join(realpathSync(os.tmpdir()), 'beuve-test-');
     const root = mkdtempDisposableSync(prefix);
-    onCleanup(() => {
-      root.remove();
+    onCleanup(async () => {
+      await removeTree(root.path);
     });
     return root.path;
   })
   .extend('tempDir', ({ tempRoot }, { onCleanup }) => {
     const directory = mkdtempDisposableSync(path.join(tempRoot, 'test-'));
-    onCleanup(() => {
-      directory.remove();
+    onCleanup(async () => {
+      await removeTree(directory.path);
     });
     return directory.path;
   })

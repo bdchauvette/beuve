@@ -17,7 +17,7 @@ export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {
   if (response.location === 'beuve-checkout') {
     return {
       tone: 'info',
-      text: `${opened} (beuve checkout of the reviewed head, not your working tree).`,
+      text: `${opened} (read-only beuve checkout of the reviewed head, not your working tree).`,
     };
   }
   return { tone: 'info', text: `${opened}.` };

@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { addWorktree } from '#internal/git/add-worktree.ts';
@@ -11,6 +11,8 @@ import { planWorktreePath } from '#internal/git/plan-worktree-path.ts';
 import { pruneWorktrees } from '#internal/git/prune-worktrees.ts';
 import { removeWorktree } from '#internal/git/remove-worktree.ts';
 import { errorFrom } from '#x/error/error-from.ts';
+import { chmodTree } from '#x/fs/chmod-tree.ts';
+import { removeTree } from '#x/fs/remove-tree.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { untilAborted } from '#x/async/until-aborted.ts';
 import { err } from '#x/result/err.ts';
@@ -203,10 +205,14 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         return;
       }
       checkedOut.delete(path);
+      await reopenCheckout(path, logger);
       const removed = await removeWorktree(entry.repository, path, { force: true });
-      if (!removed.ok) {
-        logger.warn('could not remove an unused worktree', { path, error: removed.error });
+      if (removed.ok) {
+        return;
       }
+
+      logger.warn('could not remove an unused worktree', { path, error: removed.error });
+      await sealCheckout(path, logger);
     });
   };
 
@@ -242,6 +248,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       if (!added.ok) {
         return added;
       }
+      await sealCheckout(entry.path, logger);
       checkedOut.set(entry.path, commit);
       logger.debug('worktree ready', { path: entry.path, duration: stopwatch.elapsed() });
     }
@@ -335,6 +342,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         try {
           const kept = await pruneAll(options, keep);
           for (const [path, commit] of kept) {
+            await sealCheckout(path, logger);
             checkedOut.set(path, commit);
           }
         } catch (error: unknown) {
@@ -467,6 +475,7 @@ async function pruneRepository(
       kept.push({ path: worktree.path, head });
       continue;
     }
+    await reopenCheckout(worktree.path, logger);
     const removed = await removeWorktree(repository, worktree.path, { force: true });
     if (!removed.ok) {
       logger.warn('could not remove a stale worktree', {
@@ -492,11 +501,11 @@ async function removeStrayDirectories(
         continue;
       }
       logger.info('removing a stray worktree directory', { path: checkout });
-      await rm(checkout, { recursive: true, force: true });
+      await removeTree(checkout);
     }
     const remaining = await listDirectories(repositoryDirectory);
     if (remaining.length === 0) {
-      await rm(repositoryDirectory, { recursive: true, force: true });
+      await removeTree(repositoryDirectory);
     }
   }
 }
@@ -521,4 +530,45 @@ interface Containment {
 function isInside({ root, candidate }: Containment): boolean {
   const relative = path.relative(root, candidate);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+/**
+ * Makes a checkout read-only (ADR 0033, 0079 amendments): no write bit on any file or directory,
+ * so an editor opened on it refuses to save and nothing can add a file, while every reader (the
+ * language servers, chat's sandbox, trace probes) still sees exactly the commit. Runs on the
+ * path's serial chain, right after the add. A failure is logged: the checkout still serves reads.
+ */
+async function sealCheckout(checkout: string, logger: Logger): Promise<void> {
+  try {
+    await chmodTree(checkout, { file: withoutWriteBits, directory: withoutWriteBits });
+  } catch (error: unknown) {
+    logger.warn('could not make a worktree read-only', { path: checkout, error: errorFrom(error) });
+  }
+}
+
+/**
+ * Gives a sealed checkout's directories back their owner's write bit, which deleting an entry
+ * needs, just before `git worktree remove` on the same serial chain. Files stay read-only: removing
+ * a file needs write permission on its directory only.
+ */
+async function reopenCheckout(checkout: string, logger: Logger): Promise<void> {
+  try {
+    await chmodTree(checkout, {
+      file: (mode) => {
+        return mode;
+      },
+      directory: (mode) => {
+        return mode | 0o700;
+      },
+    });
+  } catch (error: unknown) {
+    logger.warn('could not reopen a worktree for removal', {
+      path: checkout,
+      error: errorFrom(error),
+    });
+  }
+}
+
+function withoutWriteBits(mode: number): number {
+  return mode & ~0o222;
 }

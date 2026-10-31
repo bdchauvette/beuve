@@ -4,6 +4,7 @@ import process from 'node:process';
 
 import { describe } from 'vitest';
 
+import { chmodTree } from '#x/fs/chmod-tree.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import { createVitestTraceRunner } from './create-vitest-trace-runner.ts';
@@ -145,6 +146,28 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     ]);
     expect(snapshot(fixture.worktree)).toStrictEqual(before);
     expect(readdirSync(fixture.temporaryDirectory)).toStrictEqual([]);
+  });
+
+  test('traces a read-only worktree, as beuve checks them out (ADR 0033 amendment)', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
+    await chmodTree(fixture.worktree, { file: withoutWrite, directory: withoutWrite });
+    const result = await runTraceProbe(
+      { ...request(fixture, { signal }), plan, source: math() },
+      runnerFor(fixture),
+    );
+    expect(
+      okValueFrom(result).timelines.map((timeline) => {
+        return [timeline.titles, timeline.status];
+      }),
+    ).toStrictEqual([
+      [['clamp', 'caps high values'], 'passed'],
+      [['clamp', 'keeps values in range'], 'passed'],
+      [['clamp', 'never calls clamp'], 'passed'],
+    ]);
   });
 
   test('runs only the tests matching a name pattern', async ({
@@ -349,6 +372,10 @@ function refusalRunner(fixtures: VitestFixtures): RefusalFixture {
 }
 
 type RefusalRun = (overrides: Partial<TraceRunRequest>) => ReturnType<TraceRunner['run']>;
+
+function withoutWrite(mode: number): number {
+  return mode & ~0o222;
+}
 
 /** Every path under `root` with its size and modification time. */
 function snapshot(root: string): string[] {

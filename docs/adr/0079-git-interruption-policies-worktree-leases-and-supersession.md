@@ -74,3 +74,7 @@ Probes, fork points and review diffs are shared between requests. A shared compu
 
 - `GitObjectReader` joins the `read` row: every request on the shared `cat-file --batch-command` is a read, and an abort **abandons** the request (it answers `aborted` at once and its bytes are skipped) instead of stopping the shared process. The process is restarted (SIGTERM) only on a crash, a desync, a head-of-queue timeout or too many bytes owed to abandoned requests. `streamGit` (`git grep`) is a `read` too. `git-object-reader.ts` and `stream-git.ts` join `git-only-through-typed-operations`.
 - A chat request leases the session checkout only when one of its models reads a checkout (`ModelCapabilities.checkout`: the Claude Code CLI and the Agent SDK). OpenAI-compatible models, with or without tools, run on git objects and take no lease. The language servers, trace probes and the editor keep theirs.
+
+## Amendment 2026-10-31 (task #28, ADR 0033 amendment)
+
+- **Sealing is part of the add, opening part of the removal.** A granted checkout is made read-only on its path's serial chain right after `addWorktree` (and after the startup prune keeps it), before any lease is handed out; its directories get their owner's write bit back on the same chain right before `removeWorktree`. A lease therefore never sees a checkout that is writable, half sealed or being opened for removal.

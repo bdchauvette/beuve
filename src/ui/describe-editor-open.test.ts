@@ -18,7 +18,7 @@ describe('describeEditorOpen', () => {
       text: 'Opened src/a.ts:4 in Zed.',
     });
     expect(describeEditorOpen({ ...opened, location: 'beuve-checkout' }).text).toContain(
-      'beuve checkout',
+      'read-only beuve checkout',
     );
   });
 

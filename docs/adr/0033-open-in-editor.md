@@ -19,3 +19,15 @@
 ## Consequences
 
 A renderer can only ask to open a file of a session at a line; it can't choose a command or URL. The working-tree rule sometimes falls back to a checkout without `node_modules`, which the status bar explains. Adding an editor is one entry in the registry plus an argv builder.
+
+## Amendment (2026-10-31, task #28): beuve's checkouts are read-only
+
+The TOCTOU audit (finding 3) found that "which copy" sent the editor into the same per-commit checkout that the language servers, chat's sandbox and trace probes read as the reviewed SHA. An edit there silently changed what they describe, and the next head move or startup prune deleted it (`worktree remove --force`).
+
+- **Every beuve checkout is read-only**, not only one opened in an editor: nothing in beuve writes to them. Right after `git worktree add`, on the path's serial chain (ADR 0079), the worktree manager clears the write bits of every file and every directory (`chmodTree`, `#x/fs/chmod-tree.ts`). Directories matter as much as files: editors save by writing a temporary file beside the original and renaming it over, which a writable directory allows whatever the file's mode. Links are never followed or changed (a committed link may point anywhere), and each entry is changed through a handle opened with `O_NOFOLLOW`.
+- **Removal opens directories only.** Just before `git worktree remove --force`, on the same chain, the manager gives every directory back its owner's `rwx`. Deleting an entry needs write permission on its directory, never on the entry, so files stay read-only to the end. A failed removal closes the directories again. The startup prune does the same before removing a stale worktree, and deletes stray directories with `removeTree` (`#x/fs/remove-tree.ts`), as does `addWorktree` for a leftover directory at its planned path.
+- **Reuse keeps it closed.** A checkout another session reuses is granted as it is. A checkout the startup prune keeps is closed again, so one an older beuve left writable becomes read-only.
+- **Trace probes need nothing writable in the checkout.** ADR 0036's runner already writes its config, setup module, reports and Vite and Vitest caches into its own temporary directory, runs with `CI=1` (no snapshot writes) and with coverage off; a test runs it against a read-only checkout. A test that writes beside its own source now fails in the probe, with the error in the probe's output; tests that need scratch space use the inherited `TMPDIR`.
+- **The status bar** says "read-only beuve checkout of the reviewed head". To try a change, use Open Review Edits (ADR 0088).
+
+Tests change the bits through `chmodTree` too, and check writes from a separate process (`#testing/attempt-write.ts`), which runs with no capabilities when the tests run as root, since root ignores permission bits. The `tempDir` fixture removes what it holds with `removeTree`.

@@ -1,7 +1,8 @@
-import { mkdir, realpath, rm } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 import { errorFrom } from '#x/error/error-from.ts';
+import { removeTree } from '#x/fs/remove-tree.ts';
 import { err } from '#x/result/err.ts';
 import { fromPromise } from '#x/result/from-promise.ts';
 import { ok } from '#x/result/ok.ts';
@@ -34,7 +35,8 @@ const checkoutTimeout = Temporal.Duration.from({ minutes: 10 });
  * `atomic` (ADR 0079): an abort lets the checkout finish and then reports `aborted`, since a
  * checkout stopped halfway would stay registered with files missing. A directory at the path that
  * git doesn't know (left by a crash or a timeout) is beuve's own and is removed first, and a
- * failed add removes what it left, so the next add starts clean.
+ * failed add removes what it left, so the next add starts clean. Both removals first reopen the
+ * directories a read-only checkout closed (`removeTree`).
  */
 export async function addWorktree(
   repository: GitRepository,
@@ -68,7 +70,7 @@ export async function addWorktree(
       reason: `HEAD is ${found.head ?? 'unborn'}`,
     });
   }
-  await rm(target.value, { recursive: true, force: true });
+  await removeTree(target.value);
   const added = await repository[gitRunner].exec(
     ['worktree', 'add', '--detach', '--end-of-options', target.value, request.commit],
     { policy: { kind: 'atomic' }, timeout: checkoutTimeout },
@@ -95,7 +97,7 @@ async function removeFailedAdd(repository: GitRepository, target: string): Promi
   if (isRegistered) {
     return;
   }
-  await rm(target, { recursive: true, force: true });
+  await removeTree(target);
   await pruneWorktrees(repository);
 }
 
