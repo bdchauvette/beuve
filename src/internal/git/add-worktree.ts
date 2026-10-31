@@ -109,7 +109,7 @@ async function canonicalRoot(root: string): Promise<Result<string, GitError>> {
   }
   return fromPromise(
     (async (): Promise<string> => {
-      await mkdir(root, { recursive: true });
+      await mkdir(root, { recursive: true, mode: 0o700 });
       return realpath(root);
     })(),
     (cause): GitError => ({

@@ -143,7 +143,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
   const rootPath = async (): Promise<Result<string, GitError>> => {
     canonicalRoot ??= fromPromise(
       (async (): Promise<string> => {
-        await mkdir(options.root, { recursive: true });
+        await mkdir(options.root, { recursive: true, mode: 0o700 });
         return realpath(options.root);
       })(),
       (cause): GitError => ({
@@ -373,7 +373,7 @@ async function pruneAll(
   keep: readonly WorktreeKeep[],
 ): Promise<ReadonlyMap<string, CommitSha>> {
   const { logger } = options;
-  await mkdir(options.root, { recursive: true });
+  await mkdir(options.root, { recursive: true, mode: 0o700 });
   const root = await realpath(options.root);
   const registered = new Map<string, CommitSha>();
   const repoPaths = new Set(keep.map((entry) => entry.repoPath));
