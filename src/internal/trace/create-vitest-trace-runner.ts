@@ -71,11 +71,11 @@ const outputTailLength = 8192;
 
 /**
  * Runs a Vitest project's tests against instrumented sources, one Vitest process per run
- * (ADR 0036). Nothing is written into the worktree: the generated config, setup module, run file,
- * caches and reports live in a fresh directory under `temporaryDirectory`, which links to the
- * dependency root's `node_modules` so the config can import Vitest. The process gets no shell, an
- * allow-listed environment and its own process group, which is killed on timeout, cancellation
- * and exit.
+ * (ADR 0036). Nothing is written into the worktree or the dependency root: the generated config,
+ * setup module, run file, caches, attachments and reports live in a fresh directory under
+ * `temporaryDirectory`, whose own `node_modules` links to each of the dependency root's packages
+ * so the config can import Vitest. The process gets no shell, an allow-listed environment and its
+ * own process group, which is killed on timeout, cancellation and exit.
  */
 export function createVitestTraceRunner(options: VitestTraceRunnerOptions): TraceRunner {
   return {
@@ -172,11 +172,10 @@ async function runIn(
   const configFile = path.join(directory, 'vitest.config.mjs');
   const reportFile = path.join(directory, 'report.json');
   await mkdir(eventsDirectory);
-  await symlink(
-    path.join(workspace.dependencyRoot, 'node_modules'),
-    path.join(directory, 'node_modules'),
-    'dir',
-  );
+  await linkDependencies({
+    source: path.join(workspace.dependencyRoot, 'node_modules'),
+    target: path.join(directory, 'node_modules'),
+  });
   const runFile = path.join(directory, 'run.json');
   const setupFile = path.join(directory, 'setup.mjs');
 
@@ -193,6 +192,7 @@ async function runIn(
       setupFile,
       reportFile,
       cacheDirectory: path.join(directory, 'cache'),
+      attachmentsDirectory: path.join(directory, 'attachments'),
     }),
   );
 
@@ -230,6 +230,32 @@ async function runIn(
   }
   const records = await readRecords(eventsDirectory, workspace.worktree);
   return ok({ records, outcomes, duration });
+}
+
+/** The dependency root's `node_modules`, and the scratch directory that stands in for it. */
+interface DependencyLinks {
+  readonly source: string;
+  readonly target: string;
+}
+
+/**
+ * Makes `target` a real directory holding a link to each package in `source`, so the config and
+ * the project config it imports resolve their packages, while anything Vite or Vitest writes into
+ * the nearest `node_modules` (`.vite-temp`, the bundled config, ADR 0036 amendment) stays in
+ * scratch. Dot-entries are left out: they are caches and tool state (`.vite-temp`, `.vite`,
+ * `.cache`, `.vitest-cache`) that would lead writes back into the clone, or `.bin` and `.pnpm`,
+ * which resolution through a package's real path never needs.
+ */
+async function linkDependencies({ source, target }: DependencyLinks): Promise<void> {
+  await mkdir(target);
+  const names = await readdir(source);
+  await Promise.all(
+    names
+      .filter((name) => !name.startsWith('.'))
+      .map(async (name) => {
+        await symlink(path.join(source, name), path.join(target, name));
+      }),
+  );
 }
 
 async function spawnVitest(

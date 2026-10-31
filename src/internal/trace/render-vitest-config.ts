@@ -12,13 +12,16 @@ export interface VitestConfigInput {
   readonly setupFile: string;
   readonly reportFile: string;
   readonly cacheDirectory: string;
+  /** Where `annotate` copies attached files, instead of `<root>/.vitest/attachments`. */
+  readonly attachmentsDirectory: string;
 }
 
 /**
  * The Vitest config beuve generates in its own temp directory (ADR 0036). It loads the project's
  * config and overrides what must not vary: beuve's setup module goes last, the transform that swaps
  * in instrumented sources goes first, reports go to `reportFile` as JSON, and every cache, snapshot
- * update, coverage and watch mode is off so nothing is written into the worktree. Bare imports
+ * update, coverage, module dump and watch mode is off, and caches and attachments go to beuve's
+ * directory, so nothing is written into the worktree. Bare imports
  * from worktree files that resolve nowhere are retried from `dependencyRoot`, because beuve's
  * worktrees have no `node_modules` (ADR 0020).
  */
@@ -31,6 +34,7 @@ export function renderVitestConfig(input: VitestConfigInput): string {
     setupFile: input.setupFile,
     reportFile: input.reportFile,
     cacheDirectory: input.cacheDirectory,
+    attachmentsDirectory: input.attachmentsDirectory,
   };
   let projectImport = 'const projectConfig = {};';
   if (input.projectConfig !== undefined) {
@@ -90,6 +94,8 @@ export default async function beuveTraceConfig(env) {
       cache: false,
       fsModuleCache: false,
       fsModuleCachePath: settings.cacheDirectory,
+      attachmentsDir: settings.attachmentsDirectory,
+      server: { ...test.server, debug: { ...test.server?.debug, dump: false, load: false } },
     },
   };
 }

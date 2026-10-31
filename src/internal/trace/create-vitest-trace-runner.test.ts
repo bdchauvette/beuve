@@ -15,6 +15,7 @@ import { runTraceProbe } from './run-trace-probe.ts';
 import type { VitestFixture } from './testing/create-vitest-fixture.ts';
 import { describeTimeline } from './testing/describe-timeline.ts';
 import { parseTestSource } from './testing/parse-test-source.ts';
+import { snapshotTree } from './testing/snapshot-tree.ts';
 import { test } from './testing/test.ts';
 import type { VitestFixtures } from './testing/test.ts';
 import type { TraceRunner, TraceRunRequest } from './trace-runner.ts';
@@ -146,6 +147,65 @@ describe('createVitestTraceRunner with Vitest', { timeout: 60_000 }, () => {
     ]);
     expect(snapshot(fixture.worktree)).toStrictEqual(before);
     expect(readdirSync(fixture.temporaryDirectory)).toStrictEqual([]);
+  });
+
+  test('leaves the clone it takes dependencies from untouched, node_modules included (ADR 0088)', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
+    installClone(fixture);
+    const before = {
+      worktree: snapshotTree(fixture.worktree),
+      clone: snapshotTree(fixture.dependencyRoot),
+    };
+    const result = await runTraceProbe(
+      { ...request(fixture, { signal }), plan, source: math() },
+      runnerFor(fixture),
+    );
+
+    expect(okValueFrom(result).timelines.map((timeline) => timeline.status)).toStrictEqual([
+      'passed',
+      'passed',
+      'passed',
+    ]);
+    expect({
+      worktree: snapshotTree(fixture.worktree),
+      clone: snapshotTree(fixture.dependencyRoot),
+    }).toStrictEqual(before);
+  });
+
+  test('writes no snapshots or attachments into the worktree', async ({
+    expect,
+    vitestFixtures,
+    signal,
+  }) => {
+    const { fixture, plan } = await mathProject(vitestFixtures);
+    installClone(fixture);
+    fixture.write({ 'src/math.test.ts': writingTest(), 'src/note.txt': 'attached' });
+    const before = {
+      worktree: snapshotTree(fixture.worktree),
+      clone: snapshotTree(fixture.dependencyRoot),
+    };
+    const result = await runTraceProbe(
+      { ...request(fixture, { signal }), plan, source: math() },
+      runnerFor(fixture),
+    );
+
+    expect(
+      okValueFrom(result).timelines.map((timeline) => {
+        return [timeline.titles, timeline.status];
+      }),
+    ).toStrictEqual([
+      [['matches a new snapshot'], 'failed'],
+      [['matches a new inline snapshot'], 'failed'],
+      [['attaches a file'], 'passed'],
+    ]);
+    expect({
+      worktree: snapshotTree(fixture.worktree),
+      clone: snapshotTree(fixture.dependencyRoot),
+    }).toStrictEqual(before);
   });
 
   test('traces a read-only worktree, as beuve checks them out (ADR 0033 amendment)', async ({
@@ -324,6 +384,56 @@ describe('createVitestTraceRunner output', { timeout: 30_000 }, () => {
     });
   });
 });
+
+/**
+ * Makes the fixture's dependency root look like the user's clone: the project's sources, a
+ * project config that loads a scoped plugin from `node_modules`, and dot-entries there.
+ */
+function installClone(fixture: VitestFixture): void {
+  const config = `import { defineConfig } from 'vitest/config';
+import plugin from '@fixture/plugin';
+
+export default defineConfig({ plugins: [plugin()], test: { include: ['src/**/*.test.ts'] } });
+`;
+  fixture.write({ 'vitest.config.ts': config });
+  const files: Record<string, string> = {
+    'package.json': JSON.stringify({ name: 'fixture', type: 'module', private: true }),
+    'vitest.config.ts': config,
+    'src/math.ts': math(),
+    'src/math.test.ts': mathTest(),
+    'node_modules/@fixture/plugin/package.json': JSON.stringify({
+      name: '@fixture/plugin',
+      type: 'module',
+      exports: './index.js',
+    }),
+    'node_modules/@fixture/plugin/index.js':
+      "export default function plugin() {\n  return { name: 'fixture-plugin' };\n}\n",
+    'node_modules/.package-lock.json': '{}',
+    'node_modules/.cache/kept': '',
+    'node_modules/.vite-temp/left-by-the-user.mjs': '',
+  };
+  for (const [file, content] of Object.entries(files)) {
+    const target = path.join(fixture.dependencyRoot, file);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  }
+}
+
+/** Tests that would write a snapshot file, rewrite themselves, and copy an attachment. */
+function writingTest(): string {
+  return `import { expect, test } from 'vitest';
+
+test('matches a new snapshot', () => {
+  expect({ a: 1 }).toMatchSnapshot();
+});
+test('matches a new inline snapshot', () => {
+  expect({ a: 1 }).toMatchInlineSnapshot();
+});
+test('attaches a file', async ({ annotate }) => {
+  await annotate('note', { path: 'src/note.txt' });
+});
+`;
+}
 
 /**
  * Replaces the fixture's Vitest with a script that prints "before 🙂 after" to stdout, with the
