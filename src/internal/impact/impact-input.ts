@@ -34,10 +34,20 @@ export interface ImpactSourceFile {
  * `kind` it reports other than `unsupported-language` or `too-large` reads as `parse-failed`.
  */
 export type ParseSource = <T>(
-  path: string,
-  text: string,
+  source: SourceText,
   use: (root: ImpactNode, language: string) => T,
-) => Promise<Result<T, { readonly kind: string }>>;
+) => Promise<Result<T, ParseFailure>>;
+
+/** A file's text and the path whose extension names its language. */
+export interface SourceText {
+  readonly path: string;
+  readonly text: string;
+}
+
+/** Why a parse failed; only the `kind` is read. */
+export interface ParseFailure {
+  readonly kind: string;
+}
 
 /** A file whose sides are already measured: the pure input of `assessImpact`. */
 export type MeasuredFile =

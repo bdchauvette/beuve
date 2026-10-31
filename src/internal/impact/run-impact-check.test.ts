@@ -7,17 +7,16 @@ import { ok } from '#x/result/ok.ts';
 
 import type { Result } from '#x/result/result.ts';
 
-import type { ImpactSourceFile } from './impact-input.ts';
+import type { ImpactSourceFile, ParseFailure, SourceText } from './impact-input.ts';
 import type { ImpactNode } from './impact-node.ts';
 import { runImpactCheck } from './run-impact-check.ts';
 import { parseTestSource } from './testing/parse-test-source.ts';
 
 /** A `ParseSource` over the real grammar that fails on cue by file name. */
 async function parse<T>(
-  path: string,
-  text: string,
+  { path, text }: SourceText,
   use: (root: ImpactNode, language: string) => T,
-): Promise<Result<T, { readonly kind: string }>> {
+): Promise<Result<T, ParseFailure>> {
   if (path.endsWith('.md')) {
     return err({ kind: 'unsupported-language' });
   }
@@ -27,7 +26,14 @@ async function parse<T>(
   if (path.endsWith('.wasm-broken.ts')) {
     return err({ kind: 'load-failed' });
   }
-  return ok(use(await parseTestSource(text), path.endsWith('.py.ts') ? 'python' : 'typescript'));
+  return ok(use(await parseTestSource(text), languageOf(path)));
+}
+
+function languageOf(path: string): string {
+  if (path.endsWith('.py.ts')) {
+    return 'python';
+  }
+  return 'typescript';
 }
 
 function base(): string {

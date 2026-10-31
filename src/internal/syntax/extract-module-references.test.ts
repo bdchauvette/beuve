@@ -1,14 +1,15 @@
 import { describe } from 'vitest';
 
 import { createSyntaxParser } from './create-syntax-parser.ts';
+import type { SyntaxSource } from './create-syntax-parser.ts';
 import { extractModuleReferences } from './extract-module-references.ts';
 import { test } from './testing/test.ts';
 
 describe('extractModuleReferences', () => {
   test('finds every way TypeScript refers to a module, in source order', async ({ expect }) => {
-    const found = await referencesIn(
-      'a.ts',
-      [
+    const found = await referencesIn({
+      path: 'a.ts',
+      text: [
         "import a from './a.ts';",
         'import type { B } from "#x/b.ts";',
         "import './side';",
@@ -20,7 +21,7 @@ describe('extractModuleReferences', () => {
         "const r = require('./r');",
         'export const local = 1;',
       ].join('\n'),
-    );
+    });
     expect(found).toStrictEqual([
       ['./a.ts', 'static', false],
       ['#x/b.ts', 'static', true],
@@ -35,14 +36,14 @@ describe('extractModuleReferences', () => {
   });
 
   test('finds imports nested in functions and in TSX and JavaScript', async ({ expect }) => {
-    const tsx = await referencesIn(
-      'a.tsx',
-      "import React from 'react';\nfunction f() { return import('./lazy'); }\nconst v = <div />;",
-    );
-    const javascript = await referencesIn(
-      'a.mjs',
-      "import fs from 'node:fs';\nrequire('./b.cjs');",
-    );
+    const tsx = await referencesIn({
+      path: 'a.tsx',
+      text: "import React from 'react';\nfunction f() { return import('./lazy'); }\nconst v = <div />;",
+    });
+    const javascript = await referencesIn({
+      path: 'a.mjs',
+      text: "import fs from 'node:fs';\nrequire('./b.cjs');",
+    });
     expect(tsx).toStrictEqual([
       ['react', 'static', false],
       ['./lazy', 'dynamic', false],
@@ -56,19 +57,18 @@ describe('extractModuleReferences', () => {
   test('skips computed specifiers, empty ones and other calls named like imports', async ({
     expect,
   }) => {
-    const found = await referencesIn(
-      'a.ts',
-      "const n = './x';\nimport(n);\nrequire(`./t`);\nrequire('');\nobj.require('./no');\nload('./no');",
-    );
+    const found = await referencesIn({
+      path: 'a.ts',
+      text: "const n = './x';\nimport(n);\nrequire(`./t`);\nrequire('');\nobj.require('./no');\nload('./no');",
+    });
     expect(found).toStrictEqual([]);
   });
 });
 
 async function referencesIn(
-  path: string,
-  source: string,
+  source: SyntaxSource,
 ): Promise<readonly (readonly [string, string, boolean])[]> {
-  const parsed = await createSyntaxParser().parse(path, source, (root) => {
+  const parsed = await createSyntaxParser().parse(source, (root) => {
     return extractModuleReferences(root).map(({ specifier, kind, isTypeOnly }) => {
       return [specifier, kind, isTypeOnly] as const;
     });

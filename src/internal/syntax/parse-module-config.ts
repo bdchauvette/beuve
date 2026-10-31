@@ -24,8 +24,7 @@ export function parseModuleConfig(text: string): ModuleConfig {
     return {};
   }
   const { imports, compilerOptions } = parsed;
-  const options = isRecord(compilerOptions) ? compilerOptions : {};
-  const { baseUrl, paths } = options;
+  const { baseUrl, paths } = recordOrEmpty(compilerOptions);
   return {
     ...(isRecord(imports) && { imports }),
     ...(typeof baseUrl === 'string' && { baseUrl }),
@@ -41,6 +40,13 @@ function stringListsFrom(record: Readonly<Record<string, unknown>>): Record<stri
     }
   }
   return lists;
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) {
+    return value;
+  }
+  return {};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,10 +66,16 @@ function stripJsonComments(text: string): string {
       index = end;
     } else if (char === '/' && next === '/') {
       const end = text.indexOf('\n', index);
-      index = end === -1 ? text.length : end;
+      index = text.length;
+      if (end !== -1) {
+        index = end;
+      }
     } else if (char === '/' && next === '*') {
       const end = text.indexOf('*/', index + 2);
-      index = end === -1 ? text.length : end + 2;
+      index = text.length;
+      if (end !== -1) {
+        index = end + 2;
+      }
     } else {
       output += char;
       index += 1;
@@ -77,7 +89,10 @@ const trailingComma = /,(\s*[\]}])/gu;
 function endOfString(text: string, start: number): number {
   let index = start + 1;
   while (index < text.length && text.charAt(index) !== '"') {
-    index += text.charAt(index) === '\\' ? 2 : 1;
+    if (text.charAt(index) === '\\') {
+      index += 1;
+    }
+    index += 1;
   }
   return Math.min(index + 1, text.length);
 }

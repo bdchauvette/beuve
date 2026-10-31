@@ -3,8 +3,15 @@ import path from 'node:path';
 import { parseModuleConfig } from './parse-module-config.ts';
 import type { ModuleConfig } from './parse-module-config.ts';
 
-/** Resolves a module specifier written in `fromPath` to a repository path, or `undefined`. */
-export type ModuleResolver = (specifier: string, fromPath: string) => string | undefined;
+/** Resolves a module specifier to a repository path, or `undefined`. */
+export type ModuleResolver = (request: ModuleRequest) => string | undefined;
+
+/** A module specifier and the file that wrote it. */
+export interface ModuleRequest {
+  readonly specifier: string;
+  /** Repository-relative, `/`-separated. */
+  readonly fromPath: string;
+}
 
 export interface ModuleResolverInput {
   /** Every file of the repository at the head, `/`-separated and repository-relative. */
@@ -25,6 +32,20 @@ const emittedExtensions: ReadonlyMap<string, readonly string[]> = new Map([
 
 const importConditions = ['types', 'import', 'node', 'default', 'require'];
 
+/** The parsed configs and the file probe a resolution looks things up in. */
+interface ResolverScope {
+  readonly configs: ReadonlyMap<string, ModuleConfig>;
+  readonly probe: (base: string) => string | undefined;
+}
+
+type ConfigName = 'package.json' | 'tsconfig.json';
+
+/** The exact key of an `imports` or `paths` table, or a `*` pattern and what its `*` matched. */
+interface PatternMatch {
+  readonly pattern: string;
+  readonly star: string;
+}
+
 /**
  * Module resolution over the files of a repository at one commit, with no file system access:
  * relative specifiers (with the extension and `index` probing TypeScript and Node do),
@@ -41,15 +62,18 @@ export function createModuleResolver(input: ModuleResolverInput): ModuleResolver
   const isFile = (candidate: string): boolean => input.paths.has(candidate);
   const probe = (base: string): string | undefined => probeFile(base, isFile);
 
-  return (specifier, fromPath) => {
-    const directory = path.posix.dirname(fromPath);
+  const scope: ResolverScope = { configs, probe };
+
+  return (request) => {
+    const { specifier, fromPath } = request;
     if (specifier === '.' || specifier.startsWith('./') || specifier.startsWith('../')) {
+      const directory = path.posix.dirname(fromPath);
       return probe(path.posix.normalize(path.posix.join(directory, specifier)));
     }
     if (specifier.startsWith('#')) {
-      return resolveAlias(configs, directory, specifier, probe);
+      return resolveAlias(scope, request);
     }
-    return resolveTsconfigPath(configs, directory, specifier, probe);
+    return resolveTsconfigPath(scope, request);
   };
 }
 
@@ -73,18 +97,25 @@ function probeFile(base: string, isFile: (candidate: string) => boolean): string
 /** Directories from `directory` up to the repository root (`''`), nearest first. */
 function ancestorsOf(directory: string): string[] {
   const chain: string[] = [];
-  let current = directory === '.' ? '' : directory;
+  let current = rootAsEmpty(directory);
   for (;;) {
     chain.push(current);
     if (current === '') {
       return chain;
     }
-    const parent = path.posix.dirname(current);
-    current = parent === '.' ? '' : parent;
+    current = rootAsEmpty(path.posix.dirname(current));
   }
 }
 
-function configPathIn(directory: string, name: string): string {
+/** `''` for the repository root, which `path.posix.dirname` writes as `.`. */
+function rootAsEmpty(directory: string): string {
+  if (directory === '.') {
+    return '';
+  }
+  return directory;
+}
+
+function configPathIn(directory: string, name: ConfigName): string {
   if (directory === '') {
     return name;
   }
@@ -92,23 +123,25 @@ function configPathIn(directory: string, name: string): string {
 }
 
 function resolveAlias(
-  configs: ReadonlyMap<string, ModuleConfig>,
-  directory: string,
-  specifier: string,
-  probe: (base: string) => string | undefined,
+  { configs, probe }: ResolverScope,
+  { specifier, fromPath }: ModuleRequest,
 ): string | undefined {
-  for (const ancestor of ancestorsOf(directory)) {
+  const ancestors = ancestorsOf(path.posix.dirname(fromPath));
+  for (const ancestor of ancestors) {
     const imports = configs.get(configPathIn(ancestor, 'package.json'))?.imports;
     if (imports === undefined) {
       continue;
     }
     const match = matchPattern(Object.keys(imports), specifier);
-    const target = match === undefined ? undefined : targetOf(imports[match.pattern]);
-    if (match === undefined || target === undefined) {
+    if (match === undefined) {
+      return undefined;
+    }
+    const target = targetOf(imports[match.pattern]);
+    if (target === undefined) {
       return undefined;
     }
     if (target.startsWith('./')) {
-      return probe(inDirectory(ancestor, target, match.star));
+      return probe(expandIn(ancestor, { target, match }));
     }
     return undefined;
   }
@@ -137,41 +170,47 @@ function targetOf(value: unknown): string | undefined {
 }
 
 function resolveTsconfigPath(
-  configs: ReadonlyMap<string, ModuleConfig>,
-  directory: string,
-  specifier: string,
-  probe: (base: string) => string | undefined,
+  { configs, probe }: ResolverScope,
+  { specifier, fromPath }: ModuleRequest,
 ): string | undefined {
-  for (const ancestor of ancestorsOf(directory)) {
+  const ancestors = ancestorsOf(path.posix.dirname(fromPath));
+  for (const ancestor of ancestors) {
     const config = configs.get(configPathIn(ancestor, 'tsconfig.json'));
     if (config?.paths === undefined) {
       continue;
     }
     const root = path.posix.join(ancestor, config.baseUrl ?? '.');
     const match = matchPattern(Object.keys(config.paths), specifier);
-    const targets = match === undefined ? [] : (config.paths[match.pattern] ?? []);
-    return targets
-      .map((target) => probe(inDirectory(root, target, match?.star ?? '')))
+    if (match === undefined) {
+      return undefined;
+    }
+    return (config.paths[match.pattern] ?? [])
+      .map((target) => {
+        return probe(expandIn(root, { target, match }));
+      })
       .find((resolved) => resolved !== undefined);
   }
   return undefined;
 }
 
-/** `target` with its `*` replaced, relative to `directory`, normalized. */
-function inDirectory(directory: string, target: string, star: string): string {
+/** A target of a matched `imports` or `paths` pattern. */
+interface MatchedTarget {
+  readonly target: string;
+  readonly match: PatternMatch;
+}
+
+/** `target` with its `*` replaced by what the pattern's `*` matched, relative to `directory`. */
+function expandIn(directory: string, { target, match }: MatchedTarget): string {
   return path.posix.normalize(
     path.posix.join(
       directory,
-      target.replace('*', () => star),
+      target.replace('*', () => match.star),
     ),
   );
 }
 
 /** The exact key, else the pattern with a single `*` and the longest prefix, and what `*` matched. */
-function matchPattern(
-  patterns: readonly string[],
-  specifier: string,
-): { readonly pattern: string; readonly star: string } | undefined {
+function matchPattern(patterns: readonly string[], specifier: string): PatternMatch | undefined {
   if (patterns.includes(specifier)) {
     return { pattern: specifier, star: '' };
   }

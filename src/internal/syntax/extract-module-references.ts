@@ -41,22 +41,22 @@ export function extractModuleReferences(root: SyntaxNode): readonly ModuleRefere
 function referenceFrom(node: SyntaxNode): ModuleReference | undefined {
   switch (node.type) {
     case 'import_statement': {
-      const source = node.childForFieldName('source') ?? requireClauseSource(node);
+      const required = requireClauseSource(node);
+      const source = node.childForFieldName('source') ?? required;
       if (source === undefined) {
         return undefined;
       }
-      return makeReference(
-        source,
-        requireClauseSource(node) === undefined ? 'static' : 'require',
-        node,
-      );
+      if (required === undefined) {
+        return makeReference(source, 'static', hasTypeKeyword(node));
+      }
+      return makeReference(source, 'require', hasTypeKeyword(node));
     }
     case 'export_statement': {
       const source = node.childForFieldName('source');
       if (source === null) {
         return undefined;
       }
-      return makeReference(source, 'export-from', node);
+      return makeReference(source, 'export-from', hasTypeKeyword(node));
     }
     case 'call_expression': {
       return callReference(node);
@@ -79,10 +79,10 @@ function callReference(call: SyntaxNode): ModuleReference | undefined {
     return undefined;
   }
   if (callee.type === 'import') {
-    return makeReference(argument, 'dynamic', call);
+    return makeReference(argument, 'dynamic', hasTypeKeyword(call));
   }
   if (callee.type === 'identifier' && callee.text === 'require') {
-    return makeReference(argument, 'require', call);
+    return makeReference(argument, 'require', hasTypeKeyword(call));
   }
   return undefined;
 }
@@ -90,15 +90,16 @@ function callReference(call: SyntaxNode): ModuleReference | undefined {
 function makeReference(
   literal: SyntaxNode,
   kind: ModuleReferenceKind,
-  statement: SyntaxNode,
+  isTypeOnly: boolean,
 ): ModuleReference | undefined {
   const specifier = literal.text.slice(1, -1);
   if (specifier === '') {
     return undefined;
   }
-  return {
-    specifier,
-    kind,
-    isTypeOnly: statement.children.some((child) => !child.isNamed && child.type === 'type'),
-  };
+  return { specifier, kind, isTypeOnly };
+}
+
+/** `import type` and `export type`: the statement has an anonymous `type` keyword. */
+function hasTypeKeyword(statement: SyntaxNode): boolean {
+  return statement.children.some((child) => !child.isNamed && child.type === 'type');
 }

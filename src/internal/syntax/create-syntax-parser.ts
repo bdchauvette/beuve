@@ -36,10 +36,15 @@ export type SyntaxFailure =
  * it returns. The tree is freed when `use` returns, so nodes must not escape it.
  */
 export type ParseSyntax = <T>(
-  path: string,
-  text: string,
+  source: SyntaxSource,
   use: (root: SyntaxNode, language: SyntaxLanguage) => T,
 ) => Promise<Result<T, SyntaxFailure>>;
+
+/** A file's text and the path whose extension names its language. */
+export interface SyntaxSource {
+  readonly path: string;
+  readonly text: string;
+}
 
 export interface SyntaxParser {
   readonly parse: ParseSyntax;
@@ -86,7 +91,7 @@ export function createSyntaxParser(options: SyntaxParserOptions = {}): SyntaxPar
     return loaded;
   };
 
-  const parse: ParseSyntax = async (filePath, text, use) => {
+  const parse: ParseSyntax = async ({ path: filePath, text }, use) => {
     const language = detectLanguage(filePath);
     if (language === undefined) {
       return err({ kind: 'unsupported-language', path: filePath });

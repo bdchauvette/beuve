@@ -45,12 +45,12 @@ export async function buildImportEdges(
       continue;
     }
     const dependent = headPathOf(file);
-    const parsed = await parse(dependent, content.text, (root) =>
+    const parsed = await parse({ path: dependent, text: content.text }, (root) =>
       extractModuleReferences(root).map((reference) => reference.specifier),
     );
     const specifiers = parsed.ok ? new Set(parsed.value) : new Set<string>();
     for (const specifier of specifiers) {
-      const dependency = resolve(specifier, dependent);
+      const dependency = resolve({ specifier, fromPath: dependent });
       if (dependency !== undefined && dependency !== dependent && paths.has(dependency)) {
         edges.push({ dependent, dependency });
       }

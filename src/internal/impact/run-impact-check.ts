@@ -31,10 +31,7 @@ export async function runImpactCheck(
 }
 
 async function measureFile(file: ImpactSourceFile, parse: ParseSource): Promise<MeasuredFile> {
-  const location =
-    file.previousPath === undefined
-      ? { path: file.path }
-      : { path: file.path, previousPath: file.previousPath };
+  const location = locationOf(file);
   const [base, head] = await Promise.all([
     measureSide(file.previousPath ?? file.path, file.baseText, parse),
     measureSide(file.path, file.headText, parse),
@@ -59,6 +56,14 @@ async function measureFile(file: ImpactSourceFile, parse: ParseSource): Promise<
   };
 }
 
+/** The file's path, and its base path when it was renamed. */
+function locationOf(file: ImpactSourceFile): Pick<ImpactSourceFile, 'path' | 'previousPath'> {
+  if (file.previousPath === undefined) {
+    return { path: file.path };
+  }
+  return { path: file.path, previousPath: file.previousPath };
+}
+
 async function measureSide(
   path: string,
   text: string | undefined,
@@ -67,7 +72,7 @@ async function measureSide(
   if (text === undefined) {
     return ok(undefined);
   }
-  const parsed = await parse(path, text, (root, language): MeasuredSide | undefined => {
+  const parsed = await parse({ path, text }, (root, language): MeasuredSide | undefined => {
     const rules = rulesByLanguage[language];
     if (rules === undefined) {
       return undefined;

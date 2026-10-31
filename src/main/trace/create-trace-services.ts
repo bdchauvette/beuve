@@ -179,8 +179,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
     changedLines: ReadonlySet<number>,
   ): Promise<Result<InstrumentationPlan, Failed>> => {
     const planned = await parse(
-      filePath,
-      source,
+      { path: filePath, text: source },
       (root, language): Result<InstrumentationPlan, Failed> => {
         const rules = traceRulesByLanguage[language];
         if (rules === undefined) {

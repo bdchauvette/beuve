@@ -85,23 +85,26 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
         return failed('file-unavailable', `${path} has no readable text at the head`);
       }
       const changedLines = flowChangedLinesFrom(file);
-      const built = await parse(path, blob.text, (root, parsedLanguage): FlowGraphResponse => {
-        const rules = flowRulesByLanguage[parsedLanguage];
-        if (rules === undefined) {
-          return unsupported(path);
-        }
-        const found = findFunctionAt(root, line, rules);
-        if (found === undefined) {
-          return noFunction(path, line);
-        }
-        const graph = buildControlFlowGraph(found, rules, { changedLines });
-        if (graph.ok) {
-          return { kind: 'graph', graph: graph.value };
-        }
-        return graph.error.kind === 'too-large'
-          ? tooLarge(graph.error.nodeLimit)
-          : noFunction(path, line);
-      });
+      const built = await parse(
+        { path, text: blob.text },
+        (root, parsedLanguage): FlowGraphResponse => {
+          const rules = flowRulesByLanguage[parsedLanguage];
+          if (rules === undefined) {
+            return unsupported(path);
+          }
+          const found = findFunctionAt(root, line, rules);
+          if (found === undefined) {
+            return noFunction(path, line);
+          }
+          const graph = buildControlFlowGraph(found, rules, { changedLines });
+          if (graph.ok) {
+            return { kind: 'graph', graph: graph.value };
+          }
+          return graph.error.kind === 'too-large'
+            ? tooLarge(graph.error.nodeLimit)
+            : noFunction(path, line);
+        },
+      );
       if (!built.ok) {
         switch (built.error.kind) {
           case 'unsupported-language': {

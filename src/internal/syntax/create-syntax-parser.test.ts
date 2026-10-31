@@ -7,19 +7,28 @@ import { test } from './testing/test.ts';
 describe('createSyntaxParser', () => {
   test('parses TypeScript, TSX and JavaScript by path', async ({ expect }) => {
     const parser = createSyntaxParser();
-    const typescript = await parser.parse('a.ts', 'function f(a: number): void {}', (root) => {
-      return root.namedChildren.map((node) => node.type);
-    });
-    const tsx = await parser.parse('a.tsx', 'const x = <div a={1} />;', (root, language) => {
-      return {
-        language,
-        hasJsx: root.text.includes('<div'),
-        types: shape(root),
-      };
-    });
-    const javascript = await parser.parse('a.mjs', 'class A { m() {} }', (root, language) => {
-      return [language, root.namedChildren[0]?.childForFieldName('name')?.text];
-    });
+    const typescript = await parser.parse(
+      { path: 'a.ts', text: 'function f(a: number): void {}' },
+      (root) => {
+        return root.namedChildren.map((node) => node.type);
+      },
+    );
+    const tsx = await parser.parse(
+      { path: 'a.tsx', text: 'const x = <div a={1} />;' },
+      (root, language) => {
+        return {
+          language,
+          hasJsx: root.text.includes('<div'),
+          types: shape(root),
+        };
+      },
+    );
+    const javascript = await parser.parse(
+      { path: 'a.mjs', text: 'class A { m() {} }' },
+      (root, language) => {
+        return [language, root.namedChildren[0]?.childForFieldName('name')?.text];
+      },
+    );
 
     expect(typescript).toStrictEqual({ ok: true, value: ['function_declaration'] });
     expect(tsx.ok && tsx.value.language).toBe('tsx');
@@ -29,7 +38,7 @@ describe('createSyntaxParser', () => {
 
   test('reports positions and syntax errors without failing', async ({ expect }) => {
     const parser = createSyntaxParser();
-    const parsed = await parser.parse('a.ts', '\n\nfunction (', (root) => {
+    const parsed = await parser.parse({ path: 'a.ts', text: '\n\nfunction (' }, (root) => {
       return {
         hasError: root.hasError,
         start: root.namedChildren[0]?.startPosition,
@@ -44,14 +53,16 @@ describe('createSyntaxParser', () => {
   test('refuses unsupported and oversized sources', async ({ expect }) => {
     const parser = createSyntaxParser();
     const small = createSyntaxParser({ maxSourceLength: 4 });
-    await expect(parser.parse('notes.md', '# hi', () => 1)).resolves.toStrictEqual({
+    await expect(parser.parse({ path: 'notes.md', text: '# hi' }, () => 1)).resolves.toStrictEqual({
       ok: false,
       error: { kind: 'unsupported-language', path: 'notes.md' },
     });
-    await expect(small.parse('a.ts', 'let a = 1;', () => 1)).resolves.toStrictEqual({
-      ok: false,
-      error: { kind: 'too-large', length: 10, limit: 4 },
-    });
+    await expect(small.parse({ path: 'a.ts', text: 'let a = 1;' }, () => 1)).resolves.toStrictEqual(
+      {
+        ok: false,
+        error: { kind: 'too-large', length: 10, limit: 4 },
+      },
+    );
   });
 
   test('loads grammars from a wasm directory and reports missing ones', async ({
@@ -59,12 +70,14 @@ describe('createSyntaxParser', () => {
     wasmDirectory,
   }) => {
     const copied = createSyntaxParser({ wasmDirectory });
-    await expect(copied.parse('a.ts', 'let a = 1;', (root) => root.type)).resolves.toStrictEqual({
+    await expect(
+      copied.parse({ path: 'a.ts', text: 'let a = 1;' }, (root) => root.type),
+    ).resolves.toStrictEqual({
       ok: true,
       value: 'program',
     });
-    const missing = await copied.parse('a.js', 'let a = 1;', (root) => root.type);
-    expect(missing.ok ? undefined : missing.error.kind).toBe('load-failed');
+    const missing = await copied.parse({ path: 'a.js', text: 'let a = 1;' }, (root) => root.type);
+    expect(missing).toMatchObject({ ok: false, error: { kind: 'load-failed' } });
   });
 });
 
