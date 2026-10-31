@@ -40,7 +40,7 @@ describe('parseGhAuthStatus', () => {
         ],
       },
     });
-    expect(parseGhAuthStatus({ stdout: stdout, host: 'github.com' })).toStrictEqual({
+    expect(parseGhAuthStatus({ stdout, host: 'github.com' })).toStrictEqual({
       login: 'octocat',
       scopes: ['gist', 'read:org', 'repo'],
       check: { kind: 'valid' },

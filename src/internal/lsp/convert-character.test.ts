@@ -29,7 +29,7 @@ describe('convertCharacter', () => {
       for (const to of encodings()) {
         const expected = boundaries()[to];
         const actual = boundaries()[from].map((column) => {
-          return convertCharacter(line(), column, { from: from, to: to });
+          return convertCharacter(line(), column, { from, to });
         });
         expect(actual, `${from} -> ${to}`).toStrictEqual(expected);
       }
