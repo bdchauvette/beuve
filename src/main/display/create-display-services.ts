@@ -44,7 +44,10 @@ const defaults: Required<DiffDisplayView> = {
 export function createDisplayServices(filePath?: string): DisplayServices {
   let remembered: Required<DiffDisplayView> = defaults;
   const read = async (): Promise<Required<DiffDisplayView>> => {
-    return filePath === undefined ? remembered : displayFrom(await readSettingsFile(filePath));
+    if (filePath === undefined) {
+      return remembered;
+    }
+    return displayFrom(await readSettingsFile(filePath));
   };
   return {
     get: async (): Promise<IpcResult<DiffDisplayView>> => {

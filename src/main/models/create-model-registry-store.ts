@@ -43,9 +43,13 @@ export function createModelRegistryStore(settingsPath?: string): ModelRegistrySt
       let outcome: Result<ModelRegistry, E> | undefined;
       await updateSettingsFile(settingsPath, (current) => {
         outcome = change(modelRegistryFrom(current['models']));
-        return outcome.ok
-          ? { ...current, models: { entries: outcome.value.entries, roles: outcome.value.roles } }
-          : { ...current };
+        if (outcome.ok) {
+          return {
+            ...current,
+            models: { entries: outcome.value.entries, roles: outcome.value.roles },
+          };
+        }
+        return { ...current };
       });
       // updateSettingsFile always calls the function; this only satisfies the type checker.
       return outcome ?? change(memory);

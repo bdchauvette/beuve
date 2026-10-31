@@ -7,9 +7,10 @@ import { readFile } from 'node:fs/promises';
 export async function readSettingsFile(filePath: string): Promise<Record<string, unknown>> {
   try {
     const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'));
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
   } catch {
     return {};
   }

@@ -176,7 +176,10 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
         owner === null
           ? await dialog.showOpenDialog(options)
           : await dialog.showOpenDialog(owner, options);
-      return chosen.canceled ? undefined : chosen.filePaths[0];
+      if (chosen.canceled) {
+        return undefined;
+      }
+      return chosen.filePaths[0];
     },
   };
   const handlers = createIpcHandlers(

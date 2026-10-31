@@ -45,7 +45,10 @@ export async function syncPullRequestHead(
 ): Promise<Result<SyncedPullRequest, GithubFailureView>> {
   const first = await fetchAndVerify(input, input.pullRequest);
   if (!first.ok || first.value.matches) {
-    return first.ok ? ok(first.value.synced) : first;
+    if (first.ok) {
+      return ok(first.value.synced);
+    }
+    return first;
   }
   input.logger.info('github: fetched head differs from the API; asking again', {
     number: input.pullRequest.number,
@@ -56,7 +59,10 @@ export async function syncPullRequestHead(
   }
   const second = await fetchAndVerify(input, again.value);
   if (!second.ok || second.value.matches) {
-    return second.ok ? ok(second.value.synced) : second;
+    if (second.ok) {
+      return ok(second.value.synced);
+    }
+    return second;
   }
   return err(
     githubFailure(
@@ -108,7 +114,8 @@ function describeFetchError(remote: string, error: GitError): string {
     const last = error.stderr.trim().split('\n').at(-1)?.slice(0, 300) ?? '';
     return `git fetch from ${remote} failed${last === '' ? '' : `: ${last}`}`;
   }
-  return error.kind === 'timeout'
-    ? `git fetch from ${remote} timed out`
-    : `git fetch from ${remote} failed (${error.kind})`;
+  if (error.kind === 'timeout') {
+    return `git fetch from ${remote} timed out`;
+  }
+  return `git fetch from ${remote} failed (${error.kind})`;
 }

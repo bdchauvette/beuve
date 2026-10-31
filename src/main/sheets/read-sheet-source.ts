@@ -35,7 +35,8 @@ export async function readSheetSource(
     return gitFailure(context.logger, read.error);
   }
   const content = read.value.get(blob.value.objectId);
-  return content?.kind === 'text'
-    ? ok(content.text)
-    : err({ code: 'unsupported', message: `${path} is not a text file beuve can show` });
+  if (content?.kind === 'text') {
+    return ok(content.text);
+  }
+  return err({ code: 'unsupported', message: `${path} is not a text file beuve can show` });
 }

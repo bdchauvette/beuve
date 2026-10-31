@@ -14,7 +14,8 @@ export interface EditorRootFacts {
  * the diff; otherwise beuve's head checkout (ADR 0020).
  */
 export function chooseEditorRoot(facts: EditorRootFacts): 'working-tree' | 'beuve-checkout' {
-  return facts.workingTreeHead === facts.sessionHead && facts.workingFile === 'clean'
-    ? 'working-tree'
-    : 'beuve-checkout';
+  if (facts.workingTreeHead === facts.sessionHead && facts.workingFile === 'clean') {
+    return 'working-tree';
+  }
+  return 'beuve-checkout';
 }

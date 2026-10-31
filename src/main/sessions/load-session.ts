@@ -19,7 +19,8 @@ export function loadSession(context: SessionContext, sessionId: string): Result<
   if (!found.ok) {
     return sessionFailure(context.logger, found.error);
   }
-  return found.value === undefined
-    ? err({ code: 'not-found', message: 'no such session' })
-    : ok(found.value);
+  if (found.value === undefined) {
+    return err({ code: 'not-found', message: 'no such session' });
+  }
+  return ok(found.value);
 }

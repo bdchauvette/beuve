@@ -41,9 +41,15 @@ export async function findSessionForkPoint(
     key,
     async (shared): Promise<Result<StackForkPoint, GitError>> => {
       const own = await rebindRepository(context, repository, shared);
-      return own.ok ? findStackForkPoint(own.value, range, { reviewedBases }) : own;
+      if (own.ok) {
+        return findStackForkPoint(own.value, range, { reviewedBases });
+      }
+      return own;
     },
     { signal: options.signal },
   );
-  return found === 'aborted' ? err({ kind: 'aborted', args: ['merge-base'] }) : found;
+  if (found === 'aborted') {
+    return err({ kind: 'aborted', args: ['merge-base'] });
+  }
+  return found;
 }

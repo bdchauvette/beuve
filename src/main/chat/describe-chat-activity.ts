@@ -12,9 +12,10 @@ export function describeChatActivity(name: string, event: ModelStreamEvent): str
       return progressActivity(name, event.progress);
     }
     case 'text': {
-      return event.delta.kind === 'append' && event.delta.text !== ''
-        ? `${name} is writing`
-        : undefined;
+      if (event.delta.kind === 'append' && event.delta.text !== '') {
+        return `${name} is writing`;
+      }
+      return undefined;
     }
     case 'stop': {
       return undefined;

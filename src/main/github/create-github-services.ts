@@ -143,9 +143,10 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
   const defaultHost = (): string => {
     const sessionId = options.openSessionId();
     const session = sessionId === undefined ? undefined : loadSession(options.context, sessionId);
-    return session?.ok === true && session.value.source.kind === 'github-pull-request'
-      ? session.value.source.host
-      : 'github.com';
+    if (session?.ok === true && session.value.source.kind === 'github-pull-request') {
+      return session.value.source.host;
+    }
+    return 'github.com';
   };
 
   return {
@@ -217,7 +218,10 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     ): Promise<IpcResult<GithubReviewPreviewView | GithubFailureView>> => {
       const prepared = await prepareGithubReview(github, options.ura, request);
       if (!prepared.ok) {
-        return 'code' in prepared.error ? err(prepared.error) : ok(prepared.error);
+        if ('code' in prepared.error) {
+          return err(prepared.error);
+        }
+        return ok(prepared.error);
       }
       return ok(prepared.value.preview);
     },
@@ -258,34 +262,39 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
 
     badgeFor: (source): PullRequestBadgeView | undefined => {
       const stored = storedFor(source);
-      return stored === undefined
-        ? undefined
-        : {
-            title: stored.title,
-            state: stored.state,
-            isDraft: stored.isDraft,
-            baseBranch: stored.baseBranch,
-          };
+      if (stored === undefined) {
+        return undefined;
+      }
+      return {
+        title: stored.title,
+        state: stored.state,
+        isDraft: stored.isDraft,
+        baseBranch: stored.baseBranch,
+      };
     },
 
     summaryFor: (sessionId): PullRequestSummary | undefined => {
       const loaded = loadSession(options.context, sessionId);
       const stored = loaded.ok ? storedFor(loaded.value.source) : undefined;
-      return stored === undefined
-        ? undefined
-        : {
-            number: stored.ref.number,
-            title: stored.title,
-            url: stored.htmlUrl,
-            state: stored.state,
-            author: stored.author,
-          };
+      if (stored === undefined) {
+        return undefined;
+      }
+      return {
+        number: stored.ref.number,
+        title: stored.title,
+        url: stored.htmlUrl,
+        state: stored.state,
+        author: stored.author,
+      };
     },
 
     intentFor: (sessionId): string | undefined => {
       const loaded = loadSession(options.context, sessionId);
       const stored = loaded.ok ? storedFor(loaded.value.source) : undefined;
-      return stored === undefined ? undefined : `${stored.title}\n\n${stored.body}`.trim();
+      if (stored === undefined) {
+        return undefined;
+      }
+      return `${stored.title}\n\n${stored.body}`.trim();
     },
 
     watch: poller.watch,

@@ -8,5 +8,8 @@ export function repositoryRelativePathFrom(repository: GitRepository, requested:
     return requested;
   }
   const relative = path.relative(repository.root, requested);
-  return relative.startsWith('..') || path.isAbsolute(relative) ? requested : relative;
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return requested;
+  }
+  return relative;
 }

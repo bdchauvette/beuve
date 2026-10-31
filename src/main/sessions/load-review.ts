@@ -60,15 +60,16 @@ export async function loadReview(
 }
 
 function forkPointViewFrom(forkPoint: StackForkPoint | undefined): Pick<ReviewView, 'forkPoint'> {
-  return forkPoint === undefined || forkPoint.reason === 'merge-base'
-    ? {}
-    : {
-        forkPoint: {
-          reason: forkPoint.reason,
-          mergeBaseSha: forkPoint.mergeBase,
-          skippedCommits: forkPoint.skipped,
-        },
-      };
+  if (forkPoint === undefined || forkPoint.reason === 'merge-base') {
+    return {};
+  }
+  return {
+    forkPoint: {
+      reason: forkPoint.reason,
+      mergeBaseSha: forkPoint.mergeBase,
+      skippedCommits: forkPoint.skipped,
+    },
+  };
 }
 
 /** Pair ids are the new commit's sha, so a hunk's attributed commits are already its pair ids. */

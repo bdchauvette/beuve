@@ -125,9 +125,10 @@ function isOk(result: Result<unknown, unknown>): boolean {
 }
 
 function rangeDiffWeightOf(result: Result<RangeDiff, IpcError>): number {
-  return result.ok
-    ? result.value.files.reduce((sum, file) => {
-        return sum + 4 * file.patch.length;
-      }, 0)
-    : 0;
+  if (result.ok) {
+    return result.value.files.reduce((sum, file) => {
+      return sum + 4 * file.patch.length;
+    }, 0);
+  }
+  return 0;
 }

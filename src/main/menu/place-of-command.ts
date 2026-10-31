@@ -5,5 +5,8 @@ export function placeOfCommand(
   command: CatalogCommand,
   platform: KeyPlatform,
 ): MenuPlace | undefined {
-  return platform === 'linux' ? (command.linuxMenu ?? command.menu) : command.menu;
+  if (platform === 'linux') {
+    return command.linuxMenu ?? command.menu;
+  }
+  return command.menu;
 }

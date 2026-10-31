@@ -477,27 +477,40 @@ export function createIpcHandlers(
     }
     using scope = scopes.begin(sender.webContentsId, kind, id);
     const result = await work({ signal: scope.signal });
-    return scope.signal.aborted ? err({ code: 'cancelled', message: 'cancelled' }) : result;
+    if (scope.signal.aborted) {
+      return err({ code: 'cancelled', message: 'cancelled' });
+    }
+    return result;
   };
 
   return {
     'app:get-info': (request): IpcResult<AppInfo> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? ok(appInfo) : invalid(parsed.error);
+      if (parsed.success) {
+        return ok(appInfo);
+      }
+      return invalid(parsed.error);
     },
     'session:list': (request): IpcResult<readonly SessionSummary[]> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.sessions.list() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.sessions.list();
+      }
+      return invalid(parsed.error);
     },
     'session:create-local': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = localSessionRequest.safeParse(request);
-      return parsed.success ? services.sessions.createLocal(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.sessions.createLocal(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'repository:inspect': async (request): Promise<IpcResult<RepositoryInspectionView>> => {
       const parsed = inspectRepositoryRequest.safeParse(request);
-      return parsed.success
-        ? services.sessions.inspectRepository(parsed.data)
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.sessions.inspectRepository(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'dialog:choose-folder': async (request): Promise<IpcResult<ChooseFolderResponse>> => {
       const parsed = chooseFolderRequest.safeParse(request);
@@ -529,13 +542,17 @@ export function createIpcHandlers(
     },
     'session:mark-reviewed': async (request): Promise<IpcResult<SessionSummary>> => {
       const parsed = markReviewedRequest.safeParse(request);
-      return parsed.success ? services.sessions.markReviewed(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.sessions.markReviewed(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'review:set-file-reviewed': async (request): Promise<IpcResult<SetFileReviewedResponse>> => {
       const parsed = fileReviewedRequest.safeParse(request);
-      return parsed.success
-        ? services.sessions.setFileReviewed(parsed.data)
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.sessions.setFileReviewed(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'session:get-order': async (request, sender): Promise<IpcResult<ReviewOrderView>> => {
       const parsed = reviewOrderRequest.safeParse(request);
@@ -552,38 +569,47 @@ export function createIpcHandlers(
     },
     'session:get-impact': async (request, sender): Promise<IpcResult<ImpactView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success
-        ? scoped(sender, 'impact', async (options) => {
-            return services.impact.getImpactForRenderer(parsed.data, options);
-          })
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return scoped(sender, 'impact', async (options) => {
+          return services.impact.getImpactForRenderer(parsed.data, options);
+        });
+      }
+      return invalid(parsed.error);
     },
     'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
       const parsed = filePairRequest.safeParse(request);
-      return parsed.success ? services.files.getFilePair(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.files.getFilePair(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'session:get-tree': async (request, sender): Promise<IpcResult<RepositoryTreeView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success
-        ? scoped(sender, 'tree', async (options) => services.files.getTree(parsed.data, options))
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return scoped(sender, 'tree', async (options) => {
+          return services.files.getTree(parsed.data, options);
+        });
+      }
+      return invalid(parsed.error);
     },
     'session:get-file-attributes': async (
       request,
       sender,
     ): Promise<IpcResult<FileAttributesView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success
-        ? scoped(sender, 'file-attributes', async (options) => {
-            return services.files.getFileAttributes(parsed.data, options);
-          })
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return scoped(sender, 'file-attributes', async (options) => {
+          return services.files.getFileAttributes(parsed.data, options);
+        });
+      }
+      return invalid(parsed.error);
     },
     'lsp:call-hierarchy': async (request): Promise<IpcResult<CallHierarchyView>> => {
       const parsed = callHierarchyRequest.safeParse(request);
-      return parsed.success
-        ? services.lsp.callHierarchy(withoutUndefined(parsed.data))
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.lsp.callHierarchy(withoutUndefined(parsed.data));
+      }
+      return invalid(parsed.error);
     },
     'lsp:definition': async (request): Promise<IpcResult<DefinitionView>> => {
       const parsed = definitionRequest.safeParse(request);
@@ -620,35 +646,42 @@ export function createIpcHandlers(
     },
     'sheet:get-file': async (request, sender): Promise<IpcResult<SheetFileView>> => {
       const parsed = sheetFileRequest.safeParse(request);
-      return parsed.success
-        ? scoped(sender, 'sheet-file', async (options) => {
-            return services.sheets.getFile(parsed.data, options);
-          })
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return scoped(sender, 'sheet-file', async (options) => {
+          return services.sheets.getFile(parsed.data, options);
+        });
+      }
+      return invalid(parsed.error);
     },
     'sheet:get-head': async (request, sender): Promise<IpcResult<SheetHeadView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success
-        ? scoped(sender, 'sheet-head', async (options) => {
-            return services.sheets.getHead(parsed.data, options);
-          })
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return scoped(sender, 'sheet-head', async (options) => {
+          return services.sheets.getHead(parsed.data, options);
+        });
+      }
+      return invalid(parsed.error);
     },
     'remote:permalink': async (request): Promise<IpcResult<PermalinkView>> => {
       const parsed = permalinkRequest.safeParse(request);
-      return parsed.success
-        ? services.remote.permalink(permalinkRequestFrom(parsed.data))
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.remote.permalink(permalinkRequestFrom(parsed.data));
+      }
+      return invalid(parsed.error);
     },
     'remote:open-permalink': async (request): Promise<IpcResult<PermalinkView>> => {
       const parsed = permalinkRequest.safeParse(request);
-      return parsed.success
-        ? services.remote.openPermalink(permalinkRequestFrom(parsed.data))
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.remote.openPermalink(permalinkRequestFrom(parsed.data));
+      }
+      return invalid(parsed.error);
     },
     'flow:get-graph': async (request): Promise<IpcResult<FlowGraphResponse>> => {
       const parsed = flowGraphRequest.safeParse(request);
-      return parsed.success ? services.flow.getGraph(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.flow.getGraph(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'trace:run': async (request): Promise<IpcResult<TraceRunStartedView>> => {
       const parsed = traceRunRequest.safeParse(request);
@@ -663,19 +696,31 @@ export function createIpcHandlers(
     },
     'trace:cancel': (request): IpcResult<TraceCancelledView> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.trace.cancel(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.trace.cancel(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'trace:get-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.trace.getTrust(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.trace.getTrust(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'trace:set-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
       const parsed = traceTrustRequest.safeParse(request);
-      return parsed.success ? services.trace.setTrust(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.trace.setTrust(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'ura:list': async (request): Promise<IpcResult<UraListView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.ura.list(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.ura.list(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'ura:create': async (request): Promise<IpcResult<UraItemView>> => {
       const parsed = uraCreateRequest.safeParse(request);
@@ -706,11 +751,17 @@ export function createIpcHandlers(
     },
     'ura:transition': async (request): Promise<IpcResult<UraItemView>> => {
       const parsed = uraTransitionRequest.safeParse(request);
-      return parsed.success ? services.ura.transition(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.ura.transition(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'ura:reorder': (request): IpcResult<UraOrderView> => {
       const parsed = uraReorderRequest.safeParse(request);
-      return parsed.success ? services.ura.reorder(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.ura.reorder(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'ura:stage-review-finding': async (request): Promise<IpcResult<UraStagedView>> => {
       const parsed = stageReviewFindingRequest.safeParse(request);
@@ -725,7 +776,10 @@ export function createIpcHandlers(
     },
     'ura:stage-impact-finding': async (request): Promise<IpcResult<UraStagedView>> => {
       const parsed = stageFindingRequest.safeParse(request);
-      return parsed.success ? services.ura.stageImpactFinding(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.ura.stageImpactFinding(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'ura:set-verdict': (request): IpcResult<UraVerdictStateView> => {
       const parsed = verdictChoiceRequest.safeParse(request);
@@ -774,11 +828,17 @@ export function createIpcHandlers(
     },
     'chat:list': (request): IpcResult<ChatListView> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.chat.list(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.chat.list(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'chat:cancel': (request): IpcResult<ChatCancelledView> => {
       const parsed = chatCancelRequest.safeParse(request);
-      return parsed.success ? services.chat.cancel(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.chat.cancel(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'request:cancel': (request, sender): IpcResult<RequestCancelledView> => {
       const parsed = cancelRequestRequest.safeParse(request);
@@ -792,7 +852,10 @@ export function createIpcHandlers(
     },
     'chat:compact': async (request): Promise<IpcResult<ChatCompactedView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success ? services.chat.compact(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.chat.compact(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'chat:clear': (request): IpcResult<ChatClearedView> => {
       const parsed = chatClearRequest.safeParse(request);
@@ -812,11 +875,17 @@ export function createIpcHandlers(
     },
     'editor:get-settings': async (request): Promise<IpcResult<EditorSettingsView>> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.editor.getSettings() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.editor.getSettings();
+      }
+      return invalid(parsed.error);
     },
     'editor:set-preferred': async (request): Promise<IpcResult<EditorSettingsView>> => {
       const parsed = preferredEditorRequest.safeParse(request);
-      return parsed.success ? services.editor.setPreferred(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.editor.setPreferred(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'github:auth-status': async (request): Promise<IpcResult<GithubAuthStatusView>> => {
       const parsed = githubAuthRequest.safeParse(request ?? {});
@@ -846,7 +915,10 @@ export function createIpcHandlers(
     },
     'display:get': async (request): Promise<IpcResult<DiffDisplayView>> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.display.get() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.display.get();
+      }
+      return invalid(parsed.error);
     },
     'display:set': async (request): Promise<IpcResult<DiffDisplayView>> => {
       const parsed = displayRequest.safeParse(request);
@@ -876,9 +948,10 @@ export function createIpcHandlers(
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
       const parsed = sessionRequest.safeParse(request);
-      return parsed.success
-        ? services.github.getPullRequest(parsed.data.sessionId)
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.github.getPullRequest(parsed.data.sessionId);
+      }
+      return invalid(parsed.error);
     },
     'github:preview-review': async (
       request,
@@ -908,11 +981,17 @@ export function createIpcHandlers(
     },
     'github:open-link': async (request): Promise<IpcResult<{ opened: true }>> => {
       const parsed = githubLinkRequest.safeParse(request);
-      return parsed.success ? services.github.openLink(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.github.openLink(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'shell:open-url': async (request): Promise<IpcResult<{ opened: true }>> => {
       const parsed = openUrlRequest.safeParse(request);
-      return parsed.success ? services.shell.openUrl(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.shell.openUrl(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'menu:set-state': (request, sender): IpcResult<{ readonly applied: true }> => {
       const parsed = menuStateRequest.safeParse(request);
@@ -950,55 +1029,77 @@ export function createIpcHandlers(
       if (sender === undefined || platform.menus === undefined) {
         return err({ code: 'not-wired', message: 'no menus outside Electron' });
       }
-      return platform.menus.runMainCommand(sender.webContentsId, parsed.data.id)
-        ? ok({ ran: true })
-        : err({ code: 'refused', message: `${parsed.data.id} is not a main-process command` });
+      if (platform.menus.runMainCommand(sender.webContentsId, parsed.data.id)) {
+        return ok({ ran: true });
+      }
+      return err({ code: 'refused', message: `${parsed.data.id} is not a main-process command` });
     },
     'trace:list-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.trace.listTrust() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.trace.listTrust();
+      }
+      return invalid(parsed.error);
     },
     'trace:remove-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
       const parsed = traceRemoveTrustRequest.safeParse(request);
-      return parsed.success ? services.trace.removeTrust(parsed.data) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.trace.removeTrust(parsed.data);
+      }
+      return invalid(parsed.error);
     },
     'claude:status': async (request): Promise<IpcResult<ClaudeStatusView>> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.claude.status() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.claude.status();
+      }
+      return invalid(parsed.error);
     },
     'models:list': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = noRequest.safeParse(request);
-      return parsed.success ? services.models.list() : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.list();
+      }
+      return invalid(parsed.error);
     },
     'models:save': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = saveModelRequest.safeParse(request);
-      return parsed.success
-        ? services.models.save(modelEntryInputFrom(parsed.data.entry))
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.save(modelEntryInputFrom(parsed.data.entry));
+      }
+      return invalid(parsed.error);
     },
     'models:remove': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = modelIdRequest.safeParse(request);
-      return parsed.success ? services.models.remove(parsed.data.id) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.remove(parsed.data.id);
+      }
+      return invalid(parsed.error);
     },
     'models:set-role': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = modelRoleRequest.safeParse(request);
-      return parsed.success
-        ? services.models.setRole(parsed.data.role, parsed.data.id)
-        : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.setRole(parsed.data.role, parsed.data.id);
+      }
+      return invalid(parsed.error);
     },
     'models:set-key': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = modelKeyRequest.safeParse(request);
       // Never echo the request: a validation message could quote the key.
-      return parsed.success
-        ? services.models.setKey(parsed.data.id, parsed.data.apiKey)
-        : err({
-            code: 'invalid-request',
-            message: 'expected { id, apiKey } with a key of 1 to 4096 printable characters',
-          });
+      if (parsed.success) {
+        return services.models.setKey(parsed.data.id, parsed.data.apiKey);
+      }
+      return err({
+        code: 'invalid-request',
+        message: 'expected { id, apiKey } with a key of 1 to 4096 printable characters',
+      });
     },
     'models:remove-key': async (request): Promise<IpcResult<ModelRegistryView>> => {
       const parsed = modelIdRequest.safeParse(request);
-      return parsed.success ? services.models.removeKey(parsed.data.id) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.removeKey(parsed.data.id);
+      }
+      return invalid(parsed.error);
     },
     'models:list-remote': async (request): Promise<IpcResult<RemoteModelsView>> => {
       const parsed = listRemoteModelsRequest.safeParse(request);
@@ -1010,7 +1111,10 @@ export function createIpcHandlers(
     },
     'models:test': async (request): Promise<IpcResult<ModelTestView>> => {
       const parsed = modelIdRequest.safeParse(request);
-      return parsed.success ? services.models.test(parsed.data.id) : invalid(parsed.error);
+      if (parsed.success) {
+        return services.models.test(parsed.data.id);
+      }
+      return invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<{ length: number }>> => {
       const parsed = clipboardRequest.safeParse(request);

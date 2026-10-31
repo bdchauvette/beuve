@@ -215,9 +215,10 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       return undefined;
     }
     const stored = options.storedHead(claim.sessionId);
-    return stored === claim.headSha
-      ? undefined
-      : { kind: 'stale-head', sessionId: claim.sessionId, requested: claim.headSha, stored };
+    if (stored === claim.headSha) {
+      return undefined;
+    }
+    return { kind: 'stale-head', sessionId: claim.sessionId, requested: claim.headSha, stored };
   };
 
   const hold = (holder: string, path: string): void => {
@@ -316,7 +317,10 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       const outcome = signal === undefined ? await granted : await untilAborted(granted, signal);
       if (outcome === 'aborted' || !outcome.ok) {
         lease[Symbol.dispose]();
-        return outcome === 'aborted' ? err({ kind: 'aborted', args: [] }) : outcome;
+        if (outcome === 'aborted') {
+          return err({ kind: 'aborted', args: [] });
+        }
+        return outcome;
       }
       return ok(lease);
     },
@@ -353,9 +357,10 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
 
 /** The key a claim keeps its checkout under: one per session, one per sheet-pinned commit. */
 function holderOf(claim: WorktreeClaim): string {
-  return claim.kind === 'session-head'
-    ? `session\0${claim.sessionId}`
-    : `pinned\0${claim.sessionId}\0${claim.commit}`;
+  if (claim.kind === 'session-head') {
+    return `session\0${claim.sessionId}`;
+  }
+  return `pinned\0${claim.sessionId}\0${claim.commit}`;
 }
 
 /**

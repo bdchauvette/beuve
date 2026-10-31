@@ -67,6 +67,9 @@ async function tighten(file: string): Promise<'tightened' | 'unchanged' | 'missi
     await handle.chmod(owned);
     return 'tightened';
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : errorFrom(error);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return 'missing';
+    }
+    return errorFrom(error);
   }
 }

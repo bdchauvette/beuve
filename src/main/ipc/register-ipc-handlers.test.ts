@@ -33,7 +33,10 @@ function handlersAnsweringOk(): IpcHandlers {
       return [
         channel,
         (_request: unknown, sender?: { readonly webContentsId: number }): unknown => {
-          return channel === 'menu:set-state' ? ok(sender) : ok(channel);
+          if (channel === 'menu:set-state') {
+            return ok(sender);
+          }
+          return ok(channel);
         },
       ];
     }),

@@ -98,7 +98,10 @@ export function createTraceTrust(options: TraceTrustOptions): TraceTrust {
     return entries
       .flatMap(([repositoryPath, value]): TraceTrustEntryView[] => {
         const approval = approvalFrom(value);
-        return approval === undefined ? [] : [{ repositoryPath, ...approval }];
+        if (approval === undefined) {
+          return [];
+        }
+        return [{ repositoryPath, ...approval }];
       })
       .toSorted((left, right) => left.repositoryPath.localeCompare(right.repositoryPath));
   };
@@ -134,7 +137,10 @@ function approvalFrom(value: unknown): Approval | undefined {
   if (typeof trustedAt !== 'string') {
     return undefined;
   }
-  return typeof remoteUrl === 'string' ? { trustedAt, remoteUrl } : { trustedAt };
+  if (typeof remoteUrl === 'string') {
+    return { trustedAt, remoteUrl };
+  }
+  return { trustedAt };
 }
 
 async function identify(

@@ -27,7 +27,10 @@ export async function openSessionRepository(
         objectReaders: context.caches.objectReaders,
         signal: anySignal(context.git.signal, shared),
       });
-      return opened.ok ? ok({ root: opened.value.root, version: opened.value.version }) : opened;
+      if (opened.ok) {
+        return ok({ root: opened.value.root, version: opened.value.version });
+      }
+      return opened;
     },
     { signal },
   );

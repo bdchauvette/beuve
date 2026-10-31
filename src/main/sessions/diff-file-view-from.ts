@@ -50,7 +50,8 @@ function blobSha<K extends 'oldBlobSha' | 'newBlobSha'>(
   key: K,
   objectId: string | undefined,
 ): Partial<Record<K, string>> {
-  return objectId === undefined || zeroIdPattern.test(objectId)
-    ? {}
-    : ({ [key]: objectId } as Partial<Record<K, string>>);
+  if (objectId === undefined || zeroIdPattern.test(objectId)) {
+    return {};
+  }
+  return { [key]: objectId } as Partial<Record<K, string>>;
 }

@@ -37,8 +37,14 @@ export function upsertPullRequestSession(
       return sessionFailure(logger, created.error);
     }
     const inserted = insertSession(db, created.value);
-    return inserted.ok ? ok(created.value) : sessionFailure(logger, inserted.error);
+    if (inserted.ok) {
+      return ok(created.value);
+    }
+    return sessionFailure(logger, inserted.error);
   }
   const moved = moveSessionHead(context, observedFrom ?? existing.value, headSha);
-  return !moved.ok && moved.error.code === 'stale-review' ? ok(existing.value) : moved;
+  if (!moved.ok && moved.error.code === 'stale-review') {
+    return ok(existing.value);
+  }
+  return moved;
 }

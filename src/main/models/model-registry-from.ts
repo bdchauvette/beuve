@@ -54,5 +54,8 @@ function entryFrom(candidate: unknown): ModelEntry | undefined {
     return undefined;
   }
   const entry = { ...modelEntryInputFrom(parsed.data), id: parsed.data.id };
-  return typeof apiKeyRef === 'string' && apiKeyRef !== '' ? { ...entry, apiKeyRef } : entry;
+  if (typeof apiKeyRef === 'string' && apiKeyRef !== '') {
+    return { ...entry, apiKeyRef };
+  }
+  return entry;
 }

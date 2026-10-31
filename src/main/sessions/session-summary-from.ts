@@ -10,7 +10,8 @@ export function sessionSummaryFrom(session: Session): SessionSummary {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
-  return session.review.kind === 'reviewed'
-    ? { ...summary, lastReviewedSha: session.review.checkpoint.headSha }
-    : summary;
+  if (session.review.kind === 'reviewed') {
+    return { ...summary, lastReviewedSha: session.review.checkpoint.headSha };
+  }
+  return summary;
 }

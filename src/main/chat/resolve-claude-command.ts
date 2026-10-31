@@ -31,12 +31,13 @@ export async function resolveClaudeCommand(lookup: ClaudeCommandLookup): Promise
   const override = lookup.env[claudePathVariable]?.trim();
   if (override !== undefined && override !== '') {
     const file = expandHome(override, lookup.homeDirectory);
-    return path.isAbsolute(file) && (await lookup.isExecutable(file))
-      ? { kind: 'found', command: file, source: 'env' }
-      : {
-          kind: 'missing',
-          message: `${claudePathVariable} is set to ${override}, which is not an executable file.`,
-        };
+    if (path.isAbsolute(file) && (await lookup.isExecutable(file))) {
+      return { kind: 'found', command: file, source: 'env' };
+    }
+    return {
+      kind: 'missing',
+      message: `${claudePathVariable} is set to ${override}, which is not an executable file.`,
+    };
   }
   const name = lookup.platform === 'win32' ? 'claude.exe' : 'claude';
   for (const file of knownLocations(lookup.homeDirectory, lookup.platform)) {
@@ -59,7 +60,10 @@ export async function resolveClaudeCommand(lookup: ClaudeCommandLookup): Promise
 }
 
 function expandHome(file: string, homeDirectory: string): string {
-  return file === '~' || file.startsWith('~/') ? path.join(homeDirectory, file.slice(1)) : file;
+  if (file === '~' || file.startsWith('~/')) {
+    return path.join(homeDirectory, file.slice(1));
+  }
+  return file;
 }
 
 function knownLocations(homeDirectory: string, platform: NodeJS.Platform): string[] {

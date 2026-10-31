@@ -70,7 +70,10 @@ export async function loadReviewDiff(
   }
   const range = computeReviewRange(refreshed.value.session);
   const diff = await sharedRangeDiff(context, refreshed.value, range, options);
-  return diff.ok ? ok({ ...diff.value, refreshed: refreshed.value }) : diff;
+  if (diff.ok) {
+    return ok({ ...diff.value, refreshed: refreshed.value });
+  }
+  return diff;
 }
 
 /**
@@ -110,7 +113,10 @@ async function sharedRangeDiff(
     },
     { signal: options.signal },
   );
-  return diff === 'aborted' ? err(ipcErrorFromGitError({ kind: 'aborted', args: ['diff'] })) : diff;
+  if (diff === 'aborted') {
+    return err(ipcErrorFromGitError({ kind: 'aborted', args: ['diff'] }));
+  }
+  return diff;
 }
 
 /** One shared diff computation: its own handle and signal, and the refresh it diffs for. */
@@ -138,14 +144,15 @@ async function diffReviewRange(
         range.headSha,
         review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [],
       );
-      return fork.ok
-        ? ok({
-            scope: { kind: 'up-to-date' },
-            baseSha: fork.value.forkPoint,
-            files: [],
-            ...stackForkPoint(fork.value),
-          })
-        : gitFailure(context.logger, fork.error);
+      if (fork.ok) {
+        return ok({
+          scope: { kind: 'up-to-date' },
+          baseSha: fork.value.forkPoint,
+          files: [],
+          ...stackForkPoint(fork.value),
+        });
+      }
+      return gitFailure(context.logger, fork.error);
     }
     case 'interdiff': {
       return diffInterdiff(computing, range, isIgnoringWhitespace);
@@ -184,14 +191,15 @@ async function diffFull(
       ignoreWhitespace: isIgnoringWhitespace,
     },
   );
-  return files.ok
-    ? ok({
-        scope,
-        baseSha: fork.value.forkPoint,
-        files: files.value,
-        ...stackForkPoint(fork.value),
-      })
-    : gitFailure(context.logger, files.error);
+  if (files.ok) {
+    return ok({
+      scope,
+      baseSha: fork.value.forkPoint,
+      files: files.value,
+      ...stackForkPoint(fork.value),
+    });
+  }
+  return gitFailure(context.logger, files.error);
 }
 
 async function diffInterdiff(
@@ -267,7 +275,10 @@ async function diffInterdiff(
 }
 
 function stackForkPoint(fork: StackForkPoint): { readonly forkPoint?: StackForkPoint } {
-  return fork.reason === 'merge-base' ? {} : { forkPoint: fork };
+  if (fork.reason === 'merge-base') {
+    return {};
+  }
+  return { forkPoint: fork };
 }
 
 function outcomeFrom(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interdiff' }>['outcome'] {
@@ -276,9 +287,10 @@ function outcomeFrom(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interd
       return { kind: 'exact' };
     }
     case 'rebased': {
-      return interdiff.replay === 'commit-pairs'
-        ? { kind: 'rebased', replay: 'commit-pairs' }
-        : { kind: 'rebased' };
+      if (interdiff.replay === 'commit-pairs') {
+        return { kind: 'rebased', replay: 'commit-pairs' };
+      }
+      return { kind: 'rebased' };
     }
     case 'fallback': {
       const { reason } = interdiff;

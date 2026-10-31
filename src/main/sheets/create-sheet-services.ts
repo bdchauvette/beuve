@@ -99,9 +99,13 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         return loaded;
       }
       const refreshed = await refreshSession(context, loaded.value, { signal: call.signal });
-      return refreshed.ok
-        ? ok({ sessionId: refreshed.value.session.id, headSha: refreshed.value.session.headSha })
-        : refreshed;
+      if (refreshed.ok) {
+        return ok({
+          sessionId: refreshed.value.session.id,
+          headSha: refreshed.value.session.headSha,
+        });
+      }
+      return refreshed;
     },
     checkOpen: async ({ sessionId, sha, path }): Promise<IpcResult<{ readonly opened: true }>> => {
       const commit = await resolveSheetCommit(context, sessionId, sha);
@@ -109,7 +113,10 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         return commit;
       }
       const contents = await readSheetSource(context, commit.value, path);
-      return contents.ok ? ok({ opened: true }) : contents;
+      if (contents.ok) {
+        return ok({ opened: true });
+      }
+      return contents;
     },
   };
 }

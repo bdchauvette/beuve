@@ -36,7 +36,10 @@ export function createClonePathSettings(filePath?: string): ClonePathSettings {
         typeof paths === 'object' && paths !== null
           ? (paths as Record<string, unknown>)[keyOf(repository)]
           : undefined;
-      return typeof value === 'string' && path.isAbsolute(value) ? value : undefined;
+      if (typeof value === 'string' && path.isAbsolute(value)) {
+        return value;
+      }
+      return undefined;
     },
     write: async (repository, repoPath): Promise<void> => {
       remembered.set(keyOf(repository), repoPath);

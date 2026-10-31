@@ -33,9 +33,10 @@ export async function checkClaudeCodeVersion(
     return err({ kind: 'not-installed', command });
   }
   const version = found[0];
-  return isAtLeast(version, pinnedClaudeCodeVersion)
-    ? ok(version)
-    : err({ kind: 'unsupported-version', command, version, required: pinnedClaudeCodeVersion });
+  if (isAtLeast(version, pinnedClaudeCodeVersion)) {
+    return ok(version);
+  }
+  return err({ kind: 'unsupported-version', command, version, required: pinnedClaudeCodeVersion });
 }
 
 function isAtLeast(version: string, required: string): boolean {

@@ -100,9 +100,10 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
           if (graph.ok) {
             return { kind: 'graph', graph: graph.value };
           }
-          return graph.error.kind === 'too-large'
-            ? tooLarge(graph.error.nodeLimit)
-            : noFunction(path, line);
+          if (graph.error.kind === 'too-large') {
+            return tooLarge(graph.error.nodeLimit);
+          }
+          return noFunction(path, line);
         },
       );
       if (!built.ok) {
@@ -130,7 +131,10 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
 }
 
 function headPath(file: DiffFile): string {
-  return 'newPath' in file ? file.newPath : file.path;
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
 }
 
 function failed(failure: FlowFailureKind, message: string): IpcResult<FlowGraphResponse> {

@@ -75,9 +75,10 @@ export async function refreshSession(
     return ok({ session, repository: repository.value, baseTip: baseTip.value });
   }
   const advanced = await advanceLocalHead(context, repository.value, session);
-  return advanced.ok
-    ? ok({ session: advanced.value, repository: repository.value, baseTip: baseTip.value })
-    : advanced;
+  if (advanced.ok) {
+    return ok({ session: advanced.value, repository: repository.value, baseTip: baseTip.value });
+  }
+  return advanced;
 }
 
 /** How often a local head write retries after losing a race to another writer. */

@@ -3,12 +3,14 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   ClaudeStatusView,
   IpcResult,
+  PullRequestBadgeView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 import { createCachedCredentialProvider } from '#internal/auth/create-cached-credential-provider.ts';
 import { createGhCliCredentialProvider } from '#internal/auth/create-gh-cli-credential-provider.ts';
 import type { GithubCredentialProvider } from '#internal/auth/github-credential-provider.ts';
+import type { CommitSha } from '#internal/git/object-id.ts';
 import type { FetchLike } from '#internal/github/github-client.ts';
 import type { OpenRepositoryOptions } from '#internal/git/open-repository.ts';
 import { createLspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
@@ -196,10 +198,11 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         gh.services?.watch(isPull ? id : undefined);
       },
     ),
-    (summary) => {
-      return summary.source.kind === 'github-pull-request'
-        ? gh.services?.badgeFor(summary.source)
-        : undefined;
+    (summary): PullRequestBadgeView | undefined => {
+      if (summary.source.kind === 'github-pull-request') {
+        return gh.services?.badgeFor(summary.source);
+      }
+      return undefined;
     },
   );
   const parser = createSyntaxParser(options.syntax);
@@ -223,9 +226,12 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     root: options.worktreeRoot,
     logger,
     git: context.git,
-    storedHead: (sessionId) => {
+    storedHead: (sessionId): CommitSha | undefined => {
       const stored = loadSession(context, sessionId);
-      return stored.ok ? stored.value.headSha : undefined;
+      if (stored.ok) {
+        return stored.value.headSha;
+      }
+      return undefined;
     },
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
@@ -422,7 +428,10 @@ function withPullRequestBadges(
         ok: true,
         value: listed.value.map((summary) => {
           const badge = badgeFor(summary);
-          return badge === undefined ? summary : { ...summary, pullRequest: badge };
+          if (badge === undefined) {
+            return summary;
+          }
+          return { ...summary, pullRequest: badge };
         }),
       };
     },

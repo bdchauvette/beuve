@@ -88,12 +88,13 @@ export function createModelServices(options: ModelServicesOptions): ModelService
     change: (current: ModelRegistry) => Result<ModelRegistry, string>,
   ): Promise<IpcResult<ModelRegistryView>> => {
     const updated = await registry.update(change);
-    return updated.ok
-      ? ok(await view(updated.value))
-      : err({
-          code: updated.error.startsWith('no model') ? 'not-found' : 'refused',
-          message: updated.error,
-        });
+    if (updated.ok) {
+      return ok(await view(updated.value));
+    }
+    return err({
+      code: updated.error.startsWith('no model') ? 'not-found' : 'refused',
+      message: updated.error,
+    });
   };
 
   return {
@@ -137,7 +138,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
             existing === undefined
               ? [...current.entries, entry]
               : current.entries.map((candidate) => {
-                  return candidate.id === id ? entry : candidate;
+                  if (candidate.id === id) {
+                    return entry;
+                  }
+                  return candidate;
                 }),
         });
       });
@@ -169,9 +173,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
 
     setRole: async (role, id): Promise<IpcResult<ModelRegistryView>> => {
       return changed((current) => {
-        return current.entries.some((entry) => entry.id === id)
-          ? ok({ ...current, roles: { ...current.roles, [role]: id } })
-          : err(`no model named ${id}`);
+        if (current.entries.some((entry) => entry.id === id)) {
+          return ok({ ...current, roles: { ...current.roles, [role]: id } });
+        }
+        return err(`no model named ${id}`);
       });
     },
 
@@ -196,7 +201,10 @@ export function createModelServices(options: ModelServicesOptions): ModelService
         return ok({
           ...latest,
           entries: latest.entries.map((candidate) => {
-            return candidate.id === id ? { ...candidate, apiKeyRef: keyRefFor(id) } : candidate;
+            if (candidate.id === id) {
+              return { ...candidate, apiKeyRef: keyRefFor(id) };
+            }
+            return candidate;
           }),
         });
       });
@@ -206,14 +214,15 @@ export function createModelServices(options: ModelServicesOptions): ModelService
       await secrets.remove(keyRefFor(id));
       logger.info('model key removed', { id });
       return changed((current) => {
-        return current.entries.some((entry) => entry.id === id)
-          ? ok({
-              ...current,
-              entries: current.entries.map((entry) => {
-                return entry.id === id ? withoutKeyRef(entry) : entry;
-              }),
-            })
-          : err(`no model named ${id}`);
+        if (current.entries.some((entry) => entry.id === id)) {
+          return ok({
+            ...current,
+            entries: current.entries.map((entry) => {
+              return entry.id === id ? withoutKeyRef(entry) : entry;
+            }),
+          });
+        }
+        return err(`no model named ${id}`);
       });
     },
 
@@ -231,16 +240,18 @@ export function createModelServices(options: ModelServicesOptions): ModelService
         timeout: listTimeout,
         ...(apiKey !== undefined && { apiKey }),
       });
-      return listed.ok
-        ? ok({ models: listed.value })
-        : err({ code: 'refused', message: describeModelError(listed.error) });
+      if (listed.ok) {
+        return ok({ models: listed.value });
+      }
+      return err({ code: 'refused', message: describeModelError(listed.error) });
     },
 
     test: async (id): Promise<IpcResult<ModelTestView>> => {
       const current = await registry.read();
-      return current.entries.every((entry) => entry.id !== id)
-        ? err({ code: 'not-found', message: `no model named ${id}` })
-        : ok(await options.testModel(id));
+      if (current.entries.every((entry) => entry.id !== id)) {
+        return err({ code: 'not-found', message: `no model named ${id}` });
+      }
+      return ok(await options.testModel(id));
     },
   };
 }

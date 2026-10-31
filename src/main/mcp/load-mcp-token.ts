@@ -34,7 +34,10 @@ async function readExisting(file: string): Promise<string | undefined> {
   try {
     const contents = await readFile(file, 'utf8');
     const token = contents.trim();
-    return tokenPattern.test(token) ? token : undefined;
+    if (tokenPattern.test(token)) {
+      return token;
+    }
+    return undefined;
   } catch {
     return undefined;
   }

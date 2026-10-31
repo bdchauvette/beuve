@@ -42,11 +42,13 @@ export async function resolveSheetCommit(
   }
   const resolved = await resolveRevision(refreshed.value.repository, sha);
   if (!resolved.ok) {
-    return resolved.error.kind === 'unknown-revision'
-      ? err({ code: 'not-found', message: 'that commit is not in the repository' })
-      : gitFailure(context.logger, resolved.error);
+    if (resolved.error.kind === 'unknown-revision') {
+      return err({ code: 'not-found', message: 'that commit is not in the repository' });
+    }
+    return gitFailure(context.logger, resolved.error);
   }
-  return resolved.value === sha
-    ? ok({ refreshed: refreshed.value, sha: resolved.value })
-    : err({ code: 'invalid-request', message: 'expected a full commit sha' });
+  if (resolved.value === sha) {
+    return ok({ refreshed: refreshed.value, sha: resolved.value });
+  }
+  return err({ code: 'invalid-request', message: 'expected a full commit sha' });
 }

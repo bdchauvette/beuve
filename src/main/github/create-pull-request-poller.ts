@@ -149,7 +149,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       }
       backoff = backoff.add(backoff);
     }
-    return Temporal.Duration.compare(backoff, maxBackoff) < 0 ? backoff : maxBackoff;
+    if (Temporal.Duration.compare(backoff, maxBackoff) < 0) {
+      return backoff;
+    }
+    return maxBackoff;
   };
 
   /** Reads the reviews and review requests; keeps the old ones when GitHub does not answer. */
@@ -230,9 +233,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     if (synced.value.pullRequest !== pullRequest) {
       savePullRequest(context.session.db, ref, synced.value.pullRequest);
     }
-    return moveSessionHead(context.session, session, synced.value.headSha).ok
-      ? synced.value.headSha
-      : undefined;
+    if (moveSessionHead(context.session, session, synced.value.headSha).ok) {
+      return synced.value.headSha;
+    }
+    return undefined;
   };
 
   const emitUpdated = (

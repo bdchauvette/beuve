@@ -9,12 +9,13 @@ export function canonicalPullRequestRef(
   pullRequest: PullRequest,
 ): PullRequestRef {
   const repository = pullRequest.base.repository;
-  return repository === undefined
-    ? { ...asked, number: pullRequest.number }
-    : {
-        host: asked.host,
-        owner: repository.owner,
-        repo: repository.name,
-        number: pullRequest.number,
-      };
+  if (repository === undefined) {
+    return { ...asked, number: pullRequest.number };
+  }
+  return {
+    host: asked.host,
+    owner: repository.owner,
+    repo: repository.name,
+    number: pullRequest.number,
+  };
 }

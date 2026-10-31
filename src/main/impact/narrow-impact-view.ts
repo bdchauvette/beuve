@@ -14,7 +14,10 @@ export function narrowImpactView(view: ImpactView, paths: readonly string[]): Im
   const kept = new Set(files.map((file) => file.path));
   const findings = view.findings.filter((finding) => kept.has(finding.path));
   const functions = files.flatMap((file) => {
-    return file.status === 'analyzed' ? file.functions : [];
+    if (file.status === 'analyzed') {
+      return file.functions;
+    }
+    return [];
   });
   const count = (...changes: string[]): number => {
     return functions.filter((entry) => changes.includes(entry.change)).length;

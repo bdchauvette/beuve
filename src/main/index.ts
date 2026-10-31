@@ -99,10 +99,13 @@ async function launch(): Promise<void> {
               return decrypted.result;
             },
             backend: () => {
-              return process.platform === 'linux' &&
+              if (
+                process.platform === 'linux' &&
                 safeStorage.getSelectedStorageBackend() === 'basic_text'
-                ? 'basic'
-                : 'os';
+              ) {
+                return 'basic';
+              }
+              return 'os';
             },
           },
           ...bundledClaudeCode(),
@@ -150,9 +153,10 @@ function bundledClaudeCode(): { bundledClaudeCodePath?: string; hasBundledClaude
     `claude-agent-sdk-${process.platform}-${process.arch}`,
     process.platform === 'win32' ? 'claude.exe' : 'claude',
   );
-  return existsSync(binary)
-    ? { bundledClaudeCodePath: binary, hasBundledClaudeCode: true }
-    : { hasBundledClaudeCode: false };
+  if (existsSync(binary)) {
+    return { bundledClaudeCodePath: binary, hasBundledClaudeCode: true };
+  }
+  return { hasBundledClaudeCode: false };
 }
 
 function focusExistingWindow(): void {
@@ -168,7 +172,8 @@ function focusExistingWindow(): void {
 
 function parsePort(value: string | undefined): number | undefined {
   const port = Number(value);
-  return value !== undefined && Number.isSafeInteger(port) && port >= 0 && port < 65_536
-    ? port
-    : undefined;
+  if (value !== undefined && Number.isSafeInteger(port) && port >= 0 && port < 65_536) {
+    return port;
+  }
+  return undefined;
 }

@@ -8,5 +8,8 @@ export function acceleratorsFor(command: CatalogCommand, platform: KeyPlatform):
   }
   const primary = platform === 'mac' ? keys.mac : keys.linux;
   const alternates = (platform === 'mac' ? keys.macAlt : keys.linuxAlt) ?? [];
-  return primary === undefined ? alternates : [primary, ...alternates];
+  if (primary === undefined) {
+    return alternates;
+  }
+  return [primary, ...alternates];
 }

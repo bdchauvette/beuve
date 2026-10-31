@@ -10,5 +10,8 @@ const archive = 'app.asar';
 export function unpackedPathFrom(file: string, separator: string = path.sep): string {
   const segments = file.split(separator);
   const index = segments.indexOf(archive);
-  return index === -1 ? file : segments.with(index, `${archive}.unpacked`).join(separator);
+  if (index === -1) {
+    return file;
+  }
+  return segments.with(index, `${archive}.unpacked`).join(separator);
 }

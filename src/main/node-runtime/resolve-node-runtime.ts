@@ -80,9 +80,10 @@ export async function resolveNodeRuntime(
     return version;
   }
   const minimumMajor = options.minimumMajor ?? defaultMinimumMajor;
-  return version.value.major < minimumMajor
-    ? err({ kind: 'too-old', command, version: version.value.text, minimumMajor })
-    : ok({ command, version: version.value.text, source });
+  if (version.value.major < minimumMajor) {
+    return err({ kind: 'too-old', command, version: version.value.text, minimumMajor });
+  }
+  return ok({ command, version: version.value.text, source });
 }
 
 function pathCandidatesFrom(pathVariable = ''): string[] {

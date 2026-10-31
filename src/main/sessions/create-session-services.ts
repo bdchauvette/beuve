@@ -84,7 +84,8 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
 
 function listSummaries(context: SessionContext): IpcResult<readonly SessionSummary[]> {
   const sessions = listSessions(context.db);
-  return sessions.ok
-    ? ok(sessions.value.map((session) => sessionSummaryFrom(session)))
-    : sessionFailure(context.logger, sessions.error);
+  if (sessions.ok) {
+    return ok(sessions.value.map((session) => sessionSummaryFrom(session)));
+  }
+  return sessionFailure(context.logger, sessions.error);
 }

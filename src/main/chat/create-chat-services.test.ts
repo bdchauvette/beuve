@@ -60,7 +60,10 @@ describe(
       });
       expect(
         events.flatMap((event) => {
-          return event.type === 'status' ? [[event.status, event.activity]] : [];
+          if (event.type === 'status') {
+            return [[event.status, event.activity]];
+          }
+          return [];
         }),
       ).toStrictEqual([
         ['submitted', 'Asking Claude Code'],
@@ -72,13 +75,14 @@ describe(
       ]);
       expect(
         events.flatMap((event) => {
-          return event.type === 'status'
-            ? []
-            : [
-                'text' in event
-                  ? [event.type, event.text]
-                  : [event.type, 'part' in event ? event.part.id : ''],
-              ];
+          if (event.type === 'status') {
+            return [];
+          }
+          return [
+            'text' in event
+              ? [event.type, event.text]
+              : [event.type, 'part' in event ? event.part.id : ''],
+          ];
         }),
       ).toStrictEqual([
         ['part-start', 'p1'],
@@ -193,14 +197,20 @@ describe(
       });
       expect(textOf(await settled(fourth.answer.id))).toBe('abc');
       const started = events.flatMap((event) => {
-        return event.type === 'status' &&
+        if (
+          event.type === 'status' &&
           event.status === 'submitted' &&
           event.activity === undefined
-          ? event.messageId
-          : [];
+        ) {
+          return event.messageId;
+        }
+        return [];
       });
       const finished = updates.flatMap(({ id, status }) => {
-        return status === 'done' ? id : [];
+        if (status === 'done') {
+          return id;
+        }
+        return [];
       });
       expect([started, finished]).toStrictEqual([
         [second.answer.id, fourth.answer.id],
@@ -419,7 +429,10 @@ describe(
       expect(reviewed.parts.at(-1)).toStrictEqual({ kind: 'finding', id: 'p5', finding: 0 });
       expect(
         events.flatMap((event) => {
-          return event.type === 'status' ? (event.activity ?? []) : [];
+          if (event.type === 'status') {
+            return event.activity ?? [];
+          }
+          return [];
         }),
       ).toStrictEqual(
         expect.arrayContaining([
@@ -608,7 +621,10 @@ describe(
       expect(textOf(asked.question)).toBe('Why [[@1]] and not [[@2]]?');
       expect(
         asked.question.parts.flatMap((part) => {
-          return part.kind === 'mention' ? [part.mention] : [];
+          if (part.kind === 'mention') {
+            return [part.mention];
+          }
+          return [];
         }),
       ).toStrictEqual(mentions);
       await settled(asked.answer.id);
@@ -659,7 +675,10 @@ describe(
       }): Promise<string> => {
         const result = await chat.ask({ sessionId, question: 'Why?', mentions: [mention] });
         expect(result).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
-        return result.ok ? '' : result.error.message;
+        if (result.ok) {
+          return '';
+        }
+        return result.error.message;
       };
       await expect(
         refused({

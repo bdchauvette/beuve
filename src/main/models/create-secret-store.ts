@@ -63,7 +63,10 @@ export function createSecretStore(options: {
   };
   return {
     status: async (): Promise<'os' | 'basic' | 'unavailable'> => {
-      return cipher !== undefined && (await isUsable()) ? cipher.backend() : 'unavailable';
+      if (cipher !== undefined && (await isUsable())) {
+        return cipher.backend();
+      }
+      return 'unavailable';
     },
     has: async (ref): Promise<boolean> => {
       const secrets = await readSecrets(filePath);

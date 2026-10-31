@@ -157,7 +157,10 @@ function withMnemonics(items: readonly MenuTemplateItem[]): MenuTemplateItem[] {
   return items.map((item) => {
     const submenu = item.submenu === undefined ? undefined : withMnemonics(item.submenu);
     if (item.label === undefined || item.visible === false) {
-      return submenu === undefined ? item : { ...item, submenu };
+      if (submenu === undefined) {
+        return item;
+      }
+      return { ...item, submenu };
     }
     const label = mnemonicLabel(item.label, taken);
     return { ...item, label, ...(submenu !== undefined && { submenu }) };
@@ -181,7 +184,10 @@ function mnemonicLabel(label: string, taken: Set<string>): string {
     return !taken.has((characters[index] ?? '').toLowerCase());
   });
   const escaped = characters.map((character) => {
-    return character === '&' ? '&&' : character;
+    if (character === '&') {
+      return '&&';
+    }
+    return character;
   });
   if (chosen === undefined) {
     return escaped.join('');

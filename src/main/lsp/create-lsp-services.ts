@@ -117,15 +117,16 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       sessionId,
       headSha,
     });
-    return lease.ok
-      ? ok({
-          root: lease.value.path,
-          repository,
-          [Symbol.dispose]: (): void => {
-            lease.value[Symbol.dispose]();
-          },
-        })
-      : worktreeFailure(logger, lease.error);
+    if (lease.ok) {
+      return ok({
+        root: lease.value.path,
+        repository,
+        [Symbol.dispose]: (): void => {
+          lease.value[Symbol.dispose]();
+        },
+      });
+    }
+    return worktreeFailure(logger, lease.error);
   };
 
   const fail = (error: LspError): Err<IpcError> => {
@@ -142,7 +143,10 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       direction === 'incoming'
         ? await multiplexer.incomingCalls(nodeId)
         : await multiplexer.outgoingCalls(nodeId);
-    return calls.ok ? ok(calls.value.map((call) => callViewFrom(call, spans))) : fail(calls.error);
+    if (calls.ok) {
+      return ok(calls.value.map((call) => callViewFrom(call, spans)));
+    }
+    return fail(calls.error);
   };
 
   const locate = async (
@@ -165,12 +169,13 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const symbol =
       findEnclosingSymbol(symbols.value, line) ??
       (span === undefined ? undefined : findFirstCallable(symbols.value, line, span.endLine - 1));
-    return symbol === undefined
-      ? err({
-          code: 'not-found',
-          message: `no function, method or constructor encloses line ${String(request.line)} of ${file}`,
-        })
-      : ok(symbol.selectionRange.start);
+    if (symbol === undefined) {
+      return err({
+        code: 'not-found',
+        message: `no function, method or constructor encloses line ${String(request.line)} of ${file}`,
+      });
+    }
+    return ok(symbol.selectionRange.start);
   };
 
   /**
@@ -215,7 +220,10 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     };
     const again = await multiplexer.definition({ root, path: file, position: target.range.start });
     if (!again.ok || outside(again.value).length > 0) {
-      return again.ok ? ok(outside(again.value)) : again;
+      if (again.ok) {
+        return ok(outside(again.value));
+      }
+      return again;
     }
     const specifier = moduleSpecifier.exec(lineText);
     if (specifier?.index === undefined || specifier[1] === undefined) {
@@ -347,7 +355,10 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       const answer = (
         calls: Result<readonly CallHierarchyCallView[], IpcError>,
       ): IpcResult<CallHierarchyView> => {
-        return calls.ok ? ok({ headSha, direction: request.direction, calls: calls.value }) : calls;
+        if (calls.ok) {
+          return ok({ headSha, direction: request.direction, calls: calls.value });
+        }
+        return calls;
       };
       const cachedSpans = spansByHead.get(key);
       if (cachedSpans !== undefined && request.nodeId !== undefined) {
@@ -394,14 +405,15 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         direction: request.direction,
         duration: stopwatch.elapsed(),
       });
-      return calls.ok
-        ? ok({
-            headSha,
-            direction: request.direction,
-            root: nodeViewFrom(root, spans),
-            calls: calls.value,
-          })
-        : calls;
+      if (calls.ok) {
+        return ok({
+          headSha,
+          direction: request.direction,
+          root: nodeViewFrom(root, spans),
+          calls: calls.value,
+        });
+      }
+      return calls;
     },
 
     diagnostics: async ({
@@ -522,7 +534,10 @@ function relativeFrom(repository: GitRepository, requested: string): string {
     return requested;
   }
   const relative = path.relative(repository.root, requested);
-  return relative.startsWith('..') || path.isAbsolute(relative) ? requested : relative;
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return requested;
+  }
+  return relative;
 }
 
 function callViewFrom(call: CallHierarchyCall, spans: ChangedLines): CallHierarchyCallView {

@@ -26,11 +26,12 @@ export async function refreshSessionHead(
     return loaded;
   }
   const refreshed = await refreshSession(context, loaded.value);
-  return refreshed.ok
-    ? ok({
-        sessionId: refreshed.value.session.id,
-        headSha: refreshed.value.session.headSha,
-        refreshed: refreshed.value,
-      })
-    : refreshed;
+  if (refreshed.ok) {
+    return ok({
+      sessionId: refreshed.value.session.id,
+      headSha: refreshed.value.session.headSha,
+      refreshed: refreshed.value,
+    });
+  }
+  return refreshed;
 }

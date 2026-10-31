@@ -13,7 +13,12 @@ export function planEditorLaunch(
   target: { readonly file: string; readonly line: number; readonly column: number },
 ): LaunchPlan {
   const { file, line, column } = target;
-  return found.kind === 'cli'
-    ? { kind: 'spawn', command: found.command, args: definition.buildArgv(file, line, column) }
-    : { kind: 'url', url: buildEditorUrl(definition.urlScheme, file, line, column) };
+  if (found.kind === 'cli') {
+    return {
+      kind: 'spawn',
+      command: found.command,
+      args: definition.buildArgv(file, line, column),
+    };
+  }
+  return { kind: 'url', url: buildEditorUrl(definition.urlScheme, file, line, column) };
 }

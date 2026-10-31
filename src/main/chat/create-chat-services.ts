@@ -288,7 +288,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
   const resolve = async (role: ModelRole): Promise<Result<ResolvedModel, Outcome>> => {
     const resolved = await resolveLanguageModel({ role }, options.models);
-    return resolved.ok ? resolved : err(outcomeFrom(resolved.error));
+    if (resolved.ok) {
+      return resolved;
+    }
+    return err(outcomeFrom(resolved.error));
   };
 
   const prepare = async (
@@ -504,9 +507,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         droppedTurns: asked.value.prompt.omittedTurns,
       };
     }
-    return asked.error.kind === 'model'
-      ? outcomeFrom(asked.error.error)
-      : { status: 'failed', code: 'internal' };
+    if (asked.error.kind === 'model') {
+      return outcomeFrom(asked.error.error);
+    }
+    return { status: 'failed', code: 'internal' };
   };
 
   /** `/review` (ADR 0055): findings, verified unless `--no-verify`, or an earlier answer reused. */
@@ -606,9 +610,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
     if (!reviewed.ok) {
-      return reviewed.error.kind === 'model'
-        ? outcomeFrom(reviewed.error.error)
-        : { status: 'failed', code: 'internal' };
+      if (reviewed.error.kind === 'model') {
+        return outcomeFrom(reviewed.error.error);
+      }
+      return { status: 'failed', code: 'internal' };
     }
     logger.info('chat review answered', {
       findings: reviewed.value.review.findings.length,
@@ -771,9 +776,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       createdAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     };
     const appended = appendChatMessage(db, message);
-    return appended.ok
-      ? ok({ outcome: 'compacted', summary: chatMessageViewFrom(message) })
-      : err({ code: 'not-found', message: 'no such session' });
+    if (appended.ok) {
+      return ok({ outcome: 'compacted', summary: chatMessageViewFrom(message) });
+    }
+    return err({ code: 'not-found', message: 'no such session' });
   };
 
   /**
@@ -803,9 +809,14 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
         timeout: Temporal.Duration.from({ minutes: 2 }),
         signal: job.controller.signal,
       });
-      return answered.ok
-        ? { outcome: 'ok', elapsedMs: elapsedMilliseconds(stopwatch), model: answered.value.model }
-        : failed(answered.error);
+      if (answered.ok) {
+        return {
+          outcome: 'ok',
+          elapsedMs: elapsedMilliseconds(stopwatch),
+          model: answered.value.model,
+        };
+      }
+      return failed(answered.error);
     };
     try {
       job.settle(await probe());
@@ -816,11 +827,13 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   };
 
   const queue = new KeyedQueue<string, Job>(async (job) => {
-    return job.kind === 'answer'
-      ? runAnswer(job)
-      : job.kind === 'compact'
-        ? runCompaction(job)
-        : runProbe(job);
+    if (job.kind === 'answer') {
+      return runAnswer(job);
+    }
+    if (job.kind === 'compact') {
+      return runCompaction(job);
+    }
+    return runProbe(job);
   }, options.maxQueued ?? 10);
 
   const jobOfMessage = (messageId: string): AnswerJob | undefined => {
@@ -1020,7 +1033,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
           return ok({ done: settled.promise });
         },
       );
-      return queued.ok ? queued.value.done : queued;
+      if (queued.ok) {
+        return queued.value.done;
+      }
+      return queued;
     },
 
     clear: ({ sessionId, queuedOnly }): IpcResult<ChatClearedView> => {
@@ -1032,7 +1048,10 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       const waiting = queue.remove(id, () => true);
       if (queuedOnly === true) {
         const messages = waiting.flatMap((job) => {
-          return job.kind === 'answer' ? [job.question.id, job.assistant.id] : [];
+          if (job.kind === 'answer') {
+            return [job.question.id, job.assistant.id];
+          }
+          return [];
         });
         for (const job of waiting) {
           drop(job, false);
@@ -1117,7 +1136,10 @@ function streamEventFrom(job: AnswerJob, event: ChatPartEvent): ChatStreamEvent 
 /** The latest `/compact` summary's text, if the transcript has one (ADR 0047). */
 function summaryTextOf(messages: readonly ChatMessage[]): string | undefined {
   const { summary } = splitAtCompaction(messages);
-  return summary === undefined ? undefined : chatTextFrom(summary.parts);
+  if (summary === undefined) {
+    return undefined;
+  }
+  return chatTextFrom(summary.parts);
 }
 
 /** The queue key of Settings' model tests, which no session id can equal (ADR 0070). */
@@ -1126,9 +1148,10 @@ const probeQueue = '\0settings:model-test';
 /** A model failure as an answer's outcome; a cancellation keeps what streamed (ADR 0031). */
 function outcomeFrom(error: ModelError): Outcome {
   const failed = chatFailureFromModelError(error);
-  return failed.kind === 'cancelled'
-    ? { status: 'cancelled' }
-    : { status: 'failed', code: failed.code };
+  if (failed.kind === 'cancelled') {
+    return { status: 'cancelled' };
+  }
+  return { status: 'failed', code: failed.code };
 }
 
 /** Whole milliseconds since `stopwatch` started, for a view. */

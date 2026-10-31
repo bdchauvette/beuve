@@ -158,13 +158,19 @@ function attributeListsFrom(read: ReadonlyMap<string, DiffAttributes>): Attribut
 }
 
 function headPath(file: DiffFile): string {
-  return 'newPath' in file ? file.newPath : file.path;
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
 }
 
 function blobId(file: DiffFile, side: 'old' | 'new'): string | undefined {
   const isAbsent = side === 'old' ? file.status === 'added' : file.status === 'deleted';
   const objectId = side === 'old' ? file.oldObject : file.newObject;
-  return isAbsent || objectId === undefined || zeroIdPattern.test(objectId) ? undefined : objectId;
+  if (isAbsent || objectId === undefined || zeroIdPattern.test(objectId)) {
+    return undefined;
+  }
+  return objectId;
 }
 
 /** `{ value: undefined }` for an absent side, `undefined` when the side is not readable text. */
@@ -176,5 +182,8 @@ function textOf(
     return { value: undefined };
   }
   const content = blobs.get(objectId);
-  return content?.kind === 'text' ? { value: content.text } : undefined;
+  if (content?.kind === 'text') {
+    return { value: content.text };
+  }
+  return undefined;
 }

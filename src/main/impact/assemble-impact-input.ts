@@ -51,7 +51,10 @@ export async function assembleImpactInput(
   }
   const requests = candidates.flatMap(({ base, head }) => {
     return [base, head].flatMap((side) => {
-      return side.kind === 'blob' ? [side.request] : [];
+      if (side.kind === 'blob') {
+        return [side.request];
+      }
+      return [];
     });
   });
   const blobs = await readBlobs(repository, requests);
@@ -95,13 +98,17 @@ function preSkipReason(file: DiffFile): ImpactSkipReason | undefined {
     return 'unsupported-language';
   }
   const { base, head } = sides(file);
-  return base.kind === 'absent' && head.kind === 'absent' ? 'no-source' : undefined;
+  if (base.kind === 'absent' && head.kind === 'absent') {
+    return 'no-source';
+  }
+  return undefined;
 }
 
 function location(file: DiffFile): { path: string; previousPath: string | undefined } {
-  return 'newPath' in file
-    ? { path: file.newPath, previousPath: file.oldPath }
-    : { path: file.path, previousPath: undefined };
+  if ('newPath' in file) {
+    return { path: file.newPath, previousPath: file.oldPath };
+  }
+  return { path: file.path, previousPath: undefined };
 }
 
 function sides(file: DiffFile): { base: Side; head: Side } {
@@ -122,9 +129,10 @@ function absent(): Side {
 }
 
 function side(objectId: string | undefined, mode: string | undefined): Side {
-  return objectId === undefined || zeroIdPattern.test(objectId)
-    ? absent()
-    : { kind: 'blob', request: { objectId, mode } };
+  if (objectId === undefined || zeroIdPattern.test(objectId)) {
+    return absent();
+  }
+  return { kind: 'blob', request: { objectId, mode } };
 }
 
 function textOf(

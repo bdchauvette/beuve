@@ -7,6 +7,9 @@ export function joinMenuSections(
   return sections
     .filter((section) => section.length > 0)
     .flatMap((section, index) => {
-      return index === 0 ? section : [{ type: 'separator' }, ...section];
+      if (index === 0) {
+        return section;
+      }
+      return [{ type: 'separator' }, ...section];
     });
 }

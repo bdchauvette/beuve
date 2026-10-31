@@ -81,9 +81,10 @@ export async function resolveLanguageModel(
   switch (entry.kind) {
     case 'claude-code-cli': {
       const command = await claudeCommand(deps.claude, undefined);
-      return command.ok
-        ? ok({ model: cliModel(entry, command.value, deps), entry, name: 'Claude Code' })
-        : command;
+      if (command.ok) {
+        return ok({ model: cliModel(entry, command.value, deps), entry, name: 'Claude Code' });
+      }
+      return command;
     }
     case 'claude-agent-sdk': {
       const apiKey =
@@ -174,9 +175,10 @@ async function claudeCommand(
   configured: string | undefined,
 ): Promise<Result<string, ModelError>> {
   if (configured !== undefined) {
-    return (await isExecutable(configured))
-      ? ok(configured)
-      : err({ kind: 'not-installed', command: configured });
+    if (await isExecutable(configured)) {
+      return ok(configured);
+    }
+    return err({ kind: 'not-installed', command: configured });
   }
   if (claude.command !== undefined) {
     return ok(claude.command);
@@ -187,9 +189,10 @@ async function claudeCommand(
     platform: process.platform,
     isExecutable,
   });
-  return resolved.kind === 'found'
-    ? ok(resolved.command)
-    : err({ kind: 'not-installed', command: 'claude' });
+  if (resolved.kind === 'found') {
+    return ok(resolved.command);
+  }
+  return err({ kind: 'not-installed', command: 'claude' });
 }
 
 async function isExecutable(file: string): Promise<boolean> {

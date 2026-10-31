@@ -23,7 +23,8 @@ export async function fetchPullRequest(
       failureFromGithubError(fetched.error, `${ref.owner}/${ref.repo}#${String(ref.number)}`),
     );
   }
-  return fetched.value.kind === 'modified'
-    ? ok(fetched.value.value)
-    : err(githubFailure('github-failed', 'GitHub answered 304 to an unconditional request'));
+  if (fetched.value.kind === 'modified') {
+    return ok(fetched.value.value);
+  }
+  return err(githubFailure('github-failed', 'GitHub answered 304 to an unconditional request'));
 }

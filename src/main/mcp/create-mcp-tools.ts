@@ -53,7 +53,10 @@ export function createMcpTools(options: McpToolsOptions): McpToolServices {
         return id;
       }
       const report = await lsp.diagnostics({ sessionId: id.value, path });
-      return report.ok ? report : failure(report.error);
+      if (report.ok) {
+        return report;
+      }
+      return failure(report.error);
     },
     runTraceProbe: async ({ sessionId, path, line, testNamePattern }): Promise<McpToolOutcome> => {
       const id = sessionFor(sessionId);
@@ -87,12 +90,13 @@ export function createMcpTools(options: McpToolsOptions): McpToolServices {
         return id;
       }
       const read = await ura.readAgentReview(id.value);
-      return read.ok
-        ? ok({
-            structured: withPullRequest(read.value.review, github.summaryFor(id.value)),
-            text: read.value.xml,
-          })
-        : err(`${read.error.code}: ${read.error.message}`);
+      if (read.ok) {
+        return ok({
+          structured: withPullRequest(read.value.review, github.summaryFor(id.value)),
+          text: read.value.xml,
+        });
+      }
+      return err(`${read.error.code}: ${read.error.message}`);
     },
   };
 }
@@ -106,14 +110,20 @@ function withPullRequest(
   review: object,
   pullRequest: ReturnType<GithubServices['summaryFor']>,
 ): Record<string, unknown> {
-  return pullRequest === undefined ? { ...review } : { ...review, pullRequest };
+  if (pullRequest === undefined) {
+    return { ...review };
+  }
+  return { ...review, pullRequest };
 }
 
 function describeProbeFailure(failure: TraceProbeFailure): string {
-  return failure.failure === 'untrusted'
-    ? 'untrusted: this repository is not approved to run its tests, and running them executes ' +
-        "the repository's code and Vitest config on the reviewer's machine. A human must approve it " +
-        'in beuve (open the session, press r on a hunk and choose "Trust and run", or type /trust ' +
-        'in the chat). beuve never asks through MCP; retry after they have.'
-    : `${failure.failure}: ${failure.message}`;
+  if (failure.failure === 'untrusted') {
+    return (
+      'untrusted: this repository is not approved to run its tests, and running them executes ' +
+      "the repository's code and Vitest config on the reviewer's machine. A human must approve it " +
+      'in beuve (open the session, press r on a hunk and choose "Trust and run", or type /trust ' +
+      'in the chat). beuve never asks through MCP; retry after they have.'
+    );
+  }
+  return `${failure.failure}: ${failure.message}`;
 }

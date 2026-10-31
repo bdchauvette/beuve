@@ -43,7 +43,10 @@ export function impactViewFrom(source: ImpactViewSource): ImpactView {
   }
   const files = source.order.flatMap((path) => {
     const view = byPath.get(path);
-    return view === undefined ? [] : [view];
+    if (view === undefined) {
+      return [];
+    }
+    return [view];
   });
   return {
     sessionId: source.sessionId,
@@ -63,16 +66,17 @@ function fileViewFrom(file: FileImpact): FileImpactView {
     file.previousPath === undefined
       ? { path: file.path }
       : { path: file.path, previousPath: file.previousPath };
-  return file.status === 'skipped'
-    ? { status: 'skipped', ...location, reason: file.reason }
-    : {
-        status: 'analyzed',
-        ...location,
-        language: file.language,
-        parseErrors: file.parseErrors,
-        aggregate: { ...file.aggregate },
-        functions: file.functions.map((entry) => functionViewFrom(entry)),
-      };
+  if (file.status === 'skipped') {
+    return { status: 'skipped', ...location, reason: file.reason };
+  }
+  return {
+    status: 'analyzed',
+    ...location,
+    language: file.language,
+    parseErrors: file.parseErrors,
+    aggregate: { ...file.aggregate },
+    functions: file.functions.map((entry) => functionViewFrom(entry)),
+  };
 }
 
 function functionViewFrom(entry: FunctionImpact): FunctionImpactView {
@@ -122,5 +126,8 @@ function snapshotFrom(snapshot: FunctionSnapshot): FunctionSnapshotView {
 
 function findingViewFrom(finding: ImpactFinding): ImpactFindingView {
   const { baseValue, ...rest } = finding;
-  return baseValue === undefined ? { ...rest } : { ...rest, baseValue };
+  if (baseValue === undefined) {
+    return { ...rest };
+  }
+  return { ...rest, baseValue };
 }

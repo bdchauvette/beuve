@@ -34,9 +34,10 @@ export function checkMcpRequest(
     return err({ status: 403, reason: 'origin not allowed' });
   }
   const presented = bearerPattern.exec(headers.authorization ?? '')?.[1];
-  return presented !== undefined && isSameSecret(presented, expected.token)
-    ? ok(undefined)
-    : err({ status: 401, reason: 'missing or invalid bearer token' });
+  if (presented !== undefined && isSameSecret(presented, expected.token)) {
+    return ok(undefined);
+  }
+  return err({ status: 401, reason: 'missing or invalid bearer token' });
 }
 
 function isSameSecret(presented: string, token: string): boolean {

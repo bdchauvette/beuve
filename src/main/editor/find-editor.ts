@@ -54,5 +54,8 @@ function expandHome(file: string, home: string): string[] {
   if (!file.startsWith('~/')) {
     return [file];
   }
-  return home === '' ? [] : [path.join(home, file.slice(2))];
+  if (home === '') {
+    return [];
+  }
+  return [path.join(home, file.slice(2))];
 }

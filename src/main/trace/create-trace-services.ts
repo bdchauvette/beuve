@@ -375,7 +375,10 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
     sessionId: string,
   ): Promise<Result<ReviewDiff['refreshed'], IpcError>> => {
     const diff = await loadReviewDiff(context, sessionId);
-    return diff.ok ? ok(diff.value.refreshed) : diff;
+    if (diff.ok) {
+      return ok(diff.value.refreshed);
+    }
+    return diff;
   };
 
   return {
@@ -428,7 +431,10 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
 
     getTrust: async ({ sessionId }): Promise<IpcResult<TraceTrustView>> => {
       const refreshed = await repositoryOf(sessionId);
-      return refreshed.ok ? ok(await trust.status(refreshed.value.repository)) : refreshed;
+      if (refreshed.ok) {
+        return ok(await trust.status(refreshed.value.repository));
+      }
+      return refreshed;
     },
 
     setTrust: async ({ sessionId, trusted }): Promise<IpcResult<TraceTrustView>> => {
@@ -496,15 +502,16 @@ function statusFrom(
   outcome: Outcome,
 ): TraceStatusView {
   if (outcome.kind === 'done') {
-    return outcome.testsFailed
-      ? {
-          ...echo,
-          state: 'failed',
-          failure: 'test-failed-with-trace',
-          message: 'Some of the tests failed; the trace shows what ran.',
-          result: outcome.result,
-        }
-      : { ...echo, state: 'completed', result: outcome.result };
+    if (outcome.testsFailed) {
+      return {
+        ...echo,
+        state: 'failed',
+        failure: 'test-failed-with-trace',
+        message: 'Some of the tests failed; the trace shows what ran.',
+        result: outcome.result,
+      };
+    }
+    return { ...echo, state: 'completed', result: outcome.result };
   }
   return {
     ...echo,
@@ -536,7 +543,10 @@ function suggestTestName(filePath: string): string {
 }
 
 function headPathOf(file: ReviewDiff['files'][number]): string {
-  return 'newPath' in file ? file.newPath : file.path;
+  if ('newPath' in file) {
+    return file.newPath;
+  }
+  return file.path;
 }
 
 function failed(failure: TraceFailureKind, message: string): Failed {
@@ -549,7 +559,10 @@ function hasStopped(job: Job): boolean {
 
 function describeStop(signal: AbortSignal): string {
   const reason = String(signal.reason);
-  return isStopReason(reason) ? stopMessages[reason] : stopMessages.cancelled;
+  if (isStopReason(reason)) {
+    return stopMessages[reason];
+  }
+  return stopMessages.cancelled;
 }
 
 function defaultTemporaryDirectory(): string {

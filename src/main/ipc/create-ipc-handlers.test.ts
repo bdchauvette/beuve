@@ -358,7 +358,10 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
           getFile: notWired,
           getHead: notWired,
           checkOpen: async (request): Promise<IpcResult<{ readonly opened: true }>> => {
-            return request.path === 'src/a.ts' ? sheetChecked() : notFound();
+            if (request.path === 'src/a.ts') {
+              return sheetChecked();
+            }
+            return notFound();
           },
         },
       },
@@ -929,10 +932,13 @@ describe('createIpcHandlers for the open flow', () => {
   test('shows the folder picker through the platform', async ({ expect }) => {
     const asked: unknown[] = [];
     const handlers = createIpcHandlers(stubServices({}), appInfo(), {
-      chooseFolder: async (options) => {
+      chooseFolder: async (options): Promise<string | undefined> => {
         asked.push(options);
         await Promise.resolve();
-        return asked.length === 1 ? '/code/beuve' : undefined;
+        if (asked.length === 1) {
+          return '/code/beuve';
+        }
+        return undefined;
       },
     });
     await expectInvalid(expect, handlers['dialog:choose-folder']({ title: 7 }));

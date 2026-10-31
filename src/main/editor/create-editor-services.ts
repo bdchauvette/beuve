@@ -106,9 +106,10 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
       workingFile,
     });
     if (root === 'working-tree') {
-      return (await isInsideRoot(repository.root, working))
-        ? { file: working, location: root }
-        : 'file-unavailable';
+      if (await isInsideRoot(repository.root, working)) {
+        return { file: working, location: root };
+      }
+      return 'file-unavailable';
     }
     const checkout = await worktrees.acquire(repository, {
       kind: 'session-head',
@@ -204,7 +205,10 @@ async function launch(
 ): Promise<string | undefined> {
   if (plan.kind === 'spawn') {
     const started = await platform.spawn(plan.command, plan.args);
-    return started.ok ? undefined : started.error;
+    if (started.ok) {
+      return undefined;
+    }
+    return started.error;
   }
   if (!isEditorUrl(plan.url) || platform.openExternal === undefined) {
     return 'cannot open the editor URL here';
@@ -226,7 +230,10 @@ async function readWorkingFileState(
     return 'missing';
   }
   const status = await readPathStatus(repository, relative);
-  return status.ok ? status.value : 'modified';
+  if (status.ok) {
+    return status.value;
+  }
+  return 'modified';
 }
 
 async function isPresent(file: string): Promise<boolean> {

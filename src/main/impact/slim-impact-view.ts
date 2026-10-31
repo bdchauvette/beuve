@@ -29,5 +29,8 @@ function slimFile(file: FileImpactView): FileImpactView {
 }
 
 function headValue(entry: FunctionImpactView): number {
-  return entry.change === 'removed' ? -1 : entry.head.metrics.cognitive;
+  if (entry.change === 'removed') {
+    return -1;
+  }
+  return entry.head.metrics.cognitive;
 }

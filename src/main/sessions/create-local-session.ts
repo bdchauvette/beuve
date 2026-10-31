@@ -49,7 +49,10 @@ export async function createLocalSession(
     headRef: request.headRef,
   };
   const saved = upsert(context, source, head.value);
-  return saved.ok ? ok(sessionSummaryFrom(saved.value)) : saved;
+  if (saved.ok) {
+    return ok(sessionSummaryFrom(saved.value));
+  }
+  return saved;
 }
 
 function upsert(
@@ -71,14 +74,18 @@ function upsert(
     if (updated.ok) {
       return ok(advanced);
     }
-    return updated.error.kind === 'session-not-found'
-      ? sessionFailure(logger, updated.error)
-      : err({ code: 'stale-review', message: 'The session moved while it was being opened.' });
+    if (updated.error.kind === 'session-not-found') {
+      return sessionFailure(logger, updated.error);
+    }
+    return err({ code: 'stale-review', message: 'The session moved while it was being opened.' });
   }
   const created = createSession(source, headSha, deps);
   if (!created.ok) {
     return sessionFailure(logger, created.error);
   }
   const inserted = insertSession(db, created.value);
-  return inserted.ok ? ok(created.value) : sessionFailure(logger, inserted.error);
+  if (inserted.ok) {
+    return ok(created.value);
+  }
+  return sessionFailure(logger, inserted.error);
 }

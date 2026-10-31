@@ -46,7 +46,10 @@ export async function resolveChatMentions(
     path: string,
   ): Promise<Result<string | undefined, IpcError>> => {
     const found = await findTreeBlob(repository, sha as typeof session.headSha, path);
-    return found.ok ? ok(found.value?.objectId) : gitFailure(context.logger, found.error);
+    if (found.ok) {
+      return ok(found.value?.objectId);
+    }
+    return gitFailure(context.logger, found.error);
   };
 
   const objectIds: string[] = [];

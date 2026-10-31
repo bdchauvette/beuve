@@ -48,5 +48,8 @@ export function describeModelError(error: ModelError, locale?: Intl.LocalesArgum
 
 function short(text: string): string {
   const line = text.replaceAll(/\s+/gu, ' ').trim();
-  return line.length > 300 ? `${line.slice(0, 299)}…` : line;
+  if (line.length > 300) {
+    return `${line.slice(0, 299)}…`;
+  }
+  return line;
 }

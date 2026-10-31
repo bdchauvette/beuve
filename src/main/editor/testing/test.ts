@@ -49,7 +49,10 @@ export const test = baseTest
       spawn: async (command, args): Promise<Result<void, string>> => {
         editorState.spawned.push({ command, args });
         await Promise.resolve();
-        return editorState.spawnError === undefined ? ok(undefined) : err(editorState.spawnError);
+        if (editorState.spawnError === undefined) {
+          return ok(undefined);
+        }
+        return err(editorState.spawnError);
       },
       openExternal: async (url): Promise<void> => {
         editorState.opened.push(url);

@@ -103,7 +103,10 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
         report,
         skipped: input.value.skipped,
         order: diff.files.map((file) => {
-          return 'newPath' in file ? file.newPath : file.path;
+          if ('newPath' in file) {
+            return file.newPath;
+          }
+          return file.path;
         }),
         compute,
       }),
@@ -180,9 +183,10 @@ export function createImpactServices(options: ImpactServicesOptions): ImpactServ
     getImpact,
     getImpactForRenderer: async (request, call = {}): Promise<IpcResult<ImpactView>> => {
       const full = await getImpact(request, call);
-      return full.ok
-        ? ok(slimmed.getOrInsertComputed(full.value, () => slimImpactView(full.value)))
-        : full;
+      if (full.ok) {
+        return ok(slimmed.getOrInsertComputed(full.value, () => slimImpactView(full.value)));
+      }
+      return full;
     },
     observeHead: (sessionId, headSha): void => {
       lastObserved.set(sessionId, { sequence: ++observations, headSha });

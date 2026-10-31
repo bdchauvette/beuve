@@ -220,9 +220,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         return { kind: 'current', anchor: item.anchor };
       }
       const mapping = byHead.get(item.headSha);
-      return mapping === undefined
-        ? { kind: 'outdated', reason: 'no-line-mapping' }
-        : reanchorUraAnchor(item.anchor, mapping.files);
+      if (mapping === undefined) {
+        return { kind: 'outdated', reason: 'no-line-mapping' };
+      }
+      return reanchorUraAnchor(item.anchor, mapping.files);
     };
   };
 
@@ -240,13 +241,14 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return loaded;
     }
     const refreshed = await refreshSession(context, loaded.value);
-    return refreshed.ok
-      ? ok({
-          sessionId: refreshed.value.session.id,
-          headSha: refreshed.value.session.headSha,
-          repository: refreshed.value.repository,
-        })
-      : refreshed;
+    if (refreshed.ok) {
+      return ok({
+        sessionId: refreshed.value.session.id,
+        headSha: refreshed.value.session.headSha,
+        repository: refreshed.value.repository,
+      });
+    }
+    return refreshed;
   };
 
   const viewOne = async (item: UraItem): Promise<IpcResult<UraItemView>> => {
@@ -259,7 +261,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   };
 
   const stored = <T>(result: StoreResult<T>): IpcResult<T> => {
-    return result.ok ? result : uraFailure(logger, result.error);
+    if (result.ok) {
+      return result;
+    }
+    return uraFailure(logger, result.error);
   };
 
   /** Inserts a promoted or staged item; a repeat returns the existing one, restaged if withdrawn. */
@@ -286,7 +291,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return restaged;
     }
     const saved = updateUraItem(db, restaged.value);
-    return saved.ok ? ok({ item: restaged.value, created: false }) : saved;
+    if (saved.ok) {
+      return ok({ item: restaged.value, created: false });
+    }
+    return saved;
   };
 
   const staged = async (
@@ -297,7 +305,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     }
     changed(result.value.item.sessionId);
     const view = await viewOne(result.value.item);
-    return view.ok ? ok({ item: view.value, created: result.value.created }) : view;
+    if (view.ok) {
+      return ok({ item: view.value, created: result.value.created });
+    }
+    return view;
   };
 
   /**
@@ -313,7 +324,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     const isBlocked =
       chosen === 'approve' &&
       items.some((item) => item.status.kind === 'staged' && item.severity === 'blocker');
-    return chosenAt === headSha && !isBlocked ? chosen : undefined;
+    if (chosenAt === headSha && !isBlocked) {
+      return chosen;
+    }
+    return undefined;
   };
 
   const compile = async (
@@ -352,7 +366,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       lineMappings: await mappingsFor(head, live),
       ...(chosen !== undefined && { verdict: chosen }),
     });
-    return artifact.ok ? artifact : uraFailure(logger, artifact.error);
+    if (artifact.ok) {
+      return artifact;
+    }
+    return uraFailure(logger, artifact.error);
   };
 
   const verdictState = (
@@ -494,9 +511,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     }): Promise<IpcResult<UraStagedView>> => {
       const message = findChatMessage(db, messageId as ChatMessageId);
       if (!message.ok) {
-        return message.error.kind === 'message-not-found'
-          ? err({ code: 'not-found', message: 'no such answer' })
-          : err({ code: 'internal', message: 'stored chat data is corrupt' });
+        if (message.error.kind === 'message-not-found') {
+          return err({ code: 'not-found', message: 'no such answer' });
+        }
+        return err({ code: 'internal', message: 'stored chat data is corrupt' });
       }
       const answer = message.value;
       const found = answer.role === 'assistant' ? answer.review?.findings[finding] : undefined;
@@ -578,7 +596,10 @@ export function createUraServices(options: UraServicesOptions): UraServices {
 
     export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
       const artifact = await compile(sessionId, verdict);
-      return artifact.ok ? ok(renderUraExport(artifact.value, target)) : artifact;
+      if (artifact.ok) {
+        return ok(renderUraExport(artifact.value, target));
+      }
+      return artifact;
     },
 
     compileArtifact: async (
@@ -601,12 +622,13 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       sessionId,
     ): Promise<IpcResult<{ review: AgentReview; xml: string }>> => {
       const artifact = await compile(sessionId, undefined);
-      return artifact.ok
-        ? ok({
-            review: buildAgentReview(artifact.value),
-            xml: renderAgentReviewXml(artifact.value),
-          })
-        : artifact;
+      if (artifact.ok) {
+        return ok({
+          review: buildAgentReview(artifact.value),
+          xml: renderAgentReviewXml(artifact.value),
+        });
+      }
+      return artifact;
     },
 
     observeHead: changed,

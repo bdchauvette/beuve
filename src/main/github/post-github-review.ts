@@ -30,7 +30,10 @@ export async function postGithubReview(
   const prepared = await prepareGithubReview(context, ura, request);
   if (!prepared.ok) {
     const { error } = prepared;
-    return 'code' in error ? err(error) : ok(error);
+    if ('code' in error) {
+      return err(error);
+    }
+    return ok(error);
   }
   const { ref, payload, entries, preview } = prepared.value;
   const posted = await context.clients.withClient(ref.host, async (client) => {

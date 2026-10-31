@@ -9,7 +9,10 @@ export function textOf(message: ChatMessageView | undefined): string {
         mentions += 1;
         return `[[@${String(mentions)}]]`;
       }
-      return part.kind === 'text' ? part.text : '';
+      if (part.kind === 'text') {
+        return part.text;
+      }
+      return '';
     })
     .join('');
 }

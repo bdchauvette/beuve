@@ -11,5 +11,8 @@ export function normalizePathPrefix(raw: string): string | undefined {
     return undefined;
   }
   const segments = trimmed.split('/').filter((segment) => segment !== '' && segment !== '.');
-  return segments.length === 0 || segments.includes('..') ? undefined : segments.join('/');
+  if (segments.length === 0 || segments.includes('..')) {
+    return undefined;
+  }
+  return segments.join('/');
 }

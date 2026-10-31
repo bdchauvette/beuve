@@ -39,11 +39,17 @@ export function createSandboxTree(
         `${repository.root}\0${commit}`,
         async (shared): Promise<Result<readonly TreeFile[], GitError>> => {
           const own = await rebindRepository(context, repository, shared);
-          return own.ok ? listTreeBlobs(own.value, commit) : own;
+          if (own.ok) {
+            return listTreeBlobs(own.value, commit);
+          }
+          return own;
         },
         { signal },
       );
-      return listed === 'aborted' ? undefined : valueOf(listed);
+      if (listed === 'aborted') {
+        return undefined;
+      }
+      return valueOf(listed);
     },
     read: async (file, maxBytes): Promise<SandboxBytes> => {
       const read = await readBlobBytes(repository, file.objectId, { maxBytes, signal });

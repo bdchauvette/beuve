@@ -136,16 +136,20 @@ function toolResultFrom(outcome: McpToolOutcome): CallToolResult {
   const content: CallToolResult['content'] = [
     { type: 'text', text: JSON.stringify(outcome.value) },
   ];
-  return isRecord(outcome.value) ? { content, structuredContent: outcome.value } : { content };
+  if (isRecord(outcome.value)) {
+    return { content, structuredContent: outcome.value };
+  }
+  return { content };
 }
 
 function documentResultFrom(outcome: McpDocumentOutcome): CallToolResult {
-  return outcome.ok
-    ? {
-        content: [{ type: 'text', text: outcome.value.text }],
-        structuredContent: { ...outcome.value.structured },
-      }
-    : { isError: true, content: [{ type: 'text', text: outcome.error }] };
+  if (outcome.ok) {
+    return {
+      content: [{ type: 'text', text: outcome.value.text }],
+      structuredContent: { ...outcome.value.structured },
+    };
+  }
+  return { isError: true, content: [{ type: 'text', text: outcome.error }] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

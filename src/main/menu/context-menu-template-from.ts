@@ -38,9 +38,10 @@ export function contextMenuTemplateFrom(
   });
   const sectionOf = (command: CatalogCommand): number => {
     const place = placeOfCommand(command, platform);
-    return place === undefined
-      ? Number.MAX_SAFE_INTEGER
-      : menuOrder.indexOf(place.menu) * 100 + place.group;
+    if (place === undefined) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    return menuOrder.indexOf(place.menu) * 100 + place.group;
   };
   const sections = [...new Set(chosen.map((command) => sectionOf(command)))].toSorted(
     (left, right) => {

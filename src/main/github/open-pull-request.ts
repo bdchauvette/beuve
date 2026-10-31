@@ -132,12 +132,13 @@ async function openClone(
     );
   }
   const opened = await openRepository(target, { ...context.session.git, signal });
-  return opened.ok
-    ? ok(opened.value)
-    : err(
-        githubFailure(
-          'needs-local-clone',
-          `${ipcErrorFromGitError(opened.error).message}. Enter the path of a local clone of ${name}.`,
-        ),
-      );
+  if (opened.ok) {
+    return ok(opened.value);
+  }
+  return err(
+    githubFailure(
+      'needs-local-clone',
+      `${ipcErrorFromGitError(opened.error).message}. Enter the path of a local clone of ${name}.`,
+    ),
+  );
 }

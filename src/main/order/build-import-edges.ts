@@ -63,5 +63,11 @@ export async function buildImportEdges(
 }
 
 function newModeOf(file: DiffFile): string | undefined {
-  return file.status === 'added' ? file.mode : file.status === 'deleted' ? undefined : file.newMode;
+  if (file.status === 'added') {
+    return file.mode;
+  }
+  if (file.status === 'deleted') {
+    return undefined;
+  }
+  return file.newMode;
 }

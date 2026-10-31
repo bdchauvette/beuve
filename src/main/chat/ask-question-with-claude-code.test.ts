@@ -47,7 +47,10 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
       deltas
         .slice(2)
         .map((delta) => {
-          return delta.kind === 'append' ? delta.text : '';
+          if (delta.kind === 'append') {
+            return delta.text;
+          }
+          return '';
         })
         .join(''),
     ).toBe(`It trims [[${tempDir}/src/a.ts:12-13]] and [[src/zzz.ts:1]].`);

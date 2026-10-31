@@ -57,7 +57,8 @@ export async function markReviewed(
   }
   const recorded = recordCheckpoint(session, { baseSha, headSha: session.headSha }, context.deps);
   const inserted = insertCheckpoint(context.db, recorded.checkpoint);
-  return inserted.ok
-    ? ok(sessionSummaryFrom(recorded.session))
-    : sessionFailure(context.logger, inserted.error);
+  if (inserted.ok) {
+    return ok(sessionSummaryFrom(recorded.session));
+  }
+  return sessionFailure(context.logger, inserted.error);
 }

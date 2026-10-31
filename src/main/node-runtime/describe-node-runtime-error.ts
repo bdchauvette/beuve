@@ -4,9 +4,10 @@ import type { NodeRuntimeError } from './resolve-node-runtime.ts';
 export function describeNodeRuntimeError(error: NodeRuntimeError): string {
   switch (error.kind) {
     case 'missing': {
-      return error.source === 'bundled'
-        ? `beuve's bundled Node is missing (${error.searched.join(', ')}); reinstall beuve.`
-        : 'No node on PATH. Unpackaged beuve runs language servers and trace probes with the node on PATH, which must be Node 26 or later (.node-version).';
+      if (error.source === 'bundled') {
+        return `beuve's bundled Node is missing (${error.searched.join(', ')}); reinstall beuve.`;
+      }
+      return 'No node on PATH. Unpackaged beuve runs language servers and trace probes with the node on PATH, which must be Node 26 or later (.node-version).';
     }
     case 'unrunnable': {
       return `${error.command} could not report its version: ${error.reason}`;
