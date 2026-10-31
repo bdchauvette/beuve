@@ -1,10 +1,13 @@
-import { mkdir, mkdtempDisposable, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtempDisposable, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { extraMarkup } from '../src/ui/testing/extra-markup.ts';
+import { hostileCorpus } from '../src/ui/testing/hostile-corpus.ts';
 import { errorFrom } from '../src/x/error/error-from.ts';
 import { revealFormatControls } from '../src/x/text/reveal-format-controls.ts';
 import { timeoutSignal } from '../src/x/time/timeout-signal.ts';
@@ -52,6 +55,18 @@ const violationRecorder = String.raw`document.addEventListener('securitypolicyvi
   }));
 }, true);`;
 const waitSeconds = 30;
+const cspMeta = /http-equiv="Content-Security-Policy"\s+content="([^"]*)"/u;
+/** What only the test build (`dist-test/`) may hold. */
+const testBuildFile = /hostile-harness|pass-through-policy/u;
+/** How often, and how many times at most, a card is serialized while its highlighting settles. */
+const settlePollMilliseconds = 60;
+const settlePolls = 100;
+/**
+ * ImpactGate's chip and its details, which the twin comparison leaves out: Lit builds them from
+ * main's analysis of the code, so a hostile line that does not parse gets findings its benign
+ * twin does not. The probe and the visibility checks still cover them.
+ */
+const impactSelector = '.impact-chip, .impact-popover';
 /** Everything of a page URL up to the build output, which says nothing. */
 const beforeDist = /^.*\/dist\//u;
 /** Characters that reorder text: a displayed path must hold none of them (ADR 0082). */
@@ -83,6 +98,9 @@ async function checkHostileRender(): Promise<void> {
   const temporaryRoot = await realpath(os.tmpdir());
   await using temporary = await mkdtempDisposable(path.join(temporaryRoot, 'beuve-hostile-'));
   const repository = await createHostileRepository(path.join(temporary.path, 'repo'), wait());
+  findings.notes.push(
+    `the repository holds the corpus but ${repository.skipped.join(', ')}, which only the harness renders`,
+  );
   await using app = await launchElectron({
     root,
     userDataDir: path.join(temporary.path, 'user-data'),
@@ -109,6 +127,8 @@ async function checkHostileRender(): Promise<void> {
     await writeFile(path.join(screenshots, `${name}.png`), Uint8Array.fromBase64(data));
   };
   try {
+    console.log('hostile render: the test build');
+    await checkTestBuild(findings);
     console.log('hostile render: the main window');
     const main = await openMainWindow(devtools);
     console.log('hostile render: the diff stream, split and unified');
@@ -128,6 +148,11 @@ async function checkHostileRender(): Promise<void> {
     );
     console.log('hostile render: the policy');
     await checkPolicy(devtools, main, findings);
+    console.log('hostile render: the corpus through the components, in the harness page');
+    const harness = await openHarness(devtools, main);
+    await checkHarness(devtools, harness, findings, shoot);
+    console.log('hostile render: the harness page’s policy');
+    await checkPolicy(devtools, harness, findings);
   } catch (error) {
     findings.failures.push(
       `the run stopped: ${errorFrom(error).stack ?? errorFrom(error).message}`,
@@ -182,14 +207,19 @@ async function preparePage(page: DevtoolsPage, devtools: DevtoolsConnection): Pr
 function recordEvent(event: DevtoolsEvent, devtools: DevtoolsConnection, findings: Findings): void {
   const page = devtools.urlOf(event.sessionId ?? '').replace(beforeDist, '');
   if (event.method === 'Runtime.consoleAPICalled') {
-    const args = event.params['args'] as readonly { readonly value?: unknown }[];
+    const args = event.params['args'] as readonly {
+      readonly value?: unknown;
+      readonly description?: string;
+    }[];
     const text = args
-      .map((arg) => (typeof arg.value === 'string' ? arg.value : JSON.stringify(arg.value)))
+      .map((arg) =>
+        typeof arg.value === 'string' ? arg.value : (arg.description ?? JSON.stringify(arg.value)),
+      )
       .join(' ');
     if (text.startsWith(violationMarker)) {
       findings.violations.push(JSON.parse(text.slice(violationMarker.length)) as Violation);
     } else if (event.params['type'] === 'error') {
-      findings.notes.push(`console error in ${page}: ${text.slice(0, 300)}`);
+      findings.failures.push(`unexpected console error in ${page}: ${text.slice(0, 300)}`);
     }
   } else if (event.method === 'Runtime.exceptionThrown') {
     const details = event.params['exceptionDetails'] as {
@@ -242,6 +272,7 @@ async function checkDiffStream(
       main,
       `document.querySelector('beuve-app').runCommandId('diff-${view}')`,
     );
+    const rendered = new Map<string, string>();
     for (const file of repository.files) {
       const card = `__hostileProbe.all('beuve-file-card').find((card) => card.file?.path === ${JSON.stringify(file.path)})`;
       const found = await devtools.evaluate(
@@ -264,6 +295,15 @@ async function checkDiffStream(
         ...(file.oldPath === undefined ? [] : [revealFormatControls(file.oldPath)]),
         ...file.lines,
       ]);
+      rendered.set(file.path, await settledHtml(devtools, main, card));
+    }
+    for (const file of repository.files) {
+      const twin = file.twin === undefined ? undefined : rendered.get(file.twin);
+      expectNone(
+        findings,
+        `${view} card ${JSON.stringify(file.path)}: markup its twin ${JSON.stringify(file.twin)} lacks`,
+        twin === undefined ? [] : extraMarkup([rendered.get(file.path) ?? ''], [twin]),
+      );
     }
     await expectSafe(devtools, main, findings, `diff stream (${view})`);
     await devtools.evaluate(main, `(${cardOf(repository.contents.path)})?.scrollIntoView()`);
@@ -273,6 +313,27 @@ async function checkDiffStream(
     await delay(300);
     await shoot(main, `stream-${view}-names`);
   }
+}
+
+/** A card serialized with its shadow roots once highlighting has finished: three equal polls in a row. */
+async function settledHtml(
+  devtools: DevtoolsConnection,
+  main: string,
+  card: string,
+): Promise<string> {
+  let last = '';
+  for (let polls = 0, stable = 0; polls < settlePolls && stable < 3; polls += 1) {
+    await delay(settlePollMilliseconds);
+    const html = String(
+      await devtools.evaluate(
+        main,
+        `__hostileProbe.html(${card}, ${JSON.stringify(impactSelector)})`,
+      ),
+    );
+    stable = html === last ? stable + 1 : 0;
+    last = html;
+  }
+  return last;
 }
 
 /**
@@ -302,8 +363,12 @@ async function checkPathDisplay(
   const tree = "__hostileProbe.all('beuve-radar-tree')[0]";
   for (const name of repository.spoofing) {
     await devtools.evaluate(main, `${tree}?.revealPath(${JSON.stringify(name)})`);
-    await delay(200);
-    const names = String(await devtools.evaluate(main, treeNames(tree)));
+    // The tree renders only the rows in view; revealing scrolls the row in once it has laid out.
+    let names = '';
+    for (let tries = 0; tries < 30 && !names.includes(revealFormatControls(name)); tries += 1) {
+      await delay(100);
+      names = String(await devtools.evaluate(main, treeNames(tree)));
+    }
     const text = String(
       await devtools.evaluate(
         main,
@@ -500,6 +565,119 @@ async function checkSettingsWindow(
   await devtools.evaluate(settings, pageProbe);
   await expectSafe(devtools, settings, findings, 'settings window');
   await shoot(settings, 'settings');
+}
+
+/**
+ * The harness page has exactly the app's CSP, and nothing of the test build is in `dist/`, which
+ * electron-builder packages.
+ */
+async function checkTestBuild(findings: Findings): Promise<void> {
+  const policyOf = async (page: string): Promise<string> =>
+    cspMeta.exec(await readFile(path.join(root, page), 'utf8'))?.[1] ?? '';
+  const [app, harness] = await Promise.all([
+    policyOf('dist/ui/index.html'),
+    policyOf('dist-test/ui/hostile-harness.html'),
+  ]);
+  if (app === '' || app !== harness) {
+    findings.failures.push(
+      `the harness page's CSP ${JSON.stringify(harness)} is not the app's ${JSON.stringify(app)}`,
+    );
+  }
+  const shipped = await readdir(path.join(root, 'dist'), { recursive: true });
+  expectNone(
+    findings,
+    'test build file in dist/',
+    shipped.filter((file) => testBuildFile.test(file)),
+  );
+}
+
+/**
+ * Navigates the main window, with its production web preferences, to the test build's harness
+ * page (`node scripts/build.ts --hostile-harness`), which has `index.html`'s CSP and installs
+ * the same policy, and installs the probe there.
+ */
+async function openHarness(devtools: DevtoolsConnection, main: string): Promise<string> {
+  const page = path.join(root, 'dist-test/ui/hostile-harness.html');
+  await devtools.send('Page.navigate', { url: pathToFileURL(page).href }, main);
+  const harness = await devtools.waitForPage(
+    (url) => url.endsWith('/hostile-harness.html'),
+    wait(),
+  );
+  await devtools.waitFor(harness, "typeof globalThis.hostileHarness === 'object'", wait());
+  await devtools.evaluate(harness, pageProbe);
+  return harness;
+}
+
+/**
+ * Renders each group of the shared corpus (`src/ui/testing/hostile-corpus.ts`, as the Node test
+ * does) through the real components in the harness page and fails on any case's verdict, on a
+ * group with fewer verdicts than the corpus has cases, and on unsafe markup while the group is
+ * mounted. Then it splices each hostile string unescaped into library-like HTML and assigns it
+ * through the page's default policy: the sanitizer must leave nothing unsafe, whatever a library
+ * escaping bug would let through.
+ */
+async function checkHarness(
+  devtools: DevtoolsConnection,
+  harness: string,
+  findings: Findings,
+  shoot: (sessionId: string, name: string) => Promise<void>,
+): Promise<void> {
+  const corpus = hostileCorpus();
+  const groups = (await devtools.evaluate(harness, 'hostileHarness.groups()')) as readonly (
+    | 'fileNames'
+    | 'renames'
+    | 'lines'
+    | 'hunkContexts'
+    | 'shownHunkContexts'
+    | 'diffLanguages'
+    | 'sheets'
+    | 'codeBlocks'
+    | 'sheetLanguages'
+  )[];
+  // Each `createPolicy` that `checkPolicy` refused is reported as a violation too: expected.
+  const seen = findings.violations.length;
+  let cases = 0;
+  for (const group of groups) {
+    const verdicts = (await devtools.evaluate(
+      harness,
+      `hostileHarness.run(${JSON.stringify(group)})`,
+    )) as readonly { readonly title: string; readonly failures: readonly string[] }[];
+    cases += verdicts.length;
+    if (verdicts.length !== corpus[group].length) {
+      findings.failures.push(
+        `harness ${group}: ${String(verdicts.length)} verdicts for ${String(corpus[group].length)} cases`,
+      );
+    }
+    for (const { title, failures } of verdicts) {
+      expectNone(findings, `harness ${title}`, failures);
+    }
+    await expectSafe(devtools, harness, findings, `harness ${group}`);
+    await shoot(harness, `harness-${group}`);
+    await devtools.evaluate(harness, 'hostileHarness.clear()');
+  }
+  expectNone(
+    findings,
+    'Content Security Policy violation in the harness page',
+    findings.violations.slice(seen).map((violation) => JSON.stringify(violation)),
+  );
+  const beforeSplice = findings.violations.length;
+  const spliced = [...corpus.names, ...corpus.contents].map(
+    ({ text }) => `<div data-title="${text}"><span data-diff-span="">${text}</span></div>`,
+  );
+  await devtools.evaluate(harness, `__hostileProbe.mount(${JSON.stringify(spliced.join(''))})`);
+  await delay(300);
+  await expectSafe(devtools, harness, findings, 'hostile strings spliced unescaped into a sink');
+  // The sanitizer's parse reports each event handler it drops as `script-src-attr`; nothing runs.
+  expectNone(
+    findings,
+    'Content Security Policy violation from the spliced strings',
+    findings.violations
+      .slice(beforeSplice)
+      .filter((violation) => violation.directive !== 'script-src-attr')
+      .map((violation) => JSON.stringify(violation)),
+  );
+  await devtools.evaluate(harness, 'hostileHarness.clear()');
+  findings.notes.push(`the harness rendered ${String(cases)} cases of the shared corpus`);
 }
 
 /**

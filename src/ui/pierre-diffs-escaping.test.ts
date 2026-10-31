@@ -1,107 +1,106 @@
 import { describe } from 'vitest';
 
-import { snippetPathFrom } from './snippet-path-from.ts';
-import { createGitPatch } from './testing/create-git-patch.ts';
-import type { GitPatchInput } from './testing/create-git-patch.ts';
+import { extraMarkup } from './testing/extra-markup.ts';
+import { hostileCorpus } from './testing/hostile-corpus.ts';
 import { htmlStructureFrom } from './testing/html-structure-from.ts';
-import type { HtmlStructure } from './testing/html-structure-from.ts';
+import { inParsedText } from './testing/in-parsed-text.ts';
 import { renderDiffHtml } from './testing/render-diff-html.ts';
 import type { DiffHtmlOptions } from './testing/render-diff-html.ts';
 import { renderFileHtml } from './testing/render-file-html.ts';
 import { test } from './testing/test.ts';
+import { visibleText } from './testing/visible-text.ts';
 
 // ADR 0077: hostile file names, contents, languages and hunk headers go through the code paths
 // `@pierre/diffs` builds its `innerHTML` strings with, and must produce no element or attribute
 // that the same input with benign text does not, while the hostile text stays visible as text.
-// The real app, with the Trusted Types policy, is checked by `scripts/check-hostile-render.ts`.
+// `scripts/check-hostile-render.ts` renders the same corpus (`testing/hostile-corpus.ts`) in the
+// built app, with the production CSP and the Trusted Types policy.
 
 describe('@pierre/diffs escapes hostile input', () => {
-  test.for(diffCases(hostileNames))(
+  test.for(hostileCorpus().fileNames)(
     'file name $label ($options.diffStyle, $options.hunkSeparators)',
-    async ({ text: name, options }, { expect }) => {
-      const hostile = await renderDiffHtml(patchNamed(name, name), options);
-      const benign = await renderDiffHtml(patchNamed('benign.ts', 'benign.ts'), options);
-      expect(extraMarkup(hostile.html, benign.html)).toStrictEqual([]);
-      expect(hostile.name).toBe(name);
-      expect(visibleText(hostile.html)).toContain(inParsedText(name));
+    async ({ text: name, options, hostile, benign, visible }, { expect }) => {
+      const rendered = await renderDiffHtml(hostile, options);
+      const twin = await renderDiffHtml(benign, options);
+      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(rendered.name).toBe(name);
+      expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
   );
 
-  test.for(hostileNames())('rename from and to $label', async ({ text: name }, { expect }) => {
-    const options: DiffHtmlOptions = { diffStyle: 'split', hunkSeparators: 'line-info' };
-    const hostile = await renderDiffHtml(patchNamed(`${name}.old.ts`, name), options);
-    const benign = await renderDiffHtml(patchNamed('benign.old.ts', 'benign.ts'), options);
-    expect(extraMarkup(hostile.html, benign.html)).toStrictEqual([]);
-    expect([hostile.previousName, hostile.name]).toStrictEqual([`${name}.old.ts`, name]);
-    expect(visibleText(hostile.html)).toContain(inParsedText(name));
-  });
+  test.for(hostileCorpus().renames)(
+    'rename from and to $label',
+    async ({ text: name, options, hostile, benign, visible }, { expect }) => {
+      const rendered = await renderDiffHtml(hostile, options);
+      const twin = await renderDiffHtml(benign, options);
+      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect([rendered.previousName, rendered.name]).toStrictEqual([`${name}.old.ts`, name]);
+      expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
+    },
+  );
 
-  test.for(diffCases(hostileContents))(
+  test.for(hostileCorpus().lines)(
     'contents $label ($options.diffStyle, $options.hunkSeparators)',
-    async ({ text: payload, options }, { expect }) => {
-      const hostile = await renderDiffHtml(patchWithLine(payload), options);
-      const benign = await renderDiffHtml(patchWithLine('benign'), options);
-      expect(extraMarkup(hostile.html, benign.html)).toStrictEqual([]);
-      expect(visibleText(hostile.html)).toContain(inParsedText(payload));
+    async ({ options, hostile, benign, visible }, { expect }) => {
+      const rendered = await renderDiffHtml(hostile, options);
+      const twin = await renderDiffHtml(benign, options);
+      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
+      expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
   );
 
-  test.for(diffCases(hostileContents))(
+  test.for(hostileCorpus().hunkContexts)(
     'hunk header context $label ($options.diffStyle, $options.hunkSeparators)',
-    async ({ text: payload, options }, { expect }) => {
-      const hostile = await renderDiffHtml(patchWithContext(payload), options);
-      const benign = await renderDiffHtml(patchWithContext('benign'), options);
-      expect(extraMarkup(hostile.html, benign.html)).toStrictEqual([]);
+    async ({ options, hostile, benign }, { expect }) => {
+      const rendered = await renderDiffHtml(hostile, options);
+      const twin = await renderDiffHtml(benign, options);
+      expect(extraMarkup(rendered.html, twin.html)).toStrictEqual([]);
     },
   );
 
-  test.for(hostileContents())(
+  test.for(hostileCorpus().shownHunkContexts)(
     'hunk header context $label is visible as text',
-    async ({ text: payload }, { expect }) => {
-      const options: DiffHtmlOptions = { diffStyle: 'unified', hunkSeparators: 'metadata' };
-      const hostile = await renderDiffHtml(patchWithContext(payload), options);
-      expect(visibleText(hostile.html)).toContain(`function f() { ${inParsedText(payload)}`);
+    async ({ options, hostile, visible }, { expect }) => {
+      const rendered = await renderDiffHtml(hostile, options);
+      expect(missingFrom(visibleText(rendered.html), visible)).toStrictEqual([]);
     },
   );
 
-  test.for(hostileContents())(
+  test.for(hostileCorpus().diffLanguages)(
     'language override $label renders nothing',
-    async ({ text: language }, { expect }) => {
-      const options: DiffHtmlOptions = {
-        diffStyle: 'unified',
-        hunkSeparators: 'line-info',
-        language,
-      };
-      await expect(renderDiffHtml(patchWithLine('const a = 1;'), options)).rejects.toThrow(
+    async ({ options, patch }, { expect }) => {
+      await expect(renderDiffHtml(patch, options)).rejects.toThrow(
         'not found in bundled or custom languages',
       );
     },
   );
 
-  test.for(hostileNames())('sheet of a file named $label', async ({ text: name }, { expect }) => {
-    const hostile = await renderFileHtml({ name, contents: allHostileContents() });
-    const benign = await renderFileHtml({ name: 'benign.ts', contents: 'benign\n'.repeat(20) });
-    expect(extraMarkup(hostile, benign)).toStrictEqual([]);
-    expect(visibleText(hostile)).toContain(inParsedText(name));
-    expect(visibleText(hostile)).toContain(inParsedText(allHostileContents().replaceAll('\n', '')));
-  });
-
-  test.for(hostileContents())(
-    'chat code block with info string $label',
-    async ({ text: info }, { expect }) => {
-      const hostile = await renderFileHtml({ name: snippetPathFrom(info), contents: info });
-      const benign = await renderFileHtml({ name: snippetPathFrom('ts'), contents: 'benign' });
-      expect(extraMarkup(hostile, benign)).toStrictEqual([]);
-      expect(visibleText(hostile)).toContain(inParsedText(info));
+  test.for(hostileCorpus().sheets)(
+    'sheet of a file named $label',
+    async ({ hostile, benign, visible }, { expect }) => {
+      const rendered = await renderFileHtml(hostile);
+      const twin = await renderFileHtml(benign);
+      expect(extraMarkup(rendered, twin)).toStrictEqual([]);
+      expect(missingFrom(visibleText(rendered), visible)).toStrictEqual([]);
     },
   );
 
-  test.for(hostileContents())(
+  test.for(hostileCorpus().codeBlocks)(
+    'chat code block with info string $label',
+    async ({ hostile, benign, visible }, { expect }) => {
+      const rendered = await renderFileHtml(hostile);
+      const twin = await renderFileHtml(benign);
+      expect(extraMarkup(rendered, twin)).toStrictEqual([]);
+      expect(missingFrom(visibleText(rendered), visible)).toStrictEqual([]);
+    },
+  );
+
+  test.for(hostileCorpus().sheetLanguages)(
     'sheet with language $label renders nothing',
-    async ({ text: lang }, { expect }) => {
-      await expect(
-        renderFileHtml({ name: 'a.ts', contents: 'const a = 1;', lang }),
-      ).rejects.toThrow('not found in bundled or custom languages');
+    async ({ file }, { expect }) => {
+      await expect(renderFileHtml(file)).rejects.toThrow(
+        'not found in bundled or custom languages',
+      );
     },
   );
 });
@@ -158,11 +157,11 @@ describe('the structural oracle', () => {
     expect(htmlStructureFrom('a < b <3 <')).toStrictEqual({ markup: [], text: 'a < b <3 <' });
   });
 
-  test.for(hostileNames())(
+  test.for(hostileCorpus().names)(
     'would catch $label spliced unescaped into text or an attribute',
     async ({ text: name }, { expect }) => {
       const options: DiffHtmlOptions = { diffStyle: 'unified', hunkSeparators: 'line-info' };
-      const benign = await renderDiffHtml(patchNamed('benign.ts', 'benign.ts'), options);
+      const benign = await renderDiffHtml(hostileCorpus().fileNames.at(0)?.benign ?? '', options);
       const inText = benign.html.map((html) => html.replace('benign.ts', () => name));
       const inAttribute = benign.html.map((html) =>
         html.replace('data-title=""', () => `data-title="${name}"`),
@@ -180,113 +179,7 @@ describe('the structural oracle', () => {
   );
 });
 
-interface HostileInput {
-  readonly label: string;
-  readonly text: string;
-}
-
-interface DiffCase extends HostileInput {
-  readonly options: DiffHtmlOptions;
-}
-
-/** File names a repository can hold on Linux and macOS, plus NUL, which only a patch can. */
-function hostileNames(): readonly HostileInput[] {
-  return [
-    { label: 'script tag', text: '<script>alert(1)</script>.ts' },
-    { label: 'attribute breakout', text: '"><img src=x onerror=alert(1)>.ts' },
-    { label: 'single-quote breakout', text: "'><svg onload=alert(1)>.ts" },
-    { label: 'closing tags', text: '</span></bdi></div><b>bold</b>.ts' },
-    { label: 'quotes and backticks', text: `'single' "double" \`tick\` \${x}.ts` },
-    { label: 'javascript URL', text: 'javascript:alert(1).ts' },
-    { label: 'bidi overrides', text: 'invoice\u{202E}gpj.ts\u{202C}\u{2066}x\u{2069}.ts' },
-    { label: 'NUL', text: 'nul\0name.ts' },
-    { label: 'newline and tab', text: 'line\nbreak\there.ts' },
-    { label: 'backslash', text: String.raw`back\slash\".ts` },
-    { label: 'entities', text: '&amp;&lt;&#x3C;script&gt;.ts' },
-    { label: 'use reference', text: '<svg><use href="//evil.example/#x"/></svg>.ts' },
-    { label: 'very long', text: `${'<b>'.repeat(80)}${'x'.repeat(4000)}.ts` },
-    { label: 'deep path', text: `${'d<i>r/'.repeat(60)}f.ts` },
-  ];
-}
-
-/** Lines of code (or a language, or an info string) that would be markup if not escaped. */
-function hostileContents(): readonly HostileInput[] {
-  return [
-    { label: 'script tag', text: '<script>alert(1)</script>' },
-    { label: 'attribute breakout', text: '"><img src=x onerror=alert(1)>' },
-    { label: 'closing tags', text: '</span></div></pre></code><b>bold</b>' },
-    { label: 'comment open', text: '<!-- <img src=x onerror=alert(1)>' },
-    { label: 'comment close', text: '--> <img src=x onerror=alert(1)>' },
-    { label: 'CDATA', text: '<![CDATA[ <script>alert(1)</script> ]]>' },
-    { label: 'CDATA close', text: ']]> <img src=x onerror=alert(1)>' },
-    { label: 'svg use', text: '<svg><use href="//evil.example/sprite.svg#x"/></svg>' },
-    { label: 'template literal', text: '`${alert(document.domain)}`' },
-    { label: 'javascript URL', text: '<a href="javascript:alert(1)">x</a>' },
-    { label: 'raw-text openers', text: '<style>*{}</style><textarea><title><xmp>' },
-    { label: 'entities', text: '&lt;img src=x onerror=alert(1)&gt; &amp;amp;' },
-    { label: 'bidi and NUL', text: 'a\u{202E}b\0c\u{2067}d' },
-    { label: 'processing instruction', text: '<?xml version="1.0"?><!DOCTYPE x>' },
-  ];
-}
-
-function allHostileContents(): string {
-  return hostileContents()
-    .map((input) => input.text)
-    .join('\n');
-}
-
-/** Each of `inputs` in split and unified views, with the card's separators and with hunk headers. */
-function diffCases(inputs: () => readonly HostileInput[]): readonly DiffCase[] {
-  return inputs().flatMap((input) =>
-    (['split', 'unified'] as const).flatMap((diffStyle) =>
-      (['line-info', 'metadata'] as const).map((hunkSeparators) => ({
-        ...input,
-        options: { diffStyle, hunkSeparators },
-      })),
-    ),
-  );
-}
-
-function patchNamed(oldPath: string, newPath: string): string {
-  return createGitPatch({ ...benignChange(), oldPath, newPath });
-}
-
-function patchWithLine(payload: string): string {
-  return createGitPatch({
-    ...benignChange(),
-    lines: [` ${payload}`, `-const a = '${payload}';`, `+const a = "${payload}";`, `+${payload}`],
-  });
-}
-
-function patchWithContext(payload: string): string {
-  return createGitPatch({ ...benignChange(), context: `function f() { ${payload}` });
-}
-
-function benignChange(): GitPatchInput {
-  return {
-    oldPath: 'a.ts',
-    newPath: 'a.ts',
-    lines: [' const kept = 1;', '-const a = 1;', '+const a = 2;'],
-    context: 'function f() {',
-  };
-}
-
-/** Markup in `hostile` that `benign` has none of. */
-function extraMarkup(hostile: readonly string[], benign: readonly string[]): readonly string[] {
-  const allowed = new Set(structureOf(benign).markup);
-  return structureOf(hostile).markup.filter((entry) => !allowed.has(entry));
-}
-
-/** The text a browser shows for `html`. */
-function visibleText(html: readonly string[]): string {
-  return inParsedText(structureOf(html).text);
-}
-
-function structureOf(html: readonly string[]): HtmlStructure {
-  return htmlStructureFrom(html.join(''));
-}
-
-/** `text` as the HTML parser leaves it in an element: without NUL, which it drops. */
-function inParsedText(text: string): string {
-  return text.replaceAll('\0', '');
+/** The entries of `expected` that `text` does not hold. */
+function missingFrom(text: string, expected: readonly string[]): readonly string[] {
+  return expected.filter((entry) => !text.includes(entry));
 }

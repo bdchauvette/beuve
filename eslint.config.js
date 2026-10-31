@@ -23,6 +23,7 @@ const entrypointFiles = [
   'src/preload/settings-preload.ts',
   'src/ui/sheet-entry.ts',
   'src/ui/settings-entry.ts',
+  'src/ui/testing/hostile-harness-entry.ts',
   'scripts/**/*.ts',
   'src/main/impact/impact-worker.ts',
   'src/main/impact/testing/scripted-impact-worker.ts',
@@ -101,7 +102,7 @@ const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) =>
 );
 
 export default defineConfig(
-  globalIgnores(['dist/', 'out/', 'coverage/', '.claude/worktrees/']),
+  globalIgnores(['dist/', 'dist-test/', 'out/', 'coverage/', '.claude/worktrees/']),
 
   {
     name: 'beuve/linter-options',
