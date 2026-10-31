@@ -40,6 +40,30 @@ jobs:
           npm run build
           xvfb-run -a -s '-screen 0 1600x1000x24' \
             node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
+      # The packaged app with the runAsNode fuse off and the bundled Node (ADR 0083-0085).
+      - name: Package for Linux and check its fuses and bundled Node
+        if: runner.os == 'Linux'
+        run: |
+          npm run dist:linux-dir
+          npm run check:packaged -- --app out/linux-unpacked
+          du -sh out/linux-unpacked out/linux-unpacked/resources/node/node
+      - name: Package for macOS, verify signatures, fuses and bundled Node
+        if: runner.os == 'macOS'
+        run: |
+          npm run dist:mac
+          app=out/mac-arm64/beuve.app
+          node=$app/Contents/Resources/node/node
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --verify --strict --verbose=2 "$node"
+          # Kept as the Node.js Foundation signed it (ADR 0085), not re-signed ad hoc.
+          codesign -dv --verbose=4 "$node" 2>&1 | grep -E '^(Authority|TeamIdentifier|Timestamp|CodeDirectory)'
+          codesign -dv --verbose=4 "$node" 2>&1 | grep -q '^TeamIdentifier=HX7739G8FX$'
+          codesign -d --entitlements - "$node"
+          # Informational: whether Gatekeeper would accept the binary on its own.
+          spctl --assess --type execute -vv "$node" || true
+          npm run check:packaged -- --app "$app"
+          ls -l out/*.dmg out/*.zip
+          du -sh "$app" "$node"
       - name: Upload the hostile-render screenshots
         if: failure() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4

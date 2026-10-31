@@ -198,6 +198,17 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/no-electron-as-node',
+    // ADR 0083: the runAsNode fuse is off; Node children run the resolved Node with `spawn`.
+    // Tests may name the variable to check that environments drop it.
+    files: ['src/main/**/*.ts', 'src/internal/**/*.ts'],
+    ignores: testFiles,
+    rules: {
+      'local/no-electron-as-node': 'error',
+    },
+  },
+
+  {
     name: 'beuve/conversion-naming',
     // ADR 0062.
     files: nodeFiles,

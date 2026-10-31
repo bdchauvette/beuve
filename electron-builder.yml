@@ -7,6 +7,7 @@ directories:
   buildResources: build
 # Main, preload and ui are esbuild bundles (ADR 0007). The only node_modules main needs at run
 # time are those it launches by path (ADR 0021, 0070); every other dependency is inside the bundles.
+# Every file main loads or runs by path at run time must be listed here or in extraResources.
 # `dist/main/impact-worker.js` (ADR 0053) and the sheet and Settings pages and preloads (ADR 0067,
 # 0068) are dist files and load from the archive.
 files:
@@ -40,8 +41,14 @@ files:
       - package.json
       - LICENSE.md
 asar: true
-# Launched by path with ELECTRON_RUN_AS_NODE (ADR 0021). Inside the archive tsserver resolves its
-# lib files only partly and reports wrong diagnostics, so both run from app.asar.unpacked.
+# The Node that runs the TypeScript language server and trace probes (ADR 0083): the pinned
+# nodejs.org binary (scripts/node-runtime.json, ADR 0084), which `npm run dist:*` fetches and
+# verifies into vendor/node first. Main runs it as resources/node/node.
+extraResources:
+  - from: vendor/node/${platform}-${arch}/node
+    to: node/node
+# Run by path by the bundled Node, which can't read inside the archive (ADR 0021, 0083); tsserver
+# also resolves its lib files only partly from there and reports wrong diagnostics.
 asarUnpack:
   - node_modules/typescript/**
   - node_modules/typescript-language-server/**
@@ -50,10 +57,11 @@ asarUnpack:
 # Nothing is native, so there is nothing to rebuild for Electron's ABI (ADR 0004).
 npmRebuild: false
 publish: null
+# scripts/check-packaged-app.ts reads these back from the built binary; keep it in step.
 electronFuses:
-  # Must stay on: language servers and trace probes run as `process.execPath` with
-  # ELECTRON_RUN_AS_NODE=1 (ADR 0017, 0021, 0036).
-  runAsNode: true
+  # Off: nothing can run beuve's signed binary as a Node interpreter. Node children run the
+  # bundled Node instead (ADR 0083).
+  runAsNode: false
   enableCookieEncryption: true
   enableNodeOptionsEnvironmentVariable: false
   enableNodeCliInspectArguments: false
@@ -73,6 +81,10 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  # The bundled Node keeps the Node.js Foundation's Developer ID signature and its entitlements
+  # rather than being re-signed with beuve's (ADR 0085).
+  signIgnore:
+    - Contents/Resources/node/node$
   icon: build/icon.icns
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
 dmg:

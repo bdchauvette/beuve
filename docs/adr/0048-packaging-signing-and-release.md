@@ -1,6 +1,6 @@
 # 0048. Packaging, signing and release with electron-builder
 
-- Status: Accepted
+- Status: Accepted (fuses and the Node launch path amended by [0083](0083-run-as-node-fuse-off-and-a-bundled-node.md))
 - Date: 2026-10-29
 
 ## Context

@@ -31,6 +31,8 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { gitFailure } from '../sessions/git-failure.ts';
+import { describeNodeRuntimeError } from '../node-runtime/describe-node-runtime-error.ts';
+import type { NodeRuntime, NodeRuntimeError } from '../node-runtime/resolve-node-runtime.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
@@ -93,6 +95,8 @@ export interface TraceServicesOptions {
   /** The syntax domain's `SyntaxParser.parse`. */
   readonly parse: ParseSyntax;
   readonly trust: TraceTrust;
+  /** The Node that runs Vitest (ADR 0083); without one, every probe fails with its reason. */
+  readonly nodeRuntime: Result<NodeRuntime, NodeRuntimeError>;
   /** Replaces the Vitest runner; tests use it to count or fake runs. */
   readonly runner?: TraceRunner;
   /** Where each run makes its throwaway directory. Defaults to a folder under the OS temp. */
@@ -143,18 +147,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
   const { context, worktrees, parse, trust } = options;
   const { logger } = context;
   const timeout = options.timeout ?? defaultTimeout;
-  const runner =
-    options.runner ??
-    createVitestTraceRunner({
-      nodePath: process.execPath,
-      inheritedEnvironment: process.env,
-      // Electron's own binary runs Vitest as a plain Node.
-      ...(Object.hasOwn(process.versions, 'electron') && {
-        extraEnvironment: { ELECTRON_RUN_AS_NODE: '1' },
-      }),
-      temporaryDirectory: options.temporaryDirectory ?? defaultTemporaryDirectory(),
-      logger,
-    });
+  const runner = traceRunnerFrom(options);
   const jobs = new Map<string, Job>();
   const listeners = new Set<(event: TraceStatusView) => void>();
   let isDisposed = false;
@@ -242,6 +235,9 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         repositoryPath: approval.repositoryPath,
       };
     }
+    if (!runner.ok) {
+      return failed('runner-failed', runner.error);
+    }
     const filePath = repositoryRelativePathFrom(repository, request.path);
     const headSha = session.headSha;
     const search = await findTestFiles(repository, headSha, filePath);
@@ -304,7 +300,7 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         source: blob.text,
         ...(request.testNamePattern !== undefined && { testNamePattern: request.testNamePattern }),
       },
-      runner,
+      runner.value,
     );
     if (!probed.ok) {
       if (probed.error.kind === 'run-failed') {
@@ -474,6 +470,24 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       await Promise.all(running);
     },
   };
+}
+
+/** The runner a test passed, or Vitest on the resolved Node; without a Node, why not. */
+function traceRunnerFrom(options: TraceServicesOptions): Result<TraceRunner, string> {
+  if (options.runner !== undefined) {
+    return ok(options.runner);
+  }
+  if (!options.nodeRuntime.ok) {
+    return err(describeNodeRuntimeError(options.nodeRuntime.error));
+  }
+  return ok(
+    createVitestTraceRunner({
+      nodePath: options.nodeRuntime.value.command,
+      inheritedEnvironment: process.env,
+      temporaryDirectory: options.temporaryDirectory ?? defaultTemporaryDirectory(),
+      logger: options.context.logger,
+    }),
+  );
 }
 
 function statusFrom(

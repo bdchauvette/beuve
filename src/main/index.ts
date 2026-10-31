@@ -10,6 +10,8 @@ import { createLogger } from '#x/log/create-logger.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
+import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
+import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
 import { secureUserData } from './secure-user-data.ts';
 import { startApp } from './start-app.ts';
@@ -53,11 +55,25 @@ async function launch(): Promise<void> {
     app.once('quit', () => {
       db.close();
     });
+    const nodeRuntime = await resolveNodeRuntime({
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      pathVariable: process.env['PATH'],
+    });
+    if (nodeRuntime.ok) {
+      logger.info('node runtime for language servers and trace probes', { ...nodeRuntime.value });
+    } else {
+      logger.error('no node runtime for language servers and trace probes', {
+        error: nodeRuntime.error,
+        message: describeNodeRuntimeError(nodeRuntime.error),
+      });
+    }
     await startApp(app, {
       services: createMainServices({
         db,
         logger,
         worktreeRoot,
+        nodeRuntime,
         editor: {
           settingsPath,
           platform: createSystemEditorPlatform({

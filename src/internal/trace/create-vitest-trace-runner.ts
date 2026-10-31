@@ -31,7 +31,7 @@ import { timeoutSignal } from '#x/time/timeout-signal.ts';
 import { tailOf } from '#x/text/tail-of.ts';
 
 export interface VitestTraceRunnerOptions {
-  /** The Node binary that runs Vitest (in the app: `process.execPath` with `ELECTRON_RUN_AS_NODE`). */
+  /** The Node binary that runs Vitest: in the app, the one main resolved (ADR 0083). */
   readonly nodePath: string;
   /** Usually `process.env`; only an allow-list passes through (`createTraceEnvironment`). */
   readonly inheritedEnvironment: Readonly<Record<string, string | undefined>>;

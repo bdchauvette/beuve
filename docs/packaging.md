@@ -11,7 +11,29 @@ How to build the app, and what each build is good for. The decisions behind this
 | `npm run dist:linux`     | Linux   | `out/beuve-<version>-linux-x86_64.AppImage`                                                              |
 | `npm run build:icon`     | any     | `build/icon.icns` and `build/icon.png` from `scripts/build-icon.ts` (committed; rerun after changing it) |
 
-Each `dist:*` command runs `npm run build` first. The configuration is `electron-builder.yml`.
+Each `dist:*` command runs `npm run build` and `scripts/fetch-node.ts` first. The configuration is `electron-builder.yml`. `npm run check:packaged -- --app out/linux-unpacked` (or `--app out/mac-arm64/beuve.app`) reads the fuses back from the built binary and checks the bundled Node. CI runs it on both platforms.
+
+## The bundled Node
+
+The language server and trace probes run on a standalone Node that the app ships as `resources/node/node` (`Contents/Resources/node/node` on macOS), because the `runAsNode` fuse is off (ADR 0083). `npm start` and tests use the `node` on `PATH` instead, which must be Node 26 or later (`.node-version`). Otherwise beuve logs `no node runtime …` at startup and refuses probes.
+
+`scripts/node-runtime.json` pins the version and the SHA-256 of each archive (ADR 0084): Node 26.13.0 LTS, for `darwin-arm64` and `linux-x64`. `npm run fetch-node -- --target <target>` does three things:
+
+1. Downloads `node-v<version>-<target>.tar.xz` from nodejs.org into `vendor/node/cache`.
+2. Refuses the archive unless its hash matches the pin.
+3. Extracts only `bin/node`, to `vendor/node/<target>/node`.
+
+A second run does nothing. Behind a proxy, set `NODE_USE_ENV_PROXY=1`, and `NODE_EXTRA_CA_CERTS` if the proxy re-signs TLS.
+
+To bump it, on a Node security release or when CI moves to a new LTS:
+
+1. Download `https://nodejs.org/dist/v<version>/SHASUMS256.txt` and `SHASUMS256.txt.sig`. Check the signature against a releaser key from the nodejs/node README: `gpg --verify SHASUMS256.txt.sig SHASUMS256.txt`.
+2. Copy the version and the `.tar.xz` hashes for `darwin-arm64` and `linux-x64` into `scripts/node-runtime.json`.
+3. Run `npm run dist:linux-dir` and `npm run check:packaged -- --app out/linux-unpacked`, then commit the pin on its own.
+
+On macOS the binary keeps the Node.js Foundation's Developer ID signature and entitlements, because `mac.signIgnore` stops electron-builder from re-signing it (ADR 0085). `codesign -dv out/mac-arm64/beuve.app/Contents/Resources/node/node` shows `TeamIdentifier=HX7739G8FX`.
+
+Size: the binary is 150.3 MB on Linux and 147.3 MB on macOS. It takes the Linux app directory from 606.6 MB to 756.9 MB.
 
 ## Signing and notarization
 
@@ -103,7 +125,7 @@ A Developer ID signed and notarized build would make this unnecessary.
 
 ## What's in the app
 
-`app.asar` holds the esbuild output (`dist/`, without source maps) and `package.json`. `app.asar.unpacked` holds `typescript` and `typescript-language-server`, which main runs with `ELECTRON_RUN_AS_NODE=1` from the real file system. Run from inside the archive, tsserver reports wrong diagnostics. `app.asar.unpacked` also holds the Claude Code binary of the Agent SDK's platform package (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>`, about 280 MB), which a model set to Bundled runs (ADR 0070); a binary inside the archive can't be executed. ImpactGate's worker (`dist/main/impact-worker.js`, ADR 0053) and its wasm load from inside the archive. Nothing else from `node_modules` ships, because the bundles already contain it. After upgrading either package, rebuild `dist:linux-dir` and check that `p` (peek) and the MCP `beuve_get_lsp_diagnostics` tool still work in the packaged app.
+`app.asar` holds the esbuild output (`dist/`, without source maps) and `package.json`. `app.asar.unpacked` holds `typescript` and `typescript-language-server`, which the bundled Node (`resources/node/node`) runs from the real file system. Run from inside the archive, tsserver reports wrong diagnostics. `app.asar.unpacked` also holds the Claude Code binary of the Agent SDK's platform package (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>`, about 280 MB), which a model set to Bundled runs (ADR 0070); a binary inside the archive can't be executed. ImpactGate's worker (`dist/main/impact-worker.js`, ADR 0053) and its wasm load from inside the archive. Nothing else from `node_modules` ships, because the bundles already contain it. After upgrading either package, rebuild `dist:linux-dir` and check that `p` (peek) and the MCP `beuve_get_lsp_diagnostics` tool still work in the packaged app.
 
 In a packaged app, `BEUVE_GITHUB_API_URL` and `BEUVE_EDITOR_LAUNCH_LOG` are ignored, and the log says so. `BEUVE_CLAUDE_PATH`, `BEUVE_GH_PATH`, `BEUVE_MCP_PORT` and `BEUVE_LOG_LEVEL` keep working. A macOS app started from Finder doesn't see your shell's variables. Use `launchctl setenv` or launch it from a terminal with `open -a beuve`.
 
@@ -113,3 +135,5 @@ In a packaged app, `BEUVE_GITHUB_API_URL` and `BEUVE_EDITOR_LAUNCH_LOG` are igno
 npm run dist:linux-dir
 xvfb-run -a out/linux-unpacked/beuve          # add --no-sandbox only when running as root, on the command line
 ```
+
+With the fuse off, `ELECTRON_RUN_AS_NODE=1 out/linux-unpacked/beuve -e '…'` starts beuve, not Node.

@@ -20,6 +20,7 @@ import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { ok } from '#x/result/ok.ts';
+import type { Result } from '#x/result/result.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
@@ -41,6 +42,7 @@ import type { ImpactRunner } from './impact/create-impact-worker.ts';
 import { createOrderServices } from './order/create-order-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
+import type { NodeRuntime, NodeRuntimeError } from './node-runtime/resolve-node-runtime.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
@@ -72,6 +74,12 @@ export interface MainServicesOptions {
   readonly logger: Logger;
   /** Where session head checkouts live (ADR 0020): `<userData>/worktrees` in the app. */
   readonly worktreeRoot: string;
+  /**
+   * The Node that runs the TypeScript language server and trace probes (ADR 0083), resolved once
+   * at startup with `resolveNodeRuntime`. Without one, TypeScript has no language server and
+   * every probe fails with the reason.
+   */
+  readonly nodeRuntime: Result<NodeRuntime, NodeRuntimeError>;
   readonly deps?: SessionDeps;
   readonly git?: OpenRepositoryOptions;
   /**
@@ -201,7 +209,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   const impact = createImpactServices({ context, runner: impactRunner });
   heads.impact = impact;
   const multiplexer = createLspMultiplexer({
-    servers: [createTypescriptServer()],
+    servers: options.nodeRuntime.ok ? [createTypescriptServer(options.nodeRuntime.value)] : [],
     trustWorkspaceBinaries: false,
     logger,
     ...options.lsp,
@@ -247,6 +255,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     worktrees,
     parse: parser.parse,
     trust: createTraceTrust({ settingsPath: options.trace?.settingsPath }),
+    nodeRuntime: options.nodeRuntime,
     ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
     ...(options.trace?.temporaryDirectory !== undefined && {
       temporaryDirectory: options.trace.temporaryDirectory,

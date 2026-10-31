@@ -1,5 +1,6 @@
 dist/
 out/
+vendor/
 coverage/
 node_modules/
 package-lock.json

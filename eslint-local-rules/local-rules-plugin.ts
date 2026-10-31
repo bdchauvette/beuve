@@ -7,6 +7,7 @@ import { exportNameMatchesFilename } from './export-name-matches-filename.ts';
 import { noBarrelFiles } from './no-barrel-files.ts';
 import { noCheckThenOpen } from './no-check-then-open.ts';
 import { noDate } from './no-date.ts';
+import { noElectronAsNode } from './no-electron-as-node.ts';
 import { noHandFormattedDuration } from './no-hand-formatted-duration.ts';
 import { noListenerInRepeatedTemplate } from './no-listener-in-repeated-template.ts';
 import { noModuleMocking } from './no-module-mocking.ts';
@@ -38,6 +39,7 @@ const plugin = {
     'no-barrel-files': noBarrelFiles,
     'no-check-then-open': noCheckThenOpen,
     'no-date': noDate,
+    'no-electron-as-node': noElectronAsNode,
     'no-hand-formatted-duration': noHandFormattedDuration,
     'no-listener-in-repeated-template': noListenerInRepeatedTemplate,
     'no-module-mocking': noModuleMocking,

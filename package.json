@@ -33,9 +33,11 @@
     "build:icon": "node scripts/build-icon.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run deps && npm run test",
     "start": "npm run build && electron .",
-    "dist:mac": "npm run build && node scripts/dist-mac.ts",
-    "dist:linux-dir": "npm run build && electron-builder --linux dir",
-    "dist:linux": "npm run build && electron-builder --linux AppImage"
+    "fetch-node": "node scripts/fetch-node.ts",
+    "check:packaged": "node scripts/check-packaged-app.ts",
+    "dist:mac": "npm run build && node scripts/fetch-node.ts --target darwin-arm64 && node scripts/dist-mac.ts",
+    "dist:linux-dir": "npm run build && node scripts/fetch-node.ts --target linux-x64 && electron-builder --linux dir",
+    "dist:linux": "npm run build && node scripts/fetch-node.ts --target linux-x64 && electron-builder --linux AppImage"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.312",
