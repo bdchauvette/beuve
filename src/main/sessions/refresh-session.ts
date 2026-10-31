@@ -57,10 +57,12 @@ export async function refreshSession(
   if (!repository.ok) {
     return gitFailure(logger, repository.error);
   }
-  const baseTip =
-    options.baseTip === undefined
-      ? await resolveRevision(repository.value, session.source.baseRef)
-      : ok(options.baseTip);
+  let baseTip: Result<CommitSha, GitError>;
+  if (options.baseTip === undefined) {
+    baseTip = await resolveRevision(repository.value, session.source.baseRef);
+  } else {
+    baseTip = ok(options.baseTip);
+  }
   if (!baseTip.ok) {
     if (isRepositoryGone(baseTip.error)) {
       context.caches.probes.delete(repoPath);

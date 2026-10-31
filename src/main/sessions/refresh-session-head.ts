@@ -13,6 +13,11 @@ export interface SessionHead {
   readonly headSha: string;
 }
 
+/** A session's id and head, and the refresh they come from. */
+export interface RefreshedHead extends SessionHead {
+  readonly refreshed: RefreshedSession;
+}
+
 /**
  * Refreshes a session from git (storing a moved head) and returns its id and head, for work keyed
  * by (session, head). `refreshed` is kept for callers that need the repository.
@@ -20,7 +25,7 @@ export interface SessionHead {
 export async function refreshSessionHead(
   context: SessionContext,
   sessionId: string,
-): Promise<Result<SessionHead & { readonly refreshed: RefreshedSession }, IpcError>> {
+): Promise<Result<RefreshedHead, IpcError>> {
   const loaded = loadSession(context, sessionId);
   if (!loaded.ok) {
     return loaded;

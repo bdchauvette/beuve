@@ -14,11 +14,16 @@ import type { RangeDiff } from './range-diff.ts';
  * A memo shared by every request: concurrent misses on one key share one computation, which is
  * aborted only when its last waiter gives up (a {@link CoalescingCache}).
  */
+/** One `get`: the caller's signal, which stops its wait. */
+export interface SharedCacheCall {
+  readonly signal?: AbortSignal | undefined;
+}
+
 export interface SharedCache<V> {
   readonly get: (
     key: string,
     compute: (signal: AbortSignal | undefined) => Promise<V>,
-    options?: { readonly signal?: AbortSignal | undefined },
+    options?: SharedCacheCall,
   ) => Promise<V | 'aborted'>;
   readonly delete: (key: string) => void;
 }

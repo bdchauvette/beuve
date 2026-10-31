@@ -5,6 +5,12 @@ import type { Result } from '#x/result/result.ts';
 
 import type { SessionContext } from './session-context.ts';
 
+/** The session id an agent passed, and the one the reviewer has open, either maybe absent. */
+export interface SessionChoice {
+  readonly requested: string | undefined;
+  readonly openSessionId: string | undefined;
+}
+
 /**
  * Which session an agent means (ADR 0021): the id it passed; else the session the reviewer has
  * open in beuve; else the only session there is. Anything else is ambiguous, and the message
@@ -12,8 +18,7 @@ import type { SessionContext } from './session-context.ts';
  */
 export function resolveSessionId(
   context: SessionContext,
-  requested: string | undefined,
-  openSessionId: string | undefined,
+  { requested, openSessionId }: SessionChoice,
 ): Result<string, string> {
   if (requested !== undefined) {
     return ok(requested);

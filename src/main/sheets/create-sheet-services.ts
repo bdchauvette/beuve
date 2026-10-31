@@ -61,8 +61,7 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
       const { repository, baseTip, session } = commit.value.refreshed;
       const fork = await findSessionForkPoint(
         context,
-        repository,
-        { base: baseTip, head: commit.value.sha },
+        { repository, range: { base: baseTip, head: commit.value.sha } },
         { signal: call.signal },
       );
       if (!fork.ok) {

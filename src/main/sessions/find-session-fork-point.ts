@@ -17,6 +17,12 @@ export interface SessionForkPointOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
+/** The commits to find the fork point of, and the repository they are in. */
+export interface ForkPointQuery {
+  readonly repository: GitRepository;
+  readonly range: ReviewRange;
+}
+
 /**
  * {@link findStackForkPoint} for `range`, memoized in `context.caches.forkPoints` (ADR 0081). The
  * answer depends only on the commits named, the reviewed bases and the git that merges them, all
@@ -25,8 +31,7 @@ export interface SessionForkPointOptions {
  */
 export async function findSessionForkPoint(
   context: SessionContext,
-  repository: GitRepository,
-  range: ReviewRange,
+  { repository, range }: ForkPointQuery,
   options: SessionForkPointOptions = {},
 ): Promise<Result<StackForkPoint, GitError>> {
   const reviewedBases = [...new Set(options.reviewedBases)].toSorted((a, b) => a.localeCompare(b));

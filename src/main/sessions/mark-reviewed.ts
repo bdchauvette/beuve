@@ -6,6 +6,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { findSessionForkPoint } from './find-session-fork-point.ts';
+import { reviewedBasesOf } from './reviewed-bases-of.ts';
 import { gitFailure } from './git-failure.ts';
 import { loadSession } from './load-session.ts';
 import { refreshSession } from './refresh-session.ts';
@@ -40,9 +41,8 @@ export async function markReviewed(
   const { review } = session;
   const fork = await findSessionForkPoint(
     context,
-    repository,
-    { base: baseTip, head: session.headSha },
-    { reviewedBases: review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [] },
+    { repository, range: { base: baseTip, head: session.headSha } },
+    { reviewedBases: reviewedBasesOf(review) },
   );
   if (!fork.ok) {
     return gitFailure(context.logger, fork.error);

@@ -29,10 +29,10 @@ describe('the shared git caches (ADR 0081)', { timeout: 60_000 }, () => {
       }),
     );
 
-    const full = await expectSameReview(expect, cached, uncached, sessionId, signal);
+    const full = await expectSameReview(expect, { cached, uncached, sessionId, signal });
     expect(full.scope).toStrictEqual({ kind: 'full' });
     okValueFrom(await cached.sessions.markReviewed({ sessionId, expectedHeadSha: full.headSha }));
-    const upToDate = await expectSameReview(expect, cached, uncached, sessionId, signal);
+    const upToDate = await expectSameReview(expect, { cached, uncached, sessionId, signal });
     expect(upToDate.scope).toStrictEqual({ kind: 'up-to-date' });
 
     await repo.git('switch', '--quiet', 'main');
@@ -42,7 +42,7 @@ describe('the shared git caches (ADR 0081)', { timeout: 60_000 }, () => {
     await repo.git('rebase', '--quiet', 'main');
     repo.write('src/b.ts', "import { a } from './a.ts';\nexport const b = a + 3;\n");
     await repo.commit('feature: b again');
-    const interdiff = await expectSameReview(expect, cached, uncached, sessionId, signal);
+    const interdiff = await expectSameReview(expect, { cached, uncached, sessionId, signal });
     expect(interdiff.scope).toMatchObject({ kind: 'interdiff', outcome: { kind: 'rebased' } });
 
     const cachedRuns = gitRuns(cachedGit);
@@ -62,10 +62,7 @@ type Review = Awaited<ReturnType<MainServices['sessions']['getReview']>>;
  */
 async function expectSameReview(
   expect: ExpectStatic,
-  cached: MainServices,
-  uncached: MainServices,
-  sessionId: string,
-  signal: AbortSignal,
+  { cached, uncached, sessionId, signal }: ReviewComparison,
 ): Promise<Extract<Review, { ok: true }>['value']> {
   const ask = async (services: MainServices): Promise<unknown[]> => {
     const review = await services.sessions.getReview({ sessionId }, { signal });
@@ -73,8 +70,12 @@ async function expectSameReview(
       { sessionId, ignoreWhitespace: true },
       { signal },
     );
-    const paths = review.ok ? review.value.files.map((file) => file.path) : [];
-    const headSha = review.ok ? review.value.headSha : '';
+    let paths: string[] = [];
+    let headSha = '';
+    if (review.ok) {
+      paths = review.value.files.map((file) => file.path);
+      headSha = review.value.headSha;
+    }
     const [order, attributes, tree, pairs, sheets] = await Promise.all([
       services.order.getOrder({ sessionId, mode: 'imports' }, { signal }),
       services.files.getFileAttributes({ sessionId }, { signal }),
@@ -137,4 +138,12 @@ async function importingBranch(repo: TestRepository): Promise<undefined> {
   repo.write('src/d.ts', "import { c } from './c.ts';\nexport const d = c;\n");
   await repo.commit('feature');
   return undefined;
+}
+
+/** The services with and without the caches, and the session and signal to compare them on. */
+interface ReviewComparison {
+  readonly cached: MainServices;
+  readonly uncached: MainServices;
+  readonly sessionId: string;
+  readonly signal: AbortSignal;
 }

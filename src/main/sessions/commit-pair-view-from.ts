@@ -1,4 +1,8 @@
-import type { CommitPairView, CommitSideView } from '#contract/ipc-contract.ts';
+import type {
+  CommitInterdiffView,
+  CommitPairView,
+  CommitSideView,
+} from '#contract/ipc-contract.ts';
 import type { CommitPair } from '#internal/git/compute-commit-pairs.ts';
 import type { RangeCommit } from '#internal/git/list-range-commits.ts';
 
@@ -6,8 +10,14 @@ import { diffFileViewFrom } from './diff-file-view-from.ts';
 
 /** Maps a git-domain commit pair to the contract's view, keyed by its new (else previous) sha. */
 export function commitPairViewFrom(pair: CommitPair): CommitPairView {
-  const previous = 'previous' in pair ? sideFrom(pair.previous) : undefined;
-  const next = 'next' in pair ? sideFrom(pair.next) : undefined;
+  let previous: CommitSideView | undefined;
+  if ('previous' in pair) {
+    previous = sideFrom(pair.previous);
+  }
+  let next: CommitSideView | undefined;
+  if ('next' in pair) {
+    next = sideFrom(pair.next);
+  }
   const common = {
     id: next?.sha ?? previous?.sha ?? '',
     kind: pair.kind,
@@ -22,16 +32,27 @@ export function commitPairViewFrom(pair: CommitPair): CommitPairView {
   return {
     ...common,
     similarity: Math.round(pair.similarity * 100) / 100,
-    interdiff:
-      interdiff.kind === 'clean'
-        ? { kind: 'clean', files: interdiff.files.map((file) => diffFileViewFrom(file)) }
-        : interdiff.kind === 'conflicts'
-          ? { kind: 'conflicts', paths: [...interdiff.paths] }
-          : {
-              kind: 'unavailable',
-              reason: interdiff.kind === 'skipped' ? interdiff.reason : 'git-too-old',
-            },
+    interdiff: interdiffViewFrom(interdiff),
   };
+}
+
+function interdiffViewFrom(
+  interdiff: Extract<CommitPair, { kind: 'modified' }>['interdiff'],
+): CommitInterdiffView {
+  switch (interdiff.kind) {
+    case 'clean': {
+      return { kind: 'clean', files: interdiff.files.map((file) => diffFileViewFrom(file)) };
+    }
+    case 'conflicts': {
+      return { kind: 'conflicts', paths: [...interdiff.paths] };
+    }
+    case 'skipped': {
+      return { kind: 'unavailable', reason: interdiff.reason };
+    }
+    default: {
+      return { kind: 'unavailable', reason: 'git-too-old' };
+    }
+  }
 }
 
 function sideFrom(commit: RangeCommit): CommitSideView {

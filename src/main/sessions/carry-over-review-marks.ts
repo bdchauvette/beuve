@@ -9,8 +9,15 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { headPathOf } from './head-path-of.ts';
+import { oldPathOf } from './old-path-of.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
+
+/** The files a review shows, and the plain diff's files whose identities key the marks. */
+export interface MarkedFiles {
+  readonly shown: readonly DiffFile[];
+  readonly identified: readonly DiffFile[];
+}
 
 /**
  * The reviewed state of the files `shown` (ADR 0064). Marks are keyed by the diff identity of the
@@ -20,8 +27,7 @@ import { sessionFailure } from './session-failure.ts';
 export function carryOverReviewMarks(
   context: SessionContext,
   sessionId: SessionId,
-  shown: readonly DiffFile[],
-  identified: readonly DiffFile[],
+  { shown, identified }: MarkedFiles,
 ): Result<CarriedMarks, IpcError> {
   const marks = listFileMarks(context.db, sessionId);
   if (!marks.ok) {
@@ -38,7 +44,7 @@ export function carryOverReviewMarks(
       shown.map((file) => {
         return {
           path: headPathOf(file),
-          oldPath: 'oldPath' in file ? file.oldPath : undefined,
+          oldPath: oldPathOf(file),
           diffId: idByPath.get(headPathOf(file)) ?? fileDiffIdFrom(file),
         };
       }),

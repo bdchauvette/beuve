@@ -7,8 +7,9 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { carryOverReviewMarks } from './carry-over-review-marks.ts';
+import { headPathOf } from './head-path-of.ts';
 import { loadReviewDiff } from './load-review-diff.ts';
-import type { ReviewDiffOptions } from './load-review-diff.ts';
+import type { ReviewDiff, ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { commitPairViewFrom } from './commit-pair-view-from.ts';
 import { diffFileViewFrom } from './diff-file-view-from.ts';
@@ -25,14 +26,17 @@ export async function loadReview(
     return diff;
   }
   const { refreshed, scope, baseSha, files, forkPoint, commitPairs, attribution } = diff.value;
-  const plain =
-    options.ignoreWhitespace === true
-      ? await loadReviewDiff(context, sessionId, { ...options, ignoreWhitespace: false })
-      : diff;
+  let plain: Result<ReviewDiff, IpcError> = diff;
+  if (options.ignoreWhitespace === true) {
+    plain = await loadReviewDiff(context, sessionId, { ...options, ignoreWhitespace: false });
+  }
   if (!plain.ok) {
     return plain;
   }
-  const carried = carryOverReviewMarks(context, refreshed.session.id, files, plain.value.files);
+  const carried = carryOverReviewMarks(context, refreshed.session.id, {
+    shown: files,
+    identified: plain.value.files,
+  });
   if (!carried.ok) {
     return carried;
   }
@@ -53,7 +57,7 @@ export async function loadReview(
       changedSince: carried.value.counts.changedSince,
       unreviewed: carried.value.counts.unreviewed,
     },
-    whitespace: options.ignoreWhitespace === true ? 'ignored' : 'shown',
+    whitespace: whitespaceOf(options),
     ...forkPointViewFrom(forkPoint),
     ...pairingViewsFrom(files, commitPairs, attribution),
   });
@@ -84,7 +88,7 @@ function pairingViewsFrom(
   const fileAttribution: FileAttributionView[] = files.map((file, index) => {
     const attributed = attribution?.[index];
     return {
-      path: 'newPath' in file ? file.newPath : file.path,
+      path: headPathOf(file),
       pairIds: [...(attributed?.commits ?? [])],
       hunkPairIds: (
         attributed?.hunks ??
@@ -100,4 +104,11 @@ function pairingViewsFrom(
     commitPairs: commitPairs.pairs.map((pair) => commitPairViewFrom(pair)),
     fileAttribution,
   };
+}
+
+function whitespaceOf(options: ReviewDiffOptions): ReviewView['whitespace'] {
+  if (options.ignoreWhitespace === true) {
+    return 'ignored';
+  }
+  return 'shown';
 }

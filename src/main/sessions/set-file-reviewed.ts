@@ -12,6 +12,7 @@ import type { Result } from '#x/result/result.ts';
 
 import { carryOverReviewMarks } from './carry-over-review-marks.ts';
 import { headPathOf } from './head-path-of.ts';
+import { oldPathOf } from './old-path-of.ts';
 import { loadReviewDiff } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
@@ -40,7 +41,7 @@ export async function setFileReviewed(
   if (file === undefined) {
     return err({ code: 'not-found', message: 'that file is not in the review' });
   }
-  const oldPath = 'oldPath' in file ? file.oldPath : undefined;
+  const oldPath = oldPathOf(file);
   if (request.reviewed) {
     const stored = setFileMark(
       context.db,
@@ -57,13 +58,16 @@ export async function setFileReviewed(
       return sessionFailure(context.logger, stored.error);
     }
   } else {
-    removeFileMarks(
-      context.db,
-      session.id,
-      oldPath === undefined ? [request.path] : [request.path, oldPath],
-    );
+    const paths = [request.path];
+    if (oldPath !== undefined) {
+      paths.push(oldPath);
+    }
+    removeFileMarks(context.db, session.id, paths);
   }
-  const carried = carryOverReviewMarks(context, session.id, diff.value.files, diff.value.files);
+  const carried = carryOverReviewMarks(context, session.id, {
+    shown: diff.value.files,
+    identified: diff.value.files,
+  });
   if (!carried.ok) {
     return carried;
   }

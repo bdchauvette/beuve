@@ -1,6 +1,7 @@
 import type { InterdiffFallbackView, IpcError, ReviewScope } from '#contract/ipc-contract.ts';
 import { attributeHunks } from '#internal/git/attribute-hunks.ts';
 import { computeCommitPairs } from '#internal/git/compute-commit-pairs.ts';
+import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import { computeInterdiff } from '#internal/git/compute-interdiff.ts';
 import type { Interdiff } from '#internal/git/compute-interdiff.ts';
 import { diffObjects } from '#internal/git/diff-objects.ts';
@@ -20,6 +21,7 @@ import { gitFailure } from './git-failure.ts';
 import { ipcErrorFromGitError } from './ipc-error-from-git-error.ts';
 import { loadSession } from './load-session.ts';
 import type { RangeDiff } from './range-diff.ts';
+import { reviewedBasesOf } from './reviewed-bases-of.ts';
 import { rebindRepository } from './rebind-repository.ts';
 import { refreshSession } from './refresh-session.ts';
 import type { RefreshedSession } from './refresh-session.ts';
@@ -69,7 +71,7 @@ export async function loadReviewDiff(
     return refreshed;
   }
   const range = computeReviewRange(refreshed.value.session);
-  const diff = await sharedRangeDiff(context, refreshed.value, range, options);
+  const diff = await sharedRangeDiff(context, { refreshed: refreshed.value, range }, options);
   if (diff.ok) {
     return ok({ ...diff.value, refreshed: refreshed.value });
   }
@@ -85,22 +87,12 @@ export async function loadReviewDiff(
  */
 async function sharedRangeDiff(
   context: SessionContext,
-  refreshed: RefreshedSession,
-  range: ReviewRange,
+  { refreshed, range }: RangeOfSession,
   options: ReviewDiffOptions,
 ): Promise<Result<RangeDiff, IpcError>> {
   const isIgnoringWhitespace = options.ignoreWhitespace === true;
-  const { repository, session } = refreshed;
-  const key = [
-    repository.root,
-    repository.version.raw,
-    refreshed.baseTip,
-    range.kind,
-    range.kind === 'interdiff' ? `${range.fromBaseSha}:${range.fromHeadSha}` : '',
-    session.review.kind === 'reviewed' ? session.review.checkpoint.baseSha : '',
-    range.kind === 'interdiff' ? range.toHeadSha : range.headSha,
-    isIgnoringWhitespace ? 'w' : '',
-  ].join('\0');
+  const { repository } = refreshed;
+  const key = rangeDiffKey({ refreshed, range }, isIgnoringWhitespace);
   const diff = await context.caches.rangeDiffs.get(
     key,
     async (shared): Promise<Result<RangeDiff, IpcError>> => {
@@ -119,6 +111,45 @@ async function sharedRangeDiff(
   return diff;
 }
 
+/** The key of a range's diff: every value it is a function of. */
+function rangeDiffKey({ refreshed, range }: RangeOfSession, isIgnoringWhitespace: boolean): string {
+  const { repository, session } = refreshed;
+  let interdiffFrom = '';
+  let head: string;
+  if (range.kind === 'interdiff') {
+    interdiffFrom = `${range.fromBaseSha}:${range.fromHeadSha}`;
+    head = range.toHeadSha;
+  } else {
+    head = range.headSha;
+  }
+  let variant = '';
+  if (isIgnoringWhitespace) {
+    variant = 'w';
+  }
+  return [
+    repository.root,
+    repository.version.raw,
+    refreshed.baseTip,
+    range.kind,
+    interdiffFrom,
+    reviewedBasesOf(session.review)[0] ?? '',
+    head,
+    variant,
+  ].join('\0');
+}
+
+/** A review range, and the refreshed session it is a range of. */
+interface RangeOfSession {
+  readonly refreshed: RefreshedSession;
+  readonly range: ReviewRange;
+}
+
+/** The head a full diff runs to, and the scope to report it under. */
+interface FullDiff {
+  readonly headSha: CommitSha;
+  readonly scope: ReviewScope;
+}
+
 /** One shared diff computation: its own handle and signal, and the refresh it diffs for. */
 interface Computing {
   readonly context: SessionContext;
@@ -135,15 +166,15 @@ async function diffReviewRange(
   const { context, refreshed } = computing;
   switch (range.kind) {
     case 'full': {
-      return diffFull(computing, range.headSha, { kind: 'full' }, isIgnoringWhitespace);
+      return diffFull(
+        computing,
+        { headSha: range.headSha, scope: { kind: 'full' } },
+        isIgnoringWhitespace,
+      );
     }
     case 'up-to-date': {
       const { review } = refreshed.session;
-      const fork = await forkPointOf(
-        computing,
-        range.headSha,
-        review.kind === 'reviewed' ? [review.checkpoint.baseSha] : [],
-      );
+      const fork = await forkPointOf(computing, range.headSha, reviewedBasesOf(review));
       if (fork.ok) {
         return ok({
           scope: { kind: 'up-to-date' },
@@ -167,16 +198,14 @@ async function forkPointOf(
 ): Promise<Result<StackForkPoint, GitError>> {
   return findSessionForkPoint(
     computing.context,
-    computing.repository,
-    { base: computing.refreshed.baseTip, head },
+    { repository: computing.repository, range: { base: computing.refreshed.baseTip, head } },
     { reviewedBases, signal: computing.signal },
   );
 }
 
 async function diffFull(
   computing: Computing,
-  headSha: CommitSha,
-  scope: ReviewScope,
+  { headSha, scope }: FullDiff,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
   const { context, repository } = computing;
@@ -220,11 +249,13 @@ async function diffInterdiff(
     }
     return diffFull(
       computing,
-      range.toHeadSha,
       {
-        kind: 'interdiff',
-        ...from,
-        outcome: { kind: 'fallback', reason: { kind: 'reviewed-commits-missing' } },
+        headSha: range.toHeadSha,
+        scope: {
+          kind: 'interdiff',
+          ...from,
+          outcome: { kind: 'fallback', reason: { kind: 'reviewed-commits-missing' } },
+        },
       },
       isIgnoringWhitespace,
     );
@@ -245,7 +276,10 @@ async function diffInterdiff(
   if (!pairs.ok) {
     return gitFailure(context.logger, pairs.error);
   }
-  const usablePairs = pairs.value.truncated ? undefined : pairs.value;
+  let usablePairs: CommitPairs | undefined;
+  if (!pairs.value.truncated) {
+    usablePairs = pairs.value;
+  }
   const interdiff = await computeInterdiff(
     repository,
     { previous, next },
@@ -274,7 +308,7 @@ async function diffInterdiff(
   });
 }
 
-function stackForkPoint(fork: StackForkPoint): { readonly forkPoint?: StackForkPoint } {
+function stackForkPoint(fork: StackForkPoint): Pick<RangeDiff, 'forkPoint'> {
   if (fork.reason === 'merge-base') {
     return {};
   }
@@ -294,10 +328,14 @@ function outcomeFrom(interdiff: Interdiff): Extract<ReviewScope, { kind: 'interd
     }
     case 'fallback': {
       const { reason } = interdiff;
-      const view: InterdiffFallbackView =
-        reason.kind === 'conflicts'
-          ? { kind: 'conflicts', paths: [...reason.paths] }
-          : { kind: 'git-too-old', version: reason.version.raw, required: reason.required };
+      if (reason.kind === 'conflicts') {
+        return { kind: 'fallback', reason: { kind: 'conflicts', paths: [...reason.paths] } };
+      }
+      const view: InterdiffFallbackView = {
+        kind: 'git-too-old',
+        version: reason.version.raw,
+        required: reason.required,
+      };
       return { kind: 'fallback', reason: view };
     }
   }
