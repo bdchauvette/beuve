@@ -16,6 +16,7 @@ export const perHeadInvokeChannels = Object.freeze([
   'lsp:call-hierarchy',
   'deps:install',
   'deps:skip',
+  'terminal:open',
 ] as const satisfies readonly InvokeChannel[]);
 
 export type PerHeadInvokeChannel = (typeof perHeadInvokeChannels)[number];

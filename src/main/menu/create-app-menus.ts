@@ -18,6 +18,7 @@ import { menuItemStatesFrom } from './menu-item-states-from.ts';
 import type { MenuItemState } from './menu-item-states-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
 import type { MenuTemplateItem } from './menu-template-item.ts';
+import { yieldToTerminal } from './yield-to-terminal.ts';
 
 export interface AppMenusOptions {
   readonly platform: KeyPlatform;
@@ -84,11 +85,16 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
 
   const isEnabled = (contentsId: number, id: string): boolean => {
     const kind = kinds.get(contentsId);
-    return (
-      kind !== undefined &&
-      menuItemStatesFrom(commandCatalog, kind, states.get(contentsId) ?? emptyState).get(id)
-        ?.enabled === true
-    );
+    return kind !== undefined && statesOf(contentsId, kind).get(id)?.enabled === true;
+  };
+
+  const statesOf = (contentsId: number, kind: WindowKind): ReadonlyMap<string, MenuItemState> => {
+    const state = states.get(contentsId) ?? emptyState;
+    return yieldToTerminal(menuItemStatesFrom(commandCatalog, kind, state), {
+      catalog: commandCatalog,
+      conditions: state.conditions,
+      platform,
+    });
   };
 
   const build = (): Menu => Menu.buildFromTemplate(withClicks(template, dispatch));
@@ -109,10 +115,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     if (appMenu !== undefined && BrowserWindow.getFocusedWindow()?.webContents.id !== contentsId) {
       return;
     }
-    applyStates(
-      menu,
-      menuItemStatesFrom(commandCatalog, kind, states.get(contentsId) ?? emptyState),
-    );
+    applyStates(menu, statesOf(contentsId, kind));
   };
 
   return {
@@ -163,10 +166,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
           dispatch(id, window);
         }),
       );
-      applyStates(
-        menu,
-        menuItemStatesFrom(commandCatalog, kind, states.get(contentsId) ?? emptyState),
-      );
+      applyStates(menu, statesOf(contentsId, kind));
       menu.popup({
         window,
         ...(request.x !== undefined && { x: Math.round(request.x) }),

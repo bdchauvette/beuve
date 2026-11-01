@@ -153,6 +153,8 @@ function mainOptions(): BuildOptions {
     ...sharedOptions(),
     entryPoints: [path.join(root, 'src/main/index.ts')],
     outfile: path.join(dist, 'main/index.js'),
+    // node-pty loads its native addon by path next to its own files (ADR 0095).
+    external: ['electron', 'node-pty'],
     platform: 'node',
     target: 'node24',
     supported: nativeUsing,

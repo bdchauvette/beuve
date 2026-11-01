@@ -26,6 +26,7 @@ describe('menuStateFrom', () => {
       { sheetHistory: { canGoBack: true, canGoForward: false } },
       ['session', 'file', 'diff-target', 'back'],
     ],
+    [{ isTerminalFocused: true }, ['session', 'file', 'diff-target', 'terminal-focus']],
   ] as const)('focus %o gives %o', ([change, conditions], { expect }) => {
     expect(menuStateFrom({ ...open(), ...change }).conditions).toStrictEqual(conditions);
   });
@@ -39,10 +40,12 @@ describe('menuStateFrom', () => {
       dockItem: { isAddressed: true },
       isFindCaseSensitive: true,
       treeMode: 'diff-only',
+      isTerminalShown: true,
       display: { ...open().display, layout: 'unified', reviewOrder: 'calls', sheets: 'inline' },
     });
     expect(checked).toStrictEqual([
       'toggle-sidebar',
+      'toggle-terminal',
       'sidebar-right',
       'diff-inline',
       'toggle-insights',
@@ -69,6 +72,8 @@ function idle(): MenuStateInput {
     isPullRequest: false,
     stagedCount: 0,
     isSidebarShown: false,
+    isTerminalShown: false,
+    isTerminalFocused: false,
     display: {
       layout: 'split',
       ignoreWhitespace: false,

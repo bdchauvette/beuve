@@ -20,6 +20,9 @@ export interface MenuStateInput {
   readonly isPullRequest: boolean;
   readonly stagedCount: number;
   readonly isSidebarShown: boolean;
+  readonly isTerminalShown: boolean;
+  /** Whether a terminal of the panel has the keyboard (ADR 0095). */
+  readonly isTerminalFocused: boolean;
   readonly display: DiffDisplayView;
   readonly treeMode: RadarTreeMode;
   readonly preferredEditor: EditorId | undefined;
@@ -53,10 +56,12 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ...has('back', input.sheetHistory?.canGoBack === true),
     ...has('forward', input.sheetHistory?.canGoForward === true),
     ...has('text-focus', input.isTextFocused),
+    ...has('terminal-focus', input.isTerminalFocused),
   ];
   const order = display.reviewOrder ?? 'path';
   const checks: readonly (readonly [CommandId, boolean])[] = [
     ['toggle-sidebar', input.isSidebarShown],
+    ['toggle-terminal', input.isTerminalShown],
     ['sidebar-left', display.sidebarSide === 'left'],
     ['sidebar-right', display.sidebarSide === 'right'],
     ['diff-split', display.layout === 'split'],

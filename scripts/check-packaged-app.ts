@@ -47,6 +47,7 @@ async function checkPackagedApp(): Promise<void> {
     ...(await checkFuses(layout.fuseBinary)),
     ...(await checkNode(layout.node)),
     ...(await checkCorepack(layout)),
+    ...(await checkNodePty(layout)),
   ];
   for (const failure of failures) {
     console.error(`check-packaged-app: FAIL ${failure}`);
@@ -63,6 +64,7 @@ interface AppLayout {
   readonly fuseBinary: string;
   readonly node: string;
   readonly corepack: string;
+  readonly nodePty: string;
 }
 
 function layoutOf(app: string): AppLayout {
@@ -74,12 +76,14 @@ function layoutOf(app: string): AppLayout {
       ),
       node: path.join(app, 'Contents/Resources/node/node'),
       corepack: path.join(app, corepackInResources('Contents/Resources')),
+      nodePty: path.join(app, nodePtyInResources('Contents/Resources')),
     };
   }
   return {
     fuseBinary: path.join(app, 'beuve'),
     node: path.join(app, 'resources/node/node'),
     corepack: path.join(app, corepackInResources('resources')),
+    nodePty: path.join(app, nodePtyInResources('resources')),
   };
 }
 
@@ -113,6 +117,34 @@ function verdictOf(state: FuseState, expected: FuseState | undefined): string {
 
 function corepackInResources(resources: string): string {
   return path.join(resources, 'app.asar.unpacked/node_modules/corepack/dist/corepack.js');
+}
+
+function nodePtyInResources(resources: string): string {
+  return path.join(resources, 'app.asar.unpacked/node_modules/node-pty');
+}
+
+/**
+ * node-pty (ADR 0095) must be unpacked with its native addon and, on macOS, `spawn-helper`: the
+ * check loads it with the bundled Node (it is N-API, so any Node loads it) and runs a shell on a
+ * pseudo-terminal.
+ */
+async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
+  const script =
+    "const p=require(process.argv[1]).spawn('/bin/sh',['-c','echo pty-ok'],{name:'xterm',cols:80,rows:24});" +
+    "let o='';p.onData(d=>{o+=d});p.onExit(()=>{process.stdout.write(o)})";
+  try {
+    const { stdout } = await runFile(node, ['-e', script, nodePty], {
+      env: {},
+      encoding: 'utf8',
+    });
+    console.log(`check-packaged-app: ${nodePty}: ${stdout.trim()}`);
+    if (!stdout.includes('pty-ok')) {
+      return [`${nodePty} did not run a shell: ${stdout.trim()}`];
+    }
+    return [];
+  } catch (error: unknown) {
+    return [`${nodePty} did not load: ${errorFrom(error).message}`];
+  }
 }
 
 /** corepack (ADR 0091) must be unpacked where the bundled Node can run it, at the pinned version. */

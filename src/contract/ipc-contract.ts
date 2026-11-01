@@ -900,6 +900,81 @@ export interface SetToolPathRequest {
   readonly directory: string;
 }
 
+/** One terminal of a session (ADR 0095). */
+export interface TerminalView {
+  readonly id: string;
+  readonly sessionId: string;
+  /** The head whose checkout the terminal runs in; it stays there when the head moves. */
+  readonly headSha: string;
+  /** The shell's name, e.g. `zsh`. */
+  readonly title: string;
+  /** Whether the shell is still running; an ended terminal keeps its output until closed. */
+  readonly isRunning: boolean;
+}
+
+/** `terminal:open`: a new shell in the checkout of the session's head. */
+export interface TerminalOpenRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha: string;
+  readonly cols: number;
+  readonly rows: number;
+}
+
+/** `terminal:list`: the session's terminals, for a renderer that just loaded. */
+export interface TerminalListRequest {
+  readonly sessionId: string;
+}
+
+/**
+ * A terminal and its recent output. `backlogEnd` counts every character the terminal has written
+ * up to the end of `backlog`: a `terminal:data` event whose `end` is not past it is already in it.
+ */
+export interface TerminalBacklogView extends TerminalView {
+  readonly backlog: string;
+  readonly backlogEnd: number;
+}
+
+export interface TerminalListView {
+  readonly terminals: readonly TerminalBacklogView[];
+}
+
+/** `terminal:write`: keystrokes or a paste, as the terminal would receive them. */
+export interface TerminalWriteRequest {
+  readonly terminalId: string;
+  readonly data: string;
+}
+
+/** `terminal:resize`: the panel's size in character cells. */
+export interface TerminalResizeRequest {
+  readonly terminalId: string;
+  readonly cols: number;
+  readonly rows: number;
+}
+
+/** `terminal:close`: ends the shell if it runs and forgets the terminal. */
+export interface TerminalCloseRequest {
+  readonly terminalId: string;
+}
+
+/** The answer to `terminal:write`, `terminal:resize` and `terminal:close`. */
+export interface TerminalAckView {
+  readonly terminalId: string;
+}
+
+/** `terminal:data`: output, in order. `end` is the terminal's character count after `data`. */
+export interface TerminalDataEvent {
+  readonly terminalId: string;
+  readonly data: string;
+  readonly end: number;
+}
+
+/** `terminal:exit`: the shell ended. `signal` is the signal number that ended it, if any. */
+export interface TerminalExitEvent {
+  readonly terminalId: string;
+  readonly exitCode: number;
+  readonly signal: number | undefined;
+}
+
 /** A bounded one-line rendering of a runtime value. */
 export interface TraceValueView {
   readonly type: string;
@@ -2336,6 +2411,26 @@ export interface InvokeChannelMap {
     readonly request: SetToolPathRequest;
     readonly response: IpcResult<DependencySettingsView>;
   };
+  'terminal:open': {
+    readonly request: TerminalOpenRequest;
+    readonly response: IpcResult<TerminalView>;
+  };
+  'terminal:list': {
+    readonly request: TerminalListRequest;
+    readonly response: IpcResult<TerminalListView>;
+  };
+  'terminal:write': {
+    readonly request: TerminalWriteRequest;
+    readonly response: IpcResult<TerminalAckView>;
+  };
+  'terminal:resize': {
+    readonly request: TerminalResizeRequest;
+    readonly response: IpcResult<TerminalAckView>;
+  };
+  'terminal:close': {
+    readonly request: TerminalCloseRequest;
+    readonly response: IpcResult<TerminalAckView>;
+  };
   'trust:get': {
     readonly request: TrustGetRequest;
     readonly response: IpcResult<TrustView>;
@@ -2548,6 +2643,10 @@ export interface EventChannelMap {
   'trace:status': TraceStatusView;
   /** A session head's dependency install changed (ADR 0089). */
   'deps:status': DependencyStatusView;
+  /** A terminal wrote output (ADR 0095). */
+  'terminal:data': TerminalDataEvent;
+  /** A terminal's shell ended. */
+  'terminal:exit': TerminalExitEvent;
   /** Run a menu, shortcut or context menu command in this window (ADR 0068). */
   'menu:run': MenuRunView;
   /** Preferences changed in another window (the Settings window); read them again. */

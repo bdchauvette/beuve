@@ -12,4 +12,5 @@ export const menuConditions = Object.freeze([
   'back',
   'forward',
   'text-focus',
+  'terminal-focus',
 ] as const satisfies readonly MenuCondition[]);

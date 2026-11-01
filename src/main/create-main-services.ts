@@ -76,6 +76,9 @@ import { captureLoginEnvironment } from './deps/capture-login-environment.ts';
 import { createDependencyServices } from './deps/create-dependency-services.ts';
 import type { DependencyServices } from './deps/create-dependency-services.ts';
 import { createToolchainFinder } from './deps/create-toolchain-finder.ts';
+import { createTerminalServices } from './terminal/create-terminal-services.ts';
+import { spawnNodePty } from './terminal/spawn-node-pty.ts';
+import type { PtySpawner } from '#internal/terminal/pty-process.ts';
 import type { ToolchainFinder } from './deps/create-toolchain-finder.ts';
 import { resolveCorepack } from './deps/resolve-corepack.ts';
 import { listToolPaths } from '#internal/deps/list-tool-paths.ts';
@@ -153,6 +156,16 @@ export interface MainServicesOptions {
     readonly timeout?: Temporal.Duration;
     readonly killGrace?: Temporal.Duration;
     readonly inheritedEnvironment?: Readonly<Record<string, string | undefined>>;
+  };
+  /**
+   * Terminals (ADR 0095): tests pass a fake `spawn`, a short `outputDelay` and the environment the
+   * shell inherits; the app passes its version.
+   */
+  readonly terminal?: {
+    readonly spawn?: PtySpawner;
+    readonly environment?: Readonly<Record<string, string | undefined>>;
+    readonly version?: string;
+    readonly outputDelay?: Temporal.Duration;
   };
   /** Diff display preferences (ADR 0042), in memory without `settingsPath`. */
   readonly display?: { readonly settingsPath?: string };
@@ -346,6 +359,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       void deps.ensure(sessionId);
     }
   });
+  const terminal = createTerminalServices({
+    context,
+    worktrees,
+    spawn: options.terminal?.spawn ?? spawnNodePty,
+    environment: options.terminal?.environment ?? process.env,
+    platform: process.platform,
+    version: options.terminal?.version ?? '0.0.0',
+    ...(options.terminal?.outputDelay !== undefined && {
+      outputDelay: options.terminal.outputDelay,
+    }),
+  });
   const trace = createTraceServices({
     context,
     worktrees,
@@ -436,6 +460,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     trace,
     trust,
     deps,
+    terminal,
     github,
     claude: {
       status: async (): Promise<IpcResult<ClaudeStatusView>> => {
@@ -472,6 +497,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
     dispose: async (): Promise<void> => {
       github.dispose();
+      terminal.dispose();
       await Promise.all([chat.dispose(), trace.dispose(), deps.dispose()]);
       impactRunner.dispose();
       await multiplexer.dispose();

@@ -244,6 +244,12 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
+        "accelerator": "Ctrl+\`",
+        "id": "toggle-terminal",
+        "label": "Show &Terminal",
+        "type": "checkbox",
+      },
+      {
         "id": "tree-mode",
         "label": "Changed &Files Only",
         "type": "checkbox",
@@ -319,7 +325,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "accelerator": "F11",
-        "label": "&Toggle Full Screen",
+        "label": "To&ggle Full Screen",
         "role": "togglefullscreen",
       },
     ],
@@ -1008,6 +1014,12 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "type": "separator",
+      },
+      {
+        "accelerator": "Ctrl+\`",
+        "id": "toggle-terminal",
+        "label": "Show Terminal",
+        "type": "checkbox",
       },
       {
         "id": "tree-mode",

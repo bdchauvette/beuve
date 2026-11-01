@@ -31,6 +31,7 @@ import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
 import type { TrustServices } from './trust/create-trust-services.ts';
 import type { DependencyServices } from './deps/create-dependency-services.ts';
+import type { TerminalServices } from './terminal/create-terminal-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
@@ -93,6 +94,8 @@ export interface MainServices {
     | 'setToolPath'
     | 'onStatus'
   >;
+  /** Shells in beuve's checkouts (ADR 0095). */
+  readonly terminal: TerminalServices;
   readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;
   /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };

@@ -48,6 +48,17 @@ files:
       - claude
       - package.json
       - LICENSE.md
+  # node-pty (ADR 0095): its JavaScript and the addon for this platform. Linux compiles it into
+  # build/Release when npm installs; the macOS package ships prebuilds, with spawn-helper.
+  - from: node_modules/node-pty
+    to: node_modules/node-pty
+    filter:
+      - package.json
+      - LICENSE
+      - lib/**/*.js
+      - '!lib/**/*.test.js'
+      - build/Release/*.node
+      - prebuilds/${platform}-${arch}/**
 asar: true
 # The Node that runs the TypeScript language server and trace probes (ADR 0083): the pinned
 # nodejs.org binary (scripts/node-runtime.json, ADR 0084), which `npm run dist:*` fetches and
@@ -61,9 +72,11 @@ asarUnpack:
   - node_modules/typescript/**
   - node_modules/typescript-language-server/**
   - node_modules/corepack/**
+  # The addon and, on macOS, spawn-helper, which is run as a program (ADR 0095).
+  - node_modules/node-pty/**
   # A native executable inside app.asar can't be run.
   - node_modules/@anthropic-ai/claude-agent-sdk-*/**
-# Nothing is native, so there is nothing to rebuild for Electron's ABI (ADR 0004).
+# node-pty's addon is N-API, so it needs no rebuild for Electron's ABI (ADR 0004, 0095).
 npmRebuild: false
 publish: null
 # scripts/check-packaged-app.ts reads these back from the built binary; keep it in step.

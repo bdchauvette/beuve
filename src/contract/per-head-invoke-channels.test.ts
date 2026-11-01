@@ -68,6 +68,7 @@ function headFreeSessionChannels(): Readonly<
     'deps:get-status': read,
     'deps:cancel': 'stops work; it stores nothing about a head',
     'deps:read-log': 'a read: its answer names the head whose checkout wrote the log',
+    'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
     'trust:get': 'trust belongs to the repository, not a head',
     'trust:set': 'trust belongs to the repository, not a head',
     'ura:list': read,

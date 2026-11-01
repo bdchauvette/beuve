@@ -74,6 +74,9 @@ import type {
   DependencyLogView,
   DependencySettingsView,
   DependencyStatusView,
+  TerminalAckView,
+  TerminalListView,
+  TerminalView,
   UraExportView,
   UraItemView,
   UraListView,
@@ -279,6 +282,21 @@ const traceRunRequest = z.strictObject({
 const trustSetRequest = z.strictObject({ sessionId, trusted: z.boolean() });
 const depsInstallRequest = z.strictObject({ sessionId, expectedHeadSha, reinstall: z.boolean() });
 const depsSkipRequest = z.strictObject({ sessionId, expectedHeadSha });
+const terminalId = z.string().min(1).max(100);
+const terminalCells = z.number().int().min(1).max(1000);
+const terminalOpenRequest = z.strictObject({
+  sessionId,
+  expectedHeadSha,
+  cols: terminalCells,
+  rows: terminalCells,
+});
+const terminalWriteRequest = z.strictObject({ terminalId, data: z.string().max(1_048_576) });
+const terminalResizeRequest = z.strictObject({
+  terminalId,
+  cols: terminalCells,
+  rows: terminalCells,
+});
+const terminalCloseRequest = z.strictObject({ terminalId });
 const depsRepositorySettingsRequest = z.strictObject({
   repositoryPath: z.string().min(1).max(4096),
   safeguard: z.boolean(),
@@ -780,6 +798,41 @@ export function createIpcHandlers(
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
         return services.deps.readLog(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'terminal:open': async (request): Promise<IpcResult<TerminalView>> => {
+      const parsed = terminalOpenRequest.safeParse(request);
+      if (parsed.success) {
+        return services.terminal.open(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'terminal:list': (request): IpcResult<TerminalListView> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.terminal.list(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'terminal:write': (request): IpcResult<TerminalAckView> => {
+      const parsed = terminalWriteRequest.safeParse(request);
+      if (parsed.success) {
+        return services.terminal.write(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'terminal:resize': (request): IpcResult<TerminalAckView> => {
+      const parsed = terminalResizeRequest.safeParse(request);
+      if (parsed.success) {
+        return services.terminal.resize(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'terminal:close': (request): IpcResult<TerminalAckView> => {
+      const parsed = terminalCloseRequest.safeParse(request);
+      if (parsed.success) {
+        return services.terminal.close(parsed.data);
       }
       return invalid(parsed.error);
     },

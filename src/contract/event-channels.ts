@@ -9,6 +9,8 @@ export const eventChannels = Object.freeze([
   'github:ci-status',
   'trace:status',
   'deps:status',
+  'terminal:data',
+  'terminal:exit',
   'menu:run',
   'settings:changed',
 ] as const satisfies readonly EventChannel[]);

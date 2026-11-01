@@ -68,6 +68,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'find-match-case': app,
     palette: app,
     'toggle-sidebar': app,
+    'toggle-terminal': app,
     'sidebar-overview': app,
     'sidebar-review': app,
     'sidebar-chat': app,

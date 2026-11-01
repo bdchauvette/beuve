@@ -2,7 +2,7 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 import { BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
-import type { App } from 'electron';
+import type { App, WebContents } from 'electron';
 
 import type { Logger } from '#x/log/create-logger.ts';
 
@@ -102,9 +102,15 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       menus.track(window, 'settings');
     },
   });
+  /** Terminal output goes to main windows only, never to sheets or Settings (ADR 0095). */
+  const mainWindowContents = new Set<WebContents>();
   const openWindow = (): void => {
     const window = createMainWindow(options);
     menus.track(window, 'main');
+    mainWindowContents.add(window.webContents);
+    window.once('closed', () => {
+      mainWindowContents.delete(window.webContents);
+    });
     window.webContents.on('did-finish-load', () => {
       sendEvent(window.webContents, 'mcp:status', mcpStatus);
     });
@@ -130,6 +136,16 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   services.deps.onStatus((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'deps:status', event);
+    }
+  });
+  services.terminal.onData((event) => {
+    for (const contents of mainWindowContents) {
+      sendEvent(contents, 'terminal:data', event);
+    }
+  });
+  services.terminal.onExit((event) => {
+    for (const contents of mainWindowContents) {
+      sendEvent(contents, 'terminal:exit', event);
     }
   });
   services.ura.onChanged((sessionId) => {

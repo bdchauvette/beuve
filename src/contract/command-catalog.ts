@@ -25,7 +25,8 @@ export type MenuCondition =
   | 'staged'
   | 'back'
   | 'forward'
-  | 'text-focus';
+  | 'text-focus'
+  | 'terminal-focus';
 
 /** Where a command sits in the menu bar; items sort by `group`, then catalog order. */
 export interface MenuPlace {
@@ -66,6 +67,11 @@ export interface CatalogCommand {
   readonly inPlace?: InPlaceKeys;
   /** The chord means something in a text field, so it is suspended while one has focus. */
   readonly textConflict?: true;
+  /**
+   * The chord still works while a terminal has the keyboard (ADR 0095). Every other keyed command
+   * is disabled then on Linux, where its Ctrl chord is a shell's (Ctrl-D, Ctrl-R, Ctrl-K).
+   */
+  readonly keepsInTerminal?: true;
   readonly when?: readonly MenuCondition[];
   readonly toggle?: 'checkbox' | 'radio';
   readonly context?: readonly ContextKind[];
@@ -316,6 +322,17 @@ const entries = Object.freeze([
     title: 'Show Review Insights',
     menu: { menu: 'view', group: 2, submenu: 'Diff', subgroup: 1 },
     toggle: 'checkbox',
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'toggle-terminal',
+    title: 'Show Terminal',
+    menu: { menu: 'view', group: 3 },
+    keys: { mac: 'Ctrl+`', linux: 'Ctrl+`' },
+    toggle: 'checkbox',
+    keepsInTerminal: true,
+    when: ['session'],
     windows: ['main'],
     handler: 'window',
   },

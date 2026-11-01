@@ -85,6 +85,7 @@ async function launch(): Promise<void> {
           }),
         },
         display: { settingsPath },
+        terminal: { version: app.getVersion() },
         models: {
           settingsPath,
           secretsPath: path.join(userData, 'model-secrets.json'),

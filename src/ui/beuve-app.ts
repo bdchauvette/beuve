@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 
 import type {
   AppInfo,
@@ -55,6 +56,7 @@ import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
 import './beuve-dependency-dialog.ts';
 import type { DependencyDialogChoice, DependencyDialogState } from './beuve-dependency-dialog.ts';
+import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import type { DependencyAction } from './describe-dependency-status.ts';
 import './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
@@ -364,6 +366,11 @@ export class BeuveApp extends LitElement {
       flex-direction: column;
       min-width: 0;
       min-height: 0;
+    }
+
+    .main > beuve-terminal-panel {
+      flex: none;
+      height: var(--beuve-terminal-height, 300px);
     }
 
     .main > beuve-diff-stream,
@@ -1041,6 +1048,9 @@ export class BeuveApp extends LitElement {
   /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
   @state() accessor sidebarSide: SidebarSideView = 'right';
   @state() accessor sidebarHidden = false;
+  /** The terminal panel under the diff (ADR 0095); its shells run on while it is hidden. */
+  @state() accessor terminalShown = false;
+  @state() accessor isTerminalFocused = false;
   /** The sidebar tab on show: intent and files, the review or the chat. */
   @state() accessor sidebarTab: SidebarZone = 'intent';
   @state() accessor openDialog = false;
@@ -3022,6 +3032,16 @@ export class BeuveApp extends LitElement {
         }
         return;
       }
+      case 'toggle-terminal': {
+        this.terminalShown = !this.terminalShown;
+        if (this.terminalShown) {
+          // xterm is large: it loads when the panel first opens (ADR 0095).
+          void import('./beuve-terminal-panel.ts');
+        } else {
+          this.isTerminalFocused = false;
+        }
+        return;
+      }
       case 'toggle-sidebar': {
         this.sidebarHidden = !this.sidebarHidden;
         if (this.sidebarHidden && this.focusedZone !== 'diff') {
@@ -3321,6 +3341,8 @@ export class BeuveApp extends LitElement {
       isPullRequest: this.pullRequest !== undefined,
       stagedCount: this.stagedCount(),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
+      isTerminalShown: this.review !== undefined && this.terminalShown,
+      isTerminalFocused: this.isTerminalFocused,
       display: this.display,
       treeMode: this.treeMode,
       preferredEditor: this.editorSettings?.preferred,
@@ -3848,6 +3870,36 @@ export class BeuveApp extends LitElement {
     </div>`;
   }
 
+  private onTerminalFocus(event: CustomEvent<TerminalFocusDetail>): void {
+    this.isTerminalFocused = event.detail.isFocused;
+  }
+
+  private onTerminalHide(): void {
+    this.terminalShown = false;
+    this.isTerminalFocused = false;
+  }
+
+  private renderTerminal(): TemplateResult | typeof nothing {
+    const { review } = this;
+    if (review === undefined || !this.terminalShown) {
+      return nothing;
+    }
+    return html`${keyed(
+      review.session.id,
+      html`<beuve-terminal-panel
+        .api=${beuveBridge()}
+        .sessionId=${review.session.id}
+        .headSha=${review.headSha}
+        @beuve-terminal-focus=${(event: CustomEvent<TerminalFocusDetail>): void => {
+          this.onTerminalFocus(event);
+        }}
+        @beuve-terminal-hide=${(): void => {
+          this.onTerminalHide();
+        }}
+      ></beuve-terminal-panel>`,
+    )}`;
+  }
+
   override render(): TemplateResult {
     const hasSidebar = this.review !== undefined && !this.sidebarHidden;
     const workspace: string[] = [];
@@ -3861,7 +3913,7 @@ export class BeuveApp extends LitElement {
     return html`
       ${this.renderTitlebar()}
       <div class="workspace ${workspace.join(' ')}">
-        <div class="main">${this.renderDiff()}</div>
+        <div class="main">${this.renderDiff()}${this.renderTerminal()}</div>
         ${hasSidebar ? this.renderSidebar() : nothing}
       </div>
       <beuve-status-bar
