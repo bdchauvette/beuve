@@ -1444,6 +1444,8 @@ export type EditorOpenResponse =
       readonly location: 'working-tree' | 'beuve-checkout';
       readonly path: string;
       readonly line: number;
+      /** The commit of the checkout the file was opened in: the session head. */
+      readonly headSha: string;
     }
   | { readonly kind: 'failed'; readonly failure: EditorOpenFailure; readonly message: string };
 

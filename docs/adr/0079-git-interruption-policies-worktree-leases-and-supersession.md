@@ -83,3 +83,9 @@ Probes, fork points and review diffs are shared between requests. A shared compu
 
 - **`review-edits { sessionId, branch, base }`** is the writable worktree Task #28 anticipated. Its path is planned per branch under a root of its own (`<userData>/review-edits`), and it is added by `addBranchWorktree` (`atomic`), which creates the branch at `base` or checks out the existing one. It shares the leases, the per-path chains and the holders map; its holder is never replaced, so the worktree is never collected when its leases go, and the startup prune, which works only under the read-only root, never reaches it. It is not sealed.
 - **`discardEdits`** removes it on its path's chain, refusing while a lease holds it or when the branch moved past the tip the reviewer confirmed, then deletes the branch with a compare-and-swap `update-ref -d`.
+
+## Amendment 2026-11-01 (ADR 0089): no sealing
+
+- **Checkouts are read-only by convention** (ADR 0033, second amendment): beuve never edits tracked files; installs and tools write untracked output. The add no longer seals the checkout and the removal no longer opens it. A removal that `git worktree remove --force` can't finish falls back to `removeTree` and `worktree prune` on the same chain; the startup prune unseals checkouts an older beuve sealed.
+- **The manager reports resets.** `onCheckoutReset(path)` is called on the path's chain after a fresh add and after a removal (also by the startup prune), so the dependency-install state recorded for that checkout (ADR 0089) is forgotten whenever its untracked contents are.
+- **Installs are not git** but follow this ADR's vocabulary: an install is `owned-write` with cleanup (SIGTERM to its process group, a grace period, then SIGKILL), holds a `session-head` lease while it runs, and is aborted when no session waits for its checkout any more (ADR 0089).

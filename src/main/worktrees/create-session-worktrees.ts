@@ -1,4 +1,5 @@
-import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { mkdir, open, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { addBranchWorktree } from '#internal/git/add-branch-worktree.ts';
@@ -40,6 +41,11 @@ export interface SessionWorktreesOptions {
    * `review-edits` beside `root`.
    */
   readonly editsRoot?: string;
+  /**
+   * Told the path of a read-only checkout that was just checked out afresh or removed, on its
+   * serial chain, so whatever describes its untracked contents (an install, ADR 0089) is forgotten.
+   */
+  readonly onCheckoutReset?: (path: string) => void;
 }
 
 /** A session's stored head, as `prune` keeps it. */
@@ -288,14 +294,8 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         return;
       }
       checkedOut.delete(path);
-      await reopenCheckout(path, logger);
-      const removed = await removeWorktree(entry.repository, path, { force: true });
-      if (removed.ok) {
-        return;
-      }
-
-      logger.warn('could not remove an unused worktree', { path, error: removed.error });
-      await sealCheckout(path, logger);
+      await removeCheckout({ repository: entry.repository, path }, logger);
+      options.onCheckoutReset?.(path);
     });
   };
 
@@ -358,7 +358,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       if (!added.ok) {
         return added;
       }
-      await sealCheckout(entry.path, logger);
+      options.onCheckoutReset?.(entry.path);
       checkedOut.set(entry.path, commit);
       logger.debug('worktree ready', { path: entry.path, duration: stopwatch.elapsed() });
     }
@@ -448,7 +448,7 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
         try {
           const kept = await pruneAll(options, keep);
           for (const [path, commit] of kept) {
-            await sealCheckout(path, logger);
+            await unsealLegacyCheckout(path, logger);
             checkedOut.set(path, commit);
           }
         } catch (error: unknown) {
@@ -570,12 +570,16 @@ async function pruneAll(
       continue;
     }
     const heads = keep.filter((entry) => entry.repoPath === repoPath).map((entry) => entry.headSha);
-    const kept = await pruneRepository(repository.value, { root, heads }, logger);
+    const kept = await pruneRepository(
+      repository.value,
+      { root, heads, onReset: options.onCheckoutReset },
+      logger,
+    );
     for (const worktree of kept) {
       registered.set(worktree.path, worktree.head);
     }
   }
-  await removeStrayDirectories(root, registered, logger);
+  await removeStrayDirectories({ root, registered, onReset: options.onCheckoutReset }, logger);
   return registered;
 }
 
@@ -583,6 +587,7 @@ async function pruneAll(
 interface PruneScope {
   readonly root: string;
   readonly heads: readonly CommitSha[];
+  readonly onReset: ((path: string) => void) | undefined;
 }
 
 /** A worktree that survived the prune, and the commit it has checked out. */
@@ -629,7 +634,7 @@ function commitOf(claim: WorktreeClaim): CommitSha {
 /** Removes this repository's worktrees under `root` except those at `heads`; returns the kept ones. */
 async function pruneRepository(
   repository: GitRepository,
-  { root, heads }: PruneScope,
+  { root, heads, onReset }: PruneScope,
   logger: Logger,
 ): Promise<readonly KeptWorktree[]> {
   await pruneWorktrees(repository);
@@ -654,22 +659,15 @@ async function pruneRepository(
       kept.push({ path: worktree.path, head });
       continue;
     }
-    await reopenCheckout(worktree.path, logger);
-    const removed = await removeWorktree(repository, worktree.path, { force: true });
-    if (!removed.ok) {
-      logger.warn('could not remove a stale worktree', {
-        path: worktree.path,
-        error: removed.error,
-      });
-    }
+    await removeCheckout({ repository, path: worktree.path }, logger);
+    onReset?.(worktree.path);
   }
   return kept;
 }
 
 /** Deletes checkouts under `root` that no known repository has registered (`<root>/<repo>/<commit>`). */
 async function removeStrayDirectories(
-  root: string,
-  registered: ReadonlyMap<string, CommitSha>,
+  { root, registered, onReset }: StrayScope,
   logger: Logger,
 ): Promise<void> {
   const repositories = await listDirectories(root);
@@ -681,12 +679,20 @@ async function removeStrayDirectories(
       }
       logger.info('removing a stray worktree directory', { path: checkout });
       await removeTree(checkout);
+      onReset?.(checkout);
     }
     const remaining = await listDirectories(repositoryDirectory);
     if (remaining.length === 0) {
       await removeTree(repositoryDirectory);
     }
   }
+}
+
+/** The root to clean, the checkouts git still registers there, and who hears of a removal. */
+interface StrayScope {
+  readonly root: string;
+  readonly registered: ReadonlyMap<string, CommitSha>;
+  readonly onReset: ((path: string) => void) | undefined;
 }
 
 async function listDirectories(directory: string): Promise<readonly string[]> {
@@ -711,43 +717,63 @@ function isInside({ root, candidate }: Containment): boolean {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-/**
- * Makes a checkout read-only (ADR 0033, 0079 amendments): no write bit on any file or directory,
- * so an editor opened on it refuses to save and nothing can add a file, while every reader (the
- * language servers, chat's sandbox, trace probes) still sees exactly the commit. Runs on the
- * path's serial chain, right after the add. A failure is logged: the checkout still serves reads.
- */
-async function sealCheckout(checkout: string, logger: Logger): Promise<void> {
-  try {
-    await chmodTree(checkout, { file: withoutWriteBits, directory: withoutWriteBits });
-  } catch (error: unknown) {
-    logger.warn('could not make a worktree read-only', { path: checkout, error: errorFrom(error) });
-  }
+/** A checkout to remove, and the repository it is registered in. */
+interface CheckoutPlace {
+  readonly repository: GitRepository;
+  readonly path: string;
 }
 
 /**
- * Gives a sealed checkout's directories back their owner's write bit, which deleting an entry
- * needs, just before `git worktree remove` on the same serial chain. Files stay read-only: removing
- * a file needs write permission on its directory only.
+ * Removes a checkout (`git worktree remove --force`, untracked installs included). When git
+ * can't, for instance because a tool left a read-only directory in it, the tree goes with
+ * `removeTree` and git forgets the record (`worktree prune`). Failures are logged.
  */
-async function reopenCheckout(checkout: string, logger: Logger): Promise<void> {
+async function removeCheckout({ repository, path }: CheckoutPlace, logger: Logger): Promise<void> {
+  await unsealLegacyCheckout(path, logger);
+  const removed = await removeWorktree(repository, path, { force: true });
+  if (removed.ok) {
+    return;
+  }
+  logger.info('git could not remove a worktree; removing its tree', {
+    path,
+    error: removed.error,
+  });
+  try {
+    await removeTree(path);
+  } catch (error: unknown) {
+    logger.warn('could not remove an unused worktree', { path, error: errorFrom(error) });
+    return;
+  }
+  await pruneWorktrees(repository);
+}
+
+/**
+ * Gives a checkout an older beuve sealed (ADR 0033's first amendment cleared every write bit)
+ * its owner's write bits back, once: checkouts are now read-only by convention only, and an
+ * install writes into them (ADR 0089). A checkout whose top directory is writable is left as it
+ * is, so this costs one `stat` after the first time. Links are never followed. Failures are logged.
+ */
+async function unsealLegacyCheckout(checkout: string, logger: Logger): Promise<void> {
+  try {
+    await using handle = await open(checkout, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const { mode } = await handle.stat();
+    if ((mode & 0o200) !== 0) {
+      return;
+    }
+  } catch {
+    return;
+  }
   try {
     await chmodTree(checkout, {
       file: (mode) => {
-        return mode;
+        return mode | 0o200;
       },
       directory: (mode) => {
         return mode | 0o700;
       },
     });
+    logger.info('unsealed a checkout an older beuve made read-only', { path: checkout });
   } catch (error: unknown) {
-    logger.warn('could not reopen a worktree for removal', {
-      path: checkout,
-      error: errorFrom(error),
-    });
+    logger.warn('could not unseal a checkout', { path: checkout, error: errorFrom(error) });
   }
-}
-
-function withoutWriteBits(mode: number): number {
-  return mode & ~0o222;
 }

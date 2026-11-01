@@ -18,7 +18,7 @@ As AI agents accelerate code generation, comprehension and verification become t
 
 beuve is a review-first, authoring-resistant workbench, named after the critic Sainte-Beuve. It is for close examination, triage and validation, and deliberately resists becoming an editor or IDE.
 
-The boundary (ADR 0088): beuve never writes the reviewer's own checkout or index, its per-commit checkouts are read-only, and it never pushes. A reviewer who wants to try a change edits a local review-edits branch in their own editor; beuve writes only that branch's worktree (through `git worktree`), never commits to it, and brings the edits back as review suggestions the reviewer previews and stages.
+The boundary (ADR 0088): beuve never writes the reviewer's own checkout or index, its per-commit checkouts are read-only by convention (it never edits their tracked files; dependency installs write untracked output there, ADR 0089), and it never pushes. A reviewer who wants to try a change edits a local review-edits branch in their own editor; beuve writes only that branch's worktree (through `git worktree`), never commits to it, and brings the edits back as review suggestions the reviewer previews and stages.
 
 Objectives:
 

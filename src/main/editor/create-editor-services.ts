@@ -228,6 +228,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         location: located.location,
         path: request.path,
         line: request.line,
+        headSha: session.headSha,
       });
     },
     getSettings: async (): Promise<IpcResult<EditorSettingsView>> => {

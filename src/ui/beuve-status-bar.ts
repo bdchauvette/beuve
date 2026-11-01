@@ -87,6 +87,21 @@ export class BeuveStatusBar extends LitElement {
       cursor: default;
     }
 
+    button {
+      flex: none;
+      padding: 0 var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      border-radius: var(--beuve-radius-small, 3px);
+      background: transparent;
+      color: var(--beuve-text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--beuve-surface-hover, var(--beuve-surface));
+    }
+
     .attention.yours {
       color: var(--beuve-accent);
       font-weight: 600;
@@ -102,6 +117,31 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
   /** Whose turn the open pull request is; absent for local sessions and until it is known. */
   @property({ attribute: false }) accessor attention: AttentionView | undefined;
+
+  private renderNotice(notice: StatusNotice): TemplateResult {
+    const { action } = notice;
+    return html`<span class="notice ${notice.tone}" role="status" title=${notice.text}
+        >${notice.text}</span
+      >${
+        action === undefined
+          ? nothing
+          : html`<button
+              type="button"
+              class="notice-action"
+              @click=${(): void => {
+                this.dispatchEvent(
+                  new CustomEvent('beuve-status-action', {
+                    detail: { command: action.command },
+                    bubbles: true,
+                    composed: true,
+                  }),
+                );
+              }}
+            >
+              ${action.label}
+            </button>`
+      }`;
+  }
 
   private renderAttention(): TemplateResult | typeof nothing {
     const chip = describeAttention(this.attention);
@@ -155,11 +195,7 @@ export class BeuveStatusBar extends LitElement {
   override render(): TemplateResult {
     return html`
       <span class="zone">${this.zoneLabel}</span>
-      ${
-        this.notice === undefined
-          ? nothing
-          : html`<span class="notice ${this.notice.tone}" role="status">${this.notice.text}</span>`
-      }
+      ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}

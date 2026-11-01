@@ -3,8 +3,6 @@ import path from 'node:path';
 
 import { describe } from 'vitest';
 
-import { attemptWrite } from '#testing/attempt-write.ts';
-
 import { test } from './testing/test.ts';
 
 /** `editor:open` through `createMainServices` with a fake platform: nothing is ever launched. */
@@ -39,17 +37,15 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     expect(launch?.args[0]?.startsWith(repo.directory)).toBe(false);
   });
 
-  test("beuve's head checkout opens read-only, so an edit there can't change what it serves", async ({
+  test("beuve's head checkout is read-only by convention: the answer names its commit for the notice", async ({
     expect,
     openInEditor,
-    editorState,
-    signal,
+    repo,
   }) => {
-    await openInEditor('src/feature.ts', 3);
-    const file = (editorState.spawned[0]?.args[0] ?? '').replace(/:3:1$/u, '');
-    const sibling = path.join(path.dirname(file), 'new.ts');
-    await expect(attemptWrite(file, signal)).resolves.toBe('EACCES');
-    await expect(attemptWrite(sibling, signal)).resolves.toBe('EACCES');
+    await expect(openInEditor('src/feature.ts', 3)).resolves.toMatchObject({
+      location: 'beuve-checkout',
+      headSha: await repo.git('rev-parse', 'feature'),
+    });
   });
 
   test('uses the checkout when the working tree file has uncommitted changes', async ({

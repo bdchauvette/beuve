@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { lstat, readdir } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe } from 'vitest';
@@ -250,7 +250,7 @@ describe('createSessionWorktrees', () => {
     expect(worktreeCommands(logger.lines)).toStrictEqual(pruned);
   });
 
-  test('checkouts are read-only: nothing can change or add a file', async ({
+  test('checkouts are read-only by convention only: an install can add untracked files', async ({
     expect,
     repo,
     repository,
@@ -262,33 +262,13 @@ describe('createSessionWorktrees', () => {
     const { worktrees, heads } = manager(worktreeRoot, logger.logger, { signal });
     heads.set('S', c1);
     using lease = okValueFrom(await worktrees.acquire(repository, head('S', c1), { signal }));
-    await expect(attemptWrite(path.join(lease.path, 'f.txt'), signal)).resolves.toBe('EACCES');
-    await expect(attemptWrite(path.join(lease.path, 'new.txt'), signal)).resolves.toBe('EACCES');
-    await expect(writableEntriesUnder(lease.path)).resolves.toStrictEqual([]);
+    await expect(attemptWrite(path.join(lease.path, 'node_modules.txt'), signal)).resolves.toBe(
+      'written',
+    );
     expect(readFileSync(path.join(lease.path, 'f.txt'), 'utf8')).toBe('1\n');
   });
 
-  test('a checkout another session reuses stays read-only', async ({
-    expect,
-    repo,
-    repository,
-    worktreeRoot,
-    logger,
-    signal,
-  }) => {
-    const { c1 } = await twoCommits(repo);
-    const { worktrees, heads } = manager(worktreeRoot, logger.logger, { signal });
-    heads.set('A', c1);
-    heads.set('B', c1);
-    const first = await leasedPath(worktrees, { repository, claim: head('A', c1), signal });
-    await worktrees.settled();
-    using second = okValueFrom(await worktrees.acquire(repository, head('B', c1), { signal }));
-    expect(second.path).toBe(first);
-    await expect(attemptWrite(path.join(second.path, 'f.txt'), signal)).resolves.toBe('EACCES');
-    await expect(writableEntriesUnder(second.path)).resolves.toStrictEqual([]);
-  });
-
-  test('removes a read-only checkout when the head moves, and prunes the rest', async ({
+  test('removes a checkout with untracked, read-only installs when the head moves, and prunes the rest', async ({
     expect,
     repo,
     repository,
@@ -297,22 +277,37 @@ describe('createSessionWorktrees', () => {
     signal,
   }) => {
     const { c1, c2 } = await twoCommits(repo);
-    const { worktrees, heads } = manager(worktreeRoot, logger.logger, { signal });
+    const reset: string[] = [];
+    const { worktrees, heads } = managerWith(worktreeRoot, logger.logger, {
+      git: { signal },
+      onCheckoutReset: (checkout) => {
+        reset.push(checkout);
+      },
+    });
     heads.set('S', c1);
     const old = await leasedPath(worktrees, { repository, claim: head('S', c1), signal });
+    const installed = path.join(old, 'node_modules', 'pkg');
+    mkdirSync(installed, { recursive: true });
+    writeFileSync(path.join(installed, 'index.js'), '');
+    await chmodTree(path.join(old, 'node_modules'), {
+      file: withoutWrite,
+      directory: withoutWrite,
+    });
     heads.set('S', c2);
     const current = await leasedPath(worktrees, { repository, claim: head('S', c2), signal });
     await worktrees.settled();
     expect(existsSync(old)).toBe(false);
     expect(existsSync(current)).toBe(true);
+    expect(reset).toStrictEqual([old, current, old]);
 
     await worktrees.prune([{ repoPath: repo.directory, headSha: c1 }]);
     expect(existsSync(current)).toBe(false);
+    expect(reset.at(-1)).toBe(current);
     await expect(repo.git('worktree', 'list', '--porcelain')).resolves.not.toContain(current);
     expect(logger.lines.filter((line) => line['level'] === 'warn')).toStrictEqual([]);
   });
 
-  test('the startup prune keeps a kept checkout read-only, even one an older beuve left writable', async ({
+  test('the startup prune unseals a kept checkout an older beuve made read-only', async ({
     expect,
     repo,
     repository,
@@ -324,11 +319,11 @@ describe('createSessionWorktrees', () => {
     const { worktrees, heads } = manager(worktreeRoot, logger.logger, { signal });
     heads.set('S', c1);
     const checkout = await leasedPath(worktrees, { repository, claim: head('S', c1), signal });
-    await chmodTree(checkout, { file: withWrite, directory: withWrite });
+    await chmodTree(checkout, { file: withoutWrite, directory: withoutWrite });
 
     await worktrees.prune([{ repoPath: repo.directory, headSha: c1 }]);
-    await expect(writableEntriesUnder(checkout)).resolves.toStrictEqual([]);
-    await expect(attemptWrite(path.join(checkout, 'f.txt'), signal)).resolves.toBe('EACCES');
+    await expect(attemptWrite(path.join(checkout, 'new.txt'), signal)).resolves.toBe('written');
+    await expect(attemptWrite(path.join(checkout, 'f.txt'), signal)).resolves.toBe('written');
   });
 
   test('review edits: a writable branch worktree that outlives its leases and the prune', async ({
@@ -415,6 +410,14 @@ async function twoCommits(repo: TestRepository): Promise<TwoCommits> {
 }
 
 function manager(root: string, logger: Logger, git: OpenRepositoryOptions = {}): Manager {
+  return managerWith(root, logger, { git });
+}
+
+function managerWith(
+  root: string,
+  logger: Logger,
+  { git, onCheckoutReset }: ManagerOptions,
+): Manager {
   const heads = new Map<string, CommitSha>();
   const worktrees = createSessionWorktrees({
     root,
@@ -423,8 +426,15 @@ function manager(root: string, logger: Logger, git: OpenRepositoryOptions = {}):
     storedHead: (sessionId) => {
       return heads.get(sessionId);
     },
+    ...(onCheckoutReset !== undefined && { onCheckoutReset }),
   });
   return { worktrees, heads };
+}
+
+/** How a test's manager opens git, and who hears of a checkout made afresh or removed. */
+interface ManagerOptions {
+  readonly git: OpenRepositoryOptions;
+  readonly onCheckoutReset?: (checkout: string) => void;
 }
 
 function head(sessionId: string, headSha: CommitSha): WorktreeClaim {
@@ -469,21 +479,8 @@ async function leasedPath(
   return lease.path;
 }
 
-function withWrite(mode: number): number {
-  return mode | 0o200;
-}
-
-/** Files and directories under `root` (itself included) with any write bit, links skipped. */
-async function writableEntriesUnder(root: string): Promise<readonly string[]> {
-  const names = ['.', ...(await readdir(root, { recursive: true }))];
-  const writable: string[] = [];
-  for (const name of names) {
-    const stats = await lstat(path.join(root, name));
-    if (!stats.isSymbolicLink() && (stats.mode & 0o222) !== 0) {
-      writable.push(name);
-    }
-  }
-  return writable;
+function withoutWrite(mode: number): number {
+  return mode & ~0o222;
 }
 
 /** Lock files anywhere under the repository's `.git`, worktree administrative files included. */

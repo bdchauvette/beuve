@@ -12,14 +12,17 @@ describe('describeEditorOpen', () => {
       editorName: 'Zed',
       path: 'src/a.ts',
       line: 4,
+      headSha: 'abcdef0123456789abcdef0123456789abcdef01',
     } as const;
     expect(describeEditorOpen({ ...opened, location: 'working-tree' })).toStrictEqual({
       tone: 'info',
       text: 'Opened src/a.ts:4 in Zed.',
     });
-    expect(describeEditorOpen({ ...opened, location: 'beuve-checkout' }).text).toContain(
-      'read-only beuve checkout',
-    );
+    expect(describeEditorOpen({ ...opened, location: 'beuve-checkout' })).toStrictEqual({
+      tone: 'info',
+      text: 'Opened src/a.ts:4 in Zed: beuve’s checkout at abcdef0; edits here aren’t kept, use Review Edits.',
+      action: { label: 'Open Review Edits', command: 'open-review-edits' },
+    });
   });
 
   test('shows failures as errors', ({ expect }) => {

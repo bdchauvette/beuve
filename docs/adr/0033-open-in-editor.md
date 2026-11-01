@@ -31,3 +31,13 @@ The TOCTOU audit (finding 3) found that "which copy" sent the editor into the sa
 - **The status bar** says "read-only beuve checkout of the reviewed head". To try a change, use Open Review Edits (ADR 0088).
 
 Tests change the bits through `chmodTree` too, and check writes from a separate process (`#testing/attempt-write.ts`), which runs with no capabilities when the tests run as root, since root ignores permission bits. The `tempDir` fixture removes what it holds with `removeTree`.
+
+## Amendment (2026-11-01, ADR 0089): read-only by convention, not enforced
+
+Dependency installs (ADR 0089) run `npm ci`, `uv sync --frozen` and the like directly in beuve's checkout, as in a normal clone, and tools write generated code into dependency directories (Prisma's `.prisma/client`). A sealed tree can't take that, so the seal goes.
+
+- **Checkouts are read-only by convention**: beuve never edits a tracked file in them; installs and tools write untracked output. Nothing clears write bits after `git worktree add`, and nothing reopens directories before `git worktree remove`.
+- **Removal still uses `removeTree`** when `git worktree remove --force` fails (a tool can leave read-only directories, such as Go's module files), followed by `git worktree prune`. It is harmless on a writable tree.
+- **Checkouts an older beuve sealed** are unsealed once by the startup prune: a kept checkout whose top directory has no owner write bit gets its owner's write bits back on every file and directory (links never followed). Any checkout about to be removed gets the same treatment first.
+- **Open in Editor on beuve's checkout** shows one line instead of "read-only": "beuve's checkout at `<short sha>`; edits here aren't kept, use Review Edits", with an Open Review Edits button (ADR 0088). The `editor:open` answer names the head it opened.
+- The TOCTOU concern of the first amendment stands, as a convention: an edit in the checkout still changes what the language servers and probes read, and a head move still deletes it. The notice says so; Review Edits is the sanctioned place to edit.

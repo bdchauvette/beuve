@@ -969,6 +969,7 @@ describe('createIpcHandlers for the editor', () => {
     location: 'working-tree' as const,
     path: 'src/a.ts',
     line: 3,
+    headSha: 'a'.repeat(40),
   });
 
   test('validates editor:open and normalizes the path before delegating', async ({ expect }) => {

@@ -20,8 +20,8 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - `src/ui` and `src/preload` never import `src/main` or `src/internal`.
 - Nothing imports an entrypoint (`src/*/index.ts`). No other `index.ts` files exist.
 - Git runs only through the typed operations in `src/internal/git`, and each git command declares an interruption policy: `read`, `owned-write` or `atomic` (ADR 0079).
-- beuve never pushes; `review/` branches are local only (ADR 0088). The runners refuse any subcommand not on `isAllowedGitCommand`'s list, which has no `push`, and `local/no-git-push` bans the strings. beuve writes only the review-edits worktree, never the user's checkout or index, and never commits for the user.
-- beuve's per-commit checkouts are read-only (ADR 0033 amendment): seal after add and reopen directories before removal on the path's serial chain, and remove trees with `removeTree` (`#x/fs/remove-tree.ts`), never a bare `rm -r`.
+- beuve never pushes; `review/` branches are local only (ADR 0088). The runners refuse any subcommand not on `isAllowedGitCommand`'s list, which has no `push`, and `local/no-git-push` bans the strings. beuve writes only the review-edits worktree and untracked install output in its own checkouts, never the user's checkout or index, and never commits for the user.
+- beuve's per-commit checkouts are read-only by convention, not enforced (ADR 0033 amendments, ADR 0089): beuve never edits tracked files there; dependency installs and tools write untracked output. Nothing seals them; remove trees with `removeTree` (`#x/fs/remove-tree.ts`), never a bare `rm -r`.
 - Single-object reads and ref lookups go through `GitRunner.objects`, the per-root long-lived `GitObjectReader` on `cat-file --batch-command` (ADR 0087), inside a typed operation (`resolveRevision`, `readBlobs`, `findTreeBlob`, `readBlobBytes`); never add a one-off `cat-file`. Diffs, `ls-tree -r`, `git grep` and writes still spawn.
 - dependency-cruiser enforces all of this (`npm run deps`); type-only imports count.
 

@@ -89,7 +89,7 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
-import type { StatusNotice } from './describe-editor-open.ts';
+import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { mentionFromTarget } from './mention-from-target.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
@@ -795,6 +795,12 @@ export class BeuveApp extends LitElement {
 
   private readonly onStatusNotice = (event: CustomEvent<StatusNotice>): void => {
     this.showNotice(event.detail);
+  };
+
+  /** A notice's button: runs its catalog command as the menu would. */
+  private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
+    this.statusNotice = undefined;
+    this.runAppCommand(event.detail.command);
   };
 
   /** A display change from the stream: store it, and refetch the diff if whitespace changed. */
@@ -3643,6 +3649,7 @@ export class BeuveApp extends LitElement {
         .ci=${this.ci}
         .attention=${this.pullRequest?.attention}
         .githubAuth=${this.githubAuth}
+        @beuve-status-action=${this.onStatusAction}
       ></beuve-status-bar>
       ${
         this.inlineSheet === undefined || this.review === undefined
