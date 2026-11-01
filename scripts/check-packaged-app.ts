@@ -162,7 +162,14 @@ async function describePtyFailure({ node, script, nodePty }: PtyFailureContext):
   const withEnvironment = await outcomeOf(
     runFile(node, ['-e', script, nodePty], { env: process.env, encoding: 'utf8' }),
   );
-  return [...lines, `  same call with this process's environment: ${withEnvironment}`].join('\n');
+  const underRunnerNode = await outcomeOf(
+    runFile(process.execPath, ['-e', script, nodePty], { env: process.env, encoding: 'utf8' }),
+  );
+  return [
+    ...lines,
+    `  same call with this process's environment: ${withEnvironment}`,
+    `  same call under the Node running this check (${process.execPath}): ${underRunnerNode}`,
+  ].join('\n');
 }
 
 async function describeSpawnHelper(helper: SpawnHelper): Promise<string[]> {
