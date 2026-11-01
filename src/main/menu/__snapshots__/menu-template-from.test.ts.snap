@@ -588,6 +588,30 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "id": "untrust",
         "label": "Sto&p Trusting Repository",
       },
+      {
+        "label": "&Dependencies",
+        "submenu": [
+          {
+            "id": "install-dependencies",
+            "label": "&Install",
+          },
+          {
+            "id": "reinstall-dependencies",
+            "label": "&Reinstall",
+          },
+          {
+            "id": "cancel-dependency-install",
+            "label": "&Cancel Install",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "view-install-log",
+            "label": "&View Install Log",
+          },
+        ],
+      },
     ],
   },
   {
@@ -1330,6 +1354,30 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       {
         "id": "untrust",
         "label": "Stop Trusting Repository",
+      },
+      {
+        "label": "Dependencies",
+        "submenu": [
+          {
+            "id": "install-dependencies",
+            "label": "Install",
+          },
+          {
+            "id": "reinstall-dependencies",
+            "label": "Reinstall",
+          },
+          {
+            "id": "cancel-dependency-install",
+            "label": "Cancel Install",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "view-install-log",
+            "label": "View Install Log",
+          },
+        ],
       },
     ],
   },

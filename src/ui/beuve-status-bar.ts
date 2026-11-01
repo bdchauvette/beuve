@@ -6,11 +6,14 @@ import type {
   AppInfo,
   AttentionView,
   CiStatusView,
+  DependencyStatusView,
   GithubAuthStatusView,
   McpStatus,
 } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describeAttention } from './describe-attention.ts';
+import { describeDependencyStatus } from './describe-dependency-status.ts';
 import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
@@ -73,6 +76,23 @@ export class BeuveStatusBar extends LitElement {
       background: var(--beuve-warn);
     }
 
+    .dot.busy {
+      background: var(--beuve-accent);
+    }
+
+    .dependencies {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      max-width: 40ch;
+      overflow: hidden;
+    }
+
+    .dependency-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .notice {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -117,6 +137,40 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
   /** Whose turn the open pull request is; absent for local sessions and until it is known. */
   @property({ attribute: false }) accessor attention: AttentionView | undefined;
+  /** The open session's dependency install (ADR 0089); absent without a session. */
+  @property({ attribute: false }) accessor dependencies: DependencyStatusView | undefined;
+
+  constructor() {
+    super();
+    // ADR 0074: the dependency line's buttons, through one listener.
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          dependency: ({ name = '' }): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-dependency-action', {
+                detail: { action: name },
+                bubbles: true,
+                composed: true,
+              }),
+            );
+          },
+        },
+      }),
+    );
+  }
+
+  private renderDependencies(status: DependencyStatusView): TemplateResult {
+    const line = describeDependencyStatus(status);
+    return html`<span class="dependencies" title=${line.title}
+        ><span class="dot ${line.tone}"></span
+        ><span class="dependency-text">${line.text}</span></span
+      >${line.buttons.map((button) => {
+        return html`<button type="button" data-action="dependency" data-name=${button.action}>
+          ${button.label}
+        </button>`;
+      })}`;
+  }
 
   private renderNotice(notice: StatusNotice): TemplateResult {
     const { action } = notice;
@@ -195,6 +249,7 @@ export class BeuveStatusBar extends LitElement {
   override render(): TemplateResult {
     return html`
       <span class="zone">${this.zoneLabel}</span>
+      ${this.dependencies === undefined ? nothing : this.renderDependencies(this.dependencies)}
       ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}

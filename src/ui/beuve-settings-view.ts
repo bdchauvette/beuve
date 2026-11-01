@@ -10,14 +10,19 @@ import type {
   GithubAuthStatusView,
   ReviewOrderMode,
   SetDiffDisplayRequest,
+  IpcResult,
   SettingsApi,
   TrustEntryView,
+  DependencySettingsView,
+  RepositoryDependencySettingsView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
 import { ActionDelegation } from './action-delegation.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
 
 /**
  * The Settings window (ADR 0068): the preferences that were reachable only through chat commands
@@ -44,119 +49,143 @@ interface RadioChoice {
 
 @customElement('beuve-settings-view')
 export class BeuveSettingsView extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      height: 100%;
-      overflow: auto;
-      box-sizing: border-box;
-      padding: var(--beuve-space-4) var(--beuve-space-6) var(--beuve-space-6);
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: var(--beuve-font-body);
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: block;
+        height: 100%;
+        overflow: auto;
+        box-sizing: border-box;
+        padding: var(--beuve-space-4) var(--beuve-space-6) var(--beuve-space-6);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: var(--beuve-font-body);
+      }
 
-    h2 {
-      margin: var(--beuve-space-4) 0 var(--beuve-space-2);
-      font: var(--beuve-font-small);
-      font-weight: 600;
-      color: var(--beuve-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+      h2 {
+        margin: var(--beuve-space-4) 0 var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        font-weight: 600;
+        color: var(--beuve-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
 
-    h2:first-child {
-      margin-top: 0;
-    }
+      h2:first-child {
+        margin-top: 0;
+      }
 
-    .group {
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface);
-    }
+      .group {
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+      }
 
-    .row {
-      display: grid;
-      grid-template-columns: 180px minmax(0, 1fr);
-      align-items: center;
-      gap: var(--beuve-space-3);
-      min-height: 32px;
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-    }
+      .row {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        align-items: center;
+        gap: var(--beuve-space-3);
+        min-height: 32px;
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+      }
 
-    .row + .row {
-      border-top: 1px solid var(--beuve-border);
-    }
+      .row + .row {
+        border-top: 1px solid var(--beuve-border);
+      }
 
-    .row > label:first-child,
-    .row > span:first-child {
-      color: var(--beuve-text);
-    }
+      .row > label:first-child,
+      .row > span:first-child {
+        color: var(--beuve-text);
+      }
 
-    .detail {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      overflow-wrap: anywhere;
-    }
+      .detail {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        overflow-wrap: anywhere;
+      }
 
-    .ok {
-      color: var(--beuve-ok);
-    }
+      .ok {
+        color: var(--beuve-ok);
+      }
 
-    .warn {
-      color: var(--beuve-warn);
-    }
+      .warn {
+        color: var(--beuve-warn);
+      }
 
-    .muted {
-      color: var(--beuve-text-muted);
-    }
+      .muted {
+        color: var(--beuve-text-muted);
+      }
 
-    select,
-    button {
-      font: inherit;
-      color: var(--beuve-text);
-    }
+      select,
+      button {
+        font: inherit;
+        color: var(--beuve-text);
+      }
 
-    select,
-    input[type='text'] {
-      justify-self: start;
-      min-width: 160px;
-    }
+      select,
+      input[type='text'] {
+        justify-self: start;
+        min-width: 160px;
+      }
 
-    input[type='text'] {
-      font: var(--beuve-font-mono);
-      color: var(--beuve-text);
-    }
+      input[type='text'] {
+        font: var(--beuve-font-mono);
+        color: var(--beuve-text);
+      }
 
-    .choices {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-3);
-    }
+      .choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-3);
+      }
 
-    .trusted {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-    }
+      .trusted {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+      }
 
-    .trusted .path {
-      flex: 1;
-      min-width: 0;
-      overflow-wrap: anywhere;
-      font: var(--beuve-font-mono);
-    }
+      .trusted .path {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font: var(--beuve-font-mono);
+      }
 
-    .empty {
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-      color: var(--beuve-text-muted);
-    }
+      .empty {
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        color: var(--beuve-text-muted);
+      }
 
-    .error {
-      margin: var(--beuve-space-3) 0 0;
-      color: var(--beuve-danger);
-    }
-  `;
+      .error {
+        margin: var(--beuve-space-3) 0 0;
+        color: var(--beuve-danger);
+      }
+
+      .dependency-repository {
+        padding: var(--beuve-space-2) 0;
+      }
+
+      .dependency-repository + .dependency-repository {
+        border-top: 1px solid var(--beuve-border);
+      }
+
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        margin: var(--beuve-space-1) 0;
+        font: var(--beuve-font-mono, monospace);
+        font-size: 12px;
+      }
+
+      input.tool-path {
+        flex: 1;
+        font: var(--beuve-font-mono, monospace);
+      }
+    `,
+  ];
 
   private readonly onWindowFocus = (): void => {
     void this.load();
@@ -178,6 +207,10 @@ export class BeuveSettingsView extends LitElement {
   @state() accessor github: GithubAuthStatusView | undefined;
   @state() accessor claude: ClaudeStatusView | undefined;
   @state() accessor trusted: readonly TrustEntryView[] = [];
+  /** Per trusted repository and per tool (ADR 0089, 0090, 0092). */
+  @state() accessor dependencies: DependencySettingsView | undefined;
+  /** Why an override or a tool path was refused, by repository path or executable. */
+  @state() accessor dependencyErrors: ReadonlyMap<string, string> = new Map();
   @state() accessor error = '';
 
   constructor() {
@@ -188,6 +221,17 @@ export class BeuveSettingsView extends LitElement {
         click: {
           'remove-trust': ({ path = '' }): void => {
             void this.removeTrust(path);
+          },
+          'save-override': ({ path = '' }): void => {
+            void this.saveRepositoryDependencies(path);
+          },
+          'save-tool-path': ({ executable = '' }): void => {
+            void this.saveToolPath(executable);
+          },
+        },
+        change: {
+          safeguard: ({ path = '' }): void => {
+            void this.saveRepositoryDependencies(path);
           },
         },
       }),
@@ -201,11 +245,15 @@ export class BeuveSettingsView extends LitElement {
       this.error = 'This window has no connection to beuve.';
       return;
     }
-    const [display, editors, trusted] = await Promise.all([
+    const [display, editors, trusted, dependencies] = await Promise.all([
       bridge.invoke('display:get'),
       bridge.invoke('editor:get-settings'),
       bridge.invoke('trust:list'),
+      bridge.invoke('deps:get-settings'),
     ]);
+    if (dependencies.ok) {
+      this.dependencies = dependencies.value;
+    }
     if (display.ok) {
       this.display = display.value;
     }
@@ -277,6 +325,138 @@ export class BeuveSettingsView extends LitElement {
     } else {
       this.error = saved.error.message;
     }
+  }
+
+  /** Saves a repository's safeguard switch and override as the form shows them. */
+  private async saveRepositoryDependencies(repositoryPath: string): Promise<void> {
+    const { api: bridge } = this;
+    const row = this.repositoryRow(repositoryPath);
+    if (bridge === undefined || row === undefined) {
+      return;
+    }
+    const isAsking = row.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked ?? true;
+    const override = row.querySelector<HTMLTextAreaElement>('textarea')?.value ?? '';
+    const saved = await bridge.invoke('deps:set-repository-settings', {
+      repositoryPath,
+      safeguard: isAsking,
+      override,
+    });
+    this.applyDependencySave({ key: repositoryPath, saved });
+  }
+
+  private async saveToolPath(executable: string): Promise<void> {
+    const { api: bridge } = this;
+    if (bridge === undefined) {
+      return;
+    }
+    const input = [...this.renderRoot.querySelectorAll<HTMLInputElement>('input.tool-path')].find(
+      (candidate) => {
+        return candidate.dataset['executable'] === executable;
+      },
+    );
+    const saved = await bridge.invoke('deps:set-tool-path', {
+      executable,
+      directory: input?.value.trim() ?? '',
+    });
+    this.applyDependencySave({ key: executable, saved });
+  }
+
+  private repositoryRow(repositoryPath: string): HTMLElement | undefined {
+    return [...this.renderRoot.querySelectorAll<HTMLElement>('.dependency-repository')].find(
+      (row) => {
+        return row.dataset['path'] === repositoryPath;
+      },
+    );
+  }
+
+  private applyDependencySave({ key, saved }: DependencySave): void {
+    const errors = new Map(this.dependencyErrors);
+    if (saved.ok) {
+      this.dependencies = saved.value;
+      errors.delete(key);
+    } else {
+      errors.set(key, saved.error.message);
+    }
+    this.dependencyErrors = errors;
+  }
+
+  private renderDependencyRepository(entry: RepositoryDependencySettingsView): TemplateResult {
+    const error = this.dependencyErrors.get(entry.repositoryPath);
+    return html`<div class="dependency-repository" data-path=${entry.repositoryPath}>
+      <div class="row">
+        <span class="path" title=${entry.repositoryPath}>${pathText(entry.repositoryPath)}</span>
+        <label class="detail">
+          <input
+            type="checkbox"
+            data-action="safeguard"
+            data-path=${entry.repositoryPath}
+            .checked=${entry.safeguard}
+          />
+          Ask before installing when the change modifies dependencies
+        </label>
+      </div>
+      <label class="detail" for=${`override-${entry.repositoryPath}`}>
+        Install override (same shape as <code>.beuve/config.json</code>; wins over it field by
+        field)
+      </label>
+      <textarea
+        id=${`override-${entry.repositoryPath}`}
+        rows="3"
+        spellcheck="false"
+        placeholder='{"install": {"skip": ["python"], "steps": [{"run": ["make", "deps"]}]}}'
+        .value=${entry.override}
+      ></textarea>
+      <div class="row">
+        <button type="button" data-action="save-override" data-path=${entry.repositoryPath}>
+          Save
+        </button>
+        ${error === undefined ? nothing : html`<span class="error" role="alert">${error}</span>`}
+      </div>
+    </div>`;
+  }
+
+  private renderDependencies(): TemplateResult {
+    const { dependencies } = this;
+    if (dependencies === undefined) {
+      return html``;
+    }
+    const directories = new Map(
+      dependencies.toolPaths.map((entry) => {
+        return [entry.executable, entry.directory] as const;
+      }),
+    );
+    return html`<h2>Dependency installs</h2>
+      <div class="group">
+        ${
+          dependencies.repositories.length === 0
+            ? html`<p class="empty">Trust a repository to install its dependencies.</p>`
+            : dependencies.repositories.map((entry) => this.renderDependencyRepository(entry))
+        }
+      </div>
+      <h2>Tool paths</h2>
+      <div class="group">
+        <p class="detail">
+          A directory searched first for each tool, before the login shell’s PATH and the well-known
+          directories. Leave empty to search as usual.
+        </p>
+        ${dependencies.executables.map((executable) => {
+          const error = this.dependencyErrors.get(executable);
+          return html`<div class="row">
+            <label for=${`tool-${executable}`}>${executable}</label>
+            <input
+              id=${`tool-${executable}`}
+              class="tool-path"
+              data-executable=${executable}
+              placeholder="/opt/homebrew/bin"
+              .value=${directories.get(executable) ?? ''}
+            />
+            <button type="button" data-action="save-tool-path" data-executable=${executable}>
+              Save
+            </button>
+            ${error === undefined ? nothing : html`<span class="error" role="alert">${error}</span>`}
+          </div>`;
+        })}
+      </div>`;
   }
 
   private async removeTrust(repositoryPath: string): Promise<void> {
@@ -492,11 +672,14 @@ export class BeuveSettingsView extends LitElement {
         ${
           this.trusted.length === 0
             ? html`<p class="empty">
-                No repository may run its tests for trace probes. Run Trace Probe asks first.
+                No repository may run its tests or install its dependencies. Trust Repository… asks
+                first.
               </p>`
             : this.trusted.map((entry) => {
                 return html`<div class="row trusted">
-                  <span class="path" title=${entry.remoteUrl ?? ''}>${entry.repositoryPath}</span>
+                  <span class="path" title=${entry.remoteUrl ?? entry.repositoryPath}
+                    >${pathText(entry.repositoryPath)}</span
+                  >
                   <span class="detail">since ${entry.trustedAt.slice(0, 10)}</span>
                   <button
                     type="button"
@@ -532,10 +715,16 @@ export class BeuveSettingsView extends LitElement {
       ${display === undefined ? nothing : html`${this.renderReview(display)} ${this.renderDiff(display)}`}
       ${this.renderAccounts()}
       <beuve-model-settings .api=${this.api}></beuve-model-settings>
-      ${this.renderTrust()}
+      ${this.renderTrust()} ${this.renderDependencies()}
       ${this.error === '' ? nothing : html`<p class="error" role="alert">${this.error}</p>`}
     `;
   }
+}
+
+/** A saved setting's key (a repository path or an executable) and main's answer. */
+interface DependencySave {
+  readonly key: string;
+  readonly saved: IpcResult<DependencySettingsView>;
 }
 
 const githubPrefix = /^GitHub: /u;
