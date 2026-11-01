@@ -582,11 +582,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "trust",
-        "label": "Tr&ust Repository Tests…",
+        "label": "Tr&ust Repository…",
       },
       {
         "id": "untrust",
-        "label": "Sto&p Trusting Repository Tests",
+        "label": "Sto&p Trusting Repository",
       },
     ],
   },
@@ -1325,11 +1325,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "id": "trust",
-        "label": "Trust Repository Tests…",
+        "label": "Trust Repository…",
       },
       {
         "id": "untrust",
-        "label": "Stop Trusting Repository Tests",
+        "label": "Stop Trusting Repository",
       },
     ],
   },

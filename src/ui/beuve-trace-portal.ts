@@ -14,6 +14,7 @@ import { shortcutOf } from './shortcut-of.ts';
 import type { TraceState } from './trace-state.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { trustGrantWording } from './trust-grant-wording.ts';
 
 /** Detail of `trace-line-activate`: the head line of the step the reviewer chose. */
 export interface TraceLineActivateDetail {
@@ -449,11 +450,8 @@ export class BeuveTracePortal extends LitElement {
 
   private renderTrust(repositoryPath: string): TemplateResult {
     return html`<div class="prompt" role="alertdialog" aria-labelledby="trust-title">
-      <h4 id="trust-title">Run this repository's tests?</h4>
-      <p>
-        Tracing runs the repository's own test code, and its Vitest configuration, on this machine,
-        with your user's access to files and network. Only continue for code you trust.
-      </p>
+      <h4 id="trust-title">Trust this repository?</h4>
+      <p>${trustGrantWording}</p>
       <p>
         ${repositoryPath === '' ? 'This repository' : html`<code>${pathText(repositoryPath)}</code>`}
         is remembered once you agree; <code>/untrust</code> in the chat withdraws it.

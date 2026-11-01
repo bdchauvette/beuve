@@ -760,7 +760,7 @@ const entries = Object.freeze([
   },
   {
     id: 'trust',
-    title: 'Trust Repository Tests…',
+    title: 'Trust Repository…',
     menu: { menu: 'review', group: 6 },
     when: ['session'],
     windows: ['main'],
@@ -768,7 +768,7 @@ const entries = Object.freeze([
   },
   {
     id: 'untrust',
-    title: 'Stop Trusting Repository Tests',
+    title: 'Stop Trusting Repository',
     menu: { menu: 'review', group: 6 },
     when: ['session'],
     windows: ['main'],

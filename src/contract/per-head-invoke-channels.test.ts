@@ -65,8 +65,8 @@ function headFreeSessionChannels(): Readonly<
     'trace:run':
       'a probe whose result names the head it ran at; main aborts it when the head moves',
     'trace:cancel': 'stops work; it stores nothing about a head',
-    'trace:get-trust': 'trust belongs to the repository, not a head',
-    'trace:set-trust': 'trust belongs to the repository, not a head',
+    'trust:get': 'trust belongs to the repository, not a head',
+    'trust:set': 'trust belongs to the repository, not a head',
     'ura:list': read,
     'ura:create': 'the item records the head its anchor refers to and is re-anchored on every read',
     'ura:reorder': 'dock order belongs to the session, not a head',

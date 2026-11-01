@@ -773,11 +773,11 @@ export interface TraceCancelledView {
   readonly cancelled: boolean;
 }
 
-export interface TraceGetTrustRequest {
+export interface TrustGetRequest {
   readonly sessionId: string;
 }
 
-export interface TraceSetTrustRequest {
+export interface TrustSetRequest {
   readonly sessionId: string;
   readonly trusted: boolean;
 }
@@ -786,7 +786,7 @@ export interface TraceSetTrustRequest {
  * Whether the session's repository may run its own tests (ADR 0041). `repositoryPath` is the
  * real path the approval is keyed by; `remoteUrl` the remote it was given for, when there is one.
  */
-export interface TraceTrustView {
+export interface TrustView {
   readonly trusted: boolean;
   readonly repositoryPath: string;
   readonly remoteUrl?: string;
@@ -1964,15 +1964,15 @@ export interface MenuRunView {
 }
 
 /** One repository the reviewer allowed to run its tests for trace probes (ADR 0041). */
-export interface TraceTrustEntryView {
+export interface TrustEntryView {
   readonly repositoryPath: string;
   readonly remoteUrl?: string;
   /** ISO-8601 UTC. */
   readonly trustedAt: string;
 }
 
-/** `trace:remove-trust`: withdraws the approval stored for one repository path. */
-export interface TraceRemoveTrustRequest {
+/** `trust:remove`: withdraws the approval stored for one repository path. */
+export interface TrustRemoveRequest {
   readonly repositoryPath: string;
 }
 
@@ -2196,13 +2196,13 @@ export interface InvokeChannelMap {
     readonly request: TraceCancelRequest;
     readonly response: IpcResult<TraceCancelledView>;
   };
-  'trace:get-trust': {
-    readonly request: TraceGetTrustRequest;
-    readonly response: IpcResult<TraceTrustView>;
+  'trust:get': {
+    readonly request: TrustGetRequest;
+    readonly response: IpcResult<TrustView>;
   };
-  'trace:set-trust': {
-    readonly request: TraceSetTrustRequest;
-    readonly response: IpcResult<TraceTrustView>;
+  'trust:set': {
+    readonly request: TrustSetRequest;
+    readonly response: IpcResult<TrustView>;
   };
   'ura:list': { readonly request: ListUraItemsRequest; readonly response: IpcResult<UraListView> };
   'ura:create': {
@@ -2347,13 +2347,13 @@ export interface InvokeChannelMap {
     readonly request: MenuRunMainRequest;
     readonly response: IpcResult<MainCommandRanView>;
   };
-  'trace:list-trust': {
+  'trust:list': {
     readonly request: undefined;
-    readonly response: IpcResult<readonly TraceTrustEntryView[]>;
+    readonly response: IpcResult<readonly TrustEntryView[]>;
   };
-  'trace:remove-trust': {
-    readonly request: TraceRemoveTrustRequest;
-    readonly response: IpcResult<readonly TraceTrustEntryView[]>;
+  'trust:remove': {
+    readonly request: TrustRemoveRequest;
+    readonly response: IpcResult<readonly TrustEntryView[]>;
   };
   'claude:status': {
     readonly request: undefined;
@@ -2449,8 +2449,8 @@ export type SettingsInvokeChannel =
   | 'editor:set-review-edits-prefix'
   | 'github:auth-status'
   | 'claude:status'
-  | 'trace:list-trust'
-  | 'trace:remove-trust'
+  | 'trust:list'
+  | 'trust:remove'
   | 'menu:set-state'
   | SettingsOnlyInvokeChannel;
 

@@ -11,7 +11,7 @@ import type {
   ReviewOrderMode,
   SetDiffDisplayRequest,
   SettingsApi,
-  TraceTrustEntryView,
+  TrustEntryView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
@@ -177,7 +177,7 @@ export class BeuveSettingsView extends LitElement {
   @state() accessor editors: EditorSettingsView | undefined;
   @state() accessor github: GithubAuthStatusView | undefined;
   @state() accessor claude: ClaudeStatusView | undefined;
-  @state() accessor trusted: readonly TraceTrustEntryView[] = [];
+  @state() accessor trusted: readonly TrustEntryView[] = [];
   @state() accessor error = '';
 
   constructor() {
@@ -204,7 +204,7 @@ export class BeuveSettingsView extends LitElement {
     const [display, editors, trusted] = await Promise.all([
       bridge.invoke('display:get'),
       bridge.invoke('editor:get-settings'),
-      bridge.invoke('trace:list-trust'),
+      bridge.invoke('trust:list'),
     ]);
     if (display.ok) {
       this.display = display.value;
@@ -284,7 +284,7 @@ export class BeuveSettingsView extends LitElement {
     if (bridge === undefined) {
       return;
     }
-    const left = await bridge.invoke('trace:remove-trust', { repositoryPath });
+    const left = await bridge.invoke('trust:remove', { repositoryPath });
     if (left.ok) {
       this.trusted = left.value;
     } else {

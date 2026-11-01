@@ -17,7 +17,7 @@ describe('withSettingsBroadcast', () => {
       changes.push(sender);
     });
     await handlers['display:set']({ layout: 'split' }, { webContentsId: 2 });
-    await handlers['trace:remove-trust']({ repositoryPath: 'refuse' }, { webContentsId: 2 });
+    await handlers['trust:remove']({ repositoryPath: 'refuse' }, { webContentsId: 2 });
     await handlers['editor:set-preferred']({ editorId: 'zed' }, { webContentsId: 5 });
     await handlers['display:get'](undefined, { webContentsId: 2 });
     expect(changes).toStrictEqual([{ webContentsId: 2 }, { webContentsId: 5 }]);

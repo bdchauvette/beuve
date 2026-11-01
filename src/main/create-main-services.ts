@@ -65,7 +65,8 @@ import { createGitCaches } from './sessions/create-git-caches.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createTraceServices } from './trace/create-trace-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
-import { createTraceTrust } from './trace/create-trace-trust.ts';
+import { createRepositoryTrust } from './trust/create-repository-trust.ts';
+import { createTrustServices } from './trust/create-trust-services.ts';
 import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
@@ -276,11 +277,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   heads.chat = chat;
   const ura = createUraServices({ context, impact });
   heads.ura = ura;
+  const repositoryTrust = createRepositoryTrust({
+    db: options.db,
+    logger,
+    legacySettingsPath: options.trace?.settingsPath,
+  });
+  const trust = createTrustServices({ context, trust: repositoryTrust });
   const trace = createTraceServices({
     context,
     worktrees,
     parse: parser.parse,
-    trust: createTraceTrust({ settingsPath: options.trace?.settingsPath }),
+    trust: repositoryTrust,
     nodeRuntime: options.nodeRuntime,
     ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
     ...(options.trace?.temporaryDirectory !== undefined && {
@@ -363,6 +370,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     chat,
     ura,
     trace,
+    trust,
     github,
     claude: {
       status: async (): Promise<IpcResult<ClaudeStatusView>> => {

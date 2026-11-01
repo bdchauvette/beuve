@@ -29,6 +29,7 @@ import type { RemoteServices } from './remote/create-remote-services.ts';
 import type { ShellServices } from './shell/create-shell-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
+import type { TrustServices } from './trust/create-trust-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
@@ -76,6 +77,8 @@ export interface MainServices {
     'observeHead' | 'readAgentReview' | 'compileArtifact' | 'listPostings' | 'recordPostings'
   >;
   readonly trace: Omit<TraceServices, 'observeHead' | 'probe'>;
+  /** The one trust grant per repository: tests and dependency installs (ADR 0090). */
+  readonly trust: Omit<TrustServices, 'onChanged'>;
   readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;
   /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };

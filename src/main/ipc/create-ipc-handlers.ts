@@ -20,7 +20,7 @@ import type {
   ClaudeStatusView,
   MenuContextRequest,
   MenuStateRequest,
-  TraceTrustEntryView,
+  TrustEntryView,
   CallHierarchyRequest,
   CallHierarchyView,
   ChooseFolderResponse,
@@ -70,7 +70,7 @@ import type {
   SetFileReviewedResponse,
   TraceCancelledView,
   TraceRunStartedView,
-  TraceTrustView,
+  TrustView,
   UraExportView,
   UraItemView,
   UraListView,
@@ -273,7 +273,7 @@ const traceRunRequest = z.strictObject({
   testNamePattern: z.string().min(1).max(1000).optional(),
 });
 
-const traceTrustRequest = z.strictObject({ sessionId, trusted: z.boolean() });
+const trustSetRequest = z.strictObject({ sessionId, trusted: z.boolean() });
 
 const pathPrefix = z
   .string()
@@ -461,7 +461,7 @@ const menuContextRequest = z.strictObject({
   y: z.number().min(0).max(100_000).optional(),
 });
 const menuRunMainRequest = z.strictObject({ id: commandId });
-const traceRemoveTrustRequest = z.strictObject({ repositoryPath: z.string().min(1).max(4096) });
+const trustRemoveRequest = z.strictObject({ repositoryPath: z.string().min(1).max(4096) });
 
 const clipboardRequest = z.strictObject({ text: z.string().max(16 * 1024 * 1024) });
 
@@ -731,17 +731,17 @@ export function createIpcHandlers(
       }
       return invalid(parsed.error);
     },
-    'trace:get-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
+    'trust:get': async (request): Promise<IpcResult<TrustView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return services.trace.getTrust(parsed.data);
+        return services.trust.get(parsed.data);
       }
       return invalid(parsed.error);
     },
-    'trace:set-trust': async (request): Promise<IpcResult<TraceTrustView>> => {
-      const parsed = traceTrustRequest.safeParse(request);
+    'trust:set': async (request): Promise<IpcResult<TrustView>> => {
+      const parsed = trustSetRequest.safeParse(request);
       if (parsed.success) {
-        return services.trace.setTrust(parsed.data);
+        return services.trust.set(parsed.data);
       }
       return invalid(parsed.error);
     },
@@ -1117,17 +1117,17 @@ export function createIpcHandlers(
       }
       return err({ code: 'refused', message: `${parsed.data.id} is not a main-process command` });
     },
-    'trace:list-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
+    'trust:list': async (request): Promise<IpcResult<readonly TrustEntryView[]>> => {
       const parsed = noRequest.safeParse(request);
       if (parsed.success) {
-        return services.trace.listTrust();
+        return services.trust.list();
       }
       return invalid(parsed.error);
     },
-    'trace:remove-trust': async (request): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
-      const parsed = traceRemoveTrustRequest.safeParse(request);
+    'trust:remove': async (request): Promise<IpcResult<readonly TrustEntryView[]>> => {
+      const parsed = trustRemoveRequest.safeParse(request);
       if (parsed.success) {
-        return services.trace.removeTrust(parsed.data);
+        return services.trust.remove(parsed.data);
       }
       return invalid(parsed.error);
     },

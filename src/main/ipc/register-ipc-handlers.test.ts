@@ -125,7 +125,7 @@ describe('registerIpcHandlers', () => {
     };
     const refused = { ok: false, error: { code: 'invalid-request', message: 'untrusted sender' } };
     await expect(call('display:set')).resolves.toStrictEqual(ok('display:set'));
-    await expect(call('trace:remove-trust')).resolves.toStrictEqual(ok('trace:remove-trust'));
+    await expect(call('trust:remove')).resolves.toStrictEqual(ok('trust:remove'));
     await expect(call('menu:set-state')).resolves.toStrictEqual(ok({ webContentsId: 7 }));
     await expect(call('models:set-key')).resolves.toStrictEqual(ok('models:set-key'));
     for (const channel of [

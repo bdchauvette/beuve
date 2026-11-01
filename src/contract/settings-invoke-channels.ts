@@ -10,8 +10,8 @@ export const settingsInvokeChannels = Object.freeze([
   'editor:set-review-edits-prefix',
   'github:auth-status',
   'claude:status',
-  'trace:list-trust',
-  'trace:remove-trust',
+  'trust:list',
+  'trust:remove',
   'menu:set-state',
   ...settingsOnlyInvokeChannels,
 ] as const satisfies readonly SettingsInvokeChannel[]);

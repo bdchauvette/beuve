@@ -17,7 +17,7 @@ describe('isSettingsInvokeChannel', () => {
 
   test('refuses channels that read or change a review', ({ expect }) => {
     expect(isSettingsInvokeChannel('display:set')).toBe(true);
-    expect(isSettingsInvokeChannel('trace:remove-trust')).toBe(true);
+    expect(isSettingsInvokeChannel('trust:remove')).toBe(true);
     expect(isSettingsInvokeChannel('models:set-key')).toBe(true);
     for (const channel of ['ura:create', 'editor:open', 'session:get-review', 'menu:run-main']) {
       expect(isSettingsInvokeChannel(channel)).toBe(false);

@@ -159,12 +159,12 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     trust: {
       run: { kind: 'slash', text: '/trust', isPrefill: false },
       slash: '/trust',
-      help: 'allow this repository’s tests to run on this machine for trace probes. They execute the repository’s test code and Vitest config.',
+      help: 'trust this repository: beuve may run its tests (trace probes) and install its dependencies, including their install scripts, on this machine.',
     },
     untrust: {
       run: { kind: 'slash', text: '/untrust', isPrefill: false },
       slash: '/untrust',
-      help: 'withdraw that approval; a trace probe then asks again.',
+      help: 'withdraw that grant; trace probes and dependency installs then ask again.',
     },
     chat: app,
     'add-to-chat': app,

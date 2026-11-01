@@ -8,15 +8,10 @@ import type {
   TraceCancelledView,
   TraceCancelRequest,
   TraceFailureKind,
-  TraceGetTrustRequest,
   TraceResultView,
   TraceRunRequest,
   TraceRunStartedView,
-  TraceSetTrustRequest,
   TraceStatusView,
-  TraceRemoveTrustRequest,
-  TraceTrustEntryView,
-  TraceTrustView,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import { readBlobs } from '#internal/git/read-blobs.ts';
@@ -47,7 +42,7 @@ import { findTestFiles } from './find-test-files.ts';
 import { hunkChangedLinesFrom } from './hunk-changed-lines-from.ts';
 import { repositoryRelativePathFrom } from './repository-relative-path-from.ts';
 import { traceResultViewFrom } from './trace-result-view-from.ts';
-import type { TraceTrust } from './create-trace-trust.ts';
+import type { RepositoryTrust } from '../trust/create-repository-trust.ts';
 
 /** What an agent asks for (`beuve_run_trace_probe`). */
 export interface TraceProbeInput {
@@ -77,13 +72,6 @@ export interface TraceServices {
   /** Runs a probe for an agent and waits for it. Never asks for trust and never pushes events. */
   readonly probe: (input: TraceProbeInput) => Promise<Result<TraceProbeOutput, TraceProbeFailure>>;
   readonly cancel: (request: TraceCancelRequest) => IpcResult<TraceCancelledView>;
-  readonly getTrust: (request: TraceGetTrustRequest) => Promise<IpcResult<TraceTrustView>>;
-  readonly setTrust: (request: TraceSetTrustRequest) => Promise<IpcResult<TraceTrustView>>;
-  /** Every stored approval, for the Settings window (ADR 0068). */
-  readonly listTrust: () => Promise<IpcResult<readonly TraceTrustEntryView[]>>;
-  readonly removeTrust: (
-    request: TraceRemoveTrustRequest,
-  ) => Promise<IpcResult<readonly TraceTrustEntryView[]>>;
   /** Aborts the session's probe if it started at a head other than `headSha`. */
   readonly observeHead: (sessionId: string, headSha: CommitSha) => void;
   readonly onStatus: (listener: (event: TraceStatusView) => void) => () => void;
@@ -96,7 +84,8 @@ export interface TraceServicesOptions {
   readonly worktrees: SessionWorktrees;
   /** The syntax domain's `SyntaxParser.parse`. */
   readonly parse: ParseSyntax;
-  readonly trust: TraceTrust;
+  /** The one grant (ADR 0090); a probe runs only while it covers the repository. */
+  readonly trust: Pick<RepositoryTrust, 'status'>;
   /** The Node that runs Vitest (ADR 0083); without one, every probe fails with its reason. */
   readonly nodeRuntime: Result<NodeRuntime, NodeRuntimeError>;
   /** Replaces the Vitest runner; tests use it to count or fake runs. */
@@ -374,16 +363,6 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
     return ok(job);
   };
 
-  const repositoryOf = async (
-    sessionId: string,
-  ): Promise<Result<ReviewDiff['refreshed'], IpcError>> => {
-    const diff = await loadReviewDiff(context, sessionId);
-    if (diff.ok) {
-      return ok(diff.value.refreshed);
-    }
-    return diff;
-  };
-
   return {
     run: async (request): Promise<IpcResult<TraceRunStartedView>> => {
       const echo = (job: Job): TraceEcho => {
@@ -430,34 +409,6 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
       }
       stop(job, 'cancelled');
       return ok({ cancelled: true });
-    },
-
-    getTrust: async ({ sessionId }): Promise<IpcResult<TraceTrustView>> => {
-      const refreshed = await repositoryOf(sessionId);
-      if (refreshed.ok) {
-        return ok(await trust.status(refreshed.value.repository));
-      }
-      return refreshed;
-    },
-
-    setTrust: async ({ sessionId, trusted }): Promise<IpcResult<TraceTrustView>> => {
-      const refreshed = await repositoryOf(sessionId);
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-      const { repository } = refreshed.value;
-      if (trusted) {
-        return ok(await trust.grant(repository));
-      }
-      return ok(await trust.revoke(repository));
-    },
-
-    listTrust: async (): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
-      return ok(await trust.list());
-    },
-
-    removeTrust: async ({ repositoryPath }): Promise<IpcResult<readonly TraceTrustEntryView[]>> => {
-      return ok(await trust.remove(repositoryPath));
     },
 
     observeHead: (sessionId, headSha): void => {

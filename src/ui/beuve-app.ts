@@ -1948,7 +1948,7 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined || review === undefined || trace?.status !== 'needs-trust') {
       return;
     }
-    const trusted = await bridge.invoke('trace:set-trust', {
+    const trusted = await bridge.invoke('trust:set', {
       sessionId: review.session.id,
       trusted: true,
     });
@@ -1999,7 +1999,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     const sessionId = review.session.id;
-    const before = await bridge.invoke('trace:get-trust', { sessionId });
+    const before = await bridge.invoke('trust:get', { sessionId });
     if (!before.ok) {
       this.note('error', before.error.message);
       return;
@@ -2013,7 +2013,7 @@ export class BeuveApp extends LitElement {
       }
       return;
     }
-    const changed = await bridge.invoke('trace:set-trust', { sessionId, trusted: isTrusting });
+    const changed = await bridge.invoke('trust:set', { sessionId, trusted: isTrusting });
     if (!changed.ok) {
       this.note('error', changed.error.message);
       return;
@@ -2022,10 +2022,13 @@ export class BeuveApp extends LitElement {
       this.note(
         'info',
         `Trusted ${repositoryPath}.`,
-        'Run Trace Probe now runs this repository’s Vitest tests, and its Vitest config, on this machine. /untrust withdraws this.',
+        'beuve may now run this repository’s tests and install its dependencies, including their install scripts, on this machine. /untrust withdraws this.',
       );
     } else {
-      this.note('info', `No longer trusting ${repositoryPath}. Run Trace Probe will ask again.`);
+      this.note(
+        'info',
+        `No longer trusting ${repositoryPath}. Trace probes and dependency installs will ask again.`,
+      );
     }
     if (!isTrusting) {
       this.closeTrace();

@@ -25,7 +25,7 @@ describe(
       settledTrace,
     }) => {
       const request = { sessionId, path: 'src/math.ts', line: 5 };
-      expect(okValueFrom(await services.trace.getTrust({ sessionId }))).toMatchObject({
+      expect(okValueFrom(await services.trust.get({ sessionId }))).toMatchObject({
         trusted: false,
         repositoryPath: repo.directory,
       });
@@ -39,7 +39,7 @@ describe(
       });
       expect(existsSync(traceDirectory)).toBe(false);
 
-      expect(okValueFrom(await services.trace.setTrust({ sessionId, trusted: true })).trusted).toBe(
+      expect(okValueFrom(await services.trust.set({ sessionId, trusted: true })).trusted).toBe(
         true,
       );
       traceEvents.length = 0;
@@ -88,7 +88,7 @@ describe(
       repo,
       settledTrace,
     }) => {
-      okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await services.trust.set({ sessionId, trusted: true }));
       repo.write(
         'src/math.ts',
         readFileSync(path.join(repo.directory, 'src/math.ts'), 'utf8').replace(
@@ -112,7 +112,7 @@ describe(
       traceEvents,
       settledTrace,
     }) => {
-      okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await services.trust.set({ sessionId, trusted: true }));
       const failures: [string, number, string][] = [
         ['notes.md', 1, 'unsupported-language'],
         ['src/orphan.ts', 2, 'no-tests-found'],
@@ -138,7 +138,7 @@ describe(
       traceEvents,
       settledTrace,
     }) => {
-      okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await services.trust.set({ sessionId, trusted: true }));
       const request = { sessionId, path: 'src/hang.ts', line: 2 };
       okValueFrom(await services.trace.run(request));
       await expect(services.trace.run(request)).resolves.toMatchObject({
@@ -165,7 +165,7 @@ describe(
       settledTrace,
       signal,
     }) => {
-      okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await services.trust.set({ sessionId, trusted: true }));
       okValueFrom(await services.trace.run({ sessionId, path: 'src/hang.ts', line: 2 }));
       await waitUntil(() => {
         return traceEvents.some((event) => event.state === 'running');
@@ -190,7 +190,7 @@ describe(
           timeout: Temporal.Duration.from({ milliseconds: 1500 }),
         },
       });
-      okValueFrom(await quick.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await quick.trust.set({ sessionId, trusted: true }));
       const outcome = await quick.mcpTools.runTraceProbe({
         sessionId,
         path: 'src/hang.ts',
@@ -216,7 +216,7 @@ describe(
       );
       expect(existsSync(traceDirectory)).toBe(false);
 
-      okValueFrom(await services.trace.setTrust({ sessionId, trusted: true }));
+      okValueFrom(await services.trust.set({ sessionId, trusted: true }));
       const outcome = await services.mcpTools.runTraceProbe(input);
       const traced = okValueFrom(outcome) as Record<string, unknown>;
       expect(traced).toMatchObject({
@@ -233,7 +233,7 @@ describe(
       expect(timelines[0]?.entries.map((entry) => entry.line)).toStrictEqual([1, 2, 5, 6]);
       expect(traceEvents).toStrictEqual([]);
 
-      const untrusted = okValueFrom(await services.trace.setTrust({ sessionId, trusted: false }));
+      const untrusted = okValueFrom(await services.trust.set({ sessionId, trusted: false }));
       expect(untrusted.trusted).toBe(false);
       await expect(services.mcpTools.runTraceProbe(input)).resolves.toMatchObject({ ok: false });
     });
