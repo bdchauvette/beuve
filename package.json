@@ -20,6 +20,7 @@
     "#x/*": "./src/x/*"
   },
   "scripts": {
+    "postinstall": "node scripts/fix-node-pty-permissions.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json",
     "lint": "eslint --max-warnings 0 .",
     "lint:fix": "eslint --fix .",
