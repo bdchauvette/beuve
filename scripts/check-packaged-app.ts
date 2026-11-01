@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { open, readdir, readFile } from 'node:fs/promises';
+import { cp, mkdtempDisposable, open, readdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { promisify } from 'node:util';
@@ -116,15 +117,22 @@ function nodePtyInResources(resources: string): string {
 
 /**
  * node-pty (ADR 0095) must be unpacked with its native addon and, on macOS, `spawn-helper`: the
- * check loads it with the bundled Node (it is N-API, so any Node loads it) and runs a shell on a
- * pseudo-terminal.
+ * check runs a shell on a pseudo-terminal with the bundled Node (it is N-API, so any Node loads it).
+ *
+ * The unpacked files are copied to a scratch directory first. node-pty rewrites `app.asar` to
+ * `app.asar.unpacked` in the helper's path, which is right when Electron loads it from the archive
+ * but turns the already-unpacked path into `app.asar.unpacked.unpacked`, a helper that does not
+ * exist. The copy keeps the shipped files, their permissions and their signatures.
  */
 async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
   const script =
     "const p=require(process.argv[1]).spawn('/bin/sh',['-c','echo pty-ok'],{name:'xterm',cols:80,rows:24});" +
     "let o='';p.onData(d=>{o+=d});p.onExit(()=>{process.stdout.write(o)})";
   try {
-    const { stdout } = await runFile(node, ['-e', script, nodePty], {
+    await using scratch = await mkdtempDisposable(path.join(tmpdir(), 'check-packaged-pty-'));
+    const copy = path.join(scratch.path, 'node-pty');
+    await cp(nodePty, copy, { recursive: true });
+    const { stdout } = await runFile(node, ['-e', script, copy], {
       env: {},
       encoding: 'utf8',
     });
@@ -134,65 +142,13 @@ async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
     }
     return [];
   } catch (error: unknown) {
-    const details = await describePtyFailure({ node, script, nodePty });
-    return [`${nodePty} did not load: ${errorFrom(error).message}\n${details}`];
+    const helpers = await describeSpawnHelpers(nodePty);
+    return [`${nodePty} did not load: ${errorFrom(error).message}\n${helpers}`];
   }
 }
 
-interface PtyFailureContext {
-  readonly node: string;
-  readonly script: string;
-  readonly nodePty: string;
-}
-
-/**
- * What to know when the packaged node-pty cannot spawn: each `spawn-helper` with its permission
- * bits, whether it runs on its own and how it is signed, and whether the same call works with
- * this process's environment instead of an empty one.
- */
-async function describePtyFailure({ node, script, nodePty }: PtyFailureContext): Promise<string> {
-  const helpers = await findSpawnHelpers(nodePty);
-  const lines: string[] = [];
-  for (const helper of helpers) {
-    lines.push(...(await describeSpawnHelper(helper)));
-  }
-  if (lines.length === 0) {
-    lines.push('  no spawn-helper found');
-  }
-  const withEnvironment = await outcomeOf(
-    runFile(node, ['-e', script, nodePty], { env: process.env, encoding: 'utf8' }),
-  );
-  const underRunnerNode = await outcomeOf(
-    runFile(process.execPath, ['-e', script, nodePty], { env: process.env, encoding: 'utf8' }),
-  );
-  return [
-    ...lines,
-    `  same call with this process's environment: ${withEnvironment}`,
-    `  same call under the Node running this check (${process.execPath}): ${underRunnerNode}`,
-  ].join('\n');
-}
-
-async function describeSpawnHelper(helper: SpawnHelper): Promise<string[]> {
-  const direct = await outcomeOf(
-    runFile(helper.file, ['/', '/bin/sh', '-c', 'echo helper-ok'], { env: {}, encoding: 'utf8' }),
-  );
-  let signing: string[] = [];
-  if (process.platform === 'darwin') {
-    const signature = await outcomeOf(
-      runFile('codesign', ['-dv', '--verbose=2', helper.file], { encoding: 'utf8' }),
-    );
-    signing = [`    codesign: ${signature}`];
-  }
-  return [`  ${helper.file}: mode ${helper.mode}`, `    run directly: ${direct}`, ...signing];
-}
-
-interface SpawnHelper {
-  readonly file: string;
-  /** Permission bits in octal. */
-  readonly mode: string;
-}
-
-async function findSpawnHelpers(nodePty: string): Promise<SpawnHelper[]> {
+/** Each `spawn-helper` node-pty ships, with its permission bits: one that is not executable fails `posix_spawnp`. */
+async function describeSpawnHelpers(nodePty: string): Promise<string> {
   const candidates = [path.join(nodePty, 'build', 'Release', 'spawn-helper')];
   try {
     const targets = await readdir(path.join(nodePty, 'prebuilds'));
@@ -202,39 +158,20 @@ async function findSpawnHelpers(nodePty: string): Promise<SpawnHelper[]> {
   } catch {
     // No prebuilds directory: only the compiled helper, if any, exists.
   }
-  const found: SpawnHelper[] = [];
+  const lines: string[] = [];
   for (const file of candidates) {
     try {
       await using handle = await open(file, 'r');
       const { mode } = await handle.stat();
-      found.push({ file, mode: (mode & 0o777).toString(8) });
+      lines.push(`  ${path.relative(nodePty, file)}: mode ${(mode & 0o777).toString(8)}`);
     } catch {
       // Not shipped for this platform.
     }
   }
-  return found;
-}
-
-interface ChildOutput {
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/** A child process's result on one line: its output, or its exit code, signal and error text. */
-async function outcomeOf(run: Promise<ChildOutput>): Promise<string> {
-  try {
-    const { stdout, stderr } = await run;
-    return `ok ${JSON.stringify((stdout + stderr).trim().slice(0, 400))}`;
-  } catch (error: unknown) {
-    const { code, signal, stderr } = error as Partial<
-      Record<'code' | 'signal' | 'stderr', unknown>
-    >;
-    let detail = errorFrom(error).message;
-    if (typeof stderr === 'string' && stderr !== '') {
-      detail = stderr;
-    }
-    return `failed code=${String(code)} signal=${String(signal)} ${JSON.stringify(detail.trim().slice(0, 400))}`;
+  if (lines.length === 0) {
+    return '  no spawn-helper found';
   }
+  return lines.join('\n');
 }
 
 async function checkNode(node: string): Promise<string[]> {
