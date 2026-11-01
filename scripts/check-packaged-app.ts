@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { open, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { promisify } from 'node:util';
@@ -134,8 +134,36 @@ async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
     }
     return [];
   } catch (error: unknown) {
-    return [`${nodePty} did not load: ${errorFrom(error).message}`];
+    const helpers = await describeSpawnHelpers(nodePty);
+    return [`${nodePty} did not load: ${errorFrom(error).message}\n${helpers}`];
   }
+}
+
+/** Each `spawn-helper` node-pty ships, with its permission bits: a helper that is not executable fails `posix_spawnp`. */
+async function describeSpawnHelpers(nodePty: string): Promise<string> {
+  const candidates = [path.join(nodePty, 'build', 'Release', 'spawn-helper')];
+  try {
+    const targets = await readdir(path.join(nodePty, 'prebuilds'));
+    for (const target of targets) {
+      candidates.push(path.join(nodePty, 'prebuilds', target, 'spawn-helper'));
+    }
+  } catch {
+    // No prebuilds directory: only the compiled helper, if any, exists.
+  }
+  const lines: string[] = [];
+  for (const file of candidates) {
+    try {
+      await using handle = await open(file, 'r');
+      const { mode } = await handle.stat();
+      lines.push(`  ${path.relative(nodePty, file)}: mode ${(mode & 0o777).toString(8)}`);
+    } catch {
+      // Not shipped for this platform.
+    }
+  }
+  if (lines.length === 0) {
+    return '  no spawn-helper found';
+  }
+  return lines.join('\n');
 }
 
 async function checkNode(node: string): Promise<string[]> {
