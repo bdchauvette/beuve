@@ -61,7 +61,6 @@ import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { editTargetFrom } from './edit-target-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
-import type { TraceState } from './trace-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
 import { formatIsoDuration } from './format-iso-duration.ts';
@@ -133,7 +132,7 @@ const unmountMargin = '6000px 0px';
  * header naming the review kind and ImpactGate banners once they arrive. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
- * it), Run Trace Probe runs the tests covering the target with tracing (ADR 0041), and Add Note opens a composer
+ * it), and Add Note opens a composer
  * that stages the target into the review dock (ADR 0027). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), ImpactGate Details opens the focused card's ImpactGate details, and Suggest Edit edits the
@@ -371,7 +370,7 @@ export class BeuveDiffStream extends LitElement {
     ) {
       return;
     }
-    if (this.peek !== undefined || this.flow !== undefined || this.trace !== undefined) {
+    if (this.peek !== undefined || this.flow !== undefined) {
       event.preventDefault();
       this.togglePeek(true);
       return;
@@ -574,7 +573,6 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   @property({ attribute: false }) accessor flow: FlowState | undefined;
-  @property({ attribute: false }) accessor trace: TraceState | undefined;
 
   @property({ attribute: false }) accessor fileJump: FileJump | undefined;
   /** Backs hunk expansion in the cards. */
@@ -1098,33 +1096,7 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   }
 
-  /**
-   * Run Trace Probe runs the tests covering the target's head line (ADR 0063) with tracing and opens the timeline portal; pressing it while the same probe runs does nothing.
-   */
-  private requestTrace(): void {
-    const file = this.shownFiles()[this.activeIndex];
-    if (file === undefined) {
-      return;
-    }
-    const line = this.targetLine();
-    if (
-      this.trace?.status === 'loading' &&
-      this.trace.path === file.path &&
-      this.trace.line === line
-    ) {
-      return;
-    }
-    this.dispatchEvent(
-      new CustomEvent('beuve-trace-request', {
-        detail: { path: file.path, line },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    this.focus();
-  }
-
-  /** The head line Show Callers, Show Control Flow and Run Trace Probe find the enclosing function of. */
+  /** The head line Show Callers and Show Control Flow find the enclosing function of. */
   private targetLine(): number | undefined {
     return lineFromTarget(this.target());
   }
@@ -1135,9 +1107,6 @@ export class BeuveDiffStream extends LitElement {
     }
     if (this.flow !== undefined) {
       this.dispatchEvent(new CustomEvent('beuve-flow-close', { bubbles: true, composed: true }));
-    }
-    if (this.trace !== undefined) {
-      this.dispatchEvent(new CustomEvent('beuve-trace-close', { bubbles: true, composed: true }));
     }
     this.focus();
   }
@@ -1274,7 +1243,6 @@ export class BeuveDiffStream extends LitElement {
                           .findings=${this.impact?.findings ?? noFindings}
                           .peek=${this.peek?.path === file.path ? this.peek : undefined}
                           .flow=${this.flow?.path === file.path ? this.flow : undefined}
-                          .trace=${this.trace?.path === file.path ? this.trace : undefined}
                           .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
                           .insights=${insightsByPath.get(file.path) ?? noInsights}
                           .composer=${this.composer?.path === file.path ? this.composer : undefined}
@@ -1489,10 +1457,6 @@ export class BeuveDiffStream extends LitElement {
       }
       case 'flow': {
         this.toggleFlow();
-        return true;
-      }
-      case 'trace': {
-        this.requestTrace();
         return true;
       }
       case 'stage': {

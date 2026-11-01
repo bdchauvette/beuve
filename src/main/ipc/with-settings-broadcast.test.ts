@@ -17,7 +17,7 @@ describe('withSettingsBroadcast', () => {
       changes.push(sender);
     });
     await handlers['display:set']({ layout: 'split' }, { webContentsId: 2 });
-    await handlers['trust:remove']({ repositoryPath: 'refuse' }, { webContentsId: 2 });
+    await handlers['editor:set-preferred']({ editorId: 'refuse' }, { webContentsId: 2 });
     await handlers['editor:set-preferred']({ editorId: 'zed' }, { webContentsId: 5 });
     await handlers['display:get'](undefined, { webContentsId: 2 });
     expect(changes).toStrictEqual([{ webContentsId: 2 }, { webContentsId: 5 }]);
@@ -31,7 +31,7 @@ function handlersAnswering(): IpcHandlers {
         channel,
         async (request: unknown): Promise<unknown> => {
           await Promise.resolve();
-          if ((request as { repositoryPath?: string } | undefined)?.repositoryPath === 'refuse') {
+          if ((request as { editorId?: string } | undefined)?.editorId === 'refuse') {
             return err({ code: 'refused', message: 'no' });
           }
           return ok(channel);

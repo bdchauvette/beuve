@@ -39,8 +39,6 @@ import type {
   SessionSummary,
   SetDiffDisplayRequest,
   SidebarSideView,
-  TraceStatusView,
-  TrustView,
   UraExportTarget,
   UraItemView,
   UraSeverityView,
@@ -54,8 +52,6 @@ import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
-import './beuve-trust-dialog.ts';
-import type { TrustDialogChoice } from './beuve-trust-dialog.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
@@ -113,10 +109,8 @@ import type { GithubDockState, GithubPostState } from './github-post-state.ts';
 import { clearReviewEditsStatus } from './clear-review-edits-status.ts';
 import type { ReviewEditsFlow } from './review-edits-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
+import { relativeLineTextFrom } from './relative-line-text-from.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
-import { applyTraceStatus } from './apply-trace-status.ts';
-import { formatIsoDuration } from './format-iso-duration.ts';
-import type { TraceState } from './trace-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
@@ -654,18 +648,6 @@ export class BeuveApp extends LitElement {
     this.flow = undefined;
   };
 
-  private readonly onTraceRequest = (event: CustomEvent<LineRequestDetail>): void => {
-    void this.openTrace(event.detail.path, event.detail.line);
-  };
-
-  private readonly onTraceClose = (): void => {
-    this.closeTrace();
-  };
-
-  private readonly onTraceTrust = (): void => {
-    void this.trustAndRunTrace();
-  };
-
   private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
 
   private readonly onChatSubmit = (event: CustomEvent<ChatSubmitDetail>): void => {
@@ -805,15 +787,6 @@ export class BeuveApp extends LitElement {
 
   private readonly onStatusNotice = (event: CustomEvent<StatusNotice>): void => {
     this.showNotice(event.detail);
-  };
-
-  private readonly onTrustChoice = (event: CustomEvent<TrustDialogChoice>): void => {
-    if (event.detail.action === 'trust') {
-      void this.grantTrustFromDialog();
-      return;
-    }
-    this.trustDialog = undefined;
-    this.refocusZone();
   };
 
   /** A notice's button: runs its catalog command as the menu would. */
@@ -988,8 +961,6 @@ export class BeuveApp extends LitElement {
   @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
   /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
   @state() accessor flow: FlowState | undefined;
-  /** The trace timeline portal; at most one of `peek`, `flow` and `trace` is open at a time. */
-  @state() accessor trace: TraceState | undefined;
   @state() accessor reviewLoading = false;
   @state() accessor reviewError = '';
   @state() accessor marking = false;
@@ -1026,9 +997,6 @@ export class BeuveApp extends LitElement {
   @state() accessor sidebarTab: SidebarZone = 'intent';
   @state() accessor openDialog = false;
 
-  /** The trust prompt, the safeguard's question or the install log, when one is open. */
-  /** The trust prompt (ADR 0090), while it is open. */
-  @state() accessor trustDialog: TrustView | undefined;
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
   @state() accessor githubPost: GithubPostState = { kind: 'idle' };
@@ -1068,9 +1036,6 @@ export class BeuveApp extends LitElement {
         if (sessionId === this.review?.session.id) {
           void this.refreshUra(sessionId);
         }
-      }),
-      bridge.on('trace:status', (event) => {
-        this.applyTraceEvent(event);
       }),
       bridge.on('github:pr-updated', (event) => {
         this.applyPullRequestUpdate(event);
@@ -1672,7 +1637,6 @@ export class BeuveApp extends LitElement {
       this.chat = emptyChatTranscript;
       this.pullRequest = undefined;
       this.ci = undefined;
-      this.trustDialog = undefined;
       this.githubPost = { kind: 'idle' };
       this.reviewEdits = undefined;
       this.reviewEditsFlow = { kind: 'idle' };
@@ -1691,7 +1655,6 @@ export class BeuveApp extends LitElement {
     this.reviewLoading = false;
     this.peek = undefined;
     this.flow = undefined;
-    this.closeTrace();
     if (review.ok) {
       if (shownHead !== undefined && shownHead !== review.value.headSha) {
         this.invalidateGithubPost();
@@ -1866,7 +1829,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.flow = undefined;
-    this.closeTrace();
     if (line === undefined) {
       this.peek = {
         path,
@@ -1898,7 +1860,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.peek = undefined;
-    this.closeTrace();
     if (line === undefined) {
       this.flow = {
         path,
@@ -1921,146 +1882,6 @@ export class BeuveApp extends LitElement {
     this.flow = flowStateFrom(path, line, answer);
   }
 
-  /** Run Trace Probe: runs the tests covering the hunk with tracing; the portal follows `trace:status`. */
-  private async openTrace(path: string, line: number | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    this.peek = undefined;
-    this.flow = undefined;
-    this.closeTrace();
-    if (line === undefined) {
-      this.trace = {
-        path,
-        line,
-        status: 'error',
-        failure: 'local',
-        message: 'This file has no head-side change to trace.',
-      };
-      return;
-    }
-    const pending: TraceState = { path, line, status: 'loading', testFiles: undefined };
-    this.trace = pending;
-    const started = await bridge.invoke('trace:run', {
-      sessionId: review.session.id,
-      path,
-      line,
-    });
-    // Status events may already have replaced `pending`; only a refusal is left to report.
-    if (!started.ok && this.trace === pending && this.review === review) {
-      this.trace = {
-        path,
-        line,
-        status: 'error',
-        failure: 'local',
-        message: started.error.message,
-      };
-    }
-  }
-
-  /** Closes the trace portal, stopping the probe if it is still running. */
-  private closeTrace(): void {
-    const { review, trace } = this;
-    if (review !== undefined && trace?.status === 'loading') {
-      void beuveBridge()?.invoke('trace:cancel', { sessionId: review.session.id });
-    }
-    this.trace = undefined;
-  }
-
-  private async trustAndRunTrace(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, trace } = this;
-    if (bridge === undefined || review === undefined || trace?.status !== 'needs-trust') {
-      return;
-    }
-    const trusted = await bridge.invoke('trust:set', {
-      sessionId: review.session.id,
-      trusted: true,
-    });
-    if (this.trace !== trace || this.review !== review) {
-      return;
-    }
-    if (!trusted.ok) {
-      this.trace = {
-        path: trace.path,
-        line: trace.line,
-        status: 'error',
-        failure: 'local',
-        message: trusted.error.message,
-      };
-      return;
-    }
-    await this.openTrace(trace.path, trace.line);
-  }
-
-  private applyTraceEvent(event: TraceStatusView): void {
-    const next = applyTraceStatus(this.trace, this.review?.session.id, event);
-    if (next === this.trace) {
-      return;
-    }
-    this.trace = next;
-    if (next?.status === 'ready') {
-      const tests = next.result.timelines.length;
-      const took = formatIsoDuration(next.result.duration);
-      if (next.note === undefined) {
-        this.showNotice({
-          tone: 'info',
-          text: `Trace ready: ${countNoun(tests, 'test')} in ${took}.`,
-        });
-      } else {
-        this.showNotice({ tone: 'error', text: `Trace ready, but some tests failed (${took}).` });
-      }
-    } else if (next?.status === 'error') {
-      this.showNotice({ tone: 'error', text: `Trace probe: ${next.message}` });
-    }
-  }
-
-  /** Trust Repository…: the one grant's prompt (ADR 0090), for the open session's repository. */
-  private async openTrustDialog(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.showNotice({ tone: 'error', text: 'Open a review session first.' });
-      return;
-    }
-    const trust = await bridge.invoke('trust:get', { sessionId: review.session.id });
-    if (!trust.ok) {
-      this.showNotice({ tone: 'error', text: trust.error.message });
-      return;
-    }
-    if (trust.value.trusted) {
-      this.showNotice({
-        tone: 'info',
-        text: `${revealFormatControls(trust.value.repositoryPath)} is already trusted. Stop Trusting Repository withdraws it.`,
-      });
-      return;
-    }
-    this.trustDialog = trust.value;
-  }
-
-  private async grantTrustFromDialog(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    this.trustDialog = undefined;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const trusted = await bridge.invoke('trust:set', {
-      sessionId: review.session.id,
-      trusted: true,
-    });
-    if (!trusted.ok) {
-      this.showNotice({ tone: 'error', text: trusted.error.message });
-      return;
-    }
-    this.showNotice({
-      tone: 'info',
-      text: `Trusted ${revealFormatControls(trusted.value.repositoryPath)}: beuve may run its tests.`,
-    });
-  }
-
   /** Restart Language Servers: the head checkout's servers start afresh on the next request. */
   private async restartLanguageServers(): Promise<void> {
     const bridge = beuveBridge();
@@ -2076,45 +1897,22 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  /** `/trust` and `/untrust`: approve or withdraw running the open repository's tests (ADR 0041). */
-  private async runTrustCommand(isTrusting: boolean): Promise<void> {
+  /** Copy Relative Line Number (ADR 0096): `path:line` of the target, for test runners. */
+  private async copyRelativeLine(): Promise<void> {
     const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.note('error', 'Open a review session first, then type /trust or /untrust.');
+    const target = this.stream()?.target();
+    if (bridge === undefined || target === undefined) {
       return;
     }
-    const sessionId = review.session.id;
-    const before = await bridge.invoke('trust:get', { sessionId });
-    if (!before.ok) {
-      this.note('error', before.error.message);
+    const text = relativeLineTextFrom(target);
+    if (text === undefined) {
       return;
     }
-    const { repositoryPath } = before.value;
-    if (before.value.trusted === isTrusting) {
-      if (isTrusting) {
-        this.note('info', `${repositoryPath} is already trusted. /untrust withdraws it.`);
-      } else {
-        this.note('info', `${repositoryPath} is not trusted.`);
-      }
-      return;
-    }
-    const changed = await bridge.invoke('trust:set', { sessionId, trusted: isTrusting });
-    if (!changed.ok) {
-      this.note('error', changed.error.message);
-      return;
-    }
-    if (isTrusting) {
-      this.note(
-        'info',
-        `Trusted ${repositoryPath}.`,
-        'beuve may now run this repository’s tests on this machine. /untrust withdraws this.',
-      );
+    const copied = await bridge.invoke('clipboard:write-text', { text });
+    if (copied.ok) {
+      this.showNotice({ tone: 'info', text: `Copied ${revealFormatControls(text)}.` });
     } else {
-      this.note('info', `No longer trusting ${repositoryPath}. Trace probes will ask again.`);
-    }
-    if (!isTrusting) {
-      this.closeTrace();
+      this.showNotice({ tone: 'error', text: `Could not copy: ${copied.error.message}` });
     }
   }
 
@@ -2265,12 +2063,6 @@ export class BeuveApp extends LitElement {
             ignoreWhitespace: command.ignoreWhitespace,
           }),
         });
-        return;
-      }
-      case 'trust':
-      case 'untrust': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.runTrustCommand(command.kind === 'trust');
         return;
       }
       case 'review': {
@@ -3007,6 +2799,10 @@ export class BeuveApp extends LitElement {
         void this.openCommitPairs();
         return;
       }
+      case 'copy-relative-line': {
+        void this.copyRelativeLine();
+        return;
+      }
       case 'open-definition':
       case 'open-type-definition':
       case 'copy-permalink':
@@ -3032,10 +2828,6 @@ export class BeuveApp extends LitElement {
       }
       case 'open-review-edits': {
         void this.openReviewEdits();
-        return;
-      }
-      case 'trust': {
-        void this.openTrustDialog();
         return;
       }
       case 'restart-language-servers': {
@@ -3125,12 +2917,8 @@ export class BeuveApp extends LitElement {
     this.stream()?.runCommand('open-in-editor');
   }
 
-  /** Stop: the running trace probe, else the answer being written. */
+  /** Stop: the answer being written. */
   private stopRunning(): void {
-    if (this.trace?.status === 'loading') {
-      this.closeTrace();
-      return;
-    }
     const running = this.chat.entries.find((entry) => {
       return entry.kind === 'message' && isActiveRequest(entry.message);
     });
@@ -3194,11 +2982,9 @@ export class BeuveApp extends LitElement {
       focusedZone: this.focusedZone,
       dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
-      isBusy:
-        this.trace?.status === 'loading' ||
-        this.chat.entries.some((entry) => {
-          return entry.kind === 'message' && isActiveRequest(entry.message);
-        }),
+      isBusy: this.chat.entries.some((entry) => {
+        return entry.kind === 'message' && isActiveRequest(entry.message);
+      }),
       isPullRequest: this.pullRequest !== undefined,
       stagedCount: this.stagedCount(),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -3589,7 +3375,6 @@ export class BeuveApp extends LitElement {
       .impact=${this.impact}
       .peek=${this.peek}
       .flow=${this.flow}
-      .trace=${this.trace}
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.uraItems}
@@ -3607,9 +3392,6 @@ export class BeuveApp extends LitElement {
       @beuve-sheet-request=${this.onSheetRequest}
       @beuve-flow-request=${this.onFlowRequest}
       @beuve-flow-close=${this.onFlowClose}
-      @beuve-trace-request=${this.onTraceRequest}
-      @beuve-trace-close=${this.onTraceClose}
-      @beuve-trace-trust=${this.onTraceTrust}
       @beuve-diff-rendered=${this.onDiffRendered}
       @beuve-ura-create=${this.onUraCreate}
       @beuve-active-file=${this.onActiveFile}
@@ -3787,18 +3569,6 @@ export class BeuveApp extends LitElement {
         .githubAuth=${this.githubAuth}
         @beuve-status-action=${this.onStatusAction}
       ></beuve-status-bar>
-      ${
-        this.trustDialog === undefined
-          ? nothing
-          : html`<div class="scrim">
-              <div class="dialog">
-                <beuve-trust-dialog
-                  .trust=${this.trustDialog}
-                  @beuve-trust-choice=${this.onTrustChoice}
-                ></beuve-trust-dialog>
-              </div>
-            </div>`
-      }
       ${
         this.inlineSheet === undefined || this.review === undefined
           ? nothing

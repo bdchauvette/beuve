@@ -1,6 +1,6 @@
 # 0036. Test-driven trace probes: source instrumentation through a Vitest transform
 
-- Status: Accepted
+- Status: Superseded by [0096](0096-drop-trace-probes-and-the-trust-grant.md)
 - Date: 2026-10-28
 
 ## Context

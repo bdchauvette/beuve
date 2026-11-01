@@ -61,9 +61,9 @@ async function launch(): Promise<void> {
       pathVariable: process.env['PATH'],
     });
     if (nodeRuntime.ok) {
-      logger.info('node runtime for language servers and trace probes', { ...nodeRuntime.value });
+      logger.info('node runtime for the language server', { ...nodeRuntime.value });
     } else {
-      logger.error('no node runtime for language servers and trace probes', {
+      logger.error('no node runtime for the language server', {
         error: nodeRuntime.error,
         message: describeNodeRuntimeError(nodeRuntime.error),
       });
@@ -112,7 +112,6 @@ async function launch(): Promise<void> {
           },
           ...bundledClaudeCode(),
         },
-        trace: { settingsPath, temporaryDirectory: path.join(userData, 'trace') },
         shell: { openExternal: async (url) => shell.openExternal(url) },
         github: {
           settingsPath,

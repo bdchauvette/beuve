@@ -63,12 +63,7 @@ function headFreeSessionChannels(): Readonly<
     'remote:permalink': 'a link pinned to its own `sha`',
     'remote:open-permalink': 'a link pinned to its own `sha`',
     'flow:get-graph': read,
-    'trace:run':
-      'a probe whose result names the head it ran at; main aborts it when the head moves',
-    'trace:cancel': 'stops work; it stores nothing about a head',
     'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
-    'trust:get': 'trust belongs to the repository, not a head',
-    'trust:set': 'trust belongs to the repository, not a head',
     'ura:list': read,
     'ura:create': 'the item records the head its anchor refers to and is re-anchored on every read',
     'ura:reorder': 'dock order belongs to the session, not a head',

@@ -59,48 +59,6 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
   );
 
   server.registerTool(
-    'beuve_run_trace_probe',
-    {
-      title: 'Trace probe',
-      description:
-        "Runs the repository's Vitest tests that cover a line of the review session's head commit " +
-        'with execution tracing, and returns what ran: for each test case (name, passed/failed/' +
-        "skipped), the traced functions' calls in order with call depth, argument summaries, " +
-        'which side of each if/ternary/switch/case/catch was taken, loop iteration counts, and ' +
-        'the returned or thrown value. `line` and every line in the result are 1-based lines of ' +
-        'the head file (`path`), not your working tree; `inHunk` marks events whose own lines ' +
-        'the review changed. Tests are picked statically (named after the file, then importing ' +
-        "it) and run in a detached checkout of the head with the clone's node_modules; the " +
-        "user's files are never written. It executes the repository's code, so a human must " +
-        'first trust the repository in beuve: until then this fails with `untrusted`, and beuve ' +
-        'never prompts through MCP. Other failures: no-tests-found, not-vitest, ' +
-        'unsupported-language (TypeScript/JavaScript only), no-function-at-line, timeout (30 s), ' +
-        'runner-failed. If tests fail the trace is still returned with `testsFailed: true`. ' +
-        'Runs take about a second; one probe at a time per session.',
-      inputSchema: {
-        sessionId,
-        path,
-        line: z
-          .number()
-          .int()
-          .min(1)
-          .describe('1-based line number in the head version of the file.'),
-        testNamePattern: z
-          .string()
-          .min(1)
-          .max(1000)
-          .optional()
-          .describe(
-            "Only run tests whose full name matches this pattern (Vitest's --testNamePattern).",
-          ),
-      },
-    },
-    async (input): Promise<CallToolResult> => {
-      return toolResultFrom(await services.runTraceProbe(input));
-    },
-  );
-
-  server.registerTool(
     'beuve_read_human_review',
     {
       title: 'Human review',

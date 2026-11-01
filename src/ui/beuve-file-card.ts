@@ -25,8 +25,6 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import './beuve-flow-portal.ts';
 import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
-import './beuve-trace-portal.ts';
-import type { TraceLineActivateDetail } from './beuve-trace-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import { applySuggestedPatch } from './apply-suggested-patch.ts';
@@ -36,7 +34,6 @@ import { headRowSelector } from './head-row-selector.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
-import type { TraceState } from './trace-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
 import { planImpactChip } from './plan-impact-chip.ts';
@@ -751,7 +748,7 @@ export class BeuveFileCard extends LitElement {
   private programmaticStep: HunkStep | undefined;
   /** Lines the reviewer selected in the gutter, until Next/Previous Change moves on. */
   private lineSelection: SelectedLines | undefined;
-  /** The head line a jump (citation, flow node, trace line) landed on, until Next/Previous Change moves on. */
+  /** The head line a jump (citation or flow node) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
   /** The Suggest Edit editor attached to the diff, and the head text it started from. */
   private editor: Editor<'file-diff', PlacedSlot> | undefined;
@@ -812,11 +809,6 @@ export class BeuveFileCard extends LitElement {
   private readonly onFlowNodeActivate = (event: CustomEvent<FlowNodeActivateDetail>): void => {
     event.stopPropagation();
     void this.focusLine(event.detail.startLine);
-  };
-
-  private readonly onTraceLineActivate = (event: CustomEvent<TraceLineActivateDetail>): void => {
-    event.stopPropagation();
-    void this.focusLine(event.detail.line);
   };
 
   private readonly onLineSelected = (range: SelectedLines | null): void => {
@@ -950,8 +942,6 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   /** The control-flow graph portal, which shares the peek's place (one portal at a time). */
   @property({ attribute: false }) accessor flow: FlowState | undefined;
-  /** The trace timeline portal; it shares the place of the peek and flow portals too. */
-  @property({ attribute: false }) accessor trace: TraceState | undefined;
   /** The hunk Next/Previous Change stopped at, selected in the diff; `-1` for none. */
   @property({ type: Number }) accessor activeHunk = -1;
   /** Enables hunk expansion; absent outside Electron. */
@@ -1899,7 +1889,7 @@ ${splitPatch(file.patch).map((line) => {
     }
   }
 
-  /** Scrolls to head line `line` and makes it the card's target (a citation, flow or trace jump). */
+  /** Scrolls to head line `line` and makes it the card's target (a citation or flow jump). */
   async focusLine(line: number): Promise<void> {
     await this.revealLine(line);
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
@@ -2057,14 +2047,6 @@ ${splitPatch(file.patch).map((line) => {
               .flow=${this.flow}
               @flow-node-activate=${this.onFlowNodeActivate}
             ></beuve-flow-portal>`
-      }
-      ${
-        this.trace === undefined
-          ? nothing
-          : html`<beuve-trace-portal
-              .trace=${this.trace}
-              @trace-line-activate=${this.onTraceLineActivate}
-            ></beuve-trace-portal>`
       }
       ${this.renderCode(file)}
     `;

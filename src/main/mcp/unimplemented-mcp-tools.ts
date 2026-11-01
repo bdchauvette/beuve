@@ -8,13 +8,12 @@ const notImplementedResult: Promise<Err<string>> = Promise.resolve(
 );
 
 /**
- * MCP tools whose domains (LSP, ImpactGate, trace probes, URA) don't exist yet: every call fails
+ * MCP tools whose domains (LSP, ImpactGate, URA) don't exist yet: every call fails
  * honestly with a "not implemented yet" tool error. Never fakes data.
  */
 export const unimplementedMcpTools: McpToolServices = Object.freeze({
   getLspDiagnostics: notImplemented,
   runImpactCheck: notImplemented,
-  runTraceProbe: notImplemented,
   readHumanReview: notImplemented,
 });
 

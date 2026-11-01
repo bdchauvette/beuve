@@ -13,7 +13,7 @@ import { timeoutSignal } from '#x/time/timeout-signal.ts';
 /** Where the Node came from: the app's `resources/node/node`, or `node` on `PATH` (unpackaged). */
 export type NodeRuntimeSource = 'bundled' | 'path';
 
-/** A Node that beuve's Node children (the TypeScript language server, trace probes) run on. */
+/** A Node that beuve's Node children (the TypeScript language server) run on. */
 export interface NodeRuntime {
   /** Absolute path of the `node` executable. */
   readonly command: string;
@@ -61,8 +61,8 @@ const runFile = promisify(execFile);
  * Finds the Node that beuve's Node children run on (ADR 0083), never Electron's own binary: the
  * `runAsNode` fuse is off. A packaged app uses the Node it ships in `resources/node/node`;
  * `npm start` and tests use the first `node` on `PATH`. Either way the binary is run once with
- * `--version`, and anything older than `minimumMajor` is refused: trace probes inject code that
- * needs what Node 26 has (`Temporal`). Call it once and share the result.
+ * `--version`, and anything older than `minimumMajor` is refused: beuve is built and tested
+ * on Node 26 (`.node-version`). Call it once and share the result.
  */
 export async function resolveNodeRuntime(
   options: ResolveNodeRuntimeOptions,

@@ -52,7 +52,7 @@ files:
       - build/Release/*.node
       - prebuilds/${platform}-${arch}/**
 asar: true
-# The Node that runs the TypeScript language server and trace probes (ADR 0083): the pinned
+# The Node that runs the TypeScript language server (ADR 0083): the pinned
 # nodejs.org binary (scripts/node-runtime.json, ADR 0084), which `npm run dist:*` fetches and
 # verifies into vendor/node first. Main runs it as resources/node/node.
 extraResources:
