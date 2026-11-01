@@ -134,13 +134,58 @@ async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
     }
     return [];
   } catch (error: unknown) {
-    const helpers = await describeSpawnHelpers(nodePty);
-    return [`${nodePty} did not load: ${errorFrom(error).message}\n${helpers}`];
+    const details = await describePtyFailure({ node, script, nodePty });
+    return [`${nodePty} did not load: ${errorFrom(error).message}\n${details}`];
   }
 }
 
-/** Each `spawn-helper` node-pty ships, with its permission bits: a helper that is not executable fails `posix_spawnp`. */
-async function describeSpawnHelpers(nodePty: string): Promise<string> {
+interface PtyFailureContext {
+  readonly node: string;
+  readonly script: string;
+  readonly nodePty: string;
+}
+
+/**
+ * What to know when the packaged node-pty cannot spawn: each `spawn-helper` with its permission
+ * bits, whether it runs on its own and how it is signed, and whether the same call works with
+ * this process's environment instead of an empty one.
+ */
+async function describePtyFailure({ node, script, nodePty }: PtyFailureContext): Promise<string> {
+  const helpers = await findSpawnHelpers(nodePty);
+  const lines: string[] = [];
+  for (const helper of helpers) {
+    lines.push(...(await describeSpawnHelper(helper)));
+  }
+  if (lines.length === 0) {
+    lines.push('  no spawn-helper found');
+  }
+  const withEnvironment = await outcomeOf(
+    runFile(node, ['-e', script, nodePty], { env: process.env, encoding: 'utf8' }),
+  );
+  return [...lines, `  same call with this process's environment: ${withEnvironment}`].join('\n');
+}
+
+async function describeSpawnHelper(helper: SpawnHelper): Promise<string[]> {
+  const direct = await outcomeOf(
+    runFile(helper.file, ['/', '/bin/sh', '-c', 'echo helper-ok'], { env: {}, encoding: 'utf8' }),
+  );
+  let signing: string[] = [];
+  if (process.platform === 'darwin') {
+    const signature = await outcomeOf(
+      runFile('codesign', ['-dv', '--verbose=2', helper.file], { encoding: 'utf8' }),
+    );
+    signing = [`    codesign: ${signature}`];
+  }
+  return [`  ${helper.file}: mode ${helper.mode}`, `    run directly: ${direct}`, ...signing];
+}
+
+interface SpawnHelper {
+  readonly file: string;
+  /** Permission bits in octal. */
+  readonly mode: string;
+}
+
+async function findSpawnHelpers(nodePty: string): Promise<SpawnHelper[]> {
   const candidates = [path.join(nodePty, 'build', 'Release', 'spawn-helper')];
   try {
     const targets = await readdir(path.join(nodePty, 'prebuilds'));
@@ -150,20 +195,39 @@ async function describeSpawnHelpers(nodePty: string): Promise<string> {
   } catch {
     // No prebuilds directory: only the compiled helper, if any, exists.
   }
-  const lines: string[] = [];
+  const found: SpawnHelper[] = [];
   for (const file of candidates) {
     try {
       await using handle = await open(file, 'r');
       const { mode } = await handle.stat();
-      lines.push(`  ${path.relative(nodePty, file)}: mode ${(mode & 0o777).toString(8)}`);
+      found.push({ file, mode: (mode & 0o777).toString(8) });
     } catch {
       // Not shipped for this platform.
     }
   }
-  if (lines.length === 0) {
-    return '  no spawn-helper found';
+  return found;
+}
+
+interface ChildOutput {
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+/** A child process's result on one line: its output, or its exit code, signal and error text. */
+async function outcomeOf(run: Promise<ChildOutput>): Promise<string> {
+  try {
+    const { stdout, stderr } = await run;
+    return `ok ${JSON.stringify((stdout + stderr).trim().slice(0, 400))}`;
+  } catch (error: unknown) {
+    const { code, signal, stderr } = error as Partial<
+      Record<'code' | 'signal' | 'stderr', unknown>
+    >;
+    let detail = errorFrom(error).message;
+    if (typeof stderr === 'string' && stderr !== '') {
+      detail = stderr;
+    }
+    return `failed code=${String(code)} signal=${String(signal)} ${JSON.stringify(detail.trim().slice(0, 400))}`;
   }
-  return lines.join('\n');
 }
 
 async function checkNode(node: string): Promise<string[]> {
