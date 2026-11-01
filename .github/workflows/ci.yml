@@ -100,7 +100,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload the terminal screenshot
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terminal-screenshots-${{ runner.os }}
           path: ${{ runner.temp }}/terminal
