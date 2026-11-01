@@ -20,7 +20,7 @@ export interface LineRange {
 
 /**
  * What the reviewer points at in the diff stream (ADR 0063), the one answer every action
- * (Add Note, Add to Chat, Suggest Edit, Open in Editor, Show Callers, Show Control Flow, Run Trace Probe) adapts to what it needs:
+ * (Add Note, Add to Chat, Suggest Edit, Open in Editor, Show Callers, Show Control Flow, Copy Relative Line Number) adapts to what it needs:
  *
  * - `selection`: lines the reviewer selected, or a citation or find hit selected for them.
  *   `side` says which numbering `start`–`end` use: `base` when both ends are on deleted rows or
@@ -30,7 +30,7 @@ export interface LineRange {
  * - `hunk`: the hunk Next/Previous Change stopped at. `head` is its head lines (`undefined` for a pure
  *   deletion), `base` its base lines (`undefined` for a pure addition) and `line` its first
  *   changed head line (for a deletion, the head line before the gap).
- * - `line`: one head line a jump landed on (a citation, a flow node, a trace line).
+ * - `line`: one head line a jump landed on (a citation or a flow node).
  * - `file`: the whole file; `line` is its first changed head line, if it has one.
  * - `change`: no file is active.
  */

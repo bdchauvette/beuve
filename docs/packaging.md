@@ -15,7 +15,7 @@ Each `dist:*` command runs `npm run build` and `scripts/fetch-node.ts` first. Th
 
 ## The bundled Node
 
-The language server and trace probes run on a standalone Node that the app ships as `resources/node/node` (`Contents/Resources/node/node` on macOS), because the `runAsNode` fuse is off (ADR 0083). `npm start` and tests use the `node` on `PATH` instead, which must be Node 26 or later (`.node-version`). Otherwise beuve logs `no node runtime …` at startup and refuses probes.
+The language server runs on a standalone Node that the app ships as `resources/node/node` (`Contents/Resources/node/node` on macOS), because the `runAsNode` fuse is off (ADR 0083). `npm start` and tests use the `node` on `PATH` instead, which must be Node 26 or later (`.node-version`). Otherwise beuve logs `no node runtime …` at startup and the TypeScript language server does not start.
 
 `scripts/node-runtime.json` pins the version and the SHA-256 of each archive (ADR 0084): Node 26.13.0 LTS, for `darwin-arm64` and `linux-x64`. `npm run fetch-node -- --target <target>` does three things:
 

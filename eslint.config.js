@@ -336,15 +336,6 @@ export default defineConfig(
   },
 
   {
-    name: 'beuve/time-foreign-dates',
-    // Records arbitrary values from the program under test, which may be Dates (ADR 0036).
-    files: ['src/internal/trace/create-trace-recorder.ts'],
-    rules: {
-      'local/no-date': ['error', { allowGlobalUses: ['instanceof', 'prototype'] }],
-    },
-  },
-
-  {
     name: 'beuve/tests',
     // ADR 0058.
     files: testFiles,

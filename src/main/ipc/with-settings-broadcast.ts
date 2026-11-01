@@ -7,8 +7,6 @@ const settingsChannels = [
   'display:set',
   'editor:set-preferred',
   'editor:set-review-edits-prefix',
-  'trust:set',
-  'trust:remove',
 ] as const satisfies readonly InvokeChannel[];
 
 /** A handler's answer, as far as telling success needs it. */

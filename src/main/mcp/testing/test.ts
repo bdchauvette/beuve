@@ -23,9 +23,6 @@ export const test = baseTest
         await Promise.resolve();
         return ok({ breaches: [] });
       },
-      runTraceProbe: async () => {
-        return notImplemented();
-      },
       readHumanReview: async () => {
         return notImplemented();
       },

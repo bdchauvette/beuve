@@ -12,15 +12,6 @@ export interface ImpactCheckInput {
   readonly paths?: readonly string[] | undefined;
 }
 
-/** Runs the tests covering a line with execution tracing (spec 5E, ADR 0041). */
-export interface TraceProbeInput {
-  readonly sessionId?: string | undefined;
-  readonly path: string;
-  /** 1-based head line. */
-  readonly line: number;
-  readonly testNamePattern?: string | undefined;
-}
-
 /** The human's staged review (URA items) for a session. */
 export interface HumanReviewInput {
   readonly sessionId?: string | undefined;
@@ -45,6 +36,5 @@ export type McpDocumentOutcome = Result<
 export interface McpToolServices {
   readonly getLspDiagnostics: (input: LspDiagnosticsInput) => Promise<McpToolOutcome>;
   readonly runImpactCheck: (input: ImpactCheckInput) => Promise<McpToolOutcome>;
-  readonly runTraceProbe: (input: TraceProbeInput) => Promise<McpToolOutcome>;
   readonly readHumanReview: (input: HumanReviewInput) => Promise<McpDocumentOutcome>;
 }

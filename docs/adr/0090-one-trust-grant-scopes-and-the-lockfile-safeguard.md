@@ -1,6 +1,6 @@
 # 0090. One trust grant, an extensible scope, and the lockfile safeguard
 
-- Status: Accepted; the lockfile safeguard is superseded by [0095](0095-terminal-panel-in-the-session-checkout.md), the trust grant stands
+- Status: Superseded by [0096](0096-drop-trace-probes-and-the-trust-grant.md)
 - Date: 2026-11-01
 
 ## Context

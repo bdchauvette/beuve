@@ -101,6 +101,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Copy &GitHub Permalink",
       },
       {
+        "accelerator": "Ctrl+Alt+Shift+C",
+        "id": "copy-relative-line",
+        "label": "Copy Relative &Line Number",
+      },
+      {
         "type": "separator",
       },
       {
@@ -475,11 +480,6 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "S&how Control Flow",
       },
       {
-        "accelerator": "Ctrl+R",
-        "id": "trace",
-        "label": "&Run Trace Probe",
-      },
-      {
         "id": "stop",
         "label": "S&top",
       },
@@ -517,7 +517,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
-        "label": "Re&view Edits",
+        "label": "&Review Edits",
         "submenu": [
           {
             "id": "open-review-edits",
@@ -582,17 +582,6 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "Move &Down",
           },
         ],
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "id": "trust",
-        "label": "Tr&ust Repository…",
-      },
-      {
-        "id": "untrust",
-        "label": "Sto&p Trusting Repository",
       },
       {
         "type": "separator",
@@ -860,6 +849,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Shift+Cmd+C",
         "id": "copy-permalink",
         "label": "Copy GitHub Permalink",
+      },
+      {
+        "accelerator": "Alt+Shift+Cmd+C",
+        "id": "copy-relative-line",
+        "label": "Copy Relative Line Number",
       },
       {
         "type": "separator",
@@ -1230,11 +1224,6 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Show Control Flow",
       },
       {
-        "accelerator": "Cmd+R",
-        "id": "trace",
-        "label": "Run Trace Probe",
-      },
-      {
         "accelerator": "Cmd+.",
         "id": "stop",
         "label": "Stop",
@@ -1338,17 +1327,6 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "label": "Move Down",
           },
         ],
-      },
-      {
-        "type": "separator",
-      },
-      {
-        "id": "trust",
-        "label": "Trust Repository…",
-      },
-      {
-        "id": "untrust",
-        "label": "Stop Trusting Repository",
       },
       {
         "type": "separator",

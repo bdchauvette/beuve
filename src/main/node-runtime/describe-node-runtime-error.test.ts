@@ -20,7 +20,7 @@ describe('describeNodeRuntimeError', () => {
     expect(
       describeNodeRuntimeError({ kind: 'missing', source: 'path', searched: ['/usr/bin/node'] }),
     ).toBe(
-      'No node on PATH. Unpackaged beuve runs language servers and trace probes with the node on PATH, which must be Node 26 or later (.node-version).',
+      'No node on PATH. Unpackaged beuve runs language servers with the node on PATH, which must be Node 26 or later (.node-version).',
     );
   });
 
@@ -32,9 +32,7 @@ describe('describeNodeRuntimeError', () => {
         version: '22.22.0',
         minimumMajor: 26,
       }),
-    ).toBe(
-      'Language servers and trace probes need Node 26 or later; found 22.22.0 at /opt/node22/bin/node.',
-    );
+    ).toBe('Language servers need Node 26 or later; found 22.22.0 at /opt/node22/bin/node.');
   });
 
   test('passes on why node could not run', ({ expect }) => {

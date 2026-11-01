@@ -432,52 +432,6 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
   });
 });
 
-describe('createIpcHandlers for trace probes', () => {
-  test('validates trace:run and trust:set before delegating', async ({ expect }) => {
-    const calls: unknown[] = [];
-    const handlers = createIpcHandlers(
-      {
-        ...stubServices({}),
-        trace: {
-          ...stubServices({}).trace,
-          run: async (request) => {
-            calls.push(request);
-            return notWired();
-          },
-        },
-        trust: {
-          ...stubServices({}).trust,
-          set: async (request) => {
-            calls.push(request);
-            return notWired();
-          },
-        },
-      },
-      appInfo(),
-    );
-    const good = { sessionId: 's1', path: 'src/a.ts', line: 3 };
-    for (const bad of [
-      { ...good, line: 0 },
-      { ...good, path: '' },
-      { ...good, testNamePattern: '' },
-      { ...good, extra: true },
-      { sessionId: 's1', line: 3 },
-    ]) {
-      await expectInvalid(expect, handlers['trace:run'](bad));
-    }
-    await handlers['trace:run'](good);
-    await handlers['trace:run']({ ...good, testNamePattern: 'clamp' });
-    await expectInvalid(expect, handlers['trust:set']({ sessionId: 's1' }));
-    await expectInvalid(expect, handlers['trust:set']({ sessionId: 's1', trusted: 'yes' }));
-    await handlers['trust:set']({ sessionId: 's1', trusted: true });
-    expect(calls).toStrictEqual([
-      good,
-      { ...good, testNamePattern: 'clamp' },
-      { sessionId: 's1', trusted: true },
-    ]);
-  });
-});
-
 describe('createIpcHandlers for menus and the Settings window', () => {
   test('validates menu:set-state and passes it on with its sender', ({ expect }) => {
     const states: unknown[] = [];
@@ -529,30 +483,12 @@ describe('createIpcHandlers for menus and the Settings window', () => {
     ).toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });
 
-  test('validates trust:remove and the read-only settings channels', async ({ expect }) => {
-    const calls: unknown[] = [];
-    const handlers = createIpcHandlers(
-      {
-        ...stubServices({}),
-        trust: {
-          ...stubServices({}).trust,
-          remove: async (request) => {
-            calls.push(request);
-            await Promise.resolve();
-            return ok([]);
-          },
-        },
-      },
-      appInfo(),
-    );
-    await expectInvalid(expect, handlers['trust:remove']({ repositoryPath: '' }));
-    await expectInvalid(expect, handlers['trust:remove']({}));
-    await expectInvalid(expect, handlers['trust:list']({ all: true }));
-    await expectInvalid(expect, handlers['claude:status']({ probe: true }));
-    await expect(handlers['trust:remove']({ repositoryPath: '/repo' })).resolves.toStrictEqual(
-      ok([]),
-    );
-    expect(calls).toStrictEqual([{ repositoryPath: '/repo' }]);
+  test('validates the read-only settings channels', async ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    await expect(handlers['claude:status']({ probe: true })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'invalid-request' },
+    });
   });
 });
 
@@ -1191,20 +1127,6 @@ function stubServices(
       onChanged: (): (() => void) => {
         return doNothingSync;
       },
-    },
-    trace: {
-      run: notWired,
-      cancel: notWiredError,
-      onStatus: (): (() => void) => {
-        return doNothingSync;
-      },
-      dispose: doNothing,
-    },
-    trust: {
-      get: notWired,
-      set: notWired,
-      list: notWired,
-      remove: notWired,
     },
     terminal: {
       open: notWired,

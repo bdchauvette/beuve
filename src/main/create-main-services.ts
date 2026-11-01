@@ -64,11 +64,6 @@ import { createRemoteServices } from './remote/create-remote-services.ts';
 import { createShellServices } from './shell/create-shell-services.ts';
 import { createGitCaches } from './sessions/create-git-caches.ts';
 import type { SessionContext } from './sessions/session-context.ts';
-import { createTraceServices } from './trace/create-trace-services.ts';
-import type { TraceServices } from './trace/create-trace-services.ts';
-import { createRepositoryTrust } from './trust/create-repository-trust.ts';
-import { createTrustServices } from './trust/create-trust-services.ts';
-import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
 import { createTerminalServices } from './terminal/create-terminal-services.ts';
 import { spawnNodePty } from './terminal/spawn-node-pty.ts';
@@ -90,9 +85,8 @@ export interface MainServicesOptions {
    */
   readonly reviewEditsRoot?: string;
   /**
-   * The Node that runs the TypeScript language server and trace probes (ADR 0083), resolved once
-   * at startup with `resolveNodeRuntime`. Without one, TypeScript has no language server and
-   * every probe fails with the reason.
+   * The Node that runs the TypeScript language server (ADR 0083), resolved once
+   * at startup with `resolveNodeRuntime`. Without one, TypeScript has no language server.
    */
   readonly nodeRuntime: Result<NodeRuntime, NodeRuntimeError>;
   readonly deps?: SessionDeps;
@@ -149,17 +143,6 @@ export interface MainServicesOptions {
   /** Diff display preferences (ADR 0042), in memory without `settingsPath`. */
   readonly display?: { readonly settingsPath?: string };
   /**
-   * Trace probes (ADR 0036, 0041): `settingsPath` holds the per-repository approvals (in memory
-   * without it), `temporaryDirectory` where runs work, `timeout` the longest a probe may run.
-   * Tests may pass a `runner`.
-   */
-  readonly trace?: {
-    readonly settingsPath?: string;
-    readonly temporaryDirectory?: string;
-    readonly timeout?: Temporal.Duration;
-    readonly runner?: TraceRunner;
-  };
-  /**
    * GitHub (ADR 0034, 0037–0040). `credentials` defaults to the gh CLI and is always wrapped in the
    * short-lived token cache; tests must pass a fake one and a fake `fetch`. `apiBase` is a
    * development-only API root, `settingsPath` where remembered clone paths live, `openExternal`
@@ -189,13 +172,11 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   const heads: {
     ura: UraServices | undefined;
     chat: ChatServices | undefined;
-    trace: TraceServices | undefined;
     impact: ImpactServices | undefined;
-  } = { ura: undefined, chat: undefined, trace: undefined, impact: undefined };
+  } = { ura: undefined, chat: undefined, impact: undefined };
   const onHeadMoved = (sessionId: string, headSha: CommitSha): void => {
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
-    heads.trace?.observeHead(sessionId, headSha);
     heads.impact?.observeHead(sessionId, headSha);
   };
   const caches = createGitCaches({ enabled: options.caching !== false, logger });
@@ -291,12 +272,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   heads.chat = chat;
   const ura = createUraServices({ context, impact });
   heads.ura = ura;
-  const repositoryTrust = createRepositoryTrust({
-    db: options.db,
-    logger,
-    legacySettingsPath: options.trace?.settingsPath,
-  });
-  const trust = createTrustServices({ context, trust: repositoryTrust });
   const terminal = createTerminalServices({
     context,
     worktrees,
@@ -308,19 +283,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       outputDelay: options.terminal.outputDelay,
     }),
   });
-  const trace = createTraceServices({
-    context,
-    worktrees,
-    parse: parser.parse,
-    trust: repositoryTrust,
-    nodeRuntime: options.nodeRuntime,
-    ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
-    ...(options.trace?.temporaryDirectory !== undefined && {
-      temporaryDirectory: options.trace.temporaryDirectory,
-    }),
-    ...(options.trace?.timeout !== undefined && { timeout: options.trace.timeout }),
-  });
-  heads.trace = trace;
   const credentials = createCachedCredentialProvider(
     options.github?.credentials ?? createGhCliCredentialProvider({ logger }),
   );
@@ -394,8 +356,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     display,
     chat,
     ura,
-    trace,
-    trust,
     terminal,
     github,
     claude: {
@@ -415,7 +375,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       impact,
       lsp,
       ura,
-      trace,
       github,
       openSessionId: () => {
         return open.sessionId;
@@ -434,7 +393,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     dispose: async (): Promise<void> => {
       github.dispose();
       terminal.dispose();
-      await Promise.all([chat.dispose(), trace.dispose()]);
+      await chat.dispose();
       impactRunner.dispose();
       await multiplexer.dispose();
       await worktrees.settled();

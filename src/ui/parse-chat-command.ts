@@ -30,10 +30,6 @@ export type ChatCommand =
   | { readonly kind: 'insights'; readonly showInsights?: boolean }
   /** `/order` shows the file order; `/order path|imports|calls` sets it (ADR 0065). */
   | { readonly kind: 'order'; readonly mode?: ReviewOrderMode }
-  /** Approves running the open repository's tests for trace probes (ADR 0041). */
-  | { readonly kind: 'trust' }
-  /** Withdraws that approval. */
-  | { readonly kind: 'untrust' }
   /** Findings as a chat answer, verified by a second pass unless `--no-verify` (ADR 0055). */
   | {
       readonly kind: 'review';
@@ -56,7 +52,7 @@ const whitespace = /\s+/u;
 
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`),
- * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), `/trust`, `/untrust`,
+ * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`),
  * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
  * `/generated [show|hide]`, `/insights [show|hide]`, `/order [path|imports|calls]`,
  * `/sidebar left|right`, `/sheets [window|inline]`, and
@@ -99,16 +95,6 @@ export function parseChatCommand(input: string): ChatCommand {
         return { kind: 'compact' };
       }
       return invalid('/compact takes no arguments. Type /help for the commands.');
-    }
-    case '/trust':
-    case '/untrust': {
-      if (args.length > 0) {
-        return invalid(`${name.toLowerCase()} takes no arguments. Type /help for the commands.`);
-      }
-      if (name.toLowerCase() === '/trust') {
-        return { kind: 'trust' };
-      }
-      return { kind: 'untrust' };
     }
     case '/editor': {
       return parseEditor(args);

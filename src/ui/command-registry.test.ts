@@ -97,8 +97,6 @@ describe('commandRegistry', () => {
       '/order',
       '/sidebar',
       '/sheets',
-      '/trust',
-      '/untrust',
       '/clear',
       '/compact',
       '/help',

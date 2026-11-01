@@ -1,6 +1,6 @@
 # 0041. Trace probes in the app: trust, channels, cancellation and the MCP tool
 
-- Status: Accepted
+- Status: Superseded by [0096](0096-drop-trace-probes-and-the-trust-grant.md)
 - Date: 2026-10-28
 
 ## Context

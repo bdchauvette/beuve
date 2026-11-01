@@ -11,21 +11,17 @@ import type {
   ReviewOrderMode,
   SetDiffDisplayRequest,
   SettingsApi,
-  TrustEntryView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
-import { ActionDelegation } from './action-delegation.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { formatControlStyles } from './format-control-styles.ts';
-import { pathText } from './path-text.ts';
 
 /**
  * The Settings window (ADR 0068): the preferences that were reachable only through chat commands
  * (editor, diff layout, whitespace, generated files, insights, review order, skipping reviewed
- * files, definitions, sidebar side), the accounts beuve uses (read-only), and the repositories
- * trusted to run their tests (each removable). Every change is saved at once through the settings
+ * files, definitions, sidebar side), the accounts beuve uses (read-only). Every change is saved at once through the settings
  * channels, which also tell the main window; the window is read again when it regains focus.
  */
 /** A checkbox row: its label, the note beside it, its state, and the change it asks for. */
@@ -138,19 +134,6 @@ export class BeuveSettingsView extends LitElement {
         gap: var(--beuve-space-3);
       }
 
-      .trusted {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-2);
-      }
-
-      .trusted .path {
-        flex: 1;
-        min-width: 0;
-        overflow-wrap: anywhere;
-        font: var(--beuve-font-mono);
-      }
-
       .empty {
         padding: var(--beuve-space-2) var(--beuve-space-3);
         color: var(--beuve-text-muted);
@@ -182,22 +165,7 @@ export class BeuveSettingsView extends LitElement {
   @state() accessor editors: EditorSettingsView | undefined;
   @state() accessor github: GithubAuthStatusView | undefined;
   @state() accessor claude: ClaudeStatusView | undefined;
-  @state() accessor trusted: readonly TrustEntryView[] = [];
   @state() accessor error = '';
-
-  constructor() {
-    super();
-    // ADR 0074: the trusted repositories' Remove buttons, through one listener.
-    this.addController(
-      new ActionDelegation(this, {
-        click: {
-          'remove-trust': ({ path = '' }): void => {
-            void this.removeTrust(path);
-          },
-        },
-      }),
-    );
-  }
 
   /** Reads every setting and account afresh. */
   private async load(): Promise<void> {
@@ -206,10 +174,9 @@ export class BeuveSettingsView extends LitElement {
       this.error = 'This window has no connection to beuve.';
       return;
     }
-    const [display, editors, trusted] = await Promise.all([
+    const [display, editors] = await Promise.all([
       bridge.invoke('display:get'),
       bridge.invoke('editor:get-settings'),
-      bridge.invoke('trust:list'),
     ]);
     if (display.ok) {
       this.display = display.value;
@@ -217,11 +184,8 @@ export class BeuveSettingsView extends LitElement {
     if (editors.ok) {
       this.editors = editors.value;
     }
-    if (trusted.ok) {
-      this.trusted = trusted.value;
-    }
     this.error =
-      [display, editors, trusted]
+      [display, editors]
         .map((result) => {
           if (result.ok) {
             return '';
@@ -281,19 +245,6 @@ export class BeuveSettingsView extends LitElement {
       this.error = '';
     } else {
       this.error = saved.error.message;
-    }
-  }
-
-  private async removeTrust(repositoryPath: string): Promise<void> {
-    const { api: bridge } = this;
-    if (bridge === undefined) {
-      return;
-    }
-    const left = await bridge.invoke('trust:remove', { repositoryPath });
-    if (left.ok) {
-      this.trusted = left.value;
-    } else {
-      this.error = left.error.message;
     }
   }
 
@@ -491,33 +442,6 @@ export class BeuveSettingsView extends LitElement {
       <div class="detail">${claude.detail}</div>`;
   }
 
-  private renderTrust(): TemplateResult {
-    return html`<h2>Trusted repositories</h2>
-      <div class="group">
-        ${
-          this.trusted.length === 0
-            ? html`<p class="empty">
-                No repository may run its tests. Trust Repository… asks first.
-              </p>`
-            : this.trusted.map((entry) => {
-                return html`<div class="row trusted">
-                  <span class="path" title=${entry.remoteUrl ?? entry.repositoryPath}
-                    >${pathText(entry.repositoryPath)}</span
-                  >
-                  <span class="detail">since ${entry.trustedAt.slice(0, 10)}</span>
-                  <button
-                    type="button"
-                    data-action="remove-trust"
-                    data-path=${entry.repositoryPath}
-                  >
-                    Remove
-                  </button>
-                </div>`;
-              })
-        }
-      </div>`;
-  }
-
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
@@ -539,7 +463,6 @@ export class BeuveSettingsView extends LitElement {
       ${display === undefined ? nothing : html`${this.renderReview(display)} ${this.renderDiff(display)}`}
       ${this.renderAccounts()}
       <beuve-model-settings .api=${this.api}></beuve-model-settings>
-      ${this.renderTrust()}
       ${this.error === '' ? nothing : html`<p class="error" role="alert">${this.error}</p>`}
     `;
   }

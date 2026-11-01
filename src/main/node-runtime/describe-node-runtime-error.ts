@@ -7,13 +7,13 @@ export function describeNodeRuntimeError(error: NodeRuntimeError): string {
       if (error.source === 'bundled') {
         return `beuve's bundled Node is missing (${error.searched.join(', ')}); reinstall beuve.`;
       }
-      return 'No node on PATH. Unpackaged beuve runs language servers and trace probes with the node on PATH, which must be Node 26 or later (.node-version).';
+      return 'No node on PATH. Unpackaged beuve runs language servers with the node on PATH, which must be Node 26 or later (.node-version).';
     }
     case 'unrunnable': {
       return `${error.command} could not report its version: ${error.reason}`;
     }
     case 'too-old': {
-      return `Language servers and trace probes need Node ${String(error.minimumMajor)} or later; found ${error.version} at ${error.command}.`;
+      return `Language servers need Node ${String(error.minimumMajor)} or later; found ${error.version} at ${error.command}.`;
     }
   }
 }

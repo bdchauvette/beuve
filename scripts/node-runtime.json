@@ -1,5 +1,5 @@
 {
-  "$comment": "The Node that packaged builds ship as resources/node/node for language servers and trace probes (ADR 0083, 0084). Bump deliberately: the version, and both hashes from https://nodejs.org/dist/v<version>/SHASUMS256.txt after checking its signature (docs/packaging.md). scripts/fetch-node.ts verifies every download against these hashes.",
+  "$comment": "The Node that packaged builds ship as resources/node/node for language servers (ADR 0083, 0084). Bump deliberately: the version, and both hashes from https://nodejs.org/dist/v<version>/SHASUMS256.txt after checking its signature (docs/packaging.md). scripts/fetch-node.ts verifies every download against these hashes.",
   "version": "26.13.0",
   "sha256": {
     "darwin-arm64": "6f5b3187d9df9fc007e881167905bc7d69ad26450ddc377c83d63256a2495b6e",

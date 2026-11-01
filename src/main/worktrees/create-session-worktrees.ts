@@ -115,7 +115,7 @@ export interface AcquireWorktreeOptions {
 }
 
 /**
- * Detached checkouts for language servers, chat, the sandbox, trace probes and the editor (ADR
+ * Detached checkouts for language servers, chat, the sandbox and the editor (ADR
  * 0020, 0079). One worktree per (repository, commit) at `<root>/<repo>-<hash>/<commit>`, shared
  * by every lease on that commit.
  */

@@ -33,7 +33,6 @@ describe('startMcpServer', () => {
       'beuve_get_lsp_diagnostics',
       'beuve_read_human_review',
       'beuve_run_impact_check',
-      'beuve_run_trace_probe',
     ]);
 
     const failed = await client.callTool(
@@ -58,8 +57,8 @@ describe('startMcpServer', () => {
 
     const invalid = await client.callTool(
       {
-        name: 'beuve_run_trace_probe',
-        arguments: { path: 'src/a.ts', line: 0 },
+        name: 'beuve_get_lsp_diagnostics',
+        arguments: { path: '' },
       },
       undefined,
       { signal },

@@ -69,18 +69,6 @@ describe('parseChatCommand', () => {
     expect(parseChatCommand('/editor zed cursor')).toMatchObject({ kind: 'invalid' });
   });
 
-  test('parses /trust and /untrust, which take no arguments', ({ expect }) => {
-    expect(parseChatCommand('/trust')).toStrictEqual({ kind: 'trust' });
-    expect(parseChatCommand(' /UNTRUST ')).toStrictEqual({ kind: 'untrust' });
-    expect(parseChatCommand('/trust now')).toMatchObject({ kind: 'invalid' });
-    expect(parseChatCommand('/untrust all')).toMatchObject({ kind: 'invalid' });
-  });
-
-  test('lists /trust and /untrust in the help', ({ expect }) => {
-    expect(chatHelp.some((line) => line.startsWith('/trust'))).toBe(true);
-    expect(chatHelp.some((line) => line.startsWith('/untrust'))).toBe(true);
-  });
-
   test('parses /review for the whole session', ({ expect }) => {
     expect(parseChatCommand('  /review ')).toStrictEqual({
       kind: 'review',
