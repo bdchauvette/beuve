@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { cp, mkdtempDisposable, open, readdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { promisify } from 'node:util';
@@ -116,15 +117,22 @@ function nodePtyInResources(resources: string): string {
 
 /**
  * node-pty (ADR 0095) must be unpacked with its native addon and, on macOS, `spawn-helper`: the
- * check loads it with the bundled Node (it is N-API, so any Node loads it) and runs a shell on a
- * pseudo-terminal.
+ * check runs a shell on a pseudo-terminal with the bundled Node (it is N-API, so any Node loads it).
+ *
+ * The unpacked files are copied to a scratch directory first. node-pty rewrites `app.asar` to
+ * `app.asar.unpacked` in the helper's path, which is right when Electron loads it from the archive
+ * but turns the already-unpacked path into `app.asar.unpacked.unpacked`, a helper that does not
+ * exist. The copy keeps the shipped files, their permissions and their signatures.
  */
 async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
   const script =
     "const p=require(process.argv[1]).spawn('/bin/sh',['-c','echo pty-ok'],{name:'xterm',cols:80,rows:24});" +
     "let o='';p.onData(d=>{o+=d});p.onExit(()=>{process.stdout.write(o)})";
   try {
-    const { stdout } = await runFile(node, ['-e', script, nodePty], {
+    await using scratch = await mkdtempDisposable(path.join(tmpdir(), 'check-packaged-pty-'));
+    const copy = path.join(scratch.path, 'node-pty');
+    await cp(nodePty, copy, { recursive: true });
+    const { stdout } = await runFile(node, ['-e', script, copy], {
       env: {},
       encoding: 'utf8',
     });
@@ -134,8 +142,36 @@ async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
     }
     return [];
   } catch (error: unknown) {
-    return [`${nodePty} did not load: ${errorFrom(error).message}`];
+    const helpers = await describeSpawnHelpers(nodePty);
+    return [`${nodePty} did not load: ${errorFrom(error).message}\n${helpers}`];
   }
+}
+
+/** Each `spawn-helper` node-pty ships, with its permission bits: one that is not executable fails `posix_spawnp`. */
+async function describeSpawnHelpers(nodePty: string): Promise<string> {
+  const candidates = [path.join(nodePty, 'build', 'Release', 'spawn-helper')];
+  try {
+    const targets = await readdir(path.join(nodePty, 'prebuilds'));
+    for (const target of targets) {
+      candidates.push(path.join(nodePty, 'prebuilds', target, 'spawn-helper'));
+    }
+  } catch {
+    // No prebuilds directory: only the compiled helper, if any, exists.
+  }
+  const lines: string[] = [];
+  for (const file of candidates) {
+    try {
+      await using handle = await open(file, 'r');
+      const { mode } = await handle.stat();
+      lines.push(`  ${path.relative(nodePty, file)}: mode ${(mode & 0o777).toString(8)}`);
+    } catch {
+      // Not shipped for this platform.
+    }
+  }
+  if (lines.length === 0) {
+    return '  no spawn-helper found';
+  }
+  return lines.join('\n');
 }
 
 async function checkNode(node: string): Promise<string[]> {

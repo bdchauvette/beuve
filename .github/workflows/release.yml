@@ -134,7 +134,7 @@ jobs:
           git commit -am "chore(cask): beuve $VERSION"
           # A GITHUB_TOKEN push starts no workflow runs, and releases come from tags only, so
           # this commit can't loop.
-          for attempt in 1 2 3; do
+          for _ in 1 2 3; do
             git push origin main && exit 0
             git pull --rebase origin main
           done
