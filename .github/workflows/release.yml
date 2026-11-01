@@ -5,8 +5,7 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
@@ -14,17 +13,23 @@ concurrency:
 
 jobs:
   build:
+    name: build
+    permissions:
+      contents: read
     # Apple silicon runner; beuve ships arm64 only (ADR 0048, 0049).
     runs-on: macos-latest
     timeout-minutes: 60
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      # No dependency cache: this workflow publishes artifacts, so a poisoned cache would ship.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .node-version
-          cache: npm
+          package-manager-cache: false
       - name: Resolve the version
         id: version
         run: |
@@ -65,7 +70,7 @@ jobs:
           shasum -a 256 ./*.dmg ./*.zip | sed 's|  \./|  |' > SHA256SUMS
           cat SHA256SUMS
           [ "$(wc -l < SHA256SUMS)" -eq 2 ]
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: beuve-${{ steps.version.outputs.version }}-mac-arm64
           path: |
@@ -75,6 +80,9 @@ jobs:
           if-no-files-found: error
 
   release:
+    name: release
+    permissions:
+      contents: write # create the GitHub Release and push the cask bump to main
     # Tags only; an untagged run stops at the uploaded artifact.
     if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     needs: build
@@ -84,13 +92,15 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.build.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .node-version
-      - uses: actions/download-artifact@v4
+          package-manager-cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: beuve-${{ needs.build.outputs.version }}-mac-arm64
           path: ${{ runner.temp }}/assets
@@ -103,8 +113,14 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/assets/* \
             --verify-tag --title "beuve $VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
       - name: Update the Homebrew cask on main
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           case "$VERSION" in *-*) echo "Prerelease: leaving the cask alone"; exit 0 ;; esac
+          # The checkout keeps no credentials; git gets the token from the environment here only.
+          header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $header"
           # Hash what users download, not what we built.
           gh release download "$GITHUB_REF_NAME" --pattern '*.zip' --dir "$RUNNER_TEMP/published"
           sha=$(sha256sum "$RUNNER_TEMP"/published/*.zip | cut -d' ' -f1)
@@ -125,6 +141,8 @@ jobs:
           exit 1
 
   verify-cask:
+    name: verify-cask
+    permissions: {}
     needs: [build, release]
     if: ${{ !contains(needs.build.outputs.version, '-') }}
     runs-on: macos-latest
