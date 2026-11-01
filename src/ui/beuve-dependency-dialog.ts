@@ -3,11 +3,11 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { DependencyLogView, DependencyStatusView, TrustView } from '#contract/ipc-contract.ts';
-import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { revealLogText } from './reveal-log-text.ts';
 import { trustGrantWording } from './trust-grant-wording.ts';
 
 /** What the dependency dialog shows. */
@@ -167,7 +167,7 @@ export class BeuveDependencyDialog extends LitElement {
   }
 
   private renderSafeguard(status: DependencyStatusView): TemplateResult {
-    return html`<h3 id="dependency-title">This change modifies dependencies</h3>
+    return html`<h3 id="dependency-title">Dependencies changed</h3>
       <p>This change modifies dependencies:</p>
       <ul>
         ${status.inputs.map((input) => {
@@ -205,7 +205,7 @@ export class BeuveDependencyDialog extends LitElement {
       body = html`${
           log.truncated ? html`<p class="muted">The log is long; this is its end.</p>` : nothing
         }
-        <pre aria-label="Install log">${revealFormatControls(log.text)}</pre>`;
+        <pre aria-label="Install log">${revealLogText(log.text)}</pre>`;
     }
     return html`<h3 id="dependency-title">Install log</h3>
       ${body}

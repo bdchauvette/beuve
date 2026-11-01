@@ -74,4 +74,6 @@ An allow-list of beuve's environment (home, user, shell, temp, locale, `TZ`, pro
 
 Types, definitions and probes come from the reviewed head's own lockfile, for every ecosystem with a host tool. Installs execute the repository's and its dependencies' install scripts with the user's access, which the trust grant and the safeguard gate (ADR 0090). A checkout is now as large as a clone with its dependencies (beuve's own is about 700 MB), per commit under review; the pnpm store and the shared caches reduce download, not disk. Monorepos with nested lockfiles install every unit, not only the ones a request touches. Bundler without rv evaluates the `Gemfile` (Ruby code) like any `bundle install`.
 
+"Scripts run normally" means what the tool does in a terminal: corepack's default npm when a repository pins none (12.2.1 in the smoke run) blocks dependency install scripts that the project's `allowScripts` doesn't list, and pnpm 10 builds only `onlyBuiltDependencies`; beuve doesn't override either, and the log shows what was blocked.
+
 Deferred: reporting checkout sizes, a disk budget, waiting for an in-flight install from a probe, yarn PnP's tsserver SDK, a Python language server with venv settings, Windows.
