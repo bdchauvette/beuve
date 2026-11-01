@@ -5,6 +5,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 ## Before committing
 
 - Run `npm run check` (typecheck, lint, format:check, deps, test). It must pass with zero warnings.
+- Use the Node in `.node-version`: `devEngines` in `package.json` makes npm refuse any other (`EBADDEVENGINES`). Claude Code cloud sessions get it from `.claude/hooks/session-start.sh` (ADR 0060 amendment).
 - `npm run build` bundles to `dist/`; `npm start` builds and launches Electron.
 - CI runs `npm run check` on Ubuntu and macOS, so tests must not assume Linux (symlinked `/tmp`, extra env vars, case-insensitive paths). Compare realpaths, and never skip a test to get green.
 - Release: calendar versions `YYYY.M.N` (ADR 0049). From a clean, up-to-date `main` run `npm run release` (bumps `package.json`/lockfile, commits `chore(release): <version>`, creates tag `v<version>`), then `git push --follow-tags origin main`; the `v*` tag builds, publishes the GitHub Release and bumps `Casks/beuve.rb` (docs/packaging.md). Don't use `npm version`, and don't edit the cask's `version` or `sha256` by hand.
