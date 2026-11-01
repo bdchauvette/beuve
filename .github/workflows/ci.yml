@@ -76,6 +76,12 @@ jobs:
           du -sh out/linux-unpacked out/linux-unpacked/resources/node/node
       - name: Package for macOS, verify signatures, fuses and bundled Node
         if: runner.os == 'macOS'
+        env:
+          # electron-builder skips signing in pull request builds, which leaves Electron's own
+          # signature broken by the edits and fails the codesign checks below. This job has no
+          # certificate or secrets, so the flag only makes pull requests get the same ad-hoc
+          # signing that pushes get (ADR 0048).
+          CSC_FOR_PULL_REQUEST: 'true'
         run: |
           npm run dist:mac
           app=out/mac-arm64/beuve.app
@@ -100,7 +106,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload the terminal screenshot
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: terminal-screenshots-${{ runner.os }}
           path: ${{ runner.temp }}/terminal
