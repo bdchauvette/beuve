@@ -1,9 +1,12 @@
 name: CI
 
+# Skipped when a change touches only prose; docs.yml still checks its formatting (ADR 0094).
 on:
   push:
     branches: [main]
+    paths-ignore: &docs-only ['docs/**', '**/*.md', 'LICENSE']
   pull_request:
+    paths-ignore: *docs-only
 
 permissions:
   contents: read

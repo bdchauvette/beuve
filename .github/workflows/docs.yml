@@ -1,0 +1,35 @@
+name: Docs
+
+# The counterpart of the paths-ignore in ci.yml: a docs-only change skips the full check but
+# still has its formatting verified (ADR 0094).
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '**/*.md', 'LICENSE']
+  pull_request:
+    paths: ['docs/**', '**/*.md', 'LICENSE']
+
+permissions: {}
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      # No install scripts: Prettier needs none, and Electron's would download a binary.
+      - run: npm ci --ignore-scripts
+      - run: npx --no-install prettier --check docs '**/*.md'
