@@ -57,6 +57,16 @@ jobs:
       - name: Render the hostile-input corpus in the built app (macOS)
         if: runner.os == 'macOS'
         run: time node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
+      # The terminal panel runs a real shell through node-pty in the built app, under the production
+      # policy: typing, output, the checkout, replay after hiding the panel (ADR 0093).
+      - name: Run a shell in the built app's terminal panel (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          time xvfb-run -a -s '-screen 0 1600x1000x24' \
+            node scripts/check-terminal.ts --screenshots "$RUNNER_TEMP/terminal"
+      - name: Run a shell in the built app's terminal panel (macOS)
+        if: runner.os == 'macOS'
+        run: time node scripts/check-terminal.ts --screenshots "$RUNNER_TEMP/terminal"
       # The packaged app with the runAsNode fuse off and the bundled Node (ADR 0083-0085).
       - name: Package for Linux and check its fuses and bundled Node
         if: runner.os == 'Linux'
@@ -87,6 +97,13 @@ jobs:
         with:
           name: hostile-render-screenshots-${{ runner.os }}
           path: ${{ runner.temp }}/hostile-render
+          if-no-files-found: ignore
+      - name: Upload the terminal screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-screenshots-${{ runner.os }}
+          path: ${{ runner.temp }}/terminal
           if-no-files-found: ignore
       - name: Lint the Homebrew cask
         if: runner.os == 'macOS'
