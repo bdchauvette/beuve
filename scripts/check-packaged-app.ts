@@ -9,7 +9,6 @@ import { errorFrom } from '../src/x/error/error-from.ts';
 
 import { readFuseWire } from './lib/fuses/read-fuse-wire.ts';
 import type { FuseState } from './lib/fuses/read-fuse-wire.ts';
-import packageJson from '../package.json' with { type: 'json' };
 import pinned from './node-runtime.json' with { type: 'json' };
 
 /** Electron's fuse order (`FuseV1Options` in `@electron/fuses`) and what beuve expects. */
@@ -46,7 +45,6 @@ async function checkPackagedApp(): Promise<void> {
   const failures = [
     ...(await checkFuses(layout.fuseBinary)),
     ...(await checkNode(layout.node)),
-    ...(await checkCorepack(layout)),
     ...(await checkNodePty(layout)),
   ];
   for (const failure of failures) {
@@ -59,11 +57,10 @@ async function checkPackagedApp(): Promise<void> {
   }
 }
 
-/** Where a packaged app keeps the binary whose fuses are checked, its bundled Node and corepack. */
+/** Where a packaged app keeps the binary whose fuses are checked, its bundled Node and node-pty. */
 interface AppLayout {
   readonly fuseBinary: string;
   readonly node: string;
-  readonly corepack: string;
   readonly nodePty: string;
 }
 
@@ -75,14 +72,12 @@ function layoutOf(app: string): AppLayout {
         'Contents/Frameworks/Electron Framework.framework/Electron Framework',
       ),
       node: path.join(app, 'Contents/Resources/node/node'),
-      corepack: path.join(app, corepackInResources('Contents/Resources')),
       nodePty: path.join(app, nodePtyInResources('Contents/Resources')),
     };
   }
   return {
     fuseBinary: path.join(app, 'beuve'),
     node: path.join(app, 'resources/node/node'),
-    corepack: path.join(app, corepackInResources('resources')),
     nodePty: path.join(app, nodePtyInResources('resources')),
   };
 }
@@ -115,10 +110,6 @@ function verdictOf(state: FuseState, expected: FuseState | undefined): string {
   return ` (want ${expected})`;
 }
 
-function corepackInResources(resources: string): string {
-  return path.join(resources, 'app.asar.unpacked/node_modules/corepack/dist/corepack.js');
-}
-
 function nodePtyInResources(resources: string): string {
   return path.join(resources, 'app.asar.unpacked/node_modules/node-pty');
 }
@@ -144,25 +135,6 @@ async function checkNodePty({ node, nodePty }: AppLayout): Promise<string[]> {
     return [];
   } catch (error: unknown) {
     return [`${nodePty} did not load: ${errorFrom(error).message}`];
-  }
-}
-
-/** corepack (ADR 0091) must be unpacked where the bundled Node can run it, at the pinned version. */
-async function checkCorepack({ node, corepack }: AppLayout): Promise<string[]> {
-  const want = packageJson.dependencies.corepack;
-  try {
-    const { stdout } = await runFile(node, [corepack, '--version'], {
-      env: {},
-      encoding: 'utf8',
-    });
-    const version = stdout.trim();
-    console.log(`check-packaged-app: ${corepack}: corepack ${version}`);
-    if (version !== want) {
-      return [`corepack is ${version}, not the pinned ${want}`];
-    }
-    return [];
-  } catch (error: unknown) {
-    return [`${corepack} did not run: ${errorFrom(error).message}`];
   }
 }
 

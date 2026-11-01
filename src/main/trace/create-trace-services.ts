@@ -96,11 +96,6 @@ export interface TraceServicesOptions {
   readonly temporaryDirectory?: string;
   /** Longest a probe may run. Defaults to 30 s (ADR 0041). */
   readonly timeout?: Temporal.Duration;
-  /**
-   * Whether beuve installed the checkout's own dependencies (ADR 0089): its `node_modules` then
-   * serves the probe, and the user's clone only when not.
-   */
-  readonly isInstalled?: (checkoutPath: string) => boolean;
 }
 
 type StopReason = 'cancelled' | 'head-changed' | 'app-quit';
@@ -298,7 +293,6 @@ export function createTraceServices(options: TraceServicesOptions): TraceService
         dependencyRoot: await dependencyRootFor({
           checkout: worktree.path,
           clone: repository.root,
-          isInstalled: options.isInstalled,
         }),
         testFiles,
         timeout,
@@ -516,26 +510,19 @@ function statusFrom(echo: TraceEcho, outcome: Outcome): TraceStatusView {
   };
 }
 
-/** A probe's checkout, the user's clone, and whether beuve installed into the checkout. */
+/** A probe's checkout and the user's clone. */
 interface DependencyRootChoice {
   readonly checkout: string;
   readonly clone: string;
-  readonly isInstalled: ((checkoutPath: string) => boolean) | undefined;
 }
 
 /**
- * Where a probe resolves packages from (ADR 0089): the checkout, once beuve installed into it
- * and it has a top-level `node_modules`, else the user's clone (ADR 0041). Either way the
- * runner's scratch `node_modules` links into it, so nothing writes there (ADR 0036 amendment).
+ * Where a probe resolves packages from (ADR 0095): the checkout when it has a top-level
+ * `node_modules` (the reviewer installed into it from the terminal), else the user's clone
+ * (ADR 0041). Either way the runner's scratch `node_modules` links into it, so nothing writes
+ * there (ADR 0036 amendment).
  */
-async function dependencyRootFor({
-  checkout,
-  clone,
-  isInstalled,
-}: DependencyRootChoice): Promise<string> {
-  if (isInstalled?.(checkout) !== true) {
-    return clone;
-  }
+async function dependencyRootFor({ checkout, clone }: DependencyRootChoice): Promise<string> {
   try {
     await using handle = await open(
       path.join(checkout, 'node_modules'),

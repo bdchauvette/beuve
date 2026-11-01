@@ -45,7 +45,7 @@ const screenText = `(${panel}?.renderRoot.querySelector('.host:not([hidden]) .xt
 await checkTerminal();
 
 /**
- * Drives the terminal panel (ADR 0093) in the built app, with the production Content Security
+ * Drives the terminal panel (ADR 0095) in the built app, with the production Content Security
  * Policy and Trusted Types: opens a review of a generated repository, shows the panel, types
  * commands into the shell through the page's keyboard, and checks that the shell runs in beuve's
  * checkout and not in the clone, that output returns to the screen, that hiding and showing the

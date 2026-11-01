@@ -43,7 +43,7 @@ export interface SessionWorktreesOptions {
   readonly editsRoot?: string;
   /**
    * Told the path of a read-only checkout that was just checked out afresh or removed, on its
-   * serial chain, so whatever describes its untracked contents (an install, ADR 0089) is forgotten.
+   * serial chain, so whatever describes its untracked contents is forgotten.
    */
   readonly onCheckoutReset?: (path: string) => void;
 }
@@ -761,8 +761,8 @@ async function removeCheckout({ repository, path }: CheckoutPlace, logger: Logge
 
 /**
  * Gives a checkout an older beuve sealed (ADR 0033's first amendment cleared every write bit)
- * its owner's write bits back, once: checkouts are now read-only by convention only, and an
- * install writes into them (ADR 0089). A checkout whose top directory is writable is left as it
+ * its owner's write bits back, once: checkouts are now read-only by convention only, and the
+ * reviewer's terminal writes into them (ADR 0095). A checkout whose top directory is writable is left as it
  * is, so this costs one `stat` after the first time. Links are never followed. Failures are logged.
  */
 async function unsealLegacyCheckout(checkout: string, logger: Logger): Promise<void> {

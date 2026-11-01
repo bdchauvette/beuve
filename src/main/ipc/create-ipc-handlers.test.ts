@@ -50,8 +50,6 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'github:preview-review': { sessionId: 's1' },
     'github:post-review': { sessionId: 's1' },
     'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
-    'deps:install': { sessionId: 's1', reinstall: false },
-    'deps:skip': { sessionId: 's1' },
     'terminal:open': { sessionId: 's1', cols: 80, rows: 24 },
   };
   return requests[channel];
@@ -297,6 +295,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             return notWired();
           },
           definition: notWired,
+          restart: notWired,
         },
       },
       appInfo(),
@@ -334,6 +333,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             calls.push(request);
             return notWired();
           },
+          restart: notWired,
         },
       },
       appInfo(),
@@ -1147,7 +1147,7 @@ function stubServices(
       getFileAttributes: notWired,
     },
     order: { getOrder: notWired },
-    lsp: { callHierarchy: notWired, definition: notWired },
+    lsp: { callHierarchy: notWired, definition: notWired, restart: notWired },
     sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
     remote: { permalink: notWired, openPermalink: notWired },
     shell: { openUrl: notWired },
@@ -1205,19 +1205,6 @@ function stubServices(
       set: notWired,
       list: notWired,
       remove: notWired,
-    },
-    deps: {
-      status: notWired,
-      install: notWired,
-      skip: notWired,
-      cancel: notWired,
-      readLog: notWired,
-      getSettings: notWired,
-      setRepositorySettings: notWired,
-      setToolPath: notWired,
-      onStatus: (): (() => void) => {
-        return doNothingSync;
-      },
     },
     terminal: {
       open: notWired,

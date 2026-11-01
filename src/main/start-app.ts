@@ -133,11 +133,6 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       sendEvent(window.webContents, 'trace:status', event);
     }
   });
-  services.deps.onStatus((event) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      sendEvent(window.webContents, 'deps:status', event);
-    }
-  });
   services.terminal.onData((event) => {
     for (const contents of mainWindowContents) {
       sendEvent(contents, 'terminal:data', event);

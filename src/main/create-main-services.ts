@@ -1,5 +1,3 @@
-import os from 'node:os';
-import path from 'node:path';
 import process from 'node:process';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -72,16 +70,9 @@ import { createRepositoryTrust } from './trust/create-repository-trust.ts';
 import { createTrustServices } from './trust/create-trust-services.ts';
 import type { TraceRunner } from '#internal/trace/trace-runner.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
-import { captureLoginEnvironment } from './deps/capture-login-environment.ts';
-import { createDependencyServices } from './deps/create-dependency-services.ts';
-import type { DependencyServices } from './deps/create-dependency-services.ts';
-import { createToolchainFinder } from './deps/create-toolchain-finder.ts';
 import { createTerminalServices } from './terminal/create-terminal-services.ts';
 import { spawnNodePty } from './terminal/spawn-node-pty.ts';
 import type { PtySpawner } from '#internal/terminal/pty-process.ts';
-import type { ToolchainFinder } from './deps/create-toolchain-finder.ts';
-import { resolveCorepack } from './deps/resolve-corepack.ts';
-import { listToolPaths } from '#internal/deps/list-tool-paths.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 import { loadSession } from './sessions/load-session.ts';
 import { createSessionWorktrees } from './worktrees/create-session-worktrees.ts';
@@ -146,18 +137,6 @@ export interface MainServicesOptions {
     readonly platform?: EditorPlatform;
   };
   /**
-   * Dependency installs (ADR 0089): `root` is `<userData>/deps` (defaults to `deps` beside
-   * `worktreeRoot`); tests pass fake `toolchains`, a short `timeout` and `killGrace`, and the
-   * environment installs inherit from.
-   */
-  readonly installs?: {
-    readonly root?: string;
-    readonly toolchains?: ToolchainFinder;
-    readonly timeout?: Temporal.Duration;
-    readonly killGrace?: Temporal.Duration;
-    readonly inheritedEnvironment?: Readonly<Record<string, string | undefined>>;
-  };
-  /**
    * Terminals (ADR 0095): tests pass a fake `spawn`, a short `outputDelay` and the environment the
    * shell inherits; the app passes its version.
    */
@@ -213,9 +192,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     trace: TraceServices | undefined;
     impact: ImpactServices | undefined;
   } = { ura: undefined, chat: undefined, trace: undefined, impact: undefined };
-  const later: { deps: DependencyServices | undefined } = { deps: undefined };
   const onHeadMoved = (sessionId: string, headSha: CommitSha): void => {
-    later.deps?.observeHead(sessionId, headSha);
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
     heads.trace?.observeHead(sessionId, headSha);
@@ -241,7 +218,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       createSessionServices({ ...options, onHeadMoved, caches }),
       open,
       (id, isPull) => {
-        void later.deps?.ensure(id);
         if (isPull) {
           gh.services?.watch(id);
         } else {
@@ -285,9 +261,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       }
       return undefined;
     },
-    onCheckoutReset: (checkoutPath): void => {
-      later.deps?.forget(checkoutPath);
-    },
   });
   const lsp = createLspServices({ context, multiplexer, worktrees });
   const registry = createModelRegistryStore(options.models?.settingsPath);
@@ -324,41 +297,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     legacySettingsPath: options.trace?.settingsPath,
   });
   const trust = createTrustServices({ context, trust: repositoryTrust });
-  const deps = createDependencyServices({
-    context,
-    worktrees,
-    trust: repositoryTrust,
-    root: options.installs?.root ?? path.join(path.dirname(options.worktreeRoot), 'deps'),
-    inheritedEnvironment: options.installs?.inheritedEnvironment ?? process.env,
-    toolchains:
-      options.installs?.toolchains ??
-      createToolchainFinder({
-        home: os.homedir(),
-        inheritedPath: process.env['PATH'],
-        captureEnvironment: async () => {
-          return captureLoginEnvironment({
-            shell: process.env['SHELL'] ?? defaultShell(),
-            home: os.homedir(),
-          });
-        },
-        toolPaths: () => {
-          return listToolPaths(options.db);
-        },
-        corepack: resolveCorepack(options.nodeRuntime),
-        logger,
-      }),
-    onInstalled: async (checkoutPath): Promise<void> => {
-      await multiplexer.restart(checkoutPath);
-    },
-    ...(options.installs?.timeout !== undefined && { timeout: options.installs.timeout }),
-    ...(options.installs?.killGrace !== undefined && { killGrace: options.installs.killGrace }),
-  });
-  later.deps = deps;
-  trust.onChanged(({ sessionId, trusted }) => {
-    if (trusted) {
-      void deps.ensure(sessionId);
-    }
-  });
   const terminal = createTerminalServices({
     context,
     worktrees,
@@ -375,7 +313,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     worktrees,
     parse: parser.parse,
     trust: repositoryTrust,
-    isInstalled: deps.isInstalled,
     nodeRuntime: options.nodeRuntime,
     ...(options.trace?.runner !== undefined && { runner: options.trace.runner }),
     ...(options.trace?.temporaryDirectory !== undefined && {
@@ -459,7 +396,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ura,
     trace,
     trust,
-    deps,
     terminal,
     github,
     claude: {
@@ -498,20 +434,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     dispose: async (): Promise<void> => {
       github.dispose();
       terminal.dispose();
-      await Promise.all([chat.dispose(), trace.dispose(), deps.dispose()]);
+      await Promise.all([chat.dispose(), trace.dispose()]);
       impactRunner.dispose();
       await multiplexer.dispose();
       await worktrees.settled();
       await caches[Symbol.asyncDispose]();
     },
   };
-}
-
-function defaultShell(): string {
-  if (process.platform === 'darwin') {
-    return '/bin/zsh';
-  }
-  return '/bin/sh';
 }
 
 /** The session the reviewer last opened, if any; shared with the MCP tools. */

@@ -1,6 +1,6 @@
 # 0089. Dependency installs in beuve's checkouts, detected from a table
 
-- Status: Accepted
+- Status: Superseded by [0095](0095-terminal-panel-in-the-session-checkout.md)
 - Date: 2026-11-01
 
 ## Context

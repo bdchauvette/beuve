@@ -1,6 +1,6 @@
 # 0091. Bundled corepack runs Node package managers on beuve's Node
 
-- Status: Accepted
+- Status: Superseded by [0095](0095-terminal-panel-in-the-session-checkout.md)
 - Date: 2026-11-01
 
 ## Context

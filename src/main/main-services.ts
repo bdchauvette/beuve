@@ -30,7 +30,6 @@ import type { ShellServices } from './shell/create-shell-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TraceServices } from './trace/create-trace-services.ts';
 import type { TrustServices } from './trust/create-trust-services.ts';
-import type { DependencyServices } from './deps/create-dependency-services.ts';
 import type { TerminalServices } from './terminal/create-terminal-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
@@ -61,7 +60,7 @@ export interface MainServices {
   readonly impact: ImpactServices;
   readonly files: FileServices;
   readonly order: OrderServices;
-  readonly lsp: Pick<LspServices, 'callHierarchy' | 'definition'>;
+  readonly lsp: Pick<LspServices, 'callHierarchy' | 'definition' | 'restart'>;
   /** Sheets: whole files pinned to a commit (ADR 0067). */
   readonly sheets: SheetServices;
   /** Permalinks to the primary remote (ADR 0067). */
@@ -79,21 +78,8 @@ export interface MainServices {
     'observeHead' | 'readAgentReview' | 'compileArtifact' | 'listPostings' | 'recordPostings'
   >;
   readonly trace: Omit<TraceServices, 'observeHead' | 'probe'>;
-  /** The one trust grant per repository: tests and dependency installs (ADR 0090). */
-  readonly trust: Omit<TrustServices, 'onChanged'>;
-  /** Dependency installs in beuve's checkouts (ADR 0089). */
-  readonly deps: Pick<
-    DependencyServices,
-    | 'status'
-    | 'install'
-    | 'skip'
-    | 'cancel'
-    | 'readLog'
-    | 'getSettings'
-    | 'setRepositorySettings'
-    | 'setToolPath'
-    | 'onStatus'
-  >;
+  /** The one trust grant per repository: running its tests (ADR 0090). */
+  readonly trust: TrustServices;
   /** Shells in beuve's checkouts (ADR 0095). */
   readonly terminal: TerminalServices;
   readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'summaryFor' | 'watch'>;

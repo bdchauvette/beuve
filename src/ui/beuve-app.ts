@@ -15,14 +15,16 @@ import type {
   CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
+  DiffFileView,
   EditorId,
   EditorSettingsView,
+  FileAttributesView,
   FilePairView,
+  FileReviewProgressView,
+  FileReviewStateView,
   FlowFailureKind,
   FlowGraphResponse,
   GithubAuthStatusView,
-  TraceStatusView,
-  DependencyStatusView,
   ImpactView,
   IpcResult,
   McpStatus,
@@ -30,17 +32,15 @@ import type {
   PullRequestSessionView,
   PullRequestUpdatedView,
   RepositoryTreeView,
-  DiffFileView,
-  FileAttributesView,
-  FileReviewProgressView,
-  FileReviewStateView,
+  ReviewEditsView,
   ReviewOrderMode,
   ReviewOrderView,
   ReviewView,
-  ReviewEditsView,
   SessionSummary,
   SetDiffDisplayRequest,
   SidebarSideView,
+  TraceStatusView,
+  TrustView,
   UraExportTarget,
   UraItemView,
   UraSeverityView,
@@ -54,10 +54,9 @@ import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
-import './beuve-dependency-dialog.ts';
-import type { DependencyDialogChoice, DependencyDialogState } from './beuve-dependency-dialog.ts';
+import './beuve-trust-dialog.ts';
+import type { TrustDialogChoice } from './beuve-trust-dialog.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
-import type { DependencyAction } from './describe-dependency-status.ts';
 import './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
@@ -808,41 +807,13 @@ export class BeuveApp extends LitElement {
     this.showNotice(event.detail);
   };
 
-  private readonly onDependencyAction = (event: CustomEvent<DependencyActionDetail>): void => {
-    const action = dependencyActionFrom(event.detail.action);
-    if (action !== undefined) {
-      void this.runDependencyAction(action);
+  private readonly onTrustChoice = (event: CustomEvent<TrustDialogChoice>): void => {
+    if (event.detail.action === 'trust') {
+      void this.grantTrustFromDialog();
+      return;
     }
-  };
-
-  private readonly onDependencyChoice = (event: CustomEvent<DependencyDialogChoice>): void => {
-    const { action, path } = event.detail;
-    switch (action) {
-      case 'trust': {
-        void this.grantTrustFromDialog();
-        return;
-      }
-      case 'install':
-      case 'skip': {
-        void this.runDependencyAction(action);
-        return;
-      }
-      case 'refresh': {
-        void this.openInstallLog();
-        return;
-      }
-      case 'file': {
-        this.dependencyDialog = undefined;
-        if (path !== undefined) {
-          this.goToFile(path, true);
-        }
-        return;
-      }
-      case 'close': {
-        this.dependencyDialog = undefined;
-        this.refocusZone();
-      }
-    }
+    this.trustDialog = undefined;
+    this.refocusZone();
   };
 
   /** A notice's button: runs its catalog command as the menu would. */
@@ -1054,10 +1025,10 @@ export class BeuveApp extends LitElement {
   /** The sidebar tab on show: intent and files, the review or the chat. */
   @state() accessor sidebarTab: SidebarZone = 'intent';
   @state() accessor openDialog = false;
-  /** The open session's dependency install (ADR 0089). */
-  @state() accessor dependencies: DependencyStatusView | undefined;
+
   /** The trust prompt, the safeguard's question or the install log, when one is open. */
-  @state() accessor dependencyDialog: DependencyDialogState | undefined;
+  /** The trust prompt (ADR 0090), while it is open. */
+  @state() accessor trustDialog: TrustView | undefined;
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
   @state() accessor githubPost: GithubPostState = { kind: 'idle' };
@@ -1100,9 +1071,6 @@ export class BeuveApp extends LitElement {
       }),
       bridge.on('trace:status', (event) => {
         this.applyTraceEvent(event);
-      }),
-      bridge.on('deps:status', (event) => {
-        this.applyDependencyStatus(event);
       }),
       bridge.on('github:pr-updated', (event) => {
         this.applyPullRequestUpdate(event);
@@ -1704,8 +1672,7 @@ export class BeuveApp extends LitElement {
       this.chat = emptyChatTranscript;
       this.pullRequest = undefined;
       this.ci = undefined;
-      this.dependencies = undefined;
-      this.dependencyDialog = undefined;
+      this.trustDialog = undefined;
       this.githubPost = { kind: 'idle' };
       this.reviewEdits = undefined;
       this.reviewEditsFlow = { kind: 'idle' };
@@ -1741,7 +1708,6 @@ export class BeuveApp extends LitElement {
       void this.loadFileAttributes(review.value);
       void this.refreshUra(review.value.session.id);
       void this.loadReviewEdits(review.value.session.id);
-      void this.loadDependencies(review.value.session.id);
       void this.loadChat(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
         void this.loadPullRequest(review.value.session.id);
@@ -2027,7 +1993,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     await this.openTrace(trace.path, trace.line);
-    await this.loadDependencies(review.session.id);
   }
 
   private applyTraceEvent(event: TraceStatusView): void {
@@ -2052,88 +2017,6 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  private applyDependencyStatus(event: DependencyStatusView): void {
-    if (event.sessionId !== this.review?.session.id) {
-      return;
-    }
-    this.dependencies = event;
-    const dialog = this.dependencyDialog;
-    if (dialog?.kind === 'safeguard' && event.state !== 'needs-approval') {
-      this.dependencyDialog = undefined;
-    }
-  }
-
-  private async loadDependencies(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const loaded = await bridge.invoke('deps:get-status', { sessionId });
-    if (loaded.ok && sessionId === this.review?.session.id) {
-      this.dependencies = loaded.value;
-    }
-  }
-
-  /** A button of the status bar's dependency line, or a Dependencies command (ADR 0089). */
-  private async runDependencyAction(action: DependencyAction): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const sessionId = review.session.id;
-    const expectedHeadSha = this.dependencies?.headSha ?? review.headSha;
-    switch (action) {
-      case 'trust': {
-        await this.openTrustDialog();
-        return;
-      }
-      case 'review-files': {
-        if (this.dependencies !== undefined) {
-          this.dependencyDialog = { kind: 'safeguard', status: this.dependencies };
-        }
-        return;
-      }
-      case 'view-log': {
-        await this.openInstallLog();
-        return;
-      }
-      case 'install':
-      case 'reinstall': {
-        this.dependencyDialog = undefined;
-        const installed = await bridge.invoke('deps:install', {
-          sessionId,
-          expectedHeadSha,
-          reinstall: action === 'reinstall',
-        });
-        this.afterDependencyRequest(sessionId, installed);
-        return;
-      }
-      case 'skip': {
-        this.dependencyDialog = undefined;
-        this.afterDependencyRequest(
-          sessionId,
-          await bridge.invoke('deps:skip', { sessionId, expectedHeadSha }),
-        );
-        return;
-      }
-      case 'cancel': {
-        this.afterDependencyRequest(sessionId, await bridge.invoke('deps:cancel', { sessionId }));
-      }
-    }
-  }
-
-  private afterDependencyRequest(sessionId: string, answer: IpcResult<DependencyStatusView>): void {
-    if (sessionId !== this.review?.session.id) {
-      return;
-    }
-    if (answer.ok) {
-      this.dependencies = answer.value;
-    } else if (answer.error.code !== 'cancelled') {
-      this.showNotice({ tone: 'error', text: answer.error.message });
-    }
-  }
-
   /** Trust Repository…: the one grant's prompt (ADR 0090), for the open session's repository. */
   private async openTrustDialog(): Promise<void> {
     const bridge = beuveBridge();
@@ -2154,13 +2037,13 @@ export class BeuveApp extends LitElement {
       });
       return;
     }
-    this.dependencyDialog = { kind: 'trust', trust: trust.value };
+    this.trustDialog = trust.value;
   }
 
   private async grantTrustFromDialog(): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
-    this.dependencyDialog = undefined;
+    this.trustDialog = undefined;
     if (bridge === undefined || review === undefined) {
       return;
     }
@@ -2174,28 +2057,22 @@ export class BeuveApp extends LitElement {
     }
     this.showNotice({
       tone: 'info',
-      text: `Trusted ${revealFormatControls(trusted.value.repositoryPath)}: beuve may run its tests and install its dependencies.`,
+      text: `Trusted ${revealFormatControls(trusted.value.repositoryPath)}: beuve may run its tests.`,
     });
-    await this.loadDependencies(review.session.id);
   }
 
-  /** View Install Log: the head checkout's log, revealed, in the dependency dialog. */
-  private async openInstallLog(): Promise<void> {
+  /** Restart Language Servers: the head checkout's servers start afresh on the next request. */
+  private async restartLanguageServers(): Promise<void> {
     const bridge = beuveBridge();
     const { review } = this;
     if (bridge === undefined || review === undefined) {
       return;
     }
-    this.dependencyDialog = { kind: 'log', log: undefined };
-    const log = await bridge.invoke('deps:read-log', { sessionId: review.session.id });
-    const current = this.dependencyDialog as DependencyDialogState | undefined;
-    if (current?.kind !== 'log' || this.review !== review) {
-      return;
-    }
-    if (log.ok) {
-      this.dependencyDialog = { kind: 'log', log: log.value };
-    } else {
-      this.dependencyDialog = { kind: 'log', log: undefined, error: log.error.message };
+    const restarted = await bridge.invoke('lsp:restart', { sessionId: review.session.id });
+    if (restarted.ok) {
+      this.showNotice({ tone: 'info', text: 'Language servers restarted for this head.' });
+    } else if (restarted.error.code !== 'cancelled') {
+      this.showNotice({ tone: 'error', text: restarted.error.message });
     }
   }
 
@@ -2231,18 +2108,14 @@ export class BeuveApp extends LitElement {
       this.note(
         'info',
         `Trusted ${repositoryPath}.`,
-        'beuve may now run this repository’s tests and install its dependencies, including their install scripts, on this machine. /untrust withdraws this.',
+        'beuve may now run this repository’s tests on this machine. /untrust withdraws this.',
       );
     } else {
-      this.note(
-        'info',
-        `No longer trusting ${repositoryPath}. Trace probes and dependency installs will ask again.`,
-      );
+      this.note('info', `No longer trusting ${repositoryPath}. Trace probes will ask again.`);
     }
     if (!isTrusting) {
       this.closeTrace();
     }
-    await this.loadDependencies(sessionId);
   }
 
   private async expandPeek(nodeId: string): Promise<void> {
@@ -3165,20 +3038,8 @@ export class BeuveApp extends LitElement {
         void this.openTrustDialog();
         return;
       }
-      case 'install-dependencies': {
-        void this.runDependencyAction('install');
-        return;
-      }
-      case 'reinstall-dependencies': {
-        void this.runDependencyAction('reinstall');
-        return;
-      }
-      case 'cancel-dependency-install': {
-        void this.runDependencyAction('cancel');
-        return;
-      }
-      case 'view-install-log': {
-        void this.openInstallLog();
+      case 'restart-language-servers': {
+        void this.restartLanguageServers();
         return;
       }
       case 'harvest-review-edits': {
@@ -3924,19 +3785,17 @@ export class BeuveApp extends LitElement {
         .ci=${this.ci}
         .attention=${this.pullRequest?.attention}
         .githubAuth=${this.githubAuth}
-        .dependencies=${this.review === undefined ? undefined : this.dependencies}
         @beuve-status-action=${this.onStatusAction}
-        @beuve-dependency-action=${this.onDependencyAction}
       ></beuve-status-bar>
       ${
-        this.dependencyDialog === undefined
+        this.trustDialog === undefined
           ? nothing
           : html`<div class="scrim">
               <div class="dialog">
-                <beuve-dependency-dialog
-                  .state=${this.dependencyDialog}
-                  @beuve-dependency-choice=${this.onDependencyChoice}
-                ></beuve-dependency-dialog>
+                <beuve-trust-dialog
+                  .trust=${this.trustDialog}
+                  @beuve-trust-choice=${this.onTrustChoice}
+                ></beuve-trust-dialog>
               </div>
             </div>`
       }
@@ -4210,26 +4069,4 @@ declare global {
   interface HTMLElementTagNameMap {
     'beuve-app': BeuveApp;
   }
-}
-
-/** What the status bar's dependency line asks for. */
-interface DependencyActionDetail {
-  readonly action: string;
-}
-
-const dependencyActions: ReadonlySet<string> = new Set([
-  'trust',
-  'install',
-  'reinstall',
-  'skip',
-  'cancel',
-  'view-log',
-  'review-files',
-]);
-
-function dependencyActionFrom(value: string): DependencyAction | undefined {
-  if (dependencyActions.has(value)) {
-    return value as DependencyAction;
-  }
-  return undefined;
 }

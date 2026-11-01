@@ -42,8 +42,9 @@ export async function secureUserData(userData: string, logger: Logger): Promise<
 }
 
 /**
- * Directories beuve creates in `userData`: session checkouts, trace scratch space, and the
- * dependency installs' caches, logs and corepack home (ADR 0089).
+ * Directories beuve creates in `userData`: session checkouts, trace scratch space, and `deps`,
+ * which builds before the terminal (ADR 0095) filled with install caches and logs and which may
+ * still be on disk.
  */
 const ownedDirectories = ['worktrees', 'trace', 'deps'];
 

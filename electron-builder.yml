@@ -32,14 +32,6 @@ files:
       - package.json
       - LICENSE
       - lib/cli.mjs
-  # corepack (ADR 0091): the bundled Node runs dist/corepack.js to fetch and run the package
-  # manager a reviewed repository pins, for dependency installs (ADR 0089).
-  - from: node_modules/corepack
-    to: node_modules/corepack
-    filter:
-      - package.json
-      - LICENSE.md
-      - dist/**
   # The Claude Code binary the Agent SDK runs when a model's executable is Bundled (ADR 0069,
   # 0070): the platform package npm installed (darwin-arm64 for the dmg, linux-x64 here).
   - from: node_modules/@anthropic-ai/claude-agent-sdk-${platform}-${arch}
@@ -71,7 +63,6 @@ extraResources:
 asarUnpack:
   - node_modules/typescript/**
   - node_modules/typescript-language-server/**
-  - node_modules/corepack/**
   # The addon and, on macOS, spawn-helper, which is run as a program (ADR 0095).
   - node_modules/node-pty/**
   # A native executable inside app.asar can't be run.

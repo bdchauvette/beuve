@@ -792,112 +792,15 @@ export interface TrustView {
   readonly remoteUrl?: string;
 }
 
-/**
- * Where the open session's dependency install stands (ADR 0089, 0090):
- * - `untrusted`: nothing installs until the reviewer trusts the repository;
- * - `nothing`: the reviewed tree has no lockfile, config step or hook;
- * - `needs-approval`: the lockfile safeguard asks first, `inputs` names the changed files;
- * - `declined`: the reviewer chose Skip at the safeguard for this head;
- * - `not-installed`: trusted, but no install has run for this checkout yet;
- * - `pending` (waiting for a slot), `running`, `done`, `failed` (`detail` says why).
- */
-export type DependencyState =
-  | 'untrusted'
-  | 'nothing'
-  | 'needs-approval'
-  | 'declined'
-  | 'not-installed'
-  | 'pending'
-  | 'running'
-  | 'done'
-  | 'failed';
-
-/** A package manager an install uses or used, with the version it reported. */
-export interface DependencyToolView {
-  readonly tool: string;
-  readonly version?: string;
+/** `lsp:restart`: stops the language servers of the session head's checkout; they start afresh. */
+export interface LspRestartRequest {
+  readonly sessionId: string;
 }
 
-/** `deps:get-status` and the `deps:status` event: one session head's install. */
-export interface DependencyStatusView {
+/** `lsp:restart`'s answer: the head whose checkout's servers were restarted. */
+export interface LspRestartedView {
   readonly sessionId: string;
   readonly headSha: string;
-  readonly state: DependencyState;
-  /** The real path the trust grant is keyed by. */
-  readonly repositoryPath: string;
-  readonly tools: readonly DependencyToolView[];
-  /** For `needs-approval` (and `declined`): the changed dependency inputs, repository-relative. */
-  readonly inputs: readonly string[];
-  /** For `running`, the step; for `failed`, why. */
-  readonly detail?: string;
-  /** Whether an install log exists for this checkout (View Install Log). */
-  readonly hasLog: boolean;
-}
-
-/** `deps:get-status`, `deps:cancel` and `deps:read-log`: the session whose head checkout is meant. */
-export interface DependencySessionRequest {
-  readonly sessionId: string;
-}
-
-/**
- * `deps:install`: install now, or again (`reinstall`). It is also the safeguard's Install, so it
- * records that answer for `expectedHeadSha` (ADR 0078, 0090).
- */
-export interface DependencyInstallRequest {
-  readonly sessionId: string;
-  readonly expectedHeadSha: string;
-  readonly reinstall: boolean;
-}
-
-/** `deps:skip`: the safeguard's Skip for `expectedHeadSha`; the checkout stays uninstalled. */
-export interface DependencySkipRequest {
-  readonly sessionId: string;
-  readonly expectedHeadSha: string;
-}
-
-/** `deps:read-log`: the last part of the head checkout's install log, as written. */
-export interface DependencyLogView {
-  readonly sessionId: string;
-  readonly headSha: string;
-  readonly text: string;
-  /** The log is longer than `text`, which is its end. */
-  readonly truncated: boolean;
-}
-
-/** One trusted repository's install settings, for the Settings window. */
-export interface RepositoryDependencySettingsView {
-  readonly repositoryPath: string;
-  /** Ask before installing when the reviewed range changes a dependency input (ADR 0090). */
-  readonly safeguard: boolean;
-  /** The override of `.beuve/config.json`, as JSON text; `''` for none (ADR 0092). */
-  readonly override: string;
-}
-
-/** A directory searched first for one tool executable (ADR 0089). */
-export interface ToolPathView {
-  readonly executable: string;
-  readonly directory: string;
-}
-
-/** `deps:get-settings`: per trusted repository, and per tool. */
-export interface DependencySettingsView {
-  readonly repositories: readonly RepositoryDependencySettingsView[];
-  readonly toolPaths: readonly ToolPathView[];
-  /** Every executable the detection table can run, for the tool-path rows. */
-  readonly executables: readonly string[];
-}
-
-/** `deps:set-repository-settings`; `override` must parse as `.beuve/config.json` does, or be `''`. */
-export interface SetRepositoryDependencySettingsRequest {
-  readonly repositoryPath: string;
-  readonly safeguard: boolean;
-  readonly override: string;
-}
-
-/** `deps:set-tool-path`: an absolute directory, or `''` to remove the override. */
-export interface SetToolPathRequest {
-  readonly executable: string;
-  readonly directory: string;
 }
 
 /** One terminal of a session (ADR 0095). */
@@ -2379,37 +2282,9 @@ export interface InvokeChannelMap {
     readonly request: TraceCancelRequest;
     readonly response: IpcResult<TraceCancelledView>;
   };
-  'deps:get-status': {
-    readonly request: DependencySessionRequest;
-    readonly response: IpcResult<DependencyStatusView>;
-  };
-  'deps:install': {
-    readonly request: DependencyInstallRequest;
-    readonly response: IpcResult<DependencyStatusView>;
-  };
-  'deps:skip': {
-    readonly request: DependencySkipRequest;
-    readonly response: IpcResult<DependencyStatusView>;
-  };
-  'deps:cancel': {
-    readonly request: DependencySessionRequest;
-    readonly response: IpcResult<DependencyStatusView>;
-  };
-  'deps:read-log': {
-    readonly request: DependencySessionRequest;
-    readonly response: IpcResult<DependencyLogView>;
-  };
-  'deps:get-settings': {
-    readonly request: undefined;
-    readonly response: IpcResult<DependencySettingsView>;
-  };
-  'deps:set-repository-settings': {
-    readonly request: SetRepositoryDependencySettingsRequest;
-    readonly response: IpcResult<DependencySettingsView>;
-  };
-  'deps:set-tool-path': {
-    readonly request: SetToolPathRequest;
-    readonly response: IpcResult<DependencySettingsView>;
+  'lsp:restart': {
+    readonly request: LspRestartRequest;
+    readonly response: IpcResult<LspRestartedView>;
   };
   'terminal:open': {
     readonly request: TerminalOpenRequest;
@@ -2641,8 +2516,6 @@ export interface EventChannelMap {
   'github:pr-updated': PullRequestUpdatedView;
   'github:ci-status': CiStatusChangedView;
   'trace:status': TraceStatusView;
-  /** A session head's dependency install changed (ADR 0089). */
-  'deps:status': DependencyStatusView;
   /** A terminal wrote output (ADR 0095). */
   'terminal:data': TerminalDataEvent;
   /** A terminal's shell ended. */
@@ -2692,9 +2565,6 @@ export type SettingsInvokeChannel =
   | 'claude:status'
   | 'trust:list'
   | 'trust:remove'
-  | 'deps:get-settings'
-  | 'deps:set-repository-settings'
-  | 'deps:set-tool-path'
   | 'menu:set-state'
   | SettingsOnlyInvokeChannel;
 

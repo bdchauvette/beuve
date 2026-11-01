@@ -1,6 +1,6 @@
 # 0092. The `.beuve/` directory: install configuration, an install hook, and a Settings override
 
-- Status: Accepted
+- Status: Superseded by [0095](0095-terminal-panel-in-the-session-checkout.md)
 - Date: 2026-11-01
 
 ## Context

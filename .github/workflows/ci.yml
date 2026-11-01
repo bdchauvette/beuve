@@ -58,7 +58,7 @@ jobs:
         if: runner.os == 'macOS'
         run: time node scripts/check-hostile-render.ts --screenshots "$RUNNER_TEMP/hostile-render"
       # The terminal panel runs a real shell through node-pty in the built app, under the production
-      # policy: typing, output, the checkout, replay after hiding the panel (ADR 0093).
+      # policy: typing, output, the checkout, replay after hiding the panel (ADR 0095).
       - name: Run a shell in the built app's terminal panel (Linux)
         if: runner.os == 'Linux'
         run: |

@@ -12,9 +12,6 @@ export const settingsInvokeChannels = Object.freeze([
   'claude:status',
   'trust:list',
   'trust:remove',
-  'deps:get-settings',
-  'deps:set-repository-settings',
-  'deps:set-tool-path',
   'menu:set-state',
   ...settingsOnlyInvokeChannels,
 ] as const satisfies readonly SettingsInvokeChannel[]);

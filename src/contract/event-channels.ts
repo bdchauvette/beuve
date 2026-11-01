@@ -8,7 +8,6 @@ export const eventChannels = Object.freeze([
   'github:pr-updated',
   'github:ci-status',
   'trace:status',
-  'deps:status',
   'terminal:data',
   'terminal:exit',
   'menu:run',

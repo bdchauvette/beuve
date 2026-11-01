@@ -14,8 +14,6 @@ export const perHeadInvokeChannels = Object.freeze([
   'github:preview-review',
   'github:post-review',
   'lsp:call-hierarchy',
-  'deps:install',
-  'deps:skip',
   'terminal:open',
 ] as const satisfies readonly InvokeChannel[]);
 

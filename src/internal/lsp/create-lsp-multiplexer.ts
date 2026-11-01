@@ -132,7 +132,7 @@ export interface LspMultiplexer {
   /**
    * Stops every server of the workspace `root` (resolved to its real path), so the next request
    * starts it afresh: tsserver doesn't notice a `node_modules` that appeared after it started
-   * (ADR 0089). Resolves once they have exited. An unknown root is a no-op.
+   * (ADR 0095: Restart Language Servers). Resolves once they have exited. An unknown root is a no-op.
    */
   readonly restart: (root: string) => Promise<void>;
   /** Shuts every server down cleanly (`shutdown`, `exit`, then signals). Idempotent. */

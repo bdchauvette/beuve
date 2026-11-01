@@ -10,6 +10,8 @@ import type {
   DefinitionView,
   IpcError,
   IpcResult,
+  LspRestartedView,
+  LspRestartRequest,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import type { Session } from '#internal/session/session.ts';
@@ -80,6 +82,11 @@ export interface LspServices {
    * commit kept until the next startup prune.
    */
   readonly definition: (request: DefinitionRequest) => Promise<IpcResult<DefinitionView>>;
+  /**
+   * Stops the language servers of the session head's checkout, so the next request starts them
+   * afresh: after the reviewer installed dependencies there, or when a server misbehaves.
+   */
+  readonly restart: (request: LspRestartRequest) => Promise<IpcResult<LspRestartedView>>;
   readonly diagnostics: (
     request: AgentDiagnosticsRequest,
   ) => Promise<Result<AgentDiagnosticsReport, IpcError>>;
@@ -384,6 +391,24 @@ export function createLspServices(options: LspServicesOptions): LspServices {
 
   return {
     definition: define,
+    restart: async ({ sessionId }): Promise<IpcResult<LspRestartedView>> => {
+      const loaded = loadSession(context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const refreshed = await refreshSession(context, loaded.value);
+      if (!refreshed.ok) {
+        return refreshed;
+      }
+      const { session, repository } = refreshed.value;
+      const leased = await checkout(session.id, repository, session.headSha);
+      if (!leased.ok) {
+        return leased;
+      }
+      using workspace = leased.value;
+      await multiplexer.restart(workspace.root);
+      return ok({ sessionId: session.id, headSha: session.headSha });
+    },
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
       const stopwatch = new Stopwatch();
       const loaded = loadSession(context, request.sessionId);

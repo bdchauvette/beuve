@@ -17,7 +17,7 @@ export interface StatusNoticeAction {
 
 /**
  * What the status bar says after Open in Editor. beuve's checkout is writable, but it is
- * read-only by convention (ADR 0033, amended by ADR 0089): edits there aren't kept, so the notice
+ * read-only by convention (ADR 0033, amended by ADR 0095): edits there aren't kept, so the notice
  * says so in one line and offers Review Edits (ADR 0088).
  */
 export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {

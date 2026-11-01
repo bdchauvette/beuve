@@ -1,6 +1,6 @@
 # 0090. One trust grant, an extensible scope, and the lockfile safeguard
 
-- Status: Accepted
+- Status: Accepted; the lockfile safeguard is superseded by [0095](0095-terminal-panel-in-the-session-checkout.md), the trust grant stands
 - Date: 2026-11-01
 
 ## Context

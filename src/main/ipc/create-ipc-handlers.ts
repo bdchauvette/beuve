@@ -71,9 +71,7 @@ import type {
   TraceCancelledView,
   TraceRunStartedView,
   TrustView,
-  DependencyLogView,
-  DependencySettingsView,
-  DependencyStatusView,
+  LspRestartedView,
   TerminalAckView,
   TerminalListView,
   TerminalView,
@@ -280,8 +278,6 @@ const traceRunRequest = z.strictObject({
 });
 
 const trustSetRequest = z.strictObject({ sessionId, trusted: z.boolean() });
-const depsInstallRequest = z.strictObject({ sessionId, expectedHeadSha, reinstall: z.boolean() });
-const depsSkipRequest = z.strictObject({ sessionId, expectedHeadSha });
 const terminalId = z.string().min(1).max(100);
 const terminalCells = z.number().int().min(1).max(1000);
 const terminalOpenRequest = z.strictObject({
@@ -297,18 +293,6 @@ const terminalResizeRequest = z.strictObject({
   rows: terminalCells,
 });
 const terminalCloseRequest = z.strictObject({ terminalId });
-const depsRepositorySettingsRequest = z.strictObject({
-  repositoryPath: z.string().min(1).max(4096),
-  safeguard: z.boolean(),
-  override: z.string().max(65_536),
-});
-const depsToolPathRequest = z.strictObject({
-  executable: z.string().regex(/^[\w.-]{1,64}$/u),
-  directory: z
-    .string()
-    .max(4096)
-    .refine((value) => !value.includes('\0')),
-});
 
 const pathPrefix = z
   .string()
@@ -766,38 +750,10 @@ export function createIpcHandlers(
       }
       return invalid(parsed.error);
     },
-    'deps:get-status': async (request): Promise<IpcResult<DependencyStatusView>> => {
+    'lsp:restart': async (request): Promise<IpcResult<LspRestartedView>> => {
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
-        return services.deps.status(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:install': async (request): Promise<IpcResult<DependencyStatusView>> => {
-      const parsed = depsInstallRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.install(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:skip': async (request): Promise<IpcResult<DependencyStatusView>> => {
-      const parsed = depsSkipRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.skip(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:cancel': async (request): Promise<IpcResult<DependencyStatusView>> => {
-      const parsed = sessionRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.cancel(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:read-log': async (request): Promise<IpcResult<DependencyLogView>> => {
-      const parsed = sessionRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.readLog(parsed.data);
+        return services.lsp.restart(parsed.data);
       }
       return invalid(parsed.error);
     },
@@ -833,27 +789,6 @@ export function createIpcHandlers(
       const parsed = terminalCloseRequest.safeParse(request);
       if (parsed.success) {
         return services.terminal.close(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:get-settings': async (request): Promise<IpcResult<DependencySettingsView>> => {
-      const parsed = noRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.getSettings();
-      }
-      return invalid(parsed.error);
-    },
-    'deps:set-repository-settings': async (request): Promise<IpcResult<DependencySettingsView>> => {
-      const parsed = depsRepositorySettingsRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.setRepositorySettings(parsed.data);
-      }
-      return invalid(parsed.error);
-    },
-    'deps:set-tool-path': async (request): Promise<IpcResult<DependencySettingsView>> => {
-      const parsed = depsToolPathRequest.safeParse(request);
-      if (parsed.success) {
-        return services.deps.setToolPath(parsed.data);
       }
       return invalid(parsed.error);
     },

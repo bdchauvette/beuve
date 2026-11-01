@@ -56,6 +56,7 @@ function headFreeSessionChannels(): Readonly<
     'session:get-tree': read,
     'session:get-file-attributes': read,
     'lsp:definition': 'a read pinned to its own `sha`',
+    'lsp:restart': 'restarts servers; it stores nothing about a head',
     'sheet:open': 'opens a window pinned to its own `sha`',
     'sheet:get-file': 'a read pinned to its own `sha`',
     'sheet:get-head': read,
@@ -65,9 +66,6 @@ function headFreeSessionChannels(): Readonly<
     'trace:run':
       'a probe whose result names the head it ran at; main aborts it when the head moves',
     'trace:cancel': 'stops work; it stores nothing about a head',
-    'deps:get-status': read,
-    'deps:cancel': 'stops work; it stores nothing about a head',
-    'deps:read-log': 'a read: its answer names the head whose checkout wrote the log',
     'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
     'trust:get': 'trust belongs to the repository, not a head',
     'trust:set': 'trust belongs to the repository, not a head',

@@ -40,15 +40,23 @@ A compromised renderer could call `terminal:open` and `terminal:write`, which is
 
 ### What this replaces
 
-Dependency installs end. Detection (`ecosystemRows`), install planning, the install slots, toolchain discovery and the login-shell capture, bundled corepack for installs, the trust-grant gate on installs, the lockfile safeguard, `.beuve/config.json`, the install hook, the Settings override and tool paths, the dependency dialog, status and menu items, and the `dependency_*` tables are removed by a following change, which marks ADR 0089 to 0092 Superseded. The trust grant itself stays while trace probes use it (ADR 0041). Two behaviours that depended on installs are kept:
+Dependency installs end. Detection (`ecosystemRows`), install planning, the install slots, toolchain discovery and the login-shell capture, bundled corepack for installs, the trust-grant gate on installs, the lockfile safeguard, `.beuve/config.json`, the install hook, the Settings override and tool paths, the dependency dialog, status line and menu items, and the `dependency_*` tables are removed; ADR 0089, 0091 and 0092 are Superseded and ADR 0090 keeps only its trust grant. The migration that created the tables never shipped, so it is deleted rather than followed by a drop. Builds from before this change may leave a `deps` directory in `userData`, which stays on `secureUserData`'s list.
 
-- **Language servers** restart for a checkout when a `node_modules` appears at its top level (a watch on the checkout's root, started with the first terminal), and by Review › Restart Language Servers.
+The trust grant stays: trace probes still run a repository's tests only under it (ADR 0041), and its prompt now says only that.
+
+Two behaviours that depended on installs change:
+
+- **Language servers** restart for the session head's checkout through Review › Restart Language Servers (`lsp:restart`, `LspMultiplexer.restart`). tsserver does not notice a `node_modules` that appears after it started, so the reviewer restarts after installing; the command also covers a server that misbehaves. Nothing watches the checkout.
 - **Trace probes** take packages from the checkout when it has a top-level `node_modules`, else from the user's clone (ADR 0041), instead of "when beuve installed it".
+
+Not decided here: a configuration file for custom language server definitions. `.beuve/config.json` held only install settings and is gone; a later ADR picks where such a file lives (the reviewer's own settings, not the reviewed repository, since a server is a program beuve starts).
 
 ## Consequences
 
-A reviewer sets up each head with the commands they already know, and any ecosystem works with no change in beuve. The cost is that nothing installs by itself: types and go-to-definition for a dependency appear only after the reviewer runs the install. A head that moves needs the install again in a new terminal, which costs time and disk like a fresh clone did.
+A reviewer sets up each head with the commands they already know, and any ecosystem works with no change in beuve. The cost is that nothing installs by itself: types and go-to-definition for a dependency appear only after the reviewer runs the install. A head that moves needs the install again in a new terminal, and then Restart Language Servers, which costs time and disk like a fresh clone did.
 
 `node-pty` brings a native module to build on Linux and ship unpacked from the archive (`asarUnpack`), and its macOS helper and addon are re-signed with beuve's identity like other nested executables (ADR 0085). `@xterm/xterm` is a large dependency, loaded only when the panel first opens. The terminal is a new path to code execution that is gated by the renderer alone.
+
+CI runs `scripts/check-terminal.ts` on Ubuntu and macOS (as it does the hostile-input render): it types into a real shell in the built app under the production CSP and Trusted Types, and checks the checkout, the output, replay after hiding the panel, Restart Language Servers and a shell's exit. `check:packaged` loads the unpacked `node-pty` with the bundled Node.
 
 Deferred: output flow control, search in the terminal, links, split panes, a Windows port, restoring terminals after a restart (a quit ends them), and remembering the panel's height.

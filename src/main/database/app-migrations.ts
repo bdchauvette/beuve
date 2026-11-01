@@ -2,7 +2,6 @@ import { chatMigrations } from '#internal/chat/chat-migrations.ts';
 import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { trustMigrations } from '#internal/trust/trust-migrations.ts';
-import { depsMigrations } from '#internal/deps/deps-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
@@ -13,8 +12,7 @@ import type { Migration } from '#sqlite/run-migrations.ts';
  * `sessions`, ADR 0023), then `chat` (its messages cascade from `sessions`, ADR 0031), then
  * `github` (pull request metadata, which references nothing, ADR 0037), then `review-edits`
  * (its rows cascade from `sessions` and `ura_items`, ADR 0088), then `trust` (grants, which
- * reference nothing, ADR 0090), then `deps` (installs and the safeguard's answers, which cascade
- * from `sessions`, ADR 0089, 0090).
+ * reference nothing, ADR 0090).
  */
 export const appMigrations: readonly Migration[] = Object.freeze([
   ...sessionMigrations,
@@ -23,5 +21,4 @@ export const appMigrations: readonly Migration[] = Object.freeze([
   ...githubMigrations,
   ...reviewEditsMigrations,
   ...trustMigrations,
-  ...depsMigrations,
 ]);
