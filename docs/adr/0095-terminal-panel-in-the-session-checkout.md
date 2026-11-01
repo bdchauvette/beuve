@@ -60,3 +60,7 @@ A reviewer sets up each head with the commands they already know, and any ecosys
 CI runs `scripts/check-terminal.ts` on Ubuntu and macOS (as it does the hostile-input render): it types into a real shell in the built app under the production CSP and Trusted Types, and checks the checkout, the output, replay after hiding the panel, Restart Language Servers and a shell's exit. `check:packaged` loads the unpacked `node-pty` with the bundled Node.
 
 Deferred: output flow control, search in the terminal, links, split panes, a Windows port, restoring terminals after a restart (a quit ends them), and remembering the panel's height.
+
+## Amendment (2026-11-01): the macOS spawn-helper is made executable on install
+
+node-pty 1.1.0 publishes its prebuilt `darwin-*/spawn-helper` without the exec bit, and its own `postinstall` does not set it, so `pty.fork` fails with `posix_spawnp failed` on macOS. CI on macOS failed on `spawn-node-pty.test.ts` from the terminal panel's first commit. `scripts/fix-node-pty-permissions.ts` runs as this package's `postinstall` and sets the helper to 0755, so the unpacked copy in the packaged app keeps that mode. An install with `--ignore-scripts` skips it, and the macOS terminal then fails to spawn.
