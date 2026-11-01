@@ -9,6 +9,13 @@
   "engines": {
     "node": ">=26.0.0"
   },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26",
+      "onFail": "error"
+    }
+  },
   "imports": {
     "#contract/*": "./src/contract/*",
     "#git/*": "./src/git/*",
@@ -78,5 +85,10 @@
     "prettier": "3.9.10",
     "typescript-eslint": "8.72.1",
     "vitest": "5.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true,
+    "node-pty@1.1.0": true
   }
 }
