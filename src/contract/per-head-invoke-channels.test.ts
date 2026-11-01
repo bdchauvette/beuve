@@ -65,6 +65,9 @@ function headFreeSessionChannels(): Readonly<
     'trace:run':
       'a probe whose result names the head it ran at; main aborts it when the head moves',
     'trace:cancel': 'stops work; it stores nothing about a head',
+    'deps:get-status': read,
+    'deps:cancel': 'stops work; it stores nothing about a head',
+    'deps:read-log': 'a read: its answer names the head whose checkout wrote the log',
     'trust:get': 'trust belongs to the repository, not a head',
     'trust:set': 'trust belongs to the repository, not a head',
     'ura:list': read,

@@ -147,6 +147,11 @@ export interface SessionWorktrees {
     repository: GitRepository,
     request: DiscardEditsRequest,
   ) => Promise<Result<undefined, DiscardEditsError>>;
+  /** Where `commit`'s read-only checkout is, or would be; creates nothing. */
+  readonly checkoutPath: (
+    repository: GitRepository,
+    commit: CommitSha,
+  ) => Promise<Result<string, GitError>>;
   /** Where `branch`'s review-edits worktree is, or would be, checked out; creates nothing. */
   readonly editsPath: (
     repository: GitRepository,
@@ -470,6 +475,13 @@ export function createSessionWorktrees(options: SessionWorktreesOptions): Sessio
       for (let pending = tails(); pending.length > 0; pending = tails()) {
         await Promise.all(pending);
       }
+    },
+    checkoutPath: async (repository, commit): Promise<Result<string, GitError>> => {
+      const placed = await place(repository, { kind: 'pinned-commit', sessionId: '', commit });
+      if (!placed.ok) {
+        return placed;
+      }
+      return ok(placed.value.path);
     },
     editsPath: async (repository, branch): Promise<Result<string, GitError>> => {
       const placed = await place(repository, {

@@ -16,6 +16,7 @@ import { test as baseTest } from '#internal/git/testing/test.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
 
 import { appMigrations } from '../database/app-migrations.ts';
+import { fakeToolchains } from '../deps/testing/fake-toolchains.ts';
 import { createMainServices } from '../create-main-services.ts';
 import { resolveNodeRuntime } from '../node-runtime/resolve-node-runtime.ts';
 import type { NodeRuntime, NodeRuntimeError } from '../node-runtime/resolve-node-runtime.ts';
@@ -88,6 +89,12 @@ export const test = baseTest
           worktreeRoot,
           nodeRuntime,
           ...options,
+          installs: {
+            root: path.join(path.dirname(worktreeRoot), 'deps'),
+            toolchains: fakeToolchains(),
+            inheritedEnvironment: { HOME: path.dirname(worktreeRoot) },
+            ...options.installs,
+          },
         });
         created.push(services);
         return services;

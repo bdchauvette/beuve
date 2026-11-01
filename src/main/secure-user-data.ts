@@ -41,8 +41,11 @@ export async function secureUserData(userData: string, logger: Logger): Promise<
   return { tightened };
 }
 
-/** Directories beuve creates in `userData`: session checkouts and trace scratch space. */
-const ownedDirectories = ['worktrees', 'trace'];
+/**
+ * Directories beuve creates in `userData`: session checkouts, trace scratch space, and the
+ * dependency installs' caches, logs and corepack home (ADR 0089).
+ */
+const ownedDirectories = ['worktrees', 'trace', 'deps'];
 
 /** Files beuve keeps in `userData`, which hold reviews, chat, settings, keys and the MCP token. */
 const ownedFiles = [

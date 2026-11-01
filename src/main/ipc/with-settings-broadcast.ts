@@ -9,6 +9,8 @@ const settingsChannels = [
   'editor:set-review-edits-prefix',
   'trust:set',
   'trust:remove',
+  'deps:set-repository-settings',
+  'deps:set-tool-path',
 ] as const satisfies readonly InvokeChannel[];
 
 /** A handler's answer, as far as telling success needs it. */

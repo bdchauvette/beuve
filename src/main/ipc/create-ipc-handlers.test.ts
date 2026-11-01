@@ -50,6 +50,8 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'github:preview-review': { sessionId: 's1' },
     'github:post-review': { sessionId: 's1' },
     'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
+    'deps:install': { sessionId: 's1', reinstall: false },
+    'deps:skip': { sessionId: 's1' },
   };
   return requests[channel];
 }
@@ -1202,6 +1204,19 @@ function stubServices(
       set: notWired,
       list: notWired,
       remove: notWired,
+    },
+    deps: {
+      status: notWired,
+      install: notWired,
+      skip: notWired,
+      cancel: notWired,
+      readLog: notWired,
+      getSettings: notWired,
+      setRepositorySettings: notWired,
+      setToolPath: notWired,
+      onStatus: (): (() => void) => {
+        return doNothingSync;
+      },
     },
     github: {
       authStatus: notWired,

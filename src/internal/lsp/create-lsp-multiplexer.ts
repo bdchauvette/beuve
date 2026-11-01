@@ -129,6 +129,12 @@ export interface LspMultiplexer {
     request: DefinitionRequest,
   ) => Promise<Result<readonly LocationView[], LspError>>;
   readonly status: () => readonly ServerStatus[];
+  /**
+   * Stops every server of the workspace `root` (resolved to its real path), so the next request
+   * starts it afresh: tsserver doesn't notice a `node_modules` that appeared after it started
+   * (ADR 0089). Resolves once they have exited. An unknown root is a no-op.
+   */
+  readonly restart: (root: string) => Promise<void>;
   /** Shuts every server down cleanly (`shutdown`, `exit`, then signals). Idempotent. */
   readonly dispose: () => Promise<void>;
 }
@@ -635,6 +641,31 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         }
       }
       return statuses;
+    },
+
+    restart: async (root): Promise<void> => {
+      const resolved = await resolveWorkspaceRoot(root);
+      if (!resolved.ok) {
+        return;
+      }
+      const stopping: Promise<void>[] = [];
+      for (const entry of entries.values()) {
+        if (entry.root !== resolved.value) {
+          continue;
+        }
+        const { session } = entry;
+        entry.session = undefined;
+        if (session === undefined) {
+          continue;
+        }
+
+        logger?.info('lsp: restarting a server after an install', {
+          serverId: entry.definition.id,
+          root: entry.root,
+        });
+        stopping.push(session.dispose());
+      }
+      await Promise.all(stopping);
     },
 
     dispose: async (): Promise<void> => {

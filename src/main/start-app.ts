@@ -127,6 +127,11 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
       sendEvent(window.webContents, 'trace:status', event);
     }
   });
+  services.deps.onStatus((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'deps:status', event);
+    }
+  });
   services.ura.onChanged((sessionId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'ura:changed', { sessionId });
