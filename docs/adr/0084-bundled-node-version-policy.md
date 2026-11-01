@@ -18,3 +18,7 @@ Packaged beuve ships its own Node for the language server and trace probes (ADR 
 ## Consequences
 
 Probe results match what the repository's CI would see on the same Node line. A forgotten bump leaves a Node with known vulnerabilities in the app, so Node security releases join Electron's on the release checklist (docs/packaging.md). Adding a target, such as Intel macOS, means adding its hash. Committed hashes make every build reproducible and tamper-evident, but only as trustworthy as the bump that recorded them, which is why the signature is checked at that point.
+
+## Amendment (2026-11-01, ADR 0091): corepack
+
+The bundled corepack (ADR 0091), pinned exactly in `package.json` and checked by `check-packaged-app`, follows the same policy: bumped deliberately, in its own commit, after checking it on the CI Node and in the packaged app.

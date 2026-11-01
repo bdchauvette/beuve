@@ -23,3 +23,9 @@ ADR 0036 built the instrumented-Vitest probe and left four things to main and th
 ## Consequences
 
 Measured in the app on a 4-core container, one probe on a four-test file takes 0.65 to 0.70 s from keypress to timeline, and the first one after granting trust 0.8 s (a cold Vitest process each time; the warm runner stays deferred). Revoking trust or moving a repository is a settings edit, and a user who copies `settings.json` to another machine finds nothing trusted there unless the path matches too. Trusting a repository trusts every later commit of it, including a pull request's head, because the approval is for the repository, not a commit: reviewers of hostile pull requests should not trust a clone they review untrusted code in. The approval does not extend to the language servers (ADR 0017) or to other test runners. Jest and other frameworks need a runner behind the same port and probably their own `not-vitest`-style failure.
+
+## Amendment (2026-11-01, ADR 0089, 0090): one grant for tests and installs
+
+- **The approval is the one trust grant** (ADR 0090): "run this repository's tests and install its dependencies, including their install scripts". It moved from `settings.json` (`traceTrustedRepositories`) into the trust domain's `trust_grants` table as a `repository` scope (path plus recorded remote, matched as before); earlier entries are moved on first use. The channels are `trust:get`, `trust:set`, `trust:list` and `trust:remove` (were `trace:get-trust`, `trace:set-trust`, `trace:list-trust`, `trace:remove-trust`), still renderer-only. Review › Trust Repository… opens the prompt; `/trust` and `/untrust` remain.
+- **Dependencies come from the checkout when installed** (ADR 0089, ADR 0036 amendment), else from the clone as this ADR decided.
+- `beuve_run_trace_probe` still never prompts, and an agent still can't grant trust.

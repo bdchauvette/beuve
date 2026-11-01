@@ -61,3 +61,8 @@ Every probe wrote into the user's clone, against ADR 0088. Vite bundles the gene
 - **The integration tests snapshot both trees** (every path with its kind, size, modification time and link target, without following links, `node_modules` and dot-entries included) before and after a probe whose project config loads a scoped plugin from the clone, and after one whose tests try to write a snapshot, an inline snapshot and an attachment; both must be unchanged.
 
 Remaining writes beuve doesn't control: a test's own file writes (as before), browser-mode screenshots, and tools in a project config that write relative to `process.cwd()` (the project root inside the read-only checkout, where they fail).
+
+## Amendment (2026-11-01, ADR 0089, 0090): the checkout's own dependencies
+
+- **The dependency root is the checkout once beuve installed it**: when the head checkout's install finished (ADR 0089) and it has a top-level `node_modules`, the probe resolves packages there, so it runs against the reviewed head's own lockfile. Otherwise it uses the user's clone, as before. The scratch `node_modules` stays a directory of links, so a probe still writes into neither.
+- **Trust** is now the one grant of ADR 0090, which also covers dependency installs, install scripts included; the request type's `trusted: true` is unchanged.
