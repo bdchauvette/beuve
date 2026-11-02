@@ -16,7 +16,7 @@
 - **`build.yml`** (the rest of the old `ci.yml`) builds, renders the hostile-input corpus, runs the terminal check and packages on both systems.
 - `test.yml` and `build.yml` keep `paths-ignore` for `docs/**`, `**/*.md`, `LICENSE` and now `Casks/**`. Their lists stay identical. Tests build their own fixtures and never read the docs or the cask; a test that starts to must be added to the lists.
 - Each check has a `:ci` script in `package.json` that CI and the release workflow call by name: `typecheck:ci`, `lint:ci`, `format:ci`, `deps:ci`, `test:ci`. Most are the local command today; the name is the contract, and a CI-only flag goes there without changing the local one. `format:check` is now `format:ci`. `npm run check` stays as the local aggregate that `CLAUDE.md` asks contributors to run; CI does not call it.
-- `release.yml` runs the five `:ci` scripts in place of `check`.
+- `release.yml` runs the six `:ci` scripts (the five checks and `audit:ci`) in place of `check`, so a release is gated on a passing audit at the moment it is cut, not on the last weekly run.
 
 ## Consequences
 
