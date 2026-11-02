@@ -1,8 +1,8 @@
-import { createInlineNode } from './create-inline-node.ts';
+import { createMarkdownNodes } from './create-markdown-nodes.ts';
+import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
 import { createTextSpan } from './create-text-span.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
-import { parseMarkdownSubset } from './parse-markdown-subset.ts';
-import type { InlineSpan, MarkdownBlock } from './parse-markdown-subset.ts';
+import { parseMarkdown } from './parse-markdown.ts';
 
 /**
  * Expands or collapses an insight note made by `createInsightElement`: the full body, with Stage
@@ -25,7 +25,7 @@ function createBody(insight: ReviewInsight): HTMLElement {
   body.className = 'insight-body';
   const text = document.createElement('div');
   text.className = 'insight-text';
-  text.append(...parseMarkdownSubset(finding.body).map((block) => blockNode(block)));
+  text.append(...createMarkdownNodes(parseMarkdown(finding.body), createPlainMarkdownRenderers()));
   const actions = document.createElement('div');
   actions.className = 'insight-actions';
   const stage = actionButton({
@@ -49,30 +49,6 @@ function createBody(insight: ReviewInsight): HTMLElement {
   );
   body.append(text, actions);
   return body;
-}
-
-function blockNode(block: MarkdownBlock): Node {
-  switch (block.kind) {
-    case 'paragraph': {
-      return container('p', block.spans);
-    }
-    case 'list': {
-      const list = document.createElement('ul');
-      list.append(...block.items.map((item) => container('li', item)));
-      return list;
-    }
-    case 'code': {
-      const pre = document.createElement('pre');
-      pre.textContent = block.text;
-      return pre;
-    }
-  }
-}
-
-function container(tag: 'p' | 'li', spans: readonly InlineSpan[]): HTMLElement {
-  const element = document.createElement(tag);
-  element.append(...spans.map((span) => createInlineNode(span)));
-  return element;
 }
 
 /** A delegated button (ADR 0074): its `data-action`, its text and its tooltip. */
