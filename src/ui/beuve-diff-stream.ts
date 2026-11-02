@@ -131,6 +131,11 @@ const mountMargin = '1200px 0px';
 /** Cards farther away than this unmount theirs, which bounds the DOM of a long stream (ADR 0025). */
 const unmountMargin = '6000px 0px';
 
+/** What the card's gutter button asks for: a note composer on `anchor`. */
+interface NoteAddDetail {
+  readonly anchor: UraAnchorView;
+}
+
 /**
  * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
  * header naming the review kind and ImpactGate banners once they arrive. Cards
@@ -532,6 +537,12 @@ export class BeuveDiffStream extends LitElement {
     );
   };
 
+  /** The gutter button: a composer on the lines it was clicked for. */
+  private readonly onNoteAdd = (event: CustomEvent<NoteAddDetail>): void => {
+    event.stopPropagation();
+    this.openComposer(event.detail.anchor);
+  };
+
   private readonly onComposeCancel = (): void => {
     this.closeComposer();
   };
@@ -778,6 +789,7 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-ura-compose-submit', this.onComposeSubmit as EventListener);
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
     this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
+    this.addEventListener('beuve-note-add', this.onNoteAdd as EventListener);
     this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
     this.addEventListener('beuve-impact-close', this.onImpactClose);
     this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
@@ -1107,7 +1119,14 @@ export class BeuveDiffStream extends LitElement {
    */
   private openComposer(given?: UraAnchorView, suggestedPatch?: string): void {
     const { review } = this;
-    const file = this.shownFiles()[this.activeIndex];
+    const files = this.shownFiles();
+    if (given !== undefined && given.kind !== 'change') {
+      const index = files.findIndex((candidate) => candidate.path === given.path);
+      if (index !== -1) {
+        this.activeIndex = index;
+      }
+    }
+    const file = files[this.activeIndex];
     if (review === undefined || file === undefined) {
       return;
     }

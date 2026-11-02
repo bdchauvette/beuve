@@ -51,7 +51,6 @@ import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
-import { mentionFromTarget } from './mention-from-target.ts';
 import { targetFrom } from './target-from.ts';
 import type { ReviewTarget, SelectedLines } from './target-from.ts';
 import { splitPatch } from './split-patch.ts';
@@ -68,6 +67,7 @@ import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
+import { anchorFromTarget } from './anchor-from-target.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
@@ -1265,7 +1265,7 @@ export class BeuveFileCard extends LitElement {
         onTokenLeave: this.onTokenLeave,
         enableGutterUtility: true,
         onGutterUtilityClick: (range): void => {
-          this.addToChat(range);
+          this.addNote(range);
         },
         ...(loader !== undefined && {
           loadDiffFiles: async (fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> => {
@@ -1291,8 +1291,9 @@ export class BeuveFileCard extends LitElement {
 
   /**
    * `@pierre/diffs` shows its gutter button beside the hovered line number, or at the end of the
-   * selection; a click adds that line or the selection to the chat, a drag from it selects lines
-   * first (ADR 0046). Its plus becomes a speech bubble, so it doesn't read as "stage a note".
+   * selection; a click opens the note composer on that line or the selection, a drag from it
+   * selects lines first (ADR 0101). Its plus becomes the note icon; Add to Chat (⌘>) sends the
+   * selected lines to the chat instead.
    */
   private labelGutterButton(): void {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
@@ -1301,37 +1302,27 @@ export class BeuveFileCard extends LitElement {
       return;
     }
     this.isGutterLabelled = true;
-    button.title = `Add to Chat (${shortcutOf('add-to-chat', keyPlatformOf(navigator.platform))}); drag to take more lines`;
-    button.setAttribute('aria-label', 'Add these lines to the chat');
-    const namespace = 'http://www.w3.org/2000/svg';
-    const icon = document.createElementNS(namespace, 'svg');
-    icon.setAttribute('viewBox', '0 0 16 16');
-    icon.setAttribute('width', '12');
-    icon.setAttribute('height', '12');
-    icon.setAttribute('aria-hidden', 'true');
-    const bubble = document.createElementNS(namespace, 'path');
-    bubble.setAttribute(
-      'd',
-      'M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5Z',
-    );
-    bubble.setAttribute('fill', 'currentColor');
-    icon.append(bubble);
-    button.replaceChildren(icon);
+    button.title = `Add Note (${shortcutOf('stage', keyPlatformOf(navigator.platform))}); drag to take more lines. Add to Chat: ${shortcutOf('add-to-chat', keyPlatformOf(navigator.platform))}`;
+    button.setAttribute('aria-label', 'Add a review note on these lines');
+    button.replaceChildren(createUraNoteIcon());
   }
 
-  private addToChat(range: SelectedLines): void {
+  /**
+   * The gutter button: select the clicked lines (so Add to Chat, ⌘>, takes them on) and ask the
+   * stream to open the note composer on them.
+   */
+  private addNote(range: SelectedLines): void {
     const { file } = this;
     if (file === undefined) {
       return;
     }
-    const target = mentionFromTarget(
+    this.diff?.setSelectedLines(range);
+    this.lineSelection = range;
+    const anchor = anchorFromTarget(
       targetFrom({ file, hunk: -1, selection: range, line: undefined, collapsed: false }),
     );
-    if (target === undefined) {
-      return;
-    }
     this.dispatchEvent(
-      new CustomEvent('beuve-chat-add', { detail: { target }, bubbles: true, composed: true }),
+      new CustomEvent('beuve-note-add', { detail: { anchor }, bubbles: true, composed: true }),
     );
   }
 
