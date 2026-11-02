@@ -94,8 +94,30 @@ export class BeuveOpenPanel extends LitElement {
       cursor: pointer;
     }
 
+    li {
+      transition:
+        background-color 80ms ease-out,
+        transform 80ms ease-out;
+    }
+
     li[aria-selected='true'] {
       background: var(--beuve-accent-soft);
+    }
+
+    li:active {
+      transform: scale(0.985);
+      background: var(--beuve-accent-soft);
+      box-shadow: inset 0 0 0 1px var(--beuve-accent);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      li {
+        transition: none;
+      }
+
+      li:active {
+        transform: none;
+      }
     }
 
     li.separated {

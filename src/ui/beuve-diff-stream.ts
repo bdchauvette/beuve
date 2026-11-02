@@ -191,6 +191,66 @@ export class BeuveDiffStream extends LitElement {
         color: var(--beuve-danger);
       }
 
+      .welcome > .opening {
+        display: grid;
+        justify-items: center;
+        gap: var(--beuve-space-3);
+        animation: opening-in 160ms ease-out both;
+      }
+
+      .opening-label {
+        font-size: 16px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .opening-bar {
+        position: relative;
+        width: 160px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: var(--beuve-accent-soft);
+      }
+
+      .opening-bar::after {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 40%;
+        border-radius: inherit;
+        background: var(--beuve-accent);
+        content: '';
+        animation: opening-slide 1.1s ease-in-out infinite;
+      }
+
+      @keyframes opening-in {
+        from {
+          opacity: 0;
+          transform: translateY(4px) scale(0.98);
+        }
+      }
+
+      @keyframes opening-slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .welcome > .opening {
+          animation: none;
+        }
+
+        .opening-bar::after {
+          width: 100%;
+          animation: none;
+          opacity: 0.6;
+        }
+      }
+
       .summary {
         display: flex;
         align-items: center;
@@ -563,6 +623,8 @@ export class BeuveDiffStream extends LitElement {
   @property() accessor sessionNote = 'Loading sessions…';
   @property({ attribute: false }) accessor review: ReviewView | undefined;
   @property({ type: Boolean }) accessor loading = false;
+  /** Names the session being opened, shown while `loading` and no review has arrived. */
+  @property() accessor loadingLabel = '';
   @property({ type: Boolean }) accessor marking = false;
   /** The checkpoint Save Progress recorded in this window for this session, if any. */
   @property({ attribute: false }) accessor savedProgress:
@@ -1113,6 +1175,17 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private renderWelcome(): TemplateResult {
+    if (this.loading && this.error === '') {
+      return html`
+        <div class="body welcome">
+          <div class="opening" role="status" aria-live="polite">
+            <span class="opening-label">${this.loadingLabel}</span>
+            <span class="opening-bar" aria-hidden="true"></span>
+            <span class="note">Opening review…</span>
+          </div>
+        </div>
+      `;
+    }
     return html`
       <div class="body welcome">
         <div>
