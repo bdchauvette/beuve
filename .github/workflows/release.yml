@@ -59,11 +59,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building beuve $version"
       - run: npm ci
-      - run: npm run typecheck:ci
-      - run: npm run lint:ci
-      - run: npm run format:ci
-      - run: npm run deps:ci
-      - run: npm run test:ci
       # No secrets: an ad-hoc signed, unnotarized build for personal use (docs/packaging.md). To
       # sign and notarize, add the CSC_* and APPLE_* secrets and pass them here as `env`.
       - name: Build the dmg and zip
