@@ -24,6 +24,8 @@ interface ShownHover {
 
 /** How long the pointer rests on a token before the language server is asked. */
 const dwellMs = 300;
+/** The rest required while a card is already open, so moving between tokens feels immediate. */
+const warmDwellMs = 40;
 /** How long the card outlives the pointer leaving a token, so crossing to its neighbour or the card doesn't flicker. */
 const graceMs = 150;
 
@@ -171,16 +173,24 @@ export class BeuveHoverCard extends LitElement {
     this.shown = { key, markdown: answer.value.hover.markdown, anchor };
   }
 
-  /** The pointer is over (or moved within) a token: ask once it rests. */
+  /**
+   * The pointer is over (or moved within) a token: ask once it rests. The first card waits
+   * {@link dwellMs}; while a card is open (it outlives the pointer by {@link graceMs}) the next
+   * token waits only {@link warmDwellMs}.
+   */
   point(target: HoverPoint): void {
     this.pointer = { clientX: target.clientX, clientY: target.clientY };
     clearTimeout(this.hideTimer);
     clearTimeout(this.dwellTimer);
     this.pending = target;
     this.generation += 1;
+    let delay = dwellMs;
+    if (this.shown !== undefined) {
+      delay = warmDwellMs;
+    }
     this.dwellTimer = setTimeout(() => {
       void this.consult();
-    }, dwellMs);
+    }, delay);
   }
 
   /** The pointer left its token: forget the pending question and hide the card shortly. */
