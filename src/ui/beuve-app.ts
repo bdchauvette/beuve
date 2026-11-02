@@ -5,8 +5,6 @@ import { keyed } from 'lit/directives/keyed.js';
 
 import type {
   AppInfo,
-  BeuveApi,
-  CallHierarchyView,
   ChatCitationView,
   ChatMentionView,
   ChatMessageView,
@@ -16,9 +14,6 @@ import type {
   EditorId,
   FileAttributesView,
   FilePairView,
-  FlowFailureKind,
-  FlowGraphResponse,
-  GithubAuthStatusView,
   IpcResult,
   LspServerView,
   McpStatus,
@@ -30,7 +25,6 @@ import type {
   SidebarSideView,
   UraExportTarget,
   UraItemView,
-  UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
@@ -73,7 +67,6 @@ import type { CommandDefinition } from './command-registry.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { menuStateFrom } from './menu-state-from.ts';
-import type { MenuStateInput } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
@@ -114,142 +107,55 @@ import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
 import { runSheetAction } from './run-sheet-action.ts';
-import type { ClickedToken, SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
-import type { ReviewTarget } from './target-from.ts';
+import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
 import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
+import type {
+  ActiveFileDetail,
+  ChatAddDetail,
+  ChatCiteDetail,
+  ChatMentionDetail,
+  ChatSubmitDetail,
+  EditorOpenDetail,
+  FileReviewedDetail,
+  FindingRefDetail,
+  ReviewEditsDetail,
+  LineRequestDetail,
+  MessageIdDetail,
+  PaletteRunDetail,
+  PeekExpandDetail,
+  SessionIdDetail,
+  StackRefDetail,
+  TreeModeDetail,
+  TreeSelectDetail,
+  UraExportDetail,
+  UraItemIdDetail,
+  UraJumpDetail,
+  UraReorderDetail,
+  UraTransitionDetail,
+  UraVerdictDetail,
+  UrlDetail,
+} from './app-event-details.ts';
+import { describeSheets } from './describe-sheets.ts';
+import { describeGenerated } from './describe-generated.ts';
+import { describeInsights } from './describe-insights.ts';
+import { describeSkipReviewed } from './describe-skip-reviewed.ts';
+import { describeOrder } from './describe-order.ts';
+import { signInHintOf } from './sign-in-hint-of.ts';
+import { dockItemOf } from './dock-item-of.ts';
+import { sheetActionFrom } from './sheet-action-from.ts';
+import { peekStateFrom } from './peek-state-from.ts';
+import { flowStateFrom } from './flow-state-from.ts';
+import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
+import { isEditableElement } from './is-editable-element.ts';
+import { isTextFocused } from './is-text-focused.ts';
 
 /**
  * Root of the renderer: the four-zone shell (spec section 4), the zone focus model and the
  * keys the shell already handles. Owns all bridge calls and session state; zones are
  * presentational and report user intent with events.
  */
-/** The file the diff stream is on, if any. */
-interface ActiveFileDetail {
-  readonly path: string | undefined;
-}
-
-/** Lines a diff card adds to the chat. */
-interface ChatAddDetail {
-  readonly target: MentionTarget;
-}
-
-/** A citation pill to open. */
-interface ChatCiteDetail {
-  readonly citation: ChatCitationView;
-}
-
-/** A context chip to show in the diff. */
-interface ChatMentionDetail {
-  readonly mention: ChatMentionView;
-}
-
-/** A question and its context chips. */
-interface ChatSubmitDetail {
-  readonly text: string;
-  readonly mentions?: readonly ChatMentionView[];
-}
-
-/** A file and line to open in the editor. */
-interface EditorOpenDetail {
-  readonly path: string;
-  readonly line: number;
-}
-
-/** A file to mark reviewed, or to unmark. */
-interface FileReviewedDetail {
-  readonly path: string;
-  readonly reviewed: boolean;
-}
-
-/** One finding of a `/review` answer: its message and its index. */
-interface FindingRefDetail {
-  readonly messageId: string;
-  readonly finding: number;
-}
-
-/** A button of the dock's review-edits section (ADR 0088). */
-interface ReviewEditsDetail {
-  readonly op: string;
-}
-
-/** A file and, if any, the line a portal opens at. */
-interface LineRequestDetail {
-  readonly path: string;
-  readonly line: number | undefined;
-}
-
-/** A chat message, by id. */
-interface MessageIdDetail {
-  readonly messageId: string;
-}
-
-/** The palette entry the reviewer ran. */
-interface PaletteRunDetail {
-  readonly action: PaletteAction;
-}
-
-/** A call hierarchy node to expand. */
-interface PeekExpandDetail {
-  readonly nodeId: string;
-}
-
-/** A session the open panel or the palette picked. */
-interface SessionIdDetail {
-  readonly sessionId: string;
-}
-
-/** A stacked pull request, by its ref. */
-interface StackRefDetail {
-  readonly ref: string;
-}
-
-/** The radar tree mode chosen in its header. */
-interface TreeModeDetail {
-  readonly mode: RadarTreeMode;
-}
-
-/** A file picked in the radar tree. */
-interface TreeSelectDetail {
-  readonly path: string;
-}
-
-/** Where to export the staged review. */
-interface UraExportDetail {
-  readonly target: UraExportTarget;
-}
-
-/** A staged item, by id. */
-interface UraItemIdDetail {
-  readonly itemId: string;
-}
-
-/** A staged item to show in the diff. */
-interface UraJumpDetail {
-  readonly item: UraItemView;
-}
-
-/** The dock order after a move. */
-interface UraReorderDetail {
-  readonly itemIds: readonly string[];
-}
-
-/** A staged item and the status it moves to. */
-interface UraTransitionDetail {
-  readonly itemId: string;
-  readonly to: 'staged' | 'withdrawn' | 'addressed';
-}
-
-/** The verdict the reviewer chose; `undefined` goes back to the derived one. */
-interface UraVerdictDetail {
-  readonly verdict: UraVerdictView | undefined;
-}
-
-/** A link to open. */
-interface UrlDetail {
-  readonly url: string;
-}
 
 @customElement('beuve-app')
 export class BeuveApp extends LitElement {
@@ -2653,64 +2559,7 @@ const otherSides: Readonly<Record<SidebarSideView, SidebarSideView>> = {
   right: 'left',
 };
 
-function describeSheets(sheets: DiffDisplayView['sheets']): string {
-  if (sheets === 'inline') {
-    return 'Definitions open over the diff.';
-  }
-  return 'Definitions open in a new sheet window each.';
-}
-
-/** What the dock's cursor item enables in the menus, while the dock has the focus. */
-function dockItemOf(item: UraItemView | undefined): MenuStateInput['dockItem'] {
-  if (item === undefined) {
-    return undefined;
-  }
-  return { isAddressed: item.status.kind === 'addressed' };
-}
-
-/** What to do before posting to GitHub: sign in, or wait for the check. */
-function signInHintOf(auth: GithubAuthStatusView | undefined): string {
-  if (auth?.kind !== 'signed-out') {
-    return 'checking GitHub sign-in…';
-  }
-  if (auth.remedy === undefined) {
-    return auth.message;
-  }
-  return `sign in first: run ${auth.remedy}.`;
-}
-
-function describeGenerated(isShown: boolean): string {
-  if (isShown) {
-    return 'Generated files: shown (/generated hide collapses them)';
-  }
-  return 'Generated files: collapsed (/generated show expands them)';
-}
-
 const noInsights: readonly ReviewInsight[] = [];
-
-function describeInsights(isShown: boolean): string {
-  if (isShown) {
-    return 'Review insights: shown on the diff (/insights hide removes them)';
-  }
-  return 'Review insights: hidden (/insights show brings them back)';
-}
-
-function describeSkipReviewed(isSkipping: boolean | undefined): string {
-  if (isSkipping === true) {
-    return 'Next and Previous Change skip files marked reviewed';
-  }
-  return 'Next and Previous Change stop at every file, reviewed or not';
-}
-
-function describeOrder(mode: ReviewOrderMode = 'path'): string {
-  return orderDescriptions[mode];
-}
-
-const orderDescriptions: Readonly<Record<ReviewOrderMode, string>> = {
-  path: 'Files in path order',
-  imports: 'Files by imports: what a file uses comes before it',
-  calls: 'Files by calls: what a function calls comes before it',
-};
 
 const editorActions: Readonly<Record<Extract<CommandId, `editor-${string}`>, EditorId>> = {
   'editor-zed': 'zed',
@@ -2724,105 +2573,8 @@ const exportActions: Readonly<Record<Extract<CommandId, `export-${string}`>, Ura
   'export-github': 'github',
 };
 
-const sheetActionKinds = {
-  'open-definition': 'definition',
-  'open-type-definition': 'type-definition',
-  'copy-permalink': 'copy-link',
-  'open-permalink': 'open-link',
-} as const;
-
-/** The sheet action a menu command asks for; a definition asks about the clicked token, if any. */
-function sheetActionFrom(
-  id: keyof typeof sheetActionKinds,
-  target: ReviewTarget,
-  token: ClickedToken | undefined,
-): SheetAction {
-  const kind = sheetActionKinds[id];
-  if (kind === 'definition' || kind === 'type-definition') {
-    return { kind, target, token };
-  }
-  return { kind, target };
-}
-
-function peekStateFrom(
-  path: string,
-  line: number,
-  answer: IpcResult<CallHierarchyView>,
-): PeekState {
-  if (!answer.ok) {
-    return { path, line, status: 'error', message: answer.error.message };
-  }
-  const { root, calls } = answer.value;
-  if (root === undefined) {
-    return {
-      path,
-      line,
-      status: 'error',
-      message: 'The language server found nothing callable here.',
-    };
-  }
-  return {
-    path,
-    line,
-    status: 'ready',
-    root,
-    children: new Map([[root.id, { status: 'ready', calls }]]),
-  };
-}
-
-function flowStateFrom(
-  path: string,
-  line: number,
-  answer: IpcResult<FlowGraphResponse>,
-): FlowState {
-  if (!answer.ok) {
-    return { path, line, status: 'error', message: answer.error.message };
-  }
-  if (answer.value.kind === 'graph') {
-    return { path, line, status: 'ready', graph: answer.value.graph };
-  }
-  return { path, line, status: 'error', message: flowFailureText[answer.value.failure] };
-}
-
-const flowFailureText: Readonly<Record<FlowFailureKind, string>> = {
-  'unsupported-language':
-    'No control-flow chart for this kind of file yet (TypeScript and JavaScript only).',
-  'no-function-at-line': 'The change is not inside a function, so there is no flow to draw.',
-  'too-large': 'This function is too large to draw as a chart.',
-  'file-unavailable': 'The head version of this file is not readable source.',
-};
-
 const nothingSelected =
   'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
-
-/** Whether the focus, through shadow roots, is in a field that takes typing. */
-/** The bridge's `chat:stream` subscription, as `textPartStream` takes it. */
-function subscribeChatStreamOf(bridge: BeuveApi | undefined): ChatStreamSubscribe | undefined {
-  if (bridge === undefined) {
-    return undefined;
-  }
-  return (listener): (() => void) => bridge.on('chat:stream', listener);
-}
-
-function isTextFocused(): boolean {
-  let element: Element | null = document.activeElement;
-  while (
-    element?.shadowRoot?.activeElement !== undefined &&
-    element.shadowRoot.activeElement !== null
-  ) {
-    element = element.shadowRoot.activeElement;
-  }
-  return element instanceof HTMLElement && isEditableElement(element);
-}
-
-function isEditableElement(element: HTMLElement): boolean {
-  return (
-    element instanceof HTMLInputElement ||
-    element instanceof HTMLTextAreaElement ||
-    element instanceof HTMLSelectElement ||
-    element.isContentEditable
-  );
-}
 
 declare global {
   interface HTMLElementTagNameMap {
