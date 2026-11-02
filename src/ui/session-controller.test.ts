@@ -66,7 +66,7 @@ describe('SessionController', () => {
       replies: { 'session:get-review': ok(review), 'session:list': listed('s1') },
     });
     await session.select('s1');
-    expect(hooks).toStrictEqual(['closed', 'switching', 'settled']);
+    expect(hooks).toStrictEqual(['closed', 'switching']);
     expect(invoked[0]).toStrictEqual([
       'session:get-review',
       { sessionId: 's1', ignoreWhitespace: false },
@@ -97,14 +97,7 @@ describe('SessionController', () => {
     });
     await session.select('s1');
     await session.select('s1');
-    expect(hooks).toStrictEqual([
-      'closed',
-      'switching',
-      'settled',
-      'closed',
-      'reloading',
-      'settled',
-    ]);
+    expect(hooks).toStrictEqual(['closed', 'switching', 'closed', 'reloading']);
     expect(loaded.map(({ previousHead }) => previousHead)).toStrictEqual([
       undefined,
       first.headSha,
@@ -114,7 +107,7 @@ describe('SessionController', () => {
   test('keeps the selection and shows the error when the review does not load', async ({
     expect,
   }) => {
-    const { session, hooks, loaded } = createSessionHarness({
+    const { session, loaded } = createSessionHarness({
       replies: { 'session:get-review': failed({ code: 'not-found', message: 'gone' }) },
     });
     await session.select('s1');
@@ -122,7 +115,6 @@ describe('SessionController', () => {
     expect(session.error).toBe('gone');
     expect(session.selectedId).toBe('s1');
     expect(session.isLoading).toBe(false);
-    expect(hooks).toContain('settled');
     expect(loaded).toStrictEqual([]);
   });
 
@@ -131,8 +123,8 @@ describe('SessionController', () => {
       replies: { 'session:get-review': failed({ code: 'cancelled', message: 'cancelled' }) },
     });
     await session.select('s1');
-    expect(hooks).not.toContain('settled');
     expect(loaded).toStrictEqual([]);
+    expect(hooks).toStrictEqual(['closed', 'switching']);
     expect(session.error).toBe('');
   });
 

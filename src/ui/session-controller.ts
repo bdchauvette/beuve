@@ -37,8 +37,6 @@ export interface SessionEnvironment {
   readonly switching: () => void;
   /** The same session loads again: its finished action status lines go. */
   readonly reloading: () => void;
-  /** A load ended, in a review or an error. */
-  readonly settled: () => void;
   /** A review arrived; start what follows it. */
   readonly loaded: (change: ReviewLoaded) => void;
 }
@@ -231,7 +229,6 @@ export class SessionController implements ReactiveController {
       return;
     }
     this.patch({ isLoading: false });
-    this.environment.settled();
     if (!review.ok) {
       this.patch({ review: undefined, error: review.error.message });
       return;
