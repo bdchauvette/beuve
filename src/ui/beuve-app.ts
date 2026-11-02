@@ -3491,6 +3491,7 @@ export class BeuveApp extends LitElement {
       .reviewProgress=${this.reviewProgress}
       .order=${this.order}
       ?loading=${this.reviewLoading}
+      .loadingLabel=${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
       ?marking=${this.marking}
       .savedProgress=${
         this.savedProgress?.sessionId === this.review?.session.id ? this.savedProgress : undefined
