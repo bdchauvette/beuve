@@ -56,6 +56,8 @@ jobs:
       - run: npm run format:ci
       - run: npm run deps:ci
       - run: npm run test:ci
+      # A high or critical advisory blocks the release even if the weekly audit has not run (ADR 0103).
+      - run: npm run audit:ci
       # No secrets: an ad-hoc signed, unnotarized build for personal use (docs/packaging.md). To
       # sign and notarize, add the CSC_* and APPLE_* secrets and pass them here as `env`.
       - name: Build the dmg and zip
