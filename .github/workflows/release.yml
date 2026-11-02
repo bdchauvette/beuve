@@ -16,7 +16,8 @@ jobs:
     name: audit
     permissions:
       contents: read
-    uses: $/.github/workflows/audit.yml
+    # actionlint (1.7.12) rejects the `$/` syntax zizmor asks for; revisit when it accepts it.
+    uses: ./.github/workflows/audit.yml # zizmor: ignore[self-repository]
 
   build:
     name: build
