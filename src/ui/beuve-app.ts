@@ -8,10 +8,8 @@ import type {
   BeuveApi,
   CallHierarchyView,
   ChatCitationView,
-  ChatCommandRequest,
   ChatMentionView,
   ChatMessageView,
-  ChatStreamEvent,
   CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
@@ -87,8 +85,8 @@ import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
-import type { ChatEntry, ChatTranscript, LocalChatEntry } from './chat-entry.ts';
-import { chatHelp } from './chat-help.ts';
+import { ChatController } from './chat-controller.ts';
+import type { ChatAppCommand } from './chat-controller.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
@@ -99,13 +97,8 @@ import { mentionFromTarget } from './mention-from-target.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
 import { targetFromAnchor } from './target-from-anchor.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
-import { parseChatCommand } from './parse-chat-command.ts';
 import { planChatStage } from './plan-chat-stage.ts';
-import { emptyChatTranscript } from './empty-chat-transcript.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
-import { isActiveRequest } from './is-active-request.ts';
-import { reduceChatTranscript } from './reduce-chat-transcript.ts';
-import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
 import type { FlowState } from './flow-state.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { GithubDockState, GithubPostState } from './github-post-state.ts';
@@ -526,7 +519,21 @@ export class BeuveApp extends LitElement {
   `;
 
   private unsubscribes: (() => void)[] = [];
-  private nextEntryId = 1;
+  private readonly chat = new ChatController(this, {
+    bridge: beuveBridge,
+    sessionId: (): string | undefined => {
+      return this.review?.session.id;
+    },
+    focusPath: (): string | undefined => {
+      return this.focusPathOfReview();
+    },
+    restoreDraft: (text, mentions): void => {
+      this.chatDrawer()?.setDraft(text, mentions);
+    },
+    runAppCommand: (command): void => {
+      this.runChatAppCommand(command);
+    },
+  });
   /** The file the diff stream's cursor is on, sent as the question's focus. */
   private activePath: string | undefined;
   private jumpNonce = 0;
@@ -712,7 +719,7 @@ export class BeuveApp extends LitElement {
   private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
 
   private readonly onChatSubmit = (event: CustomEvent<ChatSubmitDetail>): void => {
-    this.submitChat(event.detail.text, event.detail.mentions ?? []);
+    this.chat.submit(event.detail.text, event.detail.mentions ?? []);
   };
 
   /** A context chip, in the input or the transcript: show its lines in the diff. */
@@ -764,7 +771,7 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onChatClearQueue = (): void => {
-    void this.clearChat(true);
+    void this.chat.clear(true);
   };
 
   private readonly onChatCite = (event: CustomEvent<ChatCiteDetail>): void => {
@@ -784,9 +791,6 @@ export class BeuveApp extends LitElement {
     this.activePath = event.detail.path;
     this.scheduleMenuSync();
   };
-
-  /** Sessions whose chat already suggested /compact in this window. */
-  private readonly compactHinted = new Set<string>();
 
   /** Resolves the wait in {@link loadImpactAfterFirstDiff}; set while it waits. */
   private releaseImpact: (() => void) | undefined;
@@ -1092,7 +1096,6 @@ export class BeuveApp extends LitElement {
     { readonly sessionId: string; readonly sha: string; readonly at: Temporal.Instant } | undefined;
   @state() accessor opening = false;
   @state() accessor localFailure: OpenFailure | undefined;
-  @state() accessor chat: ChatTranscript = emptyChatTranscript;
   @state() accessor fileJump: FileJump | undefined;
   /** The open session head's tracked paths, for the radar tree. */
   @state() accessor tree: RepositoryTreeView | undefined;
@@ -1154,9 +1157,6 @@ export class BeuveApp extends LitElement {
     this.unsubscribes = [
       bridge.on('mcp:status', (status) => {
         this.mcpStatus = status;
-      }),
-      bridge.on('chat:stream', (event) => {
-        this.applyChatStream(event);
       }),
       bridge.on('ura:changed', ({ sessionId }) => {
         if (sessionId === this.review?.session.id) {
@@ -1677,7 +1677,7 @@ export class BeuveApp extends LitElement {
   private async runDisplayCommand(change: SetDiffDisplayRequest): Promise<void> {
     const display = await this.setDisplay(change);
     if (display !== undefined) {
-      this.note('info', `Diffs: ${describeDiffDisplay(display, false).text}.`);
+      this.chat.note('info', `Diffs: ${describeDiffDisplay(display, false).text}.`);
     }
   }
 
@@ -1694,11 +1694,11 @@ export class BeuveApp extends LitElement {
       result = await bridge.invoke('editor:set-preferred', { editorId });
     }
     if (!result.ok) {
-      this.note('error', result.error.message);
+      this.chat.note('error', result.error.message);
       return;
     }
     this.editorSettings = result.value;
-    this.note('info', ...describeEditorSettings(result.value));
+    this.chat.note('info', ...describeEditorSettings(result.value));
   }
 
   private applySessions(sessions: IpcResult<readonly SessionSummary[]>): void {
@@ -1761,7 +1761,7 @@ export class BeuveApp extends LitElement {
       this.chosenVerdict = undefined;
       this.verdictNotice = '';
       this.dockNotice = undefined;
-      this.chat = emptyChatTranscript;
+      this.chat.reset();
       this.pullRequest = undefined;
       this.ci = undefined;
       this.githubPost = { kind: 'idle' };
@@ -1798,7 +1798,7 @@ export class BeuveApp extends LitElement {
       void this.loadFileAttributes(review.value);
       void this.refreshUra(review.value.session.id);
       void this.loadReviewEdits(review.value.session.id);
-      void this.loadChat(review.value.session.id);
+      void this.chat.load(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
         void this.loadPullRequest(review.value.session.id);
       }
@@ -2106,85 +2106,20 @@ export class BeuveApp extends LitElement {
     await this.selectSession(review.session.id);
   }
 
-  private submitChat(text: string, mentions: readonly ChatMentionView[] = []): void {
-    const command = parseChatCommand(text);
-    if (command.kind === 'empty') {
-      return;
-    }
+  /** The preference slash commands of the chat; the controller has echoed what was typed. */
+  private runChatAppCommand(command: ChatAppCommand): void {
     switch (command.kind) {
-      case 'question': {
-        void this.askQuestion(command.text, mentions);
-        return;
-      }
-      case 'clear': {
-        void this.clearChat(command.queuedOnly);
-        return;
-      }
-      case 'summarize': {
-        void this.runChatCommand(text.trim(), { kind: 'summarize' });
-        return;
-      }
-      case 'compact': {
-        void this.compactChat();
-        return;
-      }
-      case 'help': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        this.addEntry({ id: 0, kind: 'note', tone: 'info', lines: chatHelp });
-        return;
-      }
-      case 'invalid': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        this.addEntry({ id: 0, kind: 'note', tone: 'error', lines: [command.message] });
-        return;
-      }
       case 'editor': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runEditorCommand(command.editorId);
         return;
       }
       case 'diff': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runDisplayCommand({
           ...(command.layout !== undefined && { layout: command.layout }),
         });
         return;
       }
-      case 'generated': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay({
-          ...(command.showGenerated !== undefined && { showGenerated: command.showGenerated }),
-        }).then((display) => {
-          if (display !== undefined) {
-            this.note('info', `${describeGenerated(display.showGenerated)}.`);
-          }
-        });
-        return;
-      }
-      case 'sheets': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay({ ...(command.mode !== undefined && { sheets: command.mode }) }).then(
-          (display) => {
-            if (display !== undefined) {
-              this.note('info', describeSheets(display.sheets));
-            }
-          },
-        );
-        return;
-      }
-      case 'insights': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
-        void this.setDisplay({
-          ...(command.showInsights !== undefined && { showInsights: command.showInsights }),
-        }).then((display) => {
-          if (display !== undefined) {
-            this.note('info', `${describeInsights(display.showInsights)}.`);
-          }
-        });
-        return;
-      }
       case 'whitespace': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.runDisplayCommand({
           ...(command.ignoreWhitespace !== undefined && {
             ignoreWhitespace: command.ignoreWhitespace,
@@ -2192,205 +2127,52 @@ export class BeuveApp extends LitElement {
         });
         return;
       }
-      case 'review': {
-        void this.runChatCommand(text.trim(), {
-          kind: 'review',
-          ...(command.pathPrefixes.length > 0 && { pathPrefixes: command.pathPrefixes }),
-          ...(command.fresh && { fresh: true }),
-          ...(!command.verify && { verify: false }),
-          ...(command.effort !== undefined && { effort: command.effort }),
+      case 'generated': {
+        void this.setDisplay({
+          ...(command.showGenerated !== undefined && { showGenerated: command.showGenerated }),
+        }).then((display) => {
+          if (display !== undefined) {
+            this.chat.note('info', `${describeGenerated(display.showGenerated)}.`);
+          }
+        });
+        return;
+      }
+      case 'sheets': {
+        void this.setDisplay({ ...(command.mode !== undefined && { sheets: command.mode }) }).then(
+          (display) => {
+            if (display !== undefined) {
+              this.chat.note('info', describeSheets(display.sheets));
+            }
+          },
+        );
+        return;
+      }
+      case 'insights': {
+        void this.setDisplay({
+          ...(command.showInsights !== undefined && { showInsights: command.showInsights }),
+        }).then((display) => {
+          if (display !== undefined) {
+            this.chat.note('info', `${describeInsights(display.showInsights)}.`);
+          }
         });
         return;
       }
       case 'order': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.setDisplay({
           ...(command.mode !== undefined && { reviewOrder: command.mode }),
         }).then((display) => {
           if (display !== undefined) {
-            this.note('info', `${describeOrder(display.reviewOrder)}.`);
+            this.chat.note('info', `${describeOrder(display.reviewOrder)}.`);
           }
         });
         return;
       }
       case 'sidebar': {
-        this.addEntry({ id: 0, kind: 'input', text: text.trim() });
         void this.setSidebarSide(command.side).then(() => {
-          this.note('info', `Sidebar on the ${command.side}.`);
+          this.chat.note('info', `Sidebar on the ${command.side}.`);
         });
         return;
       }
-    }
-  }
-
-  private addEntry(entry: LocalChatEntry): number {
-    const id = this.nextEntryId;
-    this.nextEntryId += 1;
-    this.chat = { ...this.chat, entries: [...this.chat.entries, { ...entry, id }] };
-    return id;
-  }
-
-  private note(tone: 'info' | 'error', ...lines: string[]): void {
-    this.addEntry({ id: 0, kind: 'note', tone, lines });
-  }
-
-  private setEntries(entries: readonly ChatEntry[]): void {
-    this.chat = { ...this.chat, entries };
-  }
-
-  private dispatchChat(action: ChatTranscriptAction): void {
-    this.chat = reduceChatTranscript(this.chat, action);
-  }
-
-  /** One `chat:stream` event (ADR 0072): the reducer builds the transcript from it. */
-  private applyChatStream(event: ChatStreamEvent): void {
-    if (event.sessionId !== this.review?.session.id) {
-      return;
-    }
-    this.dispatchChat({ kind: 'stream', event });
-    if (
-      event.type !== 'message' ||
-      event.droppedTurns === undefined ||
-      this.compactHinted.has(event.sessionId)
-    ) {
-      return;
-    }
-    this.compactHinted.add(event.sessionId);
-    this.note('info', 'Older turns are being dropped — /compact to keep a summary.');
-  }
-
-  /** The session's stored transcript, shown above this window's command results. */
-  private async loadChat(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const listed = await bridge.invoke('chat:list', { sessionId });
-    if (listed.ok && this.review?.session.id === sessionId) {
-      this.dispatchChat({ kind: 'loaded', messages: listed.value.messages });
-    }
-  }
-
-  private async askQuestion(question: string, mentions: readonly ChatMentionView[]): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.note('error', 'Open a review session first, then ask your question.');
-      return;
-    }
-    let focusPath: string | undefined;
-    if (review.files.some((file) => file.path === this.activePath)) {
-      focusPath = this.activePath;
-    }
-    const asked = await bridge.invoke('chat:ask', {
-      sessionId: review.session.id,
-      question,
-      ...(focusPath !== undefined && { focus: { path: focusPath } }),
-      ...(mentions.length > 0 && { mentions }),
-    });
-    if (!asked.ok) {
-      this.note('error', asked.error.message);
-      this.chatDrawer()?.setDraft(question, mentions);
-      return;
-    }
-    if (this.review?.session.id === review.session.id) {
-      this.dispatchChat({ kind: 'asked', ...asked.value });
-    }
-  }
-
-  /** `/compact` (ADR 0047): shows progress, then the stored summary where it ran. */
-  private async compactChat(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.note('error', 'Open a review session first.');
-      return;
-    }
-    const sessionId = review.session.id;
-    const entryId = this.addEntry({ id: 0, kind: 'compaction', status: 'running' });
-    const compacted = await bridge.invoke('chat:compact', { sessionId });
-    if (this.review?.session.id !== sessionId) {
-      return;
-    }
-    if (compacted.ok && compacted.value.outcome === 'compacted') {
-      this.compactHinted.delete(sessionId);
-      this.dispatchChat({ kind: 'compacted', summary: compacted.value.summary });
-      return;
-    }
-    let failure: string | undefined;
-    if (!compacted.ok) {
-      failure = compacted.error.message;
-    } else if (compacted.value.outcome === 'failed') {
-      failure = compacted.value.errorMessage;
-    }
-    this.setEntries(
-      this.chat.entries.flatMap((entry): ChatEntry[] => {
-        if (entry.id !== entryId || entry.kind !== 'compaction') {
-          return [entry];
-        }
-        if (failure === undefined) {
-          return [
-            {
-              id: entryId,
-              kind: 'note',
-              tone: 'info',
-              lines: ['Compaction stopped; nothing was stored.'],
-            },
-          ];
-        }
-        return [{ ...entry, status: 'failed', message: failure }];
-      }),
-    );
-  }
-
-  /**
-   * `/review` and `/summarize` (ADR 0055, 0056): chat requests like a question, so they queue
-   * behind a running answer and land in the transcript as structured or calm answers.
-   */
-  private async runChatCommand(typed: string, command: ChatCommandRequest): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      this.addEntry({ id: 0, kind: 'input', text: typed });
-      this.note('error', `Open a review session first, then type ${typed.split(' ', 1)[0] ?? ''}.`);
-      return;
-    }
-    const asked = await bridge.invoke('chat:ask', {
-      sessionId: review.session.id,
-      question: typed,
-      command,
-    });
-    if (!asked.ok) {
-      this.addEntry({ id: 0, kind: 'input', text: typed });
-      this.note('error', asked.error.message);
-      return;
-    }
-    if (this.review?.session.id === review.session.id) {
-      this.dispatchChat({ kind: 'asked', ...asked.value });
-    }
-  }
-
-  /** `/clear` deletes the transcript; `/clear queue` and the queue's button only what waits. */
-  private async clearChat(isQueueOnly = false): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      if (!isQueueOnly) {
-        this.chat = emptyChatTranscript;
-      }
-      return;
-    }
-    const sessionId = review.session.id;
-    const cleared = await bridge.invoke('chat:clear', {
-      sessionId,
-      ...(isQueueOnly && { queuedOnly: true }),
-    });
-    if (!cleared.ok) {
-      this.note('error', cleared.error.message);
-    } else if (isQueueOnly) {
-      await this.loadChat(sessionId);
-    } else {
-      this.dispatchChat({ kind: 'cleared' });
     }
   }
 
@@ -2435,6 +2217,14 @@ export class BeuveApp extends LitElement {
       }
       return staged;
     });
+  }
+
+  private focusPathOfReview(): string | undefined {
+    const { activePath } = this;
+    if (this.review?.files.some((file) => file.path === activePath) === true) {
+      return activePath;
+    }
+    return undefined;
   }
 
   private chatDrawer(): BeuveChatDrawer | undefined {
@@ -2548,7 +2338,7 @@ export class BeuveApp extends LitElement {
       return candidate.path === mention.path && candidate.status !== 'deleted';
     });
     if (file === undefined) {
-      this.note(
+      this.chat.note(
         'info',
         `${revealFormatControls(mention.path)} is not in this diff: the file is unchanged by the review.`,
       );
@@ -2576,7 +2366,7 @@ export class BeuveApp extends LitElement {
       if (startLine !== endLine) {
         lines += `-${String(endLine)}`;
       }
-      this.note(
+      this.chat.note(
         'info',
         `${revealFormatControls(path)}:${lines} is not in this diff: the file is unchanged by the review.`,
       );
@@ -2976,7 +2766,7 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'stop': {
-        this.stopRunning();
+        this.chat.cancelRunning();
         return;
       }
       case 'export-agent-xml':
@@ -3044,16 +2834,6 @@ export class BeuveApp extends LitElement {
     this.stream()?.runCommand('open-in-editor');
   }
 
-  /** Stop: the answer being written. */
-  private stopRunning(): void {
-    const running = this.chat.entries.find((entry) => {
-      return entry.kind === 'message' && isActiveRequest(entry.message);
-    });
-    if (running?.kind === 'message') {
-      void beuveBridge()?.invoke('chat:cancel', { messageId: running.message.id });
-    }
-  }
-
   /** Review ▸ Open With: stores the editor Open in Editor uses. */
   private async setPreferredEditor(editorId: EditorId): Promise<void> {
     const bridge = beuveBridge();
@@ -3109,9 +2889,7 @@ export class BeuveApp extends LitElement {
       focusedZone: this.focusedZone,
       dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
-      isBusy: this.chat.entries.some((entry) => {
-        return entry.kind === 'message' && isActiveRequest(entry.message);
-      }),
+      isBusy: this.chat.isBusy,
       isPullRequest: this.pullRequest !== undefined,
       stagedCount: this.stagedCount(),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -3366,7 +3144,7 @@ export class BeuveApp extends LitElement {
         if (run.isPrefill) {
           this.chatDrawer()?.prefill(run.text);
         } else {
-          this.submitChat(run.text);
+          this.chat.submit(run.text);
         }
         return;
       }
