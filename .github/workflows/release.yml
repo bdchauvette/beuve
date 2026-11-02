@@ -16,7 +16,8 @@ jobs:
     name: audit
     permissions:
       contents: read
-    # actionlint (1.7.12) rejects the `$/` syntax zizmor asks for; revisit when it accepts it.
+    # actionlint (1.7.12) rejects the `$/` syntax zizmor's self-repository audit asks for; revisit
+    # when it accepts it: https://github.com/rhysd/actionlint/issues/760
     uses: ./.github/workflows/audit.yml # zizmor: ignore[self-repository]
 
   build:
