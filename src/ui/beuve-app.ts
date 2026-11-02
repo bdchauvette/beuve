@@ -10,7 +10,6 @@ import type {
   ChatCitationView,
   ChatMentionView,
   ChatMessageView,
-  CiStatusView,
   CreateLocalSessionRequest,
   DiffDisplayView,
   DiffFileView,
@@ -27,8 +26,6 @@ import type {
   IpcResult,
   McpStatus,
   OpenPullRequestRequest,
-  PullRequestSessionView,
-  PullRequestUpdatedView,
   RepositoryTreeView,
   ReviewEditsView,
   ReviewOrderMode,
@@ -86,6 +83,8 @@ import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-st
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import { ChatController } from './chat-controller.ts';
+import { GithubController } from './github-controller.ts';
+import type { GithubPostDetail, GithubReviewRef } from './github-controller.ts';
 import type { ChatAppCommand } from './chat-controller.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
@@ -100,8 +99,7 @@ import type { ReviewInsight } from './merge-review-insights.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
 import type { FlowState } from './flow-state.ts';
-import { describeReviewPreview } from './describe-review-preview.ts';
-import type { GithubDockState, GithubPostState } from './github-post-state.ts';
+import type { GithubDockState } from './github-post-state.ts';
 import { clearReviewEditsStatus } from './clear-review-edits-status.ts';
 import type { ReviewEditsFlow } from './review-edits-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
@@ -177,13 +175,6 @@ interface EditorPlace {
 /** A button of the dock's review-edits section (ADR 0088). */
 interface ReviewEditsDetail {
   readonly op: string;
-}
-
-/** Post the staged review to GitHub, with this verdict over the derived one. */
-interface GithubPostDetail {
-  readonly verdict?: UraVerdictView | undefined;
-  /** The reviewer's rewritten summary; absent while the generated one is unchanged. */
-  readonly summary?: string | undefined;
 }
 
 /** A file and, if any, the line a portal opens at. */
@@ -519,6 +510,24 @@ export class BeuveApp extends LitElement {
   `;
 
   private unsubscribes: (() => void)[] = [];
+  private readonly github = new GithubController(this, {
+    bridge: beuveBridge,
+    review: (): GithubReviewRef | undefined => {
+      return this.githubReviewRef();
+    },
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    refreshSessions: async (): Promise<void> => {
+      return this.refreshSessions();
+    },
+    selectSession: async (sessionId): Promise<void> => {
+      return this.selectSession(sessionId);
+    },
+    setOpenDialog: (isOpen): void => {
+      this.openDialog = isOpen;
+    },
+  });
   private readonly chat = new ChatController(this, {
     bridge: beuveBridge,
     sessionId: (): string | undefined => {
@@ -538,8 +547,6 @@ export class BeuveApp extends LitElement {
   private activePath: string | undefined;
   private jumpNonce = 0;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The `requestId` of the `github:open-pr` in flight, for `request:cancel`. */
-  private pullRequestId: string | undefined;
 
   private readonly onFocusIn = (event: FocusEvent): void => {
     const zone = event
@@ -587,13 +594,13 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onOpenPullRequest = (event: CustomEvent<OpenPullRequestRequest>): void => {
-    void this.openPullRequest(event.detail);
+    void this.github.open(event.detail);
   };
 
   /** A stack chip: the neighbour lives in the same repository, so it uses the same clone. */
   private readonly onOpenStack = (event: CustomEvent<StackRefDetail>): void => {
     const source = this.review?.session.source;
-    void this.openPullRequest({
+    void this.github.open({
       ref: event.detail.ref,
       ...(source !== undefined && { repoPath: source.repoPath }),
     });
@@ -612,15 +619,15 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onGithubPreview = (): void => {
-    void this.previewGithubReview();
+    void this.github.previewReview();
   };
 
   private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
-    void this.postGithubReview(event.detail);
+    void this.github.postReview(event.detail);
   };
 
   private readonly onGithubCancel = (): void => {
-    this.githubPost = { kind: 'idle' };
+    this.github.cancelPost();
   };
 
   /** Edits happen in the editor, outside beuve: coming back to the window counts them again. */
@@ -1022,10 +1029,7 @@ export class BeuveApp extends LitElement {
 
   /** Stops the pull request fetch in flight, if any; it then ends without a notice (ADR 0079). */
   private readonly cancelOpeningPull = (): void => {
-    const requestId = this.pullRequestId;
-    if (requestId !== undefined) {
-      void beuveBridge()?.invoke('request:cancel', { requestId });
-    }
+    this.github.cancelOpening();
   };
 
   private readonly onShortcutsClose = (): void => {
@@ -1107,12 +1111,6 @@ export class BeuveApp extends LitElement {
   @state() accessor verdictNotice = '';
   @state() accessor dockNotice: DockNotice | undefined;
   @state() accessor exporting = false;
-  /** The open pull request session's metadata and stack; absent for local sessions. */
-  @state() accessor pullRequest: PullRequestSessionView | undefined;
-  @state() accessor ci: CiStatusView | undefined;
-  @state() accessor githubAuth: GithubAuthStatusView | undefined;
-  @state() accessor openingPull = false;
-  @state() accessor pullFailure: OpenFailure | undefined;
   /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
   @state() accessor sidebarSide: SidebarSideView = 'right';
   @state() accessor sidebarHidden = false;
@@ -1128,7 +1126,6 @@ export class BeuveApp extends LitElement {
 
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
-  @state() accessor githubPost: GithubPostState = { kind: 'idle' };
   @state() accessor reviewEdits: ReviewEditsView | undefined;
   @state() accessor reviewEditsFlow: ReviewEditsFlow = { kind: 'idle' };
 
@@ -1161,14 +1158,6 @@ export class BeuveApp extends LitElement {
       bridge.on('ura:changed', ({ sessionId }) => {
         if (sessionId === this.review?.session.id) {
           void this.refreshUra(sessionId);
-        }
-      }),
-      bridge.on('github:pr-updated', (event) => {
-        this.applyPullRequestUpdate(event);
-      }),
-      bridge.on('github:ci-status', ({ sessionId, ci }) => {
-        if (sessionId === this.review?.session.id) {
-          this.ci = ci;
         }
       }),
       bridge.on('menu:run', ({ id }) => {
@@ -1219,7 +1208,7 @@ export class BeuveApp extends LitElement {
     if (display.ok) {
       this.applyDisplay(display.value);
     }
-    await this.loadGithubAuth(undefined);
+    await this.github.loadAuth();
   }
 
   /** `settings:changed`: the Settings window changed a preference; read them again. */
@@ -1240,54 +1229,6 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  /** Who beuve posts to GitHub as; `host` defaults to the open pull request's. */
-  private async loadGithubAuth(host: string | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const auth = await bridge.invoke('github:auth-status', {
-      ...(host !== undefined && { host }),
-    });
-    if (auth.ok) {
-      this.githubAuth = auth.value;
-    }
-  }
-
-  private async openPullRequest(request: OpenPullRequestRequest): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined || this.openingPull) {
-      return;
-    }
-    this.openingPull = true;
-    this.pullFailure = undefined;
-    const requestId = crypto.randomUUID();
-    this.pullRequestId = requestId;
-    const opened = await bridge.invoke('github:open-pr', { ...request, requestId });
-    this.openingPull = false;
-    this.pullRequestId = undefined;
-    if (!opened.ok && opened.error.code === 'cancelled') {
-      return;
-    }
-    if (!opened.ok) {
-      this.pullFailure = { message: opened.error.message };
-      this.openDialog = this.review !== undefined;
-      return;
-    }
-    if (opened.value.kind === 'failed') {
-      const { message, remedy } = opened.value;
-      this.pullFailure = {
-        message,
-        ...(remedy !== undefined && !message.includes(remedy) && { remedy }),
-      };
-      this.openDialog = this.review !== undefined;
-      return;
-    }
-    this.openDialog = false;
-    await this.refreshSessions();
-    await this.selectSession(opened.value.session.id);
-  }
-
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
   private async openLink(url: string): Promise<void> {
     const opened = await beuveBridge()?.invoke('github:open-link', { url });
@@ -1302,152 +1243,6 @@ export class BeuveApp extends LitElement {
     if (opened !== undefined && !opened.ok) {
       this.showNotice({ tone: 'error', text: opened.error.message });
     }
-  }
-
-  private async loadPullRequest(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const loaded = await bridge.invoke('github:get-pr', { sessionId });
-    if (this.review?.session.id !== sessionId) {
-      return;
-    }
-    if (loaded.ok) {
-      this.pullRequest = loaded.value;
-      this.ci = loaded.value.ci ?? this.ci;
-      if (this.githubAuth?.host !== loaded.value.pullRequest.host) {
-        void this.loadGithubAuth(loaded.value.pullRequest.host);
-      }
-    } else {
-      this.showNotice({ tone: 'error', text: loaded.error.message });
-    }
-  }
-
-  /** Polling found a change; a new head reloads the review, which then offers the interdiff. */
-  private applyPullRequestUpdate(event: PullRequestUpdatedView): void {
-    void this.refreshSessions();
-    const { review } = this;
-    if (event.sessionId !== review?.session.id) {
-      return;
-    }
-    const attention = event.attention ?? this.pullRequest?.attention;
-    this.pullRequest = {
-      sessionId: event.sessionId,
-      pullRequest: event.pullRequest,
-      stack: event.stack,
-      ...(this.ci !== undefined && { ci: this.ci }),
-      ...(attention !== undefined && { attention }),
-    };
-    if (!event.headMoved) {
-      return;
-    }
-    this.invalidateGithubPost();
-    this.showNotice({
-      tone: 'info',
-      text: `New commits on #${String(event.pullRequest.number)}; the review now shows what changed.`,
-    });
-    void this.selectSession(event.sessionId);
-  }
-
-  /**
-   * A confirmation (or the own-PR offer) was about the head the reviewer saw; once the head moves
-   * it would post on commits they haven't read, so it gives way to a quiet note (ADR 0078).
-   */
-  private invalidateGithubPost(): void {
-    const { kind } = this.githubPost;
-    if (kind === 'confirm' || kind === 'own-pull-request') {
-      this.githubPost = { kind: 'head-moved' };
-    }
-  }
-
-  /** Main refused because the head moved: say so quietly and show the new commits. */
-  private onGithubHeadMoved(sessionId: string): void {
-    this.githubPost = { kind: 'head-moved' };
-    void this.selectSession(sessionId);
-  }
-
-  /** The confirmation step: main compiles the review and says what goes inline and in the body. */
-  private async previewGithubReview(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined || this.githubPost.kind === 'busy') {
-      return;
-    }
-    this.githubPost = { kind: 'busy', text: 'Compiling the review…' };
-    const preview = await bridge.invoke('github:preview-review', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (!preview.ok) {
-      this.githubPost = { kind: 'failed', text: preview.error.message };
-      return;
-    }
-    if ('kind' in preview.value) {
-      if (preview.value.failure === 'head-moved') {
-        this.onGithubHeadMoved(review.session.id);
-        return;
-      }
-      this.githubPost = { kind: 'failed', text: preview.value.message };
-      return;
-    }
-    if (this.review.headSha !== preview.value.headSha) {
-      this.githubPost = { kind: 'head-moved' };
-      return;
-    }
-    this.githubPost = { kind: 'confirm', preview: preview.value };
-  }
-
-  /** Posts on the head the confirmation showed; one post at a time (ADR 0078). */
-  private async postGithubReview({ verdict, summary }: GithubPostDetail): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, githubPost } = this;
-    if (bridge === undefined || review === undefined || githubPost.kind === 'busy') {
-      return;
-    }
-    let expectedHeadSha = review.headSha;
-    if (githubPost.kind === 'confirm') {
-      expectedHeadSha = githubPost.preview.headSha;
-    }
-    this.githubPost = { kind: 'busy', text: 'Posting to GitHub…' };
-    const posted = await bridge.invoke('github:post-review', {
-      sessionId: review.session.id,
-      expectedHeadSha,
-      ...(verdict !== undefined && { verdict }),
-      ...(summary !== undefined && { summary }),
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (!posted.ok) {
-      this.githubPost = { kind: 'failed', text: posted.error.message };
-      return;
-    }
-    const result = posted.value;
-    if (result.kind === 'failed') {
-      if (result.failure === 'head-moved') {
-        this.onGithubHeadMoved(review.session.id);
-        return;
-      }
-      if (result.failure === 'own-pull-request') {
-        this.githubPost = { kind: 'own-pull-request', message: result.message, summary };
-      } else {
-        this.githubPost = { kind: 'failed', text: result.message };
-      }
-      return;
-    }
-    let moved = '';
-    if (result.movedToBody > 0) {
-      moved = ` GitHub refused ${String(result.movedToBody)} inline, so they went into the body.`;
-    }
-    this.githubPost = {
-      kind: 'posted',
-      url: result.url,
-      text: `Posted: ${describeReviewPreview(result)}${moved}`,
-    };
   }
 
   private showNotice(notice: StatusNotice): void {
@@ -1765,9 +1560,7 @@ export class BeuveApp extends LitElement {
       this.verdictNotice = '';
       this.dockNotice = undefined;
       this.chat.reset();
-      this.pullRequest = undefined;
-      this.ci = undefined;
-      this.githubPost = { kind: 'idle' };
+      this.github.reset();
       this.reviewEdits = undefined;
       this.reviewEditsFlow = { kind: 'idle' };
     }
@@ -1787,7 +1580,7 @@ export class BeuveApp extends LitElement {
     this.flow = undefined;
     if (review.ok) {
       if (shownHead !== undefined && shownHead !== review.value.headSha) {
-        this.invalidateGithubPost();
+        this.github.invalidatePost();
       }
       this.review = review.value;
       this.applyMarks(review.value);
@@ -1803,7 +1596,7 @@ export class BeuveApp extends LitElement {
       void this.loadReviewEdits(review.value.session.id);
       void this.chat.load(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
-        void this.loadPullRequest(review.value.session.id);
+        void this.github.loadPullRequest(review.value.session.id);
       }
     } else {
       this.review = undefined;
@@ -2220,6 +2013,13 @@ export class BeuveApp extends LitElement {
       }
       return staged;
     });
+  }
+
+  private githubReviewRef(): GithubReviewRef | undefined {
+    if (this.review === undefined) {
+      return undefined;
+    }
+    return { sessionId: this.review.session.id, headSha: this.review.headSha };
   }
 
   private focusPathOfReview(): string | undefined {
@@ -2780,7 +2580,7 @@ export class BeuveApp extends LitElement {
       }
       case 'post-review': {
         this.focusSidebar('ura');
-        void this.previewGithubReview();
+        void this.github.previewReview();
         return;
       }
       case 'stage-answer': {
@@ -2893,7 +2693,7 @@ export class BeuveApp extends LitElement {
       dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
       isBusy: this.chat.isBusy,
-      isPullRequest: this.pullRequest !== undefined,
+      isPullRequest: this.github.pullRequest !== undefined,
       stagedCount: this.stagedCount(),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
       isTerminalShown: this.review !== undefined && this.terminalShown,
@@ -3026,7 +2826,7 @@ export class BeuveApp extends LitElement {
 
   private closeOpenDialog(): void {
     this.openDialog = false;
-    this.pullFailure = undefined;
+    this.github.clearFailure();
     this.localFailure = undefined;
     this.refocusZone();
   }
@@ -3065,7 +2865,7 @@ export class BeuveApp extends LitElement {
       }
       case 'open-pull': {
         if (action.repoPath !== undefined) {
-          await this.openPullRequest({ ref: action.ref, repoPath: action.repoPath });
+          await this.github.open({ ref: action.ref, repoPath: action.repoPath });
           return;
         }
         this.showOpenDialog();
@@ -3182,12 +2982,12 @@ export class BeuveApp extends LitElement {
     if (source?.kind !== 'github-pull-request') {
       return undefined;
     }
-    const auth = this.githubAuth;
+    const auth = this.github.auth;
     return {
       target: `${source.owner}/${source.repo}#${String(source.number)}`,
       isSignedIn: auth?.kind === 'signed-in' && auth.host === source.host,
       signInHint: signInHintOf(auth),
-      post: this.githubPost,
+      post: this.github.post,
     };
   }
 
@@ -3238,7 +3038,7 @@ export class BeuveApp extends LitElement {
       tabindex="-1"
       ?hidden=${this.sidebarTab !== 'intent'}
       ?focused=${this.focusedZone === 'intent'}
-      .pullRequest=${this.pullRequest}
+      .pullRequest=${this.github.pullRequest}
       .files=${this.review?.files}
       .tree=${this.tree}
       .impact=${this.impact}
@@ -3320,9 +3120,9 @@ export class BeuveApp extends LitElement {
       ?closable=${isClosable}
       .platform=${this.appInfo?.platform ?? ''}
       .sessions=${this.sessions}
-      ?openingPull=${this.openingPull}
+      ?openingPull=${this.github.isOpening}
       ?openingLocal=${this.opening}
-      .pullFailure=${this.pullFailure}
+      .pullFailure=${this.github.failure}
       .localFailure=${this.localFailure}
       .chooseFolder=${this.chooseFolder}
       .inspect=${this.inspectRepository}
@@ -3412,7 +3212,7 @@ export class BeuveApp extends LitElement {
     };
     const staged = this.stagedCount();
     return html`<nav class="tabs" role="tablist" aria-label="Sidebar">
-      ${tab('intent', this.pullRequest === undefined ? 'Files' : 'Intent & files')}
+      ${tab('intent', this.github.pullRequest === undefined ? 'Files' : 'Intent & files')}
       ${tab('ura', 'Review', staged)} ${tab('chat', 'Chat')}
     </nav>`;
   }
@@ -3497,9 +3297,9 @@ export class BeuveApp extends LitElement {
         .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
-        .ci=${this.ci}
-        .attention=${this.pullRequest?.attention}
-        .githubAuth=${this.githubAuth}
+        .ci=${this.github.ci}
+        .attention=${this.github.pullRequest?.attention}
+        .githubAuth=${this.github.auth}
         @beuve-status-action=${this.onStatusAction}
       ></beuve-status-bar>
       ${
