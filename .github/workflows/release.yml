@@ -16,7 +16,7 @@ jobs:
     name: audit
     permissions:
       contents: read
-    uses: ./.github/workflows/audit.yml
+    uses: $/.github/workflows/audit.yml
 
   build:
     name: build
