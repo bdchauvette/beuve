@@ -3229,9 +3229,7 @@ export class BeuveApp extends LitElement {
   }
 
   private openPanel(): BeuveOpenPanel | undefined {
-    return (
-      this.renderRoot.querySelector<BeuveOpenPanel>(':scope .dialog beuve-open-panel') ?? undefined
-    );
+    return this.renderRoot.querySelector<BeuveOpenPanel>('.dialog beuve-open-panel') ?? undefined;
   }
 
   /** Puts focus back in the focused zone after an overlay closes. */

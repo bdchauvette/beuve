@@ -611,7 +611,7 @@ export class BeuveUraDock extends LitElement {
 
   private async focusEditor(): Promise<void> {
     await this.updateComplete;
-    this.renderRoot.querySelector<HTMLInputElement>(':scope .editor input')?.focus();
+    this.renderRoot.querySelector<HTMLInputElement>('.editor input')?.focus();
   }
 
   /** In the editor, ⌘/Ctrl+Enter is handled by the form; Escape closes it, keeping the cursor. */

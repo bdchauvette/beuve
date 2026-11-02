@@ -788,9 +788,9 @@ export class BeuveOpenPanel extends LitElement {
 
   override focus(): void {
     void this.updateComplete.then(() => {
-      let selector = ':scope form input';
+      let selector = 'form input';
       if (this.step === 'list') {
-        selector = ':scope .query';
+        selector = '.query';
       }
       this.renderRoot.querySelector<HTMLInputElement>(selector)?.focus();
     });
