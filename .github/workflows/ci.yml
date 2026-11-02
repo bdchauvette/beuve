@@ -1,12 +1,18 @@
 name: CI
 
-# Skipped when a change touches only prose; docs.yml still checks its formatting (ADR 0094).
+# Skipped when a change touches only prose; docs.yml still checks its formatting (ADR 0094). Also
+# skipped for the Homebrew cask and its lint workflow, which homebrew-lint.yml covers.
 on:
   push:
     branches: [main]
-    paths-ignore: &docs-only ['docs/**', '**/*.md', 'LICENSE']
+    paths-ignore: &skipped
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
+      - 'Casks/**'
+      - '.github/workflows/homebrew-lint.yml'
   pull_request:
-    paths-ignore: *docs-only
+    paths-ignore: *skipped
 
 permissions:
   contents: read
