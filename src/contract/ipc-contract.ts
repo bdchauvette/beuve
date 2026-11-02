@@ -1918,6 +1918,12 @@ export interface MenuRunMainRequest {
   readonly id: CommandId;
 }
 
+/** `link:open-pr` (main to a main window): a confirmed `beuve://` link asks to open this pull request (ADR 0098). */
+export interface OpenPullRequestLinkView {
+  /** `host/owner/repo#number`, as `github:open-pr` takes it. */
+  readonly ref: string;
+}
+
 /** `menu:run` (main to the focused window): run the catalog command `id`. */
 export interface MenuRunView {
   readonly id: CommandId;
@@ -2362,6 +2368,8 @@ export interface EventChannelMap {
   'terminal:exit': TerminalExitEvent;
   /** Run a menu, shortcut or context menu command in this window (ADR 0068). */
   'menu:run': MenuRunView;
+  /** Open a pull request a `beuve://` link asked for and the reviewer confirmed (ADR 0098). */
+  'link:open-pr': OpenPullRequestLinkView;
   /** Preferences changed in another window (the Settings window); read them again. */
   'settings:changed': Readonly<Record<string, never>>;
 }
