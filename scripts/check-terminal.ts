@@ -117,7 +117,7 @@ async function runSteps(main: MainWindow, repository: string): Promise<void> {
   const { devtools, page } = main;
   const request = { repoPath: repository, baseRef: 'main', headRef: 'feature' };
   console.log('terminal: open a review and show the panel');
-  await devtools.evaluate(page, `${app}.openRepository(${JSON.stringify(request)})`);
+  await devtools.evaluate(page, `${app}.session.open(${JSON.stringify(request)})`);
   await until(main, { expression: `${app}.review !== undefined`, what: 'the review to open' });
   const headSha = String(await devtools.evaluate(page, `${app}.review.headSha`));
   await devtools.evaluate(page, `${app}.runCommandId('toggle-terminal')`);

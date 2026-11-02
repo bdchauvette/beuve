@@ -14,13 +14,11 @@ import type {
   EditorId,
   FileAttributesView,
   FilePairView,
-  IpcResult,
   LspServerView,
   McpStatus,
   OpenPullRequestRequest,
   ReviewOrderMode,
   ReviewView,
-  SessionSummary,
   SetDiffDisplayRequest,
   SidebarSideView,
   UraExportTarget,
@@ -54,12 +52,7 @@ import type { BeuveSheetView } from './beuve-sheet-view.ts';
 import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
 import type { BeuveUraDock } from './beuve-ura-dock.ts';
 import type { MentionTarget } from './chat-draft.ts';
-import type {
-  BeuveOpenPanel,
-  FolderChooser,
-  OpenFailure,
-  RepositoryInspector,
-} from './beuve-open-panel.ts';
+import type { BeuveOpenPanel, FolderChooser, RepositoryInspector } from './beuve-open-panel.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
@@ -79,6 +72,7 @@ import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import { displayChangeFor } from './display-change-for.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
 import { ReviewDataController } from './review-data-controller.ts';
+import { SessionController } from './session-controller.ts';
 import { SettingsController } from './settings-controller.ts';
 import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
@@ -221,19 +215,57 @@ export class BeuveApp extends LitElement {
   `;
 
   private unsubscribes: (() => void)[] = [];
+
+  private readonly session = new SessionController(this, {
+    bridge: beuveBridge,
+    ignoreWhitespace: (): boolean => {
+      return this.settings.display.ignoreWhitespace;
+    },
+    closeOpenDialog: (): void => {
+      this.openDialog = false;
+    },
+    switching: (): void => {
+      this.reviewData.reset();
+      this.ura.reset();
+      this.chat.reset();
+      this.github.reset();
+      this.reviewEdits.reset();
+    },
+    reloading: (): void => {
+      this.reviewEdits.clearStatus();
+    },
+    settled: (): void => {
+      this.peek = undefined;
+      this.flow = undefined;
+    },
+    loaded: ({ review, previousHead }): void => {
+      if (previousHead !== undefined && previousHead !== review.headSha) {
+        this.github.invalidatePost();
+      }
+      this.focusedZone = 'diff';
+      this.reviewData.open(review);
+      void this.refreshLspStatus();
+      void this.ura.refresh(review.session.id);
+      void this.reviewEdits.load(review.session.id);
+      void this.chat.load(review.session.id);
+      if (review.session.source.kind === 'github-pull-request') {
+        void this.github.loadPullRequest(review.session.id);
+      }
+    },
+  });
   private readonly github = new GithubController(this, {
     bridge: beuveBridge,
     review: (): ReviewRef | undefined => {
-      return this.reviewRef();
+      return this.session.reviewRef;
     },
     notify: (notice): void => {
       this.showNotice(notice);
     },
     refreshSessions: async (): Promise<void> => {
-      return this.refreshSessions();
+      return this.session.refresh();
     },
     selectSession: async (sessionId): Promise<void> => {
-      return this.selectSession(sessionId);
+      return this.session.select(sessionId);
     },
     setOpenDialog: (isOpen): void => {
       this.openDialog = isOpen;
@@ -263,13 +295,13 @@ export class BeuveApp extends LitElement {
   private readonly ura = new UraController(this, {
     bridge: beuveBridge,
     review: (): ReviewRef | undefined => {
-      return this.reviewRef();
+      return this.session.reviewRef;
     },
   });
   private readonly reviewEdits = new ReviewEditsController(this, {
     bridge: beuveBridge,
     review: (): ReviewRef | undefined => {
-      return this.reviewRef();
+      return this.session.reviewRef;
     },
     notify: (notice): void => {
       this.showNotice(notice);
@@ -336,11 +368,11 @@ export class BeuveApp extends LitElement {
   private lastMenuState = '';
 
   private readonly onOpenRepository = (event: CustomEvent<CreateLocalSessionRequest>): void => {
-    void this.openRepository(event.detail);
+    void this.session.open(event.detail);
   };
 
   private readonly onSelectSession = (event: CustomEvent<SessionIdDetail>): void => {
-    void this.selectSession(event.detail.sessionId);
+    void this.session.select(event.detail.sessionId);
   };
 
   private readonly onOpenPullRequest = (event: CustomEvent<OpenPullRequestRequest>): void => {
@@ -417,7 +449,7 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onMarkReviewed = (): void => {
-    void this.markReviewed();
+    void this.session.markReviewed();
   };
 
   private readonly onPeekRequest = (event: CustomEvent<LineRequestDetail>): void => {
@@ -737,23 +769,11 @@ export class BeuveApp extends LitElement {
   @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
-  @state() accessor sessionNote = 'Loading sessions…';
-  @state() accessor sessions: readonly SessionSummary[] = [];
-  @state() accessor selectedId = '';
-  @state() accessor review: ReviewView | undefined;
   @state() accessor peek: PeekState | undefined;
   /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
   @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
   /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
   @state() accessor flow: FlowState | undefined;
-  @state() accessor reviewLoading = false;
-  @state() accessor reviewError = '';
-  @state() accessor marking = false;
-  /** The checkpoint Save Progress recorded in this window, for the header's quiet status. */
-  @state() accessor savedProgress:
-    { readonly sessionId: string; readonly sha: string; readonly at: Temporal.Instant } | undefined;
-  @state() accessor opening = false;
-  @state() accessor localFailure: OpenFailure | undefined;
   @state() accessor fileJump: FileJump | undefined;
   @state() accessor treeMode: RadarTreeMode = 'diff-only';
   /** The open session's URA items, every status, placed on its current head. */
@@ -786,6 +806,10 @@ export class BeuveApp extends LitElement {
     });
   }
 
+  private get review(): ReviewView | undefined {
+    return this.session.review;
+  }
+
   private connect(): void {
     addEventListener('focus', this.onWindowFocus);
     this.addEventListener('focusin', this.onFocusIn);
@@ -793,7 +817,6 @@ export class BeuveApp extends LitElement {
     this.addEventListener('contextmenu', this.onContextMenu);
     const bridge = beuveBridge();
     if (bridge === undefined) {
-      this.sessionNote = 'Running without the Electron bridge.';
       return;
     }
     this.unsubscribes = [
@@ -827,15 +850,11 @@ export class BeuveApp extends LitElement {
     if (bridge === undefined) {
       return;
     }
-    const [info, sessions] = await Promise.all([
-      bridge.invoke('app:get-info'),
-      bridge.invoke('session:list'),
-    ]);
+    const [info] = await Promise.all([bridge.invoke('app:get-info'), this.session.refresh()]);
     if (info.ok) {
       this.appInfo = info.value;
       this.dataset['platform'] = info.value.platform;
     }
-    this.applySessions(sessions);
     await this.settings.load();
     await this.github.loadAuth();
   }
@@ -920,8 +939,8 @@ export class BeuveApp extends LitElement {
       void this.reviewData.reloadOrder(this.review);
     }
     this.sidebarSide = next.sidebarSide;
-    if (isWhitespaceChanged && this.selectedId !== '') {
-      void this.selectSession(this.selectedId);
+    if (isWhitespaceChanged && this.session.selectedId !== '') {
+      void this.session.select(this.session.selectedId);
     }
   }
 
@@ -970,102 +989,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.chat.note('info', ...describeEditorSettings(result.value));
-  }
-
-  private applySessions(sessions: IpcResult<readonly SessionSummary[]>): void {
-    if (sessions.ok) {
-      this.sessions = sessions.value;
-      this.sessionNote = `${String(sessions.value.length)} sessions`;
-    } else {
-      this.sessionNote = `Sessions unavailable: ${sessions.error.message}`;
-    }
-  }
-
-  private async listSessions(): Promise<IpcResult<readonly SessionSummary[]>> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return { ok: false, error: { code: 'not-wired', message: 'no Electron bridge' } };
-    }
-    return bridge.invoke('session:list');
-  }
-
-  private async refreshSessions(): Promise<void> {
-    this.applySessions(await this.listSessions());
-  }
-
-  private async openRepository(request: CreateLocalSessionRequest): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined || this.opening) {
-      return;
-    }
-    this.opening = true;
-    this.localFailure = undefined;
-    const created = await bridge.invoke('session:create-local', request);
-    this.opening = false;
-    if (!created.ok) {
-      this.localFailure = { message: created.error.message };
-      return;
-    }
-    this.openDialog = false;
-    await this.refreshSessions();
-    await this.selectSession(created.value.id);
-  }
-
-  private async selectSession(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    this.openDialog = false;
-    let shownHead: string | undefined;
-    if (this.review?.session.id === sessionId) {
-      shownHead = this.review.headSha;
-    }
-    if (sessionId === this.selectedId) {
-      this.reviewEdits.clearStatus();
-    } else {
-      this.review = undefined;
-      this.reviewData.reset();
-      this.ura.reset();
-      this.chat.reset();
-      this.github.reset();
-      this.reviewEdits.reset();
-    }
-    this.selectedId = sessionId;
-    this.reviewLoading = true;
-    this.reviewError = '';
-    const review = await bridge.invoke('session:get-review', {
-      sessionId,
-      ignoreWhitespace: this.settings.display.ignoreWhitespace,
-    });
-    // A newer load of this window superseded this one (ADR 0079); that one will answer.
-    if (sessionId !== this.selectedId || (!review.ok && review.error.code === 'cancelled')) {
-      return;
-    }
-    this.reviewLoading = false;
-    this.peek = undefined;
-    this.flow = undefined;
-    if (review.ok) {
-      if (shownHead !== undefined && shownHead !== review.value.headSha) {
-        this.github.invalidatePost();
-      }
-      this.review = review.value;
-      this.focusedZone = 'diff';
-      if (this.sessions.every(({ id }) => id !== sessionId)) {
-        void this.refreshSessions();
-      }
-      this.reviewData.open(review.value);
-      void this.refreshLspStatus();
-      void this.ura.refresh(review.value.session.id);
-      void this.reviewEdits.load(review.value.session.id);
-      void this.chat.load(review.value.session.id);
-      if (review.value.session.source.kind === 'github-pull-request') {
-        void this.github.loadPullRequest(review.value.session.id);
-      }
-    } else {
-      this.review = undefined;
-      this.reviewError = review.error.message;
-    }
   }
 
   private reviewDeferrals(): typeof this.deferralPlan {
@@ -1219,32 +1142,6 @@ export class BeuveApp extends LitElement {
     return this.peek;
   }
 
-  private async markReviewed(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined || this.marking) {
-      return;
-    }
-    this.marking = true;
-    this.reviewError = '';
-    const marked = await bridge.invoke('session:mark-reviewed', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-    });
-    this.marking = false;
-    if (!marked.ok) {
-      this.reviewError = marked.error.message;
-      return;
-    }
-    this.savedProgress = {
-      sessionId: review.session.id,
-      sha: review.headSha,
-      at: Temporal.Now.instant(),
-    };
-    await this.refreshSessions();
-    await this.selectSession(review.session.id);
-  }
-
   /** The preference slash commands of the chat; the controller has echoed what was typed. */
   private runChatAppCommand(command: ChatAppCommand): void {
     switch (command.kind) {
@@ -1322,13 +1219,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     await this.ura.stageChatAnswer(plan, messageId);
-  }
-
-  private reviewRef(): ReviewRef | undefined {
-    if (this.review === undefined) {
-      return undefined;
-    }
-    return { sessionId: this.review.session.id, headSha: this.review.headSha };
   }
 
   private focusPathOfReview(): string | undefined {
@@ -1708,7 +1598,7 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'save-progress': {
-        void this.markReviewed();
+        void this.session.markReviewed();
         return;
       }
       case 'stop': {
@@ -1955,7 +1845,7 @@ export class BeuveApp extends LitElement {
   }
 
   private showOpenDialog(): void {
-    void this.refreshSessions();
+    void this.session.refresh();
     this.overlayOpen = false;
     this.openDialog = true;
     void this.updateComplete.then(() => {
@@ -1968,7 +1858,7 @@ export class BeuveApp extends LitElement {
   private closeOpenDialog(): void {
     this.openDialog = false;
     this.github.clearFailure();
-    this.localFailure = undefined;
+    this.session.clearLocalFailure();
     this.refocusZone();
   }
 
@@ -2003,7 +1893,7 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'session': {
-        await this.selectSession(action.sessionId);
+        await this.session.select(action.sessionId);
         return;
       }
       case 'open-pull': {
@@ -2138,7 +2028,7 @@ export class BeuveApp extends LitElement {
     return {
       commands: commandRegistry,
       platform: keyPlatformOf(this.appInfo?.platform),
-      sessions: this.sessions,
+      sessions: this.session.sessions,
       ...(this.review !== undefined && { files: this.review.files }),
       ...(this.reviewData.tree !== undefined && { trackedPaths: this.reviewData.tree.paths }),
       uraItems: this.ura.items,
@@ -2147,7 +2037,7 @@ export class BeuveApp extends LitElement {
 
   private renderTitlebar(): TemplateResult {
     return html`<beuve-titlebar
-      .label=${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
+      .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .searchTitle=${`Command Palette (${this.shortcut('palette')})`}
       .platform=${this.appInfo?.platform ?? ''}
@@ -2180,7 +2070,7 @@ export class BeuveApp extends LitElement {
   }
 
   private renderDiff(): TemplateResult {
-    if (this.review === undefined && !this.reviewLoading && this.reviewError === '') {
+    if (this.review === undefined && !this.session.isLoading && this.session.error === '') {
       return html`<div class="empty">
         <div>
           <h1>Open a review</h1>
@@ -2193,19 +2083,21 @@ export class BeuveApp extends LitElement {
       data-zone="diff"
       tabindex="-1"
       ?focused=${this.focusedZone === 'diff'}
-      .sessionNote=${this.sessionNote}
+      .sessionNote=${this.session.note}
       .review=${this.review}
       .reviewMarks=${this.reviewData.marks}
       .reviewProgress=${this.reviewData.progress}
       .order=${this.reviewData.order}
-      ?loading=${this.reviewLoading}
-      .loadingLabel=${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
-      ?marking=${this.marking}
+      ?loading=${this.session.isLoading}
+      .loadingLabel=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
+      ?marking=${this.session.isMarking}
       .savedProgress=${
-        this.savedProgress?.sessionId === this.review?.session.id ? this.savedProgress : undefined
+        this.session.savedProgress?.sessionId === this.review?.session.id
+          ? this.session.savedProgress
+          : undefined
       }
       .platform=${this.appInfo?.platform ?? ''}
-      .error=${this.reviewError}
+      .error=${this.session.error}
       .peek=${this.peek}
       .flow=${this.flow}
       .fileJump=${this.fileJump}
@@ -2243,11 +2135,11 @@ export class BeuveApp extends LitElement {
       data-zone=${zone ?? nothing}
       ?closable=${isClosable}
       .platform=${this.appInfo?.platform ?? ''}
-      .sessions=${this.sessions}
+      .sessions=${this.session.sessions}
       ?openingPull=${this.github.isOpening}
-      ?openingLocal=${this.opening}
+      ?openingLocal=${this.session.isOpening}
       .pullFailure=${this.github.failure}
-      .localFailure=${this.localFailure}
+      .localFailure=${this.session.localFailure}
       .chooseFolder=${this.chooseFolder}
       .inspect=${this.inspectRepository}
       @beuve-select-session=${this.onSelectSession}
