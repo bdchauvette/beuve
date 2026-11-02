@@ -412,6 +412,37 @@ export class BeuveApp extends LitElement {
       border-left: none;
     }
 
+    .sidebar {
+      position: relative;
+    }
+
+    .sidebar-handle {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      bottom: 0;
+      left: -3px;
+      width: 6px;
+      cursor: col-resize;
+      touch-action: none;
+    }
+
+    .workspace.left .sidebar-handle {
+      right: -3px;
+      left: auto;
+    }
+
+    .sidebar-handle:hover,
+    .sidebar-handle:focus-visible,
+    .sidebar-handle.dragging {
+      background: var(--beuve-border);
+      outline: none;
+    }
+
+    .sidebar > .sidebar-handle {
+      border: none;
+    }
+
     .sidebar > * {
       border: none;
     }
@@ -790,6 +821,68 @@ export class BeuveApp extends LitElement {
   };
 
   /** A notice's button: runs its catalog command as the menu would. */
+  private readonly onSidebarHandleDown = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    this.isResizingSidebar = true;
+    event.preventDefault();
+  };
+
+  private readonly onSidebarHandleMove = (event: PointerEvent): void => {
+    if (!this.isResizingSidebar) {
+      return;
+    }
+    const workspace = this.renderRoot.querySelector<HTMLElement>('.workspace');
+    if (workspace === null) {
+      return;
+    }
+    const bounds = workspace.getBoundingClientRect();
+    let width = bounds.right - event.clientX;
+    if (this.sidebarSide === 'left') {
+      width = event.clientX - bounds.left;
+    }
+    this.setSidebarWidth({ width, available: bounds.width });
+  };
+
+  private readonly onSidebarHandleUp = (event: PointerEvent): void => {
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+    this.isResizingSidebar = false;
+  };
+
+  private readonly onSidebarHandleReset = (): void => {
+    this.sidebarWidth = undefined;
+  };
+
+  private readonly onSidebarHandleKey = (event: KeyboardEvent): void => {
+    const growKey = growKeys[this.sidebarSide];
+    const shrinkKey = growKeys[otherSides[this.sidebarSide]];
+    if (event.key !== growKey && event.key !== shrinkKey) {
+      return;
+    }
+    const workspace = this.renderRoot.querySelector<HTMLElement>('.workspace');
+    const sidebar = this.renderRoot.querySelector<HTMLElement>('.sidebar');
+    if (workspace === null || sidebar === null) {
+      return;
+    }
+    let step = 16;
+    if (event.shiftKey) {
+      step = 64;
+    }
+    if (event.key === shrinkKey) {
+      step = -step;
+    }
+    this.setSidebarWidth({
+      width: sidebar.getBoundingClientRect().width + step,
+      available: workspace.clientWidth,
+    });
+    event.preventDefault();
+  };
+
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
     this.statusNotice = undefined;
     this.runAppCommand(event.detail.command);
@@ -990,6 +1083,9 @@ export class BeuveApp extends LitElement {
   /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
   @state() accessor sidebarSide: SidebarSideView = 'right';
   @state() accessor sidebarHidden = false;
+  /** Dragged sidebar width in px; `undefined` is the stylesheet's responsive default. */
+  @state() accessor sidebarWidth: number | undefined = undefined;
+  @state() accessor isResizingSidebar = false;
   /** The terminal panel under the diff (ADR 0095); its shells run on while it is hidden. */
   @state() accessor terminalShown = false;
   @state() accessor isTerminalFocused = false;
@@ -3509,8 +3605,28 @@ export class BeuveApp extends LitElement {
 
   private renderSidebar(): TemplateResult {
     return html`<div class="sidebar">
+      <div
+        class="sidebar-handle ${this.isResizingSidebar ? 'dragging' : ''}"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        aria-valuemin=${minSidebarWidth}
+        aria-valuenow=${this.sidebarWidth ?? 0}
+        tabindex="0"
+        @pointerdown=${this.onSidebarHandleDown}
+        @pointermove=${this.onSidebarHandleMove}
+        @pointerup=${this.onSidebarHandleUp}
+        @pointercancel=${this.onSidebarHandleUp}
+        @dblclick=${this.onSidebarHandleReset}
+        @keydown=${this.onSidebarHandleKey}
+      ></div>
       ${this.renderTabs()} ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
     </div>`;
+  }
+
+  private setSidebarWidth(options: SidebarWidthOptions): void {
+    const max = Math.max(minSidebarWidth, Math.min(maxSidebarWidth, options.available * 0.6));
+    this.sidebarWidth = Math.round(Math.min(max, Math.max(minSidebarWidth, options.width)));
   }
 
   private onTerminalFocus(event: CustomEvent<TerminalFocusDetail>): void {
@@ -3555,7 +3671,10 @@ export class BeuveApp extends LitElement {
     const focused = zones.find(({ id }) => id === this.focusedZone);
     return html`
       ${this.renderTitlebar()}
-      <div class="workspace ${workspace.join(' ')}">
+      <div
+        class="workspace ${workspace.join(' ')}"
+        style=${this.sidebarWidth === undefined ? '' : `--beuve-sidebar-width: ${String(this.sidebarWidth)}px`}
+      >
         <div class="main">${this.renderDiff()}${this.renderTerminal()}</div>
         ${hasSidebar ? this.renderSidebar() : nothing}
       </div>
@@ -3647,6 +3766,20 @@ export class BeuveApp extends LitElement {
 }
 
 type SidebarZone = Exclude<ZoneId, 'diff'>;
+
+interface SidebarWidthOptions {
+  readonly width: number;
+  readonly available: number;
+}
+
+/** The arrow key that widens the sidebar on each side. */
+const growKeys: Readonly<Record<SidebarSideView, string>> = {
+  left: 'ArrowRight',
+  right: 'ArrowLeft',
+};
+
+const minSidebarWidth = 240;
+const maxSidebarWidth = 900;
 
 const paletteOpenings: Readonly<Record<'palette' | 'go-to-file', string>> = {
   palette: '',
