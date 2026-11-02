@@ -40,6 +40,7 @@ import { characterOffsetAt } from './character-offset-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { ClickedToken } from './run-sheet-action.ts';
+import { trackJumpModifier } from './track-jump-modifier.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
@@ -113,6 +114,12 @@ export interface SuggestionCancelDetail {
 }
 
 /** Sent by "Load diff" (or its undo) on a card. */
+/** `beuve-token-jump`: ⌘/Ctrl-click on a head-side token, to follow its definition. */
+export interface TokenJumpDetail {
+  readonly target: ReviewTarget;
+  readonly token: ClickedToken | undefined;
+}
+
 export interface DiffToggleDetail {
   readonly path: string;
   readonly expand: boolean;
@@ -501,6 +508,10 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-text-muted);
       }
 
+      :host([data-jump]) diffs-container {
+        cursor: pointer;
+      }
+
       diffs-container {
         --diffs-font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
         --diffs-font-size: 12px;
@@ -863,6 +874,13 @@ export class BeuveFileCard extends LitElement {
       line: props.lineNumber,
       character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
     };
+    if (!event.metaKey && !event.ctrlKey) {
+      return;
+    }
+    const detail: TokenJumpDetail = { target: this.target(), token: this.clickedToken };
+    this.dispatchEvent(
+      new CustomEvent('beuve-token-jump', { detail, bubbles: true, composed: true }),
+    );
   };
 
   /** Head-side tokens only, as for Go to Definition: the checkout the server reads has no deleted text. */
@@ -1007,6 +1025,8 @@ export class BeuveFileCard extends LitElement {
   private crossingDelegation: AbortController | undefined;
   /** The editing keys' listeners, while a Suggest Edit edit is in progress. */
   private editKeys: AbortController | undefined;
+  /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
+  private jumpModifier: AbortController | undefined;
   /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
   @state() private accessor revealed: readonly RevealedRange[] = [];
 
@@ -1849,9 +1869,18 @@ ${splitPatch(file.patch).map((line) => {
     }
   }
 
+  override connectedCallback(): void {
+    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
+    super.connectedCallback();
+    this.jumpModifier = new AbortController();
+    trackJumpModifier(this, this.jumpModifier.signal);
+  }
+
   override disconnectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.disconnectedCallback();
+    this.jumpModifier?.abort();
+    this.jumpModifier = undefined;
     this.hideImpact();
   }
 
