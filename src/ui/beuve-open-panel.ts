@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
 import type {
@@ -34,6 +35,11 @@ export interface OpenFailure {
 }
 
 type Step = 'list' | 'pull' | 'local';
+
+interface PressedRow {
+  readonly index: number;
+  readonly isEditing: boolean;
+}
 
 type Row =
   | { readonly kind: 'open-pull'; readonly query: Extract<OpenQuery, { kind: 'pull-request' }> }
@@ -108,6 +114,22 @@ export class BeuveOpenPanel extends LitElement {
       transform: scale(0.985);
       background: var(--beuve-accent-soft);
       box-shadow: inset 0 0 0 1px var(--beuve-accent);
+    }
+
+    li.pressed {
+      background: var(--beuve-accent-soft);
+      animation: press 140ms ease-out both;
+    }
+
+    @keyframes press {
+      40% {
+        transform: scale(0.97);
+        box-shadow: inset 0 0 0 1px var(--beuve-accent);
+      }
+      to {
+        transform: scale(1);
+        box-shadow: inset 0 0 0 1px var(--beuve-accent);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -302,9 +324,15 @@ export class BeuveOpenPanel extends LitElement {
     if (event.key === 'Enter') {
       event.preventDefault();
       const row = rows[this.cursor];
-      if (row !== undefined) {
-        this.activate(row, event.shiftKey);
+      if (row === undefined || this.pressed !== undefined) {
+        return;
       }
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.activate(row, event.shiftKey);
+        return;
+      }
+      // The row plays its press; `animationend` activates it.
+      this.pressed = { index: this.cursor, isEditing: event.shiftKey };
       return;
     }
     if (!(event.key === 'Escape' && this.closable)) {
@@ -410,6 +438,8 @@ export class BeuveOpenPanel extends LitElement {
   @state() accessor step: Step = 'list';
   @state() accessor text = '';
   @state() accessor cursor = 0;
+  /** The row Enter is pressing: it activates when its press animation ends. */
+  @state() accessor pressed: PressedRow | undefined;
   @state() accessor pullRef = '';
   @state() accessor clonePath = '';
   @state() accessor cloneNote = '';
@@ -438,6 +468,19 @@ export class BeuveOpenPanel extends LitElement {
             const row = this.rows()[Number(index)];
             if (row !== undefined) {
               this.activate(row, true);
+            }
+          },
+        },
+        animationend: {
+          row: ({ index }): void => {
+            const { pressed } = this;
+            if (pressed?.index !== Number(index)) {
+              return;
+            }
+            this.pressed = undefined;
+            const row = this.rows()[pressed.index];
+            if (row !== undefined) {
+              this.activate(row, pressed.isEditing);
             }
           },
         },
@@ -544,7 +587,7 @@ export class BeuveOpenPanel extends LitElement {
     return html`<li
       role="option"
       aria-selected=${index === this.cursor ? 'true' : 'false'}
-      class=${isSeparated ? 'separated' : ''}
+      class=${classMap({ separated: isSeparated, pressed: this.pressed?.index === index })}
       data-action="row"
       data-index=${index}
     >
@@ -823,6 +866,7 @@ export class BeuveOpenPanel extends LitElement {
     this.step = 'list';
     this.text = '';
     this.cursor = 0;
+    this.pressed = undefined;
     this.now = Temporal.Now.instant();
   }
 
