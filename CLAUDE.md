@@ -4,10 +4,10 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 
 ## Before committing
 
-- Run `npm run check` (typecheck, lint, format:check, deps, test). It must pass with zero warnings.
+- Run `npm run check` (typecheck, lint, `format:ci`, deps, test). It must pass with zero warnings. It is the local aggregate; CI runs each check as its own script (`typecheck:ci`, `lint:ci`, `format:ci`, `deps:ci`, `test:ci`, ADR 0103).
 - Use the Node in `.node-version`: `devEngines` in `package.json` makes npm refuse any other (`EBADDEVENGINES`). Claude Code cloud sessions get it from `.claude/hooks/session-start.sh` (ADR 0060 amendment).
 - `npm run build` bundles to `dist/`; `npm start` builds and launches Electron.
-- CI runs `npm run check` on Ubuntu and macOS, so tests must not assume Linux (symlinked `/tmp`, extra env vars, case-insensitive paths). Compare realpaths, and never skip a test to get green.
+- CI runs the tests on Ubuntu and macOS (`test.yml`) and the static checks on Ubuntu (`static.yml`, which also lints the Homebrew cask when it changes), so tests must not assume Linux (symlinked `/tmp`, extra env vars, case-insensitive paths). Compare realpaths, and never skip a test to get green.
 - Release: calendar versions `YYYY.M.N` (ADR 0049). From a clean, up-to-date `main` run `npm run release` (bumps `package.json`/lockfile, commits `chore(release): <version>`, creates tag `v<version>`), then `git push --follow-tags origin main`; the `v*` tag builds, publishes the GitHub Release and bumps `Casks/beuve.rb` (docs/packaging.md). Don't use `npm version`, and don't edit the cask's `version` or `sha256` by hand.
 - `npm run dist:mac` packages an arm64 dmg+zip into `out/` (ad-hoc signed unless `CSC_*`/`APPLE_*` are set); `npm run dist:linux-dir` builds `out/linux-unpacked/` for smoke tests (ADR 0048, `docs/packaging.md`). A new file main loads or runs by path at run time (a script, wasm, a binary, a resource) must be added to `electron-builder.yml` (`files`, `asarUnpack` or `extraResources`), and checked in `npm run dist:linux-dir`.
 - Don't add dependencies without an ADR. A dependency with an install script must be approved in `allowScripts` (`npm install-scripts approve <pkg>`, pinned to the version, so a bump approves it again). Never add lodash-style grab-bags; write a helper in `src/x/<group>/` (groups are general domains: `collections`, `log`, `result`, `text`, `time`, ...) if it could plausibly belong in a JavaScript standard library, else in the shared directory it belongs to.

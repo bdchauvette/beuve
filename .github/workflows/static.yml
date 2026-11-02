@@ -1,0 +1,97 @@
+name: Static checks
+
+# Runs on every change, prose included: formatting covers Markdown, and each check is cheap on
+# Ubuntu. The Homebrew cask is linted only when it changes (ADR 0103).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: static (${{ matrix.script }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [typecheck:ci, lint:ci, format:ci, deps:ci]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      # No install scripts: these checks need no Electron binary or native build.
+      - run: npm ci --ignore-scripts
+      - run: npm run "$SCRIPT"
+        env:
+          SCRIPT: ${{ matrix.script }}
+
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cask: ${{ steps.diff.outputs.cask }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Find the Homebrew files this change touches
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # The checkout is the merge of the pull request into its base: parent 1 is the base.
+            base=HEAD^1
+          else
+            base="$PUSH_BEFORE"
+          fi
+          if ! changed=$(git diff --name-only "$base" HEAD --); then
+            echo "Could not diff against $base; linting the cask to be safe."
+            echo "cask=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(Casks/|\.github/workflows/static\.yml$)'; then
+            echo "cask=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cask=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  homebrew:
+    name: homebrew (cask)
+    needs: changes
+    if: needs.changes.outputs.cask == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # ubuntu-latest does not ship Homebrew.
+      - uses: Homebrew/actions/setup-homebrew@d482da0e602890d3160aade42e72c8556103bf04 # 2026.10.26.1
+      - name: Lint the Homebrew cask
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+        run: |
+          brew --version
+          # Audit needs the cask inside a tap: tap this checkout.
+          brew tap bdchauvette/beuve "$PWD"
+          # Homebrew 7.0.11 refuses to load casks from an untrusted tap.
+          brew trust bdchauvette/beuve
+          brew style --cask bdchauvette/beuve/beuve
+          brew audit --cask --strict bdchauvette/beuve/beuve

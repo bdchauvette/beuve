@@ -1,0 +1,49 @@
+name: Tests
+
+# Skipped when a change touches only prose or the Homebrew cask. Tests build their own fixtures and
+# never read the repository's docs or cask (ADR 0094, 0103).
+on:
+  push:
+    branches: [main]
+    paths-ignore: &skipped
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
+      - 'Casks/**'
+  pull_request:
+    paths-ignore: *skipped
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple silicon; beuve targets macOS (ADR 0049).
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Node 26 for native Temporal in tests and tooling (ADR 0060).
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      # The reftable tests need git 2.45+ (ADR 0087); both runner images ship 2.56.
+      - name: Show the git version
+        run: git --version
+      - run: npm run test:ci
+        env:
+          # The reader's ref-backend tests must run on reftable here, not fall back to files.
+          BEUVE_REQUIRE_REFTABLE: '1'

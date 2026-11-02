@@ -1,6 +1,6 @@
 # 0094. Skip the full check for docs-only changes
 
-- Status: Accepted
+- Status: Superseded by [0103](0103-separate-test-static-and-build-workflows.md)
 - Date: 2026-11-01
 
 ## Context

@@ -1,7 +1,7 @@
-name: CI
+name: Build
 
-# Skipped when a change touches only prose; docs.yml still checks its formatting (ADR 0094). Also
-# skipped for the Homebrew cask and its lint workflow, which homebrew-lint.yml covers.
+# Builds, renders and packages the app. Tests are in test.yml and the static checks in static.yml
+# (ADR 0103). Skipped when a change touches only prose or the Homebrew cask.
 on:
   push:
     branches: [main]
@@ -10,7 +10,6 @@ on:
       - '**/*.md'
       - 'LICENSE'
       - 'Casks/**'
-      - '.github/workflows/homebrew-lint.yml'
   pull_request:
     paths-ignore: *skipped
 
@@ -18,12 +17,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: check (${{ matrix.os }})
+  build:
+    name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -41,13 +40,6 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      # The reftable tests need git 2.45+ (ADR 0087); both runner images ship 2.56.
-      - name: Show the git version
-        run: git --version
-      - run: npm run check
-        env:
-          # The reader's ref-backend tests must run on reftable here, not fall back to files.
-          BEUVE_REQUIRE_REFTABLE: '1'
       # The app and the test-only harness page (dist-test/, never packaged) render the shared
       # hostile-input corpus with the production CSP and Trusted Types policy (ADR 0077).
       - name: Build the app and the hostile-input harness
