@@ -1,14 +1,13 @@
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
-import { countUraSeverities } from './count-ura-severities.ts';
 import { escapeMarkdownHtml } from './escape-markdown-html.ts';
 import { fenceCodeBlock } from './fence-code-block.ts';
 import { formatImpactOrigin } from './format-impact-origin.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
 import { formatUraSeverity } from './format-ura-severity.ts';
+import { reviewSummaryFrom } from './review-summary-from.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
 import type { PatchHunk, UraAnchor, UraItem } from './ura-item.ts';
-import { uraSeverities } from './ura-severities.ts';
 
 /** One inline comment of a review; `start_*` are present only for multi-line ranges. */
 export type GithubReviewComment = {
@@ -42,18 +41,14 @@ export interface GithubReviewOptions {
    * review when a comment falls outside them, so with this map such items go into the body.
    */
   readonly commentableRanges?: ReadonlyMap<string, readonly LineSpan[]>;
+  /** The reviewer's own text for the top of the body, in place of `reviewSummaryFrom`'s. */
+  readonly summary?: string;
 }
 
 const events: Readonly<Record<UraVerdict, GithubReviewPayload['event']>> = {
   approve: 'APPROVE',
   'request-changes': 'REQUEST_CHANGES',
   comment: 'COMMENT',
-};
-
-const verdictLabels: Readonly<Record<UraVerdict, string>> = {
-  approve: 'approved',
-  'request-changes': 'changes requested',
-  comment: 'comments',
 };
 
 const outdatedLabels: Readonly<Record<OutdatedReason, string>> = {
@@ -85,7 +80,7 @@ export function buildGithubReview(
       inline.push(comment);
     }
   }
-  const sections = [header(artifact)];
+  const sections = [options.summary ?? reviewSummaryFrom(artifact)];
   if (general.length > 0) {
     sections.push('### Not attached to a line', ...general);
   }
@@ -95,29 +90,6 @@ export function buildGithubReview(
     body: sections.join('\n\n'),
     comments: inline,
   };
-}
-
-function header(artifact: UraArtifact): string {
-  const { verdict } = artifact;
-  const chosen = chosenNote(verdict);
-  const counts = countUraSeverities(artifact.entries);
-  const tally = uraSeverities
-    .filter((severity) => counts[severity] > 0)
-    .map((severity) => `${String(counts[severity])} ${formatUraSeverity(severity).toLowerCase()}`)
-    .join(', ');
-  const summary = `**beuve review: ${verdictLabels[verdict.value]}**${chosen}`;
-  if (tally === '') {
-    return summary;
-  }
-  return `${summary}\n\n${tally}.`;
-}
-
-/** For a verdict the reviewer chose, the one the items alone suggest. */
-function chosenNote(verdict: UraArtifact['verdict']): string {
-  if (verdict.source !== 'chosen') {
-    return '';
-  }
-  return ` (the reviewer's verdict; the items alone suggest ${verdictLabels[verdict.derived]})`;
 }
 
 function commentFrom(

@@ -24,9 +24,7 @@ describe('buildGithubReview', () => {
   test('matches the snapshot', ({ expect }) => {
     expect(buildGithubReview(createSampleArtifact())).toMatchInlineSnapshot(`
       {
-        "body": "**beuve review: changes requested**
-
-      1 blocker, 1 issue, 1 question, 1 nit, 1 praise.
+        "body": "1 blocker, 1 issue, 1 question, 1 nit, 1 praise.
 
       ### Not attached to a line
 
@@ -182,14 +180,20 @@ describe('buildGithubReview', () => {
     expect(outside.body).toContain("On `src/app.ts:10-12` (outside the pull request's diff).");
   });
 
-  test('notes a chosen verdict and always has a body', ({ expect }) => {
+  test('names the verdict when there are no items, so the body is never empty', ({ expect }) => {
     const artifact = {
       ...createSampleArtifact({ value: 'comment', source: 'chosen', derived: 'approve' }),
       entries: [],
     };
-    expect(buildGithubReview(artifact).body).toBe(
-      "**beuve review: comments** (the reviewer's verdict; the items alone suggest approved)",
-    );
+    expect(buildGithubReview(artifact).body).toBe('Comments');
+  });
+
+  test("puts the reviewer's own summary above the items instead of the generated one", ({
+    expect,
+  }) => {
+    const { body } = buildGithubReview(withItem({}), { summary: 'Mostly fine, one thing to fix.' });
+    expect(body).toBe('Mostly fine, one thing to fix.');
+    expect(body).not.toContain('beuve');
   });
 });
 

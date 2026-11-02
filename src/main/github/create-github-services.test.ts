@@ -334,6 +334,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       sessionId,
       headSha: firstHead,
       verdict: 'comment',
+      summary: '1 issue, 1 question.',
       inlineCount: 1,
       bodyCount: 1,
       alreadyPostedCount: 0,
@@ -371,6 +372,8 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       comments: [{ path: 'app.ts', line: 1 }],
     });
     expect(api.reviews[0]?.token).toBe(token);
+    expect(api.reviews[0]?.body.body.startsWith('1 issue, 1 question.\n\n')).toBe(true);
+    expect(api.reviews[0]?.body.body).not.toContain('beuve');
     const listed = okValueFrom(await ura.list({ sessionId }));
     expect(listed.items.map((item) => item.posted?.placement)).toStrictEqual(['inline', 'body']);
 
@@ -393,7 +396,11 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     );
     api.rejectCommentPaths.add('app.ts');
     const fallback = okValueFrom(
-      await services.github.postReview({ sessionId, expectedHeadSha: firstHead }),
+      await services.github.postReview({
+        sessionId,
+        expectedHeadSha: firstHead,
+        summary: 'One more nit, otherwise good.',
+      }),
     );
     expect(fallback).toMatchObject({
       kind: 'posted',
@@ -403,6 +410,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     });
     expect(api.reviews).toHaveLength(2);
     expect(api.reviews[1]?.body.comments).toStrictEqual([]);
+    expect(api.reviews[1]?.body.body.startsWith('One more nit, otherwise good.\n\n')).toBe(true);
     expect(api.reviews[1]?.body.body).toContain('Comments GitHub could not attach to the diff');
   });
 

@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 import type {
+  GithubReviewPreviewView,
   ReviewEditPreviewView,
   UraAnchorView,
   UraExportTarget,
@@ -970,6 +971,12 @@ export class BeuveUraDock extends LitElement {
       case 'confirm': {
         return html`<div class="github confirm" role="group" aria-label="Confirm posting">
           <p class="note">Post to ${github.target}: ${describeReviewPreview(post.preview)}</p>
+          <textarea
+            name="summary"
+            aria-label="Review summary"
+            title="The text at the top of the review, above the items that aren't attached to a line"
+            .value=${post.preview.summary}
+          ></textarea>
           <div class="actions">
             <button
               type="button"
@@ -983,7 +990,7 @@ export class BeuveUraDock extends LitElement {
               type="button"
               class="primary"
               @click=${(): void => {
-                this.emit('beuve-github-post', {});
+                this.emit('beuve-github-post', { summary: this.editedSummary(post.preview) });
               }}
             >
               Post
@@ -1007,7 +1014,7 @@ export class BeuveUraDock extends LitElement {
               type="button"
               class="primary"
               @click=${(): void => {
-                this.emit('beuve-github-post', { verdict: 'comment' });
+                this.emit('beuve-github-post', { verdict: 'comment', summary: post.summary });
               }}
             >
               Post as comment
@@ -1041,6 +1048,18 @@ export class BeuveUraDock extends LitElement {
         </div>`;
       }
     }
+  }
+
+  /**
+   * The summary textarea's text, or `undefined` while it is still the generated one, so a post
+   * that falls back to another verdict regenerates it instead of repeating a stale label.
+   */
+  private editedSummary(preview: GithubReviewPreviewView): string | undefined {
+    const field = this.renderRoot.querySelector<HTMLTextAreaElement>('textarea[name="summary"]');
+    if (field === null || field.value === preview.summary) {
+      return undefined;
+    }
+    return field.value;
   }
 
   private saveKey(): string {
