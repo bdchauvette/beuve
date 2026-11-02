@@ -15,6 +15,7 @@ describe('describeUraItem', () => {
     });
     expect(describeUraItem(item)).toStrictEqual({
       severity: 'Issue',
+      emoji: '⚠️',
       anchor: 'src/b.ts:7-8',
       origin: 'human',
     });

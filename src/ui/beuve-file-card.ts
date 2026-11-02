@@ -67,6 +67,8 @@ import type {
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
+import { headlineOfUraItem } from './headline-of-ura-item.ts';
+import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
 import { createInsightElement } from './create-insight-element.ts';
@@ -549,7 +551,10 @@ export class BeuveFileCard extends LitElement {
       }
 
       .ura-marker .ura-kind {
+        display: inline-flex;
         flex: none;
+        align-items: center;
+        gap: var(--beuve-space-1);
         font-weight: 600;
         color: var(--beuve-accent);
       }
@@ -2193,13 +2198,14 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
   marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}`;
   const kind = document.createElement('span');
   kind.className = 'ura-kind';
-  kind.textContent = `Staged · ${labels.severity}`;
+  kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
   if (item.suggestedPatch !== undefined) {
     kind.textContent += ' · suggestion';
   }
+  kind.prepend(createUraNoteIcon());
   const title = document.createElement('span');
   title.className = 'ura-title';
-  title.append(...parseInlineTitle(item.title).map((span) => createInlineNode(span)));
+  title.append(...parseInlineTitle(headlineOfUraItem(item)).map((span) => createInlineNode(span)));
   marker.append(kind, title);
   if (outside !== undefined) {
     const reveal = document.createElement('button');

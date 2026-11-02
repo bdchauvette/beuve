@@ -41,7 +41,7 @@ export const uraMigrations: readonly Migration[] = [
         impact_value REAL,
         impact_threshold REAL,
         impact_percentile REAL,
-        title TEXT NOT NULL CHECK (trim(title) <> '' AND length(title) <= 200),
+        title TEXT NOT NULL CHECK (title = trim(title) AND length(title) <= 200),
         body TEXT NOT NULL,
         patch TEXT CHECK (patch IS NULL OR (patch <> '' AND anchor_kind <> 'change')),
         status TEXT NOT NULL CHECK (status IN ('staged', 'withdrawn', 'addressed')),
@@ -49,6 +49,8 @@ export const uraMigrations: readonly Migration[] = [
         addressed_by TEXT CHECK (addressed_by IS NULL OR addressed_by IN ('reviewer', 'agent')),
         created_at TEXT NOT NULL CHECK (${timestamp('created_at')}),
         updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
+        -- A note says something: a title is optional, but not all of title, body and patch.
+        CHECK (title <> '' OR trim(body) <> '' OR patch IS NOT NULL),
         -- Every branch tests IS NOT NULL first: a NULL comparison would make a CHECK pass.
         CHECK (
           (anchor_kind = 'lines' AND path IS NOT NULL AND path <> ''

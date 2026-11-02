@@ -28,7 +28,7 @@ describe('buildGithubReview', () => {
 
       ### Not attached to a line
 
-      #### Question: Is this file meant to ship?
+      #### ❓ Question: Is this file meant to ship?
 
       On \`docs/notes.md\`.
 
@@ -42,11 +42,11 @@ describe('buildGithubReview', () => {
        Notes
       \`\`\`
 
-      #### Praise: Clear commit history
+      #### ✨ Praise: Clear commit history
 
       On the whole change.
 
-      #### Nit: Prefer &lt;const> & "readonly"
+      #### ⛏️ Nit: Prefer &lt;const> & "readonly"
 
       \`src/app.ts:10-12\` (outdated: the lines changed since aaaaaaaaaaaa)
 
@@ -54,7 +54,7 @@ describe('buildGithubReview', () => {
       A CDATA terminator: ]]> stays text.",
         "comments": [
           {
-            "body": "**Blocker:** Guard against an empty list
+            "body": "🛑 **Blocker:** Guard against an empty list
 
       Calling \`first()\` on \`[]\` throws.
 
@@ -71,7 +71,7 @@ describe('buildGithubReview', () => {
             "start_side": "RIGHT",
           },
           {
-            "body": "**Issue:** Cognitive complexity 22 exceeds 15 in parseAll
+            "body": "⚠️ **Issue:** Cognitive complexity 22 exceeds 15 in parseAll
 
       ImpactGate: cognitive complexity 22 in \`parseAll\` (limit 15, 98th percentile).",
             "line": 30,
@@ -186,6 +186,13 @@ describe('buildGithubReview', () => {
       entries: [],
     };
     expect(buildGithubReview(artifact).body).toBe('Comments');
+  });
+
+  test('leads with the severity emoji and leaves out a missing title', ({ expect }) => {
+    const { comments } = buildGithubReview(withItem({ severity: 'praise', title: '' }));
+    expect(comments[0]?.body.startsWith('✨ **Praise**\n\n')).toBe(true);
+    const titled = buildGithubReview(withItem({ severity: 'blocker' }));
+    expect(titled.comments[0]?.body.startsWith('🛑 **Blocker:** Handle the empty list')).toBe(true);
   });
 
   test("puts the reviewer's own summary above the items instead of the generated one", ({

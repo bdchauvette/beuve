@@ -68,7 +68,7 @@ describe('validateUraItem', () => {
     expect(errorOf({ origin: { kind: 'chat-answer', messageId: 'm1' } })).toBeUndefined();
   });
 
-  test.for(['', ' padded ', 'two\nlines', 'x'.repeat(201)])(
+  test.for([' padded ', 'two\nlines', 'x'.repeat(201)])(
     'rejects the title %j',
     (title, { expect }) => {
       expect(errorOf({ title })?.kind).toBe('invalid-text');
@@ -77,6 +77,14 @@ describe('validateUraItem', () => {
 
   test('allows an empty body', ({ expect }) => {
     expect(errorOf({ body: '' })).toBeUndefined();
+  });
+
+  test('allows an empty title when the body says something', ({ expect }) => {
+    expect(errorOf({ title: '' })).toBeUndefined();
+  });
+
+  test('refuses an item with no title, no body and no suggestion', ({ expect }) => {
+    expect(errorOf({ title: '', body: ' \n' })).toMatchObject({ kind: 'invalid-text' });
   });
 
   test('refuses an item addressed at the head it was written against', ({ expect }) => {

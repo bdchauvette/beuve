@@ -9,6 +9,7 @@ import './beuve-patch-preview.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
 /** What the composer submits: a new note's severity, one-line title and Markdown body. */
 export interface UraDraft {
@@ -21,7 +22,7 @@ const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 
 
 /**
  * The compact note composer Add Note opens under the staged lines (ADR 0027): severity (`issue` by
- * default), title and body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
+ * default), an optional title and a body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
  * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Emits
  * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.
@@ -191,16 +192,16 @@ export class BeuveUraComposer extends LitElement {
   }
 
   private submit(): void {
+    if (this.saving) {
+      return;
+    }
     const title = this.titleInput()?.value.trim() ?? '';
-    if (title === '' || this.saving) {
+    const body = this.renderRoot.querySelector('textarea')?.value ?? '';
+    if (title === '' && body.trim() === '' && this.patch === '') {
       this.titleInput()?.focus();
       return;
     }
-    const draft: UraDraft = {
-      severity: this.severity,
-      title,
-      body: this.renderRoot.querySelector('textarea')?.value ?? '',
-    };
+    const draft: UraDraft = { severity: this.severity, title, body };
     this.dispatchEvent(
       new CustomEvent('beuve-ura-compose-submit', { detail: draft, bubbles: true, composed: true }),
     );
@@ -223,11 +224,16 @@ export class BeuveUraComposer extends LitElement {
         >
           ${severities.map((severity) => {
             return html`<option value=${severity} ?selected=${severity === this.severity}>
-              ${severity}
+              ${uraSeverityEmoji(severity)} ${severity}
             </option>`;
           })}
         </select>
-        <input aria-label="Title" placeholder="Title" maxlength="200" autocomplete="off" />
+        <input
+          aria-label="Title"
+          placeholder="Title (optional)"
+          maxlength="200"
+          autocomplete="off"
+        />
       </div>
       <textarea aria-label="Body" placeholder="Details (Markdown, optional)"></textarea>
       ${

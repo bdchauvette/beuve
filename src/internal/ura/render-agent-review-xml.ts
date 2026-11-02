@@ -83,7 +83,10 @@ function itemElement(item: AgentReviewItem): string[] {
       '</outdated>',
     );
   }
-  children.push(`<title>${escapeText(item.title)}</title>`, bodyElement(item.body));
+  if (item.title !== '') {
+    children.push(`<title>${escapeText(item.title)}</title>`);
+  }
+  children.push(bodyElement(item.body));
   if (origin.kind === 'impact-finding') {
     children.push(
       `<impact${attributes({ metric: origin.metric, function: origin.functionName, value: origin.value, threshold: origin.threshold, percentile: origin.percentile })}/>`,
