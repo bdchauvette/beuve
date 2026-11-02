@@ -213,7 +213,7 @@ async function chooseSheets(
 ): Promise<void> {
   const app = "document.querySelector('beuve-app')";
   await devtools.evaluate(main, `${app}.runCommandId('sheets-${mode}')`);
-  await devtools.waitFor(main, `${app}.display.sheets === '${mode}'`, wait());
+  await devtools.waitFor(main, `${app}.settings.display.sheets === '${mode}'`, wait());
 }
 
 /** A fresh deadline for one wait. */
