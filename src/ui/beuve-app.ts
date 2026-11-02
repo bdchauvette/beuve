@@ -1069,7 +1069,7 @@ export class BeuveApp extends LitElement {
   @state() accessor fileJump: FileJump | undefined;
   /** The open session head's tracked paths, for the radar tree. */
   @state() accessor tree: RepositoryTreeView | undefined;
-  @state() accessor treeMode: RadarTreeMode = 'neighborhood';
+  @state() accessor treeMode: RadarTreeMode = 'diff-only';
   /** The open session's URA items, every status, placed on its current head. */
   @state() accessor uraItems: readonly UraItemView[] = [];
   @state() accessor uraVerdict: UraVerdictView = 'approve';
