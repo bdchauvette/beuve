@@ -7,6 +7,7 @@ import { app, BrowserWindow, safeStorage, shell } from 'electron';
 
 import { createLogger } from '#x/log/create-logger.ts';
 
+import { LinkInbox } from './links/link-inbox.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
@@ -18,9 +19,25 @@ import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
 const defaultMcpPort = 47_291;
+const links = new LinkInbox();
+
+// macOS delivers beuve:// links as `open-url`, possibly before `ready` (ADR 0098).
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  links.push(url);
+});
 
 if (app.requestSingleInstanceLock()) {
-  app.on('second-instance', focusExistingWindow);
+  // Elsewhere a link starts beuve, or reaches the running one, as an argument.
+  app.on('second-instance', (_event, argv): void => {
+    focusExistingWindow();
+    for (const argument of argv) {
+      links.push(argument);
+    }
+  });
+  for (const argument of process.argv) {
+    links.push(argument);
+  }
   app.once('ready', () => {
     logger.info('beuve starting', {
       version: app.getVersion(),
@@ -130,6 +147,7 @@ async function launch(): Promise<void> {
       settingsPreloadPath: path.join(import.meta.dirname, '../preload/settings-preload.cjs'),
       settingsHtmlPath: path.join(import.meta.dirname, '../ui/settings.html'),
       mcpPort: parsePort(process.env['BEUVE_MCP_PORT']) ?? defaultMcpPort,
+      links,
       logger,
     });
   } catch (error: unknown) {

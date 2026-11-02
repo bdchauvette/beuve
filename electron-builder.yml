@@ -51,6 +51,12 @@ files:
       - '!lib/**/*.test.js'
       - build/Release/*.node
       - prebuilds/${platform}-${arch}/**
+# The beuve:// scheme (ADR 0098): Info.plist's CFBundleURLTypes on macOS, the desktop entry's
+# x-scheme-handler MIME type on Linux. A development run registers nothing.
+protocols:
+  name: beuve
+  schemes:
+    - beuve
 asar: true
 # The Node that runs the TypeScript language server (ADR 0083): the pinned
 # nodejs.org binary (scripts/node-runtime.json, ADR 0084), which `npm run dist:*` fetches and
