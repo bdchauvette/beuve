@@ -8,10 +8,13 @@ import type {
   DefinitionRequest,
   DefinitionTargetView,
   DefinitionView,
+  HoverRequest,
+  HoverView,
   IpcError,
   IpcResult,
   LspRestartedView,
   LspRestartRequest,
+  SheetRangeView,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
 import type { Session } from '#internal/session/session.ts';
@@ -82,6 +85,12 @@ export interface LspServices {
    * commit kept until the next startup prune.
    */
   readonly definition: (request: DefinitionRequest) => Promise<IpcResult<DefinitionView>>;
+  /**
+   * What the language server says about the token at a position, in the same checkouts as
+   * {@link LspServices.definition}. A file no server handles, or a server without hover support,
+   * answers "nothing to say", not an error: a pointer rests on all kinds of files.
+   */
+  readonly hover: (request: HoverRequest) => Promise<IpcResult<HoverView>>;
   /**
    * Stops the language servers of the session head's checkout, so the next request starts them
    * afresh: after the reviewer installed dependencies there, or when a server misbehaves.
@@ -389,8 +398,53 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     });
   };
 
+  const hover = async (request: HoverRequest): Promise<IpcResult<HoverView>> => {
+    const commit = await resolveSheetCommit(context, request);
+    if (!commit.ok) {
+      return commit;
+    }
+    const { sha } = commit.value;
+    const { session, repository } = commit.value.refreshed;
+    const leased = await worktrees.acquire(repository, claimOf(session, sha));
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
+    }
+    using lease = leased.value;
+    const text = await readSheetSource(context, commit.value, request.path);
+    if (!text.ok) {
+      return text;
+    }
+    const line = request.line - 1;
+    if (text.value.split(lineBreak)[line] === undefined) {
+      return err({
+        code: 'invalid-request',
+        message: `${request.path} has no line ${String(request.line)}`,
+      });
+    }
+    const found = await multiplexer.hover({
+      root: lease.path,
+      path: request.path,
+      position: { line, character: request.character },
+    });
+    if (!found.ok) {
+      if (isUnhoverable(found.error)) {
+        return ok({ sha });
+      }
+      return fail(found.error);
+    }
+    if (found.value === undefined) {
+      return ok({ sha });
+    }
+    const { markdown, range } = found.value;
+    if (range === undefined) {
+      return ok({ sha, hover: { markdown } });
+    }
+    return ok({ sha, hover: { markdown, range: sheetRangeFrom(range) } });
+  };
+
   return {
     definition: define,
+    hover,
     restart: async ({ sessionId }): Promise<IpcResult<LspRestartedView>> => {
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {
@@ -565,10 +619,19 @@ function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView[
 }
 
 function targetViewFrom(target: LocationView): DefinitionTargetView {
-  return { file: { ...target.file }, ...rangeViewFrom(target.range) };
+  return { file: { ...target.file }, ...sheetRangeFrom(target.range) };
 }
 
-function rangeViewFrom(range: Range): Omit<DefinitionTargetView, 'file'> {
+/** Failures that only mean no server can hover over this file. */
+function isUnhoverable(error: LspError): boolean {
+  return (
+    error.kind === 'unsupported-language' ||
+    error.kind === 'capability-missing' ||
+    error.kind === 'file-too-large'
+  );
+}
+
+function sheetRangeFrom(range: Range): SheetRangeView {
   return {
     startLine: range.start.line + 1,
     startCharacter: range.start.character,

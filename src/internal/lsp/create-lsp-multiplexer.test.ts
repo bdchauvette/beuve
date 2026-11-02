@@ -200,6 +200,23 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     expect(okValueFrom(nothingThere)).toStrictEqual([]);
   });
 
+  test('hovers over a symbol, with the token range, and has nothing for blank space', async ({
+    expect,
+    sharedTypescriptWorkspace: { project, lsp },
+  }) => {
+    const [called, blank] = await Promise.all([
+      lsp.hover({ root: project.root, path: 'src/b.ts', position: { line: 3, character: 9 } }),
+      lsp.hover({ root: project.root, path: 'src/b.ts', position: { line: 1, character: 0 } }),
+    ]);
+    const hover = okValueFrom(called);
+    expect(hover?.markdown).toContain('c(n: number): number');
+    expect(hover?.range).toStrictEqual({
+      start: { line: 3, character: 9 },
+      end: { line: 3, character: 10 },
+    });
+    expect(okValueFrom(blank)).toBeUndefined();
+  });
+
   test('refuses paths outside the root, odd files and unknown nodes', async ({
     expect,
     tempDir,

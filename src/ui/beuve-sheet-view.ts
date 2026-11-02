@@ -13,8 +13,15 @@ import type {
 import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
+import './beuve-hover-card.ts';
+import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
 import './beuve-sheet-code.ts';
-import type { BeuveSheetCode, SheetSelectDetail, SheetTokenDetail } from './beuve-sheet-code.ts';
+import type {
+  BeuveSheetCode,
+  SheetSelectDetail,
+  SheetTokenDetail,
+  SheetTokenHoverDetail,
+} from './beuve-sheet-code.ts';
 import { findSheetMatches } from './find-sheet-matches.ts';
 import type { SheetMatch } from './find-sheet-matches.ts';
 import { sheetRequestFrom } from './sheet-request-from.ts';
@@ -226,6 +233,14 @@ export class BeuveSheetView extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-sheet-close', { bubbles: true, composed: true }));
   };
 
+  private readonly askHover: HoverAsk = async (request) => {
+    const bridge = this.api;
+    if (bridge === undefined) {
+      return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
+    }
+    return bridge.invoke('lsp:hover', request);
+  };
+
   @property({ attribute: false }) accessor api: SheetApi | undefined;
   @property() accessor sessionId = '';
   /** The commit the sheet is pinned to. */
@@ -303,6 +318,15 @@ export class BeuveSheetView extends LitElement {
           @beuve-sheet-select=${(event: CustomEvent<SheetSelectDetail>): void => {
             this.cursor = event.detail;
           }}
+          @beuve-sheet-token-hover=${(event: CustomEvent<SheetTokenHoverDetail>): void => {
+            const path = this.current()?.path;
+            if (path !== undefined) {
+              this.hoverCard()?.point({ ...event.detail, path });
+            }
+          }}
+          @beuve-sheet-token-hover-end=${(): void => {
+            this.hoverCard()?.leave();
+          }}
           @beuve-sheet-token=${(event: CustomEvent<SheetTokenDetail>): void => {
             const { line, character, isJump } = event.detail;
             this.column = { line, character };
@@ -314,6 +338,10 @@ export class BeuveSheetView extends LitElement {
         ></beuve-sheet-code>`;
       }
     }
+  }
+
+  private hoverCard(): BeuveHoverCard | undefined {
+    return this.renderRoot.querySelector('beuve-hover-card') ?? undefined;
   }
 
   private headNote(): string {
@@ -790,6 +818,11 @@ export class BeuveSheetView extends LitElement {
           >${this.notice?.text ?? this.headNote()}</span
         >
       </footer>
+      <beuve-hover-card
+        .ask=${this.askHover}
+        .sessionId=${this.sessionId}
+        .sha=${this.sha}
+      ></beuve-hover-card>
     `;
   }
 }

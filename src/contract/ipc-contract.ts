@@ -591,6 +591,34 @@ export interface DefinitionView {
 }
 
 /**
+ * What the language server says about the token at `character` (0-based UTF-16) of 1-based `line`,
+ * asked in a checkout of `sha` (the session head when absent), as for {@link DefinitionRequest}.
+ * Unlike a definition request, `character` is required: a hover is about where the pointer is.
+ */
+export interface HoverRequest {
+  readonly sessionId: string;
+  readonly sha?: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+  /** 1-based. */
+  readonly line: number;
+  readonly character: number;
+}
+
+/**
+ * The server's hover text. `markdown` is CommonMark the server wrote, to be rendered as untrusted;
+ * `range` is the token it is about, when the server said. `hover` is absent when the server has
+ * nothing to say there. `sha` is the commit the answer is for.
+ */
+export interface HoverView {
+  readonly sha: string;
+  readonly hover?: {
+    readonly markdown: string;
+    readonly range?: SheetRangeView;
+  };
+}
+
+/**
  * Opens a new sheet (ADR 0067): a read-only window showing `path` as it is at commit `sha`,
  * scrolled to and highlighting `range` (or line 1). Every call opens a new window.
  */
@@ -2083,6 +2111,10 @@ export interface InvokeChannelMap {
     readonly request: DefinitionRequest;
     readonly response: IpcResult<DefinitionView>;
   };
+  'lsp:hover': {
+    readonly request: HoverRequest;
+    readonly response: IpcResult<HoverView>;
+  };
   'sheet:open': {
     readonly request: OpenSheetRequest;
     readonly response: IpcResult<OpenedView>;
@@ -2343,6 +2375,7 @@ export type Unsubscribe = () => void;
 /** The channels a sheet window may call (ADR 0067); its preload and main allow nothing else. */
 export type SheetInvokeChannel =
   | 'lsp:definition'
+  | 'lsp:hover'
   | 'sheet:open'
   | 'sheet:get-file'
   | 'sheet:get-head'

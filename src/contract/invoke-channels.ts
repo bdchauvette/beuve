@@ -17,6 +17,7 @@ export const invokeChannels = Object.freeze([
   'session:get-file-attributes',
   'lsp:call-hierarchy',
   'lsp:definition',
+  'lsp:hover',
   'lsp:restart',
   'sheet:open',
   'sheet:get-file',

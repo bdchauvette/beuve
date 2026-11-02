@@ -19,6 +19,12 @@ export interface LspRange {
   readonly end: LspPosition;
 }
 
+/** A checked `textDocument/hover` result, its contents already reduced to Markdown. */
+export interface LspHover {
+  readonly markdown: string;
+  readonly range: LspRange | undefined;
+}
+
 export interface LspLocation {
   readonly uri: string;
   readonly range: LspRange;

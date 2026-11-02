@@ -37,6 +37,7 @@ import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { headRowSelector } from './head-row-selector.ts';
 import { characterOffsetAt } from './character-offset-at.ts';
+import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { ClickedToken } from './run-sheet-action.ts';
 import type { FlowState } from './flow-state.ts';
@@ -864,6 +865,29 @@ export class BeuveFileCard extends LitElement {
     };
   };
 
+  /** Head-side tokens only, as for Go to Definition: the checkout the server reads has no deleted text. */
+  private readonly onTokenEnter = (props: OnTokenEventProps<'diff'>, event: PointerEvent): void => {
+    const path = this.file?.path;
+    if (path === undefined || props.side === 'deletions') {
+      return;
+    }
+    const detail: HoverPoint = {
+      path,
+      line: props.lineNumber,
+      lineCharStart: props.lineCharStart,
+      tokenElement: props.tokenElement,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+    this.dispatchEvent(
+      new CustomEvent('beuve-token-hover', { detail, bubbles: true, composed: true }),
+    );
+  };
+
+  private readonly onTokenLeave = (): void => {
+    this.dispatchEvent(new CustomEvent('beuve-token-hover-end', { bubbles: true, composed: true }));
+  };
+
   private readonly onLineSelected = (range: SelectedLines | null): void => {
     this.clickedToken = undefined;
     if (range === null) {
@@ -1212,6 +1236,8 @@ export class BeuveFileCard extends LitElement {
         enableLineSelection: true,
         onLineSelected: this.onLineSelected,
         onTokenClick: this.onTokenClick,
+        onTokenEnter: this.onTokenEnter,
+        onTokenLeave: this.onTokenLeave,
         enableGutterUtility: true,
         onGutterUtilityClick: (range): void => {
           this.addToChat(range);

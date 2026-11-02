@@ -295,6 +295,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             return notWired();
           },
           definition: notWired,
+          hover: notWired,
           restart: notWired,
         },
       },
@@ -333,6 +334,7 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
             calls.push(request);
             return notWired();
           },
+          hover: notWired,
           restart: notWired,
         },
       },
@@ -355,6 +357,41 @@ describe('createIpcHandlers for impact and call hierarchy', () => {
     await handlers['lsp:definition'](good);
     await handlers['lsp:definition']({ ...good, sha, character: 2, kind: 'type-definition' });
     expect(calls).toStrictEqual([good, { ...good, sha, character: 2, kind: 'type-definition' }]);
+  });
+
+  test('validates lsp:hover paths, commits and positions', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          callHierarchy: notWired,
+          definition: notWired,
+          hover: async (request) => {
+            calls.push(request);
+            return notWired();
+          },
+          restart: notWired,
+        },
+      },
+      appInfo(),
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts', line: 3, character: 4 };
+    for (const bad of [
+      { ...good, path: '../secret.ts' },
+      { ...good, path: 'src//a.ts' },
+      { ...good, sha: 'HEAD~1' },
+      { ...good, line: 0 },
+      { ...good, character: -1 },
+      { sessionId: 's1', path: 'src/a.ts', line: 3 },
+      { ...good, kind: 'definition' },
+    ]) {
+      await expectInvalid(expect, handlers['lsp:hover'](bad));
+    }
+    const sha = 'a'.repeat(40);
+    await handlers['lsp:hover'](good);
+    await handlers['lsp:hover']({ ...good, sha });
+    expect(calls).toStrictEqual([good, { ...good, sha }]);
   });
 
   test('opens a sheet only for a request main has checked', async ({ expect }) => {
@@ -1083,7 +1120,7 @@ function stubServices(
       getFileAttributes: notWired,
     },
     order: { getOrder: notWired },
-    lsp: { callHierarchy: notWired, definition: notWired, restart: notWired },
+    lsp: { callHierarchy: notWired, definition: notWired, hover: notWired, restart: notWired },
     sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
     remote: { permalink: notWired, openPermalink: notWired },
     shell: { openUrl: notWired },
