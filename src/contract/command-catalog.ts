@@ -72,6 +72,11 @@ export interface CatalogCommand {
    * is disabled then on Linux, where its Ctrl chord is a shell's (Ctrl-D, Ctrl-R, Ctrl-K).
    */
   readonly keepsInTerminal?: true;
+  /**
+   * With no main window open (macOS keeps the app running after the last one closes), choosing it
+   * opens a main window and runs the command there, whatever window has focus.
+   */
+  readonly opensMainWindow?: true;
   readonly when?: readonly MenuCondition[];
   readonly toggle?: 'checkbox' | 'radio';
   readonly context?: readonly ContextKind[];
@@ -106,6 +111,7 @@ const entries = Object.freeze([
     title: 'Open Pull Request or Branch…',
     menu: { menu: 'file', group: 0 },
     keys: { mac: 'Cmd+O', linux: 'Ctrl+O' },
+    opensMainWindow: true,
     windows: ['main'],
     handler: 'window',
   },
