@@ -6,6 +6,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { SheetMarksView, SheetNoteView } from '#contract/ipc-contract.ts';
 
+import { characterOffsetAt } from './character-offset-at.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
@@ -119,7 +120,7 @@ export class BeuveSheetCode extends LitElement {
       onTokenClick: (props: OnTokenEventProps<'file'>, event: MouseEvent): void => {
         const detail: SheetTokenDetail = {
           line: props.lineNumber,
-          character: props.lineCharStart,
+          character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
           isJump: event.metaKey || event.ctrlKey,
         };
         this.dispatchEvent(new CustomEvent('beuve-sheet-token', { detail, bubbles: true }));
