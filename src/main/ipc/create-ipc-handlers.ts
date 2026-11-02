@@ -70,6 +70,7 @@ import type {
   SessionSummary,
   SetFileReviewedResponse,
   LspRestartedView,
+  LspStatusView,
   TerminalAckView,
   TerminalListView,
   TerminalView,
@@ -743,6 +744,13 @@ export function createIpcHandlers(
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
         return services.lsp.restart(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'lsp:status': (request): IpcResult<LspStatusView> => {
+      const parsed = noRequest.safeParse(request);
+      if (parsed.success) {
+        return services.lsp.status();
       }
       return invalid(parsed.error);
     },

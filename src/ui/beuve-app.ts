@@ -24,6 +24,7 @@ import type {
   GithubAuthStatusView,
   ImpactView,
   IpcResult,
+  LspServerView,
   McpStatus,
   OpenPullRequestRequest,
   RepositoryTreeView,
@@ -50,6 +51,7 @@ import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-status-bar.ts';
+import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
@@ -929,6 +931,18 @@ export class BeuveApp extends LitElement {
     this.runAppCommand(event.detail.command);
   };
 
+  /** A check's link in the status bar's CI popover. */
+  private readonly onStatusOpenUrl = (event: CustomEvent<StatusOpenUrlDetail>): void => {
+    void this.openUrl(event.detail.url);
+  };
+
+  /** The language servers' list opened: read their state afresh. */
+  private readonly onStatusPopover = (event: CustomEvent<StatusPopoverDetail>): void => {
+    if (event.detail.id === 'lsp') {
+      void this.refreshLspStatus();
+    }
+  };
+
   /** A display change from the stream: store it, and refetch the diff if whitespace changed. */
   private readonly onDisplayChange = (event: CustomEvent<SetDiffDisplayRequest>): void => {
     void this.setDisplay(event.detail);
@@ -1111,6 +1125,8 @@ export class BeuveApp extends LitElement {
   @state() accessor verdictNotice = '';
   @state() accessor dockNotice: DockNotice | undefined;
   @state() accessor exporting = false;
+  /** The language servers beuve has started, as the status bar lists them. */
+  @state() accessor lspServers: readonly LspServerView[] | undefined;
   /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
   @state() accessor sidebarSide: SidebarSideView = 'right';
   @state() accessor sidebarHidden = false;
@@ -1234,6 +1250,13 @@ export class BeuveApp extends LitElement {
     const opened = await beuveBridge()?.invoke('github:open-link', { url });
     if (opened !== undefined && !opened.ok) {
       this.showNotice({ tone: 'error', text: opened.error.message });
+    }
+  }
+
+  private async refreshLspStatus(): Promise<void> {
+    const status = await beuveBridge()?.invoke('lsp:status');
+    if (status?.ok === true) {
+      this.lspServers = status.value.servers;
     }
   }
 
@@ -1591,6 +1614,7 @@ export class BeuveApp extends LitElement {
       void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
       void this.loadOrder(review.value);
+      void this.refreshLspStatus();
       void this.loadFileAttributes(review.value);
       void this.refreshUra(review.value.session.id);
       void this.loadReviewEdits(review.value.session.id);
@@ -1815,6 +1839,7 @@ export class BeuveApp extends LitElement {
     const restarted = await bridge.invoke('lsp:restart', { sessionId: review.session.id });
     if (restarted.ok) {
       this.showNotice({ tone: 'info', text: 'Language servers restarted for this head.' });
+      void this.refreshLspStatus();
     } else if (restarted.error.code !== 'cancelled') {
       this.showNotice({ tone: 'error', text: restarted.error.message });
     }
@@ -3282,7 +3307,6 @@ export class BeuveApp extends LitElement {
     if (this.sidebarSide === 'left') {
       workspace.push('left');
     }
-    const focused = zones.find(({ id }) => id === this.focusedZone);
     return html`
       ${this.renderTitlebar()}
       <div
@@ -3293,7 +3317,7 @@ export class BeuveApp extends LitElement {
         ${hasSidebar ? this.renderSidebar() : nothing}
       </div>
       <beuve-status-bar
-        .zoneLabel=${this.review === undefined ? '' : (focused?.label ?? '')}
+        .lspServers=${this.lspServers}
         .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
@@ -3301,6 +3325,8 @@ export class BeuveApp extends LitElement {
         .attention=${this.github.pullRequest?.attention}
         .githubAuth=${this.github.auth}
         @beuve-status-action=${this.onStatusAction}
+        @beuve-status-open-url=${this.onStatusOpenUrl}
+        @beuve-status-popover=${this.onStatusPopover}
       ></beuve-status-bar>
       ${
         this.review === undefined

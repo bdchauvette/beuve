@@ -14,6 +14,7 @@ import type {
   IpcResult,
   LspRestartedView,
   LspRestartRequest,
+  LspStatusView,
   SheetRangeView,
 } from '#contract/ipc-contract.ts';
 import type { CommitSha } from '#internal/git/object-id.ts';
@@ -96,6 +97,8 @@ export interface LspServices {
    * afresh: after the reviewer installed dependencies there, or when a server misbehaves.
    */
   readonly restart: (request: LspRestartRequest) => Promise<IpcResult<LspRestartedView>>;
+  /** The language servers beuve has started and their state, for the status bar. */
+  readonly status: () => IpcResult<LspStatusView>;
   readonly diagnostics: (
     request: AgentDiagnosticsRequest,
   ) => Promise<Result<AgentDiagnosticsReport, IpcError>>;
@@ -445,6 +448,13 @@ export function createLspServices(options: LspServicesOptions): LspServices {
   return {
     definition: define,
     hover,
+    status: (): IpcResult<LspStatusView> => {
+      return ok({
+        servers: multiplexer.status().map(({ serverId, root, state, openDocuments, restarts }) => {
+          return { serverId, root, state, openDocuments, restarts };
+        }),
+      });
+    },
     restart: async ({ sessionId }): Promise<IpcResult<LspRestartedView>> => {
       const loaded = loadSession(context, sessionId);
       if (!loaded.ok) {

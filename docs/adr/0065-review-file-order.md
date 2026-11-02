@@ -1,6 +1,6 @@
 # 0065. Review file order: path, imports or calls, config and mechanical last
 
-- Status: Accepted; UI decided below (2026-10-30)
+- Status: Accepted; UI decided below (2026-10-30); order direction and header amended by [0099](0099-newspaper-file-order-and-status-bar-popovers.md)
 - Date: 2026-10-30
 
 ## Context

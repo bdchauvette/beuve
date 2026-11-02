@@ -13,7 +13,7 @@ export interface DependencyEdge {
 }
 
 export interface OrderedGroup {
-  readonly id: 'changes' | 'config-and-mechanical';
+  readonly id: 'docs' | 'changes' | 'config-and-mechanical';
   readonly label: string;
   readonly paths: readonly string[];
   /** For the config group: aligned with `paths`. */
@@ -30,20 +30,29 @@ const reasonRank: Readonly<Record<MechanicalReason, number>> = {
 };
 
 /**
- * Puts a review's files in reading order (ADR 0065). Config and mechanical files form their own
- * group at the end, by reason and then path. The rest are in path order, or with `edges`
- * dependencies before the files that use them: a depth-first walk visits files in path order and
- * places each file right after the dependencies it reaches, so a dependency comes first and a
- * file's helpers sit next to it. An edge that closes a cycle is ignored, so cycles break at the
- * first path in sorted order, the same way every time. Edges to files outside the review are
- * ignored. Pure.
+ * Puts a review's files in reading order (ADR 0065). Markdown files that are ordinary changes
+ * form a group at the start, in path order, since they tend to explain the change. Config and
+ * mechanical files form their own group at the end, by reason and then path. The rest are in path
+ * order, or with `edges` the files that use others before the files they use, like a newspaper:
+ * entry points first, helpers after. A depth-first walk places each file right before the
+ * dependencies it reaches, so a file's helpers sit just below it. An edge that closes a cycle is
+ * ignored, so cycles break the same way every time. Edges to files outside the group are ignored.
+ * Pure.
  */
 export function orderReviewFiles(
   files: readonly OrderableFile[],
   edges: readonly DependencyEdge[] = [],
 ): readonly OrderedGroup[] {
   type MechanicalFile = OrderableFile & { readonly mechanical: MechanicalReason };
-  const primary = files.filter((file) => file.mechanical === undefined).map((file) => file.path);
+  const ordinary = files.filter((file) => file.mechanical === undefined).map((file) => file.path);
+  const docs = ordinary
+    .filter((path) => {
+      return isMarkdown(path);
+    })
+    .toSorted(comparePaths);
+  const primary = ordinary.filter((path) => {
+    return !isMarkdown(path);
+  });
   const mechanical = files
     .filter((file): file is MechanicalFile => {
       return file.mechanical !== undefined;
@@ -52,11 +61,14 @@ export function orderReviewFiles(
       return reasonRank[a.mechanical] - reasonRank[b.mechanical] || comparePaths(a.path, b.path);
     });
   const groups: OrderedGroup[] = [];
+  if (docs.length > 0) {
+    groups.push({ id: 'docs', label: 'Docs', paths: docs });
+  }
   if (primary.length > 0) {
     groups.push({
       id: 'changes',
       label: changesLabel(edges),
-      paths: dependenciesFirst(primary, edges),
+      paths: dependentsFirst(primary, edges),
     });
   }
   if (mechanical.length > 0) {
@@ -72,12 +84,19 @@ export function orderReviewFiles(
 
 function changesLabel(edges: readonly DependencyEdge[]): string {
   if (edges.length > 0) {
-    return 'Changes, dependencies first';
+    return 'Changes, importers first';
   }
   return 'Changes';
 }
 
-function dependenciesFirst(paths: readonly string[], edges: readonly DependencyEdge[]): string[] {
+const markdownPath = /\.(?:md|mdx|markdown)$/i;
+
+function isMarkdown(path: string): boolean {
+  return markdownPath.test(path);
+}
+
+/** Reverse depth-first post-order: every file lands before the files it uses. */
+function dependentsFirst(paths: readonly string[], edges: readonly DependencyEdge[]): string[] {
   const sorted = paths.toSorted(comparePaths);
   const members = new Set(sorted);
   const dependenciesOf = new Map<string, string[]>(
@@ -102,7 +121,7 @@ function dependenciesFirst(paths: readonly string[], edges: readonly DependencyE
       state.set(path, 'walking');
       stack.push({
         path,
-        next: [...(dependenciesOf.get(path) ?? [])].toSorted(comparePaths).toReversed(),
+        next: [...(dependenciesOf.get(path) ?? [])].toSorted(comparePaths),
       });
     };
     enter(root);
@@ -117,10 +136,10 @@ function dependenciesFirst(paths: readonly string[], edges: readonly DependencyE
       }
     }
   };
-  for (const root of sorted) {
+  for (const root of sorted.toReversed()) {
     walk(root);
   }
-  return ordered;
+  return ordered.toReversed();
 }
 
 /** Code-point order, like git's own file order, whatever the locale. */

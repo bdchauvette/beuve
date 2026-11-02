@@ -31,16 +31,11 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect(order).toMatchObject({ requestedMode: 'path', mode: 'path' });
     expect(order.fallback).toBeUndefined();
     expect(order.groups).toStrictEqual([
+      { id: 'docs', label: 'Docs', paths: ['docs/readme.md'] },
       {
         id: 'changes',
         label: 'Changes',
-        paths: [
-          'docs/readme.md',
-          'src/app.ts',
-          'src/lib/util.ts',
-          'src/shared.ts',
-          'src/x/helper.ts',
-        ],
+        paths: ['src/app.ts', 'src/lib/util.ts', 'src/shared.ts', 'src/x/helper.ts'],
       },
       {
         id: 'config-and-mechanical',
@@ -52,7 +47,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect(order.paths).toStrictEqual(order.groups.flatMap((group) => group.paths));
   });
 
-  test('puts changed dependencies before their dependents, resolving relative and #alias imports', async ({
+  test('puts changed importers before their dependencies, resolving relative and #alias imports', async ({
     expect,
     services,
     repo,
@@ -63,18 +58,13 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
       await services.order.getOrder({ sessionId, mode: 'imports' }, { signal }),
     );
     expect(order.mode).toBe('imports');
-    expect(order.groups[0]).toStrictEqual({
+    expect(order.groups[0]?.paths).toStrictEqual(['docs/readme.md']);
+    expect(order.groups[1]).toStrictEqual({
       id: 'changes',
-      label: 'Changes, dependencies first',
-      paths: [
-        'docs/readme.md',
-        'src/shared.ts',
-        'src/lib/util.ts',
-        'src/x/helper.ts',
-        'src/app.ts',
-      ],
+      label: 'Changes, importers first',
+      paths: ['src/app.ts', 'src/lib/util.ts', 'src/shared.ts', 'src/x/helper.ts'],
     });
-    expect(order.groups[1]?.paths).toStrictEqual([
+    expect(order.groups[2]?.paths).toStrictEqual([
       'package.json',
       'src/fmt.ts',
       'package-lock.json',
@@ -133,12 +123,11 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     const calls = okValueFrom(await answering.getOrder({ sessionId, mode: 'calls' }, { signal }));
     expect(calls).toMatchObject({ requestedMode: 'calls', mode: 'calls' });
     expect(calls.fallback).toBeUndefined();
-    expect(calls.groups[0]?.paths).toStrictEqual([
-      'docs/readme.md',
+    expect(calls.groups[1]?.paths).toStrictEqual([
       'src/app.ts',
       'src/lib/util.ts',
-      'src/x/helper.ts',
       'src/shared.ts',
+      'src/x/helper.ts',
     ]);
     expect(queried).toContain('src/shared.ts:1');
     expect([...heads]).toStrictEqual([await repo.git('rev-parse', 'feature')]);
@@ -155,7 +144,7 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
       mode: 'imports',
       fallback: { kind: 'no-language-server' },
     });
-    expect(fallen.paths.indexOf('src/shared.ts')).toBeLessThan(fallen.paths.indexOf('src/app.ts'));
+    expect(fallen.paths.indexOf('src/app.ts')).toBeLessThan(fallen.paths.indexOf('src/shared.ts'));
 
     const quiet = orderWith(async (request) => {
       return later(okCalls(request.expectedHeadSha, []));

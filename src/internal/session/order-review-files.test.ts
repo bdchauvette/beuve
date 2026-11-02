@@ -27,9 +27,24 @@ describe('orderReviewFiles', () => {
     ]);
   });
 
-  test('puts dependencies before the files that use them and keeps helpers beside their user', ({
-    expect,
-  }) => {
+  test('hoists Markdown into a docs group ahead of the code, in path order', ({ expect }) => {
+    const groups = orderReviewFiles([
+      file('src/a.ts'),
+      file('docs/z.md'),
+      file('README.md'),
+      file('CHANGELOG.md', 'formatting-only'),
+    ]);
+    const summary = groups.map(({ id, paths }) => {
+      return { id, paths };
+    });
+    expect(summary).toStrictEqual([
+      { id: 'docs', paths: ['README.md', 'docs/z.md'] },
+      { id: 'changes', paths: ['src/a.ts'] },
+      { id: 'config-and-mechanical', paths: ['CHANGELOG.md'] },
+    ]);
+  });
+
+  test('puts the files that use others before the files they use', ({ expect }) => {
     const [changes] = orderReviewFiles(
       [file('app.ts'), file('lib/a.ts'), file('lib/b.ts'), file('z-util.ts'), file('other.ts')],
       [
@@ -39,13 +54,13 @@ describe('orderReviewFiles', () => {
         { dependent: 'lib/b.ts', dependency: 'z-util.ts' },
       ],
     );
-    expect(changes?.label).toBe('Changes, dependencies first');
+    expect(changes?.label).toBe('Changes, importers first');
     expect(changes?.paths).toStrictEqual([
-      'z-util.ts',
+      'app.ts',
       'lib/a.ts',
       'lib/b.ts',
-      'app.ts',
       'other.ts',
+      'z-util.ts',
     ]);
   });
 
@@ -58,7 +73,7 @@ describe('orderReviewFiles', () => {
     const files = [file('c.ts'), file('a.ts'), file('b.ts')];
     const first = orderReviewFiles(files, edges)[0]?.paths;
     const shuffled = orderReviewFiles(files.toReversed(), edges.toReversed())[0]?.paths;
-    expect(first).toStrictEqual(['c.ts', 'b.ts', 'a.ts']);
+    expect(first).toStrictEqual(['c.ts', 'a.ts', 'b.ts']);
     expect(shuffled).toStrictEqual(first);
   });
 
@@ -74,7 +89,7 @@ describe('orderReviewFiles', () => {
         { dependent: 'unchanged.ts', dependency: 'a.ts' },
       ],
     );
-    expect(changes?.paths).toStrictEqual(['b.ts', 'a.ts']);
+    expect(changes?.paths).toStrictEqual(['a.ts', 'b.ts']);
   });
 
   test('omits empty groups', ({ expect }) => {
@@ -95,7 +110,7 @@ describe('orderReviewFiles', () => {
       names.map((name) => file(name)),
       chain,
     );
-    expect(changes?.paths[0]).toBe('f19999.ts');
+    expect(changes?.paths[0]).toBe('f00000.ts');
     expect(changes?.paths).toHaveLength(20_000);
   });
 });
