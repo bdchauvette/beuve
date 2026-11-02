@@ -27,6 +27,16 @@ export interface LocationView {
   readonly range: Range;
 }
 
+/**
+ * What a language server says about the symbol at a position (`textDocument/hover`): `markdown`
+ * is CommonMark text the server wrote (plain text and code-tagged strings are converted to it,
+ * the former as a fenced block) and `range` is the token it describes, when the server said.
+ */
+export interface HoverView {
+  readonly markdown: string;
+  readonly range: Range | undefined;
+}
+
 export type DiagnosticSeverity = 'error' | 'warning' | 'information' | 'hint';
 
 export interface DiagnosticView {

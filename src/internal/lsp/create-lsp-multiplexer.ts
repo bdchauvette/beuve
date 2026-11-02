@@ -26,6 +26,7 @@ import type {
   CallHierarchyNode,
   DiagnosticsReport,
   DocumentSymbolView,
+  HoverView,
   LocationView,
   Position,
   ServerStatus,
@@ -35,6 +36,7 @@ import { normalizeUri } from './normalize-uri.ts';
 import { parseCallHierarchyItems } from './parse-call-hierarchy-items.ts';
 import type { LspCallHierarchyEdge } from './parse-call-hierarchy-items.ts';
 import { parseDocumentSymbols } from './parse-document-symbols.ts';
+import { parseHover } from './parse-hover.ts';
 import { parseLocations } from './parse-locations.ts';
 import { resolveWorkspaceFile } from './resolve-workspace-file.ts';
 import type { WorkspaceFile } from './resolve-workspace-file.ts';
@@ -128,6 +130,11 @@ export interface LspMultiplexer {
   readonly definition: (
     request: DefinitionRequest,
   ) => Promise<Result<readonly LocationView[], LspError>>;
+  /**
+   * What the server says about the symbol at a position (`textDocument/hover`): Markdown and the
+   * token's range, or `undefined` when it has nothing to say there. Read-only.
+   */
+  readonly hover: (request: PositionRequest) => Promise<Result<HoverView | undefined, LspError>>;
   readonly status: () => readonly ServerStatus[];
   /**
    * Stops every server of the workspace `root` (resolved to its real path), so the next request
@@ -625,6 +632,37 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return ok(locations.map((location) => mapper.location(location)));
     },
 
+    hover: async (request): Promise<Result<HoverView | undefined, LspError>> => {
+      const opened = await openFile(request);
+      if (!opened.ok) {
+        return opened;
+      }
+      const capable = requireCapability(opened.value, 'hover');
+      if (!capable.ok) {
+        return capable;
+      }
+      const { session, entry } = opened.value;
+      const result = await session.request(
+        'textDocument/hover',
+        positionParams(opened.value, request.position),
+      );
+      if (!result.ok) {
+        return result;
+      }
+      const hover = parseHover(result.value);
+      if (hover === undefined) {
+        return ok(undefined);
+      }
+      const mapper = await mapperFor(session, entry.root, [opened.value.document.uri]);
+      if (hover.range === undefined) {
+        return ok({ markdown: hover.markdown, range: undefined });
+      }
+      return ok({
+        markdown: hover.markdown,
+        range: mapper.range(opened.value.document.uri, hover.range),
+      });
+    },
+
     status: (): readonly ServerStatus[] => {
       const statuses: ServerStatus[] = [];
       for (const entry of entries.values()) {
@@ -712,7 +750,7 @@ const definitionKinds = {
 
 function requireCapability(
   opened: ServedFile,
-  capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition',
+  capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition' | 'hover',
 ): Result<undefined, LspError> {
   if (opened.session.server.capabilities[capability]) {
     return ok(undefined);

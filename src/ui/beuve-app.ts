@@ -46,6 +46,9 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
+import './beuve-hover-card.ts';
+import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
+import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
 import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
@@ -672,6 +675,23 @@ export class BeuveApp extends LitElement {
 
   private readonly onPeekClose = (): void => {
     this.peek = undefined;
+  };
+
+  private readonly onTokenHover = (event: CustomEvent<HoverPoint>): void => {
+    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.point(event.detail);
+  };
+
+  private readonly onTokenHoverEnd = (): void => {
+    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
+  };
+
+  /** The language server's hover for a token of the diff on screen. */
+  private readonly askHover: HoverAsk = async (request) => {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
+    }
+    return bridge.invoke('lsp:hover', request);
   };
 
   private readonly onFlowRequest = (event: CustomEvent<LineRequestDetail>): void => {
@@ -3499,6 +3519,8 @@ export class BeuveApp extends LitElement {
       @beuve-chat-add=${this.onChatAdd}
       @beuve-insight-stage=${this.onInsightStage}
       @beuve-insight-show-in-chat=${this.onInsightShowInChat}
+      @beuve-token-hover=${this.onTokenHover}
+      @beuve-token-hover-end=${this.onTokenHoverEnd}
     ></beuve-diff-stream>`;
   }
 
@@ -3690,6 +3712,15 @@ export class BeuveApp extends LitElement {
         .githubAuth=${this.githubAuth}
         @beuve-status-action=${this.onStatusAction}
       ></beuve-status-bar>
+      ${
+        this.review === undefined
+          ? nothing
+          : html`<beuve-hover-card
+              .ask=${this.askHover}
+              .sessionId=${this.review.session.id}
+              .sha=${this.review.headSha}
+            ></beuve-hover-card>`
+      }
       ${
         this.inlineSheet === undefined || this.review === undefined
           ? nothing

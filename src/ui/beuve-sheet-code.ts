@@ -7,6 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { SheetMarksView, SheetNoteView } from '#contract/ipc-contract.ts';
 
 import { characterOffsetAt } from './character-offset-at.ts';
+import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
@@ -20,6 +21,9 @@ export interface SheetTokenDetail {
   readonly isJump: boolean;
 }
 
+/** A token the pointer entered: what `HoverPoint` says, without the path (the sheet knows it). */
+export type SheetTokenHoverDetail = Omit<HoverPoint, 'path'>;
+
 /** Lines the reviewer selected with the mouse, 1-based and inclusive. */
 export interface SheetSelectDetail {
   readonly start: number;
@@ -31,7 +35,8 @@ export interface SheetSelectDetail {
  * beuve's Alabaster themes (ADR 0025), line numbers on, read-only. The gutter shows the change's
  * marks, staged notes and find hits (`sheetGutterCssFrom`); `selected` is the line cursor or the
  * jump's range. Emits `beuve-sheet-token` for a clicked token and `beuve-sheet-select` for
- * lines selected by mouse. The library is a lazy chunk, as in the diff cards. `compact` is a
+ * lines selected by mouse, and `beuve-sheet-token-hover` / `beuve-sheet-token-hover-end` as the
+ * pointer enters and leaves a token (for the language server's hover). The library is a lazy chunk, as in the diff cards. `compact` is a
  * chat answer's fenced code (ADR 0073): no line numbers, selection or token clicks, and the plain
  * text until the library has loaded, so the block keeps its height.
  */
@@ -124,6 +129,19 @@ export class BeuveSheetCode extends LitElement {
           isJump: event.metaKey || event.ctrlKey,
         };
         this.dispatchEvent(new CustomEvent('beuve-sheet-token', { detail, bubbles: true }));
+      },
+      onTokenEnter: (props: OnTokenEventProps<'file'>, event: PointerEvent): void => {
+        const detail: SheetTokenHoverDetail = {
+          line: props.lineNumber,
+          lineCharStart: props.lineCharStart,
+          tokenElement: props.tokenElement,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        };
+        this.dispatchEvent(new CustomEvent('beuve-sheet-token-hover', { detail, bubbles: true }));
+      },
+      onTokenLeave: (): void => {
+        this.dispatchEvent(new CustomEvent('beuve-sheet-token-hover-end', { bubbles: true }));
       },
       onPostRender: (): void => {
         void this.syncGutter();

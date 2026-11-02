@@ -442,6 +442,37 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   );
 
   test(
+    'hovers at the head and at an older pinned commit, and refuses a line the file lacks',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, services, repositories }) => {
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const [head, base] = await Promise.all([
+        repo.git('rev-parse', 'feature'),
+        repo.git('rev-parse', 'main'),
+      ]);
+      const atHead = okValueFrom(
+        await services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 4, character: 10 }),
+      );
+      expect(atHead.sha).toBe(head);
+      expect(atHead.hover?.markdown).toContain('validate');
+      expect(atHead.hover?.range).toMatchObject({ startLine: 4, endLine: 4 });
+      const atBase = okValueFrom(
+        await services.lsp.hover({
+          sessionId,
+          sha: base,
+          path: 'src/handler.ts',
+          line: 3,
+          character: 10,
+        }),
+      );
+      expect(atBase.sha).toBe(base);
+      await expect(
+        services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 999, character: 0 }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } });
+    },
+  );
+
+  test(
     'jumps to definitions at the head and at an older pinned commit, and reads sheets there',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories, worktreeRoot, signal }) => {
