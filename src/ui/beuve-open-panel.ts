@@ -845,6 +845,12 @@ export class BeuveOpenPanel extends LitElement {
     }
   }
 
+  protected override firstUpdated(): void {
+    if (this.closable) {
+      this.focus();
+    }
+  }
+
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('pullFailure') && this.pullFailure !== undefined && this.step !== 'pull') {
       const parsed = parseOpenQuery(this.text);
