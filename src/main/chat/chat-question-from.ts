@@ -1,4 +1,4 @@
-import type { ChatFocusRequest, ImpactFindingView } from '#contract/ipc-contract.ts';
+import type { ChatFocusRequest } from '#contract/ipc-contract.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import type {
   ChatFile,
@@ -24,8 +24,6 @@ export interface ChatQuestionParts {
   /** The question's mentions, read at their commits (ADR 0046). */
   readonly selections?: readonly ChatSelection[];
   readonly focus: ChatFocusRequest | undefined;
-  /** The cached ImpactGate findings for the same diff, if they were computed. */
-  readonly impactFindings: readonly ImpactFindingView[] | undefined;
   /** The change's stated intent (a pull request's title and body), if it has one. */
   readonly intent?: string | undefined;
   /** Paths tracked at the head, so answers may cite files outside the diff. */
@@ -33,10 +31,9 @@ export interface ChatQuestionParts {
 }
 
 /**
- * Maps the session and git domains' review diff, and ImpactGate's findings, into the chat
- * domain's input (ADR 0031). A review task's path scope limits the files (a prefix matches that
- * path and everything below it, on either side of a rename) and the findings with them; anything
- * else sees the whole diff.
+ * Maps the session and git domains' review diff into the chat domain's input (ADR 0031). A
+ * review task's path scope limits the files (a prefix matches that path and everything below it,
+ * on either side of a rename); anything else sees the whole diff.
  */
 export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
   const { diff } = parts;
@@ -47,20 +44,6 @@ export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
   const files = diff.files
     .map((file) => chatFileFrom(file))
     .filter((file) => isSelected(file, prefixes));
-  const paths = new Set(files.map((file) => file.path));
-  const findings = parts.impactFindings
-    ?.filter((finding) => paths.has(finding.path))
-    .map(({ path, functionName, startLine, endLine, value, limit, trend }) => {
-      return {
-        path,
-        functionName,
-        startLine,
-        endLine,
-        value,
-        limit,
-        trend,
-      };
-    });
   return {
     sessionId: diff.refreshed.session.id,
     baseSha: diff.baseSha,
@@ -73,7 +56,6 @@ export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
     ...(parts.summary !== undefined && { summary: parts.summary }),
     ...(parts.selections !== undefined &&
       parts.selections.length > 0 && { selections: parts.selections }),
-    ...(findings !== undefined && { impactFindings: findings }),
     ...(parts.intent !== undefined && parts.intent.trim() !== '' && { intent: parts.intent }),
     ...(parts.focus !== undefined && { focus: focusFrom(parts.focus) }),
     ...(parts.worktreePaths !== undefined && { worktreePaths: parts.worktreePaths }),

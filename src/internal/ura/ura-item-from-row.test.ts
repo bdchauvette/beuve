@@ -10,18 +10,7 @@ import { test } from './testing/test.ts';
 
 /** The row SQLite would return for the fixture item, with NULLs for unset columns. */
 function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQLOutputValue> {
-  const nullable = [
-    'chat_message_id',
-    'chat_finding',
-    'impact_metric',
-    'impact_function',
-    'impact_value',
-    'impact_threshold',
-    'impact_percentile',
-    'patch',
-    'addressed_sha',
-    'addressed_by',
-  ];
+  const nullable = ['chat_message_id', 'chat_finding', 'patch', 'addressed_sha', 'addressed_by'];
   const nulls = Object.fromEntries(
     nullable.map((column) => {
       // eslint-disable-next-line unicorn/no-null -- SQLite returns NULL columns as null
@@ -74,9 +63,7 @@ describe('uraItemFromRow', () => {
     expect(reasonOf({ origin_kind: 'chat-answer', chat_message_id: 'm', chat_finding: -1 })).toBe(
       'chat_finding is not a finding index',
     );
-    expect(reasonOf({ origin_kind: 'impact-finding', impact_metric: 'cognitive-complexity' })).toBe(
-      'the ImpactGate columns are incomplete',
-    );
+    expect(reasonOf({ origin_kind: 'impact-finding' })).toBe('origin_kind is unknown');
     expect(reasonOf({ status: 'addressed', addressed_sha: 'b'.repeat(40) })).toBe(
       'addressed_sha or addressed_by is invalid',
     );

@@ -59,15 +59,5 @@ function originColumns(origin: UraItem['origin']): Record<string, SQLInputValue>
         ...(origin.finding !== undefined && { chat_finding: origin.finding }),
       };
     }
-    case 'impact-finding': {
-      return {
-        origin_kind: origin.kind,
-        impact_metric: origin.metric,
-        impact_function: origin.functionName,
-        impact_value: origin.value,
-        impact_threshold: origin.threshold,
-        impact_percentile: origin.percentile,
-      };
-    }
   }
 }

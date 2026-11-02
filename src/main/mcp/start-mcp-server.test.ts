@@ -32,7 +32,6 @@ describe('startMcpServer', () => {
     expect(tools.map((tool) => tool.name).toSorted((a, b) => a.localeCompare(b))).toStrictEqual([
       'beuve_get_lsp_diagnostics',
       'beuve_read_human_review',
-      'beuve_run_impact_check',
     ]);
 
     const failed = await client.callTool(
@@ -49,11 +48,14 @@ describe('startMcpServer', () => {
     });
 
     const passed = await client.callTool(
-      { name: 'beuve_run_impact_check', arguments: {} },
+      { name: 'beuve_read_human_review', arguments: {} },
       undefined,
       { signal },
     );
-    expect(passed).toMatchObject({ content: [{ type: 'text', text: '{"breaches":[]}' }] });
+    expect(passed).toMatchObject({
+      structuredContent: { schema: 'beuve.ura/1' },
+      content: [{ type: 'text', text: '<beuve-review/>' }],
+    });
 
     const invalid = await client.callTool(
       {

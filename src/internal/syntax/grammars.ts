@@ -6,7 +6,7 @@ export interface Grammar {
 
 /**
  * The grammars beuve can parse, keyed by language id (ADR 0014). Adding a language is a new entry
- * here (plus rules in the consumers that interpret its trees, such as ImpactGate's).
+ * here (plus rules in any consumer that interprets its trees).
  */
 export const grammars = {
   typescript: { wasmFile: 'tree-sitter-typescript.wasm', extensions: ['.ts', '.mts', '.cts'] },

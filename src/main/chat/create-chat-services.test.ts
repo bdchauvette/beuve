@@ -3,16 +3,10 @@ import process from 'node:process';
 
 import { describe } from 'vitest';
 
-import type {
-  ChatMentionView,
-  ChatMessageView,
-  ChatStreamEvent,
-  IpcResult,
-} from '#contract/ipc-contract.ts';
+import type { ChatMentionView, ChatMessageView, ChatStreamEvent } from '#contract/ipc-contract.ts';
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
-import { err } from '#x/result/err.ts';
 
 import { createGitCaches } from '../sessions/create-git-caches.ts';
 import { loadSession } from '../sessions/load-session.ts';
@@ -921,7 +915,6 @@ describe(
       };
       const chat = createChatServices({
         context,
-        impact: { getImpact: noImpact },
         worktrees: createSessionWorktrees({
           root: path.join(tempDir, 'chat-worktrees'),
           logger: logger.logger,
@@ -979,11 +972,6 @@ describe(
     });
   },
 );
-
-async function noImpact(): Promise<IpcResult<never>> {
-  await Promise.resolve();
-  return err({ code: 'not-wired', message: 'no impact here' });
-}
 
 function answerChunks(): string[] {
   return ['It adds ', '[[feature.rs:1-2]] and ', 'ignores [[ghost.rs:4]].'];

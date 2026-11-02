@@ -53,7 +53,6 @@ import type {
   GithubAuthStatusView,
   GithubFailureView,
   GithubReviewPreviewView,
-  ImpactView,
   InvokeChannel,
   InvokeResponse,
   IpcError,
@@ -377,12 +376,6 @@ const stageReviewFindingRequest = z.strictObject({
   severity: uraSeverity.optional(),
 });
 
-const stageFindingRequest = z.strictObject({
-  sessionId,
-  path: repositoryPath,
-  functionName: z.string().min(1).max(1000),
-});
-
 const uraExportRequest = z.strictObject({
   sessionId,
   target: z.enum(['agent-json', 'agent-xml', 'github']),
@@ -615,15 +608,6 @@ export function createIpcHandlers(
         );
       });
     },
-    'session:get-impact': async (request, sender): Promise<IpcResult<ImpactView>> => {
-      const parsed = sessionRequest.safeParse(request);
-      if (parsed.success) {
-        return scoped({ sender, kind: 'impact' }, async (options) => {
-          return services.impact.getImpactForRenderer(parsed.data, options);
-        });
-      }
-      return invalid(parsed.error);
-    },
     'session:get-file-pair': async (request): Promise<IpcResult<FilePairView>> => {
       const parsed = filePairRequest.safeParse(request);
       if (parsed.success) {
@@ -847,13 +831,6 @@ export function createIpcHandlers(
         ...required,
         ...(severity !== undefined && { severity }),
       });
-    },
-    'ura:stage-impact-finding': async (request): Promise<IpcResult<UraStagedView>> => {
-      const parsed = stageFindingRequest.safeParse(request);
-      if (parsed.success) {
-        return services.ura.stageImpactFinding(parsed.data);
-      }
-      return invalid(parsed.error);
     },
     'ura:set-verdict': (request): IpcResult<UraVerdictStateView> => {
       const parsed = verdictChoiceRequest.safeParse(request);

@@ -101,8 +101,7 @@ function anchorFrom(row: Row): UraAnchor | string {
 }
 
 function originFrom(row: Row): UraOrigin | string {
-  const { origin_kind, chat_message_id, chat_finding, impact_metric, impact_function } = row;
-  const { impact_value, impact_threshold, impact_percentile } = row;
+  const { origin_kind, chat_message_id, chat_finding } = row;
   switch (origin_kind) {
     case 'human': {
       return { kind: 'human' };
@@ -118,25 +117,6 @@ function originFrom(row: Row): UraOrigin | string {
         return { kind: 'chat-answer', messageId: chat_message_id, finding: Number(chat_finding) };
       }
       return 'chat_finding is not a finding index';
-    }
-    case 'impact-finding': {
-      if (
-        impact_metric === 'cognitive-complexity' &&
-        typeof impact_function === 'string' &&
-        typeof impact_value === 'number' &&
-        typeof impact_threshold === 'number' &&
-        typeof impact_percentile === 'number'
-      ) {
-        return {
-          kind: 'impact-finding',
-          metric: impact_metric,
-          functionName: impact_function,
-          value: impact_value,
-          threshold: impact_threshold,
-          percentile: impact_percentile,
-        };
-      }
-      return 'the ImpactGate columns are incomplete';
     }
     default: {
       return 'origin_kind is unknown';

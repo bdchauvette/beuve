@@ -187,10 +187,6 @@ export class BeuveUraDock extends LitElement {
         flex: none;
       }
 
-      .origin.impact-finding {
-        color: var(--beuve-warn);
-      }
-
       .outdated {
         flex: none;
         color: var(--beuve-warn);

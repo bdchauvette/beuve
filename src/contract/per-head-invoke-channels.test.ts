@@ -51,7 +51,6 @@ function headFreeSessionChannels(): Readonly<
   return {
     'session:get-review': read,
     'session:get-order': read,
-    'session:get-impact': read,
     'session:get-file-pair': read,
     'session:get-tree': read,
     'session:get-file-attributes': read,
@@ -68,7 +67,6 @@ function headFreeSessionChannels(): Readonly<
     'ura:list': read,
     'ura:create': 'the item records the head its anchor refers to and is re-anchored on every read',
     'ura:reorder': 'dock order belongs to the session, not a head',
-    'ura:stage-impact-finding': 'the item records the head ImpactGate found it at',
     'ura:export':
       'copies to the clipboard for the reviewer to paste; the export names the head it was compiled at',
     'chat:ask': 'the answer records the head it was asked at (ADR 0057)',

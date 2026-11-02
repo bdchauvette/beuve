@@ -6,7 +6,7 @@ Code Review and Verification Workbench.
 
 - Target platform: macOS (Electron desktop app wrapping a local Node.js backend daemon).
 - Core architecture: Modular monolith with a Go-inspired layout: single repository, strict domain boundaries, no monorepo workspaces, easy to migrate to workspaces later.
-- Core stack: Node.js main process daemon (local LLM/RAG context bridge, LSP proxy and call-graph resolver, Tree-sitter AST parser, git/interdiff engine, SQLite local store, ImpactGate telemetry parser, automated agentic reviewer) plus a Lit/custom-elements renderer with CSS custom properties. No React, no Monaco.
+- Core stack: Node.js main process daemon (local LLM/RAG context bridge, LSP proxy and call-graph resolver, Tree-sitter AST parser, git/interdiff engine, SQLite local store, automated agentic reviewer) plus a Lit/custom-elements renderer with CSS custom properties. No React, no Monaco.
 - UI libraries: `@pierre/diffs` (diff rendering, syntax highlighting, interdiff highlights, inline editing) and `@pierre/trees` (path-first repository navigation with package-aware expansion and a diff-only filter).
 - Code quality: ESLint flat config, type-checked via `projectService`, with Unicorn, @e18e, wc, lit, n, promise and security plugins, plus local AST rules (single named export per file, no barrel files, internal utility usage, kebab-case filenames, top-level `function` style). Prettier for formatting.
 - Boundaries: package.json `imports` aliases plus dependency-cruiser enforcing domain isolation and no cycles.
@@ -23,12 +23,12 @@ The boundary (ADR 0088): beuve never writes the reviewer's own checkout or index
 Objectives:
 
 - Zero blinders and call-stack X-ray: a package-aware neighborhood file tree, read-only LSP call-stack peek portals, and AST control-flow visualizers, without opening editor tabs.
-- Preliminary agentic review pass: an optional background worker on session load scans interdiffs and ImpactGate metrics and leaves non-blocking purple insights.
-- Agentic verification loop: a built-in MCP server exposing LSP diagnostics and ImpactGate metrics so coding agents can self-correct before human review.
+- Preliminary agentic review pass: an optional background worker on session load scans interdiffs and leaves non-blocking purple insights.
+- Agentic verification loop: a built-in MCP server exposing LSP diagnostics so coding agents can self-correct before human review.
 - Context-aware Q&A chat (Zone 4): read-only, backed by local worktree embeddings and LSP symbols.
 - Unified agent and human workflows: local agent runs (e.g. Claude Code) and GitHub PRs reviewed the same way, including stack navigation and CI status.
 - Incremental reviews (interdiffs), inspired by Flirt: don't review the same code twice when fixups are pushed.
-- Change impact and complexity gating (ImpactGate): marginal change impact and cognitive complexity surfaced in the review stream.
+- Change impact and complexity gating (ImpactGate): removed by ADR 0102; to be reconsidered.
 - Keyboard-first, modal-lite, Vim/Helix-inspired navigation.
 - Universal Review Artifacts (URA): review decisions compiled into one schema and exported to Claude Code (MCP/XML), GitHub PR reviews, or applied directly.
 
@@ -58,7 +58,6 @@ _Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec
     │   │   ├── auth/          GitHub and token authentication
     │   │   ├── chat/          Zone 4 Q&A, RAG and context indexing
     │   │   ├── git/           worktrees, interdiffs, branch management
-    │   │   ├── impact/        ImpactGate complexity and telemetry
     │   │   ├── lsp/           LSP multiplexer, call-graph resolver, tree-sitter
     │   │   ├── review/        automated preliminary agentic reviewer
     │   │   ├── session/       review sessions and checkpoints (ADR 0006)
@@ -75,18 +74,18 @@ _Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec
 
 ADR 0044 overrides the geometry below: the diff stream and one tabbed sidebar (Zone 1, Zone 3 and Zone 4 as tabs), on the right by default, with no zone title bars.
 
-- Zone 1, Intent sidebar and radar tree (260px). Top: requirements (REQ-1, REQ-2) extracted from PR descriptions or agent prompts, mapped to hunks; unmapped diffs flagged as scope creep. Bottom: `@pierre/trees` package-aware tree that auto-expands packages with modified files, highlights touched files, and shows package-level ImpactGate percentiles. `f` toggles diff-only mode.
-- Zone 2, semantic diff stream (flexible). `@pierre/diffs` cards ordered by call-graph logic rather than path. Interdiff mode (rev 1 → rev 2). ImpactGate header banners. Inline tools: call-stack peek (`p`), control-flow graph (`Shift+p`), inline edit (`e`), open in IDE (`o`).
-- Zone 3, URA staging dock (320px). Collects patches, severity tags, ImpactGate violations and notes; exports to GitHub PR review or Claude Code (MCP or XML with metrics).
+- Zone 1, Intent sidebar and radar tree (260px). Top: requirements (REQ-1, REQ-2) extracted from PR descriptions or agent prompts, mapped to hunks; unmapped diffs flagged as scope creep. Bottom: `@pierre/trees` package-aware tree that auto-expands packages with modified files, and highlights touched files. `f` toggles diff-only mode.
+- Zone 2, semantic diff stream (flexible). `@pierre/diffs` cards ordered by call-graph logic rather than path. Interdiff mode (rev 1 → rev 2). Inline tools: call-stack peek (`p`), control-flow graph (`Shift+p`), inline edit (`e`), open in IDE (`o`).
+- Zone 3, URA staging dock (320px). Collects patches, severity tags and notes; exports to GitHub PR review or Claude Code (MCP or XML with metrics).
 - Zone 4, read-only Q&A chat (toggleable drawer). Indexed on worktree files, diff hunks and LSP symbols. Cannot write files. Answers carry citation pills that jump Zone 2 to the hunk, and a button to stage an explanation as a URA comment.
 
 ## 5. Key components and workflows
 
 A. Keyboard (superseded by ADR 0068: every command is a menu item with a chorded shortcut, no bare letters; this list is the original intent): `j`/`k` step hunks or files; `Space` expand/collapse; `Tab`/`Shift+Tab` cycle zones; `c` chat; `f` tree mode; `p` call-stack peek (`textDocument/incomingCalls`); `Shift+p` control-flow graph; `e` inline edit; `m` stage into URA; `o` open in IDE.
 
-B. Preliminary agentic review: on session init and worktree checkout, a background worker analyzes the interdiff and ImpactGate metrics and emits insights (edge cases, security, type mismatches) rendered as purple badges. `y` promotes to URA, `d` dismisses.
+B. Preliminary agentic review: on session init and worktree checkout, a background worker analyzes the interdiff and emits insights (edge cases, security, type mismatches) rendered as purple badges. `y` promotes to URA, `d` dismisses.
 
-C. MCP server: embedded in the main process (`@modelcontextprotocol/sdk`). Tools: `beuve_get_lsp_diagnostics`, `beuve_run_impact_check`, `beuve_read_human_review`.
+C. MCP server: embedded in the main process (`@modelcontextprotocol/sdk`). Tools: `beuve_get_lsp_diagnostics`, `beuve_read_human_review`.
 
 D. Peek portals and CFGs: `p` builds an expandable caller/callee tree from `textDocument/incomingCalls`, badging each caller Modified or Untouched. `Shift+p` renders a Tree-sitter-derived mini flowchart with modified lines highlighted.
 
@@ -94,7 +93,7 @@ E. Trace probes (removed by ADR 0096; Copy Relative Line Number copies `path:lin
 
 F. Interdiff engine: checkpoints stored in SQLite. When a PR updates, offer interdiff mode showing `git diff <last-reviewed> <current-head>`, and handle rebases sensibly.
 
-G. ImpactGate: on worktree checkout, run local AST/Lizard-style complexity analysis to score marginal change impact and flag methods over a cognitive complexity limit. Warnings appear in diff card headers and can be auto-staged into URA.
+G. ImpactGate (removed by ADR 0102, which records what it measured and what upstream ImpactGate does).
 
 ## 6. Persistence
 
@@ -102,7 +101,7 @@ Initial tables (ownership per ADR 0006):
 
 - `sessions` (id, repo_path, pr_number, last_checkpoint_sha, current_sha, updated_at)
 - `checkpoints` (id, session_id → sessions, commit_sha, created_at)
-- `ura_items` (id, session_id, file_path, line_start, line_end, severity, critique, patch, impact_percentile, cognitive_complexity_breach, verified_by_lsp)
+- `ura_items` (id, session_id, file_path, line_start, line_end, severity, critique, patch, verified_by_lsp)
 - `chat_messages` (id, session_id, sender, content, citations, created_at)
 - `agent_comments` (id, session_id, file_path, line_number, severity, category, body, status default 'pending_review', created_at)
 
@@ -117,6 +116,6 @@ The main window uses `titleBarStyle: 'hiddenInset'`, 1440×900, context isolatio
 
 ## 8. Roadmap
 
-- Phase 1: scaffold layout and aliases, SQLite init, git worktree manager, ImpactGate telemetry, LSP JSON-RPC multiplexer, automated preliminary reviewer, embedded MCP server.
+- Phase 1: scaffold layout and aliases, SQLite init, git worktree manager, LSP JSON-RPC multiplexer, automated preliminary reviewer, embedded MCP server.
 - Phase 2: `@pierre/diffs`, package-aware `@pierre/trees` with `f` toggle, Zone 4 chat drawer, AST control-flow visualizer.
 - Phase 3: global keyboard router, interdiff view, URA dock export targets.

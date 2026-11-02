@@ -52,16 +52,11 @@ describe('validateUraItem', () => {
       },
     ],
     ['empty chat message id', { kind: 'chat-answer', messageId: ' ' }],
-    ['finding on a file', finding(), { kind: 'file', path: 'a' }],
-    ['finding without a function', { ...finding(), functionName: '' }],
-    ['finding with NaN', { ...finding(), value: NaN }],
-    ['finding with a percentile over 100', { ...finding(), percentile: 101 }],
   ])('rejects an origin with a %s', ([, origin, anchor], { expect }) => {
     expect(errorOf({ origin, ...(anchor && { anchor }) })?.kind).toBe('invalid-origin');
   });
 
   test('accepts valid origins', ({ expect }) => {
-    expect(errorOf({ origin: finding() })).toBeUndefined();
     expect(
       errorOf({ origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 3 } }),
     ).toBeUndefined();
@@ -113,15 +108,4 @@ function valid(): UraItem {
 
 function candidate(): UraItemCandidate {
   return { ...valid(), suggestion: undefined };
-}
-
-function finding(): Extract<UraOrigin, { kind: 'impact-finding' }> {
-  return {
-    kind: 'impact-finding',
-    metric: 'cognitive-complexity',
-    functionName: 'f',
-    value: 20,
-    threshold: 15,
-    percentile: 50,
-  };
 }

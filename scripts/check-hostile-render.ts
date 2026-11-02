@@ -86,12 +86,6 @@ const testBuildFile = /hostile-harness|pass-through-policy/u;
 /** How often, and how many times at most, a card is serialized while its highlighting settles. */
 const settlePollMilliseconds = 60;
 const settlePolls = 100;
-/**
- * ImpactGate's chip and its details, which the twin comparison leaves out: Lit builds them from
- * main's analysis of the code, so a hostile line that does not parse gets findings its benign
- * twin does not. The probe and the visibility checks still cover them.
- */
-const impactSelector = '.impact-chip, .impact-popover';
 /** Everything of a page URL up to the build output, which says nothing. */
 const beforeDist = /^.*\/dist\//u;
 /** Characters that reorder text: a displayed path must hold none of them (ADR 0082). */
@@ -393,12 +387,7 @@ async function settledHtml(
   let last = '';
   for (let polls = 0, stable = 0; polls < settlePolls && stable < 3; polls += 1) {
     await delay(settlePollMilliseconds);
-    const html = String(
-      await devtools.evaluate(
-        main,
-        `__hostileProbe.html(${card}, ${JSON.stringify(impactSelector)})`,
-      ),
-    );
+    const html = String(await devtools.evaluate(main, `__hostileProbe.html(${card})`));
     if (html === last) {
       stable += 1;
     } else {

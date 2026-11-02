@@ -5,7 +5,6 @@ import type {
   ListUraItemsRequest,
   ReorderUraItemsRequest,
   SetUraVerdictRequest,
-  StageImpactFindingRequest,
   StageReviewFindingRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
@@ -41,7 +40,6 @@ import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
 import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
-import { stageImpactFinding } from '#internal/ura/stage-impact-finding.ts';
 import { stageReviewFinding } from '#internal/ura/stage-review-finding.ts';
 import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
@@ -64,7 +62,6 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
@@ -87,9 +84,6 @@ export interface UraServices {
   /** Stages a `/review` finding from its stored answer (ADR 0055); again returns its item. */
   readonly stageReviewFinding: (
     request: StageReviewFindingRequest,
-  ) => Promise<IpcResult<UraStagedView>>;
-  readonly stageImpactFinding: (
-    request: StageImpactFindingRequest,
   ) => Promise<IpcResult<UraStagedView>>;
   readonly setVerdict: (request: SetUraVerdictRequest) => IpcResult<UraVerdictStateView>;
   readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
@@ -142,7 +136,6 @@ interface PinnedHead {
 
 export interface UraServicesOptions {
   readonly context: SessionContext;
-  readonly impact: ImpactServices;
   /** Line mappings kept, one per (repository, older head, current head). Defaults to 64. */
   readonly cacheSize?: number;
 }
@@ -154,14 +147,14 @@ interface Head {
 }
 
 /**
- * Composes the URA domain with sessions, git, the chat's `/review` answers and ImpactGate. Items
+ * Composes the URA domain with sessions, git and the chat's `/review` answers. Items
  * written against an older head are re-anchored on every read from the git diff between the two
  * heads (cached, since commits never change); nothing about placement is stored. Every change is
  * announced through `onChanged`, whoever made it.
  */
 export function createUraServices(options: UraServicesOptions): UraServices {
   type StoreResult<T> = Result<T, UraItemError | UraStoreError>;
-  const { context, impact } = options;
+  const { context } = options;
   const { db, logger } = context;
   const deps: UraDeps = context.deps;
   const listeners = new Set<(sessionId: string) => void>();
@@ -558,35 +551,6 @@ export function createUraServices(options: UraServicesOptions): UraServices {
         found,
         { sessionId: answer.sessionId, headSha: answer.headSha, messageId, finding },
         { deps, severity },
-      );
-      return staged(stagedOrFailure(item));
-    },
-
-    stageImpactFinding: async ({
-      sessionId,
-      path,
-      functionName,
-    }): Promise<IpcResult<UraStagedView>> => {
-      const report = await impact.getImpact({ sessionId });
-      if (!report.ok) {
-        return report;
-      }
-      const finding = report.value.findings.find((candidate) => {
-        return candidate.path === path && candidate.functionName === functionName;
-      });
-      if (finding === undefined) {
-        return err({
-          code: 'not-found',
-          message: `ImpactGate has no finding for ${functionName} in ${path} at the current head`,
-        });
-      }
-      const item = stageImpactFinding(
-        { ...finding, baseValue: finding.baseValue },
-        {
-          sessionId: report.value.sessionId as SessionId,
-          headSha: report.value.headSha as CommitSha,
-        },
-        deps,
       );
       return staged(stagedOrFailure(item));
     },

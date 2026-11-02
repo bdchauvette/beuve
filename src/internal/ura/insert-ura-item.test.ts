@@ -25,14 +25,7 @@ function sampleItems(): [UraItem, UraItem, UraItem, UraItem, UraItem] {
     createTestUraItem({
       id: testUraIds.itemId(3),
       anchor: { kind: 'lines', path: 'src/p.ts', startLine: 5, endLine: 40 },
-      origin: {
-        kind: 'impact-finding',
-        metric: 'cognitive-complexity',
-        functionName: 'parse',
-        value: 21,
-        threshold: 15,
-        percentile: 87.5,
-      },
+      origin: { kind: 'chat-answer', messageId: 'msg-2' },
     }),
     createTestUraItem({
       id: testUraIds.itemId(4),
@@ -61,7 +54,7 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
   });
 
   test('reports a missing session, a reused id and repeated staging', ({ expect, db }) => {
-    const [human, reviewFinding, finding] = sampleItems();
+    const [human, reviewFinding] = sampleItems();
     const unknown = '55555555-5555-4555-8555-555555555555' as SessionId;
     const orphan = createTestUraItem({ sessionId: unknown });
     expect(insertUraItem(db, orphan)).toStrictEqual({
@@ -81,11 +74,6 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
         id: testUraIds.itemId(8),
         reason: 'review-finding-already-staged',
       },
-    });
-    insertUraItem(db, finding);
-    expect(insertUraItem(db, { ...finding, id: testUraIds.itemId(9) })).toStrictEqual({
-      ok: false,
-      error: { kind: 'duplicate-item', id: testUraIds.itemId(9), reason: 'finding-already-staged' },
     });
   });
 

@@ -27,7 +27,6 @@ describe('uraMigrations', () => {
       { ...valid(), anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
-      { ...valid(), ...finding() },
       { ...valid(), status: "'withdrawn'" },
       { ...valid(), status: "'addressed'", addressed_sha: `'${later()}'`, addressed_by: "'agent'" },
     ];
@@ -91,13 +90,7 @@ describe('uraMigrations', () => {
     ],
     ['a line anchor without lines', { line_start: 'NULL', line_end: 'NULL' }],
     ['a chat answer without its message id', { origin_kind: "'chat-answer'" }],
-    ['a finding without a function', { ...finding(), impact_function: 'NULL' }],
-    ['a finding without a percentile', { ...finding(), impact_percentile: 'NULL' }],
-    ['a finding with a percentile over 100', { ...finding(), impact_percentile: '101' }],
-    [
-      'a finding on a whole file',
-      { ...finding(), anchor_kind: "'file'", line_start: 'NULL', line_end: 'NULL' },
-    ],
+    ['an unknown origin', { origin_kind: "'impact-finding'" }],
     ['an addressed item without a head', { status: "'addressed'", addressed_by: "'agent'" }],
     [
       'a staged item with an addressed head',
@@ -122,10 +115,7 @@ describe('uraMigrations', () => {
     expect(db.prepare('SELECT count(*) AS n FROM ura_items;').get()?.['n']).toBe(0);
   });
 
-  test('stages a review finding once, and an ImpactGate finding once per head and function', ({
-    expect,
-    db,
-  }) => {
+  test('stages a review finding once', ({ expect, db }) => {
     const answer = { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" };
     insertRow(db, { ...answer, chat_finding: '0' }, 1);
     expect(() => {
@@ -134,12 +124,6 @@ describe('uraMigrations', () => {
     insertRow(db, { ...answer, chat_finding: '1' }, 7);
     insertRow(db, answer, 8);
     insertRow(db, answer, 9);
-    insertRow(db, { ...valid(), ...finding() }, 3);
-    expect(() => {
-      insertRow(db, { ...valid(), ...finding() }, 4);
-    }).toThrow(/UNIQUE/u);
-    insertRow(db, { ...valid(), ...finding(), head_sha: `'${later()}'` }, 5);
-    insertRow(db, { ...valid(), ...finding(), impact_function: "'g'" }, 6);
   });
 
   test('records at most one verdict choice per session', ({ expect, db }) => {
@@ -188,16 +172,5 @@ function valid(): Readonly<Record<string, string>> {
     status: "'staged'",
     created_at: `'${at()}'`,
     updated_at: `'${at()}'`,
-  };
-}
-
-function finding(): Record<string, string> {
-  return {
-    origin_kind: "'impact-finding'",
-    impact_metric: "'cognitive-complexity'",
-    impact_function: "'f'",
-    impact_value: '20',
-    impact_threshold: '15',
-    impact_percentile: '90',
   };
 }

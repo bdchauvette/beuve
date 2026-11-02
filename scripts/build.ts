@@ -29,7 +29,7 @@ await buildTestPages();
  * Bundles main (ESM), the main, sheet and Settings preloads (CJS, sandboxed per ADR 0005, 0067, 0068)
  * and ui (ESM, code-split per ADR 0025, with the sheet page `sheet-entry.js` and the Settings page
  * `settings-entry.js` as further entries sharing its chunks)
- * into dist/ (plus main's ImpactGate worker as `dist/main/impact-worker.js`, ADR 0053), and copies the Tree-sitter runtime and grammar wasm files main loads from
+ * into dist/, and copies the Tree-sitter runtime and grammar wasm files main loads from
  * `dist/main/wasm/` (ADR 0014). Prints the renderer's eager size.
  */
 async function buildAll(): Promise<void> {
@@ -38,7 +38,6 @@ async function buildAll(): Promise<void> {
   await Promise.all([
     build(workerOptions()),
     build(mainOptions()),
-    build(impactWorkerOptions()),
     build(preloadOptions()),
     build(sheetPreloadOptions()),
     build(settingsPreloadOptions()),
@@ -162,15 +161,6 @@ function mainOptions(): BuildOptions {
     banner: {
       js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
     },
-  };
-}
-
-/** The ImpactGate worker thread's own file, which main starts by path (ADR 0053). */
-function impactWorkerOptions(): BuildOptions {
-  return {
-    ...mainOptions(),
-    entryPoints: [path.join(root, 'src/main/impact/impact-worker.ts')],
-    outfile: path.join(dist, 'main/impact-worker.js'),
   };
 }
 

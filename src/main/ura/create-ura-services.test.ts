@@ -261,40 +261,6 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(okValueFrom(await services.ura.list({ sessionId })).items).toHaveLength(1);
   });
 
-  test('stages an ImpactGate finding once, looked up from its own report', async ({
-    expect,
-    services,
-    sessionId,
-  }) => {
-    const finding = okValueFrom(
-      await services.ura.stageImpactFinding({
-        sessionId,
-        path: 'src/complex.ts',
-        functionName: 'decide',
-      }),
-    );
-    expect(finding).toMatchObject({
-      created: true,
-      item: {
-        severity: 'issue',
-        origin: { kind: 'impact-finding', metric: 'cognitive-complexity', functionName: 'decide' },
-        anchor: { kind: 'lines', path: 'src/complex.ts', startLine: 1 },
-      },
-    });
-    expect(
-      okValueFrom(
-        await services.ura.stageImpactFinding({
-          sessionId,
-          path: 'src/complex.ts',
-          functionName: 'decide',
-        }),
-      ),
-    ).toStrictEqual({ item: finding.item, created: false });
-    await expect(
-      services.ura.stageImpactFinding({ sessionId, path: 'src/app.ts', functionName: 'x' }),
-    ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
-  });
-
   test('exports every target and refuses to approve over a blocker', async ({
     expect,
     services,

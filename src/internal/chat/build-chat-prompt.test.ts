@@ -55,23 +55,11 @@ describe('buildChatPrompt', () => {
   test('is deterministic and holds the diff, the focus and the question, last', ({ expect }) => {
     const question = createChatQuestion({
       focus: { path: 'src/a.ts', startLine: 12, endLine: 13, excerpt: '+  return first.trim();\n' },
-      impactFindings: [
-        {
-          path: 'src/a.ts',
-          functionName: 'parse',
-          startLine: 10,
-          endLine: 14,
-          value: 18,
-          limit: 15,
-          trend: 'worsened',
-        },
-      ],
     });
     const built = buildChatPrompt(question, budget());
     expect(buildChatPrompt(question, budget())).toStrictEqual(built);
     expect(built.prompt).toContain('### modified src/a.ts');
     expect(built.prompt).toContain('### added src/b.ts');
-    expect(built.prompt).toContain('`parse`: cognitive complexity 18 (limit 15, worsened)');
     expect(built.prompt).toContain('The reviewer is looking at src/a.ts, lines 12-13.');
     expect(
       built.prompt.trimEnd().endsWith('```text\nWhy does parse trim the first part?\n```'),

@@ -110,30 +110,7 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
       }
       return 'a review finding is anchored to lines';
     }
-    case 'impact-finding': {
-      return checkFinding(origin, anchor);
-    }
   }
-}
-
-function checkFinding(
-  origin: Extract<UraOrigin, { kind: 'impact-finding' }>,
-  anchor: UraAnchor,
-): string | undefined {
-  if (anchor.kind !== 'lines') {
-    return 'an ImpactGate finding anchors to the lines of its function';
-  }
-  if (origin.functionName.trim() === '') {
-    return 'the function name is empty';
-  }
-  if (!Number.isFinite(origin.value) || !Number.isFinite(origin.threshold)) {
-    return 'the metric value and threshold must be finite numbers';
-  }
-  const { percentile } = origin;
-  if (Number.isFinite(percentile) && percentile >= 0 && percentile <= 100) {
-    return undefined;
-  }
-  return 'the percentile must be between 0 and 100';
 }
 
 function checkTitle(title: string): string | undefined {

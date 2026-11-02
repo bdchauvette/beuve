@@ -18,10 +18,8 @@ import { styleMap } from 'lit/directives/style-map.js';
 import type {
   DiffFileView,
   DiffLayoutView,
-  FileImpactView,
   FileReviewStateView,
   FilePairView,
-  ImpactFindingView,
   UraAnchorView,
   UraItemView,
 } from '#contract/ipc-contract.ts';
@@ -45,8 +43,6 @@ import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
-import { planImpactChip } from './plan-impact-chip.ts';
-import type { ImpactChip } from './plan-impact-chip.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
 import type { HunkStep } from './plan-hunk-steps.ts';
@@ -172,13 +168,11 @@ const estimatedSeparatorHeight = 32;
 
 /**
  * One file of the review diff (ADR 0018, 0025): a header with its status, path and line counts,
- * the ImpactGate banner once the impact check has run, the call-stack peek portal while it is
+ * the call-stack peek portal while it is
  * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting. The diff mounts while the stream sets `mounted` (the card is near
  * the viewport); otherwise a placeholder of the diff's last or estimated height stands in. If the
  * library fails to render, the card falls back to a plain `<pre>` of the patch. Staged URA items
- * show as subtle markers under their lines, the Add Note composer opens under the lines it stages,
- * and the ImpactGate banner offers to stage its findings. Emits `beuve-diff-rendered` each time
- * its diff mounts and `beuve-ura-stage-finding` from the banner.
+ * show as subtle markers under their lines and the Add Note composer opens under the lines it stages.
  */
 @customElement('beuve-file-card')
 export class BeuveFileCard extends LitElement {
@@ -252,131 +246,6 @@ export class BeuveFileCard extends LitElement {
       .deletions {
         font: var(--beuve-font-mono);
         color: var(--beuve-diff-removed-text);
-      }
-
-      .impact-chip {
-        display: inline-flex;
-        flex: none;
-        align-items: center;
-        gap: 4px;
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid transparent;
-        border-radius: 4px;
-        background: transparent;
-        color: var(--beuve-text-muted);
-        font: var(--beuve-font-small);
-        cursor: default;
-      }
-
-      .impact-chip svg {
-        width: 12px;
-        height: 12px;
-      }
-
-      .impact-chip.quiet {
-        opacity: 0.55;
-      }
-
-      .impact-chip.warning {
-        border-color: color-mix(in srgb, var(--beuve-warn) 45%, transparent);
-        background: color-mix(in srgb, var(--beuve-warn) 10%, var(--beuve-surface-sunken));
-        color: var(--beuve-warn);
-      }
-
-      .impact-chip:hover,
-      .impact-chip:focus-visible {
-        opacity: 1;
-        border-color: var(--beuve-accent);
-        outline: none;
-      }
-
-      .impact-popover {
-        position: fixed;
-        inset: auto;
-        box-sizing: border-box;
-        width: min(380px, calc(100vw - 32px));
-        margin: 0;
-        padding: var(--beuve-space-2) var(--beuve-space-3);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-surface);
-        box-shadow: 0 6px 24px #0000001f;
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-      }
-
-      .impact-popover h3 {
-        margin: 0 0 var(--beuve-space-1);
-        font: inherit;
-        font-weight: 600;
-      }
-
-      .impact-popover p {
-        margin: 0 0 var(--beuve-space-1);
-        color: var(--beuve-text-muted);
-      }
-
-      .impact-popover table {
-        width: 100%;
-        margin-bottom: var(--beuve-space-1);
-        border-collapse: collapse;
-      }
-
-      .impact-popover th {
-        padding: 2px 0;
-        font-weight: 400;
-        text-align: left;
-        color: var(--beuve-text-muted);
-      }
-
-      .impact-popover td {
-        padding: 2px 0;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-
-      .impact-popover th:not(:first-child),
-      .impact-popover td:not(:first-child) {
-        padding-left: var(--beuve-space-2);
-        text-align: right;
-      }
-
-      .impact-popover .fn {
-        max-width: 160px;
-        overflow: hidden;
-        font: var(--beuve-font-mono);
-        font-size: 11px;
-        text-overflow: ellipsis;
-      }
-
-      .impact-popover .breach {
-        color: var(--beuve-warn);
-      }
-
-      .impact-popover .actions {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-2);
-      }
-
-      .impact-popover .keys {
-        flex: 1;
-        color: var(--beuve-text-muted);
-      }
-
-      .impact-popover button {
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: 4px;
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .impact-popover button:disabled {
-        color: var(--beuve-text-muted);
-        cursor: default;
       }
 
       .edit-bar {
@@ -820,24 +689,6 @@ export class BeuveFileCard extends LitElement {
   private isGutterLabelled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
   private codeGeneration = 0;
-  private impactHideTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The chip's top edge when the popover was placed. */
-  private impactAnchorTop = 0;
-  /**
-   * The popover is placed once from the chip's rectangle and closes, calmly, when a scroll moves
-   * the chip away from it; scrolling inside the popover or sideways in the code leaves it be.
-   */
-  private readonly onScrollWhileImpactOpen = (event: Event): void => {
-    const parts = this.impactParts();
-    if (parts === undefined) {
-      return;
-    }
-    const isInside = event.target instanceof Node && parts.popover.contains(event.target);
-    if (!isInside && Math.abs(parts.chip.getBoundingClientRect().top - this.impactAnchorTop) > 1) {
-      this.hideImpact();
-    }
-  };
-
   /**
    * While editing, ⌘/Ctrl+Enter saves and Escape cancels before the editor sees them; every
    * other key stays with the editor and never reaches the stream's shortcuts.
@@ -934,7 +785,7 @@ export class BeuveFileCard extends LitElement {
    * The card's actions (ADR 0074), which the diff stream's listeners run through {@link runAction}:
    * a card adds no click or key listener of its own. Focus and hover moves inside a card never
    * reach the stream (their related target is in the same shadow root), so the `crossing` ones
-   * are delegated to the card's own root, and only while it shows an ImpactGate chip or insights.
+   * are delegated to the card's own root, and only while it shows insights.
    */
   private readonly actions = {
     click: {
@@ -945,16 +796,6 @@ export class BeuveFileCard extends LitElement {
       },
       unmark: (_data, event): void => {
         this.unmark(event);
-      },
-      'impact-chip': (_data, event): void => {
-        event.stopPropagation();
-        this.showImpact();
-      },
-      'impact-popover': (_data, event): void => {
-        event.stopPropagation();
-      },
-      'impact-stage': (_data, event): void => {
-        this.stageImpactFindings(event);
       },
       expand: (_data, event): void => {
         this.expand(event);
@@ -974,12 +815,6 @@ export class BeuveFileCard extends LitElement {
       },
     },
     keydown: {
-      'impact-chip': (_data, event): void => {
-        this.onImpactKey(event);
-      },
-      'impact-popover': (_data, event): void => {
-        this.onImpactKey(event);
-      },
       insight: (_data, event, note): void => {
         this.onInsightKey(event, note);
       },
@@ -987,41 +822,11 @@ export class BeuveFileCard extends LitElement {
   } satisfies DelegatedActions;
 
   private readonly crossing = {
-    pointerover: {
-      'impact-chip': (): void => {
-        this.showImpact();
-      },
-      'impact-popover': (): void => {
-        this.showImpact();
-      },
-    },
-    pointerout: {
-      'impact-chip': (): void => {
-        this.scheduleImpactHide();
-      },
-      'impact-popover': (): void => {
-        this.scheduleImpactHide();
-      },
-    },
     focusin: {
-      'impact-chip': (): void => {
-        this.showImpact();
-      },
-      'impact-popover': (): void => {
-        this.showImpact();
-      },
       'insight-line': (_data, _event, line): void => {
         if (line.matches(':focus-visible') && line.getAttribute('aria-expanded') !== 'true') {
           this.toggleInsight(line, true);
         }
-      },
-    },
-    focusout: {
-      'impact-chip': (): void => {
-        this.scheduleImpactHide();
-      },
-      'impact-popover': (): void => {
-        this.scheduleImpactHide();
       },
     },
   } satisfies DelegatedActions;
@@ -1039,9 +844,6 @@ export class BeuveFileCard extends LitElement {
   @property({ type: Boolean, reflect: true }) accessor active = false;
   /** Set by the diff stream when the card nears the viewport; the diff renders from then on. */
   @property({ type: Boolean, reflect: true }) accessor mounted = false;
-  /** This file's ImpactGate entry; `undefined` until the check has run. */
-  @property({ attribute: false }) accessor impact: FileImpactView | undefined;
-  @property({ attribute: false }) accessor findings: readonly ImpactFindingView[] = [];
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   /** The control-flow graph portal, which shares the peek's place (one portal at a time). */
   @property({ attribute: false }) accessor flow: FlowState | undefined;
@@ -1057,8 +859,6 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor composer: ComposerState | undefined;
   /** How the diff is laid out ({@link planDiffLayout} in the stream, ADR 0042). */
   @property() accessor diffStyle: DiffLayoutView = 'unified';
-  /** ImpactGate's cognitive limit, named in the indicator's popover. */
-  @property({ type: Number }) accessor cognitiveLimit: number | undefined;
   /** Why this file starts collapsed (ADR 0052): generated, a lockfile or too large. */
   @property({ attribute: false }) accessor deferral: DiffDeferral | undefined;
   /**
@@ -1097,7 +897,6 @@ export class BeuveFileCard extends LitElement {
         this.diff?.cleanUp();
         this.diff = undefined;
         this.unobserveCode();
-        clearTimeout(this.impactHideTimer);
       },
     });
   }
@@ -1280,9 +1079,6 @@ export class BeuveFileCard extends LitElement {
             return;
           }
           this.syncInsightMarks();
-          this.dispatchEvent(
-            new CustomEvent('beuve-diff-rendered', { bubbles: true, composed: true }),
-          );
         },
       },
       shared.pool,
@@ -1341,9 +1137,9 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  /** Delegates the crossing events while the chip or an insight note is there to act on them. */
+  /** Delegates the crossing events while an insight note is there to act on them. */
   private syncCrossingDelegation(): void {
-    const isNeeded = this.insights.length > 0 || this.impactParts() !== undefined;
+    const isNeeded = this.insights.length > 0;
     if (isNeeded && this.crossingDelegation === undefined) {
       this.crossingDelegation = new AbortController();
       delegateActions(this.renderRoot, this.crossing, { signal: this.crossingDelegation.signal });
@@ -1480,183 +1276,6 @@ export class BeuveFileCard extends LitElement {
     composerElement.patch = composer.suggestedPatch ?? '';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
-  }
-
-  /**
-   * The ImpactGate indicator in the title bar (ADR 0042) and its popover, which opens on hover,
-   * on keyboard focus and with ImpactGate Details, closes with Escape, and never traps focus.
-   */
-  private renderImpactChip(): TemplateResult | typeof nothing {
-    const chip = planImpactChip(this.impact, this.findings, this.cognitiveLimit);
-    if (chip === undefined) {
-      return nothing;
-    }
-    return html`<button
-        type="button"
-        class="impact-chip ${chip.tone}"
-        aria-label=${chip.tone === 'warning' ? `ImpactGate: ${chip.label}` : 'ImpactGate details'}
-        aria-haspopup="dialog"
-        aria-controls="impact-popover"
-        data-action="impact-chip"
-      >
-        ${chip.tone === 'warning' ? warningIcon : gaugeIcon}${chip.label}
-      </button>
-      <div
-        id="impact-popover"
-        class="impact-popover"
-        popover="manual"
-        role="dialog"
-        aria-label="ImpactGate"
-        data-action="impact-popover"
-      >
-        ${this.renderImpactDetails(chip)}
-      </div>`;
-  }
-
-  /** Escape on the chip or in its popover closes the popover. */
-  private onImpactKey(event: KeyboardEvent): void {
-    if (event.key !== 'Escape') {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    this.hideImpact();
-    this.dispatchEvent(new CustomEvent('beuve-impact-close', { bubbles: true, composed: true }));
-  }
-
-  /** Stages the chip's findings that are not in the review dock yet. */
-  private stageImpactFindings(event: Event): void {
-    event.stopPropagation();
-    const chip = planImpactChip(this.impact, this.findings, this.cognitiveLimit);
-    const unstaged = chip?.findings.filter((finding) => !this.isStaged(finding)) ?? [];
-    for (const finding of unstaged) {
-      this.dispatchEvent(
-        new CustomEvent('beuve-ura-stage-finding', {
-          detail: { path: finding.path, functionName: finding.functionName },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    }
-  }
-
-  private renderImpactDetails(chip: ImpactChip): TemplateResult {
-    const unstaged = chip.findings.filter((finding) => !this.isStaged(finding));
-    return html`<h3>ImpactGate</h3>
-      <p>${chip.summary}</p>
-      ${
-        chip.rows.length === 0
-          ? nothing
-          : html`<table>
-              <thead>
-                <tr>
-                  <th>Function</th>
-                  <th>Lines</th>
-                  <th title="Cognitive complexity, base → head">Cognitive</th>
-                  <th title="Rank of the head value among the head's functions">Pctl</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${chip.rows.map((row) => {
-                  return html`<tr class=${row.trend === undefined ? '' : 'breach'}>
-                    <td class="fn" title=${row.name}>${row.name}</td>
-                    <td>${row.lines}</td>
-                    <td>
-                      ${row.before === undefined ? 'new' : String(row.before)} →
-                      ${row.after === undefined ? 'removed' : String(row.after)}${
-                        row.trend === undefined ? '' : ` · ${row.trend}`
-                      }
-                    </td>
-                    <td>${row.percentile === undefined ? '' : String(row.percentile)}</td>
-                  </tr>`;
-                })}
-              </tbody>
-            </table>`
-      }
-      ${chip.note === '' ? nothing : html`<p>${chip.note}</p>`}
-      <div class="actions">
-        ${
-          chip.findings.length === 0
-            ? nothing
-            : html`<button
-                type="button"
-                ?disabled=${unstaged.length === 0}
-                title=${stageFindingsTitle(unstaged.length)}
-                data-action="impact-stage"
-              >
-                ${unstaged.length === 0 ? 'Staged' : 'Stage'}
-              </button>`
-        }
-      </div>`;
-  }
-
-  private impactParts(): ImpactParts | undefined {
-    const chip = this.renderRoot.querySelector<HTMLElement>('.impact-chip');
-    const popover = this.renderRoot.querySelector<HTMLElement>('.impact-popover');
-    if (chip === null || popover === null) {
-      return undefined;
-    }
-    return { chip, popover };
-  }
-
-  /** Opens the popover in the top layer, under the chip and inside the window. */
-  private showImpact(): void {
-    clearTimeout(this.impactHideTimer);
-    const parts = this.impactParts();
-    if (parts === undefined) {
-      return;
-    }
-    const { chip, popover } = parts;
-    if (!popover.matches(':popover-open')) {
-      popover.showPopover();
-    }
-    const anchor = chip.getBoundingClientRect();
-    const width = popover.getBoundingClientRect().width;
-    const left = Math.max(8, Math.min(anchor.right - width, innerWidth - width - 8));
-    const below = anchor.bottom + 4;
-    const height = popover.getBoundingClientRect().height;
-    let top = below;
-    if (below + height > innerHeight - 8) {
-      top = Math.max(8, anchor.top - height - 4);
-    }
-    popover.style.left = `${String(Math.round(left))}px`;
-    popover.style.top = `${String(Math.round(top))}px`;
-    this.impactAnchorTop = anchor.top;
-    addEventListener('scroll', this.onScrollWhileImpactOpen, { capture: true, passive: true });
-  }
-
-  private scheduleImpactHide(): void {
-    clearTimeout(this.impactHideTimer);
-    this.impactHideTimer = setTimeout(() => {
-      const parts = this.impactParts();
-      const isInside =
-        parts !== undefined &&
-        (parts.chip.matches(':hover, :focus') || parts.popover.matches(':hover, :focus-within'));
-      if (!isInside) {
-        this.hideImpact();
-      }
-    }, 150);
-  }
-
-  private hideImpact(): void {
-    clearTimeout(this.impactHideTimer);
-    removeEventListener('scroll', this.onScrollWhileImpactOpen, { capture: true });
-    const popover = this.impactParts()?.popover;
-    if (popover?.matches(':popover-open') === true) {
-      popover.hidePopover();
-    }
-  }
-
-  private isStaged(finding: ImpactFindingView): boolean {
-    return this.uraItems.some(({ origin, status, anchor }) => {
-      return (
-        origin.kind === 'impact-finding' &&
-        status.kind !== 'withdrawn' &&
-        origin.functionName === finding.functionName &&
-        anchor.kind === 'lines' &&
-        anchor.path === finding.path
-      );
-    });
   }
 
   private renderCode(file: DiffFileView): TemplateResult | typeof nothing {
@@ -1877,14 +1496,6 @@ ${splitPatch(file.patch).map((line) => {
     super.disconnectedCallback();
     this.jumpModifier?.abort();
     this.jumpModifier = undefined;
-    this.hideImpact();
-  }
-
-  /** ImpactGate Details: focuses the ImpactGate indicator, which opens its popover; `false` without one. */
-  focusImpact(): boolean {
-    const chip = this.impactParts()?.chip;
-    chip?.focus();
-    return chip !== undefined;
   }
 
   /**
@@ -2144,7 +1755,6 @@ ${splitPatch(file.patch).map((line) => {
             }${pathText(file.path)}
           </span>
           ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
-          ${this.renderImpactChip()}
           <span class="counts"
             ><span class="additions">+${file.additions}</span>
             <span class="deletions">−${file.deletions}</span></span
@@ -2291,10 +1901,6 @@ async function loadEditor(): Promise<typeof DiffsEdit> {
 
 const checkIcon: SVGTemplateResult = svg`<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 7.2 6 9.6l4.6-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-const warningIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10.5H1Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 5v2.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>`;
-
-const gaugeIcon: SVGTemplateResult = svg`<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5a4 4 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8.5 7.8 5.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
-
 /** Parses the patch, keyed by its blobs and hunks, and turns highlighting off for languages beuve doesn't ship. */
 function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {
   // The hunks tell apart diffs of the same blobs: a whitespace-ignoring variant, or an interdiff.
@@ -2341,22 +1947,6 @@ interface DiffMount {
 interface InsightNote {
   readonly note: HTMLElement;
   readonly insight: ReviewInsight;
-}
-
-/** The ImpactGate chip and its popover. */
-interface ImpactParts {
-  readonly chip: HTMLElement;
-  readonly popover: HTMLElement;
-}
-
-function stageFindingsTitle(unstaged: number): string {
-  if (unstaged === 0) {
-    return 'Staged in the review dock';
-  }
-  if (unstaged === 1) {
-    return 'Stage this finding in the review dock';
-  }
-  return `Stage these ${String(unstaged)} findings in the review dock`;
 }
 
 const editPhaseNotes: Readonly<Record<EditSession['phase'], string>> = {

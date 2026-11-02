@@ -2,7 +2,7 @@ import type { ChatMention, CommitSha, SessionId } from './chat-message.ts';
 
 /**
  * One question about a reviewed change, in the chat domain's own terms. Main maps the session,
- * git, impact and review domains' data into it (ADR 0002 forbids importing them here).
+ * git and review domains' data into it (ADR 0002 forbids importing them here).
  */
 export interface ChatQuestion {
   readonly sessionId: SessionId;
@@ -28,8 +28,6 @@ export interface ChatQuestion {
   readonly intent?: string;
   /** The reviewed diff, in diff order. */
   readonly files: readonly ChatFile[];
-  /** ImpactGate findings for the head, if computed. */
-  readonly impactFindings?: readonly ChatImpactFinding[];
   /** What the reviewer is looking at in the diff stream, if anything. */
   readonly focus?: ChatFocus;
   /**
@@ -66,17 +64,6 @@ export interface ChatFile {
   readonly binary: boolean;
   /** The file's unified diff text as git printed it. */
   readonly patch: string;
-}
-
-/** A changed function over the cognitive complexity limit (ImpactGate, ADR 0015). */
-export interface ChatImpactFinding {
-  readonly path: string;
-  readonly functionName: string;
-  readonly startLine: number;
-  readonly endLine: number;
-  readonly value: number;
-  readonly limit: number;
-  readonly trend: 'introduced' | 'worsened' | 'unchanged' | 'improved';
 }
 
 /** The file, and optionally the head-side lines and hunk text, the reviewer has focused. */

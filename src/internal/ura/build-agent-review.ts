@@ -19,14 +19,6 @@ export type AgentReviewAnchor =
 
 export type AgentReviewOrigin =
   | { readonly kind: 'human' }
-  | {
-      readonly kind: 'impact-finding';
-      readonly metric: string;
-      readonly functionName: string;
-      readonly value: number;
-      readonly threshold: number;
-      readonly percentile: number;
-    }
   | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
 export interface AgentReviewItem {
@@ -172,10 +164,6 @@ function originFrom(origin: UraOrigin): AgentReviewOrigin {
   switch (origin.kind) {
     case 'human': {
       return { kind: 'human' };
-    }
-    case 'impact-finding': {
-      const { metric, functionName, value, threshold, percentile } = origin;
-      return { kind: 'impact-finding', metric, functionName, value, threshold, percentile };
     }
     case 'chat-answer': {
       return {

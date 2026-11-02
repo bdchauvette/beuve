@@ -222,27 +222,7 @@ describe('createIpcHandlers for review order', () => {
   });
 });
 
-describe('createIpcHandlers for impact and call hierarchy', () => {
-  test('validates session:get-impact before delegating', async ({ expect }) => {
-    const calls: unknown[] = [];
-    const handlers = createIpcHandlers(
-      {
-        ...stubServices({}),
-        impact: {
-          ...stubServices({}).impact,
-          getImpactForRenderer: async (request) => {
-            calls.push(request);
-            return notWired();
-          },
-        },
-      },
-      appInfo(),
-    );
-    await expectInvalid(expect, handlers['session:get-impact']({ sessionId: 's1', paths: [] }));
-    await handlers['session:get-impact']({ sessionId: 's1' });
-    expect(calls).toStrictEqual([{ sessionId: 's1' }]);
-  });
-
+describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => {
   test('validates session:get-tree and session:get-file-pair before delegating', async ({
     expect,
   }) => {
@@ -791,7 +771,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           update: record,
           transition: record,
           stageReviewFinding: record,
-          stageImpactFinding: record,
           export: record,
           setVerdict: (request) => {
             calls.push(request);
@@ -839,10 +818,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       expect,
       handlers['ura:stage-review-finding']({ messageId: id, finding: 0, severity: 'meh' }),
     );
-    await expectInvalid(
-      expect,
-      handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a' }),
-    );
     await expectInvalid(expect, handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
     await expectInvalid(expect, handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
     await expectInvalid(expect, handlers['ura:list']({}));
@@ -853,7 +828,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
     await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
-    await handlers['ura:stage-impact-finding']({ sessionId: 's1', path: 'a', functionName: 'f' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
     await expectInvalid(
       expect,
@@ -872,7 +846,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
       { messageId: id, finding: 2 },
-      { sessionId: 's1', path: 'a', functionName: 'f' },
       { sessionId: 's1', target: 'agent-xml' },
       { sessionId: 's1', expectedHeadSha: sha(), verdict: 'comment' },
       { sessionId: 's1', expectedHeadSha: sha() },
@@ -1112,11 +1085,6 @@ function stubServices(
       inspectRepository: notWired,
       ...overrides,
     },
-    impact: {
-      getImpact: notWired,
-      getImpactForRenderer: notWired,
-      observeHead: noop,
-    },
     files: {
       getTree: notWired,
       getFilePair: notWired,
@@ -1167,7 +1135,6 @@ function stubServices(
       transition: notWired,
       reorder: notWiredError,
       stageReviewFinding: notWired,
-      stageImpactFinding: notWired,
       setVerdict: notWiredError,
       export: notWired,
       onChanged: (): (() => void) => {
@@ -1268,8 +1235,4 @@ function doNothingSync(): void {
 
 async function doNothing(): Promise<void> {
   // Stub services own no resources.
-}
-
-function noop(): void {
-  // stands in for a callback the test never reaches
 }

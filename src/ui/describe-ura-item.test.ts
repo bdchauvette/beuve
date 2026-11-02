@@ -38,16 +38,8 @@ describe('describeUraItem', () => {
     });
     const file = createUraItemView({
       placement: { kind: 'current', anchor: { kind: 'file', path: 'README.md' } },
-      origin: {
-        kind: 'impact-finding',
-        metric: 'cognitive-complexity',
-        functionName: 'f',
-        value: 20,
-        threshold: 15,
-        percentile: 90,
-      },
     });
-    expect(describeUraItem(file)).toMatchObject({ anchor: 'README.md', origin: 'ImpactGate' });
+    expect(describeUraItem(file)).toMatchObject({ anchor: 'README.md', origin: 'human' });
     const change = createUraItemView({
       placement: { kind: 'current', anchor: { kind: 'change' } },
     });

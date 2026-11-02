@@ -25,8 +25,6 @@ const entrypointFiles = [
   'src/ui/settings-entry.ts',
   'src/ui/testing/hostile-harness-entry.ts',
   'scripts/**/*.ts',
-  'src/main/impact/impact-worker.ts',
-  'src/main/impact/testing/scripted-impact-worker.ts',
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
 const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => {

@@ -138,7 +138,6 @@ async function launch(): Promise<void> {
           ...(githubApiBase !== undefined && { apiBase: githubApiBase }),
         },
         syntax: { wasmDirectory: path.join(import.meta.dirname, 'wasm') },
-        impactWorkerUrl: path.join(import.meta.dirname, 'impact-worker.js'),
       }),
       preloadPath: path.join(import.meta.dirname, '../preload/index.cjs'),
       indexHtmlPath: path.join(import.meta.dirname, '../ui/index.html'),

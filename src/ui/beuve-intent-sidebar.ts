@@ -5,7 +5,6 @@ import { customElement, property } from 'lit/decorators.js';
 import type {
   DiffFileView,
   FileReviewStateView,
-  ImpactView,
   PullRequestSessionView,
   RepositoryTreeView,
 } from '#contract/ipc-contract.ts';
@@ -105,7 +104,6 @@ export class BeuveIntentSidebar extends LitElement {
   /** The open review's files and the head's tree, for the radar tree. */
   @property({ attribute: false }) accessor files: readonly DiffFileView[] | undefined;
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
-  @property({ attribute: false }) accessor impact: ImpactView | undefined;
   /** Generated review files, dimmed in the tree (ADR 0052). */
   @property({ attribute: false }) accessor generatedPaths: ReadonlySet<string> = new Set();
   @property() accessor treeMode: RadarTreeMode = 'neighborhood';
@@ -133,7 +131,6 @@ export class BeuveIntentSidebar extends LitElement {
       <beuve-radar-tree
         .tree=${this.tree}
         .files=${files}
-        .impact=${this.impact}
         .generatedPaths=${this.generatedPaths}
         .reviewMarks=${this.reviewMarks}
         .mode=${this.treeMode}

@@ -16,7 +16,6 @@ import type {
   ChatListRequest,
   ChatListView,
   ChatStreamEvent,
-  ImpactFindingView,
   IpcResult,
   ModelRole,
   ModelTestView,
@@ -60,7 +59,6 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { ImpactServices } from '../impact/create-impact-services.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { loadSession } from '../sessions/load-session.ts';
@@ -115,7 +113,6 @@ export interface ChatServices {
 
 export interface ChatServicesOptions {
   readonly context: SessionContext;
-  readonly impact: Pick<ImpactServices, 'getImpact'>;
   readonly worktrees: Pick<SessionWorktrees, 'acquire'>;
   /** Request timeouts; how the CLI entry runs is in `models.claude`. */
   readonly claude?: ClaudeCodeSettings;
@@ -185,7 +182,6 @@ type Outcome =
 
 /** What {@link createChatServices}' `prepare` reads before a request asks its models. */
 interface Preparation {
-  readonly withImpact: boolean;
   /** The models the request will ask; a checkout is leased only if one of them reads it. */
   readonly models: readonly LanguageModel[];
 }
@@ -217,7 +213,6 @@ interface Prepared extends Disposable {
   readonly diff: ReviewDiff;
   readonly worktreePath: string | undefined;
   readonly worktreePaths: ReadonlySet<string> | undefined;
-  readonly findings: readonly ImpactFindingView[] | undefined;
   /** Binds a resolved model to the head's tree, for adapters whose tools read objects. */
   readonly bind: (model: LanguageModel) => LanguageModel;
 }
@@ -226,8 +221,8 @@ interface Prepared extends Disposable {
  * Answers questions and runs `/review`, `/summarize` and `/compact` in the background (ADR 0031's
  * recipe, ADR 0055–0057). `ask` stores the question and its answer and returns; each session runs
  * one request at a time and queues the rest in order, at most `maxQueued` waiting. A request
- * builds the same diff `session:get-review` shows, adds the cached ImpactGate findings, the stored
- * history before its question and the head's paths, checks the head out (ADR 0020) and asks
+ * builds the same diff `session:get-review` shows, adds the stored history before
+ * its question and the head's paths, checks the head out (ADR 0020) and asks
  * the model there. Its progress and text become parts (ADR 0072), pushed as part events as they
  * arrive and stored at most once per interval; every status change is stored, then pushed. Cancelling stops one request, the rest of
  * the queue goes on; moving the head stops the requests asked at the old head; clearing and
@@ -238,7 +233,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
   type AbortReason = 'cancelled' | 'head-changed' | 'cleared' | 'app-quit';
   type Job = AnswerJob | CompactJob | ProbeJob;
 
-  const { context, impact, worktrees } = options;
+  const { context, worktrees } = options;
   const { db, logger } = context;
   const claude = options.claude ?? {};
   const previewInterval = options.previewInterval ?? Temporal.Duration.from({ seconds: 1 });
@@ -340,19 +335,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       abort(job, 'head-changed');
       return err({ status: 'cancelled' });
     }
-    let findings: readonly ImpactFindingView[] | undefined;
-    if (preparation.withImpact) {
-      const impactView = await impact.getImpact(
-        { sessionId: job.sessionId },
-        { signal: job.controller.signal },
-      );
-      if (impactView.ok && impactView.value.headSha === job.headSha) {
-        findings = impactView.value.findings;
-      }
-    }
-    if (isAborted()) {
-      return err({ status: 'cancelled' });
-    }
     let worktree: WorktreeLease | undefined;
     if (preparation.models.some((model) => model.capabilities.checkout)) {
       const leased = await worktrees.acquire(
@@ -386,7 +368,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       diff: diff.value,
       worktreePath: worktree?.path,
       worktreePaths,
-      findings,
       bind: (model): LanguageModel => {
         return bindModelTree(model, tree);
       },
@@ -454,7 +435,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return model.error;
     }
-    const prepared = await prepare(job, { withImpact: true, models: [model.value.model] });
+    const prepared = await prepare(job, { models: [model.value.model] });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -467,7 +448,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       summary: summaryTextOf(before.value),
       selections: job.selections,
       focus: job.request.focus,
-      impactFindings: prepared.value.findings,
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
@@ -485,7 +465,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return model.error;
     }
-    const prepared = await prepare(job, { withImpact: false, models: [model.value.model] });
+    const prepared = await prepare(job, { models: [model.value.model] });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -497,7 +477,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       task: { kind: 'abstract' },
       history: [],
       focus: undefined,
-      impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
     return await askModel(job, {
@@ -583,7 +562,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (verifier?.ok === true) {
       models.push(verifier.value.model);
     }
-    const prepared = await prepare(job, { withImpact: true, models });
+    const prepared = await prepare(job, { models });
     if (!prepared.ok) {
       return prepared.error;
     }
@@ -599,7 +578,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       task,
       history: [],
       focus: undefined,
-      impactFindings: prepared.value.findings,
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
     });
@@ -752,7 +730,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
     if (!model.ok) {
       return failed(model.error);
     }
-    const prepared = await prepare(job, { withImpact: false, models: [model.value.model] });
+    const prepared = await prepare(job, { models: [model.value.model] });
     if (!prepared.ok) {
       return failed(prepared.error);
     }
@@ -763,7 +741,6 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       question: '',
       history: [],
       focus: undefined,
-      impactFindings: undefined,
       worktreePaths: prepared.value.worktreePaths,
     });
     const summary = summaryTextOf(stored.value);

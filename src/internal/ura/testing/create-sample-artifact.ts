@@ -35,7 +35,7 @@ export function createSampleArtifact(verdict?: UraArtifactVerdict): UraArtifact 
 
 /**
  * One entry of each interesting shape: a multi-line blocker with a pure-replacement patch, a
- * single-line ImpactGate finding, a file-level question with a non-replacement patch, a
+ * single-line review finding, a file-level question with a non-replacement patch, a
  * whole-change praise, and an outdated review finding with text that needs escaping.
  */
 function sampleEntries(): UraEntry[] {
@@ -59,15 +59,8 @@ function sampleEntries(): UraEntry[] {
     id: id(2),
     headSha: laterHeadSha,
     anchor: { kind: 'lines', path: 'src/parse.ts', startLine: 30, endLine: 30 },
-    origin: {
-      kind: 'impact-finding',
-      metric: 'cognitive-complexity',
-      functionName: 'parseAll',
-      value: 22,
-      threshold: 15,
-      percentile: 97.5,
-    },
-    title: 'Cognitive complexity 22 exceeds 15 in parseAll',
+    origin: { kind: 'chat-answer', messageId: 'msg-1', finding: 0 },
+    title: 'parseAll never checks for an empty list',
     body: '',
   });
   const question = createTestUraItem({

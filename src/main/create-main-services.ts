@@ -40,10 +40,6 @@ import { createClonePathSettings } from './github/create-clone-path-settings.ts'
 import { createGithubClients } from './github/create-github-clients.ts';
 import { createGithubServices } from './github/create-github-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
-import { createImpactServices } from './impact/create-impact-services.ts';
-import type { ImpactServices } from './impact/create-impact-services.ts';
-import { createImpactWorker } from './impact/create-impact-worker.ts';
-import type { ImpactRunner } from './impact/create-impact-worker.ts';
 import { createOrderServices } from './order/create-order-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
@@ -98,13 +94,6 @@ export interface MainServicesOptions {
   readonly caching?: boolean;
   /** The packaged app passes `wasmDirectory`; tests load grammars from `node_modules`. */
   readonly syntax?: SyntaxParserOptions;
-  /**
-   * The ImpactGate worker script (ADR 0053). The bundled app passes `dist/main/impact-worker.js`;
-   * tests and `node` run the TypeScript source beside `create-impact-worker.ts`.
-   */
-  readonly impactWorkerUrl?: URL | string;
-  /** Replaces the ImpactGate worker outright, so tests can hold a computation in flight. */
-  readonly impactRunner?: ImpactRunner;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
   /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
@@ -172,12 +161,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   const heads: {
     ura: UraServices | undefined;
     chat: ChatServices | undefined;
-    impact: ImpactServices | undefined;
-  } = { ura: undefined, chat: undefined, impact: undefined };
+  } = { ura: undefined, chat: undefined };
   const onHeadMoved = (sessionId: string, headSha: CommitSha): void => {
     heads.ura?.observeHead(sessionId);
     heads.chat?.observeHead(sessionId, headSha);
-    heads.impact?.observeHead(sessionId, headSha);
   };
   const caches = createGitCaches({ enabled: options.caching !== false, logger });
   const context: SessionContext = {
@@ -214,16 +201,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
   );
   const parser = createSyntaxParser(options.syntax);
-  const impactRunner =
-    options.impactRunner ??
-    createImpactWorker({
-      logger,
-      workerUrl: options.impactWorkerUrl,
-      wasmDirectory: options.syntax?.wasmDirectory,
-      maxSourceLength: options.syntax?.maxSourceLength,
-    });
-  const impact = createImpactServices({ context, runner: impactRunner });
-  heads.impact = impact;
   const multiplexer = createLspMultiplexer({
     servers: languageServersFor(options.nodeRuntime),
     trustWorkspaceBinaries: false,
@@ -251,7 +228,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   });
   const chat = createChatServices({
     context,
-    impact,
     worktrees,
     models: {
       registry,
@@ -270,7 +246,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
   });
   heads.chat = chat;
-  const ura = createUraServices({ context, impact });
+  const ura = createUraServices({ context });
   heads.ura = ura;
   const terminal = createTerminalServices({
     context,
@@ -316,7 +292,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   });
   return {
     sessions,
-    impact,
     files,
     order: createOrderServices({
       context,
@@ -372,7 +347,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     }),
     mcpTools: createMcpTools({
       context,
-      impact,
       lsp,
       ura,
       github,
@@ -394,7 +368,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       github.dispose();
       terminal.dispose();
       await chat.dispose();
-      impactRunner.dispose();
       await multiplexer.dispose();
       await worktrees.settled();
       await caches[Symbol.asyncDispose]();

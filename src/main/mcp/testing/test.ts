@@ -19,12 +19,9 @@ export const test = baseTest
       getLspDiagnostics: async () => {
         return notImplemented();
       },
-      runImpactCheck: async () => {
-        await Promise.resolve();
-        return ok({ breaches: [] });
-      },
       readHumanReview: async () => {
-        return notImplemented();
+        await Promise.resolve();
+        return ok({ structured: { schema: 'beuve.ura/1' }, text: '<beuve-review/>' });
       },
     };
     const handle = okValueFrom(

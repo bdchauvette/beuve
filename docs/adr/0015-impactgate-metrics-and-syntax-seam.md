@@ -1,6 +1,6 @@
 # 0015. ImpactGate metrics, and the seam between syntax and impact
 
-- Status: Accepted
+- Status: Superseded by [0102](0102-drop-impactgate-and-credit-its-sources.md)
 - Date: 2026-10-28
 
 ## Context
