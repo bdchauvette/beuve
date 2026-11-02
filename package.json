@@ -37,6 +37,7 @@
     "format:ci": "prettier --check .",
     "deps": "depcruise src --config .dependency-cruiser.js",
     "deps:ci": "npm run deps",
+    "audit:ci": "npm audit --audit-level=high",
     "test": "vitest run",
     "test:ci": "vitest run --reporter=default --reporter=github-actions",
     "test:watch": "vitest",
