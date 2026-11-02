@@ -25,6 +25,8 @@ export interface AppMenusOptions {
   readonly isPackaged: boolean;
   /** Runs a command whose catalog `handler` is `main` (Settings, About, …). */
   readonly runMain: (id: CommandId, window: BrowserWindow | undefined) => void;
+  /** Opens and tracks a new main window, for commands that `opensMainWindow`. */
+  readonly openMainWindow: () => BrowserWindow;
   readonly logger: Logger;
 }
 
@@ -75,6 +77,13 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
       options.runMain(command.id as CommandId, window);
       return;
     }
+    if (command.opensMainWindow === true && !hasMainWindow()) {
+      const opened = options.openMainWindow();
+      opened.webContents.once('did-finish-load', () => {
+        sendEvent(opened.webContents, 'menu:run', { id: command.id as CommandId });
+      });
+      return;
+    }
     const contents = window?.webContents;
     if (contents === undefined || !isEnabled(contents.id, command.id)) {
       logger.debug('menu command not sent', { id });
@@ -88,13 +97,35 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     return kind !== undefined && statesOf(contentsId, kind).get(id)?.enabled === true;
   };
 
+  const hasMainWindow = (): boolean => {
+    return kinds.values().toArray().includes('main');
+  };
+
   const statesOf = (contentsId: number, kind: WindowKind): ReadonlyMap<string, MenuItemState> => {
     const state = states.get(contentsId) ?? emptyState;
-    return yieldToTerminal(menuItemStatesFrom(commandCatalog, kind, state), {
-      catalog: commandCatalog,
-      conditions: state.conditions,
-      platform,
-    });
+    return withWindowOpeners(
+      yieldToTerminal(menuItemStatesFrom(commandCatalog, kind, state), {
+        catalog: commandCatalog,
+        conditions: state.conditions,
+        platform,
+      }),
+    );
+  };
+
+  /** Commands that open a main window are enabled while none is open. */
+  const withWindowOpeners = (
+    base: ReadonlyMap<string, MenuItemState>,
+  ): ReadonlyMap<string, MenuItemState> => {
+    if (hasMainWindow()) {
+      return base;
+    }
+    const opened = new Map(base);
+    for (const command of commandCatalog) {
+      if (command.opensMainWindow === true) {
+        opened.set(command.id, { enabled: true, checked: false });
+      }
+    }
+    return opened;
   };
 
   const build = (): Menu => Menu.buildFromTemplate(withClicks(template, dispatch));
@@ -139,7 +170,10 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
         states.delete(contentsId);
         menus.delete(contentsId);
         if (appMenu !== undefined && BrowserWindow.getFocusedWindow() === null) {
-          applyStates(appMenu, menuItemStatesFrom(commandCatalog, 'settings', emptyState));
+          applyStates(
+            appMenu,
+            withWindowOpeners(menuItemStatesFrom(commandCatalog, 'settings', emptyState)),
+          );
         }
       });
       refresh(contentsId);
