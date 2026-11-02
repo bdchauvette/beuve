@@ -42,7 +42,10 @@ import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
+import './beuve-sidebar-handle.ts';
+import './beuve-sidebar-tabs.ts';
 import './beuve-status-bar.ts';
+import './beuve-titlebar.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
@@ -77,7 +80,10 @@ import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
+import type { SidebarResizeDetail } from './beuve-sidebar-handle.ts';
+import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import { displayChangeFor } from './display-change-for.ts';
+import type { SidebarZone } from './sidebar-zone.ts';
 import { ReviewDataController } from './review-data-controller.ts';
 import { SettingsController } from './settings-controller.ts';
 import type { DisplayTransition } from './settings-controller.ts';
@@ -254,54 +260,6 @@ export class BeuveApp extends LitElement {
       grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(--beuve-statusbar-height);
     }
 
-    .titlebar {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-3);
-      padding: 0 var(--beuve-space-4);
-      border-bottom: 1px solid var(--beuve-border);
-      background: var(--beuve-surface-sunken);
-      -webkit-app-region: drag;
-      user-select: none;
-    }
-
-    :host([data-platform='darwin']) .titlebar {
-      padding-left: 84px;
-    }
-
-    .brand {
-      font-weight: 600;
-    }
-
-    .titlebar button {
-      min-width: 0;
-      padding: 2px var(--beuve-space-2);
-      overflow: hidden;
-      border: 1px solid transparent;
-      border-radius: var(--beuve-radius);
-      background: none;
-      color: var(--beuve-text-muted);
-      font: inherit;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-      -webkit-app-region: no-drag;
-    }
-
-    .titlebar button:hover {
-      border-color: var(--beuve-border);
-      color: var(--beuve-text);
-    }
-
-    .titlebar .spacer {
-      flex: 1;
-    }
-
-    .titlebar kbd {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-    }
-
     .workspace {
       display: grid;
       min-height: 0;
@@ -382,33 +340,6 @@ export class BeuveApp extends LitElement {
       position: relative;
     }
 
-    .sidebar-handle {
-      position: absolute;
-      z-index: 2;
-      top: 0;
-      bottom: 0;
-      left: -3px;
-      width: 6px;
-      cursor: col-resize;
-      touch-action: none;
-    }
-
-    .workspace.left .sidebar-handle {
-      right: -3px;
-      left: auto;
-    }
-
-    .sidebar-handle:hover,
-    .sidebar-handle:focus-visible,
-    .sidebar-handle.dragging {
-      background: var(--beuve-border);
-      outline: none;
-    }
-
-    .sidebar > .sidebar-handle {
-      border: none;
-    }
-
     .sidebar > * {
       border: none;
     }
@@ -422,36 +353,6 @@ export class BeuveApp extends LitElement {
     .sidebar > beuve-chat-drawer {
       flex: 1;
       min-height: 0;
-    }
-
-    /* Intent & files, Review and Chat as three quiet tabs. */
-    .tabs {
-      display: flex;
-      flex: none;
-      gap: var(--beuve-space-4);
-      height: 30px;
-      padding: 0 var(--beuve-space-3);
-      border-bottom: 1px solid var(--beuve-border);
-    }
-
-    .tabs button {
-      padding: 0;
-      border: none;
-      background: none;
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-small);
-      box-shadow: inset 0 -2px 0 transparent;
-      cursor: pointer;
-    }
-
-    .tabs button[aria-selected='true'] {
-      color: var(--beuve-text);
-      box-shadow: inset 0 -2px 0 var(--beuve-border);
-    }
-
-    .tabs .count {
-      margin-left: 3px;
-      color: var(--beuve-text-muted);
     }
 
     .sheet-overlay {
@@ -870,66 +771,20 @@ export class BeuveApp extends LitElement {
   };
 
   /** A notice's button: runs its catalog command as the menu would. */
-  private readonly onSidebarHandleDown = (event: PointerEvent): void => {
-    if (event.button !== 0) {
-      return;
-    }
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    this.isResizingSidebar = true;
-    event.preventDefault();
+  private readonly onSidebarResize = (event: CustomEvent<SidebarResizeDetail>): void => {
+    this.sidebarWidth = event.detail.width;
   };
 
-  private readonly onSidebarHandleMove = (event: PointerEvent): void => {
-    if (!this.isResizingSidebar) {
-      return;
-    }
-    const workspace = this.renderRoot.querySelector<HTMLElement>('.workspace');
-    if (workspace === null) {
-      return;
-    }
-    const bounds = workspace.getBoundingClientRect();
-    let width = bounds.right - event.clientX;
-    if (this.sidebarSide === 'left') {
-      width = event.clientX - bounds.left;
-    }
-    this.setSidebarWidth({ width, available: bounds.width });
+  private readonly onSidebarTab = (event: CustomEvent<SidebarTabDetail>): void => {
+    this.focusSidebar(event.detail.zone);
   };
 
-  private readonly onSidebarHandleUp = (event: PointerEvent): void => {
-    const handle = event.currentTarget as HTMLElement;
-    if (handle.hasPointerCapture(event.pointerId)) {
-      handle.releasePointerCapture(event.pointerId);
-    }
-    this.isResizingSidebar = false;
+  private readonly onTitlebarOpen = (): void => {
+    this.showOpenDialog();
   };
 
-  private readonly onSidebarHandleReset = (): void => {
-    this.sidebarWidth = undefined;
-  };
-
-  private readonly onSidebarHandleKey = (event: KeyboardEvent): void => {
-    const growKey = growKeys[this.sidebarSide];
-    const shrinkKey = growKeys[otherSides[this.sidebarSide]];
-    if (event.key !== growKey && event.key !== shrinkKey) {
-      return;
-    }
-    const workspace = this.renderRoot.querySelector<HTMLElement>('.workspace');
-    const sidebar = this.renderRoot.querySelector<HTMLElement>('.sidebar');
-    if (workspace === null || sidebar === null) {
-      return;
-    }
-    let step = 16;
-    if (event.shiftKey) {
-      step = 64;
-    }
-    if (event.key === shrinkKey) {
-      step = -step;
-    }
-    this.setSidebarWidth({
-      width: sidebar.getBoundingClientRect().width + step,
-      available: workspace.clientWidth,
-    });
-    event.preventDefault();
+  private readonly onTitlebarSearch = (): void => {
+    this.runAppCommand('palette');
   };
 
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
@@ -1071,7 +926,6 @@ export class BeuveApp extends LitElement {
   @state() accessor sidebarHidden = false;
   /** Dragged sidebar width in px; `undefined` is the stylesheet's responsive default. */
   @state() accessor sidebarWidth: number | undefined = undefined;
-  @state() accessor isResizingSidebar = false;
   /** The terminal panel under the diff (ADR 0095); its shells run on while it is hidden. */
   @state() accessor terminalShown = false;
   @state() accessor isTerminalFocused = false;
@@ -2452,29 +2306,14 @@ export class BeuveApp extends LitElement {
   }
 
   private renderTitlebar(): TemplateResult {
-    return html`<div class="titlebar">
-      <span class="brand">beuve</span>
-      <button
-        type="button"
-        title=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
-        @click=${(): void => {
-          this.showOpenDialog();
-        }}
-      >
-        ${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
-      </button>
-      <span class="spacer"></span>
-      <button
-        type="button"
-        class="search"
-        title=${`Command Palette (${this.shortcut('palette')})`}
-        @click=${(): void => {
-          this.runAppCommand('palette');
-        }}
-      >
-        Search or run a command
-      </button>
-    </div>`;
+    return html`<beuve-titlebar
+      .label=${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
+      .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
+      .searchTitle=${`Command Palette (${this.shortcut('palette')})`}
+      .platform=${this.appInfo?.platform ?? ''}
+      @beuve-titlebar-open=${this.onTitlebarOpen}
+      @beuve-titlebar-search=${this.onTitlebarSearch}
+    ></beuve-titlebar>`;
   }
 
   private shortcut(id: CommandId): string {
@@ -2639,49 +2478,23 @@ export class BeuveApp extends LitElement {
 
   /** Intent and files, the review and the chat as quiet tabs (1, 2, 3). */
   private renderTabs(): TemplateResult {
-    const tab = (zone: SidebarZone, label: string, count = 0): TemplateResult => {
-      return html`<button
-        type="button"
-        role="tab"
-        aria-selected=${this.sidebarTab === zone ? 'true' : 'false'}
-        @click=${(): void => {
-          this.focusSidebar(zone);
-        }}
-      >
-        ${label}${count === 0 ? nothing : html`<span class="count">${count}</span>`}
-      </button>`;
-    };
-    const staged = this.ura.stagedCount;
-    return html`<nav class="tabs" role="tablist" aria-label="Sidebar">
-      ${tab('intent', this.github.pullRequest === undefined ? 'Files' : 'Intent & files')}
-      ${tab('ura', 'Review', staged)} ${tab('chat', 'Chat')}
-    </nav>`;
+    return html`<beuve-sidebar-tabs
+      .selected=${this.sidebarTab}
+      ?isPullRequest=${this.github.pullRequest !== undefined}
+      .stagedCount=${this.ura.stagedCount}
+      @beuve-sidebar-tab=${this.onSidebarTab}
+    ></beuve-sidebar-tabs>`;
   }
 
   private renderSidebar(): TemplateResult {
     return html`<div class="sidebar">
-      <div
-        class="sidebar-handle ${this.isResizingSidebar ? 'dragging' : ''}"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        aria-valuemin=${minSidebarWidth}
-        aria-valuenow=${this.sidebarWidth ?? 0}
-        tabindex="0"
-        @pointerdown=${this.onSidebarHandleDown}
-        @pointermove=${this.onSidebarHandleMove}
-        @pointerup=${this.onSidebarHandleUp}
-        @pointercancel=${this.onSidebarHandleUp}
-        @dblclick=${this.onSidebarHandleReset}
-        @keydown=${this.onSidebarHandleKey}
-      ></div>
+      <beuve-sidebar-handle
+        .side=${this.sidebarSide}
+        .width=${this.sidebarWidth}
+        @beuve-sidebar-resize=${this.onSidebarResize}
+      ></beuve-sidebar-handle>
       ${this.renderTabs()} ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
     </div>`;
-  }
-
-  private setSidebarWidth(options: SidebarWidthOptions): void {
-    const max = Math.max(minSidebarWidth, Math.min(maxSidebarWidth, options.available * 0.6));
-    this.sidebarWidth = Math.round(Math.min(max, Math.max(minSidebarWidth, options.width)));
   }
 
   private onTerminalFocus(event: CustomEvent<TerminalFocusDetail>): void {
@@ -2829,22 +2642,6 @@ export class BeuveApp extends LitElement {
     }
   }
 }
-
-type SidebarZone = Exclude<ZoneId, 'diff'>;
-
-interface SidebarWidthOptions {
-  readonly width: number;
-  readonly available: number;
-}
-
-/** The arrow key that widens the sidebar on each side. */
-const growKeys: Readonly<Record<SidebarSideView, string>> = {
-  left: 'ArrowRight',
-  right: 'ArrowLeft',
-};
-
-const minSidebarWidth = 240;
-const maxSidebarWidth = 900;
 
 const paletteOpenings: Readonly<Record<'palette' | 'go-to-file', string>> = {
   palette: '',
