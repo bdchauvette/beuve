@@ -4,7 +4,7 @@ import type { BeuveApi } from '#contract/ipc-contract.ts';
 
 import type { StatusNotice } from '../describe-editor-open.ts';
 import { GithubController } from '../github-controller.ts';
-import type { GithubReviewRef } from '../github-controller.ts';
+import type { ReviewRef } from '../review-ref.ts';
 
 /** A {@link GithubController} wired to fakes, with what the fakes saw. */
 export interface GithubHarness {
@@ -25,7 +25,7 @@ export interface GithubHarness {
 /** Options of {@link createGithubHarness}. */
 export interface GithubHarnessOptions {
   /** The open review; none by default. */
-  readonly review?: GithubReviewRef;
+  readonly review?: ReviewRef;
   /** The whole result each channel's `invoke` answers with; unlisted channels answer `ok`. */
   readonly replies?: Readonly<Record<string, unknown>>;
 }
@@ -63,7 +63,7 @@ export function createGithubHarness(options: GithubHarnessOptions = {}): GithubH
     bridge: (): BeuveApi => {
       return bridge;
     },
-    review: (): GithubReviewRef | undefined => {
+    review: (): ReviewRef | undefined => {
       return options.review;
     },
     notify: (notice): void => {
