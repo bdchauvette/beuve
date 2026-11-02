@@ -25,3 +25,7 @@ Chat answers were parsed by a small subset (`parseMarkdownSubset` through `parse
 - Answers show real headings, nested lists, quotes, tables and highlighted code, live and stored alike. Each highlighted block is one `@pierre/diffs` `File`; a very code-heavy transcript costs what as many small sheets would.
 - The Markdown subset is ours to maintain and grows by test cases; anything outside it stays visible as text rather than disappearing. A block that turns out different once the final text arrives (citations validated, unknown paths turned into code) is rebuilt, which is the one moment a finished block changes.
 - Links outside GitHub can't be opened from the chat (main's rule), only read in their tooltip. Amended 2026-10-30: any http(s) link opens, through `shell:open-url` (ADR 0040's amendment).
+
+## Amendment 2026-11-02: pull request bodies and finding bodies use the same parser
+
+A pull request description and an insight note's body now render through `parseMarkdown` and `createMarkdownNodes` (with `createPlainMarkdownRenderers`: markers as text, code as a plain `<pre>`), so they get tables, nested lists, headings and quotes like chat. `parsePullRequestMarkdown` is gone. Links in a pull request body are any `http(s)` link (`safeHrefFrom`); `beuve-open-link` still opens only GitHub ones (ADR 0040). `parseMarkdownSubset` now serves only one-line titles (`parseInlineTitle`).

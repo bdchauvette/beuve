@@ -665,13 +665,46 @@ export class BeuveFileCard extends LitElement {
         white-space: normal;
       }
 
-      .insight-text p,
-      .insight-text ul {
+      .insight-text :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
         margin: 0 0 var(--beuve-space-1);
       }
 
-      .insight-text ul {
+      .insight-text :is(h1, h2, h3, h4, h5, h6) {
+        font: inherit;
+        font-weight: 600;
+      }
+
+      .insight-text :is(ul, ol) {
         padding-left: var(--beuve-space-4);
+      }
+
+      .insight-text .table {
+        overflow-x: auto;
+      }
+
+      .insight-text table {
+        border-collapse: collapse;
+        font: inherit;
+      }
+
+      .insight-text :is(th, td) {
+        padding: 1px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        text-align: start;
+        vertical-align: top;
+      }
+
+      .insight-text th {
+        background: var(--beuve-surface-sunken);
+        font-weight: 600;
+      }
+
+      .insight-text .align-center {
+        text-align: center;
+      }
+
+      .insight-text .align-right {
+        text-align: end;
       }
 
       .insight-text pre {

@@ -6,14 +6,15 @@ import type { PullRequestSessionView, PullRequestStackEntryView } from '#contrac
 
 import { ActionDelegation } from './action-delegation.ts';
 import { describePullRequestState } from './describe-pull-request-state.ts';
-import { parsePullRequestMarkdown } from './parse-pull-request-markdown.ts';
-import type { BodyBlock, BodySpan } from './parse-pull-request-markdown.ts';
+import { createMarkdownNodes } from './create-markdown-nodes.ts';
+import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
+import { parseMarkdown } from './parse-markdown.ts';
 
 /**
  * The intent of a pull request session (spec Zone 1, top): its title, state, author and branches,
- * the body rendered with a safe Markdown subset as text nodes, and the stack neighbours as chips.
+ * the body rendered as Markdown (ADR 0073) in text nodes, and the stack neighbours as chips.
  * Links never navigate: they emit `beuve-open-link` with `{ url }`, and main opens GitHub links in
- * the browser (ADR 0040). A chip emits `beuve-open-stack` with `{ ref }`.
+ * the browser (ADR 0040), and only `http(s)` links are links. A chip emits `beuve-open-stack` with `{ ref }`.
  */
 @customElement('beuve-pull-request-intent')
 export class BeuvePullRequestIntent extends LitElement {
@@ -72,13 +73,53 @@ export class BeuvePullRequestIntent extends LitElement {
       overflow-wrap: anywhere;
     }
 
-    .body p,
-    .body ul {
+    .body :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
       margin: 0 0 var(--beuve-space-2);
     }
 
-    .body ul {
+    .body :is(h1, h2, h3, h4, h5, h6) {
+      font: inherit;
+      font-weight: 600;
+    }
+
+    .body :is(ul, ol) {
       padding-left: var(--beuve-space-4);
+    }
+
+    .body blockquote {
+      padding-left: var(--beuve-space-2);
+      border-left: 2px solid var(--beuve-border);
+      color: var(--beuve-text-muted);
+    }
+
+    .body .table {
+      overflow-x: auto;
+    }
+
+    .body table {
+      border-collapse: collapse;
+      font: inherit;
+    }
+
+    .body :is(th, td) {
+      padding: 2px var(--beuve-space-2);
+      border: 1px solid var(--beuve-border);
+      text-align: start;
+      vertical-align: top;
+      overflow-wrap: normal;
+    }
+
+    .body th {
+      background: var(--beuve-surface-sunken);
+      font-weight: 600;
+    }
+
+    .body .align-center {
+      text-align: center;
+    }
+
+    .body .align-right {
+      text-align: end;
     }
 
     .body pre {
@@ -144,6 +185,8 @@ export class BeuvePullRequestIntent extends LitElement {
     }
   `;
 
+  private shownBody: { readonly body: string; readonly nodes: Element[] } | undefined;
+
   @property({ attribute: false }) accessor view: PullRequestSessionView | undefined;
 
   constructor() {
@@ -168,44 +211,13 @@ export class BeuvePullRequestIntent extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
-  private renderSpan(span: BodySpan): TemplateResult | string {
-    switch (span.kind) {
-      case 'text': {
-        return span.text;
-      }
-      case 'code': {
-        return html`<code>${span.text}</code>`;
-      }
-      case 'strong': {
-        return html`<strong>${span.text}</strong>`;
-      }
-      case 'emphasis': {
-        return html`<em>${span.text}</em>`;
-      }
-      case 'link': {
-        return html`<a href=${span.href} title=${span.href} data-action="link" data-url=${span.href}
-          >${span.text}</a
-        >`;
-      }
+  /** The body's nodes, built once per body text so a re-render keeps them (and a selection). */
+  private bodyNodes(body: string): Element[] {
+    if (this.shownBody?.body !== body) {
+      const nodes = createMarkdownNodes(parseMarkdown(body), createPlainMarkdownRenderers());
+      this.shownBody = { body, nodes };
     }
-  }
-
-  private renderBlock(block: BodyBlock): TemplateResult {
-    switch (block.kind) {
-      case 'paragraph': {
-        return html`<p>${block.spans.map((span) => this.renderSpan(span))}</p>`;
-      }
-      case 'list': {
-        return html`<ul>
-          ${block.items.map((item) => {
-            return html`<li>${item.map((span) => this.renderSpan(span))}</li>`;
-          })}
-        </ul>`;
-      }
-      case 'code': {
-        return html`<pre>${block.text}</pre>`;
-      }
-    }
+    return this.shownBody.nodes;
   }
 
   private renderChip(entry: PullRequestStackEntryView, direction: '↑' | '↓'): TemplateResult {
@@ -230,7 +242,7 @@ export class BeuvePullRequestIntent extends LitElement {
     }
     const { pullRequest, stack } = view;
     const badge = describePullRequestState(pullRequest);
-    const blocks = parsePullRequestMarkdown(pullRequest.body);
+    const bodyNodes = this.bodyNodes(pullRequest.body);
     const chips = [
       ...stack.parents.map((entry) => this.renderChip(entry, '↑')),
       ...stack.children.map((entry) => this.renderChip(entry, '↓')),
@@ -254,9 +266,9 @@ export class BeuvePullRequestIntent extends LitElement {
         ${pullRequest.baseBranch} ← ${pullRequest.headBranch}
       </div>
       ${
-        blocks.length === 0
+        bodyNodes.length === 0
           ? html`<p class="empty">No description.</p>`
-          : html`<div class="body">${blocks.map((block) => this.renderBlock(block))}</div>`
+          : html`<div class="body">${bodyNodes}</div>`
       }
       ${chips.length === 0 ? nothing : html`<div class="stack" aria-label="Stack">${chips}</div>`}
     `;
