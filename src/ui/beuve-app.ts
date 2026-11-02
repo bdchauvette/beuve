@@ -36,10 +36,11 @@ import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
 import './beuve-intent-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
-import './beuve-sidebar-handle.ts';
-import './beuve-sidebar-tabs.ts';
+import './beuve-dialog.ts';
+import './beuve-sidebar.ts';
 import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
+import './beuve-workspace.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
@@ -156,7 +157,6 @@ import { isTextFocused } from './is-text-focused.ts';
  * keys the shell already handles. Owns all bridge calls and session state; zones are
  * presentational and report user intent with events.
  */
-
 @customElement('beuve-app')
 export class BeuveApp extends LitElement {
   static override styles = css`
@@ -164,23 +164,6 @@ export class BeuveApp extends LitElement {
       display: grid;
       height: 100%;
       grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(--beuve-statusbar-height);
-    }
-
-    .workspace {
-      display: grid;
-      min-height: 0;
-      grid-template-columns: minmax(0, 1fr) var(--beuve-sidebar-width);
-      grid-template-areas: 'main side';
-    }
-
-    .workspace.left {
-      grid-template-columns: var(--beuve-sidebar-width) minmax(0, 1fr);
-      grid-template-areas: 'side main';
-    }
-
-    .workspace.solo {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'main';
     }
 
     .main {
@@ -227,40 +210,6 @@ export class BeuveApp extends LitElement {
       color: var(--beuve-text-muted);
     }
 
-    .sidebar {
-      grid-area: side;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      min-height: 0;
-      border-left: 1px solid var(--beuve-border);
-      background: var(--beuve-surface);
-    }
-
-    .workspace.left .sidebar {
-      border-right: 1px solid var(--beuve-border);
-      border-left: none;
-    }
-
-    .sidebar {
-      position: relative;
-    }
-
-    .sidebar > * {
-      border: none;
-    }
-
-    .sidebar > [hidden] {
-      display: none;
-    }
-
-    .sidebar > beuve-intent-sidebar,
-    .sidebar > beuve-ura-dock,
-    .sidebar > beuve-chat-drawer {
-      flex: 1;
-      min-height: 0;
-    }
-
     .sheet-overlay {
       position: fixed;
       inset: var(--beuve-titlebar-height) 0 var(--beuve-statusbar-height) auto;
@@ -268,27 +217,6 @@ export class BeuveApp extends LitElement {
       width: min(760px, 62vw);
       border-left: 1px solid var(--beuve-border);
       box-shadow: -8px 0 24px var(--beuve-scrim-soft);
-    }
-
-    .scrim {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding-top: 12vh;
-      background: var(--beuve-scrim-soft);
-    }
-
-    .dialog {
-      width: min(640px, calc(100vw - 48px));
-      box-sizing: border-box;
-      padding: var(--beuve-space-4);
-      border: 1px solid var(--beuve-border);
-      border-radius: 10px;
-      background: var(--beuve-surface);
-      box-shadow: 0 16px 48px #00000040;
     }
   `;
 
@@ -679,6 +607,10 @@ export class BeuveApp extends LitElement {
   /** A notice's button: runs its catalog command as the menu would. */
   private readonly onSidebarResize = (event: CustomEvent<SidebarResizeDetail>): void => {
     this.sidebarWidth = event.detail.width;
+  };
+
+  private readonly onDialogDismiss = (): void => {
+    this.closeOpenDialog();
   };
 
   private readonly onSidebarTab = (event: CustomEvent<SidebarTabDetail>): void => {
@@ -2046,7 +1978,9 @@ export class BeuveApp extends LitElement {
   }
 
   private openPanel(): BeuveOpenPanel | undefined {
-    return this.renderRoot.querySelector<BeuveOpenPanel>('.dialog beuve-open-panel') ?? undefined;
+    return (
+      this.renderRoot.querySelector<BeuveOpenPanel>('beuve-dialog beuve-open-panel') ?? undefined
+    );
   }
 
   /** Puts focus back in the focused zone after an overlay closes. */
@@ -2382,25 +2316,19 @@ export class BeuveApp extends LitElement {
     ></beuve-chat-drawer>`;
   }
 
-  /** Intent and files, the review and the chat as quiet tabs (1, 2, 3). */
-  private renderTabs(): TemplateResult {
-    return html`<beuve-sidebar-tabs
+  private renderSidebar(): TemplateResult {
+    return html`<beuve-sidebar
+      slot="sidebar"
+      .side=${this.sidebarSide}
+      .width=${this.sidebarWidth}
       .selected=${this.sidebarTab}
       ?isPullRequest=${this.github.pullRequest !== undefined}
       .stagedCount=${this.ura.stagedCount}
+      @beuve-sidebar-resize=${this.onSidebarResize}
       @beuve-sidebar-tab=${this.onSidebarTab}
-    ></beuve-sidebar-tabs>`;
-  }
-
-  private renderSidebar(): TemplateResult {
-    return html`<div class="sidebar">
-      <beuve-sidebar-handle
-        .side=${this.sidebarSide}
-        .width=${this.sidebarWidth}
-        @beuve-sidebar-resize=${this.onSidebarResize}
-      ></beuve-sidebar-handle>
-      ${this.renderTabs()} ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
-    </div>`;
+    >
+      ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
+    </beuve-sidebar>`;
   }
 
   private onTerminalFocus(event: CustomEvent<TerminalFocusDetail>): void {
@@ -2435,22 +2363,16 @@ export class BeuveApp extends LitElement {
 
   override render(): TemplateResult {
     const hasSidebar = this.review !== undefined && !this.sidebarHidden;
-    const workspace: string[] = [];
-    if (!hasSidebar) {
-      workspace.push('solo');
-    }
-    if (this.sidebarSide === 'left') {
-      workspace.push('left');
-    }
     return html`
       ${this.renderTitlebar()}
-      <div
-        class="workspace ${workspace.join(' ')}"
-        style=${this.sidebarWidth === undefined ? '' : `--beuve-sidebar-width: ${String(this.sidebarWidth)}px`}
+      <beuve-workspace
+        .side=${this.sidebarSide}
+        ?hasSidebar=${hasSidebar}
+        .sidebarWidth=${this.sidebarWidth}
       >
-        <div class="main">${this.renderDiff()}${this.renderTerminal()}</div>
+        <div class="main" slot="main">${this.renderDiff()}${this.renderTerminal()}</div>
         ${hasSidebar ? this.renderSidebar() : nothing}
-      </div>
+      </beuve-workspace>
       <beuve-status-bar
         .lspServers=${this.lspServers}
         .mcpStatus=${this.mcpStatus}
@@ -2487,18 +2409,9 @@ export class BeuveApp extends LitElement {
       }
       ${
         this.openDialog
-          ? html`<div
-              class="scrim"
-              @click=${(event: MouseEvent): void => {
-                if (event.target === event.currentTarget) {
-                  this.closeOpenDialog();
-                }
-              }}
-            >
-              <div class="dialog" role="dialog" aria-modal="true" aria-label="Open">
-                ${this.renderOpenPanel(true, undefined)}
-              </div>
-            </div>`
+          ? html`<beuve-dialog label="Open" @beuve-dialog-dismiss=${this.onDialogDismiss}>
+              ${this.renderOpenPanel(true, undefined)}
+            </beuve-dialog>`
           : nothing
       }
       ${

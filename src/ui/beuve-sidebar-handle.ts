@@ -14,8 +14,8 @@ export interface SidebarResizeDetail {
 
 /**
  * The strip on the sidebar's inner edge that resizes it: drag it, use the arrow keys (Shift for
- * bigger steps) or double-click to go back to the default width. It sits in the sidebar element,
- * which sits in the workspace, and reads their sizes from there. Emits `beuve-sidebar-resize`
+ * bigger steps) or double-click to go back to the default width. It sits in the sidebar's shadow
+ * root, and the sidebar sits in the workspace; it reads their sizes from there. Emits `beuve-sidebar-resize`
  * with a {@link SidebarResizeDetail}; the owner stores the width and sets it on the workspace.
  */
 @customElement('beuve-sidebar-handle')
@@ -58,8 +58,8 @@ export class BeuveSidebarHandle extends LitElement {
     if (!this.dragging) {
       return;
     }
-    const workspace = this.workspace();
-    if (workspace === undefined) {
+    const workspace = this.sidebar()?.parentElement;
+    if (workspace === null || workspace === undefined) {
       return;
     }
     const bounds = workspace.getBoundingClientRect();
@@ -82,9 +82,9 @@ export class BeuveSidebarHandle extends LitElement {
   };
 
   private readonly press = (event: KeyboardEvent): void => {
-    const workspace = this.workspace();
-    const sidebar = this.parentElement;
-    if (workspace === undefined || sidebar === null) {
+    const sidebar = this.sidebar();
+    const workspace = sidebar?.parentElement;
+    if (sidebar === undefined || workspace === null || workspace === undefined) {
       return;
     }
     const width = sidebarWidthForKey({
@@ -109,8 +109,13 @@ export class BeuveSidebarHandle extends LitElement {
 
   @property({ type: Boolean, reflect: true }) accessor dragging = false;
 
-  private workspace(): HTMLElement | undefined {
-    return this.parentElement?.parentElement ?? undefined;
+  /** The sidebar element this handle sits in; the workspace is its parent. */
+  private sidebar(): HTMLElement | undefined {
+    const root = this.getRootNode();
+    if (root instanceof ShadowRoot && root.host instanceof HTMLElement) {
+      return root.host;
+    }
+    return undefined;
   }
 
   private resize(width: number | undefined): void {
