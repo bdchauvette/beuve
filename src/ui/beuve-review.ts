@@ -55,6 +55,12 @@ import type { SidebarResizeDetail } from './beuve-sidebar-handle.ts';
 import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
 import type { AppActions } from './app-actions.ts';
+import { citationPlace } from './citation-place.ts';
+import { describeOutsideDiff } from './describe-outside-diff.ts';
+import { fileOfMention } from './file-of-mention.ts';
+import { mentionTargetFromItem } from './mention-target-from-item.ts';
+import { mentionTargetFromPalette } from './mention-target-from-palette.ts';
+import { CodeNavigationController } from './code-navigation-controller.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { dockItemOf } from './dock-item-of.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
@@ -69,23 +75,17 @@ import type { GithubPostDetail } from './github-controller.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
-import { mentionFromTarget } from './mention-from-target.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
-import { targetFromAnchor } from './target-from-anchor.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import { planChatStage } from './plan-chat-stage.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
-import type { FlowState } from './flow-state.ts';
 import type { GithubDockState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
-import type { PeekChildren, PeekState } from './peek-state.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
-import { runSheetAction } from './run-sheet-action.ts';
 import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
-import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import type {
@@ -114,8 +114,6 @@ import type {
 } from './app-event-details.ts';
 import { signInHintOf } from './sign-in-hint-of.ts';
 import { sheetActionFrom } from './sheet-action-from.ts';
-import { peekStateFrom } from './peek-state-from.ts';
-import { flowStateFrom } from './flow-state-from.ts';
 import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
 import { isEditableElement } from './is-editable-element.ts';
 
@@ -270,7 +268,7 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onPeekRequest = (event: CustomEvent<LineRequestDetail>): void => {
-    void this.openPeek(event.detail.path, event.detail.line);
+    void this.navigation.openPeek(event.detail.path, event.detail.line);
   };
 
   private readonly onSheetRequest = (event: CustomEvent<SheetOpenDetail>): void => {
@@ -278,16 +276,16 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onSheetClose = (): void => {
-    this.inlineSheet = undefined;
+    this.navigation.closeSheet();
     this.focusedZone = 'diff';
   };
 
   private readonly onPeekExpand = (event: CustomEvent<PeekExpandDetail>): void => {
-    void this.expandPeek(event.detail.nodeId);
+    void this.navigation.expandPeek(event.detail.nodeId);
   };
 
   private readonly onPeekClose = (): void => {
-    this.peek = undefined;
+    this.navigation.closePeek();
   };
 
   private readonly onTokenHover = (event: CustomEvent<HoverPoint>): void => {
@@ -315,11 +313,11 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onFlowRequest = (event: CustomEvent<LineRequestDetail>): void => {
-    void this.openFlow(event.detail.path, event.detail.line);
+    void this.navigation.openFlow(event.detail.path, event.detail.line);
   };
 
   private readonly onFlowClose = (): void => {
-    this.flow = undefined;
+    this.navigation.closeFlow();
   };
 
   private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
@@ -504,6 +502,18 @@ export class BeuveReview extends LitElement {
   /** The chat answer a context menu was opened on, for Stage Answer as a Note. */
   private contextAnswerId: string | undefined;
 
+  private readonly navigation = new CodeNavigationController(this, {
+    bridge: beuveBridge,
+    review: (): ReviewView | undefined => {
+      return this.review;
+    },
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    sheetMode: (): 'window' | 'inline' => {
+      return this.settings.display.sheets ?? 'window';
+    },
+  });
   private shownReview: ReviewView | undefined;
 
   private shownDisplaySide: SidebarSideView | undefined;
@@ -512,14 +522,6 @@ export class BeuveReview extends LitElement {
 
   /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
   @state() accessor suggestionJump: SuggestionJump | undefined;
-
-  @state() accessor peek: PeekState | undefined;
-
-  /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
-  @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
-
-  /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
-  @state() accessor flow: FlowState | undefined;
 
   @state() accessor fileJump: FileJump | undefined;
 
@@ -616,66 +618,6 @@ export class BeuveReview extends LitElement {
     return this.deferralPlan;
   }
 
-  private async openPeek(path: string, line: number | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    this.flow = undefined;
-    if (line === undefined) {
-      this.peek = {
-        path,
-        line,
-        status: 'error',
-        message: 'This file has no head-side change to peek at.',
-      };
-      return;
-    }
-    const pending: PeekState = { path, line, status: 'loading' };
-    this.peek = pending;
-    const answer = await bridge.invoke('lsp:call-hierarchy', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-      path,
-      line,
-      direction: 'incoming',
-    });
-    if (this.peek !== pending || this.review !== review) {
-      return;
-    }
-    this.peek = peekStateFrom(path, line, answer);
-  }
-
-  private async openFlow(path: string, line: number | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    this.peek = undefined;
-    if (line === undefined) {
-      this.flow = {
-        path,
-        line,
-        status: 'error',
-        message: 'This file has no head-side change to draw a flow for.',
-      };
-      return;
-    }
-    const pending: FlowState = { path, line, status: 'loading' };
-    this.flow = pending;
-    const answer = await bridge.invoke('flow:get-graph', {
-      sessionId: review.session.id,
-      path,
-      line,
-    });
-    if (this.flow !== pending || this.review !== review) {
-      return;
-    }
-    this.flow = flowStateFrom(path, line, answer);
-  }
-
   /** Restart Language Servers: the head checkout's servers start afresh on the next request. */
   private async restartLanguageServers(): Promise<void> {
     const bridge = beuveBridge();
@@ -711,43 +653,6 @@ export class BeuveReview extends LitElement {
     }
   }
 
-  private async expandPeek(nodeId: string): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, peek } = this;
-    if (bridge === undefined || review === undefined || peek?.status !== 'ready') {
-      return;
-    }
-    const withChildren = (state: PeekState, children: PeekChildren): PeekState => {
-      if (state.status === 'ready') {
-        return { ...state, children: new Map(state.children).set(nodeId, children) };
-      }
-      return state;
-    };
-    this.peek = withChildren(peek, { status: 'loading' });
-    const answer = await bridge.invoke('lsp:call-hierarchy', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-      path: peek.path,
-      line: peek.line ?? 1,
-      direction: 'incoming',
-      nodeId,
-    });
-    const current = this.currentPeek();
-    if (current?.status !== 'ready' || current.root.id !== peek.root.id) {
-      return;
-    }
-    if (answer.ok) {
-      this.peek = withChildren(current, { status: 'ready', calls: answer.value.calls });
-    } else {
-      this.peek = withChildren(current, { status: 'error', message: answer.error.message });
-    }
-  }
-
-  /** Reads the peek state afresh after an await, when it may have changed. */
-  private currentPeek(): PeekState | undefined {
-    return this.peek;
-  }
-
   /** Stages an answer in the review dock as a question note (spec Zone 4). */
   private async stageChatAnswer(messageId: string): Promise<void> {
     const plan = planChatStage(this.chat.entries, messageId, this.diffPaths());
@@ -759,18 +664,11 @@ export class BeuveReview extends LitElement {
 
   private selectionTarget(palette: PaletteSelection | undefined): MentionTarget | string {
     if (palette !== undefined) {
-      const { action } = palette;
-      if (action?.kind === 'file') {
-        return { path: action.path, side: 'head' };
-      }
-      if (action?.kind !== 'ura-item') {
-        return 'Pick a file or a staged note in the palette first.';
-      }
-      const item = this.ura.items.find(({ id }) => id === action.itemId);
-      if (item === undefined) {
-        return 'Pick a file or a staged note in the palette first.';
-      }
-      return this.itemTarget(item);
+      return mentionTargetFromPalette({
+        action: palette.action,
+        items: this.ura.items,
+        files: this.review?.files ?? [],
+      });
     }
     switch (this.focusedZone) {
       case 'ura': {
@@ -778,7 +676,7 @@ export class BeuveReview extends LitElement {
         if (item === undefined) {
           return nothingSelected;
         }
-        return this.itemTarget(item);
+        return mentionTargetFromItem(item, this.review?.files ?? []);
       }
       case 'intent': {
         const path = this.renderRoot
@@ -796,20 +694,6 @@ export class BeuveReview extends LitElement {
         );
       }
     }
-  }
-
-  /** A staged note's lines at this head, or its file, through the diff's own adapter (ADR 0063). */
-  private itemTarget(item: UraItemView): MentionTarget | string {
-    if (item.placement.kind !== 'current') {
-      return 'That note is outdated: its lines are not at this head.';
-    }
-    const target = targetFromAnchor(item.placement.anchor, this.review?.files ?? []);
-    if (target === undefined) {
-      return 'That note’s file is not in this diff.';
-    }
-    return (
-      mentionFromTarget(target) ?? 'That note is on the whole change; pick a line or file note.'
-    );
   }
 
   /** Adds a chip for `target` at the review's head (or base) and focuses the chat input. */
@@ -835,19 +719,9 @@ export class BeuveReview extends LitElement {
 
   /** A chip: show its lines in the diff stream, or say the file is outside the change. */
   private openMention(mention: ChatMentionView): void {
-    const file = this.review?.files.find((candidate) => {
-      if (mention.side === 'base') {
-        return (
-          (candidate.oldPath ?? candidate.path) === mention.path && candidate.status !== 'added'
-        );
-      }
-      return candidate.path === mention.path && candidate.status !== 'deleted';
-    });
+    const file = fileOfMention(mention, this.review?.files ?? []);
     if (file === undefined) {
-      this.chat.note(
-        'info',
-        `${revealFormatControls(mention.path)} is not in this diff: the file is unchanged by the review.`,
-      );
+      this.chat.note('info', describeOutsideDiff(mention.path));
       return;
     }
     this.jumpNonce += 1;
@@ -866,16 +740,9 @@ export class BeuveReview extends LitElement {
 
   /** A citation pill: show the lines in the diff stream, or say the file is outside the change. */
   private openCitation(citation: ChatCitationView): void {
-    const { path, startLine, endLine } = citation;
+    const { path, startLine } = citation;
     if (!this.diffPaths().has(path)) {
-      let lines = String(startLine);
-      if (startLine !== endLine) {
-        lines += `-${String(endLine)}`;
-      }
-      this.chat.note(
-        'info',
-        `${revealFormatControls(path)}:${lines} is not in this diff: the file is unchanged by the review.`,
-      );
+      this.chat.note('info', describeOutsideDiff(citationPlace(citation)));
       return;
     }
     this.jumpNonce += 1;
@@ -961,28 +828,12 @@ export class BeuveReview extends LitElement {
 
   /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
   private async sheetAction(action: SheetAction): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
+    if (!(await this.navigation.runSheet(action))) {
       return;
     }
-    const outcome = await runSheetAction(
-      {
-        bridge,
-        sessionId: review.session.id,
-        headSha: review.headSha,
-        baseSha: review.baseSha,
-        mode: this.settings.display.sheets ?? 'window',
-      },
-      action,
-    );
-    if (outcome.kind === 'inline') {
-      this.inlineSheet = { sha: outcome.sha, place: outcome.place };
-      await this.updateComplete;
-      this.renderRoot.querySelector<HTMLElement>('beuve-sheet-view')?.focus();
-    } else {
-      this.showNotice(outcome.notice);
-    }
+
+    await this.updateComplete;
+    this.renderRoot.querySelector<HTMLElement>('beuve-sheet-view')?.focus();
   }
 
   /** The palette's "commits since the last review": opens them in the stream, focused. */
@@ -1076,8 +927,8 @@ export class BeuveReview extends LitElement {
       }
       .platform=${this.platform}
       .error=${this.session.error}
-      .peek=${this.peek}
-      .flow=${this.flow}
+      .peek=${this.navigation.peek}
+      .flow=${this.navigation.flow}
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.ura.items}
@@ -1637,15 +1488,15 @@ export class BeuveReview extends LitElement {
             ></beuve-hover-card>`
       }
       ${
-        this.inlineSheet === undefined || this.review === undefined
+        this.navigation.inlineSheet === undefined || this.review === undefined
           ? nothing
           : html`<beuve-sheet-view
               class="sheet-overlay"
               mode="inline"
               .api=${beuveBridge()}
               .sessionId=${this.review.session.id}
-              .sha=${this.inlineSheet.sha}
-              .place=${this.inlineSheet.place}
+              .sha=${this.navigation.inlineSheet.sha}
+              .place=${this.navigation.inlineSheet.place}
               @beuve-sheet-close=${this.onSheetClose}
             ></beuve-sheet-view>`
       }
@@ -1668,8 +1519,7 @@ export class BeuveReview extends LitElement {
     }
 
     this.shownReview = review;
-    this.peek = undefined;
-    this.flow = undefined;
+    this.navigation.reset();
     if (review !== undefined) {
       this.focusedZone = 'diff';
     }
