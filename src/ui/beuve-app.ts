@@ -17,8 +17,6 @@ import type {
   EditorSettingsView,
   FileAttributesView,
   FilePairView,
-  FileReviewProgressView,
-  FileReviewStateView,
   FlowFailureKind,
   FlowGraphResponse,
   GithubAuthStatusView,
@@ -26,9 +24,7 @@ import type {
   LspServerView,
   McpStatus,
   OpenPullRequestRequest,
-  RepositoryTreeView,
   ReviewOrderMode,
-  ReviewOrderView,
   ReviewView,
   SessionSummary,
   SetDiffDisplayRequest,
@@ -82,6 +78,7 @@ import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
+import { ReviewDataController } from './review-data-controller.ts';
 import { UraController } from './ura-controller.ts';
 import type { EditorPlace } from './review-edits-controller.ts';
 import type { UraUpdateDetail } from './ura-controller.ts';
@@ -505,6 +502,18 @@ export class BeuveApp extends LitElement {
       this.openDialog = isOpen;
     },
   });
+  private readonly reviewData = new ReviewDataController(this, {
+    bridge: beuveBridge,
+    review: (): ReviewView | undefined => {
+      return this.review;
+    },
+    reviewOrder: (): ReviewOrderMode | undefined => {
+      return this.display.reviewOrder;
+    },
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+  });
   private readonly ura = new UraController(this, {
     bridge: beuveBridge,
     review: (): ReviewRef | undefined => {
@@ -786,7 +795,7 @@ export class BeuveApp extends LitElement {
 
   /** File Reviewed in the stream: mark the file reviewed or take the mark back (ADR 0064). */
   private readonly onFileReviewed = (event: CustomEvent<FileReviewedDetail>): void => {
-    void this.setFileReviewed(event.detail.path, event.detail.reviewed);
+    void this.reviewData.setFileReviewed(event.detail.path, event.detail.reviewed);
   };
 
   private readonly onActiveFile = (event: CustomEvent<ActiveFileDetail>): void => {
@@ -1032,7 +1041,6 @@ export class BeuveApp extends LitElement {
     skipReviewed: false,
   };
   /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
-  @state() accessor fileAttributes: FileAttributesView | undefined;
   @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
@@ -1040,11 +1048,6 @@ export class BeuveApp extends LitElement {
   @state() accessor sessions: readonly SessionSummary[] = [];
   @state() accessor selectedId = '';
   @state() accessor review: ReviewView | undefined;
-  /** The review's reviewed marks by path and their counts (ADR 0064), kept apart from `review`. */
-  @state() accessor reviewMarks: ReadonlyMap<string, FileReviewStateView> = new Map();
-  @state() accessor reviewProgress: FileReviewProgressView | undefined;
-  /** The review's reading order (ADR 0065), once `session:get-order` answers for its head. */
-  @state() accessor order: ReviewOrderView | undefined;
   @state() accessor peek: PeekState | undefined;
   /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
   @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
@@ -1059,8 +1062,6 @@ export class BeuveApp extends LitElement {
   @state() accessor opening = false;
   @state() accessor localFailure: OpenFailure | undefined;
   @state() accessor fileJump: FileJump | undefined;
-  /** The open session head's tracked paths, for the radar tree. */
-  @state() accessor tree: RepositoryTreeView | undefined;
   @state() accessor treeMode: RadarTreeMode = 'diff-only';
   /** The open session's URA items, every status, placed on its current head. */
   /** The language servers beuve has started, as the status bar lists them. */
@@ -1253,7 +1254,7 @@ export class BeuveApp extends LitElement {
     const isOrderChanged = display.reviewOrder !== this.display.reviewOrder;
     this.display = display;
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {
-      void this.loadOrder(this.review);
+      void this.reviewData.reloadOrder(this.review);
     }
     this.sidebarSide = display.sidebarSide;
     if (isWhitespaceChanged && this.selectedId !== '') {
@@ -1379,9 +1380,7 @@ export class BeuveApp extends LitElement {
       this.reviewEdits.clearStatus();
     } else {
       this.review = undefined;
-      this.order = undefined;
-      this.tree = undefined;
-      this.fileAttributes = undefined;
+      this.reviewData.reset();
       this.ura.reset();
       this.chat.reset();
       this.github.reset();
@@ -1406,15 +1405,12 @@ export class BeuveApp extends LitElement {
         this.github.invalidatePost();
       }
       this.review = review.value;
-      this.applyMarks(review.value);
       this.focusedZone = 'diff';
       if (this.sessions.every(({ id }) => id !== sessionId)) {
         void this.refreshSessions();
       }
-      void this.loadTree(review.value);
-      void this.loadOrder(review.value);
+      this.reviewData.open(review.value);
       void this.refreshLspStatus();
-      void this.loadFileAttributes(review.value);
       void this.ura.refresh(review.value.session.id);
       void this.reviewEdits.load(review.value.session.id);
       void this.chat.load(review.value.session.id);
@@ -1427,77 +1423,9 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  private applyMarks(review: ReviewView): void {
-    this.reviewMarks = new Map(
-      review.files.map((file) => {
-        return [file.path, file.reviewed ?? 'no'];
-      }),
-    );
-    this.reviewProgress = review.reviewProgress;
-  }
-
-  /** File Reviewed: stores the mark against the head the reviewer sees; a moved head says so. */
-  private async setFileReviewed(path: string, isReviewed: boolean): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const marked = await bridge.invoke('review:set-file-reviewed', {
-      sessionId: review.session.id,
-      path,
-      reviewed: isReviewed,
-      expectedHeadSha: review.headSha,
-    });
-    if (this.review !== review) {
-      return;
-    }
-    if (!marked.ok) {
-      this.showNotice({ tone: 'error', text: marked.error.message });
-      return;
-    }
-    this.reviewMarks = new Map(this.reviewMarks).set(path, marked.value.reviewed);
-    this.reviewProgress = marked.value.progress;
-  }
-
-  /** The files' reading order (ADR 0065) in the saved mode; `calls` may take a moment. */
-  private async loadOrder(review: ReviewView): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined || review.files.length === 0) {
-      return;
-    }
-    const mode = this.display.reviewOrder;
-    const order = await bridge.invoke('session:get-order', { sessionId: review.session.id });
-    const isSuperseded = !order.ok && order.error.code === 'cancelled';
-    if (isSuperseded || this.review !== review || mode !== this.display.reviewOrder) {
-      return;
-    }
-    if (order.ok) {
-      this.order = order.value;
-    } else {
-      this.order = undefined;
-      this.showNotice({ tone: 'error', text: `File order: ${order.error.message}` });
-    }
-  }
-
-  /** The radar tree's paths, once per head. */
-  private async loadTree(review: ReviewView): Promise<void> {
-    const bridge = beuveBridge();
-    if (
-      bridge === undefined ||
-      (this.tree?.sessionId === review.session.id && this.tree.headSha === review.headSha)
-    ) {
-      return;
-    }
-    const tree = await bridge.invoke('session:get-tree', { sessionId: review.session.id });
-    if (this.review === review && tree.ok) {
-      this.tree = tree.value;
-    }
-  }
-
   private reviewDeferrals(): typeof this.deferralPlan {
     const files = this.review?.files;
-    let attributes = this.fileAttributes;
+    let attributes = this.reviewData.fileAttributes;
     if (attributes?.headSha !== this.review?.headSha) {
       attributes = undefined;
     }
@@ -1512,20 +1440,6 @@ export class BeuveApp extends LitElement {
     );
     this.deferralPlan = { files, attributes, deferrals, generated };
     return this.deferralPlan;
-  }
-
-  /** Which review files `.gitattributes` marks generated or `-diff` (ADR 0052). */
-  private async loadFileAttributes(review: ReviewView): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const attributes = await bridge.invoke('session:get-file-attributes', {
-      sessionId: review.session.id,
-    });
-    if (this.review === review && attributes.ok) {
-      this.fileAttributes = attributes.value;
-    }
   }
 
   private async openPeek(path: string, line: number | undefined): Promise<void> {
@@ -2146,7 +2060,7 @@ export class BeuveApp extends LitElement {
         if (path === undefined) {
           this.stream()?.runCommand(id);
         } else {
-          void this.setFileReviewed(path, this.reviewMarks.get(path) !== 'yes');
+          void this.reviewData.setFileReviewed(path, this.reviewData.marks.get(path) !== 'yes');
         }
         return;
       }
@@ -2296,7 +2210,7 @@ export class BeuveApp extends LitElement {
     const state = menuStateFrom({
       hasSession: this.review !== undefined,
       activePath: treePath ?? this.activePath,
-      isActiveReviewed: markedPath !== undefined && this.reviewMarks.get(markedPath) === 'yes',
+      isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
       focusedZone: this.focusedZone,
       dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
@@ -2605,7 +2519,7 @@ export class BeuveApp extends LitElement {
       platform: keyPlatformOf(this.appInfo?.platform),
       sessions: this.sessions,
       ...(this.review !== undefined && { files: this.review.files }),
-      ...(this.tree !== undefined && { trackedPaths: this.tree.paths }),
+      ...(this.reviewData.tree !== undefined && { trackedPaths: this.reviewData.tree.paths }),
       uraItems: this.ura.items,
     };
   }
@@ -2648,9 +2562,9 @@ export class BeuveApp extends LitElement {
       ?focused=${this.focusedZone === 'intent'}
       .pullRequest=${this.github.pullRequest}
       .files=${this.review?.files}
-      .tree=${this.tree}
+      .tree=${this.reviewData.tree}
       .generatedPaths=${this.reviewDeferrals().generated}
-      .reviewMarks=${this.reviewMarks}
+      .reviewMarks=${this.reviewData.marks}
       .treeMode=${this.treeMode}
       @beuve-tree-mode=${this.onTreeMode}
       @beuve-open-stack=${this.onOpenStack}
@@ -2675,9 +2589,9 @@ export class BeuveApp extends LitElement {
       ?focused=${this.focusedZone === 'diff'}
       .sessionNote=${this.sessionNote}
       .review=${this.review}
-      .reviewMarks=${this.reviewMarks}
-      .reviewProgress=${this.reviewProgress}
-      .order=${this.order}
+      .reviewMarks=${this.reviewData.marks}
+      .reviewProgress=${this.reviewData.progress}
+      .order=${this.reviewData.order}
       ?loading=${this.reviewLoading}
       .loadingLabel=${describeSessionLabel(this.sessions, this.selectedId, this.review?.session)}
       ?marking=${this.marking}
