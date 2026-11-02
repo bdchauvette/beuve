@@ -12,6 +12,7 @@ import { highlightedLanguages } from './highlighted-languages.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
+import { trackJumpModifier } from './track-jump-modifier.ts';
 
 /** A token the reviewer clicked: 1-based line, 0-based UTF-16 column. */
 export interface SheetTokenDetail {
@@ -47,6 +48,10 @@ export class BeuveSheetCode extends LitElement {
       display: block;
     }
 
+    :host([data-jump]) diffs-container {
+      cursor: pointer;
+    }
+
     diffs-container {
       --diffs-font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
       --diffs-font-size: 12.5px;
@@ -73,6 +78,7 @@ export class BeuveSheetCode extends LitElement {
   private view: File | undefined;
   private sheet: CSSStyleSheet | undefined;
   private renderedKey = '';
+  private jumpModifier: AbortController | undefined;
 
   @property() accessor path = '';
   @property() accessor contents = '';
@@ -181,6 +187,10 @@ export class BeuveSheetCode extends LitElement {
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
+    if (!this.compact) {
+      this.jumpModifier = new AbortController();
+      trackJumpModifier(this, this.jumpModifier.signal);
+    }
     void loadDiffsLibrary()
       .then((library) => {
         this.library = library;
@@ -195,18 +205,25 @@ export class BeuveSheetCode extends LitElement {
   override disconnectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.disconnectedCallback();
+    this.jumpModifier?.abort();
+    this.jumpModifier = undefined;
     this.view?.cleanUp();
     this.view = undefined;
     this.renderedKey = '';
   }
 
-  /** Scrolls line `line` (1-based) into view, centred unless it is already visible. */
+  /** Scrolls line `line` (1-based) into view, centred unless it is already visible, keeping the horizontal scroll. */
   async reveal(line: number): Promise<void> {
     const row = await waitFor(() => this.row(line));
+    // scrollIntoView also scrolls sideways to fit a long line's end; only the rows move.
+    const left = this.view?.getCodeScrollLeft();
     row?.scrollIntoView({ block: 'nearest' });
     const bounds = row?.getBoundingClientRect();
     if (row !== undefined && bounds !== undefined && !isInViewport(bounds)) {
       row.scrollIntoView({ block: 'center' });
+    }
+    if (left !== undefined) {
+      this.view?.setCodeScrollLeft(left);
     }
   }
 

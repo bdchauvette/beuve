@@ -86,6 +86,9 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     platform: keyPlatform(),
     isPackaged: app.isPackaged,
     runMain: handleMainCommand,
+    openMainWindow: (): BrowserWindow => {
+      return openWindow();
+    },
     logger,
   });
   const sheets = createSheetWindows({
@@ -104,7 +107,7 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   });
   /** Terminal output goes to main windows only, never to sheets or Settings (ADR 0095). */
   const mainWindowContents = new Set<WebContents>();
-  const openWindow = (): void => {
+  const openWindow = (): BrowserWindow => {
     const window = createMainWindow(options);
     menus.track(window, 'main');
     const { webContents } = window;
@@ -123,6 +126,7 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     window.on('blur', () => {
       services.github.setForeground(false);
     });
+    return window;
   };
 
   services.chat.onStream((event) => {
