@@ -3,8 +3,6 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { ImpactServices } from '../impact/create-impact-services.ts';
-import { narrowImpactView } from '../impact/narrow-impact-view.ts';
 import type { LspServices } from '../lsp/create-lsp-services.ts';
 import { resolveSessionId } from '../sessions/resolve-session-id.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
@@ -15,7 +13,6 @@ import type { McpDocumentOutcome, McpToolOutcome, McpToolServices } from './mcp-
 
 export interface McpToolsOptions {
   readonly context: SessionContext;
-  readonly impact: ImpactServices;
   readonly lsp: LspServices;
   readonly ura: Pick<UraServices, 'readAgentReview'>;
   readonly github: Pick<GithubServices, 'summaryFor'>;
@@ -24,29 +21,14 @@ export interface McpToolsOptions {
 }
 
 /**
- * The MCP tools backed by real domains: ImpactGate, LSP diagnostics and the
- * reviewer's staged review (URA).
+ * The MCP tools backed by real domains: LSP diagnostics and the reviewer's staged review (URA).
  */
 export function createMcpTools(options: McpToolsOptions): McpToolServices {
-  const { context, impact, lsp, ura, github, openSessionId } = options;
+  const { context, lsp, ura, github, openSessionId } = options;
   const sessionFor = (requested: string | undefined): Result<string, string> => {
     return resolveSessionId(context, { requested, openSessionId: openSessionId() });
   };
   return {
-    runImpactCheck: async ({ sessionId, paths }): Promise<McpToolOutcome> => {
-      const id = sessionFor(sessionId);
-      if (!id.ok) {
-        return id;
-      }
-      const view = await impact.getImpact({ sessionId: id.value });
-      if (!view.ok) {
-        return failure(view.error);
-      }
-      if (paths === undefined) {
-        return ok(view.value);
-      }
-      return ok(narrowImpactView(view.value, paths));
-    },
     getLspDiagnostics: async ({ sessionId, path }): Promise<McpToolOutcome> => {
       const id = sessionFor(sessionId);
       if (!id.ok) {

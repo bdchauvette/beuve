@@ -28,25 +28,12 @@ export type UraAnchor =
   | { readonly kind: 'file'; readonly path: string }
   | { readonly kind: 'change' };
 
-/** The ImpactGate metrics an item can carry (ADR 0015). */
-export type ImpactMetric = 'cognitive-complexity';
-
 /**
- * Who or what raised an item. ImpactGate items keep the facts they came from. A `chat-answer` item
- * stages a chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer
- * (ADR 0055).
+ * Who or what raised an item. A `chat-answer` item stages a chat answer, or with `finding` the
+ * n-th (0-based) finding of a `/review` answer (ADR 0055).
  */
 export type UraOrigin =
   | { readonly kind: 'human' }
-  | {
-      readonly kind: 'impact-finding';
-      readonly metric: ImpactMetric;
-      readonly functionName: string;
-      readonly value: number;
-      readonly threshold: number;
-      /** 0–100, as ImpactGate ranked the function in its review. */
-      readonly percentile: number;
-    }
   | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
 /**
@@ -134,7 +121,7 @@ export type UraStoreError =
   | {
       readonly kind: 'duplicate-item';
       readonly id: UraItemId;
-      readonly reason: 'id-taken' | 'review-finding-already-staged' | 'finding-already-staged';
+      readonly reason: 'id-taken' | 'review-finding-already-staged';
     }
   | { readonly kind: 'order-mismatch'; readonly sessionId: SessionId }
   | {

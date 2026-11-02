@@ -8,8 +8,8 @@ directories:
 # Main, preload and ui are esbuild bundles (ADR 0007). The only node_modules main needs at run
 # time are those it launches by path (ADR 0021, 0070); every other dependency is inside the bundles.
 # Every file main loads or runs by path at run time must be listed here or in extraResources.
-# `dist/main/impact-worker.js` (ADR 0053) and the sheet and Settings pages and preloads (ADR 0067,
-# 0068) are dist files and load from the archive.
+# The sheet and Settings pages and preloads (ADR 0067, 0068) are dist files and load from the
+# archive.
 files:
   - dist/**
   - '!dist/**/*.map'

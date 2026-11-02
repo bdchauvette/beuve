@@ -29,7 +29,6 @@ const severities: Readonly<Record<UraSeverityView, string>> = {
 
 const origins: Readonly<Record<UraOriginView['kind'], string>> = {
   human: 'human',
-  'impact-finding': 'ImpactGate',
   'chat-answer': 'chat',
 };
 

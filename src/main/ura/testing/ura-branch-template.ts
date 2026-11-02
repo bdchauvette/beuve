@@ -2,9 +2,8 @@ import type { RepositoryTemplate } from '#internal/git/testing/test-repository.t
 
 import { lines } from '../../testing/lines.ts';
 import { appLines } from './app-lines.ts';
-import { complexLines } from './complex-lines.ts';
 
-/** main: nothing much; feature adds `src/app.ts` and a complex `src/complex.ts`. */
+/** main: nothing much; feature adds `src/app.ts`. */
 export function uraBranchTemplate(): RepositoryTemplate<undefined> {
   return {
     name: 'main-ura: feature branch',
@@ -13,7 +12,6 @@ export function uraBranchTemplate(): RepositoryTemplate<undefined> {
       await repo.commit('base');
       await repo.git('switch', '--quiet', '--create', 'feature');
       repo.write('src/app.ts', lines(appLines()));
-      repo.write('src/complex.ts', lines(complexLines()));
       await repo.commit('add app');
       await repo.git('switch', '--quiet', 'main');
     },

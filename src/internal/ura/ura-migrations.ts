@@ -2,18 +2,9 @@ import type { Migration } from '#sqlite/run-migrations.ts';
 
 import { uraSeverities } from './ura-severities.ts';
 
-const originColumns = [
-  'chat_message_id',
-  'chat_finding',
-  'impact_metric',
-  'impact_function',
-  'impact_value',
-  'impact_threshold',
-  'impact_percentile',
-] as const;
-
 /**
- * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055; squashed until the first release).
+ * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102; squashed until the first
+ * release).
  * `ura_items` references `sessions`, so main runs the session domain's migrations first. Table
  * CHECKs mirror the anchor, origin and status unions. `chat_message_id` deliberately has no foreign
  * key: the chat domain owns that table, and `/clear` must not delete staged items.
@@ -33,14 +24,9 @@ export const uraMigrations: readonly Migration[] = [
         line_end INTEGER,
         severity TEXT NOT NULL CHECK (severity IN (${list(uraSeverities)})),
         origin_kind TEXT NOT NULL
-          CHECK (origin_kind IN ('human', 'impact-finding', 'chat-answer')),
+          CHECK (origin_kind IN ('human', 'chat-answer')),
         chat_message_id TEXT,
         chat_finding INTEGER CHECK (chat_finding IS NULL OR chat_finding >= 0),
-        impact_metric TEXT,
-        impact_function TEXT,
-        impact_value REAL,
-        impact_threshold REAL,
-        impact_percentile REAL,
         title TEXT NOT NULL CHECK (title = trim(title) AND length(title) <= 200),
         body TEXT NOT NULL,
         patch TEXT CHECK (patch IS NULL OR (patch <> '' AND anchor_kind <> 'change')),
@@ -61,17 +47,10 @@ export const uraMigrations: readonly Migration[] = [
           OR (anchor_kind = 'change' AND path IS NULL AND line_start IS NULL AND line_end IS NULL)
         ),
         CHECK (
-          (origin_kind = 'human' AND ${allNull(originColumns)})
+          (origin_kind = 'human' AND chat_message_id IS NULL AND chat_finding IS NULL)
           OR (origin_kind = 'chat-answer' AND chat_message_id IS NOT NULL
             AND trim(chat_message_id) <> ''
-            AND (chat_finding IS NULL OR anchor_kind = 'lines')
-            AND ${allNull(originColumns.filter((column) => !column.startsWith('chat_')))})
-          OR (origin_kind = 'impact-finding' AND anchor_kind = 'lines'
-            AND impact_metric IS NOT NULL AND impact_metric IN ('cognitive-complexity')
-            AND impact_function IS NOT NULL AND trim(impact_function) <> ''
-            AND impact_value IS NOT NULL AND impact_threshold IS NOT NULL
-            AND impact_percentile IS NOT NULL AND impact_percentile BETWEEN 0 AND 100
-            AND chat_message_id IS NULL AND chat_finding IS NULL)
+            AND (chat_finding IS NULL OR anchor_kind = 'lines'))
         ),
         CHECK (
           (status = 'addressed') = (addressed_sha IS NOT NULL)
@@ -83,9 +62,6 @@ export const uraMigrations: readonly Migration[] = [
       CREATE INDEX ura_items_by_session ON ura_items (session_id, position);
       CREATE UNIQUE INDEX ura_items_by_chat_finding ON ura_items (chat_message_id, chat_finding)
         WHERE chat_finding IS NOT NULL;
-      CREATE UNIQUE INDEX ura_items_by_finding
-        ON ura_items (session_id, head_sha, path, impact_metric, impact_function)
-        WHERE origin_kind = 'impact-finding';
 
       CREATE TABLE ura_verdict_choices (
         session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
@@ -115,10 +91,6 @@ export const uraMigrations: readonly Migration[] = [
     `,
   },
 ];
-
-function allNull(columns: readonly string[]): string {
-  return columns.map((column) => `${column} IS NULL`).join(' AND ');
-}
 
 function list(values: readonly string[]): string {
   return values.map((value) => `'${value}'`).join(', ');

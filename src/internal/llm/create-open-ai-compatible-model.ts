@@ -71,7 +71,7 @@ const maxToolCallsPerTurn = 16;
  * A {@link LanguageModel} on any server that speaks OpenAI's `/v1/chat/completions` with
  * streaming (Ollama, llama.cpp, vLLM, LM Studio, a hosted gateway; ADR 0071), with `fetch` and
  * server-sent events and no SDK. Tools are off by default: the model answers from the prompt
- * alone (the diff, the selections and the ImpactGate summary). With `tools`, it gets the
+ * alone (the diff, the selections and the summary). With `tools`, it gets the
  * read-only sandbox of {@link createReadOnlySandbox} and runs up to `maxTurns` requests. `run`
  * asks for the JSON Schema with `response_format` when the server supports it, else in the
  * prompt, and validates the answer with zod. HTTP failures map to {@link ModelError}s.

@@ -618,16 +618,6 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'impact-details',
-    title: 'ImpactGate Details',
-    menu: { menu: 'review', group: 2 },
-    keys: { mac: 'Alt+Cmd+I', linux: 'Alt+Return' },
-    context: ['file'],
-    when: ['file'],
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
     id: 'open-in-editor',
     title: 'Open in Editor',
     menu: { menu: 'review', group: 3 },

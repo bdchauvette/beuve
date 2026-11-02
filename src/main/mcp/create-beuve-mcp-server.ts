@@ -39,26 +39,6 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
   );
 
   server.registerTool(
-    'beuve_run_impact_check',
-    {
-      title: 'ImpactGate check',
-      description:
-        "ImpactGate: scores how the review diff (base to the session's head) moves the complexity " +
-        'of the functions it touches, and lists findings: changed functions over the cognitive ' +
-        'complexity limit, with their trend against the base. Lines are 1-based; percentiles rank ' +
-        "against every head function in the review's analyzed files.",
-      inputSchema: {
-        sessionId,
-        paths: z.array(path).max(1000).optional().describe('Limit the check to these files.'),
-      },
-      annotations: { readOnlyHint: true },
-    },
-    async (input): Promise<CallToolResult> => {
-      return toolResultFrom(await services.runImpactCheck(input));
-    },
-  );
-
-  server.registerTool(
     'beuve_read_human_review',
     {
       title: 'Human review',
@@ -68,8 +48,8 @@ export function createBeuveMcpServer(services: McpToolServices, version: string)
         'they chose one), and the items they staged in their order, each with a severity (blocker ' +
         'must be fixed before merge, issue should be fixed, question needs an answer, nit is ' +
         'optional, praise needs nothing), a title, a Markdown body, an optional suggested patch ' +
-        '(a unified diff), and its origin (the human, a staged chat answer or `/review` finding, ' +
-        "or an ImpactGate finding). Items are anchored to 1-based, inclusive line ranges of the head commit's " +
+        '(a unified diff), and its origin (the human, or a staged chat answer or `/review` ' +
+        "finding). Items are anchored to 1-based, inclusive line ranges of the head commit's " +
         'files (`change.headSha`), not your working tree: they were re-anchored to that head if ' +
         'written against an earlier one, and an item that no longer maps onto it carries ' +
         '`outdated` with its original anchor and the head it was written against instead. ' +

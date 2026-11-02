@@ -39,7 +39,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       git: { logger: logger.logger },
       caches: createGitCaches(),
     };
-    const held = holdCompile(createUraServices({ context: session, impact: services.impact }));
+    const held = holdCompile(createUraServices({ context: session }));
     const context = { session };
 
     const preparing = prepareGithubReview(context, held.ura, {
@@ -71,7 +71,6 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
 
   test('uses the one base tip it resolved when the base is fetched while the review compiles', async ({
     expect,
-    services,
     opened,
     db,
     deps,
@@ -87,7 +86,7 @@ describe('prepareGithubReview (integration: fake GitHub, local bare remote)', ()
       git: { logger: logger.logger },
       caches: createGitCaches(),
     };
-    const held = holdCompile(createUraServices({ context: session, impact: services.impact }));
+    const held = holdCompile(createUraServices({ context: session }));
     const preparing = prepareGithubReview({ session }, held.ura, {
       sessionId,
       expectedHeadSha: firstHead,

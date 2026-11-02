@@ -71,9 +71,7 @@ describe('buildGithubReview', () => {
             "start_side": "RIGHT",
           },
           {
-            "body": "⚠️ **Issue:** Cognitive complexity 22 exceeds 15 in parseAll
-
-      ImpactGate: cognitive complexity 22 in \`parseAll\` (limit 15, 98th percentile).",
+            "body": "⚠️ **Issue:** parseAll never checks for an empty list",
             "line": 30,
             "path": "src/parse.ts",
             "side": "RIGHT",

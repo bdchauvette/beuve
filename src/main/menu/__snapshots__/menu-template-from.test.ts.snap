@@ -484,11 +484,6 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "S&top",
       },
       {
-        "accelerator": "Alt+Return",
-        "id": "impact-details",
-        "label": "&ImpactGate Details",
-      },
-      {
         "type": "separator",
       },
       {
@@ -1227,11 +1222,6 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+.",
         "id": "stop",
         "label": "Stop",
-      },
-      {
-        "accelerator": "Alt+Cmd+I",
-        "id": "impact-details",
-        "label": "ImpactGate Details",
       },
       {
         "type": "separator",

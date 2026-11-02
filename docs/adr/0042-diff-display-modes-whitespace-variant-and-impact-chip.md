@@ -1,6 +1,6 @@
 # 0042. Diff display modes, the whitespace-ignoring variant, and the ImpactGate chip
 
-- Status: Accepted
+- Status: Accepted; the ImpactGate chip is superseded by [0102](0102-drop-impactgate-and-credit-its-sources.md)
 - Date: 2026-10-29
 
 ## Context

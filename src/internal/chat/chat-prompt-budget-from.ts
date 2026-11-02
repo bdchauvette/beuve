@@ -51,7 +51,6 @@ export function chatPromptBudgetFrom(
     maxIntentChars: scaled('maxIntentChars'),
     maxHistoryChars: scaled('maxHistoryChars'),
     maxHistoryTurns: base.maxHistoryTurns,
-    maxImpactFindings: base.maxImpactFindings,
     maxSelectionChars: scaled('maxSelectionChars'),
     maxSelectionFileChars: scaled('maxSelectionFileChars'),
     maxSummaryChars: scaled('maxSummaryChars'),

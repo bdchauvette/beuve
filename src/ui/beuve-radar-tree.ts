@@ -7,7 +7,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type {
   DiffFileView,
   FileReviewStateView,
-  ImpactView,
   RepositoryTreeView,
 } from '#contract/ipc-contract.ts';
 
@@ -16,17 +15,15 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { planRadarTree } from './plan-radar-tree.ts';
 import type { RadarTreeMode, RadarTreePlan } from './plan-radar-tree.ts';
-import { planTreeDecorations } from './plan-tree-decorations.ts';
-import type { TreeDecoration } from './plan-tree-decorations.ts';
-import { withReviewedDecorations } from './with-reviewed-decorations.ts';
+import { reviewedDecorations } from './reviewed-decorations.ts';
+import type { TreeDecoration } from './tree-decoration.ts';
 
 const trailingSlash = /\/$/u;
 
 /**
  * The radar tree in Zone 1 (spec section 4, ADR 0026): a `@pierre/trees` view of the repository at
  * the session head that opens the packages a change touches down to its files, marks changed
- * files with their git status, and puts ImpactGate percentiles and finding counts on changed
- * files and their packages, with a `✓` on files marked reviewed (ADR 0064). `mode` is neighborhood or diff-only (View ▸ Changed Files Only). Arrow keys move through
+ * files with their git status, with a `✓` on files marked reviewed (ADR 0064). `mode` is neighborhood or diff-only (View ▸ Changed Files Only). Arrow keys move through
  * the rows; selecting a file (click, Enter or Space) emits `beuve-tree-select` with `{ path }`
  * when that file is part of the review.
  *
@@ -76,7 +73,6 @@ export class BeuveRadarTree extends LitElement {
   /** `session:get-tree` for the open session; `undefined` until it answers. */
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
   @property({ attribute: false }) accessor files: readonly DiffFileView[] = [];
-  @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property() accessor mode: RadarTreeMode = 'neighborhood';
   /**
    * Generated review files (ADR 0052): their rows take the library's dimmed `ignored` lane
@@ -181,15 +177,11 @@ export class BeuveRadarTree extends LitElement {
 
   protected override updated(changed: PropertyValues<this>): void {
     const { library } = this;
-    const isRelevant = [
-      'tree',
-      'files',
-      'mode',
-      'impact',
-      'library',
-      'generatedPaths',
-      'reviewMarks',
-    ].some((key) => changed.has(key as keyof BeuveRadarTree));
+    const isRelevant = ['tree', 'files', 'mode', 'library', 'generatedPaths', 'reviewMarks'].some(
+      (key) => {
+        return changed.has(key as keyof BeuveRadarTree);
+      },
+    );
     if (library === undefined || !isRelevant) {
       return;
     }
@@ -201,10 +193,7 @@ export class BeuveRadarTree extends LitElement {
       },
       this.mode,
     );
-    this.decorations = withReviewedDecorations(
-      planTreeDecorations(this.impact, plan.packageOf),
-      this.reviewMarks,
-    );
+    this.decorations = reviewedDecorations(this.reviewMarks);
     const gitStatus = plan.gitStatus.map((entry) => {
       if (this.generatedPaths.has(entry.path)) {
         return { ...entry, status: 'ignored' as const };
@@ -233,7 +222,7 @@ export class BeuveRadarTree extends LitElement {
       );
       this.fileTree.setGitStatus(shownGitStatus(gitStatus));
     }
-    if (changed.has('impact') || changed.has('reviewMarks')) {
+    if (changed.has('reviewMarks')) {
       // Re-renders the rows, so they ask `renderRowDecoration` again.
       this.fileTree.setComposition(this.fileTree.getComposition());
     }

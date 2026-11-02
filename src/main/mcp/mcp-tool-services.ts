@@ -6,12 +6,6 @@ export interface LspDiagnosticsInput {
   readonly sessionId?: string | undefined;
 }
 
-/** ImpactGate scoring for the session's current diff, optionally narrowed to some paths. */
-export interface ImpactCheckInput {
-  readonly sessionId?: string | undefined;
-  readonly paths?: readonly string[] | undefined;
-}
-
 /** The human's staged review (URA items) for a session. */
 export interface HumanReviewInput {
   readonly sessionId?: string | undefined;
@@ -35,6 +29,5 @@ export type McpDocumentOutcome = Result<
 /** What the MCP tools delegate to. `src/main` composes the domains behind it. */
 export interface McpToolServices {
   readonly getLspDiagnostics: (input: LspDiagnosticsInput) => Promise<McpToolOutcome>;
-  readonly runImpactCheck: (input: ImpactCheckInput) => Promise<McpToolOutcome>;
   readonly readHumanReview: (input: HumanReviewInput) => Promise<McpDocumentOutcome>;
 }

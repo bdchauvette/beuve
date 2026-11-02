@@ -2,7 +2,6 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { escapeMarkdownHtml } from './escape-markdown-html.ts';
 import { fenceCodeBlock } from './fence-code-block.ts';
-import { formatImpactOrigin } from './format-impact-origin.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
 import { formatUraSeverity } from './format-ura-severity.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
@@ -181,9 +180,6 @@ function details(item: UraItem, isInline: boolean): string[] {
   const body = item.body.trim();
   if (body !== '') {
     parts.push(body);
-  }
-  if (item.origin.kind === 'impact-finding') {
-    parts.push(formatImpactOrigin(item.origin));
   }
   if (item.suggestion === undefined) {
     return parts;

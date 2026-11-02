@@ -30,11 +30,10 @@ describe('renderAgentReviewXml', () => {
        use(first);
       ]]></suggested-patch>
           </item>
-          <item id="00000000-0000-4000-8000-000000000002" severity="issue" origin="impact-finding">
+          <item id="00000000-0000-4000-8000-000000000002" severity="issue" origin="chat-answer" message-id="msg-1" finding="0">
             <anchor kind="lines" path="src/parse.ts" start-line="30" end-line="30"/>
-            <title>Cognitive complexity 22 exceeds 15 in parseAll</title>
+            <title>parseAll never checks for an empty list</title>
             <body/>
-            <impact metric="cognitive-complexity" function="parseAll" value="22" threshold="15" percentile="97.5"/>
           </item>
           <item id="00000000-0000-4000-8000-000000000003" severity="question" origin="human">
             <anchor kind="file" path="docs/notes.md"/>

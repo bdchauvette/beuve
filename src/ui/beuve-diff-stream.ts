@@ -6,11 +6,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import type {
   DiffDisplayView,
   DiffFileView,
-  FileImpactView,
   FileReviewProgressView,
   FileReviewStateView,
-  ImpactFindingView,
-  ImpactView,
   ReviewOrderMode,
   ReviewOrderView,
   ReviewView,
@@ -24,7 +21,6 @@ import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
-import { countNoun } from './count-noun.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
 import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
@@ -65,7 +61,6 @@ import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
-import { formatIsoDuration } from './format-iso-duration.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
@@ -111,7 +106,6 @@ const defaultDisplay: DiffDisplayView = {
 
 const noUraItems: readonly UraItemView[] = [];
 const noInsights: readonly ReviewInsight[] = [];
-const noFindings: readonly ImpactFindingView[] = [];
 const noPaths: ReadonlySet<string> = new Set();
 /** {@link findInReview}'s default cap. */
 const findLimit = 5000;
@@ -138,13 +132,13 @@ interface NoteAddDetail {
 
 /**
  * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
- * header naming the review kind and ImpactGate banners once they arrive. Cards
+ * header naming the review kind. Cards
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
  * it), and Add Note opens a composer
  * that stages the target into the review dock (ADR 0027). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
- * whitespace (ADR 0042), ImpactGate Details opens the focused card's ImpactGate details, and Suggest Edit edits the
+ * whitespace (ADR 0042), and Suggest Edit edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
  * File Reviewed marks the active file reviewed or not (ADR 0064): reviewed cards collapse to their header,
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
@@ -304,15 +298,9 @@ export class BeuveDiffStream extends LitElement {
         cursor: default;
       }
 
-      .impact,
       .saved {
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
-      }
-
-      .impact.warning {
-        color: var(--beuve-warn);
-        font-weight: 600;
       }
 
       .display {
@@ -575,10 +563,6 @@ export class BeuveDiffStream extends LitElement {
     this.focus();
   };
 
-  private readonly onImpactClose = (): void => {
-    this.focus();
-  };
-
   private readonly onFindQuery = (event: CustomEvent<FindQueryDetail>): void => {
     this.findQuery = event.detail.query;
     this.isFindCaseSensitive = event.detail.isCaseSensitive;
@@ -648,15 +632,11 @@ export class BeuveDiffStream extends LitElement {
     readonly uraItemsByPath: ReadonlyMap<string, readonly UraItemView[]>;
     readonly insights: readonly ReviewInsight[];
     readonly insightsByPath: ReadonlyMap<string, readonly ReviewInsight[]>;
-    readonly impact: ImpactView | undefined;
-    readonly impactByPath: ReadonlyMap<string, FileImpactView>;
   } = {
     uraItems: noUraItems,
     uraItemsByPath: new Map(),
     insights: noInsights,
     insightsByPath: new Map(),
-    impact: undefined,
-    impactByPath: new Map(),
   };
 
   private planCache:
@@ -691,8 +671,6 @@ export class BeuveDiffStream extends LitElement {
   /** `process.platform`, for the shortcuts in tooltips. */
   @property() accessor platform = '';
   @property() accessor error = '';
-  /** ImpactGate for `review`, once `session:get-impact` has answered. */
-  @property({ attribute: false }) accessor impact: ImpactView | undefined;
   @property({ attribute: false }) accessor peek: PeekState | undefined;
   @property({ attribute: false }) accessor flow: FlowState | undefined;
 
@@ -791,7 +769,6 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
     this.addEventListener('beuve-note-add', this.onNoteAdd as EventListener);
     this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
-    this.addEventListener('beuve-impact-close', this.onImpactClose);
     this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
     this.addEventListener('beuve-find-query', this.onFindQuery as EventListener);
     this.addEventListener('beuve-find-step', this.onFindStep as EventListener);
@@ -1278,22 +1255,15 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private refreshSlices(): void {
-    const { slices, uraItems, impact, insights } = this;
-    let { insightsByPath, uraItemsByPath, impactByPath } = slices;
+    const { slices, uraItems, insights } = this;
+    let { insightsByPath, uraItemsByPath } = slices;
     if (slices.insights !== insights) {
       insightsByPath = groupStable(insights, insightPaths, slices.insightsByPath);
     }
     if (slices.uraItems !== uraItems) {
       uraItemsByPath = groupStable(uraItems, uraItemPaths, slices.uraItemsByPath);
     }
-    if (slices.impact !== impact) {
-      impactByPath = new Map(
-        (impact?.files ?? []).map((entry) => {
-          return [entry.path, entry];
-        }),
-      );
-    }
-    this.slices = { insights, insightsByPath, uraItems, uraItemsByPath, impact, impactByPath };
+    this.slices = { insights, insightsByPath, uraItems, uraItemsByPath };
   }
 
   /**
@@ -1334,7 +1304,7 @@ export class BeuveDiffStream extends LitElement {
 
   private renderReview(review: ReviewView): TemplateResult {
     this.refreshSlices();
-    const { uraItemsByPath, insightsByPath, impactByPath } = this.slices;
+    const { uraItemsByPath, insightsByPath } = this.slices;
     const plan = this.plan();
     const additions = review.files.reduce((sum, file) => {
       return sum + file.additions;
@@ -1351,7 +1321,7 @@ export class BeuveDiffStream extends LitElement {
           >${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} +${additions}
           −${deletions}</span
         >
-        ${this.renderProgress()} ${this.renderImpactTotals()}
+        ${this.renderProgress()}
         <span class="spacer"></span>
         ${this.renderOrder()} ${this.renderDisplay()}
         ${this.error === '' ? nothing : html`<span class="note error">${this.error}</span>`}
@@ -1388,11 +1358,8 @@ export class BeuveDiffStream extends LitElement {
                       return html`${this.renderGroupLabel(plan, index)}<beuve-file-card
                           .file=${file}
                           .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
-                          .cognitiveLimit=${this.impact?.cognitiveMax}
                           .loadFilePair=${this.loadFilePair}
                           .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
-                          .impact=${impactByPath.get(file.path)}
-                          .findings=${this.impact?.findings ?? noFindings}
                           .peek=${this.peek?.path === file.path ? this.peek : undefined}
                           .flow=${this.flow?.path === file.path ? this.flow : undefined}
                           .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
@@ -1554,19 +1521,6 @@ export class BeuveDiffStream extends LitElement {
     </span>`;
   }
 
-  private renderImpactTotals(): TemplateResult | typeof nothing {
-    const { impact } = this;
-    if (impact === undefined || impact.headSha !== this.review?.headSha) {
-      return nothing;
-    }
-    const count = impact.totals.findings;
-    return html`<span
-      class="impact ${count > 0 ? 'warning' : ''}"
-      title="ImpactGate computed in ${formatIsoDuration(impact.compute)}"
-      >ImpactGate: ${count === 0 ? 'no findings' : countNoun(count, 'finding')}</span
-    >`;
-  }
-
   /**
    * Keeps the cursor on its file when the list changes under it: the same head again (whitespace
    * toggled), a new order, or a commit pair filter. A new head starts at the top.
@@ -1658,12 +1612,6 @@ export class BeuveDiffStream extends LitElement {
       }
       case 'suggest-edit': {
         this.editActive();
-        return true;
-      }
-      case 'impact-details': {
-        if (this.cards()[this.activeIndex]?.focusImpact() !== true) {
-          this.notify('info', 'ImpactGate has nothing to say about this file.');
-        }
         return true;
       }
       case 'open-in-editor': {
@@ -1800,7 +1748,7 @@ function isGenerated(deferral: DiffDeferral | undefined): boolean {
 
 /**
  * The files a URA item concerns: where it was written and where it sits now. A card reads both
- * (its markers follow the placement, its ImpactGate chip the original anchor).
+ * (its markers follow the placement).
  */
 function uraItemPaths(item: UraItemView): string[] {
   const anchors = [item.anchor];

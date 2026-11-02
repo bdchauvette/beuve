@@ -6,7 +6,6 @@
 export type SupersededKind =
   | 'review'
   | 'order'
-  | 'impact'
   | 'tree'
   | 'file-attributes'
   | 'sheet-file'

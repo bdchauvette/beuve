@@ -4,23 +4,15 @@ import path from 'node:path';
 import { describe } from 'vitest';
 
 import type { CallHierarchyRequest, ReviewView } from '#contract/ipc-contract.ts';
-import type { CommitSha } from '#internal/git/object-id.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
 import type { TestRepositories } from '#internal/git/testing/test.ts';
-import type { ImpactReport } from '#internal/impact/impact-report.ts';
-import type { RecordingLogger } from '#testing/test.ts';
-import type { Logger } from '#x/log/create-logger.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
-import type { Result } from '#x/result/result.ts';
 
-import { createImpactWorker } from './impact/create-impact-worker.ts';
-import type { ImpactRunFailure, ImpactRunner } from './impact/create-impact-worker.ts';
 import type { MainServices } from './main-services.ts';
 import { lines } from './testing/lines.ts';
 import { test } from './testing/test.ts';
-import type { CreateServices } from './testing/test.ts';
 
 describe('createMainServices (integration: SQLite + git, no Electron)', { timeout: 30_000 }, () => {
   test('reviews a branch in full, then only the amendment after a rebase', async ({
@@ -290,47 +282,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
   });
 });
 
-describe('createMainServices (integration: ImpactGate, worktrees and typescript-language-server)', () => {
-  test(
-    'reports the added complex function as the one introduced finding, cached per diff',
-    { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories, signal }) => {
-      const { sessionId } = await openTypescriptSession(services, repositories);
-      const review = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
-      const impact = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
-      expect(impact).toMatchObject({ baseSha: review.baseSha, headSha: review.headSha });
-      expect(impact.findings).toStrictEqual([
-        expect.objectContaining({
-          path: 'src/complex.ts',
-          functionName: 'handleAuth',
-          trend: 'introduced',
-          limit: 15,
-          startLine: 3,
-        }),
-      ]);
-      expect(impact.findings[0]?.value).toBeGreaterThan(15);
-      expect(
-        impact.files.map((file) => {
-          return [file.path, file.status];
-        }),
-      ).toStrictEqual([
-        ['notes.md', 'skipped'],
-        ['src/auth.ts', 'analyzed'],
-        ['src/broken.ts', 'analyzed'],
-        ['src/complex.ts', 'analyzed'],
-      ]);
-      expect(impact.files[0]).toMatchObject({ reason: 'unsupported-language' });
-      const auth = impact.files[1];
-      expect(auth?.status === 'analyzed' && auth.functions).toStrictEqual([
-        expect.objectContaining({ name: 'validate', change: 'modified', inDiff: true }),
-      ]);
-      await expect(services.impact.getImpact({ sessionId }, { signal })).resolves.toStrictEqual({
-        ok: true,
-        value: impact,
-      });
-    },
-  );
-
+describe('createMainServices (integration: worktrees and typescript-language-server)', () => {
   test(
     'answers MCP diagnostics with 1-based lines from a checkout of the session head',
     { concurrent: false, timeout: 60_000 },
@@ -566,7 +518,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
   test(
     'moves the session checkout when the head moves, and prunes it on startup',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories, worktreeRoot, signal }) => {
+    async ({ expect, services, repositories, worktreeRoot }) => {
       const { sessionId, repo } = await openTypescriptSession(services, repositories);
       const before = await repo.git('rev-parse', 'feature');
       await repo.git('switch', '--quiet', 'feature');
@@ -581,9 +533,6 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
       expect(outcome).toMatchObject({ ok: true, value: { headSha: after, diagnostics: [] } });
       expect(checkouts(worktreeRoot)).toStrictEqual([after]);
       expect(after).not.toBe(before);
-
-      const impact = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
-      expect(impact.headSha).toBe(after);
 
       await repo.git(
         'worktree',
@@ -602,7 +551,7 @@ describe('createMainServices (integration: ImpactGate, worktrees and typescript-
 
 /**
  * main: a TypeScript project with `validate` and its caller `handleRequest`. feature: changes
- * `validate`, adds `handleAuth` (cognitive complexity 23) calling it, a type error and a note.
+ * `validate`, adds `handleAuth` calling it, a type error and a note.
  */
 async function typescriptBranch(repo: TestRepository): Promise<void> {
   repo.write(
@@ -751,188 +700,9 @@ function fileSummary(review: ReviewView): [string, string, number, number][] {
   });
 }
 
-describe('createMainServices (integration: ImpactGate in a worker thread)', () => {
-  test(
-    'answers other channels while a large computation runs, then ships the slim view',
-    { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger, signal }) => {
-      const { services, sessionId } = await openLargeSession(createServices, repositories, logger);
-      const computing = services.impact.getImpactForRenderer({ sessionId }, { signal });
-      const review = await services.sessions.getReview({ sessionId }, { signal });
-      expect(review.ok).toBe(true);
-      const state = await Promise.race([computing, Promise.resolve('pending')]);
-      expect(state).toBe('pending');
-
-      const slim = okValueFrom(await computing);
-      expect(slim.files).toHaveLength(60);
-      const first = slim.files[0];
-      expect(first?.status === 'analyzed' && first.functions).toHaveLength(8);
-      expect(first).toMatchObject({ omittedFunctions: 12, aggregate: { changedFunctions: 20 } });
-      const full = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
-      const fullFirst = full.files[0];
-      expect(fullFirst?.status === 'analyzed' && fullFirst.functions).toHaveLength(20);
-      expect(JSON.stringify(slim).length).toBeLessThan(JSON.stringify(full).length / 2);
-    },
-  );
-
-  test(
-    'cancels the computation when the session head moves',
-    { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger, signal }) => {
-      const { services, sessionId, repo, runner } = await openLargeSession(
-        createServices,
-        repositories,
-        logger,
-      );
-      await advance(repo, 'src/first.ts');
-      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
-      const held = runner.hold();
-      const computing = services.impact.getImpact({ sessionId }, { signal });
-      await held.started;
-      await advance(repo, 'src/second.ts');
-      okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
-      await expect(computing).resolves.toMatchObject({
-        ok: false,
-        error: { code: 'stale-review' },
-      });
-      const moved = okValueFrom(await services.impact.getImpact({ sessionId }, { signal }));
-      expect(moved.files.map((file) => file.path)).toContain('src/second.ts');
-    },
-  );
-
-  test(
-    'does not answer a request whose diff was loading when the head moved',
-    { concurrent: false, timeout: 60_000 },
-    async ({ expect, createServices, repositories, logger, signal }) => {
-      const { services, sessionId } = await openLargeSession(createServices, repositories, logger);
-      const loading = services.impact.getImpact({ sessionId }, { signal });
-      services.impact.observeHead(sessionId, 'f'.repeat(40) as CommitSha);
-      await expect(loading).resolves.toMatchObject({ ok: false, error: { code: 'stale-review' } });
-    },
-  );
-});
-
-interface LargeSession {
-  readonly services: MainServices;
-  readonly repo: TestRepository;
-  readonly runner: HoldableImpactRunner;
-  readonly sessionId: string;
-}
-
-/** A session on sixty new modules, whose review is loaded, with a holdable ImpactGate runner. */
-async function openLargeSession(
-  createServices: CreateServices,
-  repositories: TestRepositories,
-  logger: RecordingLogger,
-): Promise<LargeSession> {
-  const { repo } = await repositories.fromTemplate(sixtyModulesTemplate());
-  const runner = createHoldableImpactRunner(logger.logger);
-  const services = createServices({ impactRunner: runner.runner });
-  const sessionId = okValueFrom(
-    await services.sessions.createLocal({
-      repoPath: repo.directory,
-      baseRef: 'main',
-      headRef: 'feature',
-    }),
-  ).id;
-  okValueFrom(await services.sessions.getReview({ sessionId }));
-  return { services, repo, runner, sessionId };
-}
-
-function sixtyModulesTemplate(): RepositoryTemplate<undefined> {
-  return {
-    name: 'main: sixty modules',
-    build: async (repo): Promise<undefined> => {
-      repo.write('README.md', '# large\n');
-      await repo.commit('base');
-      await repo.git('switch', '--quiet', '-c', 'feature');
-      for (let index = 0; index < 60; index++) {
-        repo.write(`src/module-${String(index)}.ts`, largeModule(index));
-      }
-      await repo.commit('add sixty modules');
-      await repo.git('switch', '--quiet', 'main');
-    },
-  };
-}
-
 /** The feature branch template's merge base with main. */
 interface FeatureBranch {
   readonly mergeBase: string;
-}
-
-/** Settles once the held run has begun. */
-interface HeldRunStart {
-  readonly started: Promise<undefined>;
-}
-
-interface HoldableImpactRunner {
-  readonly runner: ImpactRunner;
-  /** The next run waits until its signal aborts; `started` settles once that run has begun. */
-  readonly hold: () => HeldRunStart;
-}
-
-/** The real worker, except that a held run is parked in the runner instead of racing the test. */
-function createHoldableImpactRunner(logger: Logger): HoldableImpactRunner {
-  const real = createImpactWorker({ logger });
-  let onStart: (() => void) | undefined;
-  return {
-    runner: {
-      run: async (sources, signal): Promise<Result<ImpactReport, ImpactRunFailure>> => {
-        if (onStart === undefined) {
-          return real.run(sources, signal);
-        }
-        const started = onStart;
-        onStart = undefined;
-        started();
-        const parked = Promise.withResolvers<Result<ImpactReport, ImpactRunFailure>>();
-        const cancel = (): void => {
-          parked.resolve({ ok: false, error: { kind: 'cancelled' } });
-        };
-        if (signal?.aborted === true) {
-          cancel();
-        }
-        signal?.addEventListener('abort', cancel, { once: true });
-        return parked.promise;
-      },
-      dispose: (): void => {
-        real.dispose();
-      },
-    },
-    hold: (): HeldRunStart => {
-      const started = Promise.withResolvers<undefined>();
-      onStart = (): void => {
-        started.resolve(undefined);
-      };
-      return { started: started.promise };
-    },
-  };
-}
-
-/** Twenty functions with branching, so a file has real work for the parser and the metrics. */
-function largeModule(seed: number): string {
-  return Array.from({ length: 20 }, (_, index) => {
-    return [
-      `export function task${String(seed)}x${String(index)}(input: number[], limit: number): number {`,
-      '  let total = 0;',
-      '  for (const value of input) {',
-      '    if (value > limit && value % 2 === 0) {',
-      '      total += value;',
-      '    } else if (value < 0 || value === limit) {',
-      '      total -= value;',
-      '    }',
-      '  }',
-      '  return total;',
-      '}',
-      '',
-    ].join('\n');
-  }).join('\n');
-}
-
-async function advance(repo: TestRepository, file: string): Promise<void> {
-  await repo.git('switch', '--quiet', 'feature');
-  repo.write(file, `export const value = ${JSON.stringify(file)};\n`);
-  await repo.commit(`add ${file}`);
-  await repo.git('switch', '--quiet', 'main');
 }
 
 function featureLines(): string[] {

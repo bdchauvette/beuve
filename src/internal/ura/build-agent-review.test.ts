@@ -71,15 +71,12 @@ describe('buildAgentReview', () => {
             "body": "",
             "id": "00000000-0000-4000-8000-000000000002",
             "origin": {
-              "functionName": "parseAll",
-              "kind": "impact-finding",
-              "metric": "cognitive-complexity",
-              "percentile": 97.5,
-              "threshold": 15,
-              "value": 22,
+              "finding": 0,
+              "kind": "chat-answer",
+              "messageId": "msg-1",
             },
             "severity": "issue",
-            "title": "Cognitive complexity 22 exceeds 15 in parseAll",
+            "title": "parseAll never checks for an empty list",
           },
           {
             "anchor": {

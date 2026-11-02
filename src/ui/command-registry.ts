@@ -136,7 +136,6 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     peek: diff,
     flow: diff,
     stop: app,
-    'impact-details': diff,
     'open-in-editor': app,
     'editor-zed': {
       ...app,
@@ -174,7 +173,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     review: {
       run: { kind: 'slash', text: '/review', isPrefill: false },
       slash: '/review',
-      help: 'a preliminary review as a chat answer: findings with severity and confidence, each checked against the code by a second, cheaper pass (unconfirmed ones are dropped) and stageable one by one. Uses your Claude Code login; the diff, ImpactGate findings and any worktree files Claude reads are sent to Anthropic under your account’s terms.',
+      help: 'a preliminary review as a chat answer: findings with severity and confidence, each checked against the code by a second, cheaper pass (unconfirmed ones are dropped) and stageable one by one. Uses your Claude Code login; the diff and any worktree files Claude reads are sent to Anthropic under your account’s terms.',
     },
     'review-paths': {
       run: { kind: 'slash', text: '/review ', isPrefill: true },

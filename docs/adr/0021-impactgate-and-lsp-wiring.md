@@ -1,6 +1,6 @@
 # 0021. Wiring ImpactGate and language servers into main
 
-- Status: Accepted
+- Status: Accepted; the ImpactGate wiring is superseded by [0102](0102-drop-impactgate-and-credit-its-sources.md)
 - Date: 2026-10-28
 
 ## Context

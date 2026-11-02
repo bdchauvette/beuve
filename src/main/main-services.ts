@@ -20,7 +20,6 @@ import type { ReviewEditsServices } from './review-edits/create-review-edits-ser
 import type { FileServices } from './files/create-file-services.ts';
 import type { FlowServices } from './flow/create-flow-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
-import type { ImpactServices } from './impact/create-impact-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
 import type { McpToolServices } from './mcp/mcp-tool-services.ts';
@@ -55,7 +54,6 @@ export interface SessionServices {
  */
 export interface MainServices {
   readonly sessions: SessionServices;
-  readonly impact: ImpactServices;
   readonly files: FileServices;
   readonly order: OrderServices;
   readonly lsp: Pick<LspServices, 'callHierarchy' | 'definition' | 'hover' | 'restart' | 'status'>;

@@ -22,7 +22,6 @@ import type {
   FlowFailureKind,
   FlowGraphResponse,
   GithubAuthStatusView,
-  ImpactView,
   IpcResult,
   LspServerView,
   McpStatus,
@@ -117,8 +116,6 @@ import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
 
-const impactGrace = Temporal.Duration.from({ milliseconds: 1500 });
-
 /**
  * Root of the renderer: the four-zone shell (spec section 4), the zone focus model and the
  * keys the shell already handles. Owns all bridge calls and session state; zones are
@@ -208,12 +205,6 @@ interface SessionIdDetail {
 /** A stacked pull request, by its ref. */
 interface StackRefDetail {
   readonly ref: string;
-}
-
-/** An ImpactGate finding to stage: its file and function. */
-interface StageFindingDetail {
-  readonly path: string;
-  readonly functionName: string;
 }
 
 /** The radar tree mode chosen in its header. */
@@ -801,13 +792,6 @@ export class BeuveApp extends LitElement {
     this.scheduleMenuSync();
   };
 
-  /** Resolves the wait in {@link loadImpactAfterFirstDiff}; set while it waits. */
-  private releaseImpact: (() => void) | undefined;
-
-  private readonly onDiffRendered = (): void => {
-    this.releaseImpact?.();
-  };
-
   private readonly onTreeMode = (event: CustomEvent<TreeModeDetail>): void => {
     this.treeMode = event.detail.mode;
   };
@@ -1010,19 +994,6 @@ export class BeuveApp extends LitElement {
     this.focusedZone = 'diff';
   };
 
-  private readonly onStageFinding = (event: CustomEvent<StageFindingDetail>): void => {
-    const { review } = this;
-    if (review === undefined) {
-      return;
-    }
-    void this.uraCall(async (bridge) => {
-      return bridge.invoke('ura:stage-impact-finding', {
-        sessionId: review.session.id,
-        ...event.detail,
-      });
-    });
-  };
-
   private readonly onPaletteRun = (event: CustomEvent<PaletteRunDetail>): void => {
     this.paletteText = undefined;
     void this.runPaletteAction(event.detail.action);
@@ -1100,7 +1071,6 @@ export class BeuveApp extends LitElement {
   @state() accessor reviewProgress: FileReviewProgressView | undefined;
   /** The review's reading order (ADR 0065), once `session:get-order` answers for its head. */
   @state() accessor order: ReviewOrderView | undefined;
-  @state() accessor impact: ImpactView | undefined;
   @state() accessor peek: PeekState | undefined;
   /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
   @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
@@ -1611,7 +1581,6 @@ export class BeuveApp extends LitElement {
       if (this.sessions.every(({ id }) => id !== sessionId)) {
         void this.refreshSessions();
       }
-      void this.loadImpactAfterFirstDiff(review.value);
       void this.loadTree(review.value);
       void this.loadOrder(review.value);
       void this.refreshLspStatus();
@@ -1625,46 +1594,6 @@ export class BeuveApp extends LitElement {
     } else {
       this.review = undefined;
       this.reviewError = review.error.message;
-    }
-  }
-
-  /**
-   * ImpactGate parses in main's thread, which also serves the renderer's `file://` chunk loads.
-   * Asking only once the first diff has rendered (or after a grace period, for reviews with no
-   * text diff) keeps it from stalling the highlighter's first load (ADR 0025).
-   */
-  private async loadImpactAfterFirstDiff(review: ReviewView): Promise<void> {
-    this.releaseImpact?.();
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, impactGrace.total('milliseconds'));
-      this.releaseImpact = (): void => {
-        clearTimeout(timer);
-        resolve();
-      };
-    });
-    this.releaseImpact = undefined;
-    if (this.review === review) {
-      await this.loadImpact(review);
-    }
-  }
-
-  /** ImpactGate runs after the review has rendered, so parsing never delays the diff. */
-  private async loadImpact(review: ReviewView): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined || review.files.length === 0) {
-      this.impact = undefined;
-      return;
-    }
-    if (this.impact?.headSha !== review.headSha || this.impact.sessionId !== review.session.id) {
-      this.impact = undefined;
-    }
-    const impact = await bridge.invoke('session:get-impact', { sessionId: review.session.id });
-    if (this.review !== review) {
-      return;
-    }
-    this.impact = undefined;
-    if (impact.ok && impact.value.headSha === review.headSha) {
-      this.impact = impact.value;
     }
   }
 
@@ -3066,7 +2995,6 @@ export class BeuveApp extends LitElement {
       .pullRequest=${this.github.pullRequest}
       .files=${this.review?.files}
       .tree=${this.tree}
-      .impact=${this.impact}
       .generatedPaths=${this.reviewDeferrals().generated}
       .reviewMarks=${this.reviewMarks}
       .treeMode=${this.treeMode}
@@ -3104,7 +3032,6 @@ export class BeuveApp extends LitElement {
       }
       .platform=${this.appInfo?.platform ?? ''}
       .error=${this.reviewError}
-      .impact=${this.impact}
       .peek=${this.peek}
       .flow=${this.flow}
       .fileJump=${this.fileJump}
@@ -3124,12 +3051,10 @@ export class BeuveApp extends LitElement {
       @beuve-sheet-request=${this.onSheetRequest}
       @beuve-flow-request=${this.onFlowRequest}
       @beuve-flow-close=${this.onFlowClose}
-      @beuve-diff-rendered=${this.onDiffRendered}
       @beuve-ura-create=${this.onUraCreate}
       @beuve-active-file=${this.onActiveFile}
       @beuve-file-reviewed=${this.onFileReviewed}
       @beuve-open-editor=${this.onOpenEditor}
-      @beuve-ura-stage-finding=${this.onStageFinding}
       @beuve-chat-add=${this.onChatAdd}
       @beuve-insight-stage=${this.onInsightStage}
       @beuve-insight-show-in-chat=${this.onInsightShowInChat}

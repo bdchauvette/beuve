@@ -303,140 +303,6 @@ export interface ForkPointView {
   readonly skippedCommits: number;
 }
 
-export interface GetImpactRequest {
-  readonly sessionId: string;
-}
-
-/** One function's complexity (ADR 0015). */
-export interface FunctionMetricsView {
-  readonly cognitive: number;
-  readonly cyclomatic: number;
-  readonly lines: number;
-  readonly maxNesting: number;
-  readonly parameters: number;
-}
-
-/** Where a function sat on one side of the change. Lines are 1-based and inclusive. */
-export interface FunctionSnapshotView {
-  readonly startLine: number;
-  readonly endLine: number;
-  readonly metrics: FunctionMetricsView;
-}
-
-interface FunctionImpactViewCommon {
-  readonly name: string;
-  /** Its lines intersect the diff. */
-  readonly inDiff: boolean;
-  /** Head minus base, an absent side counting as zeros. */
-  readonly delta: FunctionMetricsView;
-}
-
-/** How the change moved one function. `percentile` (0–100) ranks the head cognitive value. */
-export type FunctionImpactView = FunctionImpactViewCommon &
-  (
-    | {
-        readonly change: 'added';
-        readonly head: FunctionSnapshotView;
-        readonly percentile: number;
-      }
-    | { readonly change: 'removed'; readonly base: FunctionSnapshotView }
-    | {
-        readonly change: 'modified' | 'unchanged';
-        readonly base: FunctionSnapshotView;
-        readonly head: FunctionSnapshotView;
-        readonly percentile: number;
-      }
-    | {
-        readonly change: 'renamed';
-        readonly previousName: string;
-        readonly base: FunctionSnapshotView;
-        readonly head: FunctionSnapshotView;
-        readonly percentile: number;
-      }
-  );
-
-/** Totals for one file of the impact check. */
-export interface FileAggregateView {
-  readonly baseFunctions: number;
-  readonly headFunctions: number;
-  readonly baseCognitive: number;
-  readonly headCognitive: number;
-  readonly cognitiveDelta: number;
-  readonly maxCognitive: number;
-  readonly changedFunctions: number;
-  readonly findings: number;
-}
-
-/**
- * Why a file was not analyzed: no rules for its language, a side over the size limit, a parse
- * failure, a binary side, a submodule, or no text on either side.
- */
-export type ImpactSkipReason =
-  'unsupported-language' | 'too-large' | 'parse-failed' | 'binary' | 'submodule' | 'no-source';
-
-export type FileImpactView =
-  | {
-      readonly status: 'analyzed';
-      readonly path: string;
-      readonly previousPath?: string;
-      readonly language: string;
-      readonly parseErrors: boolean;
-      readonly aggregate: FileAggregateView;
-      /**
-       * The file's changed functions. `session:get-impact` lists only the few the popover shows,
-       * worst first, and counts the rest in `omittedFunctions` (ADR 0053); the MCP tool lists all.
-       */
-      readonly functions: readonly FunctionImpactView[];
-      /** Changed functions this view leaves out. Absent when it leaves none out. */
-      readonly omittedFunctions?: number;
-    }
-  | {
-      readonly status: 'skipped';
-      readonly path: string;
-      readonly previousPath?: string;
-      readonly reason: ImpactSkipReason;
-    };
-
-/** A changed function over the cognitive limit, and how that compares with the base. */
-export interface ImpactFindingView {
-  readonly kind: 'cognitive-complexity';
-  readonly path: string;
-  readonly functionName: string;
-  readonly startLine: number;
-  readonly endLine: number;
-  readonly value: number;
-  readonly limit: number;
-  readonly baseValue?: number;
-  readonly trend: 'introduced' | 'worsened' | 'unchanged' | 'improved';
-  readonly percentile: number;
-}
-
-/**
- * ImpactGate for the diff `session:get-review` shows for the same session, base and head
- * (ADR 0015). Computed on demand and cached per diff, so it never delays the review itself.
- */
-export interface ImpactView {
-  readonly sessionId: string;
-  readonly baseSha: string;
-  readonly headSha: string;
-  readonly cognitiveMax: number;
-  /** Head functions the percentiles rank against. */
-  readonly population: number;
-  readonly files: readonly FileImpactView[];
-  readonly findings: readonly ImpactFindingView[];
-  readonly totals: {
-    readonly analyzedFiles: number;
-    readonly skippedFiles: number;
-    readonly added: number;
-    readonly removed: number;
-    readonly modified: number;
-    readonly cognitiveDelta: number;
-    readonly findings: number;
-  };
-  /** How long the computation that produced this report took (blob reads and parsing), as an ISO-8601 duration. */
-  readonly compute: string;
-}
-
 /**
  * Both sides of one file of the review `session:get-review` shows for the session now, for hunk
  * expansion. `path` is the head-side path (the diff's `path`).
@@ -1182,14 +1048,6 @@ export type UraAnchorView =
 /** Who or what raised a URA item. */
 export type UraOriginView =
   | { readonly kind: 'human' }
-  | {
-      readonly kind: 'impact-finding';
-      readonly metric: 'cognitive-complexity';
-      readonly functionName: string;
-      readonly value: number;
-      readonly threshold: number;
-      readonly percentile: number;
-    }
   /** A chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer. */
   | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
 
@@ -1335,16 +1193,6 @@ export interface StageReviewFindingRequest {
   readonly messageId: string;
   readonly finding: number;
   readonly severity?: UraSeverityView;
-}
-
-/**
- * Stages an ImpactGate finding of the session's current head, named by its file and function;
- * main looks the finding up in its own report. Staging it again returns the existing item.
- */
-export interface StageImpactFindingRequest {
-  readonly sessionId: string;
-  readonly path: string;
-  readonly functionName: string;
 }
 
 /** The item a promotion or staging produced; `created` is false when it already existed. */
@@ -2110,10 +1958,6 @@ export interface InvokeChannelMap {
     readonly request: SetFileReviewedRequest;
     readonly response: IpcResult<SetFileReviewedResponse>;
   };
-  'session:get-impact': {
-    readonly request: GetImpactRequest;
-    readonly response: IpcResult<ImpactView>;
-  };
   'session:get-file-pair': {
     readonly request: GetFilePairRequest;
     readonly response: IpcResult<FilePairView>;
@@ -2206,10 +2050,6 @@ export interface InvokeChannelMap {
   };
   'ura:stage-review-finding': {
     readonly request: StageReviewFindingRequest;
-    readonly response: IpcResult<UraStagedView>;
-  };
-  'ura:stage-impact-finding': {
-    readonly request: StageImpactFindingRequest;
     readonly response: IpcResult<UraStagedView>;
   };
   'ura:set-verdict': {
