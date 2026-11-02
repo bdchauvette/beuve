@@ -9,6 +9,7 @@ function base(): Parameters<typeof describeReviewPreview>[0] {
     sessionId: 's1',
     headSha: 'c'.repeat(40),
     verdict: 'comment' as const,
+    summary: '1 nit.',
     inlineCount: 2,
     bodyCount: 1,
     alreadyPostedCount: 0,

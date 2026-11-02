@@ -10,7 +10,12 @@ export type GithubPostState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'busy'; readonly text: string }
   | { readonly kind: 'confirm'; readonly preview: GithubReviewPreviewView }
-  | { readonly kind: 'own-pull-request'; readonly message: string }
+  | {
+      readonly kind: 'own-pull-request';
+      readonly message: string;
+      /** The reviewer's rewritten summary, kept for posting as a comment; absent if unedited. */
+      readonly summary: string | undefined;
+    }
   | { readonly kind: 'posted'; readonly url: string; readonly text: string }
   | { readonly kind: 'failed'; readonly text: string }
   | { readonly kind: 'head-moved' };

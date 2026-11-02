@@ -186,6 +186,8 @@ interface ReviewEditsDetail {
 /** Post the staged review to GitHub, with this verdict over the derived one. */
 interface GithubPostDetail {
   readonly verdict?: UraVerdictView | undefined;
+  /** The reviewer's rewritten summary; absent while the generated one is unchanged. */
+  readonly summary?: string | undefined;
 }
 
 /** A file and, if any, the line a portal opens at. */
@@ -604,7 +606,7 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
-    void this.postGithubReview(event.detail.verdict);
+    void this.postGithubReview(event.detail);
   };
 
   private readonly onGithubCancel = (): void => {
@@ -1370,7 +1372,7 @@ export class BeuveApp extends LitElement {
   }
 
   /** Posts on the head the confirmation showed; one post at a time (ADR 0078). */
-  private async postGithubReview(verdict: UraVerdictView | undefined): Promise<void> {
+  private async postGithubReview({ verdict, summary }: GithubPostDetail): Promise<void> {
     const bridge = beuveBridge();
     const { review, githubPost } = this;
     if (bridge === undefined || review === undefined || githubPost.kind === 'busy') {
@@ -1385,6 +1387,7 @@ export class BeuveApp extends LitElement {
       sessionId: review.session.id,
       expectedHeadSha,
       ...(verdict !== undefined && { verdict }),
+      ...(summary !== undefined && { summary }),
     });
     if (this.review?.session.id !== review.session.id) {
       return;
@@ -1400,7 +1403,7 @@ export class BeuveApp extends LitElement {
         return;
       }
       if (result.failure === 'own-pull-request') {
-        this.githubPost = { kind: 'own-pull-request', message: result.message };
+        this.githubPost = { kind: 'own-pull-request', message: result.message, summary };
       } else {
         this.githubPost = { kind: 'failed', text: result.message };
       }

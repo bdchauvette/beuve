@@ -483,6 +483,7 @@ const githubReviewRequest = z.strictObject({
   sessionId,
   verdict: uraVerdict.optional(),
   expectedHeadSha,
+  summary: z.string().max(65_536).optional(),
 });
 const githubLinkRequest = z.strictObject({ url: z.string().min(1).max(8192) });
 const openUrlRequest = z.strictObject({ url: z.string().min(1).max(8192) });
@@ -1071,11 +1072,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { sessionId: id, verdict, expectedHeadSha: head } = parsed.data;
+      const { sessionId: id, verdict, expectedHeadSha: head, summary } = parsed.data;
       return services.github.postReview({
         sessionId: id,
         expectedHeadSha: head,
         ...(verdict !== undefined && { verdict }),
+        ...(summary !== undefined && { summary }),
       });
     },
     'github:open-link': async (request): Promise<IpcResult<OpenedView>> => {

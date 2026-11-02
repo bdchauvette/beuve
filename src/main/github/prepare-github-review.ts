@@ -8,6 +8,7 @@ import { diffRange } from '#internal/git/diff-range.ts';
 import type { PullRequestRef } from '#internal/github/pull-request.ts';
 import { buildGithubReview } from '#internal/ura/build-github-review.ts';
 import type { GithubReviewPayload } from '#internal/ura/build-github-review.ts';
+import { reviewSummaryFrom } from '#internal/ura/review-summary-from.ts';
 import type { UraArtifact, UraEntry } from '#internal/ura/ura-artifact.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
@@ -92,7 +93,10 @@ export async function prepareGithubReview(
   const fresh = artifact.value.entries.filter((entry) => !posted.has(entry.item.id));
   const options = { commentableRanges: commentableRangesFrom(diff.value.files) };
   const unposted: UraArtifact = { ...artifact.value, entries: fresh };
-  const payload = buildGithubReview(unposted, options);
+  const payload = buildGithubReview(unposted, {
+    ...options,
+    ...(request.summary !== undefined && { summary: request.summary }),
+  });
   const entries = fresh.map((entry) => {
     return {
       entry,
@@ -108,6 +112,7 @@ export async function prepareGithubReview(
       sessionId: session.id,
       headSha,
       verdict: artifact.value.verdict.value,
+      summary: reviewSummaryFrom(unposted),
       inlineCount: payload.comments.length,
       bodyCount: fresh.length - payload.comments.length,
       alreadyPostedCount: artifact.value.entries.length - fresh.length,
