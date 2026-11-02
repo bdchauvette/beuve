@@ -1,34 +1,23 @@
 import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { keyed } from 'lit/directives/keyed.js';
 
 import type {
   AppInfo,
-  ChatCitationView,
-  ChatMentionView,
-  ChatMessageView,
   CreateLocalSessionRequest,
   DiffDisplayView,
-  DiffFileView,
   EditorId,
-  FileAttributesView,
-  FilePairView,
   LspServerView,
   McpStatus,
   OpenPullRequestRequest,
   ReviewOrderMode,
   ReviewView,
   SetDiffDisplayRequest,
-  SidebarSideView,
   UraExportTarget,
-  UraItemView,
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
 import './beuve-hover-card.ts';
-import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
-import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
 import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
@@ -40,21 +29,11 @@ import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
-import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
-import { planDiffDeferrals } from './plan-diff-deferrals.ts';
-import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
-import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveCommandPalette } from './beuve-command-palette.ts';
-import type { BeuveDiffStream } from './beuve-diff-stream.ts';
-import type { BeuveSheetView } from './beuve-sheet-view.ts';
-import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
-import type { BeuveUraDock } from './beuve-ura-dock.ts';
-import type { MentionTarget } from './chat-draft.ts';
 import type { BeuveOpenPanel, FolderChooser, RepositoryInspector } from './beuve-open-panel.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
-import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { commandRegistry } from './command-registry.ts';
 import type { CommandDefinition } from './command-registry.ts';
@@ -62,88 +41,32 @@ import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { menuStateFrom } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
-import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
-import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
+import type { AppActions } from './app-actions.ts';
+import type { AppModel } from './app-model.ts';
+import './beuve-review.ts';
+import type { BeuveReview } from './beuve-review.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
-import type { SidebarResizeDetail } from './beuve-sidebar-handle.ts';
-import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import { displayChangeFor } from './display-change-for.ts';
-import type { SidebarZone } from './sidebar-zone.ts';
 import { ReviewDataController } from './review-data-controller.ts';
 import { SessionController } from './session-controller.ts';
 import { SettingsController } from './settings-controller.ts';
 import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
-import type { EditorPlace } from './review-edits-controller.ts';
-import type { UraUpdateDetail } from './ura-controller.ts';
-import type { GithubPostDetail } from './github-controller.ts';
 import type { ReviewRef } from './review-ref.ts';
 import type { ChatAppCommand } from './chat-controller.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
-import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
-import { cycleZone } from './cycle-zone.ts';
-import { mentionFromTarget } from './mention-from-target.ts';
-import { mergeReviewInsights } from './merge-review-insights.ts';
-import { targetFromAnchor } from './target-from-anchor.ts';
-import type { ReviewInsight } from './merge-review-insights.ts';
-import { planChatStage } from './plan-chat-stage.ts';
-import { withoutStagedInsights } from './without-staged-insights.ts';
-import type { FlowState } from './flow-state.ts';
-import type { GithubDockState } from './github-post-state.ts';
-import { lineFromTarget } from './line-from-target.ts';
-import { relativeLineTextFrom } from './relative-line-text-from.ts';
-import type { PeekChildren, PeekState } from './peek-state.ts';
-import type { RadarTreeMode } from './plan-radar-tree.ts';
-import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
-import { runSheetAction } from './run-sheet-action.ts';
-import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
-import type { SheetPlace } from './step-sheet-history.ts';
-import type { ZoneId } from './zones.ts';
-import type { ChatStreamSubscribe } from './text-part-stream.ts';
-import type {
-  ActiveFileDetail,
-  ChatAddDetail,
-  ChatCiteDetail,
-  ChatMentionDetail,
-  ChatSubmitDetail,
-  EditorOpenDetail,
-  FileReviewedDetail,
-  FindingRefDetail,
-  ReviewEditsDetail,
-  LineRequestDetail,
-  MessageIdDetail,
-  PaletteRunDetail,
-  PeekExpandDetail,
-  SessionIdDetail,
-  StackRefDetail,
-  TreeModeDetail,
-  TreeSelectDetail,
-  UraExportDetail,
-  UraItemIdDetail,
-  UraJumpDetail,
-  UraReorderDetail,
-  UraTransitionDetail,
-  UraVerdictDetail,
-  UrlDetail,
-} from './app-event-details.ts';
+import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeSheets } from './describe-sheets.ts';
 import { describeGenerated } from './describe-generated.ts';
 import { describeInsights } from './describe-insights.ts';
 import { describeSkipReviewed } from './describe-skip-reviewed.ts';
 import { describeOrder } from './describe-order.ts';
-import { signInHintOf } from './sign-in-hint-of.ts';
-import { dockItemOf } from './dock-item-of.ts';
-import { sheetActionFrom } from './sheet-action-from.ts';
-import { peekStateFrom } from './peek-state-from.ts';
-import { flowStateFrom } from './flow-state-from.ts';
-import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
-import { isEditableElement } from './is-editable-element.ts';
 import { isTextFocused } from './is-text-focused.ts';
 
 /**
@@ -234,15 +157,10 @@ export class BeuveApp extends LitElement {
     reloading: (): void => {
       this.reviewEdits.clearStatus();
     },
-    settled: (): void => {
-      this.peek = undefined;
-      this.flow = undefined;
-    },
     loaded: ({ review, previousHead }): void => {
       if (previousHead !== undefined && previousHead !== review.headSha) {
         this.github.invalidatePost();
       }
-      this.focusedZone = 'diff';
       this.reviewData.open(review);
       void this.refreshLspStatus();
       void this.ura.refresh(review.session.id);
@@ -316,37 +234,54 @@ export class BeuveApp extends LitElement {
       return this.review?.session.id;
     },
     focusPath: (): string | undefined => {
-      return this.focusPathOfReview();
+      return this.reviewElement()?.focusPathOfReview();
     },
     restoreDraft: (text, mentions): void => {
-      this.chatDrawer()?.setDraft(text, mentions);
+      this.reviewElement()?.chatDrawer()?.setDraft(text, mentions);
     },
     runAppCommand: (command): void => {
       this.runChatAppCommand(command);
     },
   });
-  /** The file the diff stream's cursor is on, sent as the question's focus. */
-  private activePath: string | undefined;
-  private jumpNonce = 0;
-  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
-
-  private readonly onFocusIn = (event: FocusEvent): void => {
-    const zone = event
-      .composedPath()
-      .find((target) => target instanceof HTMLElement && target.dataset['zone'] !== undefined);
-    if (zone instanceof HTMLElement) {
-      this.focusedZone = zone.dataset['zone'] as ZoneId;
-    }
-    this.scheduleMenuSync();
+  private readonly model: AppModel = {
+    session: this.session,
+    github: this.github,
+    settings: this.settings,
+    reviewData: this.reviewData,
+    ura: this.ura,
+    reviewEdits: this.reviewEdits,
+    chat: this.chat,
   };
+  private readonly actions: AppActions = {
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    openLink: async (url): Promise<void> => {
+      return this.openLink(url);
+    },
+    openUrl: async (url): Promise<void> => {
+      return this.openUrl(url);
+    },
+    setDisplay: async (change): Promise<DiffDisplayView | undefined> => {
+      return this.setDisplay(change);
+    },
+    refreshLspStatus: async (): Promise<void> => {
+      return this.refreshLspStatus();
+    },
+    scheduleMenuSync: (): void => {
+      this.scheduleMenuSync();
+    },
+  };
+  /** Changes on every render of the shell, so the review re-renders with any controller. */
+  private revision = 0;
+  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
 
   private readonly onFocusOut = (): void => {
     this.scheduleMenuSync();
   };
-
   /** A right-click: the context menu of what it landed on, built by main from the catalog. */
   private readonly onContextMenu = (event: MouseEvent): void => {
-    const kind = this.contextKindAt(event);
+    const kind = this.reviewElement()?.contextKindAt(event);
     if (kind === undefined) {
       return;
     }
@@ -362,8 +297,6 @@ export class BeuveApp extends LitElement {
     });
   };
 
-  /** The chat answer a context menu was opened on, for Stage Answer as a Note. */
-  private contextAnswerId: string | undefined;
   private isMenuSyncPending = false;
   private lastMenuState = '';
 
@@ -379,39 +312,6 @@ export class BeuveApp extends LitElement {
     void this.github.open(event.detail);
   };
 
-  /** A stack chip: the neighbour lives in the same repository, so it uses the same clone. */
-  private readonly onOpenStack = (event: CustomEvent<StackRefDetail>): void => {
-    const source = this.review?.session.source;
-    void this.github.open({
-      ref: event.detail.ref,
-      ...(source !== undefined && { repoPath: source.repoPath }),
-    });
-  };
-
-  /** `chat:stream` for the drawer's streaming Markdown (ADR 0073); none without the bridge. */
-  private readonly subscribeChatStream: ChatStreamSubscribe | undefined =
-    subscribeChatStreamOf(beuveBridge());
-
-  private readonly onOpenLink = (event: CustomEvent<UrlDetail>): void => {
-    void this.openLink(event.detail.url);
-  };
-
-  private readonly onOpenChatLink = (event: CustomEvent<UrlDetail>): void => {
-    void this.openUrl(event.detail.url);
-  };
-
-  private readonly onGithubPreview = (): void => {
-    void this.github.previewReview();
-  };
-
-  private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
-    void this.github.postReview(event.detail);
-  };
-
-  private readonly onGithubCancel = (): void => {
-    this.github.cancelPost();
-  };
-
   /** Edits happen in the editor, outside beuve: coming back to the window counts them again. */
   private readonly onWindowFocus = (): void => {
     const sessionId = this.review?.session.id;
@@ -420,233 +320,8 @@ export class BeuveApp extends LitElement {
     }
   };
 
-  private readonly onReviewEdits = (event: CustomEvent<ReviewEditsDetail>): void => {
-    switch (event.detail.op) {
-      case 'open': {
-        void this.openReviewEdits();
-        return;
-      }
-      case 'preview': {
-        void this.reviewEdits.previewStage();
-        return;
-      }
-      case 'stage': {
-        void this.reviewEdits.stage();
-        return;
-      }
-      case 'discard-preview': {
-        void this.reviewEdits.previewDiscard();
-        return;
-      }
-      case 'discard': {
-        void this.reviewEdits.discard();
-        return;
-      }
-      default: {
-        this.reviewEdits.cancel();
-      }
-    }
-  };
-
-  private readonly onMarkReviewed = (): void => {
-    void this.session.markReviewed();
-  };
-
-  private readonly onPeekRequest = (event: CustomEvent<LineRequestDetail>): void => {
-    void this.openPeek(event.detail.path, event.detail.line);
-  };
-
-  private readonly onSheetRequest = (event: CustomEvent<SheetOpenDetail>): void => {
-    void this.sheetAction({ kind: 'open', ...event.detail });
-  };
-
-  private readonly onSheetClose = (): void => {
-    this.inlineSheet = undefined;
-    this.focusedZone = 'diff';
-  };
-
-  private readonly onPeekExpand = (event: CustomEvent<PeekExpandDetail>): void => {
-    void this.expandPeek(event.detail.nodeId);
-  };
-
-  private readonly onPeekClose = (): void => {
-    this.peek = undefined;
-  };
-
-  private readonly onTokenHover = (event: CustomEvent<HoverPoint>): void => {
-    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.point(event.detail);
-  };
-
-  private readonly onTokenHoverEnd = (): void => {
-    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
-  };
-
-  /** ⌘/Ctrl-click on a token: Go to Definition on it, as the menu command does. */
-  private readonly onTokenJump = (event: CustomEvent<TokenJumpDetail>): void => {
-    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
-    const { target, token } = event.detail;
-    void this.sheetAction(sheetActionFrom('open-definition', target, token));
-  };
-
-  /** The language server's hover for a token of the diff on screen. */
-  private readonly askHover: HoverAsk = async (request) => {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
-    }
-    return bridge.invoke('lsp:hover', request);
-  };
-
-  private readonly onFlowRequest = (event: CustomEvent<LineRequestDetail>): void => {
-    void this.openFlow(event.detail.path, event.detail.line);
-  };
-
-  private readonly onFlowClose = (): void => {
-    this.flow = undefined;
-  };
-
-  private insightCache: { signature: string; insights: readonly ReviewInsight[] } | undefined;
-
-  private readonly onChatSubmit = (event: CustomEvent<ChatSubmitDetail>): void => {
-    this.chat.submit(event.detail.text, event.detail.mentions ?? []);
-  };
-
-  /** A context chip, in the input or the transcript: show its lines in the diff. */
-  private readonly onChatMention = (event: CustomEvent<ChatMentionDetail>): void => {
-    this.openMention(event.detail.mention);
-  };
-
-  /** The gutter's chat button on a diff card. */
-  private readonly onChatAdd = (event: CustomEvent<ChatAddDetail>): void => {
-    void this.addToChat(event.detail.target);
-  };
-
-  private readonly onChatCancelCompaction = (): void => {
-    const { review } = this;
-    if (review !== undefined) {
-      void beuveBridge()?.invoke('chat:cancel', { sessionId: review.session.id });
-    }
-  };
-
-  private readonly onChatEscape = (): void => {
-    this.focusedZone = 'diff';
-  };
-
-  private readonly onChatCancel = (event: CustomEvent<MessageIdDetail>): void => {
-    void beuveBridge()?.invoke('chat:cancel', { messageId: event.detail.messageId });
-  };
-
-  private readonly onChatStage = (event: CustomEvent<MessageIdDetail>): void => {
-    void this.stageChatAnswer(event.detail.messageId);
-  };
-
-  private readonly onChatStageFinding = (event: CustomEvent<FindingRefDetail>): void => {
-    void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
-  };
-
-  private readonly onInsightStage = (event: CustomEvent<FindingRefDetail>): void => {
-    event.stopPropagation();
-    void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
-  };
-
-  /** "Show in chat" on a diff note: the chat tab opens at that finding; the diff keeps the focus. */
-  private readonly onInsightShowInChat = (event: CustomEvent<FindingRefDetail>): void => {
-    event.stopPropagation();
-    this.sidebarHidden = false;
-    this.sidebarTab = 'chat';
-    void this.updateComplete.then(async () => {
-      return this.chatDrawer()?.revealFinding(event.detail.messageId, event.detail.finding);
-    });
-  };
-
-  private readonly onChatClearQueue = (): void => {
-    void this.chat.clear(true);
-  };
-
-  private readonly onChatCite = (event: CustomEvent<ChatCiteDetail>): void => {
-    this.openCitation(event.detail.citation);
-  };
-
-  private readonly onOpenEditor = (event: CustomEvent<EditorOpenDetail>): void => {
-    void this.openInEditor(event.detail.path, event.detail.line);
-  };
-
-  /** File Reviewed in the stream: mark the file reviewed or take the mark back (ADR 0064). */
-  private readonly onFileReviewed = (event: CustomEvent<FileReviewedDetail>): void => {
-    void this.reviewData.setFileReviewed(event.detail.path, event.detail.reviewed);
-  };
-
-  private readonly onActiveFile = (event: CustomEvent<ActiveFileDetail>): void => {
-    this.activePath = event.detail.path;
-    this.scheduleMenuSync();
-  };
-
-  private readonly onTreeMode = (event: CustomEvent<TreeModeDetail>): void => {
-    this.treeMode = event.detail.mode;
-  };
-
-  private readonly onTreeSelect = (event: CustomEvent<TreeSelectDetail>): void => {
-    this.jumpNonce += 1;
-    this.fileJump = { path: event.detail.path, nonce: this.jumpNonce };
-  };
-
-  /** {@link planDiffDeferrals} for the review and its attributes, recomputed when either changes. */
-  private deferralPlan: {
-    readonly files: readonly DiffFileView[] | undefined;
-    readonly attributes: FileAttributesView | undefined;
-    readonly deferrals: ReadonlyMap<string, DiffDeferral>;
-    readonly generated: ReadonlySet<string>;
-  } = { files: undefined, attributes: undefined, deferrals: new Map(), generated: new Set() };
-
-  /** Hunk expansion reads whole files through `session:get-file-pair`. */
-  private readonly loadFilePair: FilePairLoader = async (
-    path: string,
-  ): Promise<FilePairView | undefined> => {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return undefined;
-    }
-    const pair = await bridge.invoke('session:get-file-pair', {
-      sessionId: review.session.id,
-      path,
-    });
-    if (pair.ok) {
-      return pair.value;
-    }
-    return undefined;
-  };
-
-  private readonly onUraCreate = (event: CustomEvent<UraCreateRequest>): void => {
-    void this.ura.create(event.detail);
-  };
-
-  private readonly onUraUpdate = (event: CustomEvent<UraUpdateDetail>): void => {
-    void this.ura.update(event.detail);
-  };
-
-  /** The dock's "Edit suggestion": the stream opens Suggest Edit on the item's lines (ADR 0043). */
-  private readonly onUraEditSuggestion = (event: CustomEvent<UraItemIdDetail>): void => {
-    this.jumpNonce += 1;
-    this.suggestionJump = { itemId: event.detail.itemId, nonce: this.jumpNonce };
-    this.focusedZone = 'diff';
-  };
-
-  private readonly onStatusNotice = (event: CustomEvent<StatusNotice>): void => {
-    this.showNotice(event.detail);
-  };
-
-  /** A notice's button: runs its catalog command as the menu would. */
-  private readonly onSidebarResize = (event: CustomEvent<SidebarResizeDetail>): void => {
-    this.sidebarWidth = event.detail.width;
-  };
-
   private readonly onDialogDismiss = (): void => {
     this.closeOpenDialog();
-  };
-
-  private readonly onSidebarTab = (event: CustomEvent<SidebarTabDetail>): void => {
-    this.focusSidebar(event.detail.zone);
   };
 
   private readonly onTitlebarOpen = (): void => {
@@ -674,45 +349,6 @@ export class BeuveApp extends LitElement {
     }
   };
 
-  /** A display change from the stream: store it, and refetch the diff if whitespace changed. */
-  private readonly onDisplayChange = (event: CustomEvent<SetDiffDisplayRequest>): void => {
-    void this.setDisplay(event.detail);
-  };
-
-  private readonly onUraTransition = (event: CustomEvent<UraTransitionDetail>): void => {
-    void this.ura.transition(event.detail.itemId, event.detail.to);
-  };
-
-  private readonly onUraReorder = (event: CustomEvent<UraReorderDetail>): void => {
-    void this.ura.reorder(event.detail.itemIds);
-  };
-
-  private readonly onUraExport = (event: CustomEvent<UraExportDetail>): void => {
-    void this.ura.export(event.detail.target);
-  };
-
-  private readonly onUraSetVerdict = (event: CustomEvent<UraVerdictDetail>): void => {
-    void this.ura.setVerdict(event.detail.verdict);
-  };
-
-  private readonly onUraJump = (event: CustomEvent<UraJumpDetail>): void => {
-    const { placement } = event.detail.item;
-    let target = event.detail.item.anchor;
-    if (placement.kind === 'current') {
-      target = placement.anchor;
-    }
-    if (target.kind === 'change') {
-      return;
-    }
-    this.jumpNonce += 1;
-    this.fileJump = {
-      path: target.path,
-      ...(target.kind === 'lines' && placement.kind === 'current' && { line: target.startLine }),
-      nonce: this.jumpNonce,
-    };
-    this.focusedZone = 'diff';
-  };
-
   private readonly onPaletteRun = (event: CustomEvent<PaletteRunDetail>): void => {
     this.paletteText = undefined;
     void this.runPaletteAction(event.detail.action);
@@ -738,7 +374,7 @@ export class BeuveApp extends LitElement {
 
   private readonly onShortcutsClose = (): void => {
     this.overlayOpen = false;
-    this.refocusZone();
+    this.reviewElement()?.refocusZone();
   };
 
   private readonly chooseFolder: FolderChooser = async (
@@ -761,34 +397,13 @@ export class BeuveApp extends LitElement {
       }
     );
   };
-
-  @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor overlayOpen = false;
   @state() accessor statusNotice: StatusNotice | undefined;
-  /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
-  @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
   @state() accessor mcpStatus: McpStatus | undefined;
-  @state() accessor peek: PeekState | undefined;
-  /** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
-  @state() accessor inlineSheet: { readonly sha: string; readonly place: SheetPlace } | undefined;
-  /** The control-flow portal; at most one of `peek` and `flow` is open at a time. */
-  @state() accessor flow: FlowState | undefined;
-  @state() accessor fileJump: FileJump | undefined;
-  @state() accessor treeMode: RadarTreeMode = 'diff-only';
   /** The open session's URA items, every status, placed on its current head. */
   /** The language servers beuve has started, as the status bar lists them. */
   @state() accessor lspServers: readonly LspServerView[] | undefined;
-  /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
-  @state() accessor sidebarSide: SidebarSideView = 'right';
-  @state() accessor sidebarHidden = false;
-  /** Dragged sidebar width in px; `undefined` is the stylesheet's responsive default. */
-  @state() accessor sidebarWidth: number | undefined = undefined;
-  /** The terminal panel under the diff (ADR 0095); its shells run on while it is hidden. */
-  @state() accessor terminalShown = false;
-  @state() accessor isTerminalFocused = false;
-  /** The sidebar tab on show: intent and files, the review or the chat. */
-  @state() accessor sidebarTab: SidebarZone = 'intent';
   @state() accessor openDialog = false;
 
   /** The palette's starting text while it is open. */
@@ -812,7 +427,6 @@ export class BeuveApp extends LitElement {
 
   private connect(): void {
     addEventListener('focus', this.onWindowFocus);
-    this.addEventListener('focusin', this.onFocusIn);
     this.addEventListener('focusout', this.onFocusOut);
     this.addEventListener('contextmenu', this.onContextMenu);
     const bridge = beuveBridge();
@@ -835,7 +449,6 @@ export class BeuveApp extends LitElement {
 
   private disconnect(): void {
     removeEventListener('focus', this.onWindowFocus);
-    this.removeEventListener('focusin', this.onFocusIn);
     this.removeEventListener('focusout', this.onFocusOut);
     this.removeEventListener('contextmenu', this.onContextMenu);
     for (const unsubscribe of this.unsubscribes) {
@@ -890,47 +503,6 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  /** Where Open Review Edits opens: the tree's file, else the diff's line, else the first file. */
-  private reviewEditsLocation(review: ReviewView): EditorPlace | undefined {
-    const treePath = this.treePath();
-    if (treePath !== undefined) {
-      return { path: treePath, line: 1 };
-    }
-    const target = this.stream()?.target();
-    if (target !== undefined && target.kind !== 'change') {
-      return { path: target.file.path, line: lineFromTarget(target) ?? 1 };
-    }
-    const first = review.files.find((file) => file.status !== 'deleted');
-    if (first === undefined) {
-      return undefined;
-    }
-    return { path: first.path, line: 1 };
-  }
-
-  /** Open Review Edits (ADR 0088): the writable branch, made on first use, in the editor. */
-  private async openReviewEdits(): Promise<void> {
-    const { review } = this;
-    if (review === undefined) {
-      return;
-    }
-    await this.reviewEdits.open(this.reviewEditsLocation(review));
-  }
-
-  /** Open in Editor: opens the head-side file in the reviewer's editor (ADR 0033). */
-  private async openInEditor(path: string, line: number): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const opened = await bridge.invoke('editor:open', { sessionId: review.session.id, path, line });
-    if (opened.ok) {
-      this.showNotice(describeEditorOpen(opened.value));
-    } else {
-      this.showNotice({ tone: 'error', text: opened.error.message });
-    }
-  }
-
   /** What depends on the display changing: the file order, the sidebar side, the diff itself. */
   private onDisplayApplied({ previous, next }: DisplayTransition): void {
     const isWhitespaceChanged = next.ignoreWhitespace !== previous.ignoreWhitespace;
@@ -938,7 +510,6 @@ export class BeuveApp extends LitElement {
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {
       void this.reviewData.reloadOrder(this.review);
     }
-    this.sidebarSide = next.sidebarSide;
     if (isWhitespaceChanged && this.session.selectedId !== '') {
       void this.session.select(this.session.selectedId);
     }
@@ -989,157 +560,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.chat.note('info', ...describeEditorSettings(result.value));
-  }
-
-  private reviewDeferrals(): typeof this.deferralPlan {
-    const files = this.review?.files;
-    let attributes = this.reviewData.fileAttributes;
-    if (attributes?.headSha !== this.review?.headSha) {
-      attributes = undefined;
-    }
-    if (this.deferralPlan.files === files && this.deferralPlan.attributes === attributes) {
-      return this.deferralPlan;
-    }
-    const deferrals = planDiffDeferrals(files ?? [], attributes);
-    const generated = new Set(
-      [...deferrals]
-        .filter(([, deferral]) => deferral.reason === 'generated' || deferral.reason === 'no-diff')
-        .map(([path]) => path),
-    );
-    this.deferralPlan = { files, attributes, deferrals, generated };
-    return this.deferralPlan;
-  }
-
-  private async openPeek(path: string, line: number | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    this.flow = undefined;
-    if (line === undefined) {
-      this.peek = {
-        path,
-        line,
-        status: 'error',
-        message: 'This file has no head-side change to peek at.',
-      };
-      return;
-    }
-    const pending: PeekState = { path, line, status: 'loading' };
-    this.peek = pending;
-    const answer = await bridge.invoke('lsp:call-hierarchy', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-      path,
-      line,
-      direction: 'incoming',
-    });
-    if (this.peek !== pending || this.review !== review) {
-      return;
-    }
-    this.peek = peekStateFrom(path, line, answer);
-  }
-
-  private async openFlow(path: string, line: number | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    this.peek = undefined;
-    if (line === undefined) {
-      this.flow = {
-        path,
-        line,
-        status: 'error',
-        message: 'This file has no head-side change to draw a flow for.',
-      };
-      return;
-    }
-    const pending: FlowState = { path, line, status: 'loading' };
-    this.flow = pending;
-    const answer = await bridge.invoke('flow:get-graph', {
-      sessionId: review.session.id,
-      path,
-      line,
-    });
-    if (this.flow !== pending || this.review !== review) {
-      return;
-    }
-    this.flow = flowStateFrom(path, line, answer);
-  }
-
-  /** Restart Language Servers: the head checkout's servers start afresh on the next request. */
-  private async restartLanguageServers(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const restarted = await bridge.invoke('lsp:restart', { sessionId: review.session.id });
-    if (restarted.ok) {
-      this.showNotice({ tone: 'info', text: 'Language servers restarted for this head.' });
-      void this.refreshLspStatus();
-    } else if (restarted.error.code !== 'cancelled') {
-      this.showNotice({ tone: 'error', text: restarted.error.message });
-    }
-  }
-
-  /** Copy Relative Line Number (ADR 0096): `path:line` of the target, for test runners. */
-  private async copyRelativeLine(): Promise<void> {
-    const bridge = beuveBridge();
-    const target = this.stream()?.target();
-    if (bridge === undefined || target === undefined) {
-      return;
-    }
-    const text = relativeLineTextFrom(target);
-    if (text === undefined) {
-      return;
-    }
-    const copied = await bridge.invoke('clipboard:write-text', { text });
-    if (copied.ok) {
-      this.showNotice({ tone: 'info', text: `Copied ${revealFormatControls(text)}.` });
-    } else {
-      this.showNotice({ tone: 'error', text: `Could not copy: ${copied.error.message}` });
-    }
-  }
-
-  private async expandPeek(nodeId: string): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, peek } = this;
-    if (bridge === undefined || review === undefined || peek?.status !== 'ready') {
-      return;
-    }
-    const withChildren = (state: PeekState, children: PeekChildren): PeekState => {
-      if (state.status === 'ready') {
-        return { ...state, children: new Map(state.children).set(nodeId, children) };
-      }
-      return state;
-    };
-    this.peek = withChildren(peek, { status: 'loading' });
-    const answer = await bridge.invoke('lsp:call-hierarchy', {
-      sessionId: review.session.id,
-      expectedHeadSha: review.headSha,
-      path: peek.path,
-      line: peek.line ?? 1,
-      direction: 'incoming',
-      nodeId,
-    });
-    const current = this.currentPeek();
-    if (current?.status !== 'ready' || current.root.id !== peek.root.id) {
-      return;
-    }
-    if (answer.ok) {
-      this.peek = withChildren(current, { status: 'ready', calls: answer.value.calls });
-    } else {
-      this.peek = withChildren(current, { status: 'error', message: answer.error.message });
-    }
-  }
-
-  /** Reads the peek state afresh after an await, when it may have changed. */
-  private currentPeek(): PeekState | undefined {
-    return this.peek;
   }
 
   /** The preference slash commands of the chat; the controller has echoed what was typed. */
@@ -1204,219 +624,21 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'sidebar': {
-        void this.setSidebarSide(command.side).then(() => {
-          this.chat.note('info', `Sidebar on the ${command.side}.`);
-        });
+        void this.reviewElement()
+          ?.setSidebarSide(command.side)
+          .then(() => {
+            this.chat.note('info', `Sidebar on the ${command.side}.`);
+          });
         return;
       }
     }
   }
-
-  /** Stages an answer in the review dock as a question note (spec Zone 4). */
-  private async stageChatAnswer(messageId: string): Promise<void> {
-    const plan = planChatStage(this.chat.entries, messageId, this.diffPaths());
-    if (plan === undefined) {
-      return;
-    }
-    await this.ura.stageChatAnswer(plan, messageId);
-  }
-
-  private focusPathOfReview(): string | undefined {
-    const { activePath } = this;
-    if (this.review?.files.some((file) => file.path === activePath) === true) {
-      return activePath;
-    }
-    return undefined;
-  }
-
-  private chatDrawer(): BeuveChatDrawer | undefined {
-    return this.renderRoot.querySelector<BeuveChatDrawer>('beuve-chat-drawer') ?? undefined;
-  }
-
-  /**
-   * Add to Chat (ADR 0046): what the focused region points at becomes a chip in the chat input. The diff
-   * gives its selection, hunk or file; the dock its item's anchor; the tree its focused file; the
-   * palette its highlighted file or note. The chat tab opens with the input focused.
-   */
-  private async addSelectionToChat(): Promise<void> {
-    if (this.review === undefined) {
-      return;
-    }
-    const target = this.selectionTarget();
-    if (typeof target === 'string') {
-      this.showNotice({ tone: 'info', text: target });
-      return;
-    }
-    await this.addToChat(target);
-  }
-
-  private selectionTarget(): MentionTarget | string {
-    if (this.paletteText !== undefined) {
-      const palette =
-        this.renderRoot.querySelector<BeuveCommandPalette>('beuve-command-palette') ?? undefined;
-      const action = palette?.activeAction();
-      this.closePalette();
-      if (action?.kind === 'file') {
-        return { path: action.path, side: 'head' };
-      }
-      if (action?.kind !== 'ura-item') {
-        return 'Pick a file or a staged note in the palette first.';
-      }
-      const item = this.ura.items.find(({ id }) => id === action.itemId);
-      if (item === undefined) {
-        return 'Pick a file or a staged note in the palette first.';
-      }
-      return this.itemTarget(item);
-    }
-    switch (this.focusedZone) {
-      case 'ura': {
-        const item = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
-        if (item === undefined) {
-          return nothingSelected;
-        }
-        return this.itemTarget(item);
-      }
-      case 'intent': {
-        const path = this.renderRoot
-          .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
-          ?.focusedPath();
-        if (path === undefined) {
-          return 'Focus a file in the tree to add it.';
-        }
-        return { path, side: 'head' };
-      }
-      default: {
-        return (
-          this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream')?.chatMention() ??
-          nothingSelected
-        );
-      }
-    }
-  }
-
-  /** A staged note's lines at this head, or its file, through the diff's own adapter (ADR 0063). */
-  private itemTarget(item: UraItemView): MentionTarget | string {
-    if (item.placement.kind !== 'current') {
-      return 'That note is outdated: its lines are not at this head.';
-    }
-    const target = targetFromAnchor(item.placement.anchor, this.review?.files ?? []);
-    if (target === undefined) {
-      return 'That note’s file is not in this diff.';
-    }
-    return (
-      mentionFromTarget(target) ?? 'That note is on the whole change; pick a line or file note.'
-    );
-  }
-
-  /** Adds a chip for `target` at the review's head (or base) and focuses the chat input. */
-  private async addToChat(target: MentionTarget): Promise<void> {
-    const { review } = this;
-    if (review === undefined) {
-      return;
-    }
-    let sha = review.headSha;
-    if (target.side === 'base') {
-      sha = review.baseSha;
-    }
-    const mention: ChatMentionView = { ...target, sha };
-    this.focusSidebar('chat');
-    await this.updateComplete;
-    const added = await this.chatDrawer()?.addMention(mention);
-    if (added === 'full') {
-      this.showNotice({ tone: 'info', text: 'A question takes at most 8 selections.' });
-    } else if (added === 'duplicate') {
-      this.showNotice({ tone: 'info', text: 'Those lines are already in the question.' });
-    }
-  }
-
-  /** A chip: show its lines in the diff stream, or say the file is outside the change. */
-  private openMention(mention: ChatMentionView): void {
-    const file = this.review?.files.find((candidate) => {
-      if (mention.side === 'base') {
-        return (
-          (candidate.oldPath ?? candidate.path) === mention.path && candidate.status !== 'added'
-        );
-      }
-      return candidate.path === mention.path && candidate.status !== 'deleted';
-    });
-    if (file === undefined) {
-      this.chat.note(
-        'info',
-        `${revealFormatControls(mention.path)} is not in this diff: the file is unchanged by the review.`,
-      );
-      return;
-    }
-    this.jumpNonce += 1;
-    this.fileJump = {
-      path: file.path,
-      ...(mention.startLine !== undefined &&
-        mention.endLine !== undefined && {
-          line: mention.startLine,
-          endLine: mention.endLine,
-          side: mention.side,
-        }),
-      nonce: this.jumpNonce,
-    };
-    this.focusedZone = 'diff';
-  }
-
-  /** A citation pill: show the lines in the diff stream, or say the file is outside the change. */
-  private openCitation(citation: ChatCitationView): void {
-    const { path, startLine, endLine } = citation;
-    if (!this.diffPaths().has(path)) {
-      let lines = String(startLine);
-      if (startLine !== endLine) {
-        lines += `-${String(endLine)}`;
-      }
-      this.chat.note(
-        'info',
-        `${revealFormatControls(path)}:${lines} is not in this diff: the file is unchanged by the review.`,
-      );
-      return;
-    }
-    this.jumpNonce += 1;
-    this.fileJump = { path, line: startLine, nonce: this.jumpNonce };
-    this.focusedZone = 'diff';
-  }
-
-  private diffPaths(): ReadonlySet<string> {
-    return new Set(this.review?.files.map((file) => file.path));
-  }
-
-  /**
-   * The `/review` findings to show on the diff (ADR 0061): the head's completed review answers
-   * merged, minus the staged ones. Recomputed only when its inputs change, so the cards keep the
-   * same objects while chat text streams (ADR 0050).
-   */
-  private reviewInsights(): readonly ReviewInsight[] {
-    const { review } = this;
-    if (review === undefined || !this.settings.display.showInsights) {
-      return noInsights;
-    }
-    const messages = this.chat.entries.flatMap((entry): ChatMessageView[] => {
-      if (entry.kind === 'message' && entry.message.review !== undefined) {
-        return [entry.message];
-      }
-      return [];
-    });
-    const staged = this.ura.stagedFindings();
-    const signature = [
-      review.headSha,
-      messages.map(({ id }) => id).join(','),
-      [...staged].toSorted((x, y) => x.localeCompare(y)).join(','),
-    ].join('|');
-    if (this.insightCache?.signature !== signature) {
-      this.insightCache = {
-        signature,
-        insights: withoutStagedInsights(mergeReviewInsights(messages, review.headSha), staged),
-      };
-    }
-    return this.insightCache.insights;
-  }
-
-  /** Runs a catalog command `beuve-app` handles itself (ADR 0068). */
+  /** Runs a catalog command the app handles itself (ADR 0068): the review's first, then the window's. */
   private runAppCommand(id: CommandId): void {
-    if (this.runSheetCommand(id)) {
+    if (id === 'find') {
+      this.overlayOpen = false;
+    }
+    if (this.reviewElement()?.run(id) === true) {
       return;
     }
     switch (id) {
@@ -1436,16 +658,6 @@ export class BeuveApp extends LitElement {
         this.paletteText = paletteOpenings[id];
         return;
       }
-      case 'cycle-zone': {
-        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, 1);
-        this.refocusZone();
-        return;
-      }
-      case 'cycle-zone-back': {
-        this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, -1);
-        this.refocusZone();
-        return;
-      }
       case 'shortcuts': {
         this.overlayOpen = !this.overlayOpen;
         if (this.overlayOpen) {
@@ -1458,74 +670,8 @@ export class BeuveApp extends LitElement {
         }
         return;
       }
-      case 'chat': {
-        this.toggleChat();
-        return;
-      }
       case 'add-to-chat': {
         void this.addSelectionToChat();
-        return;
-      }
-      case 'tree-mode': {
-        if (this.treeMode === 'diff-only') {
-          this.treeMode = 'neighborhood';
-        } else {
-          this.treeMode = 'diff-only';
-        }
-        return;
-      }
-      case 'toggle-terminal': {
-        this.terminalShown = !this.terminalShown;
-        if (this.terminalShown) {
-          // xterm is large: it loads when the panel first opens (ADR 0095).
-          void import('./beuve-terminal-panel.ts');
-        } else {
-          this.isTerminalFocused = false;
-        }
-        return;
-      }
-      case 'toggle-sidebar': {
-        this.sidebarHidden = !this.sidebarHidden;
-        if (this.sidebarHidden && this.focusedZone !== 'diff') {
-          this.focusedZone = 'diff';
-        }
-        return;
-      }
-      case 'flip-sidebar': {
-        void this.setSidebarSide(otherSides[this.sidebarSide]);
-        return;
-      }
-      case 'sidebar-left': {
-        void this.setSidebarSide('left');
-        return;
-      }
-      case 'sidebar-right': {
-        void this.setSidebarSide('right');
-        return;
-      }
-      case 'sidebar-overview': {
-        this.focusSidebar('intent');
-        return;
-      }
-      case 'sidebar-review': {
-        this.focusSidebar('ura');
-        return;
-      }
-      case 'sidebar-chat': {
-        this.focusSidebar('chat');
-        return;
-      }
-      case 'find': {
-        this.overlayOpen = false;
-        this.focusedZone = 'diff';
-        void this.stream()?.openFind();
-        return;
-      }
-      case 'find-next':
-      case 'find-previous':
-      case 'find-selection':
-      case 'find-match-case': {
-        this.stream()?.runCommand(id);
         return;
       }
       case 'diff-split':
@@ -1548,55 +694,6 @@ export class BeuveApp extends LitElement {
         void this.setPreferredEditor(editorActions[id]);
         return;
       }
-      case 'commit-pairs': {
-        void this.openCommitPairs();
-        return;
-      }
-      case 'copy-relative-line': {
-        void this.copyRelativeLine();
-        return;
-      }
-      case 'open-definition':
-      case 'open-type-definition':
-      case 'copy-permalink':
-      case 'open-permalink': {
-        const target = this.stream()?.target();
-        if (target !== undefined) {
-          void this.sheetAction(sheetActionFrom(id, target, this.stream()?.tokenClicked()));
-        }
-        return;
-      }
-      case 'toggle-reviewed': {
-        const path = this.treePath();
-        if (path === undefined) {
-          this.stream()?.runCommand(id);
-        } else {
-          void this.reviewData.setFileReviewed(path, this.reviewData.marks.get(path) !== 'yes');
-        }
-        return;
-      }
-      case 'open-in-editor': {
-        this.openInEditorFromFocus();
-        return;
-      }
-      case 'open-review-edits': {
-        void this.openReviewEdits();
-        return;
-      }
-      case 'restart-language-servers': {
-        void this.restartLanguageServers();
-        return;
-      }
-      case 'harvest-review-edits': {
-        this.focusSidebar('ura');
-        void this.reviewEdits.previewStage();
-        return;
-      }
-      case 'discard-review-edits': {
-        this.focusSidebar('ura');
-        void this.reviewEdits.previewDiscard();
-        return;
-      }
       case 'save-progress': {
         void this.session.markReviewed();
         return;
@@ -1611,63 +708,10 @@ export class BeuveApp extends LitElement {
         void this.ura.export(exportActions[id]);
         return;
       }
-      case 'post-review': {
-        this.focusSidebar('ura');
-        void this.github.previewReview();
-        return;
-      }
-      case 'stage-answer': {
-        const messageId = this.contextAnswerId;
-        if (messageId !== undefined) {
-          void this.stageChatAnswer(messageId);
-        }
-        return;
-      }
       default: {
         return;
       }
     }
-  }
-
-  /** Back, Forward, Find and the definition and permalink commands go to a focused inline sheet. */
-  private runSheetCommand(id: CommandId): boolean {
-    return this.focusedSheet()?.runCommand(id) === true;
-  }
-
-  private focusedSheet(): BeuveSheetView | undefined {
-    const sheet = this.renderRoot.querySelector<BeuveSheetView>('beuve-sheet-view') ?? undefined;
-    if (sheet?.matches(':focus-within') === true) {
-      return sheet;
-    }
-    return undefined;
-  }
-
-  private stream(): BeuveDiffStream | undefined {
-    return this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream') ?? undefined;
-  }
-
-  /** The file focused in the tree, while the tree has the focus. */
-  private treePath(): string | undefined {
-    if (this.focusedZone === 'intent') {
-      return this.renderRoot
-        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
-        ?.focusedPath();
-    }
-    return undefined;
-  }
-
-  /** Open in Editor: the dock's note, the tree's file or the diff's line, by focus. */
-  private openInEditorFromFocus(): void {
-    if (this.focusedZone === 'ura') {
-      this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.runCommand('open-in-editor');
-      return;
-    }
-    const path = this.treePath();
-    if (path !== undefined) {
-      void this.openInEditor(path, 1);
-      return;
-    }
-    this.stream()?.runCommand('open-in-editor');
   }
 
   /** Review ▸ Open With: stores the editor Open in Editor uses. */
@@ -1702,38 +746,22 @@ export class BeuveApp extends LitElement {
       this.syncMenuState();
     });
   }
-
   /** Tells main which menu items apply now (ADR 0068), when that changed. */
   private syncMenuState(): void {
     const bridge = beuveBridge();
-    if (bridge === undefined) {
+    const facts = this.reviewElement()?.menuFacts();
+    if (bridge === undefined || facts === undefined) {
       return;
     }
-    let dock: UraItemView | undefined;
-    if (this.focusedZone === 'ura') {
-      dock = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
-    }
-    const treePath = this.treePath();
-    const markedPath = treePath ?? this.activePath;
-    const sheet = this.focusedSheet();
     const state = menuStateFrom({
+      ...facts,
       hasSession: this.review !== undefined,
-      activePath: treePath ?? this.activePath,
-      isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
-      focusedZone: this.focusedZone,
-      dockItem: dockItemOf(dock),
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
       isBusy: this.chat.isBusy,
       isPullRequest: this.github.pullRequest !== undefined,
       stagedCount: this.ura.stagedCount,
-      isSidebarShown: this.review !== undefined && !this.sidebarHidden,
-      isTerminalShown: this.review !== undefined && this.terminalShown,
-      isTerminalFocused: this.isTerminalFocused,
       display: this.settings.display,
-      treeMode: this.treeMode,
       preferredEditor: this.settings.editorSettings?.preferred,
-      isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
-      sheetHistory: sheet?.historyState(),
     });
     const key = JSON.stringify(state);
     if (key === this.lastMenuState) {
@@ -1741,107 +769,6 @@ export class BeuveApp extends LitElement {
     }
     this.lastMenuState = key;
     void bridge.invoke('menu:set-state', state);
-  }
-
-  /** What a right-click landed on, recording the answer, note or tree row it chose. */
-  private contextKindAt(
-    event: MouseEvent,
-  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'sheet' | 'text' | undefined {
-    const path = event.composedPath().filter((target) => target instanceof HTMLElement);
-    if (path.some((element) => isEditableElement(element))) {
-      return 'text';
-    }
-    if (path.some((element) => element.localName === 'beuve-sheet-view')) {
-      return 'sheet';
-    }
-    const answer = path.find((element) => element.dataset['messageId'] !== undefined);
-    if (answer !== undefined) {
-      this.contextAnswerId = answer.dataset['messageId'];
-      return 'answer';
-    }
-    const note = path.find((element) => element.dataset['itemId'] !== undefined);
-    if (note !== undefined) {
-      this.renderRoot
-        .querySelector<BeuveUraDock>('beuve-ura-dock')
-        ?.selectItem(note.dataset['itemId'] ?? '');
-      this.focusedZone = 'ura';
-      return 'note';
-    }
-    const row = path.find((element) => element.dataset['itemPath'] !== undefined);
-    if (row !== undefined) {
-      this.renderRoot
-        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
-        ?.revealPath(row.dataset['itemPath'] ?? '');
-      this.focusedZone = 'intent';
-      return 'tree';
-    }
-    const card = path.find((element) => element.localName === 'beuve-file-card');
-    if (card === undefined) {
-      return undefined;
-    }
-    const isHeader = path.some((element) => element.classList.contains('header'));
-    this.stream()?.activateCard(card);
-    this.focusedZone = 'diff';
-    if (isHeader) {
-      return 'file';
-    }
-    return 'line';
-  }
-
-  /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
-  private async sheetAction(action: SheetAction): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      return;
-    }
-    const outcome = await runSheetAction(
-      {
-        bridge,
-        sessionId: review.session.id,
-        headSha: review.headSha,
-        baseSha: review.baseSha,
-        mode: this.settings.display.sheets ?? 'window',
-      },
-      action,
-    );
-    if (outcome.kind === 'inline') {
-      this.inlineSheet = { sha: outcome.sha, place: outcome.place };
-      await this.updateComplete;
-      this.renderRoot.querySelector<HTMLElement>('beuve-sheet-view')?.focus();
-    } else {
-      this.showNotice(outcome.notice);
-    }
-  }
-
-  /** The palette's "commits since the last review": opens them in the stream, focused. */
-  private async openCommitPairs(): Promise<void> {
-    this.focusedZone = 'diff';
-    await this.updateComplete;
-    const stream = this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream');
-    if ((await stream?.openCommitPairs()) !== true) {
-      this.showNotice({
-        tone: 'info',
-        text: 'Commit pairs show for an interdiff, once a rebased pull request is reviewed again.',
-      });
-    }
-  }
-
-  private focusSidebar(zone: SidebarZone): void {
-    if (this.review === undefined) {
-      return;
-    }
-    this.sidebarHidden = false;
-    this.sidebarTab = zone;
-    this.focusedZone = zone;
-  }
-
-  /** `/sidebar left|right`: moves the sidebar now and stores the side in `settings.json`. */
-  private async setSidebarSide(side: SidebarSideView): Promise<void> {
-    this.sidebarSide = side;
-    if ((await this.setDisplay({ sidebarSide: side })) !== undefined) {
-      this.showNotice({ tone: 'info', text: `Sidebar on the ${side}` });
-    }
   }
 
   private showOpenDialog(): void {
@@ -1859,30 +786,17 @@ export class BeuveApp extends LitElement {
     this.openDialog = false;
     this.github.clearFailure();
     this.session.clearLocalFailure();
-    this.refocusZone();
+    this.reviewElement()?.refocusZone();
   }
 
   private closePalette(): void {
     this.paletteText = undefined;
-    this.refocusZone();
+    this.reviewElement()?.refocusZone();
   }
 
   private openPanel(): BeuveOpenPanel | undefined {
     return (
       this.renderRoot.querySelector<BeuveOpenPanel>('beuve-dialog beuve-open-panel') ?? undefined
-    );
-  }
-
-  /** Puts focus back in the focused zone after an overlay closes. */
-  private refocusZone(): void {
-    void this.updateComplete.then(() => {
-      this.zoneElement(this.focusedZone)?.focus();
-    });
-  }
-
-  private zoneElement(zone: ZoneId): HTMLElement | undefined {
-    return (
-      this.renderRoot.querySelector<HTMLElement>(`[data-zone='${CSS.escape(zone)}']`) ?? undefined
     );
   }
 
@@ -1918,70 +832,57 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'file': {
-        this.goToFile(action.path, action.isChanged);
+        this.reviewElement()?.goToFile(action.path, action.isChanged);
         return;
       }
       case 'ura-item': {
         const item = this.ura.items.find(({ id }) => id === action.itemId);
         if (item !== undefined) {
-          this.onUraJump(new CustomEvent('beuve-ura-jump', { detail: { item } }));
+          this.reviewElement()?.jumpToUraItem(item);
         }
       }
     }
   }
-
-  /** A changed file scrolls the diff to it; any other file is shown in the tree. */
-  private goToFile(path: string, isChanged: boolean): void {
-    if (isChanged) {
-      this.onTreeSelect(new CustomEvent('beuve-tree-select', { detail: { path } }));
-      this.focusedZone = 'diff';
-      this.refocusZone();
+  /** Add to Chat (ADR 0046) from the palette or the focused region; the palette closes first. */
+  private async addSelectionToChat(): Promise<void> {
+    const review = this.reviewElement();
+    if (this.paletteText === undefined) {
+      await review?.addSelectionToChat();
       return;
     }
-    this.treeMode = 'neighborhood';
-    this.focusSidebar('intent');
-    void this.updateComplete.then(() => {
-      this.renderRoot.querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')?.revealPath(path);
-    });
+    const palette =
+      this.renderRoot.querySelector<BeuveCommandPalette>('beuve-command-palette') ?? undefined;
+    const action = palette?.activeAction();
+    this.closePalette();
+    await review?.addSelectionToChat({ action });
   }
 
-  /**
-   * Runs a registry command. From the palette the command's zone gets the focus first, as if the
-   * reviewer had gone there; from a menu or shortcut the focus stays where it is.
-   */
+  private showsEmptyPanel(): boolean {
+    return (
+      this.session.review === undefined && !this.session.isLoading && this.session.error === ''
+    );
+  }
+
+  private reviewElement(): BeuveReview | undefined {
+    return this.renderRoot.querySelector<BeuveReview>('beuve-review') ?? undefined;
+  }
+
   private async runCommand(command: CommandDefinition, isFromPalette: boolean): Promise<void> {
     const { run } = command;
     switch (run.kind) {
       case 'app': {
         this.runAppCommand(command.id);
         if (isFromPalette && command.id !== 'commit-pairs') {
-          this.refocusZone();
+          this.reviewElement()?.refocusZone();
         }
         return;
       }
       case 'zone': {
-        if (isFromPalette || this.focusedZone !== run.zone) {
-          if (run.zone === 'diff' || run.zone === 'chat' || this.review === undefined) {
-            this.focusedZone = run.zone;
-          } else {
-            this.focusSidebar(run.zone);
-          }
-          await this.updateComplete;
-          this.zoneElement(run.zone)?.focus();
-        }
-        const zone = this.zoneElement(run.zone) as
-          (HTMLElement & { readonly runCommand?: (id: CommandId) => boolean }) | undefined;
-        zone?.runCommand?.(command.id);
+        await this.reviewElement()?.runZoneCommand(run.zone, command.id, isFromPalette);
         return;
       }
       case 'slash': {
-        this.focusSidebar('chat');
-        await this.updateComplete;
-        if (run.isPrefill) {
-          this.chatDrawer()?.prefill(run.text);
-        } else {
-          this.chat.submit(run.text);
-        }
+        await this.reviewElement()?.runSlash(run.text, run.isPrefill);
         return;
       }
       case 'main': {
@@ -1992,36 +893,6 @@ export class BeuveApp extends LitElement {
         return;
       }
     }
-  }
-
-  /** Regions Next Region visits: the sidebar's only while it shows. */
-  private zoneOrder(): ZoneId[] {
-    const hasSidebar = this.review !== undefined && !this.sidebarHidden;
-    return zones.map(({ id }) => id).filter((id) => id === 'diff' || hasSidebar);
-  }
-
-  /** Focus Chat: shows the chat tab and focuses its input; from the chat, goes back to the diff. */
-  private toggleChat(): void {
-    if (this.focusedZone === 'chat') {
-      this.focusedZone = 'diff';
-    } else {
-      this.focusSidebar('chat');
-    }
-  }
-
-  /** The dock's GitHub posting state, for pull request sessions only. */
-  private githubDock(): GithubDockState | undefined {
-    const source = this.review?.session.source;
-    if (source?.kind !== 'github-pull-request') {
-      return undefined;
-    }
-    const auth = this.github.auth;
-    return {
-      target: `${source.owner}/${source.repo}#${String(source.number)}`,
-      isSignedIn: auth?.kind === 'signed-in' && auth.host === source.host,
-      signInHint: signInHintOf(auth),
-      post: this.github.post,
-    };
   }
 
   private paletteSources(): PaletteSources {
@@ -2049,90 +920,10 @@ export class BeuveApp extends LitElement {
   private shortcut(id: CommandId): string {
     return shortcutOf(id, keyPlatformOf(this.appInfo?.platform));
   }
-
-  private renderIntent(): TemplateResult {
-    return html`<beuve-intent-sidebar
-      data-zone="intent"
-      tabindex="-1"
-      ?hidden=${this.sidebarTab !== 'intent'}
-      ?focused=${this.focusedZone === 'intent'}
-      .pullRequest=${this.github.pullRequest}
-      .files=${this.review?.files}
-      .tree=${this.reviewData.tree}
-      .generatedPaths=${this.reviewDeferrals().generated}
-      .reviewMarks=${this.reviewData.marks}
-      .treeMode=${this.treeMode}
-      @beuve-tree-mode=${this.onTreeMode}
-      @beuve-open-stack=${this.onOpenStack}
-      @beuve-open-link=${this.onOpenLink}
-      @beuve-tree-select=${this.onTreeSelect}
-    ></beuve-intent-sidebar>`;
-  }
-
-  private renderDiff(): TemplateResult {
-    if (this.review === undefined && !this.session.isLoading && this.session.error === '') {
-      return html`<div class="empty">
-        <div>
-          <h1>Open a review</h1>
-          <p>Pick up where you left off, or paste the pull request you were asked to look at.</p>
-          ${this.renderOpenPanel(false, 'diff')}
-        </div>
-      </div>`;
-    }
-    return html`<beuve-diff-stream
-      data-zone="diff"
-      tabindex="-1"
-      ?focused=${this.focusedZone === 'diff'}
-      .sessionNote=${this.session.note}
-      .review=${this.review}
-      .reviewMarks=${this.reviewData.marks}
-      .reviewProgress=${this.reviewData.progress}
-      .order=${this.reviewData.order}
-      ?loading=${this.session.isLoading}
-      .loadingLabel=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
-      ?marking=${this.session.isMarking}
-      .savedProgress=${
-        this.session.savedProgress?.sessionId === this.review?.session.id
-          ? this.session.savedProgress
-          : undefined
-      }
-      .platform=${this.appInfo?.platform ?? ''}
-      .error=${this.session.error}
-      .peek=${this.peek}
-      .flow=${this.flow}
-      .fileJump=${this.fileJump}
-      .loadFilePair=${this.loadFilePair}
-      .uraItems=${this.ura.items}
-      .insights=${this.reviewInsights()}
-      .display=${this.settings.display}
-      .suggestionJump=${this.suggestionJump}
-      .deferrals=${this.reviewDeferrals().deferrals}
-      @beuve-display-change=${this.onDisplayChange}
-      @beuve-status-notice=${this.onStatusNotice}
-      @beuve-ura-update=${this.onUraUpdate}
-      @beuve-mark-reviewed=${this.onMarkReviewed}
-      @beuve-peek-request=${this.onPeekRequest}
-      @beuve-peek-expand=${this.onPeekExpand}
-      @beuve-peek-close=${this.onPeekClose}
-      @beuve-sheet-request=${this.onSheetRequest}
-      @beuve-flow-request=${this.onFlowRequest}
-      @beuve-flow-close=${this.onFlowClose}
-      @beuve-ura-create=${this.onUraCreate}
-      @beuve-active-file=${this.onActiveFile}
-      @beuve-file-reviewed=${this.onFileReviewed}
-      @beuve-open-editor=${this.onOpenEditor}
-      @beuve-chat-add=${this.onChatAdd}
-      @beuve-insight-stage=${this.onInsightStage}
-      @beuve-insight-show-in-chat=${this.onInsightShowInChat}
-      @beuve-token-hover=${this.onTokenHover}
-      @beuve-token-hover-end=${this.onTokenHoverEnd}
-      @beuve-token-jump=${this.onTokenJump}
-    ></beuve-diff-stream>`;
-  }
-
-  private renderOpenPanel(isClosable: boolean, zone: ZoneId | undefined): TemplateResult {
+  private renderOpenPanel(isClosable: boolean, slot: 'empty' | undefined): TemplateResult {
     return html`<beuve-open-panel
-      data-zone=${zone ?? nothing}
+      slot=${slot ?? nothing}
+      data-zone=${slot === undefined ? nothing : 'diff'}
       ?closable=${isClosable}
       .platform=${this.appInfo?.platform ?? ''}
       .sessions=${this.session.sessions}
@@ -2150,121 +941,18 @@ export class BeuveApp extends LitElement {
     ></beuve-open-panel>`;
   }
 
-  private renderDock(): TemplateResult {
-    return html`<beuve-ura-dock
-      data-zone="ura"
-      tabindex="-1"
-      ?hidden=${this.sidebarTab !== 'ura'}
-      ?focused=${this.focusedZone === 'ura'}
-      ?hasSession=${this.review !== undefined}
-      .platform=${this.appInfo?.platform ?? ''}
-      .items=${this.ura.items}
-      .derivedVerdict=${this.ura.derivedVerdict}
-      .chosenVerdict=${this.ura.chosenVerdict}
-      .verdictNotice=${this.ura.verdictNotice}
-      .notice=${this.ura.notice}
-      ?exporting=${this.ura.isExporting}
-      .github=${this.githubDock()}
-      .reviewEdits=${{ view: this.reviewEdits.view, flow: this.reviewEdits.flow }}
-      @beuve-review-edits=${this.onReviewEdits}
-      @beuve-github-preview=${this.onGithubPreview}
-      @beuve-github-post=${this.onGithubPost}
-      @beuve-github-cancel=${this.onGithubCancel}
-      @beuve-open-link=${this.onOpenLink}
-      @beuve-ura-jump=${this.onUraJump}
-      @beuve-open-editor=${this.onOpenEditor}
-      @beuve-ura-update=${this.onUraUpdate}
-      @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
-      @beuve-ura-transition=${this.onUraTransition}
-      @beuve-ura-reorder=${this.onUraReorder}
-      @beuve-ura-export=${this.onUraExport}
-      @beuve-ura-set-verdict=${this.onUraSetVerdict}
-    ></beuve-ura-dock>`;
-  }
-
-  private renderChat(): TemplateResult {
-    return html`<beuve-chat-drawer
-      data-zone="chat"
-      tabindex="-1"
-      ?hidden=${this.sidebarTab !== 'chat'}
-      ?focused=${this.focusedZone === 'chat'}
-      .transcript=${this.chat.entries}
-      .diffPaths=${this.diffPaths()}
-      .stagedMessageIds=${this.ura.stagedMessageIds()}
-      .stagedFindings=${this.ura.stagedFindings()}
-      .subscribeChatStream=${this.subscribeChatStream}
-      ?hasSession=${this.review !== undefined}
-      @beuve-open-link=${this.onOpenChatLink}
-      @beuve-chat-submit=${this.onChatSubmit}
-      @beuve-chat-escape=${this.onChatEscape}
-      @beuve-chat-cancel=${this.onChatCancel}
-      @beuve-chat-stage=${this.onChatStage}
-      @beuve-chat-stage-finding=${this.onChatStageFinding}
-      @beuve-chat-clear-queue=${this.onChatClearQueue}
-      @beuve-chat-cite=${this.onChatCite}
-      @beuve-chat-mention=${this.onChatMention}
-      @beuve-chat-cancel-compaction=${this.onChatCancelCompaction}
-      @beuve-open-editor=${this.onOpenEditor}
-    ></beuve-chat-drawer>`;
-  }
-
-  private renderSidebar(): TemplateResult {
-    return html`<beuve-sidebar
-      slot="sidebar"
-      .side=${this.sidebarSide}
-      .width=${this.sidebarWidth}
-      .selected=${this.sidebarTab}
-      ?isPullRequest=${this.github.pullRequest !== undefined}
-      .stagedCount=${this.ura.stagedCount}
-      @beuve-sidebar-resize=${this.onSidebarResize}
-      @beuve-sidebar-tab=${this.onSidebarTab}
-    >
-      ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
-    </beuve-sidebar>`;
-  }
-
-  private onTerminalFocus(event: CustomEvent<TerminalFocusDetail>): void {
-    this.isTerminalFocused = event.detail.isFocused;
-  }
-
-  private onTerminalHide(): void {
-    this.terminalShown = false;
-    this.isTerminalFocused = false;
-  }
-
-  private renderTerminal(): TemplateResult | typeof nothing {
-    const { review } = this;
-    if (review === undefined || !this.terminalShown) {
-      return nothing;
-    }
-    return html`${keyed(
-      review.session.id,
-      html`<beuve-terminal-panel
-        .api=${beuveBridge()}
-        .sessionId=${review.session.id}
-        .headSha=${review.headSha}
-        @beuve-terminal-focus=${(event: CustomEvent<TerminalFocusDetail>): void => {
-          this.onTerminalFocus(event);
-        }}
-        @beuve-terminal-hide=${(): void => {
-          this.onTerminalHide();
-        }}
-      ></beuve-terminal-panel>`,
-    )}`;
-  }
-
   override render(): TemplateResult {
-    const hasSidebar = this.review !== undefined && !this.sidebarHidden;
     return html`
       ${this.renderTitlebar()}
-      <beuve-workspace
-        .side=${this.sidebarSide}
-        ?hasSidebar=${hasSidebar}
-        .sidebarWidth=${this.sidebarWidth}
+      <beuve-review
+        .model=${this.model}
+        .actions=${this.actions}
+        .platform=${this.appInfo?.platform ?? ''}
+        ?isModalOpen=${this.paletteText !== undefined || this.openDialog}
+        .revision=${this.revision}
       >
-        <div class="main" slot="main">${this.renderDiff()}${this.renderTerminal()}</div>
-        ${hasSidebar ? this.renderSidebar() : nothing}
-      </beuve-workspace>
+        ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}
+      </beuve-review>
       <beuve-status-bar
         .lspServers=${this.lspServers}
         .mcpStatus=${this.mcpStatus}
@@ -2277,28 +965,6 @@ export class BeuveApp extends LitElement {
         @beuve-status-open-url=${this.onStatusOpenUrl}
         @beuve-status-popover=${this.onStatusPopover}
       ></beuve-status-bar>
-      ${
-        this.review === undefined
-          ? nothing
-          : html`<beuve-hover-card
-              .ask=${this.askHover}
-              .sessionId=${this.review.session.id}
-              .sha=${this.review.headSha}
-            ></beuve-hover-card>`
-      }
-      ${
-        this.inlineSheet === undefined || this.review === undefined
-          ? nothing
-          : html`<beuve-sheet-view
-              class="sheet-overlay"
-              mode="inline"
-              .api=${beuveBridge()}
-              .sessionId=${this.review.session.id}
-              .sha=${this.inlineSheet.sha}
-              .place=${this.inlineSheet.place}
-              @beuve-sheet-close=${this.onSheetClose}
-            ></beuve-sheet-view>`
-      }
       ${
         this.openDialog
           ? html`<beuve-dialog label="Open" @beuve-dialog-dismiss=${this.onDialogDismiss}>
@@ -2328,28 +994,14 @@ export class BeuveApp extends LitElement {
     `;
   }
 
-  protected override willUpdate(changed: PropertyValues<this>): void {
-    const zone = this.focusedZone;
-    if (zone !== 'diff' && changed.has('focusedZone')) {
-      this.sidebarTab = zone;
-    }
+  protected override willUpdate(): void {
+    this.revision += 1;
   }
 
   protected override updated(changed: PropertyValues<this>): void {
     this.scheduleMenuSync();
     if (this.paletteText !== undefined && changed.has('paletteText')) {
       this.renderRoot.querySelector('beuve-command-palette')?.focus();
-      return;
-    }
-    const isRelevant = ['focusedZone', 'sidebarHidden'].some((key) => {
-      return changed.has(key as keyof BeuveApp);
-    });
-    if (!isRelevant || this.paletteText !== undefined || this.openDialog) {
-      return;
-    }
-    const element = this.zoneElement(this.focusedZone);
-    if (element !== undefined && !element.matches(':focus-within')) {
-      element.focus();
     }
   }
 }
@@ -2358,13 +1010,6 @@ const paletteOpenings: Readonly<Record<'palette' | 'go-to-file', string>> = {
   palette: '',
   'go-to-file': '@',
 };
-
-const otherSides: Readonly<Record<SidebarSideView, SidebarSideView>> = {
-  left: 'right',
-  right: 'left',
-};
-
-const noInsights: readonly ReviewInsight[] = [];
 
 const editorActions: Readonly<Record<Extract<CommandId, `editor-${string}`>, EditorId>> = {
   'editor-zed': 'zed',
@@ -2377,9 +1022,6 @@ const exportActions: Readonly<Record<Extract<CommandId, `export-${string}`>, Ura
   'export-agent-json': 'agent-json',
   'export-github': 'github',
 };
-
-const nothingSelected =
-  'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
 
 declare global {
   interface HTMLElementTagNameMap {

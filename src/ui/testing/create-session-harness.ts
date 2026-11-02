@@ -9,7 +9,7 @@ import { createFakeHost } from './create-fake-host.ts';
 /** A {@link SessionController} wired to fakes, with the hooks it called. */
 export interface SessionHarness extends FakeBridge {
   readonly session: SessionController;
-  /** The hooks the controller called, in order: `closed`, `switching`, `reloading`, `settled`. */
+  /** The hooks the controller called, in order: `closed`, `switching`, `reloading`. */
   readonly hooks: readonly string[];
   readonly loaded: readonly ReviewLoaded[];
   readonly updates: () => number;
@@ -50,9 +50,6 @@ export function createSessionHarness(options: SessionHarnessOptions = {}): Sessi
     },
     reloading: (): void => {
       hooks.push('reloading');
-    },
-    settled: (): void => {
-      hooks.push('settled');
     },
     loaded: (change): void => {
       loaded.push(change);

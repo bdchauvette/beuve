@@ -450,7 +450,7 @@ async function checkPathDisplay(
   await chooseSheets(devtools, main, 'inline');
   await devtools.evaluate(
     main,
-    `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(spoofing)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
+    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(spoofing)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
   );
   const sheet = "__hostileProbe.all('beuve-sheet-view')[0]";
   const title =
@@ -522,16 +522,19 @@ async function checkPeekAndInlineSheet(
   await devtools.evaluate(main, `(${cardOf(peek.path)})?.scrollIntoView()`);
   await devtools.evaluate(
     main,
-    `${app}.openPeek(${JSON.stringify(peek.path)}, ${String(peek.line)})`,
+    `${app}.renderRoot.querySelector('beuve-review').openPeek(${JSON.stringify(peek.path)}, ${String(peek.line)})`,
   );
   const status =
     (await eventually(
       devtools,
       main,
-      `['ready', 'error'].includes(${app}.peek?.status) && ${app}.peek.status`,
+      `['ready', 'error'].includes(${app}.renderRoot.querySelector('beuve-review').peek?.status) && ${app}.renderRoot.querySelector('beuve-review').peek.status`,
     )) ?? 'timed out';
   if (status !== 'ready') {
-    const state = await devtools.evaluate(main, `JSON.stringify(${app}.peek)`);
+    const state = await devtools.evaluate(
+      main,
+      `JSON.stringify(${app}.renderRoot.querySelector('beuve-review').peek)`,
+    );
     findings.failures.push(`peek: ${JSON.stringify(status)}: ${String(state)}`);
   }
   const portal = "__hostileProbe.all('beuve-peek-portal')[0]";
@@ -557,13 +560,13 @@ async function checkPeekAndInlineSheet(
   });
   await expectSafe(run, main, 'peek');
   await shoot(main, 'peek');
-  await devtools.evaluate(main, `${app}.peek = undefined`);
+  await devtools.evaluate(main, `${app}.renderRoot.querySelector('beuve-review').peek = undefined`);
 
   const named = repository.files.find((file) => file.path === repository.sheet);
   await chooseSheets(devtools, main, 'inline');
   await devtools.evaluate(
     main,
-    `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(named?.path)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
+    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(named?.path)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
   );
   const sheet = "__hostileProbe.all('beuve-sheet-view')[0]";
   if (
@@ -603,7 +606,7 @@ async function checkSheetWindow(
   const line = contents.line - 1;
   await devtools.evaluate(
     main,
-    `${app}.sheetAction({ kind: 'open', path: ${JSON.stringify(contents.path)}, range: { startLine: ${String(line)}, startCharacter: 0, endLine: ${String(line)}, endCharacter: 1 } })`,
+    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(contents.path)}, range: { startLine: ${String(line)}, startCharacter: 0, endLine: ${String(line)}, endCharacter: 1 } })`,
   );
   const sheet = await devtools.waitForPage((url) => {
     return url.includes('/sheet.html');

@@ -38,7 +38,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const runFile = promisify(execFile);
 const waitSeconds = 30;
 const app = "document.querySelector('beuve-app')";
-const panel = `${app}.renderRoot.querySelector('beuve-terminal-panel')`;
+const panel = `${app}.renderRoot.querySelector('beuve-review').renderRoot.querySelector('beuve-terminal-panel')`;
 /** The screen text of the visible terminal (xterm's DOM renderer writes its rows as text). */
 const screenText = `(${panel}?.renderRoot.querySelector('.host:not([hidden]) .xterm-rows')?.textContent ?? '')`;
 
