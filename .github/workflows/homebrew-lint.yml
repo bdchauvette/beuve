@@ -25,8 +25,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # ubuntu-latest does not ship Homebrew. The action has no releases, so pin a commit on main.
-      - uses: Homebrew/actions/setup-homebrew@dc7099b3e807f1e2ecc61f3ecabc840eedd5586a # main, 2026-10-04
+      # ubuntu-latest does not ship Homebrew. Pinned to a tagged release.
+      - uses: Homebrew/actions/setup-homebrew@d482da0e602890d3160aade42e72c8556103bf04 # 2026.10.26.1
       - name: Lint the Homebrew cask
         env:
           HOMEBREW_NO_AUTO_UPDATE: '1'
