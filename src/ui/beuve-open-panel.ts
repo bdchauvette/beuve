@@ -846,9 +846,7 @@ export class BeuveOpenPanel extends LitElement {
   }
 
   protected override firstUpdated(): void {
-    if (this.closable) {
-      this.focus();
-    }
+    this.focus();
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
