@@ -31,7 +31,7 @@ To bump it, on a Node security release or when CI moves to a new LTS:
 2. Copy the version and the `.tar.xz` hashes for `darwin-arm64` and `linux-x64` into `scripts/node-runtime.json`.
 3. Run `npm run dist:linux-dir` and `npm run check:packaged -- --app out/linux-unpacked`, then commit the pin on its own.
 
-On macOS the binary keeps the Node.js Foundation's Developer ID signature and entitlements, because `mac.signIgnore` stops electron-builder from re-signing it (ADR 0085). `codesign -dv out/mac-arm64/beuve.app/Contents/Resources/node/node` shows `TeamIdentifier=HX7739G8FX`.
+On macOS the binary keeps the Node.js Foundation's Developer ID signature and entitlements, because `mac.signIgnore` stops electron-builder from re-signing it (ADR 0085). `codesign -dv out/mac-arm64/beuve.app/Contents/Resources/node/node` shows `TeamIdentifier=HX7739G8FX`. That identifier is public (every copy of the binary carries it, and it is the Node.js Foundation's, not beuve's), so it is not a secret: it is pinned as `macTeamId` in `scripts/node-runtime.json`, and `npm run check:signatures -- --app out/mac-arm64/beuve.app` verifies the app's seal, the bundled Node's signature and that team. The build and release workflows both run it.
 
 Size: the binary is 150.3 MB on Linux and 147.3 MB on macOS. It takes the Linux app directory from 606.6 MB to 756.9 MB. On macOS it adds about 45 MB to the compressed dmg and zip (the binary deflates to 44.9 MB). The first CI build with it produced a 276.1 MiB dmg and a 267.6 MiB zip, and a 690 MB `beuve.app`.
 
