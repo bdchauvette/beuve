@@ -1,6 +1,7 @@
 {
-  "$comment": "The Node that packaged builds ship as resources/node/node for language servers (ADR 0083, 0084). Bump deliberately: the version, and both hashes from https://nodejs.org/dist/v<version>/SHASUMS256.txt after checking its signature (docs/packaging.md). scripts/fetch-node.ts verifies every download against these hashes.",
+  "$comment": "The Node that packaged builds ship as resources/node/node for language servers (ADR 0083, 0084). Bump deliberately: the version, and both hashes from https://nodejs.org/dist/v<version>/SHASUMS256.txt after checking its signature (docs/packaging.md). scripts/fetch-node.ts verifies every download against these hashes. macTeamId is the Node.js Foundation's public Developer ID team, which scripts/check-signatures.ts expects on the macOS binary (ADR 0085).",
   "version": "26.13.0",
+  "macTeamId": "HX7739G8FX",
   "sha256": {
     "darwin-arm64": "6f5b3187d9df9fc007e881167905bc7d69ad26450ddc377c83d63256a2495b6e",
     "linux-x64": "d28a96af6c38596f6d9d97c0ee531c13d238d757742387d1928de822d959e997"

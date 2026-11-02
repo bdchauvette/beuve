@@ -68,8 +68,7 @@ jobs:
       - name: Verify signatures, fuses and the bundled Node (ADR 0083-0085)
         run: |
           app=out/mac-arm64/beuve.app
-          codesign --verify --deep --strict --verbose=2 "$app"
-          codesign --verify --strict --verbose=2 "$app/Contents/Resources/node/node"
+          npm run check:signatures -- --app "$app"
           npm run check:packaged -- --app "$app"
       - name: Checksums
         working-directory: out

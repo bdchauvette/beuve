@@ -48,6 +48,7 @@
     "start": "npm run build && electron .",
     "fetch-node": "node scripts/fetch-node.ts",
     "check:packaged": "node scripts/check-packaged-app.ts",
+    "check:signatures": "node scripts/check-signatures.ts",
     "dist:mac": "npm run build && node scripts/fetch-node.ts --target darwin-arm64 && node scripts/dist-mac.ts",
     "dist:linux-dir": "npm run build && node scripts/fetch-node.ts --target linux-x64 && electron-builder --linux dir",
     "dist:linux": "npm run build && node scripts/fetch-node.ts --target linux-x64 && electron-builder --linux AppImage"

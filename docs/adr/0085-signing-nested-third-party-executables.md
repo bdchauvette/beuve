@@ -20,13 +20,10 @@ The Node binary then has two possible signatures:
 - **The same applies to later third-party executables** that come signed by their vendor: keep the vendor's signature unless beuve has to change the binary. The bundled Claude Code binary (ADR 0069, 0070) is still re-signed, as before; whether it should keep Anthropic's signature is a separate decision, to make when a signed build first runs it.
 - **CI checks it on every push**, on the macOS runner:
   - `npm run dist:mac` builds the app;
-  - `codesign --verify --deep --strict` passes on the app;
-  - `codesign --verify --strict` passes on `Contents/Resources/node/node`;
-  - the binary's team identifier is `HX7739G8FX`;
-  - its entitlements and an informational `spctl --assess` are printed;
+  - `npm run check:signatures -- --app out/mac-arm64/beuve.app` (`scripts/check-signatures.ts`) passes: `codesign --verify --deep --strict` on the app, `codesign --verify --strict` on `Contents/Resources/node/node`, and the binary's team identifier equals `macTeamId` in `scripts/node-runtime.json` (`HX7739G8FX`, public, so not a secret); it also prints the entitlements and an informational `spctl --assess`;
   - `npm run check:packaged` passes.
 
-  The release workflow repeats the verification on the artifact it uploads.
+  The release workflow runs the same two scripts on the artifact it uploads.
 
 ## Consequences
 
