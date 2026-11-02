@@ -1,5 +1,10 @@
 import type * as Diffs from '@pierre/diffs';
-import type { FileDiff, FileDiffLoadedFiles, FileDiffMetadata } from '@pierre/diffs';
+import type {
+  FileDiff,
+  FileDiffLoadedFiles,
+  FileDiffMetadata,
+  OnTokenEventProps,
+} from '@pierre/diffs';
 import type * as DiffsEdit from '@pierre/diffs/edit';
 import type { Editor } from '@pierre/diffs/edit';
 import type * as DiffsWorker from '@pierre/diffs/worker';
@@ -31,7 +36,9 @@ import { applySuggestedPatch } from './apply-suggested-patch.ts';
 import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { headRowSelector } from './head-row-selector.ts';
+import { characterOffsetAt } from './character-offset-at.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
+import type { ClickedToken } from './run-sheet-action.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
@@ -748,6 +755,8 @@ export class BeuveFileCard extends LitElement {
   private programmaticStep: HunkStep | undefined;
   /** Lines the reviewer selected in the gutter, until Next/Previous Change moves on. */
   private lineSelection: SelectedLines | undefined;
+  /** The head-side token last clicked; forgotten when the reviewer selects or steps elsewhere. */
+  private clickedToken: ClickedToken | undefined;
   /** The head line a jump (citation or flow node) landed on, until Next/Previous Change moves on. */
   private focusedLine: number | undefined;
   /** The Suggest Edit editor attached to the diff, and the head text it started from. */
@@ -811,7 +820,19 @@ export class BeuveFileCard extends LitElement {
     void this.focusLine(event.detail.startLine);
   };
 
+  private readonly onTokenClick = (props: OnTokenEventProps<'diff'>, event: MouseEvent): void => {
+    if (props.side === 'deletions') {
+      this.clickedToken = undefined;
+      return;
+    }
+    this.clickedToken = {
+      line: props.lineNumber,
+      character: props.lineCharStart + characterOffsetAt(props.tokenElement, event),
+    };
+  };
+
   private readonly onLineSelected = (range: SelectedLines | null): void => {
+    this.clickedToken = undefined;
     if (range === null) {
       this.lineSelection = undefined;
       return;
@@ -1157,6 +1178,7 @@ export class BeuveFileCard extends LitElement {
         overflow: 'scroll',
         enableLineSelection: true,
         onLineSelected: this.onLineSelected,
+        onTokenClick: this.onTokenClick,
         enableGutterUtility: true,
         onGutterUtilityClick: (range): void => {
           this.addToChat(range);
@@ -1795,6 +1817,11 @@ ${splitPatch(file.patch).map((line) => {
     });
   }
 
+  /** The head-side token the reviewer last clicked, until they select or step elsewhere. */
+  tokenClicked(): ClickedToken | undefined {
+    return this.clickedToken;
+  }
+
   /**
    * Scrolls to lines `start`–`end` of one side and selects them, for a chat chip: head lines as
    * Open in Editor and citations find them, base lines by their own numbers on the deleted side.
@@ -1895,6 +1922,7 @@ ${splitPatch(file.patch).map((line) => {
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff?.setSelectedLines(null);
     this.lineSelection = undefined;
+    this.clickedToken = undefined;
     this.focusedLine = line;
   }
 
@@ -1933,6 +1961,7 @@ ${splitPatch(file.patch).map((line) => {
     this.syncEditKeys();
     if (changed.has('activeHunk')) {
       this.focusedLine = undefined;
+      this.clickedToken = undefined;
     }
     if (changed.has('composer')) {
       this.syncComposer();
@@ -2160,6 +2189,8 @@ function startWorkerPool(workers: typeof DiffsWorker): WorkerPoolManager {
       theme: diffsThemeNames,
       preferredHighlighter: 'shiki-js',
       lineDiffType: 'word-alt',
+      // Spans then carry their column, which Go to Definition needs from a click.
+      useTokenTransformer: true,
       langs: [],
     },
   );

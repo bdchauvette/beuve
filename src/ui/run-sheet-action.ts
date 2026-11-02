@@ -14,9 +14,20 @@ export interface SheetOpenDetail {
   readonly range: SheetRangeView;
 }
 
+/** A token the reviewer clicked in the diff: 1-based head line, 0-based UTF-16 column. */
+export interface ClickedToken {
+  readonly line: number;
+  readonly character: number;
+}
+
 /** What the main window asks of sheets and permalinks (ADR 0067). */
 export type SheetAction =
-  | { readonly kind: 'definition' | 'type-definition'; readonly target: ReviewTarget }
+  | {
+      readonly kind: 'definition' | 'type-definition';
+      readonly target: ReviewTarget;
+      /** The token the reviewer clicked, when it still stands: asked about instead of the target's line. */
+      readonly token?: ClickedToken | undefined;
+    }
   | { readonly kind: 'copy-link' | 'open-link'; readonly target: ReviewTarget }
   /** A call-hierarchy node: open its declaration at the head. */
   | ({ readonly kind: 'open' } & SheetOpenDetail);
@@ -48,7 +59,7 @@ export async function runSheetAction(
   switch (action.kind) {
     case 'definition':
     case 'type-definition': {
-      return define(context, action.target, action.kind);
+      return define(context, action);
     }
     case 'copy-link':
     case 'open-link': {
@@ -62,11 +73,14 @@ export async function runSheetAction(
 
 async function define(
   context: SheetActionContext,
-  target: ReviewTarget,
-  kind: 'definition' | 'type-definition',
+  action: DefinitionAction,
 ): Promise<SheetOutcome> {
-  const line = lineFromTarget(target);
-  if (line === undefined || target.kind === 'change') {
+  const { target, token, kind } = action;
+  if (target.kind === 'change') {
+    return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
+  }
+  const line = token?.line ?? lineFromTarget(target);
+  if (line === undefined) {
     return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
   }
   const answer = await context.bridge.invoke('lsp:definition', {
@@ -74,6 +88,7 @@ async function define(
     sha: context.headSha,
     path: target.file.path,
     line,
+    ...(token !== undefined && { character: token.character }),
     kind,
   });
   if (!answer.ok) {
@@ -85,6 +100,8 @@ async function define(
   }
   return open({ ...context, headSha: request.sha }, { path: request.path, range: request.range });
 }
+
+type DefinitionAction = Extract<SheetAction, { readonly kind: 'definition' | 'type-definition' }>;
 
 async function open(context: SheetActionContext, place: SheetPlace): Promise<SheetOutcome> {
   if (context.mode === 'inline') {

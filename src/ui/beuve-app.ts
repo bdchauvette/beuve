@@ -115,7 +115,8 @@ import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
 import { runSheetAction } from './run-sheet-action.ts';
-import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
+import type { ClickedToken, SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
+import type { ReviewTarget } from './target-from.ts';
 import type { SheetPlace } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
@@ -2905,7 +2906,7 @@ export class BeuveApp extends LitElement {
       case 'open-permalink': {
         const target = this.stream()?.target();
         if (target !== undefined) {
-          void this.sheetAction({ kind: sheetActionKinds[id], target });
+          void this.sheetAction(sheetActionFrom(id, target, this.stream()?.tokenClicked()));
         }
         return;
       }
@@ -3874,6 +3875,19 @@ const sheetActionKinds = {
   'copy-permalink': 'copy-link',
   'open-permalink': 'open-link',
 } as const;
+
+/** The sheet action a menu command asks for; a definition asks about the clicked token, if any. */
+function sheetActionFrom(
+  id: keyof typeof sheetActionKinds,
+  target: ReviewTarget,
+  token: ClickedToken | undefined,
+): SheetAction {
+  const kind = sheetActionKinds[id];
+  if (kind === 'definition' || kind === 'type-definition') {
+    return { kind, target, token };
+  }
+  return { kind, target };
+}
 
 function peekStateFrom(
   path: string,

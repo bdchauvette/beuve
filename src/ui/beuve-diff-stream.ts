@@ -47,6 +47,7 @@ import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { lineFromTarget } from './line-from-target.ts';
+import type { ClickedToken } from './run-sheet-action.ts';
 import { mentionFromTarget } from './mention-from-target.ts';
 import type { ReviewTarget } from './target-from.ts';
 import { findInReview } from './find-in-review.ts';
@@ -1523,6 +1524,11 @@ export class BeuveDiffStream extends LitElement {
   /** What the reviewer points at (ADR 0063): the active card's target, else the whole change. */
   target(): ReviewTarget {
     return this.cards()[this.activeIndex]?.target() ?? { kind: 'change' };
+  }
+
+  /** The active card's last clicked head-side token, which Go to Definition asks about. */
+  tokenClicked(): ClickedToken | undefined {
+    return this.cards()[this.activeIndex]?.tokenClicked();
   }
 
   /** What Add to Chat adds to the chat (ADR 0046): the target's lines, or its file. */

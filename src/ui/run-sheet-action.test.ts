@@ -93,6 +93,32 @@ describe('runSheetAction', () => {
     expect(outcome).toMatchObject({ kind: 'notice', notice: { tone: 'info' } });
   });
 
+  test('asks about the clicked token’s line and column instead of the target’s', async ({
+    expect,
+  }) => {
+    const calls: [string, unknown][] = [];
+    const file = createDiffFileView('src/handler.ts', [' a', '+b'], { start: 3 });
+    await runSheetAction(
+      contextWith({ 'lsp:definition': definitionAnswer(), 'sheet:open': { ok: true } }, calls),
+      {
+        kind: 'definition',
+        target: { kind: 'file', file, line: 3 },
+        token: { line: 9, character: 21 },
+      },
+    );
+    expect(calls[0]).toStrictEqual([
+      'lsp:definition',
+      {
+        sessionId: 's1',
+        sha: 'h'.repeat(40),
+        path: 'src/handler.ts',
+        line: 9,
+        character: 21,
+        kind: 'definition',
+      },
+    ]);
+  });
+
   test('shows the definition inline when sheets open over the diff', async ({ expect }) => {
     const calls: [string, unknown][] = [];
     const file = createDiffFileView('src/handler.ts', [' a']);
