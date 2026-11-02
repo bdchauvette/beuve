@@ -522,18 +522,18 @@ async function checkPeekAndInlineSheet(
   await devtools.evaluate(main, `(${cardOf(peek.path)})?.scrollIntoView()`);
   await devtools.evaluate(
     main,
-    `${app}.renderRoot.querySelector('beuve-review').openPeek(${JSON.stringify(peek.path)}, ${String(peek.line)})`,
+    `${app}.renderRoot.querySelector('beuve-review').navigation.openPeek(${JSON.stringify(peek.path)}, ${String(peek.line)})`,
   );
   const status =
     (await eventually(
       devtools,
       main,
-      `['ready', 'error'].includes(${app}.renderRoot.querySelector('beuve-review').peek?.status) && ${app}.renderRoot.querySelector('beuve-review').peek.status`,
+      `['ready', 'error'].includes(${app}.renderRoot.querySelector('beuve-review').navigation.peek?.status) && ${app}.renderRoot.querySelector('beuve-review').navigation.peek.status`,
     )) ?? 'timed out';
   if (status !== 'ready') {
     const state = await devtools.evaluate(
       main,
-      `JSON.stringify(${app}.renderRoot.querySelector('beuve-review').peek)`,
+      `JSON.stringify(${app}.renderRoot.querySelector('beuve-review').navigation.peek)`,
     );
     findings.failures.push(`peek: ${JSON.stringify(status)}: ${String(state)}`);
   }
@@ -560,7 +560,10 @@ async function checkPeekAndInlineSheet(
   });
   await expectSafe(run, main, 'peek');
   await shoot(main, 'peek');
-  await devtools.evaluate(main, `${app}.renderRoot.querySelector('beuve-review').peek = undefined`);
+  await devtools.evaluate(
+    main,
+    `${app}.renderRoot.querySelector('beuve-review').navigation.closePeek()`,
+  );
 
   const named = repository.files.find((file) => file.path === repository.sheet);
   await chooseSheets(devtools, main, 'inline');
