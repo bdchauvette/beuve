@@ -296,6 +296,15 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/ui-shadow-root-queries',
+    // `:scope` matches nothing when the scoping root is a ShadowRoot, and `renderRoot` is one, so the rule's advice makes `renderRoot.querySelector(':scope …')` always return null.
+    files: uiFiles,
+    rules: {
+      'unicorn/prefer-scoped-selector': 'off',
+    },
+  },
+
+  {
     name: 'beuve/ui-html-sinks',
     // ADR 0077: no HTML string sinks in our renderer code, so a Trusted Types policy has nothing of ours to admit.
     files: uiFiles,

@@ -628,7 +628,7 @@ export class BeuveSheetView extends LitElement {
       case 'find': {
         this.find ??= { query: '', matches: [], index: 0 };
         void this.updateComplete.then(() => {
-          this.renderRoot.querySelector<HTMLInputElement>(':scope .find input')?.select();
+          this.renderRoot.querySelector<HTMLInputElement>('.find input')?.select();
         });
         return true;
       }
