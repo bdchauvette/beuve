@@ -5,10 +5,13 @@ import type {
   UraOutdatedReasonView,
   UraSeverityView,
 } from '#contract/ipc-contract.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
 /** How the dock and the diff markers label one URA item. */
 export interface UraItemLabels {
   readonly severity: string;
+  /** The severity's emoji, shown beside its name. */
+  readonly emoji: string;
   /** `src/a.ts:12-14`, where the item sits on the current head (or sat, when outdated). */
   readonly anchor: string;
   readonly origin: string;
@@ -41,6 +44,7 @@ export function describeUraItem(item: UraItemView): UraItemLabels {
   const { placement } = item;
   return {
     severity: severities[item.severity],
+    emoji: uraSeverityEmoji(item.severity),
     anchor: formatAnchor(currentAnchor(item)),
     origin: originOf(item),
     ...(placement.kind === 'outdated' && { outdated: outdatedReasons[placement.reason] }),

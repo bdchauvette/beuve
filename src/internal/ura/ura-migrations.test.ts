@@ -56,6 +56,13 @@ describe('uraMigrations', () => {
     }).toThrow(/CHECK/u);
   });
 
+  test('allows an empty title only when the body says something', ({ expect, db }) => {
+    insertRow(db, { ...valid(), title: "''", body: "'Nice.'" });
+    expect(() => {
+      insertRow(db, { ...valid(), title: "''", body: "' '" }, 1);
+    }).toThrow(/CHECK/u);
+  });
+
   test.for<[string, Record<string, string>]>([
     ['a file anchor with lines', { anchor_kind: "'file'" }],
     [

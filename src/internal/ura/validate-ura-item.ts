@@ -15,7 +15,8 @@ const maxTitleLength = 200;
 /**
  * The one gate every item passes, whether built by a constructor, edited or read from a row:
  * the anchor is a sane repository-relative location, the origin's facts are well-formed and fit
- * the anchor, the title is one short line, the patch fits the anchor, and an item is never
+ * the anchor, the title (optional) is one short line, the item says something (a title, a body or
+ * a patch), the patch fits the anchor, and an item is never
  * `addressed` at the head it was written against.
  */
 export function validateUraItem(candidate: UraItemCandidate): Result<UraItem, UraItemError> {
@@ -30,6 +31,13 @@ export function validateUraItem(candidate: UraItemCandidate): Result<UraItem, Ur
   const title = checkTitle(candidate.title);
   if (title !== undefined) {
     return err({ kind: 'invalid-text', reason: title });
+  }
+  if (
+    candidate.title === '' &&
+    candidate.body.trim() === '' &&
+    candidate.suggestion === undefined
+  ) {
+    return err({ kind: 'invalid-text', reason: 'a note needs a title, a body or a suggestion' });
   }
   const { status } = candidate;
   if (status.kind === 'addressed' && status.atSha === candidate.headSha) {
@@ -129,8 +137,8 @@ function checkFinding(
 }
 
 function checkTitle(title: string): string | undefined {
-  if (title.trim() === '' || title !== title.trim()) {
-    return 'the title must be non-empty and trimmed';
+  if (title !== title.trim()) {
+    return 'the title must be trimmed';
   }
   if (hasControlCharacter(title)) {
     return 'the title must be a single line';

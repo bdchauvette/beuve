@@ -5,6 +5,7 @@ import { fenceCodeBlock } from './fence-code-block.ts';
 import { formatImpactOrigin } from './format-impact-origin.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
 import { formatUraSeverity } from './format-ura-severity.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { reviewSummaryFrom } from './review-summary-from.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
 import type { PatchHunk, UraAnchor, UraItem } from './ura-item.ts';
@@ -103,14 +104,28 @@ function commentFrom(
   if (!isCommentable(placement.anchor, ranges)) {
     return undefined;
   }
-  const body = [
-    `**${formatUraSeverity(item.severity)}:** ${escapeMarkdownHtml(item.title)}`,
-    ...details(item, true),
-  ].join('\n\n');
+  const body = [headline(item, 'comment'), ...details(item, true)].join('\n\n');
   if (startLine === endLine) {
     return { path, line: endLine, side: 'RIGHT', body };
   }
   return { path, start_line: startLine, start_side: 'RIGHT', line: endLine, side: 'RIGHT', body };
+}
+
+/** The emoji and severity, then the title when there is one: `✨ **Praise:** Nice.` */
+function headline(item: UraItem, style: 'comment' | 'section'): string {
+  const label = formatUraSeverity(item.severity);
+  const emoji = uraSeverityEmoji(item.severity);
+  const title = escapeMarkdownHtml(item.title);
+  if (style === 'section') {
+    if (title === '') {
+      return `#### ${emoji} ${label}`;
+    }
+    return `#### ${emoji} ${label}: ${title}`;
+  }
+  if (title === '') {
+    return `${emoji} **${label}**`;
+  }
+  return `${emoji} **${label}:** ${title}`;
 }
 
 function isCommentable(
@@ -128,7 +143,7 @@ function generalSection(
   ranges: GithubReviewOptions['commentableRanges'],
 ): string {
   return [
-    `#### ${formatUraSeverity(item.severity)}: ${escapeMarkdownHtml(item.title)}`,
+    headline(item, 'section'),
     location(item, placement, ranges),
     ...details(item, false),
   ].join('\n\n');

@@ -39,8 +39,13 @@ describe('createUraItem', () => {
     expect(createUraItem({ ...draft(), suggestion: 'nonsense' }, deps).ok).toBe(false);
   });
 
-  test('rejects an empty title', ({ expect, deps }) => {
-    expect(createUraItem({ ...draft(), title: ' '.repeat(3) }, deps)).toMatchObject({
+  test('keeps a note without a title', ({ expect, deps }) => {
+    const result = createUraItem({ ...draft(), title: ' '.repeat(3) }, deps);
+    expect(result.ok && result.value.title).toBe('');
+  });
+
+  test('rejects a note with no title, body or suggestion', ({ expect, deps }) => {
+    expect(createUraItem({ ...draft(), title: ' ', body: '' }, deps)).toMatchObject({
       ok: false,
       error: { kind: 'invalid-text' },
     });

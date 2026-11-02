@@ -27,7 +27,10 @@ import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state
 import { describeHarvest } from './describe-harvest.ts';
 import { describeEditCounts } from './describe-edit-counts.ts';
 import { moveUraItem } from './move-ura-item.ts';
+import { createUraNoteIcon } from './create-ura-note-icon.ts';
+import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -639,7 +642,7 @@ export class BeuveUraDock extends LitElement {
       return '';
     };
     const title = field('title').trim();
-    if (title === '') {
+    if (title === '' && field('body').trim() === '' && item.suggestedPatch === undefined) {
       form.querySelector('input')?.focus();
       return;
     }
@@ -688,7 +691,8 @@ export class BeuveUraDock extends LitElement {
       data-item-id=${item.id}
     >
       <div class="meta">
-        <span class="severity ${item.severity}">${labels.severity}</span>
+        ${createUraNoteIcon()}
+        <span class="severity ${item.severity}">${labels.emoji} ${labels.severity}</span>
         <span class="anchor" title=${labels.anchor}><bdi>${pathText(labels.anchor)}</bdi></span>
         ${
           labels.outdated === undefined
@@ -715,7 +719,9 @@ export class BeuveUraDock extends LitElement {
         }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
-      <div class="title">${parseInlineTitle(item.title).map((span) => renderInlineSpan(span))}</div>
+      <div class="title">
+        ${parseInlineTitle(headlineOfUraItem(item)).map((span) => renderInlineSpan(span))}
+      </div>
       ${
         item.suggestedPatch !== undefined && (index === this.cursor || this.editingId === item.id)
           ? html`<beuve-patch-preview .patch=${item.suggestedPatch}></beuve-patch-preview>`
@@ -731,11 +737,17 @@ export class BeuveUraDock extends LitElement {
         <select name="severity" aria-label="Severity">
           ${severities.map((severity) => {
             return html`<option value=${severity} ?selected=${severity === item.severity}>
-              ${severity}
+              ${uraSeverityEmoji(severity)} ${severity}
             </option>`;
           })}
         </select>
-        <input name="title" aria-label="Title" maxlength="200" .value=${item.title} />
+        <input
+          name="title"
+          aria-label="Title"
+          placeholder="Title (optional)"
+          maxlength="200"
+          .value=${item.title}
+        />
       </div>
       <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
       ${this.renderSuggestionActions(item)}

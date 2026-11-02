@@ -35,7 +35,7 @@ describe('editUraItem', () => {
   });
 
   test('validates the result', ({ expect }) => {
-    expect(editUraItem(createTestUraItem(), { title: '' }, later()).ok).toBe(false);
+    expect(editUraItem(createTestUraItem(), { title: '', body: '' }, later()).ok).toBe(false);
     expect(
       editUraItem(createTestUraItem(), { suggestion: '@@ -1 +1 @@\n-a\n+b\n' }, later()).ok,
     ).toBe(false);

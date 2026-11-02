@@ -7,6 +7,7 @@ import type { CommandDefinition } from './command-registry.ts';
 import { displayAccelerator } from './display-accelerator.ts';
 import { findKnownClone } from './find-known-clone.ts';
 import { fuzzyMatch } from './fuzzy-match.ts';
+import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
@@ -314,8 +315,9 @@ function reviewCandidates(items: readonly UraItemView[]): Candidate[] {
 }
 
 function noteTitle(item: UraItemView): string {
-  if (item.title === '') {
+  const headline = headlineOfUraItem(item);
+  if (headline === '') {
     return '(untitled note)';
   }
-  return item.title;
+  return headline;
 }
