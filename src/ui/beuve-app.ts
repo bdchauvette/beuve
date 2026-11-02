@@ -14,7 +14,6 @@ import type {
   DiffDisplayView,
   DiffFileView,
   EditorId,
-  EditorSettingsView,
   FileAttributesView,
   FilePairView,
   FlowFailureKind,
@@ -78,7 +77,10 @@ import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
+import { displayChangeFor } from './display-change-for.ts';
 import { ReviewDataController } from './review-data-controller.ts';
+import { SettingsController } from './settings-controller.ts';
+import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
 import type { EditorPlace } from './review-edits-controller.ts';
 import type { UraUpdateDetail } from './ura-controller.ts';
@@ -502,13 +504,22 @@ export class BeuveApp extends LitElement {
       this.openDialog = isOpen;
     },
   });
+  private readonly settings = new SettingsController(this, {
+    bridge: beuveBridge,
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    displayApplied: (transition): void => {
+      this.onDisplayApplied(transition);
+    },
+  });
   private readonly reviewData = new ReviewDataController(this, {
     bridge: beuveBridge,
     review: (): ReviewView | undefined => {
       return this.review;
     },
     reviewOrder: (): ReviewOrderMode | undefined => {
-      return this.display.reviewOrder;
+      return this.settings.display.reviewOrder;
     },
     notify: (notice): void => {
       this.showNotice(notice);
@@ -1029,17 +1040,6 @@ export class BeuveApp extends LitElement {
   @state() accessor focusedZone: ZoneId = 'diff';
   @state() accessor overlayOpen = false;
   @state() accessor statusNotice: StatusNotice | undefined;
-  @state() accessor editorSettings: EditorSettingsView | undefined;
-  /** Split or inline, and whether whitespace is ignored (ADR 0042); main stores it. */
-  @state() accessor display: DiffDisplayView = {
-    layout: 'split',
-    ignoreWhitespace: false,
-    sidebarSide: 'right',
-    showGenerated: false,
-    showInsights: true,
-    reviewOrder: 'path',
-    skipReviewed: false,
-  };
   /** `.gitattributes` for the review's files (ADR 0052), once `session:get-file-attributes` answers. */
   @state() accessor suggestionJump: SuggestionJump | undefined;
   @state() accessor appInfo: AppInfo | undefined;
@@ -1114,9 +1114,6 @@ export class BeuveApp extends LitElement {
       bridge.on('link:open-pr', ({ ref }) => {
         void this.github.open({ ref });
       }),
-      bridge.on('settings:changed', () => {
-        void this.reloadSettings();
-      }),
     ];
     void this.loadInitialState();
   }
@@ -1147,34 +1144,8 @@ export class BeuveApp extends LitElement {
       this.dataset['platform'] = info.value.platform;
     }
     this.applySessions(sessions);
-    const editors = await bridge.invoke('editor:get-settings');
-    this.editorSettings = undefined;
-    if (editors.ok) {
-      this.editorSettings = editors.value;
-    }
-    const display = await bridge.invoke('display:get');
-    if (display.ok) {
-      this.applyDisplay(display.value);
-    }
+    await this.settings.load();
     await this.github.loadAuth();
-  }
-
-  /** `settings:changed`: the Settings window changed a preference; read them again. */
-  private async reloadSettings(): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const [display, editors] = await Promise.all([
-      bridge.invoke('display:get'),
-      bridge.invoke('editor:get-settings'),
-    ]);
-    if (display.ok) {
-      this.applyDisplay(display.value);
-    }
-    if (editors.ok) {
-      this.editorSettings = editors.value;
-    }
   }
 
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
@@ -1249,14 +1220,14 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  private applyDisplay(display: DiffDisplayView): void {
-    const isWhitespaceChanged = display.ignoreWhitespace !== this.display.ignoreWhitespace;
-    const isOrderChanged = display.reviewOrder !== this.display.reviewOrder;
-    this.display = display;
+  /** What depends on the display changing: the file order, the sidebar side, the diff itself. */
+  private onDisplayApplied({ previous, next }: DisplayTransition): void {
+    const isWhitespaceChanged = next.ignoreWhitespace !== previous.ignoreWhitespace;
+    const isOrderChanged = next.reviewOrder !== previous.reviewOrder;
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {
       void this.reviewData.reloadOrder(this.review);
     }
-    this.sidebarSide = display.sidebarSide;
+    this.sidebarSide = next.sidebarSide;
     if (isWhitespaceChanged && this.selectedId !== '') {
       void this.selectSession(this.selectedId);
     }
@@ -1264,40 +1235,29 @@ export class BeuveApp extends LitElement {
 
   /** Stores a display change; `/diff` and `/whitespace` without arguments only show it. */
   private async setDisplay(change: SetDiffDisplayRequest): Promise<DiffDisplayView | undefined> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
+    const display = await this.settings.change(change);
+    if (display === undefined) {
       return undefined;
     }
-    let result: IpcResult<DiffDisplayView>;
-    if (Object.keys(change).length === 0) {
-      result = await bridge.invoke('display:get');
-    } else {
-      result = await bridge.invoke('display:set', change);
-    }
-    if (!result.ok) {
-      this.showNotice({ tone: 'error', text: result.error.message });
-      return undefined;
-    }
-    this.applyDisplay(result.value);
     if (change.showGenerated !== undefined) {
-      this.showNotice({ tone: 'info', text: describeGenerated(result.value.showGenerated) });
+      this.showNotice({ tone: 'info', text: describeGenerated(display.showGenerated) });
     }
     if (change.showInsights !== undefined) {
-      this.showNotice({ tone: 'info', text: describeInsights(result.value.showInsights) });
+      this.showNotice({ tone: 'info', text: describeInsights(display.showInsights) });
     }
     if (change.skipReviewed !== undefined) {
-      this.showNotice({ tone: 'info', text: describeSkipReviewed(result.value.skipReviewed) });
+      this.showNotice({ tone: 'info', text: describeSkipReviewed(display.skipReviewed) });
     }
     if (change.reviewOrder !== undefined) {
-      this.showNotice({ tone: 'info', text: describeOrder(result.value.reviewOrder) });
+      this.showNotice({ tone: 'info', text: describeOrder(display.reviewOrder) });
     }
     if (change.layout !== undefined || change.ignoreWhitespace !== undefined) {
       this.showNotice({
         tone: 'info',
-        text: `Diffs: ${describeDiffDisplay(result.value, false).text}`,
+        text: `Diffs: ${describeDiffDisplay(display, false).text}`,
       });
     }
-    return result.value;
+    return display;
   }
 
   private async runDisplayCommand(change: SetDiffDisplayRequest): Promise<void> {
@@ -1309,21 +1269,14 @@ export class BeuveApp extends LitElement {
 
   /** `/editor [id]`: shows or sets the editor Open in Editor opens. */
   private async runEditorCommand(editorId: EditorId | undefined): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
+    const result = await this.settings.chooseEditor(editorId);
+    if (result === undefined) {
       return;
-    }
-    let result: IpcResult<EditorSettingsView>;
-    if (editorId === undefined) {
-      result = await bridge.invoke('editor:get-settings');
-    } else {
-      result = await bridge.invoke('editor:set-preferred', { editorId });
     }
     if (!result.ok) {
       this.chat.note('error', result.error.message);
       return;
     }
-    this.editorSettings = result.value;
     this.chat.note('info', ...describeEditorSettings(result.value));
   }
 
@@ -1391,7 +1344,7 @@ export class BeuveApp extends LitElement {
     this.reviewError = '';
     const review = await bridge.invoke('session:get-review', {
       sessionId,
-      ignoreWhitespace: this.display.ignoreWhitespace,
+      ignoreWhitespace: this.settings.display.ignoreWhitespace,
     });
     // A newer load of this window superseded this one (ADR 0079); that one will answer.
     if (sessionId !== this.selectedId || (!review.ok && review.error.code === 'cancelled')) {
@@ -1855,7 +1808,7 @@ export class BeuveApp extends LitElement {
    */
   private reviewInsights(): readonly ReviewInsight[] {
     const { review } = this;
-    if (review === undefined || !this.display.showInsights) {
+    if (review === undefined || !this.settings.display.showInsights) {
       return noInsights;
     }
     const messages = this.chat.entries.flatMap((entry): ChatMessageView[] => {
@@ -1993,42 +1946,18 @@ export class BeuveApp extends LitElement {
         this.stream()?.runCommand(id);
         return;
       }
-      case 'diff-split': {
-        void this.setDisplay({ layout: 'split' });
-        return;
-      }
-      case 'diff-inline': {
-        void this.setDisplay({ layout: 'unified' });
-        return;
-      }
-      case 'whitespace': {
-        void this.setDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
-        return;
-      }
-      case 'toggle-generated': {
-        void this.setDisplay({ showGenerated: !this.display.showGenerated });
-        return;
-      }
-      case 'toggle-insights': {
-        void this.setDisplay({ showInsights: !this.display.showInsights });
-        return;
-      }
-      case 'toggle-skip-reviewed': {
-        void this.setDisplay({ skipReviewed: this.display.skipReviewed !== true });
-        return;
-      }
+      case 'diff-split':
+      case 'diff-inline':
+      case 'whitespace':
+      case 'toggle-generated':
+      case 'toggle-insights':
+      case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':
-      case 'order-calls': {
-        void this.setDisplay({ reviewOrder: orderActions[id] });
-        return;
-      }
-      case 'sheets-window': {
-        void this.setDisplay({ sheets: 'window' });
-        return;
-      }
+      case 'order-calls':
+      case 'sheets-window':
       case 'sheets-inline': {
-        void this.setDisplay({ sheets: 'inline' });
+        void this.setDisplay(displayChangeFor(id, this.settings.display));
         return;
       }
       case 'editor-zed':
@@ -2161,13 +2090,11 @@ export class BeuveApp extends LitElement {
 
   /** Review ▸ Open With: stores the editor Open in Editor uses. */
   private async setPreferredEditor(editorId: EditorId): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
+    const result = await this.settings.chooseEditor(editorId);
+    if (result === undefined) {
       return;
     }
-    const result = await bridge.invoke('editor:set-preferred', { editorId });
     if (result.ok) {
-      this.editorSettings = result.value;
       this.showNotice({ tone: 'info', text: describeEditorSettings(result.value).join(' ') });
     } else {
       this.showNotice({ tone: 'error', text: result.error.message });
@@ -2220,9 +2147,9 @@ export class BeuveApp extends LitElement {
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
       isTerminalShown: this.review !== undefined && this.terminalShown,
       isTerminalFocused: this.isTerminalFocused,
-      display: this.display,
+      display: this.settings.display,
       treeMode: this.treeMode,
-      preferredEditor: this.editorSettings?.preferred,
+      preferredEditor: this.settings.editorSettings?.preferred,
       isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
       sheetHistory: sheet?.historyState(),
     });
@@ -2292,7 +2219,7 @@ export class BeuveApp extends LitElement {
         sessionId: review.session.id,
         headSha: review.headSha,
         baseSha: review.baseSha,
-        mode: this.display.sheets ?? 'window',
+        mode: this.settings.display.sheets ?? 'window',
       },
       action,
     );
@@ -2606,7 +2533,7 @@ export class BeuveApp extends LitElement {
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
-      .display=${this.display}
+      .display=${this.settings.display}
       .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
       @beuve-display-change=${this.onDisplayChange}
@@ -2986,12 +2913,6 @@ const orderDescriptions: Readonly<Record<ReviewOrderMode, string>> = {
   path: 'Files in path order',
   imports: 'Files by imports: what a file uses comes before it',
   calls: 'Files by calls: what a function calls comes before it',
-};
-
-const orderActions: Readonly<Record<Extract<CommandId, `order-${string}`>, ReviewOrderMode>> = {
-  'order-path': 'path',
-  'order-imports': 'imports',
-  'order-calls': 'calls',
 };
 
 const editorActions: Readonly<Record<Extract<CommandId, `editor-${string}`>, EditorId>> = {
