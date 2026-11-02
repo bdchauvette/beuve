@@ -28,9 +28,11 @@ function failed(error: FailureOptions): FailedReply {
 }
 
 function listed(...ids: string[]): OkReply {
-  return ok(ids.map((id) => {
-    return { id };
-  }));
+  return ok(
+    ids.map((id) => {
+      return { id };
+    }),
+  );
 }
 
 describe('SessionController', () => {
@@ -139,9 +141,11 @@ describe('SessionController', () => {
       replies: { 'session:get-review': ok(createReviewView()), 'session:list': listed('s1') },
     });
     await session.select('s1');
-    await expect.poll(() => {
-      return invoked.some(([channel]) => channel === 'session:list');
-    }).toBe(true);
+    await expect
+      .poll(() => {
+        return invoked.some(([channel]) => channel === 'session:list');
+      })
+      .toBe(true);
   });
 
   test('does nothing without a bridge', async ({ expect }) => {
