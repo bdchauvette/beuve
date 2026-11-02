@@ -5,114 +5,268 @@ import { customElement, property } from 'lit/decorators.js';
 import type {
   AppInfo,
   AttentionView,
+  CiCheckView,
   CiStatusView,
   GithubAuthStatusView,
+  LspServerView,
   McpStatus,
 } from '#contract/ipc-contract.ts';
 
+import { ActionDelegation } from './action-delegation.ts';
 import { describeAttention } from './describe-attention.ts';
 import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
+import { describeLspStatus } from './describe-lsp-status.ts';
+import { formatControlStyles } from './format-control-styles.ts';
+import { pathText } from './path-text.ts';
+
+/** `beuve-status-open-url`: a link in a status popover, for the owner to open. */
+export interface StatusOpenUrlDetail {
+  readonly url: string;
+}
+
+/** `beuve-status-popover`: which popover (`lsp` or `ci`) just opened. */
+export interface StatusPopoverDetail {
+  readonly id: string;
+}
+
+/** Worst first, so a failing check is at the top of the list. */
+const bucketRank: Readonly<Record<CiCheckView['bucket'], number>> = {
+  failure: 0,
+  pending: 1,
+  success: 2,
+  neutral: 3,
+};
+
+const bucketTone: Readonly<Record<CiCheckView['bucket'], string>> = {
+  failure: 'danger',
+  pending: 'warn',
+  success: 'ok',
+  neutral: '',
+};
 
 /**
- * Bottom bar: the focused region's name (keys live in the menus, ADR 0068), a transient notice, whose turn the open pull
- * request is (ADR 0066, reasons on hover), its CI rollup, GitHub
- * sign-in, MCP server state and app version.
+ * Bottom bar: the language servers (click for each one's state), a transient notice, whose turn
+ * the open pull request is (ADR 0066, reasons on hover), its CI rollup (click for the checks, each
+ * a link to its run), GitHub sign-in, MCP server state and app version. Its text is not selectable:
+ * these are controls and readouts, not content.
+ *
+ * Emits `beuve-status-action` (a catalog command), `beuve-status-open-url` (a link in a popover)
+ * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
  */
 @customElement('beuve-status-bar')
 export class BeuveStatusBar extends LitElement {
-  static override styles = css`
-    :host {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-4);
-      padding: 0 var(--beuve-space-3);
-      border-top: 1px solid var(--beuve-border);
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      white-space: nowrap;
-    }
+  static override styles = [
+    formatControlStyles,
+    css`
+      :host {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-4);
+        padding: 0 var(--beuve-space-3);
+        border-top: 1px solid var(--beuve-border);
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+        user-select: none;
+        -webkit-user-select: none;
+      }
 
-    .zone {
-      color: var(--beuve-text);
-    }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 var(--beuve-space-1);
+        border: 0;
+        border-radius: var(--beuve-radius-small, 3px);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
 
-    .spacer {
-      flex: 1;
-    }
+      .chip:hover,
+      .chip:has(+ [popover]:popover-open) {
+        background: var(--beuve-surface-hover, var(--beuve-surface));
+        color: var(--beuve-text);
+      }
 
-    .dot {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      margin-right: var(--beuve-space-1);
-      border-radius: 50%;
-      background: var(--beuve-text-muted);
-    }
+      [popover] {
+        position: fixed;
+        inset: auto;
+        bottom: calc(var(--beuve-statusbar-height) + var(--beuve-space-1));
+        min-width: 260px;
+        max-width: min(560px, calc(100vw - 2 * var(--beuve-space-3)));
+        max-height: 50vh;
+        margin: 0;
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        overflow: auto;
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+        box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+        color: var(--beuve-text);
+        white-space: normal;
+      }
 
-    .dot.running {
-      background: var(--beuve-ok);
-    }
+      [popover].start {
+        left: var(--beuve-space-3);
+      }
 
-    .dot.starting {
-      background: var(--beuve-warn);
-    }
+      [popover].end {
+        right: var(--beuve-space-3);
+      }
 
-    .dot.failed,
-    .dot.danger {
-      background: var(--beuve-danger);
-    }
+      .popover-title {
+        margin: 0 0 var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+        font-weight: 600;
+      }
 
-    .dot.ok {
-      background: var(--beuve-ok);
-    }
+      .popover-note {
+        margin: 0;
+        color: var(--beuve-text-muted);
+      }
 
-    .dot.warn {
-      background: var(--beuve-warn);
-    }
+      ul.rows {
+        display: flex;
+        flex-direction: column;
+        gap: var(--beuve-space-1);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
 
-    .dot.busy {
-      background: var(--beuve-accent);
-    }
+      .row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+      }
 
-    .notice {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--beuve-text);
-    }
+      .row .detail {
+        margin-left: auto;
+        padding-left: var(--beuve-space-3);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
 
-    .notice.error {
-      color: var(--beuve-danger);
-    }
+      .row .grow {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .attention {
-      cursor: default;
-    }
+      .link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--beuve-accent);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
 
-    button {
-      flex: none;
-      padding: 0 var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius-small, 3px);
-      background: transparent;
-      color: var(--beuve-text);
-      font: inherit;
-      cursor: pointer;
-    }
+      .link:hover {
+        text-decoration: underline;
+      }
 
-    button:hover {
-      background: var(--beuve-surface-hover, var(--beuve-surface));
-    }
+      .popover-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: var(--beuve-space-2);
+      }
 
-    .attention.yours {
-      color: var(--beuve-accent);
-      font-weight: 600;
-    }
-  `;
+      .notice {
+        user-select: text;
+        -webkit-user-select: text;
+      }
 
-  @property() accessor zoneLabel = '';
+      .spacer {
+        flex: 1;
+      }
+
+      .dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin-right: var(--beuve-space-1);
+        border-radius: 50%;
+        background: var(--beuve-text-muted);
+      }
+
+      .dot.running {
+        background: var(--beuve-ok);
+      }
+
+      .dot.starting,
+      .dot.stopping {
+        background: var(--beuve-warn);
+      }
+
+      .dot.failed,
+      .dot.danger {
+        background: var(--beuve-danger);
+      }
+
+      .dot.ok {
+        background: var(--beuve-ok);
+      }
+
+      .dot.warn {
+        background: var(--beuve-warn);
+      }
+
+      .dot.busy {
+        background: var(--beuve-accent);
+      }
+
+      .notice {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--beuve-text);
+      }
+
+      .notice.error {
+        color: var(--beuve-danger);
+      }
+
+      .attention {
+        cursor: default;
+      }
+
+      button {
+        flex: none;
+        padding: 0 var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius-small, 3px);
+        background: transparent;
+        color: var(--beuve-text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: var(--beuve-surface-hover, var(--beuve-surface));
+      }
+
+      .attention.yours {
+        color: var(--beuve-accent);
+        font-weight: 600;
+      }
+    `,
+  ];
+
+  private readonly onPopoverToggle = (event: Event): void => {
+    const { newState, currentTarget } = event as ToggleEvent;
+    if (newState !== 'open' || !(currentTarget instanceof HTMLElement)) {
+      return;
+    }
+    this.emit('beuve-status-popover', { id: currentTarget.id });
+  };
+
+  /** The language servers beuve has started; absent until the first answer. */
+  @property({ attribute: false }) accessor lspServers: readonly LspServerView[] | undefined;
   @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
@@ -121,6 +275,37 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
   /** Whose turn the open pull request is; absent for local sessions and until it is known. */
   @property({ attribute: false }) accessor attention: AttentionView | undefined;
+
+  constructor() {
+    super();
+    this.addController(
+      new ActionDelegation(this, {
+        click: {
+          'open-url': ({ url }, _event, element): void => {
+            if (url === undefined) {
+              return;
+            }
+            this.emit('beuve-status-open-url', { url });
+            closePopoverOf(element);
+          },
+          'restart-servers': (_data, _event, element): void => {
+            this.emit('beuve-status-action', { command: 'restart-language-servers' });
+            closePopoverOf(element);
+          },
+          'notice-action': ({ command }): void => {
+            if (command !== undefined) {
+              this.emit('beuve-status-action', { command });
+            }
+          },
+        },
+      }),
+    );
+  }
+
+  private emit(type: string, detail: unknown): void {
+    this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
   private renderNotice(notice: StatusNotice): TemplateResult {
     const { action } = notice;
     return html`<span class="notice ${notice.tone}" role="status" title=${notice.text}
@@ -131,15 +316,8 @@ export class BeuveStatusBar extends LitElement {
           : html`<button
               type="button"
               class="notice-action"
-              @click=${(): void => {
-                this.dispatchEvent(
-                  new CustomEvent('beuve-status-action', {
-                    detail: { command: action.command },
-                    bubbles: true,
-                    composed: true,
-                  }),
-                );
-              }}
+              data-action="notice-action"
+              data-command=${action.command}
             >
               ${action.label}
             </button>`
@@ -156,11 +334,116 @@ export class BeuveStatusBar extends LitElement {
     >`;
   }
 
+  private renderLsp(): TemplateResult {
+    const servers = this.lspServers ?? [];
+    const line = describeLspStatus(servers);
+    return html`<button
+        type="button"
+        class="chip"
+        popovertarget="lsp"
+        title=${line.title}
+        aria-haspopup="dialog"
+      >
+        <span class="dot ${line.tone}"></span>${line.text}
+      </button>
+      <div
+        id="lsp"
+        popover
+        class="start"
+        role="dialog"
+        aria-label="Language servers"
+        @toggle=${this.onPopoverToggle}
+      >
+        <p class="popover-title">Language servers</p>
+        ${
+          servers.length === 0
+            ? html`<p class="popover-note">
+                None started yet. A server starts the first time a file needs one.
+              </p>`
+            : html`<ul class="rows">
+                ${servers.map((server) => {
+                  return this.renderServer(server);
+                })}
+              </ul>`
+        }
+        <div class="popover-actions">
+          <button type="button" data-action="restart-servers">Restart language servers</button>
+        </div>
+      </div>`;
+  }
+
+  private renderServer(server: LspServerView): TemplateResult {
+    const documents = `${String(server.openDocuments)} open`;
+    let detail = documents;
+    if (server.restarts > 0) {
+      detail = `${documents} · restarted ${String(server.restarts)}×`;
+    }
+    return html`<li class="row">
+      <span class="dot ${server.state}"></span>
+      <span>${server.serverId}</span>
+      <span class="grow" title=${server.root}>${pathText(server.root)}</span>
+      <span class="detail">${server.state} · ${detail}</span>
+    </li>`;
+  }
+
   private renderCi(ci: CiStatusView): TemplateResult {
     const line = describeCiStatus(ci);
-    return html`<span title=${line.title}
-      ><span class="dot ${line.tone}"></span>${line.text}</span
-    >`;
+    const checks = ci.checks.toSorted((a, b) => {
+      return bucketRank[a.bucket] - bucketRank[b.bucket];
+    });
+    return html`<button
+        type="button"
+        class="chip"
+        popovertarget="ci"
+        title=${line.title}
+        aria-haspopup="dialog"
+      >
+        <span class="dot ${line.tone}"></span>${line.text}
+      </button>
+      <div
+        id="ci"
+        popover
+        class="end"
+        role="dialog"
+        aria-label="CI checks"
+        @toggle=${this.onPopoverToggle}
+      >
+        <p class="popover-title">Checks on ${ci.sha.slice(0, 7)}</p>
+        ${
+          checks.length === 0
+            ? html`<p class="popover-note">No checks have reported for this commit.</p>`
+            : html`<ul class="rows">
+                ${checks.map((check) => {
+                  return this.renderCheck(check);
+                })}
+              </ul>`
+        }
+        ${
+          ci.isTruncated
+            ? html`<p class="popover-note">More checks exist than were fetched.</p>`
+            : nothing
+        }
+      </div>`;
+  }
+
+  private renderCheck(check: CiCheckView): TemplateResult {
+    return html`<li class="row">
+      <span class="dot ${bucketTone[check.bucket]}"></span>
+      ${
+        check.url === undefined
+          ? html`<span class="grow" title=${check.name}>${check.name}</span>`
+          : html`<button
+              type="button"
+              class="link grow"
+              title=${`Open ${check.name} on GitHub`}
+              data-action="open-url"
+              data-url=${check.url}
+            >
+              ${check.name}
+            </button>`
+      }
+      <span class="detail">${check.bucket}</span>
+    </li>`;
   }
 
   private renderGithub(auth: GithubAuthStatusView): TemplateResult {
@@ -197,8 +480,7 @@ export class BeuveStatusBar extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <span class="zone">${this.zoneLabel}</span>
-      ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
+      ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
@@ -206,6 +488,11 @@ export class BeuveStatusBar extends LitElement {
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
     `;
   }
+}
+
+/** Closes the popover an action's element is in, once the action ran. */
+function closePopoverOf(element: HTMLElement): void {
+  element.closest<HTMLElement>('[popover]')?.hidePopover();
 }
 
 declare global {

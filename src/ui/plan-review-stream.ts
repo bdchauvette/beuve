@@ -73,7 +73,7 @@ function orderedFiles(
   );
   const placed = new Set<string>();
   const entries: OrderedFile[] = [];
-  for (const group of order.groups) {
+  for (const [index, group] of order.groups.entries()) {
     for (const path of group.paths) {
       const file = byPath.get(path);
       if (file === undefined || placed.has(path)) {
@@ -81,7 +81,7 @@ function orderedFiles(
       }
 
       placed.add(path);
-      entries.push({ file, group: groupLabel(group) });
+      entries.push({ file, group: groupLabel(group, index === 0) });
     }
   }
   for (const file of review.files) {
@@ -92,9 +92,15 @@ function orderedFiles(
   return entries;
 }
 
-/** The heading a group gets in the stream; the catch-all group of other changes gets none. */
-function groupLabel(group: ReviewOrderView['groups'][number]): string | undefined {
-  if (group.id === 'changes') {
+/**
+ * The heading a group gets in the stream; the catch-all group of other changes gets none while it
+ * is the first group, and one once the docs sit above it.
+ */
+function groupLabel(
+  group: ReviewOrderView['groups'][number],
+  isFirst: boolean,
+): string | undefined {
+  if (isFirst && group.id === 'changes') {
     return undefined;
   }
   return group.label;

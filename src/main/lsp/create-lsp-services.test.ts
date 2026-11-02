@@ -19,4 +19,8 @@ describe('createLspServices restart (integration: git worktrees, no language ser
     const result = await services.lsp.restart({ sessionId: 'no-such-session' });
     expect(result).toMatchObject({ ok: false });
   });
+
+  test('lists no servers until one has started', ({ expect, services }) => {
+    expect(okValueFrom(services.lsp.status())).toStrictEqual({ servers: [] });
+  });
 });

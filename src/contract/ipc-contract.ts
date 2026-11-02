@@ -785,6 +785,23 @@ export interface LspRestartedView {
   readonly headSha: string;
 }
 
+/** One running or starting language server, as the status bar lists it. */
+export interface LspServerView {
+  /** The server definition's id, e.g. `typescript`. */
+  readonly serverId: string;
+  /** The checkout the server runs in. */
+  readonly root: string;
+  readonly state: 'starting' | 'running' | 'stopping';
+  readonly openDocuments: number;
+  /** How many times beuve has restarted it. */
+  readonly restarts: number;
+}
+
+/** `lsp:status`'s answer: every language server beuve has started, whichever session it serves. */
+export interface LspStatusView {
+  readonly servers: readonly LspServerView[];
+}
+
 /** One terminal of a session (ADR 0095). */
 export interface TerminalView {
   readonly id: string;
@@ -1571,7 +1588,7 @@ export type MechanicalReasonView =
 
 /** One run of the ordered list. `reasons`, for the config group, is aligned with `paths`. */
 export interface ReviewOrderGroupView {
-  readonly id: 'changes' | 'config-and-mechanical';
+  readonly id: 'docs' | 'changes' | 'config-and-mechanical';
   readonly label: string;
   readonly paths: readonly string[];
   readonly reasons?: readonly MechanicalReasonView[];
@@ -2149,6 +2166,7 @@ export interface InvokeChannelMap {
     readonly request: LspRestartRequest;
     readonly response: IpcResult<LspRestartedView>;
   };
+  'lsp:status': { readonly request: undefined; readonly response: IpcResult<LspStatusView> };
   'terminal:open': {
     readonly request: TerminalOpenRequest;
     readonly response: IpcResult<TerminalView>;

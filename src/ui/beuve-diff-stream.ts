@@ -42,6 +42,7 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { describeOrderFallback } from './describe-order-fallback.ts';
+import { displayIcon } from './display-icon.ts';
 import { describeReviewProgress } from './describe-review-progress.ts';
 import { describeReviewScope } from './describe-review-scope.ts';
 import { describeUraItem } from './describe-ura-item.ts';
@@ -117,6 +118,8 @@ const findLimit = 5000;
 const noDeferrals: ReadonlyMap<string, DiffDeferral> = new Map();
 const noMarks: ReadonlyMap<string, FileReviewStateView> = new Map();
 const emptyPlan: ReviewStreamPlan = { files: [], groupLabels: new Map() };
+const layouts: readonly DiffDisplayView['layout'][] = ['split', 'unified'];
+
 const orderModes: readonly { readonly mode: ReviewOrderMode; readonly label: string }[] = [
   { mode: 'path', label: 'Path' },
   { mode: 'imports', label: 'Imports' },
@@ -354,9 +357,54 @@ export class BeuveDiffStream extends LitElement {
         color: var(--beuve-text);
       }
 
-      .order .fallback {
+      .order.fell-back button[aria-checked='true']::after {
+        content: '';
+        display: inline-block;
+        width: 5px;
+        height: 5px;
         margin-left: var(--beuve-space-1);
-        font-style: italic;
+        border-radius: 50%;
+        background: var(--beuve-warn);
+        vertical-align: middle;
+      }
+
+      .tools {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        margin-left: var(--beuve-space-2);
+        padding-left: var(--beuve-space-3);
+        border-left: 1px solid var(--beuve-border);
+      }
+
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+      }
+
+      .tools button {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px var(--beuve-space-1);
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: none;
+        color: var(--beuve-text-muted);
+      }
+
+      .tools button:hover {
+        color: var(--beuve-text);
+      }
+
+      .tools button[aria-checked='true'],
+      .tools button[aria-pressed='true'] {
+        border-color: var(--beuve-border);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+      }
+
+      .tools button.effective {
+        border-style: dashed;
       }
 
       .group {
@@ -693,6 +741,17 @@ export class BeuveDiffStream extends LitElement {
               this.chooseOrder(mode);
             },
           ),
+          layout: withPayload(
+            ({ layout }) => {
+              return layouts.find((entry) => entry === layout);
+            },
+            (layout): void => {
+              this.changeDisplay({ layout });
+            },
+          ),
+          whitespace: (): void => {
+            this.changeDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
+          },
         },
         keydown: { card: forwardToCard },
         pointermove: {
@@ -1352,11 +1411,12 @@ export class BeuveDiffStream extends LitElement {
       order = undefined;
     }
     const fallback = describeOrderFallback(order);
+    const help = 'The order files are listed in; config and mechanical files go last (/order)';
     return html`<span
-      class="order"
+      class="order ${fallback === undefined ? '' : 'fell-back'}"
       role="radiogroup"
       aria-label="File order"
-      title="The order files are listed in; config and mechanical files go last (/order)"
+      title=${fallback === undefined ? help : `${fallback}. ${help}`}
     >
       ${orderModes.map(({ mode, label }) => {
         return html`<button
@@ -1370,20 +1430,23 @@ export class BeuveDiffStream extends LitElement {
           ${label}
         </button>`;
       })}
-      ${fallback === undefined ? nothing : html`<span class="fallback">${fallback}</span>`}
     </span>`;
   }
 
   private chooseOrder(mode: ReviewOrderMode): void {
     if (mode !== (this.display.reviewOrder ?? 'path')) {
-      this.dispatchEvent(
-        new CustomEvent('beuve-display-change', {
-          detail: { reviewOrder: mode },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.changeDisplay({ reviewOrder: mode });
     }
+  }
+
+  private changeDisplay(change: Partial<DiffDisplayView>): void {
+    this.dispatchEvent(
+      new CustomEvent('beuve-display-change', {
+        detail: change,
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private renderGroupLabel(plan: ReviewStreamPlan, index: number): TemplateResult | typeof nothing {
@@ -1432,7 +1495,44 @@ export class BeuveDiffStream extends LitElement {
   private renderDisplay(): TemplateResult {
     const isNarrow = this.streamWidth !== undefined && this.streamWidth < minimumSplitWidth;
     const label = describeDiffDisplay(this.display, isNarrow);
-    return html`<span class="display" title=${label.title}>${label.text}</span>`;
+    const { layout, ignoreWhitespace } = this.display;
+    return html`<span class="tools" role="group" aria-label="Diff display" title=${label.title}>
+      <span class="segmented" role="radiogroup" aria-label="Diff layout">
+        <button
+          type="button"
+          role="radio"
+          tabindex="-1"
+          aria-label="Split"
+          aria-checked=${layout === 'split' ? 'true' : 'false'}
+          data-action="layout"
+          data-layout="split"
+        >
+          ${displayIcon('split')}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          tabindex="-1"
+          aria-label="Inline"
+          aria-checked=${layout === 'split' ? 'false' : 'true'}
+          class=${isNarrow && layout === 'split' ? 'effective' : ''}
+          data-action="layout"
+          data-layout="unified"
+        >
+          ${displayIcon('inline')}
+        </button>
+      </span>
+      <button
+        type="button"
+        tabindex="-1"
+        aria-label="Hide whitespace changes"
+        aria-pressed=${ignoreWhitespace ? 'true' : 'false'}
+        title=${ignoreWhitespace ? 'Whitespace-only changes are hidden' : 'Hide whitespace-only changes'}
+        data-action="whitespace"
+      >
+        ${displayIcon('whitespace')}
+      </button>
+    </span>`;
   }
 
   private renderImpactTotals(): TemplateResult | typeof nothing {
