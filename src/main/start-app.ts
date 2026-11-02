@@ -19,6 +19,8 @@ import { RequestScopes } from './ipc/request-scopes.ts';
 import { sendEvent } from './ipc/send-event.ts';
 import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
 import type { MainServices } from './main-services.ts';
+import { handlePullRequestLink } from './links/handle-pull-request-link.ts';
+import type { LinkInbox } from './links/link-inbox.ts';
 import { launchMcpServer } from './mcp/launch-mcp-server.ts';
 import { createAppMenus } from './menu/create-app-menus.ts';
 import { createMainWindow } from './window/create-main-window.ts';
@@ -40,6 +42,8 @@ export interface StartAppOptions {
   readonly settingsPreloadPath: string;
   readonly settingsHtmlPath: string;
   readonly mcpPort: number;
+  /** `beuve://` links to open pull requests with (ADR 0098). */
+  readonly links: LinkInbox;
   readonly logger: Logger;
 }
 
@@ -210,7 +214,36 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     logger,
   });
 
+  const showInMainWindow = (ref: string): void => {
+    const window =
+      BrowserWindow.getAllWindows().find((candidate) => isMainWindow(candidate, options)) ??
+      openWindow();
+    if (window.isMinimized()) {
+      window.restore();
+    }
+    window.show();
+    window.focus();
+    const { webContents } = window;
+    if (webContents.isLoading()) {
+      webContents.once('did-finish-load', () => {
+        sendEvent(webContents, 'link:open-pr', { ref });
+      });
+      return;
+    }
+    sendEvent(webContents, 'link:open-pr', { ref });
+  };
+
   openWindow();
+  options.links.attach((link) => {
+    void handlePullRequestLink(link, {
+      confirm: isOpenConfirmed,
+      reportInvalid: (reason) => {
+        logger.warn('refused a beuve:// link', { reason });
+        dialog.showErrorBox('beuve can’t open that link', reason);
+      },
+      open: showInMainWindow,
+    });
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().every((window) => !isMainWindow(window, options))) {
       openWindow();
@@ -267,6 +300,26 @@ async function showOpenDialog(
     return dialog.showOpenDialog(options);
   }
   return dialog.showOpenDialog(owner, options);
+}
+
+/** Asks, as a sheet of the focused window when there is one, before a link opens a pull request. */
+async function isOpenConfirmed(text: string): Promise<boolean> {
+  const options: Electron.MessageBoxOptions = {
+    type: 'question',
+    message: `Open pull request ${text}?`,
+    detail:
+      'A link asked beuve to open it. beuve will fetch its head into a local review checkout; it never pushes.',
+    buttons: ['Open', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  };
+  const owner = BrowserWindow.getFocusedWindow();
+  if (owner === null) {
+    const answer = await dialog.showMessageBox(options);
+    return answer.response === 0;
+  }
+  const answer = await dialog.showMessageBox(owner, options);
+  return answer.response === 0;
 }
 
 function readAppInfo(app: App): AppInfo {

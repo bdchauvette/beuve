@@ -10,5 +10,6 @@ export const eventChannels = Object.freeze([
   'terminal:data',
   'terminal:exit',
   'menu:run',
+  'link:open-pr',
   'settings:changed',
 ] as const satisfies readonly EventChannel[]);
