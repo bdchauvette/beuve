@@ -304,6 +304,10 @@ export class BeuveOpenPanel extends LitElement {
     }
 
     event.preventDefault();
+    if (this.closable) {
+      this.emit('beuve-open-close', {});
+      return;
+    }
     this.step = 'list';
     this.focus();
   };
@@ -378,7 +382,7 @@ export class BeuveOpenPanel extends LitElement {
   @property({ attribute: false }) accessor inspect: RepositoryInspector | undefined;
   /** `process.platform`, for writing shortcuts the platform's way. */
   @property() accessor platform = '';
-  /** In the dialog Escape on the list closes it; on the empty page there is nothing to close. */
+  /** In the dialog Escape closes it from any step; on the empty page there is nothing to close. */
   @property({ type: Boolean }) accessor closable = false;
 
   @state() accessor step: Step = 'list';
@@ -772,6 +776,7 @@ export class BeuveOpenPanel extends LitElement {
     return html`<button
       class="back"
       type="button"
+      @keydown=${this.onFormKeyDown}
       @click=${(): void => {
         this.step = 'list';
         this.focus();
