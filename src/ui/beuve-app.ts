@@ -85,7 +85,7 @@ import { menuStateFrom } from './menu-state-from.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
-import type { FilePairLoader } from './beuve-file-card.ts';
+import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import type { ChatEntry, ChatTranscript, LocalChatEntry } from './chat-entry.ts';
 import { chatHelp } from './chat-help.ts';
@@ -683,6 +683,13 @@ export class BeuveApp extends LitElement {
 
   private readonly onTokenHoverEnd = (): void => {
     this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
+  };
+
+  /** ⌘/Ctrl-click on a token: Go to Definition on it, as the menu command does. */
+  private readonly onTokenJump = (event: CustomEvent<TokenJumpDetail>): void => {
+    this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
+    const { target, token } = event.detail;
+    void this.sheetAction(sheetActionFrom('open-definition', target, token));
   };
 
   /** The language server's hover for a token of the diff on screen. */
@@ -3521,6 +3528,7 @@ export class BeuveApp extends LitElement {
       @beuve-insight-show-in-chat=${this.onInsightShowInChat}
       @beuve-token-hover=${this.onTokenHover}
       @beuve-token-hover-end=${this.onTokenHoverEnd}
+      @beuve-token-jump=${this.onTokenJump}
     ></beuve-diff-stream>`;
   }
 
