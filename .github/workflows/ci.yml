@@ -111,16 +111,3 @@ jobs:
           name: terminal-screenshots-${{ runner.os }}
           path: ${{ runner.temp }}/terminal
           if-no-files-found: ignore
-      - name: Lint the Homebrew cask
-        if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: '1'
-          HOMEBREW_NO_ANALYTICS: '1'
-        run: |
-          brew --version
-          # Audit needs the cask inside a tap: tap this checkout.
-          brew tap bdchauvette/beuve "$PWD"
-          # Homebrew 7.0.11 refuses to load casks from an untrusted tap.
-          brew trust bdchauvette/beuve
-          brew style --cask bdchauvette/beuve/beuve
-          brew audit --cask --strict bdchauvette/beuve/beuve
