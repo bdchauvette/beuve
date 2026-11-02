@@ -308,7 +308,7 @@ async function checkDiffStream(
   };
   await devtools.evaluate(
     main,
-    `document.querySelector('beuve-app').openRepository(${JSON.stringify(request)})`,
+    `document.querySelector('beuve-app').session.open(${JSON.stringify(request)})`,
   );
   const cardCount = repository.files.length + 1;
   await devtools.waitFor(
