@@ -1164,7 +1164,7 @@ export class BeuveApp extends LitElement {
         this.runCommandId(id);
       }),
       bridge.on('link:open-pr', ({ ref }) => {
-        void this.openPullRequest({ ref });
+        void this.github.open({ ref });
       }),
       bridge.on('settings:changed', () => {
         void this.reloadSettings();
