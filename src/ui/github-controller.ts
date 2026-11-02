@@ -14,6 +14,7 @@ import type { OpenFailure } from './beuve-open-panel.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import type { GithubPostState } from './github-post-state.ts';
+import type { ReviewRef } from './review-ref.ts';
 
 /** Post the staged review to GitHub, with this verdict over the derived one. */
 export interface GithubPostDetail {
@@ -22,18 +23,12 @@ export interface GithubPostDetail {
   readonly summary?: string | undefined;
 }
 
-/** The open review, as far as GitHub flows care. */
-export interface GithubReviewRef {
-  readonly sessionId: string;
-  readonly headSha: string;
-}
-
 /** What the GitHub flows need from the window around them. */
 export interface GithubEnvironment {
   /** The preload bridge, or `undefined` outside Electron. */
   readonly bridge: () => BeuveApi | undefined;
   /** The open review, if there is one. */
-  readonly review: () => GithubReviewRef | undefined;
+  readonly review: () => ReviewRef | undefined;
   readonly notify: (notice: StatusNotice) => void;
   readonly refreshSessions: () => Promise<void>;
   readonly selectSession: (sessionId: string) => Promise<void>;

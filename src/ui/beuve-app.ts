@@ -27,7 +27,6 @@ import type {
   McpStatus,
   OpenPullRequestRequest,
   RepositoryTreeView,
-  ReviewEditsView,
   ReviewOrderMode,
   ReviewOrderView,
   ReviewView,
@@ -36,7 +35,6 @@ import type {
   SidebarSideView,
   UraExportTarget,
   UraItemView,
-  UraSeverityView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -53,7 +51,6 @@ import './beuve-status-bar.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
 import './beuve-ura-dock.ts';
-import { countNoun } from './count-noun.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -82,10 +79,14 @@ import type { MenuStateInput } from './menu-state-from.ts';
 import type { PaletteAction, PaletteSources } from './plan-palette.ts';
 import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
-import type { DockNotice } from './beuve-ura-dock.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
-import type { GithubPostDetail, GithubReviewRef } from './github-controller.ts';
+import { ReviewEditsController } from './review-edits-controller.ts';
+import { UraController } from './ura-controller.ts';
+import type { EditorPlace } from './review-edits-controller.ts';
+import type { UraUpdateDetail } from './ura-controller.ts';
+import type { GithubPostDetail } from './github-controller.ts';
+import type { ReviewRef } from './review-ref.ts';
 import type { ChatAppCommand } from './chat-controller.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
@@ -101,8 +102,6 @@ import { planChatStage } from './plan-chat-stage.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
 import type { FlowState } from './flow-state.ts';
 import type { GithubDockState } from './github-post-state.ts';
-import { clearReviewEditsStatus } from './clear-review-edits-status.ts';
-import type { ReviewEditsFlow } from './review-edits-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
@@ -163,12 +162,6 @@ interface FileReviewedDetail {
 interface FindingRefDetail {
   readonly messageId: string;
   readonly finding: number;
-}
-
-/** A repository-relative file and a line to open it at. */
-interface EditorPlace {
-  readonly path: string;
-  readonly line: number;
 }
 
 /** A button of the dock's review-edits section (ADR 0088). */
@@ -241,15 +234,6 @@ interface UraReorderDetail {
 interface UraTransitionDetail {
   readonly itemId: string;
   readonly to: 'staged' | 'withdrawn' | 'addressed';
-}
-
-/** The fields of a staged item the dock edited. */
-interface UraUpdateDetail {
-  readonly itemId: string;
-  readonly title?: string;
-  readonly body?: string;
-  readonly severity?: UraSeverityView;
-  readonly suggestedPatch?: string;
 }
 
 /** The verdict the reviewer chose; `undefined` goes back to the derived one. */
@@ -505,8 +489,8 @@ export class BeuveApp extends LitElement {
   private unsubscribes: (() => void)[] = [];
   private readonly github = new GithubController(this, {
     bridge: beuveBridge,
-    review: (): GithubReviewRef | undefined => {
-      return this.githubReviewRef();
+    review: (): ReviewRef | undefined => {
+      return this.reviewRef();
     },
     notify: (notice): void => {
       this.showNotice(notice);
@@ -519,6 +503,24 @@ export class BeuveApp extends LitElement {
     },
     setOpenDialog: (isOpen): void => {
       this.openDialog = isOpen;
+    },
+  });
+  private readonly ura = new UraController(this, {
+    bridge: beuveBridge,
+    review: (): ReviewRef | undefined => {
+      return this.reviewRef();
+    },
+  });
+  private readonly reviewEdits = new ReviewEditsController(this, {
+    bridge: beuveBridge,
+    review: (): ReviewRef | undefined => {
+      return this.reviewRef();
+    },
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    refreshStaged: async (sessionId): Promise<void> => {
+      return this.ura.refresh(sessionId);
     },
   });
   private readonly chat = new ChatController(this, {
@@ -627,7 +629,7 @@ export class BeuveApp extends LitElement {
   private readonly onWindowFocus = (): void => {
     const sessionId = this.review?.session.id;
     if (sessionId !== undefined) {
-      void this.loadReviewEdits(sessionId);
+      void this.reviewEdits.load(sessionId);
     }
   };
 
@@ -638,23 +640,23 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'preview': {
-        void this.previewReviewEdits();
+        void this.reviewEdits.previewStage();
         return;
       }
       case 'stage': {
-        void this.stageReviewEdits();
+        void this.reviewEdits.stage();
         return;
       }
       case 'discard-preview': {
-        void this.previewDiscardReviewEdits();
+        void this.reviewEdits.previewDiscard();
         return;
       }
       case 'discard': {
-        void this.discardReviewEdits();
+        void this.reviewEdits.discard();
         return;
       }
       default: {
-        this.reviewEditsFlow = { kind: 'idle' };
+        this.reviewEdits.cancel();
       }
     }
   };
@@ -752,12 +754,12 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onChatStageFinding = (event: CustomEvent<FindingRefDetail>): void => {
-    void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
+    void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
   };
 
   private readonly onInsightStage = (event: CustomEvent<FindingRefDetail>): void => {
     event.stopPropagation();
-    void this.stageReviewFinding(event.detail.messageId, event.detail.finding);
+    void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
   };
 
   /** "Show in chat" on a diff note: the chat tab opens at that finding; the diff keeps the focus. */
@@ -829,11 +831,11 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onUraCreate = (event: CustomEvent<UraCreateRequest>): void => {
-    void this.createUraItem(event.detail);
+    void this.ura.create(event.detail);
   };
 
   private readonly onUraUpdate = (event: CustomEvent<UraUpdateDetail>): void => {
-    void this.uraCall(async (bridge) => bridge.invoke('ura:update', event.detail));
+    void this.ura.update(event.detail);
   };
 
   /** The dock's "Edit suggestion": the stream opens Suggest Edit on the item's lines (ADR 0043). */
@@ -933,47 +935,19 @@ export class BeuveApp extends LitElement {
   };
 
   private readonly onUraTransition = (event: CustomEvent<UraTransitionDetail>): void => {
-    void this.transitionUraItem(event.detail.itemId, event.detail.to);
+    void this.ura.transition(event.detail.itemId, event.detail.to);
   };
 
   private readonly onUraReorder = (event: CustomEvent<UraReorderDetail>): void => {
-    const { review } = this;
-    if (review === undefined) {
-      return;
-    }
-    const byId = new Map(
-      this.uraItems.map((item) => {
-        return [item.id, item];
-      }),
-    );
-    this.uraItems = event.detail.itemIds.flatMap((id) => {
-      return byId.get(id) ?? [];
-    });
-    void this.uraCall(async (bridge) => {
-      return bridge.invoke('ura:reorder', {
-        sessionId: review.session.id,
-        itemIds: event.detail.itemIds,
-      });
-    });
+    void this.ura.reorder(event.detail.itemIds);
   };
 
   private readonly onUraExport = (event: CustomEvent<UraExportDetail>): void => {
-    void this.exportUra(event.detail.target);
+    void this.ura.export(event.detail.target);
   };
 
   private readonly onUraSetVerdict = (event: CustomEvent<UraVerdictDetail>): void => {
-    const { review } = this;
-    if (review === undefined) {
-      return;
-    }
-    const { verdict } = event.detail;
-    void this.uraCall(async (bridge) => {
-      return bridge.invoke('ura:set-verdict', {
-        sessionId: review.session.id,
-        expectedHeadSha: review.headSha,
-        ...(verdict !== undefined && { verdict }),
-      });
-    });
+    void this.ura.setVerdict(event.detail.verdict);
   };
 
   private readonly onUraJump = (event: CustomEvent<UraJumpDetail>): void => {
@@ -1089,12 +1063,6 @@ export class BeuveApp extends LitElement {
   @state() accessor tree: RepositoryTreeView | undefined;
   @state() accessor treeMode: RadarTreeMode = 'diff-only';
   /** The open session's URA items, every status, placed on its current head. */
-  @state() accessor uraItems: readonly UraItemView[] = [];
-  @state() accessor uraVerdict: UraVerdictView = 'approve';
-  @state() accessor chosenVerdict: UraVerdictView | undefined;
-  @state() accessor verdictNotice = '';
-  @state() accessor dockNotice: DockNotice | undefined;
-  @state() accessor exporting = false;
   /** The language servers beuve has started, as the status bar lists them. */
   @state() accessor lspServers: readonly LspServerView[] | undefined;
   /** Which side the sidebar sits on (ADR 0044); main keeps it in `settings.json`. */
@@ -1112,8 +1080,6 @@ export class BeuveApp extends LitElement {
 
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
-  @state() accessor reviewEdits: ReviewEditsView | undefined;
-  @state() accessor reviewEditsFlow: ReviewEditsFlow = { kind: 'idle' };
 
   constructor() {
     super();
@@ -1140,11 +1106,6 @@ export class BeuveApp extends LitElement {
     this.unsubscribes = [
       bridge.on('mcp:status', (status) => {
         this.mcpStatus = status;
-      }),
-      bridge.on('ura:changed', ({ sessionId }) => {
-        if (sessionId === this.review?.session.id) {
-          void this.refreshUra(sessionId);
-        }
       }),
       bridge.on('menu:run', ({ id }) => {
         this.runCommandId(id);
@@ -1246,20 +1207,6 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  private async loadReviewEdits(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const loaded = await bridge.invoke('review-edits:get', { sessionId });
-    if (this.review?.session.id !== sessionId) {
-      return;
-    }
-    if (loaded.ok) {
-      this.reviewEdits = loaded.value;
-    }
-  }
-
   /** Where Open Review Edits opens: the tree's file, else the diff's line, else the first file. */
   private reviewEditsLocation(review: ReviewView): EditorPlace | undefined {
     const treePath = this.treePath();
@@ -1279,124 +1226,11 @@ export class BeuveApp extends LitElement {
 
   /** Open Review Edits (ADR 0088): the writable branch, made on first use, in the editor. */
   private async openReviewEdits(): Promise<void> {
-    const bridge = beuveBridge();
     const { review } = this;
-    if (bridge === undefined || review === undefined) {
+    if (review === undefined) {
       return;
     }
-    this.reviewEditsFlow = clearReviewEditsStatus(this.reviewEditsFlow);
-    const place = this.reviewEditsLocation(review);
-    const opened = await bridge.invoke('review-edits:open', {
-      sessionId: review.session.id,
-      ...(place !== undefined && place),
-    });
-    if (!opened.ok) {
-      this.showNotice({ tone: 'error', text: opened.error.message });
-      return;
-    }
-    let made = '';
-    if (opened.value.created) {
-      made = ', a new local branch beuve never pushes';
-    }
-    this.showNotice({
-      tone: 'info',
-      text: `Opened review edits on ${revealFormatControls(opened.value.branch)}${made}, in ${opened.value.editorName}.`,
-    });
-    await this.loadReviewEdits(review.session.id);
-  }
-
-  /** Turn Edits into Suggestions, step one: what staging would do, to confirm. */
-  private async previewReviewEdits(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined || this.reviewEditsFlow.kind === 'busy') {
-      return;
-    }
-    this.reviewEditsFlow = { kind: 'busy', text: 'Reading the review edits…' };
-    const plan = await bridge.invoke('review-edits:preview-suggestions', {
-      sessionId: review.session.id,
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (plan.ok) {
-      this.reviewEditsFlow = { kind: 'preview', plan: plan.value };
-    } else {
-      this.reviewEditsFlow = { kind: 'failed', text: plan.error.message };
-    }
-  }
-
-  /** Step two: stage exactly the previewed plan; main refuses if the edits changed since. */
-  private async stageReviewEdits(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, reviewEditsFlow: flow } = this;
-    if (bridge === undefined || review === undefined || flow.kind !== 'preview') {
-      return;
-    }
-    this.reviewEditsFlow = { kind: 'busy', text: 'Staging…' };
-    const staged = await bridge.invoke('review-edits:stage-suggestions', {
-      sessionId: review.session.id,
-      digest: flow.plan.digest,
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (!staged.ok) {
-      this.reviewEditsFlow = { kind: 'failed', text: staged.error.message };
-      return;
-    }
-    const { created, attached, updated, unchanged } = staged.value;
-    this.reviewEditsFlow = {
-      kind: 'done',
-      text: `Staged: ${String(created)} new, ${String(attached)} attached to notes, ${String(updated)} updated, ${String(unchanged)} already there.`,
-    };
-    void this.refreshUra(review.session.id);
-  }
-
-  /** Discard Review Edits, step one: what would be lost. */
-  private async previewDiscardReviewEdits(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined || this.reviewEditsFlow.kind === 'busy') {
-      return;
-    }
-    this.reviewEditsFlow = { kind: 'busy', text: 'Reading what Discard would remove…' };
-    const loss = await bridge.invoke('review-edits:preview-discard', {
-      sessionId: review.session.id,
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (loss.ok) {
-      this.reviewEditsFlow = { kind: 'discard', loss: loss.value };
-    } else {
-      this.reviewEditsFlow = { kind: 'failed', text: loss.error.message };
-    }
-  }
-
-  private async discardReviewEdits(): Promise<void> {
-    const bridge = beuveBridge();
-    const { review, reviewEditsFlow: flow } = this;
-    if (bridge === undefined || review === undefined || flow.kind !== 'discard') {
-      return;
-    }
-    this.reviewEditsFlow = { kind: 'busy', text: 'Discarding…' };
-    const discarded = await bridge.invoke('review-edits:discard', {
-      sessionId: review.session.id,
-      digest: flow.loss.digest,
-    });
-    if (this.review?.session.id !== review.session.id) {
-      return;
-    }
-    if (discarded.ok) {
-      this.reviewEditsFlow = {
-        kind: 'done',
-        text: `Discarded ${revealFormatControls(discarded.value.branch)}.`,
-      };
-    } else {
-      this.reviewEditsFlow = { kind: 'failed', text: discarded.error.message };
-    }
-    await this.loadReviewEdits(review.session.id);
+    await this.reviewEdits.open(this.reviewEditsLocation(review));
   }
 
   /** Open in Editor: opens the head-side file in the reviewer's editor (ADR 0033). */
@@ -1542,20 +1376,16 @@ export class BeuveApp extends LitElement {
       shownHead = this.review.headSha;
     }
     if (sessionId === this.selectedId) {
-      this.reviewEditsFlow = clearReviewEditsStatus(this.reviewEditsFlow);
+      this.reviewEdits.clearStatus();
     } else {
       this.review = undefined;
       this.order = undefined;
       this.tree = undefined;
       this.fileAttributes = undefined;
-      this.uraItems = [];
-      this.chosenVerdict = undefined;
-      this.verdictNotice = '';
-      this.dockNotice = undefined;
+      this.ura.reset();
       this.chat.reset();
       this.github.reset();
-      this.reviewEdits = undefined;
-      this.reviewEditsFlow = { kind: 'idle' };
+      this.reviewEdits.reset();
     }
     this.selectedId = sessionId;
     this.reviewLoading = true;
@@ -1585,8 +1415,8 @@ export class BeuveApp extends LitElement {
       void this.loadOrder(review.value);
       void this.refreshLspStatus();
       void this.loadFileAttributes(review.value);
-      void this.refreshUra(review.value.session.id);
-      void this.loadReviewEdits(review.value.session.id);
+      void this.ura.refresh(review.value.session.id);
+      void this.reviewEdits.load(review.value.session.id);
       void this.chat.load(review.value.session.id);
       if (review.value.session.source.kind === 'github-pull-request') {
         void this.github.loadPullRequest(review.value.session.id);
@@ -1928,48 +1758,14 @@ export class BeuveApp extends LitElement {
 
   /** Stages an answer in the review dock as a question note (spec Zone 4). */
   private async stageChatAnswer(messageId: string): Promise<void> {
-    const { review } = this;
     const plan = planChatStage(this.chat.entries, messageId, this.diffPaths());
-    if (review === undefined || plan === undefined || this.stagedMessageIds().has(messageId)) {
+    if (plan === undefined) {
       return;
     }
-    await this.uraCall(async (bridge) => {
-      const created = await bridge.invoke('ura:create', {
-        sessionId: review.session.id,
-        headSha: plan.headSha,
-        anchor: plan.anchor,
-        severity: plan.severity,
-        title: plan.title,
-        body: plan.body,
-        origin: { kind: 'chat-answer', messageId },
-      });
-      if (created.ok) {
-        this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
-      }
-      return created;
-    });
+    await this.ura.stageChatAnswer(plan, messageId);
   }
 
-  /** Stages one `/review` finding on its lines; main reads it from the stored answer. */
-  private async stageReviewFinding(messageId: string, finding: number): Promise<void> {
-    if (this.stagedFindings().has(`${messageId}:${String(finding)}`)) {
-      return;
-    }
-    await this.uraCall(async (bridge) => {
-      const staged = await bridge.invoke('ura:stage-review-finding', { messageId, finding });
-      if (staged.ok) {
-        const { title } = staged.value.item;
-        let text = `“${title}” is already staged.`;
-        if (staged.value.created) {
-          text = `Staged “${title}”.`;
-        }
-        this.dockNotice = { tone: 'info', text };
-      }
-      return staged;
-    });
-  }
-
-  private githubReviewRef(): GithubReviewRef | undefined {
+  private reviewRef(): ReviewRef | undefined {
     if (this.review === undefined) {
       return undefined;
     }
@@ -2017,7 +1813,7 @@ export class BeuveApp extends LitElement {
       if (action?.kind !== 'ura-item') {
         return 'Pick a file or a staged note in the palette first.';
       }
-      const item = this.uraItems.find(({ id }) => id === action.itemId);
+      const item = this.ura.items.find(({ id }) => id === action.itemId);
       if (item === undefined) {
         return 'Pick a file or a staged note in the palette first.';
       }
@@ -2138,22 +1934,6 @@ export class BeuveApp extends LitElement {
     return new Set(this.review?.files.map((file) => file.path));
   }
 
-  /** Answers staged in the dock and still staged. */
-  private stagedMessageIds(): ReadonlySet<string> {
-    return new Set(
-      this.uraItems.flatMap((item) => {
-        if (
-          item.origin.kind === 'chat-answer' &&
-          item.origin.finding === undefined &&
-          item.status.kind === 'staged'
-        ) {
-          return item.origin.messageId;
-        }
-        return [];
-      }),
-    );
-  }
-
   /**
    * The `/review` findings to show on the diff (ADR 0061): the head's completed review answers
    * merged, minus the staged ones. Recomputed only when its inputs change, so the cards keep the
@@ -2170,7 +1950,7 @@ export class BeuveApp extends LitElement {
       }
       return [];
     });
-    const staged = this.stagedFindings();
+    const staged = this.ura.stagedFindings();
     const signature = [
       review.headSha,
       messages.map(({ id }) => id).join(','),
@@ -2183,132 +1963,6 @@ export class BeuveApp extends LitElement {
       };
     }
     return this.insightCache.insights;
-  }
-
-  /** `/review` findings staged and still staged, as `messageId:index`. */
-  private stagedFindings(): ReadonlySet<string> {
-    return new Set(
-      this.uraItems.flatMap((item) => {
-        if (
-          item.origin.kind === 'chat-answer' &&
-          item.origin.finding !== undefined &&
-          item.status.kind === 'staged'
-        ) {
-          return `${item.origin.messageId}:${String(item.origin.finding)}`;
-        }
-        return [];
-      }),
-    );
-  }
-
-  private async refreshUra(sessionId: string): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const listed = await bridge.invoke('ura:list', { sessionId });
-    if (!listed.ok || this.review?.session.id !== sessionId) {
-      return;
-    }
-    this.uraItems = listed.value.items;
-    this.uraVerdict = listed.value.derivedVerdict;
-    this.chosenVerdict = listed.value.chosenVerdict;
-    this.verdictNotice = listed.value.verdictNotice ?? '';
-  }
-
-  private async createUraItem(request: UraCreateRequest): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined) {
-      request.settle('No review session is open.');
-      return;
-    }
-    const created = await bridge.invoke('ura:create', {
-      sessionId: review.session.id,
-      headSha: request.headSha,
-      anchor: request.anchor,
-      severity: request.draft.severity,
-      title: request.draft.title,
-      body: request.draft.body,
-      ...(request.suggestedPatch !== undefined && { suggestedPatch: request.suggestedPatch }),
-    });
-    if (!created.ok) {
-      request.settle(created.error.message);
-      return;
-    }
-    request.settle(undefined);
-    this.dockNotice = { tone: 'info', text: `Staged “${created.value.title}”.` };
-  }
-
-  private async transitionUraItem(
-    itemId: string,
-    to: 'staged' | 'withdrawn' | 'addressed',
-  ): Promise<void> {
-    await this.uraCall(async (bridge) => {
-      return bridge.invoke('ura:transition', { itemId, to });
-    });
-  }
-
-  /** Runs a dock call; `ura:changed` refreshes the list, and failures show in the dock. */
-  private async uraCall(
-    call: (bridge: NonNullable<ReturnType<typeof beuveBridge>>) => Promise<IpcResult<unknown>>,
-  ): Promise<void> {
-    const bridge = beuveBridge();
-    if (bridge === undefined) {
-      return;
-    }
-    const result = await call(bridge);
-    this.noteFailure(result);
-    if (!result.ok && this.review !== undefined) {
-      await this.refreshUra(this.review.session.id);
-    }
-  }
-
-  /** A moved head (`stale-review`) is expected, so it reads as a quiet note, not an error. */
-  private noteFailure(result: IpcResult<unknown>): void {
-    if (result.ok) {
-      return;
-    }
-    if (result.error.code === 'stale-review') {
-      this.dockNotice = { tone: 'info', text: result.error.message };
-    } else {
-      this.dockNotice = { tone: 'error', text: result.error.message };
-    }
-  }
-
-  /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */
-  private async exportUra(target: UraExportTarget): Promise<void> {
-    const bridge = beuveBridge();
-    const { review } = this;
-    if (bridge === undefined || review === undefined || this.exporting) {
-      return;
-    }
-    this.exporting = true;
-    const compiled = await bridge.invoke('ura:export', {
-      sessionId: review.session.id,
-      target,
-    });
-    if (!compiled.ok) {
-      this.exporting = false;
-      this.dockNotice = { tone: 'error', text: compiled.error.message };
-      return;
-    }
-    const copied = await bridge.invoke('clipboard:write-text', { text: compiled.value.text });
-    this.exporting = false;
-    const { itemCount, outdatedCount } = compiled.value;
-    if (!copied.ok) {
-      this.dockNotice = { tone: 'error', text: `Could not copy: ${copied.error.message}` };
-      return;
-    }
-    const counts = [countNoun(itemCount, 'item')];
-    if (outdatedCount > 0) {
-      counts.push(`${String(outdatedCount)} outdated`);
-    }
-    counts.push(formatBytes(compiled.value.text.length));
-    this.dockNotice = {
-      tone: 'info',
-      text: `Copied ${exportLabels[target]}: ${counts.join(', ')}.`,
-    };
   }
 
   /** Runs a catalog command `beuve-app` handles itself (ADR 0068). */
@@ -2510,12 +2164,12 @@ export class BeuveApp extends LitElement {
       }
       case 'harvest-review-edits': {
         this.focusSidebar('ura');
-        void this.previewReviewEdits();
+        void this.reviewEdits.previewStage();
         return;
       }
       case 'discard-review-edits': {
         this.focusSidebar('ura');
-        void this.previewDiscardReviewEdits();
+        void this.reviewEdits.previewDiscard();
         return;
       }
       case 'save-progress': {
@@ -2529,7 +2183,7 @@ export class BeuveApp extends LitElement {
       case 'export-agent-xml':
       case 'export-agent-json':
       case 'export-github': {
-        void this.exportUra(exportActions[id]);
+        void this.ura.export(exportActions[id]);
         return;
       }
       case 'post-review': {
@@ -2648,7 +2302,7 @@ export class BeuveApp extends LitElement {
       isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
       isBusy: this.chat.isBusy,
       isPullRequest: this.github.pullRequest !== undefined,
-      stagedCount: this.stagedCount(),
+      stagedCount: this.ura.stagedCount,
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
       isTerminalShown: this.review !== undefined && this.terminalShown,
       isTerminalFocused: this.isTerminalFocused,
@@ -2843,7 +2497,7 @@ export class BeuveApp extends LitElement {
         return;
       }
       case 'ura-item': {
-        const item = this.uraItems.find(({ id }) => id === action.itemId);
+        const item = this.ura.items.find(({ id }) => id === action.itemId);
         if (item !== undefined) {
           this.onUraJump(new CustomEvent('beuve-ura-jump', { detail: { item } }));
         }
@@ -2952,7 +2606,7 @@ export class BeuveApp extends LitElement {
       sessions: this.sessions,
       ...(this.review !== undefined && { files: this.review.files }),
       ...(this.tree !== undefined && { trackedPaths: this.tree.paths }),
-      uraItems: this.uraItems,
+      uraItems: this.ura.items,
     };
   }
 
@@ -3036,7 +2690,7 @@ export class BeuveApp extends LitElement {
       .flow=${this.flow}
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
-      .uraItems=${this.uraItems}
+      .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
       .display=${this.display}
       .suggestionJump=${this.suggestionJump}
@@ -3092,14 +2746,14 @@ export class BeuveApp extends LitElement {
       ?focused=${this.focusedZone === 'ura'}
       ?hasSession=${this.review !== undefined}
       .platform=${this.appInfo?.platform ?? ''}
-      .items=${this.uraItems}
-      .derivedVerdict=${this.uraVerdict}
-      .chosenVerdict=${this.chosenVerdict}
-      .verdictNotice=${this.verdictNotice}
-      .notice=${this.dockNotice}
-      ?exporting=${this.exporting}
+      .items=${this.ura.items}
+      .derivedVerdict=${this.ura.derivedVerdict}
+      .chosenVerdict=${this.ura.chosenVerdict}
+      .verdictNotice=${this.ura.verdictNotice}
+      .notice=${this.ura.notice}
+      ?exporting=${this.ura.isExporting}
       .github=${this.githubDock()}
-      .reviewEdits=${{ view: this.reviewEdits, flow: this.reviewEditsFlow }}
+      .reviewEdits=${{ view: this.reviewEdits.view, flow: this.reviewEdits.flow }}
       @beuve-review-edits=${this.onReviewEdits}
       @beuve-github-preview=${this.onGithubPreview}
       @beuve-github-post=${this.onGithubPost}
@@ -3124,8 +2778,8 @@ export class BeuveApp extends LitElement {
       ?focused=${this.focusedZone === 'chat'}
       .transcript=${this.chat.entries}
       .diffPaths=${this.diffPaths()}
-      .stagedMessageIds=${this.stagedMessageIds()}
-      .stagedFindings=${this.stagedFindings()}
+      .stagedMessageIds=${this.ura.stagedMessageIds()}
+      .stagedFindings=${this.ura.stagedFindings()}
       .subscribeChatStream=${this.subscribeChatStream}
       ?hasSession=${this.review !== undefined}
       @beuve-open-link=${this.onOpenChatLink}
@@ -3142,10 +2796,6 @@ export class BeuveApp extends LitElement {
     ></beuve-chat-drawer>`;
   }
 
-  private stagedCount(): number {
-    return this.uraItems.filter((item) => item.status.kind === 'staged').length;
-  }
-
   /** Intent and files, the review and the chat as quiet tabs (1, 2, 3). */
   private renderTabs(): TemplateResult {
     const tab = (zone: SidebarZone, label: string, count = 0): TemplateResult => {
@@ -3160,7 +2810,7 @@ export class BeuveApp extends LitElement {
         ${label}${count === 0 ? nothing : html`<span class="count">${count}</span>`}
       </button>`;
     };
-    const staged = this.stagedCount();
+    const staged = this.ura.stagedCount;
     return html`<nav class="tabs" role="tablist" aria-label="Sidebar">
       ${tab('intent', this.github.pullRequest === undefined ? 'Files' : 'Intent & files')}
       ${tab('ura', 'Review', staged)} ${tab('chat', 'Chat')}
@@ -3509,19 +3159,6 @@ const flowFailureText: Readonly<Record<FlowFailureKind, string>> = {
   'too-large': 'This function is too large to draw as a chart.',
   'file-unavailable': 'The head version of this file is not readable source.',
 };
-
-const exportLabels: Readonly<Record<UraExportTarget, string>> = {
-  'agent-xml': 'the review for Claude Code as XML',
-  'agent-json': 'the review for agents as JSON',
-  github: 'the GitHub review JSON',
-};
-
-function formatBytes(characters: number): string {
-  if (characters < 1024) {
-    return `${String(characters)} characters`;
-  }
-  return `${(characters / 1024).toFixed(1)} K characters`;
-}
 
 const nothingSelected =
   'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
