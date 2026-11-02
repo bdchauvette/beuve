@@ -107,9 +107,11 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
   const openWindow = (): void => {
     const window = createMainWindow(options);
     menus.track(window, 'main');
-    mainWindowContents.add(window.webContents);
+    const { webContents } = window;
+    mainWindowContents.add(webContents);
     window.once('closed', () => {
-      mainWindowContents.delete(window.webContents);
+      // `window.webContents` throws once the window is destroyed.
+      mainWindowContents.delete(webContents);
     });
     window.webContents.on('did-finish-load', () => {
       sendEvent(window.webContents, 'mcp:status', mcpStatus);
