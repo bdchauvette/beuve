@@ -414,8 +414,6 @@ export class BeuveDiffStream extends LitElement {
         font: var(--beuve-font-small);
         gap: var(--beuve-space-2);
         margin-left: var(--beuve-space-2);
-        padding-left: var(--beuve-space-3);
-        border-left: 1px solid var(--beuve-border);
       }
 
       .segmented {
