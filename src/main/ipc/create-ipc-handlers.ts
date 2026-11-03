@@ -275,6 +275,8 @@ const permalinkRequest = z
     );
   }, 'endLine needs a startLine before it');
 
+const commitLinkRequest = z.strictObject({ sessionId, sha: fullSha });
+
 const flowGraphRequest = z.strictObject({
   sessionId,
   path: z.string().min(1).max(4096),
@@ -720,6 +722,13 @@ export function createIpcHandlers(
       const parsed = permalinkRequest.safeParse(request);
       if (parsed.success) {
         return services.remote.openPermalink(permalinkRequestFrom(parsed.data));
+      }
+      return invalid(parsed.error);
+    },
+    'remote:open-commit': async (request): Promise<IpcResult<PermalinkView>> => {
+      const parsed = commitLinkRequest.safeParse(request);
+      if (parsed.success) {
+        return services.remote.openCommit(parsed.data);
       }
       return invalid(parsed.error);
     },

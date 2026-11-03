@@ -62,6 +62,7 @@ function headFreeSessionChannels(): Readonly<
     'sheet:get-head': read,
     'remote:permalink': 'a link pinned to its own `sha`',
     'remote:open-permalink': 'a link pinned to its own `sha`',
+    'remote:open-commit': 'a link pinned to its own `sha`',
     'flow:get-graph': read,
     'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
     'ura:list': read,
