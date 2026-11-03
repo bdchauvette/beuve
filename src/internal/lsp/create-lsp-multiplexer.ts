@@ -24,7 +24,6 @@ import type { LspError } from './lsp-error.ts';
 import type {
   CallHierarchyCall,
   CallHierarchyNode,
-  DiagnosticsReport,
   DocumentSymbolView,
   HoverView,
   LocationView,
@@ -65,10 +64,6 @@ export interface LspMultiplexerOptions {
   readonly logger?: Logger;
   /** Per request. Defaults to 15 s. */
   readonly requestTimeout?: Temporal.Duration;
-  /** Default upper bound for `getDiagnostics`. Defaults to 20 s. */
-  readonly diagnosticsTimeout?: Temporal.Duration;
-  /** How long to wait for a new report after a change when the old one stands. Defaults to 1.5 s. */
-  readonly diagnosticsGrace?: Temporal.Duration;
   /** Stop a server after this long without use; 0 never does. Defaults to 5 minutes. */
   readonly idleTimeout?: Temporal.Duration;
   /** Unexpected exits tolerated per window before giving up. Defaults to 3 per 5 minutes. */
@@ -93,11 +88,6 @@ export interface PositionRequest extends FileRequest {
   readonly position: Position;
 }
 
-export interface DiagnosticsRequest extends FileRequest {
-  /** Overrides `diagnosticsTimeout`. */
-  readonly timeout?: Temporal.Duration;
-}
-
 export interface DefinitionRequest extends PositionRequest {
   /** `definition` (the default) or `type-definition`. */
   readonly kind?: 'definition' | 'type-definition';
@@ -108,9 +98,6 @@ export interface DefinitionRequest extends PositionRequest {
  * first use. Every method resolves to a `Result`; none rejects.
  */
 export interface LspMultiplexer {
-  readonly getDiagnostics: (
-    request: DiagnosticsRequest,
-  ) => Promise<Result<DiagnosticsReport, LspError>>;
   readonly prepareCallHierarchy: (
     request: PositionRequest,
   ) => Promise<Result<readonly CallHierarchyNode[], LspError>>;
@@ -373,10 +360,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     }
   };
 
-  const openFile = async (
-    request: FileRequest,
-    shouldRecheck = false,
-  ): Promise<Result<OpenedFile, LspError>> => {
+  const openFile = async (request: FileRequest): Promise<Result<OpenedFile, LspError>> => {
     const root = await resolveWorkspaceRoot(request.root);
     if (!root.ok) {
       return root;
@@ -405,15 +389,12 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       return err({ kind: 'disposed' });
     }
     await refreshOpenDocuments(session.value, root.value);
-    const document = session.value.sync(
-      {
-        uri: file.value.uri,
-        absolutePath: file.value.absolutePath,
-        languageId: languageIdOf(definition, file.value),
-        ...content.value,
-      },
-      { recheck: shouldRecheck },
-    );
+    const document = session.value.sync({
+      uri: file.value.uri,
+      absolutePath: file.value.absolutePath,
+      languageId: languageIdOf(definition, file.value),
+      ...content.value,
+    });
     return ok({ entry, session: session.value, file: file.value, document });
   };
 
@@ -525,35 +506,6 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   }
 
   return {
-    getDiagnostics: async (request): Promise<Result<DiagnosticsReport, LspError>> => {
-      const opened = await openFile(request, true);
-      if (!opened.ok) {
-        return opened;
-      }
-      const { session, entry, document, file } = opened.value;
-      const settled = await session.diagnostics(document, {
-        timeout:
-          request.timeout ?? options.diagnosticsTimeout ?? Temporal.Duration.from({ seconds: 20 }),
-        grace: options.diagnosticsGrace ?? Temporal.Duration.from({ milliseconds: 1500 }),
-        quiet: entry.definition.diagnosticsQuiet,
-      });
-      if (!settled.ok) {
-        return settled;
-      }
-      const related = settled.value.diagnostics.flatMap((diagnostic) => {
-        return (diagnostic.relatedInformation ?? []).map((item) => item.location.uri);
-      });
-      const mapper = await mapperFor(session, entry.root, [document.uri, ...related]);
-      return ok({
-        path: file.relativePath,
-        serverId: entry.definition.id,
-        freshness: settled.value.freshness,
-        diagnostics: settled.value.diagnostics.map((diagnostic) => {
-          return mapper.diagnostic(document.uri, diagnostic);
-        }),
-      });
-    },
-
     prepareCallHierarchy: async (
       request,
     ): Promise<Result<readonly CallHierarchyNode[], LspError>> => {

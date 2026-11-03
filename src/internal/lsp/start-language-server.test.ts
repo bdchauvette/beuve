@@ -80,7 +80,6 @@ function definition(script: string, mode: FakeServerMode): ServerDefinition {
     args: [script, mode],
     languageIds: { '.ts': 'typescript' },
     settings: { fake: { flag: true } },
-    diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 20 }),
   };
 }
 

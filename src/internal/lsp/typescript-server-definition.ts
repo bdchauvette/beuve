@@ -45,6 +45,5 @@ export function typescriptServerDefinition(
       tsserver,
     },
     ...(options.env !== undefined && { env: options.env }),
-    diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 500 }),
   };
 }

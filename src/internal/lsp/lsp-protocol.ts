@@ -30,25 +30,6 @@ export interface LspLocation {
   readonly range: LspRange;
 }
 
-/** 1 error, 2 warning, 3 information, 4 hint. */
-export type LspDiagnosticSeverity = 1 | 2 | 3 | 4;
-
-export interface LspDiagnostic {
-  readonly range: LspRange;
-  readonly severity?: LspDiagnosticSeverity;
-  readonly code?: number | string;
-  readonly source?: string;
-  readonly message: string;
-  /** 1 unnecessary, 2 deprecated. */
-  readonly tags?: readonly number[];
-  readonly relatedInformation?: readonly LspRelatedInformation[];
-}
-
-export interface LspRelatedInformation {
-  readonly location: LspLocation;
-  readonly message: string;
-}
-
 export interface WorkspaceFolder {
   readonly uri: string;
   readonly name: string;
@@ -79,7 +60,6 @@ export interface LspDocumentSymbol {
 export interface LspServerCapabilities {
   readonly positionEncoding: PositionEncoding;
   readonly callHierarchy: boolean;
-  readonly pullDiagnostics: boolean;
   readonly definition: boolean;
   readonly typeDefinition: boolean;
   readonly references: boolean;

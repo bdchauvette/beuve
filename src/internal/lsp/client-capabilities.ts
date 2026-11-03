@@ -27,13 +27,6 @@ export const clientCapabilities = Object.freeze({
       willSaveWaitUntil: false,
       didSave: false,
     },
-    publishDiagnostics: {
-      relatedInformation: true,
-      versionSupport: true,
-      tagSupport: { valueSet: [1, 2] },
-      codeDescriptionSupport: true,
-    },
-    diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false },
     callHierarchy: { dynamicRegistration: false },
     definition: { dynamicRegistration: false, linkSupport: true },
     typeDefinition: { dynamicRegistration: false, linkSupport: true },

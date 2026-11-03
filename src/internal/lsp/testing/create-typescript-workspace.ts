@@ -34,7 +34,6 @@ export function createTypescriptWorkspace(parent: string): TypescriptWorkspace {
       ],
       searchDirectories: [path.join(repositoryRoot, 'node_modules', '.bin')],
       requestTimeout: Temporal.Duration.from({ seconds: 30 }),
-      diagnosticsTimeout: Temporal.Duration.from({ seconds: 45 }),
     }),
   };
 }

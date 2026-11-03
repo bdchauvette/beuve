@@ -32,34 +32,6 @@ function utf8Range(): LspRange {
 }
 
 describe('createViewMapper', () => {
-  test('converts diagnostics to UTF-16 columns and readable fields', ({ expect }) => {
-    expect(
-      mapper().diagnostic(uri(), {
-        range: utf8Range(),
-        severity: 1,
-        code: 2322,
-        message: 'm',
-        tags: [1, 2, 9],
-        relatedInformation: [
-          { location: { uri: 'file:///elsewhere.ts', range: utf8Range() }, message: 'r' },
-        ],
-      }),
-    ).toStrictEqual({
-      range: { start: { line: 0, character: 6 }, end: { line: 0, character: 8 } },
-      severity: 'error',
-      code: '2322',
-      source: undefined,
-      message: 'm',
-      tags: ['unnecessary', 'deprecated'],
-      related: [
-        {
-          location: { file: { kind: 'external', uri: 'file:///elsewhere.ts' }, range: utf8Range() },
-          message: 'r',
-        },
-      ],
-    });
-  });
-
   test('maps call hierarchy items to nodes with kind names', ({ expect }) => {
     expect(
       mapper().node('id-1', {

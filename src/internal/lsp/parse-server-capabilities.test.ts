@@ -23,7 +23,6 @@ describe('parseServerCapabilities', () => {
       hover: true,
       definition: false,
       typeDefinition: true,
-      pullDiagnostics: false,
     });
     expect(
       parseServerCapabilities({ capabilities: { positionEncoding: 'ucs-2' } })?.positionEncoding,

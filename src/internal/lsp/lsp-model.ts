@@ -37,36 +37,6 @@ export interface HoverView {
   readonly range: Range | undefined;
 }
 
-export type DiagnosticSeverity = 'error' | 'warning' | 'information' | 'hint';
-
-export interface DiagnosticView {
-  readonly range: Range;
-  /** Absent when the server didn't say; clients usually treat that as an error. */
-  readonly severity: DiagnosticSeverity | undefined;
-  readonly code: string | undefined;
-  readonly source: string | undefined;
-  readonly message: string;
-  readonly tags: readonly ('unnecessary' | 'deprecated')[];
-  readonly related: readonly { readonly location: LocationView; readonly message: string }[];
-}
-
-/**
- * How much to trust a diagnostics report:
- * - `fresh`: the server reported on the current text and then went quiet (or answered a pull).
- * - `assumed-unchanged`: the text changed but the server sent nothing new within the grace period;
- *   servers that skip unchanged empty reports behave like this, so the previous report stands.
- * - `timed-out`: the server was still busy (or silent) at the deadline; what it sent so far.
- */
-export type DiagnosticsFreshness = 'fresh' | 'assumed-unchanged' | 'timed-out';
-
-export interface DiagnosticsReport {
-  /** The file, relative to the workspace root. */
-  readonly path: string;
-  readonly serverId: string;
-  readonly freshness: DiagnosticsFreshness;
-  readonly diagnostics: readonly DiagnosticView[];
-}
-
 /**
  * One function, method or other callable in a call hierarchy. `id` names the server's item for
  * lazy expansion via `incomingCalls`/`outgoingCalls`; it is valid while the multiplexer lives (and

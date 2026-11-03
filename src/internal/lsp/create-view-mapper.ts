@@ -1,16 +1,8 @@
 import { convertRange } from './convert-range.ts';
 import type { LineIndex } from './line-index.ts';
-import type {
-  CallHierarchyNode,
-  DiagnosticSeverity,
-  DiagnosticView,
-  DocumentSymbolView,
-  LocationView,
-  Range,
-} from './lsp-model.ts';
+import type { CallHierarchyNode, DocumentSymbolView, LocationView, Range } from './lsp-model.ts';
 import type {
   LspCallHierarchyItem,
-  LspDiagnostic,
   LspDocumentSymbol,
   LspLocation,
   LspRange,
@@ -34,17 +26,9 @@ export interface ViewMapperContext {
 export interface ViewMapper {
   readonly range: (uri: string, range: LspRange) => Range;
   readonly location: (location: LspLocation) => LocationView;
-  readonly diagnostic: (uri: string, diagnostic: LspDiagnostic) => DiagnosticView;
   readonly node: (id: string, item: LspCallHierarchyItem) => CallHierarchyNode;
   readonly symbol: (uri: string, symbol: LspDocumentSymbol) => DocumentSymbolView;
 }
-
-const severities: Readonly<Record<number, DiagnosticSeverity>> = {
-  1: 'error',
-  2: 'warning',
-  3: 'information',
-  4: 'hint',
-};
 
 /**
  * Creates the mapper for one server's results. Columns in files whose lines are unknown (outside
@@ -79,29 +63,6 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
   return {
     range,
     location,
-    diagnostic: (uri, value): DiagnosticView => {
-      return {
-        range: range(uri, value.range),
-        severity: severityOf(value),
-        code: codeOf(value),
-        source: value.source,
-        message: value.message,
-        tags: (value.tags ?? [])
-          .filter((tag) => tag === 1 || tag === 2)
-          .map((tag) => {
-            if (tag === 1) {
-              return 'unnecessary';
-            }
-            return 'deprecated';
-          }),
-        related: (value.relatedInformation ?? []).map((related) => {
-          return {
-            location: location(related.location),
-            message: related.message,
-          };
-        }),
-      };
-    },
     node: (id, item): CallHierarchyNode => {
       return {
         id,
@@ -115,20 +76,6 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
     },
     symbol,
   };
-}
-
-function severityOf(diagnostic: LspDiagnostic): DiagnosticSeverity | undefined {
-  if (diagnostic.severity === undefined) {
-    return undefined;
-  }
-  return severities[diagnostic.severity];
-}
-
-function codeOf(diagnostic: LspDiagnostic): string | undefined {
-  if (diagnostic.code === undefined) {
-    return undefined;
-  }
-  return String(diagnostic.code);
 }
 
 /** A server's detail, where an empty one means none. */

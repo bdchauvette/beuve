@@ -18,9 +18,4 @@ export interface ServerDefinition {
   readonly settings?: Readonly<Record<string, unknown>>;
   /** Variables added to the minimal environment the server runs in. */
   readonly env?: Readonly<Record<string, string>>;
-  /**
-   * After a push-diagnostics report, how long the server must stay quiet before the report counts
-   * as settled. Servers that publish syntax and semantic results separately need more.
-   */
-  readonly diagnosticsQuiet: Temporal.Duration;
 }

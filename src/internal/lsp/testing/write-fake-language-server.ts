@@ -5,8 +5,8 @@ import path from 'node:path';
  * Writes a scripted language server (plain JavaScript, run with `process.execPath`) into
  * `directory` and returns its path. Behaviour, chosen by its first argument:
  * - `normal`: negotiates UTF-8 positions, asks the client to apply an edit and for configuration
- *   after `initialized`, publishes diagnostics on open/change, echoes `prepareCallHierarchy` and
- *   answers `test/clientAnswers` with what the client replied.
+ *   after `initialized`, echoes `prepareCallHierarchy` and answers `test/clientAnswers` with what
+ *   the client replied.
  * - `fail-initialize`: writes to stderr and exits with code 3 on `initialize`.
  */
 export function writeFakeLanguageServer(directory: string): string {
@@ -47,16 +47,6 @@ const handle = (message) => {
       send({ id: 'config', method: 'workspace/configuration', params: { items: [{ section: 'fake.flag' }, { section: 'missing' }] } });
       send({ id: 'unknown', method: 'fake/unknownRequest', params: {} });
       return;
-    case 'textDocument/didOpen':
-    case 'textDocument/didChange': {
-      const uri = message.params.textDocument.uri;
-      const version = message.params.textDocument.version;
-      send({ method: 'textDocument/publishDiagnostics', params: { uri, version, diagnostics: [{
-        range: { start: { line: 0, character: 10 }, end: { line: 0, character: 14 } },
-        severity: 2, message: 'version ' + version,
-      }] } });
-      return;
-    }
     case 'textDocument/prepareCallHierarchy': {
       const { position, textDocument } = message.params;
       const range = { start: position, end: { line: position.line, character: position.character + 4 } };
