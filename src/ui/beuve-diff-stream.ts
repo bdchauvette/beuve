@@ -324,15 +324,17 @@ export class BeuveDiffStream extends LitElement {
 
       .order {
         display: inline-flex;
-        align-items: baseline;
-        gap: 2px;
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
         white-space: nowrap;
       }
 
-      .order button {
-        padding: 0 var(--beuve-space-1);
+      .tools button,
+      .order-button {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--beuve-space-1);
+        padding: 2px var(--beuve-space-2);
         border: 1px solid transparent;
         border-radius: 4px;
         background: none;
@@ -340,25 +342,65 @@ export class BeuveDiffStream extends LitElement {
         font: inherit;
       }
 
-      .order button:hover {
+      .tools button:hover,
+      .order-button:hover,
+      .order-button:has(+ [popover]:popover-open) {
         color: var(--beuve-text);
       }
 
-      .order button[aria-checked='true'] {
+      .order-button {
+        anchor-name: --order-button;
         border-color: var(--beuve-border);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
       }
 
-      .order.fell-back button[aria-checked='true']::after {
+      .order.fell-back .order-button::after {
         content: '';
-        display: inline-block;
         width: 5px;
         height: 5px;
-        margin-left: var(--beuve-space-1);
         border-radius: 50%;
         background: var(--beuve-warn);
-        vertical-align: middle;
+      }
+
+      .order [popover] {
+        position: fixed;
+        position-anchor: --order-button;
+        inset: auto;
+        top: anchor(bottom);
+        right: anchor(right);
+        margin: var(--beuve-space-1) 0 0;
+        min-width: 140px;
+        padding: var(--beuve-space-1);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+        box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+        color: var(--beuve-text);
+      }
+
+      .order [popover] button {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        width: 100%;
+        padding: 2px var(--beuve-space-2);
+        border: 0;
+        border-radius: 4px;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+      }
+
+      .order [popover] button:hover {
+        background: var(--beuve-surface-hover, var(--beuve-bg));
+      }
+
+      .order [popover] button svg {
+        visibility: hidden;
+      }
+
+      .order [popover] button[aria-checked='true'] svg {
+        visibility: visible;
       }
 
       .tools {
@@ -372,32 +414,50 @@ export class BeuveDiffStream extends LitElement {
 
       .segmented {
         display: inline-flex;
-        gap: 2px;
-      }
-
-      .tools button {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px var(--beuve-space-1);
-        border: 1px solid transparent;
+        border: 1px solid var(--beuve-border);
         border-radius: 4px;
-        background: none;
-        color: var(--beuve-text-muted);
+        overflow: hidden;
       }
 
-      .tools button:hover {
-        color: var(--beuve-text);
+      .segmented button {
+        border-radius: 0;
       }
 
-      .tools button[aria-checked='true'],
-      .tools button[aria-pressed='true'] {
-        border-color: var(--beuve-border);
+      .segmented button + button {
+        border-left: 1px solid var(--beuve-border);
+      }
+
+      .segmented button[aria-checked='true'] {
         background: var(--beuve-bg);
         color: var(--beuve-text);
       }
 
-      .tools button.effective {
-        border-style: dashed;
+      .segmented button.effective {
+        text-decoration: underline dashed;
+        text-underline-offset: 3px;
+      }
+
+      .check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border: 1px solid var(--beuve-text-muted);
+        border-radius: 3px;
+      }
+
+      .check svg {
+        visibility: hidden;
+      }
+
+      .tools button[aria-checked='true'] .check {
+        border-color: var(--beuve-text);
+        background: var(--beuve-bg);
+      }
+
+      .tools button[aria-checked='true'] .check svg {
+        visibility: visible;
       }
 
       .group {
@@ -1389,7 +1449,7 @@ export class BeuveDiffStream extends LitElement {
     return html`<span class="progress" title=${line.title}>${line.text}</span>`;
   }
 
-  /** Path / Imports / Calls (ADR 0065); a quiet note says when the order fell back. */
+  /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0105). */
   private renderOrder(): TemplateResult {
     const requested = this.display.reviewOrder ?? 'path';
     let order = this.order;
@@ -1398,28 +1458,38 @@ export class BeuveDiffStream extends LitElement {
     }
     const fallback = describeOrderFallback(order);
     const help = 'The order files are listed in; config and mechanical files go last (/order)';
-    return html`<span
-      class="order ${fallback === undefined ? '' : 'fell-back'}"
-      role="radiogroup"
-      aria-label="File order"
-      title=${fallback === undefined ? help : `${fallback}. ${help}`}
-    >
-      ${orderModes.map(({ mode, label }) => {
-        return html`<button
-          type="button"
-          role="radio"
-          tabindex="-1"
-          aria-checked=${mode === requested ? 'true' : 'false'}
-          data-action="order"
-          data-mode=${mode}
-        >
-          ${label}
-        </button>`;
-      })}
+    const current = orderModes.find(({ mode }) => mode === requested)?.label ?? 'Path';
+    return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}">
+      <button
+        type="button"
+        class="order-button"
+        tabindex="-1"
+        popovertarget="order-menu"
+        aria-haspopup="menu"
+        aria-label="File order: ${current}"
+        title=${fallback === undefined ? help : `${fallback}. ${help}`}
+      >
+        ${displayIcon('sort')}<span>${current}</span>${displayIcon('chevron')}
+      </button>
+      <div id="order-menu" popover role="menu" aria-label="File order">
+        ${orderModes.map(({ mode, label }) => {
+          return html`<button
+            type="button"
+            role="menuitemradio"
+            tabindex="-1"
+            aria-checked=${mode === requested ? 'true' : 'false'}
+            data-action="order"
+            data-mode=${mode}
+          >
+            ${displayIcon('check')}${label}
+          </button>`;
+        })}
+      </div>
     </span>`;
   }
 
   private chooseOrder(mode: ReviewOrderMode): void {
+    this.renderRoot.querySelector<HTMLElement>('#order-menu')?.hidePopover();
     if (mode !== (this.display.reviewOrder ?? 'path')) {
       this.changeDisplay({ reviewOrder: mode });
     }
@@ -1488,35 +1558,33 @@ export class BeuveDiffStream extends LitElement {
           type="button"
           role="radio"
           tabindex="-1"
-          aria-label="Split"
           aria-checked=${layout === 'split' ? 'true' : 'false'}
           data-action="layout"
           data-layout="split"
         >
-          ${displayIcon('split')}
+          ${displayIcon('split')}Split
         </button>
         <button
           type="button"
           role="radio"
           tabindex="-1"
-          aria-label="Inline"
           aria-checked=${layout === 'split' ? 'false' : 'true'}
           class=${isNarrow && layout === 'split' ? 'effective' : ''}
           data-action="layout"
           data-layout="unified"
         >
-          ${displayIcon('inline')}
+          ${displayIcon('inline')}Inline
         </button>
       </span>
       <button
         type="button"
+        role="checkbox"
         tabindex="-1"
-        aria-label="Hide whitespace changes"
-        aria-pressed=${ignoreWhitespace ? 'true' : 'false'}
+        aria-checked=${ignoreWhitespace ? 'true' : 'false'}
         title=${ignoreWhitespace ? 'Whitespace-only changes are hidden' : 'Hide whitespace-only changes'}
         data-action="whitespace"
       >
-        ${displayIcon('whitespace')}
+        <span class="check">${displayIcon('check')}</span>Hide whitespace
       </button>
     </span>`;
   }
