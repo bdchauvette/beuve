@@ -1,5 +1,4 @@
 import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -131,7 +130,7 @@ async function checkHostileRender(): Promise<void> {
     root,
     userDataDir: path.join(temporary, 'user-data'),
     args: positionals,
-    env: { BEUVE_LOG_LEVEL: 'warn', BEUVE_MCP_PORT: String(await freePort()) },
+    env: { BEUVE_LOG_LEVEL: 'warn' },
     signal: wait(),
   });
   using devtools = await DevtoolsConnection.open(app.browserUrl, preparePage);
@@ -219,18 +218,6 @@ async function chooseSheets(
 /** A fresh deadline for one wait. */
 function wait(): AbortSignal {
   return timeoutSignal(Temporal.Duration.from({ seconds: waitSeconds }));
-}
-
-/** A TCP port nothing listens on now, for the app's MCP server. */
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  if (typeof address === 'object' && address !== null) {
-    return address.port;
-  }
-  return 0;
 }
 
 /**

@@ -1463,7 +1463,7 @@ export interface ReviewOrderView {
   readonly groups: readonly ReviewOrderGroupView[];
 }
 
-/** Pushed whenever a session's URA items change (from the dock, MCP, or a moved head). */
+/** Pushed whenever a session's URA items change (from the dock or a moved head). */
 export interface UraChangedView {
   readonly sessionId: string;
 }
@@ -2206,16 +2206,8 @@ export type InvokeChannel = keyof InvokeChannelMap;
 export type InvokeRequest<C extends InvokeChannel> = InvokeChannelMap[C]['request'];
 export type InvokeResponse<C extends InvokeChannel> = InvokeChannelMap[C]['response'];
 
-/** State of the embedded MCP server. The bearer token never crosses into the renderer. */
-export type McpStatus =
-  | { readonly state: 'starting' }
-  | { readonly state: 'running'; readonly url: string }
-  | { readonly state: 'stopped' }
-  | { readonly state: 'failed'; readonly message: string };
-
 /** Payloads main pushes to the renderer with `webContents.send`. */
 export interface EventChannelMap {
-  'mcp:status': McpStatus;
   'chat:stream': ChatStreamEvent;
   'ura:changed': UraChangedView;
   'github:pr-updated': PullRequestUpdatedView;

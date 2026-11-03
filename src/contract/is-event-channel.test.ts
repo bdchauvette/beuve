@@ -13,7 +13,7 @@ describe('isEventChannel', () => {
   });
 
   test('accepts only known channel names', ({ expect }) => {
-    expect(isEventChannel('mcp:status')).toBe(true);
+    expect(isEventChannel('chat:stream')).toBe(true);
     expect(isEventChannel('app:get-info')).toBe(false);
   });
 });

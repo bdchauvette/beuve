@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -77,7 +76,7 @@ async function checkTerminal(): Promise<void> {
     userDataDir: path.join(temporary, 'user-data'),
     args: positionals,
     // A plain POSIX shell, so the user's own shell and its start-up files do not decide the run.
-    env: { BEUVE_LOG_LEVEL: 'warn', BEUVE_MCP_PORT: String(await freePort()), SHELL: '/bin/sh' },
+    env: { BEUVE_LOG_LEVEL: 'warn', SHELL: '/bin/sh' },
     signal: wait(),
   });
   using devtools = await DevtoolsConnection.open(launched.browserUrl, async (page, connection) => {
@@ -283,18 +282,6 @@ async function createRepository(directory: string): Promise<void> {
   await git('switch', '--quiet', '--create', 'feature');
   await writeFile(path.join(directory, 'a.ts'), 'export const a = 2;\n');
   await git('commit', '--quiet', '--all', '--message', 'feature');
-}
-
-/** A TCP port nothing listens on now, for the app's MCP server. */
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  if (typeof address === 'object' && address !== null) {
-    return address.port;
-  }
-  return 0;
 }
 
 /** A fresh deadline for one wait. */

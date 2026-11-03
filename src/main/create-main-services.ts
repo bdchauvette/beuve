@@ -45,7 +45,6 @@ import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { NodeRuntime, NodeRuntimeError } from './node-runtime/resolve-node-runtime.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
-import { createMcpTools } from './mcp/create-mcp-tools.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { readClaudeStatus } from './chat/read-claude-status.ts';
 import { createClaudeCodeVersionCheck } from './models/create-claude-code-version-check.ts';
@@ -153,7 +152,7 @@ export interface MainServicesOptions {
 }
 
 /**
- * Composes the domains behind the IPC handlers and MCP tools. Needs nothing from Electron. The
+ * Composes the domains behind the IPC handlers. Needs nothing from Electron. The
  * caller owns the result's language servers and must `dispose` it.
  */
 export function createMainServices(options: MainServicesOptions): MainServices {
@@ -345,15 +344,6 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       hasBundledClaudeCode: options.models?.hasBundledClaudeCode ?? false,
       logger,
     }),
-    mcpTools: createMcpTools({
-      context,
-      lsp,
-      ura,
-      github,
-      openSessionId: () => {
-        return open.sessionId;
-      },
-    }),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
       let keep: WorktreeKeep[] = [];
@@ -375,7 +365,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   };
 }
 
-/** The session the reviewer last opened, if any; shared with the MCP tools. */
+/** The session the reviewer last opened, if any; GitHub polls it. */
 interface OpenSession {
   sessionId: string | undefined;
 }
@@ -397,8 +387,8 @@ function summaryOf(value: ReviewView | SessionSummary): SessionSummary {
 }
 
 /**
- * Remembers the session the reviewer last opened, which agents get when they name none, and
- * tells `onOpened` whether it is a pull request (which main then polls, ADR 0038).
+ * Remembers the session the reviewer last opened and tells `onOpened` whether it is a pull
+ * request (which main then polls, ADR 0038).
  */
 function trackOpenSession(
   sessions: SessionServices,

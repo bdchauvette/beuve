@@ -580,7 +580,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     });
   });
 
-  test('gives the pull request to the chat as intent and to agents as metadata', async ({
+  test('gives the pull request to the chat as intent', async ({
     expect,
     services,
     opened,
@@ -598,23 +598,6 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     const [call] = world.claude.calls();
     expect(call?.stdin).toContain("## The author's stated intent");
     expect(call?.stdin).toContain('Make the answer right\n\nREQ-1: the answer is 42.');
-
-    const review = await services.mcpTools.readHumanReview({ sessionId });
-    expect(review).toMatchObject({
-      ok: true,
-      value: {
-        structured: {
-          schema: 'beuve.ura/1',
-          pullRequest: {
-            number: 7,
-            title: 'Make the answer right',
-            url: expect.stringContaining('/pull/7') as string,
-            state: 'open',
-            author: 'octocat',
-          },
-        },
-      },
-    });
   });
 
   test('opens only allow-listed links', async ({ expect, services }) => {

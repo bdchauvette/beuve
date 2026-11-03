@@ -48,7 +48,11 @@ export async function secureUserData(userData: string, logger: Logger): Promise<
  */
 const ownedDirectories = ['worktrees', 'trace', 'deps'];
 
-/** Files beuve keeps in `userData`, which hold reviews, chat, settings, keys and the MCP token. */
+/**
+ * Files beuve keeps in `userData`, which hold reviews, chat, settings and keys, plus `mcp-token`
+ * and `mcp-server.json` (the MCP server's, removed by ADR 0105), which older installs may still
+ * have on disk.
+ */
 const ownedFiles = [
   'beuve.db',
   'beuve.db-wal',
