@@ -89,3 +89,9 @@ body {
   color: var(--beuve-text);
   font: var(--beuve-font-body);
 }
+
+/* ⌘/Ctrl-hover on a token with a definition (ADR 0105); the range sits in a diff's shadow root. */
+::highlight(beuve-definition-link) {
+  color: var(--beuve-accent);
+  text-decoration: underline;
+}
