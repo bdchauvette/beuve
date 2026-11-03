@@ -247,8 +247,8 @@ const entries = Object.freeze([
   },
   {
     id: 'sidebar-overview',
-    title: 'Show Intent & Files',
-    label: 'Intent & Files',
+    title: 'Show Overview',
+    label: 'Overview',
     menu: { menu: 'view', group: 1, submenu: 'Sidebar', subgroup: 1 },
     keys: { mac: 'Cmd+1', linux: 'Ctrl+1' },
     when: ['session'],

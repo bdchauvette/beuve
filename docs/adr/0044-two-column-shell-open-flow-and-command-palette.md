@@ -27,3 +27,7 @@ Each zone gains about 32 px of height and the diff gains the width of a column. 
 ## Amendment 2026-10-30: menus and chords (ADR 0068)
 
 The single-key shortcuts of this ADR (`1`/`2`/`3`, `c`, `\`, `f`, `?`, Tab and Shift+Tab for zones) are replaced by menu commands with chords (⌘1–3, ⌘L, ⌃⌘S / F9, View ▸ Changed Files Only, Help ▸ Keyboard Shortcuts, ⌃Tab / F6 for regions), and Tab moves focus normally again. The command registry splits into the static catalog in `src/contract/command-catalog.ts`, which main builds the menus from, and the renderer's behaviours per id; the palette runs a command by id instead of dispatching a synthetic key, which removes the cost this ADR accepted. The status bar names the focused region without keys, and the titlebar's ⌘K hint is a "Search or run a command" button.
+
+## Amendment 2026-11-03: the first tab is Overview
+
+"Intent" meant nothing to a reviewer reading the tab strip, so the first tab of a pull request is called **Overview** (a local review's, with no pull request intent, stays **Files**). The View ▸ Sidebar item, its palette entry and the zone name say Overview too. The `intent` zone id and the `sidebar-overview` command are unchanged.
