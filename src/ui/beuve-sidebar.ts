@@ -9,8 +9,8 @@ import './beuve-sidebar-tabs.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
 
 /**
- * The column beside the diff: a resize handle, the tabs and the panels the owner slots in (Intent
- * and files, the review dock, the chat), of which the owner hides all but the selected one. A
+ * The column beside the diff: a resize handle, the tabs and the panels the owner slots in (the
+ * overview, the review dock, the chat), of which the owner hides all but the selected one. A
  * presentational layout (ADR 0104). The handle's `beuve-sidebar-resize` and the tabs'
  * `beuve-sidebar-tab` reach the owner as they are.
  */
@@ -53,7 +53,7 @@ export class BeuveSidebar extends LitElement {
   /** The tab that is showing. */
   @property() accessor selected: SidebarZone = 'intent';
 
-  /** Whether the review is a pull request, which the first tab then calls Intent & files. */
+  /** Whether the review is a pull request, which the first tab then calls Overview. */
   @property({ type: Boolean }) accessor isPullRequest = false;
 
   /** How many items the review has staged, shown beside its tab. */

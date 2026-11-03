@@ -126,9 +126,15 @@ describe('menuTemplateFrom', () => {
     };
     check(menus);
     expect(clashes).toStrictEqual([]);
-    expect(flatten(menus).find((item) => item.id === 'sidebar-overview')?.label).toBe(
-      '&Intent && Files',
-    );
+    expect(flatten(menus).find((item) => item.id === 'sidebar-overview')?.label).toBe('&Overview');
+  });
+
+  test('escapes a literal ampersand in a label on Linux', ({ expect }) => {
+    const catalog: readonly CatalogCommand[] = [
+      { ...command('fish', { menu: 'go', group: 0 }), title: 'Fish & Chips' },
+    ];
+    const items = flatten(menuTemplateFrom({ catalog, platform: 'linux', isPackaged: true }));
+    expect(items.find((item) => item.id === 'fish')?.label).toBe('&Fish && Chips');
   });
 
   test('hides alternate keys behind the visible item', ({ expect }) => {

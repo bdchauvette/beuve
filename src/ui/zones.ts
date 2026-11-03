@@ -9,7 +9,7 @@ export interface Zone {
 
 /** Zones in Next Region order (ADR 0068). */
 export const zones: readonly Zone[] = Object.freeze([
-  { id: 'intent', label: 'Intent & files' },
+  { id: 'intent', label: 'Overview' },
   { id: 'diff', label: 'Diff' },
   { id: 'ura', label: 'Review' },
   { id: 'chat', label: 'Chat' },

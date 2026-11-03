@@ -182,7 +182,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           {
             "accelerator": "Ctrl+1",
             "id": "sidebar-overview",
-            "label": "&Intent && Files",
+            "label": "&Overview",
           },
           {
             "accelerator": "Ctrl+2",
@@ -199,12 +199,12 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           },
           {
             "id": "sidebar-left",
-            "label": "&On the Left",
+            "label": "On &the Left",
             "type": "radio",
           },
           {
             "id": "sidebar-right",
-            "label": "On &the Right",
+            "label": "O&n the Right",
             "type": "radio",
           },
         ],
@@ -921,7 +921,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "accelerator": "Cmd+1",
             "id": "sidebar-overview",
-            "label": "Intent & Files",
+            "label": "Overview",
           },
           {
             "accelerator": "Cmd+2",
