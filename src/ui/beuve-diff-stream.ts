@@ -1435,7 +1435,7 @@ export class BeuveDiffStream extends LitElement {
     return html`<span class="progress" title=${line.title}>${line.text}</span>`;
   }
 
-  /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0105). */
+  /** A sort button whose menu lists Path / Imports / Calls (ADR 0065, 0107). */
   private renderOrder(): TemplateResult {
     const requested = this.display.reviewOrder ?? 'path';
     let order = this.order;
