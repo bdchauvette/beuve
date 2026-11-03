@@ -13,11 +13,13 @@ import type {
   PostGithubReviewResponse,
   PullRequestBadgeView,
   PullRequestSessionView,
+  PullRequestTimelineView,
   PullRequestUpdatedView,
   SessionSourceView,
 } from '#contract/ipc-contract.ts';
 import { findPullRequestStack } from '#internal/github/find-pull-request-stack.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
+import { getPullRequestTimeline } from '#internal/github/get-pull-request-timeline.ts';
 import { normalizeHostname } from '#x/net/normalize-hostname.ts';
 import type { StoredPullRequest } from '#internal/github/stored-pull-request.ts';
 import { listSessions } from '#internal/session/list-sessions.ts';
@@ -34,6 +36,7 @@ import type { ClonePathSettings } from './create-clone-path-settings.ts';
 import type { GithubClients } from './create-github-clients.ts';
 import { createPullRequestPoller } from './create-pull-request-poller.ts';
 import { describeAuthStatus } from './describe-auth-status.ts';
+import { failureFromGithubError } from './failure-from-github-error.ts';
 import type { GithubContext } from './github-context.ts';
 import { isAllowedGithubLink } from './is-allowed-github-link.ts';
 import { openPullRequest } from './open-pull-request.ts';
@@ -52,6 +55,10 @@ export interface GithubServices {
     options?: RequestOptions,
   ) => Promise<IpcResult<OpenPullRequestResponse>>;
   readonly getPullRequest: (sessionId: string) => Promise<IpcResult<PullRequestSessionView>>;
+  /** The pull request's commits, reviews and comments, oldest first (ADR 0110). */
+  readonly getTimeline: (
+    sessionId: string,
+  ) => Promise<IpcResult<PullRequestTimelineView | GithubFailureView>>;
   readonly previewReview: (
     request: PostGithubReviewRequest,
   ) => Promise<IpcResult<GithubReviewPreviewView | GithubFailureView>>;
@@ -215,6 +222,27 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
         ...(snapshot.ci !== undefined && { ci: snapshot.ci }),
         ...(snapshot.attention !== undefined && { attention: snapshot.attention }),
       });
+    },
+
+    getTimeline: async (
+      sessionId,
+    ): Promise<IpcResult<PullRequestTimelineView | GithubFailureView>> => {
+      const loaded = loadSession(options.context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const { source } = loaded.value;
+      if (source.kind !== 'github-pull-request') {
+        return err({ code: 'refused', message: 'not a pull request session' });
+      }
+      const { host, owner, repo, number } = source;
+      const timeline = await options.clients.withClient(host, async (client) => {
+        return getPullRequestTimeline(client, { owner, repo, number });
+      });
+      if (!timeline.ok) {
+        return ok(failureFromGithubError(timeline.error, `${owner}/${repo}#${String(number)}`));
+      }
+      return ok({ kind: 'timeline', ...timeline.value });
     },
 
     previewReview: async (

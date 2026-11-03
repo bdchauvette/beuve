@@ -28,9 +28,28 @@ export interface FakeCheck {
 /** A review already on a pull request, as `GET …/reviews` lists it. */
 export interface FakeSubmittedReview {
   readonly reviewer: string;
+  /** The words the reviewer wrote with the verdict; none by default. */
+  readonly body?: string;
   readonly state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
   readonly commitSha: string;
   readonly submittedAt: string;
+}
+
+/** A commit of a pull request, as `GET …/pulls/{n}/commits` lists it. */
+export interface FakePullCommit {
+  readonly sha: string;
+  readonly message: string;
+  /** The author's login; `undefined` for a commit whose author has no GitHub account. */
+  readonly login: string | undefined;
+  readonly authorName: string;
+  readonly date: string;
+}
+
+/** A comment in a pull request's conversation, as `GET …/issues/{n}/comments` lists it. */
+export interface FakeConversationComment {
+  readonly login: string;
+  readonly body: string;
+  readonly createdAt: string;
 }
 
 export interface FakeReviewRequest {
@@ -66,6 +85,10 @@ export interface FakeGithubApi {
   readonly checks: Map<string, FakeCheck[]>;
   /** Reviews already submitted, by pull request number. */
   readonly submittedReviews: Map<number, FakeSubmittedReview[]>;
+  /** Commits of each pull request, by pull request number. */
+  readonly pullCommits: Map<number, FakePullCommit[]>;
+  /** Conversation comments, by pull request number. */
+  readonly conversation: Map<number, FakeConversationComment[]>;
   /** Users and team slugs asked to review, by pull request number. */
   readonly requestedReviewers: Map<number, { users: string[]; teams: string[] }>;
   /** The login the token belongs to: GitHub refuses its approvals on its own pull requests. */
@@ -109,6 +132,8 @@ export function createFakeGithubApi({
     checks: new Map(),
     submittedReviews: new Map(),
     requestedReviewers: new Map(),
+    pullCommits: new Map(),
+    conversation: new Map(),
     viewer: 'reviewer',
     validTokens: new Set(['gho_fake_token']),
     rejectCommentPaths: new Set(),
@@ -171,6 +196,35 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
           state: entry.state,
           commit_id: entry.commitSha,
           submitted_at: submittedAtOf(entry),
+          body: entry.body ?? '',
+          html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(pull.number)}#pullrequestreview-${String(index + 1)}`,
+        };
+      }),
+    );
+  }
+  if (third === 'commits' && pull !== undefined && request.method === 'GET') {
+    return conditional(
+      request,
+      (api.pullCommits.get(pull.number) ?? []).map((entry) => {
+        return {
+          sha: entry.sha,
+          html_url: `https://github.com/${api.owner}/${api.repo}/commit/${entry.sha}`,
+          commit: { message: entry.message, author: { name: entry.authorName, date: entry.date } },
+          author: authorOf(entry.login),
+        };
+      }),
+    );
+  }
+  if (first === 'issues' && third === 'comments' && request.method === 'GET') {
+    return conditional(
+      request,
+      (api.conversation.get(Number(second)) ?? []).map((entry, index) => {
+        return {
+          id: index + 1,
+          user: { login: entry.login },
+          body: entry.body,
+          created_at: entry.createdAt,
+          html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(second)}#issuecomment-${String(index + 1)}`,
         };
       }),
     );
@@ -369,6 +423,13 @@ function textBodyOf(init: RequestInit): string | undefined {
     return init.body;
   }
   return undefined;
+}
+
+function authorOf(login: string | undefined): unknown {
+  if (login === undefined) {
+    return jsonNull;
+  }
+  return { login };
 }
 
 function submittedAtOf(entry: FakeSubmittedReview): unknown {
