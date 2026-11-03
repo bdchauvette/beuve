@@ -1,7 +1,6 @@
-import { css, html, LitElement } from 'lit';
-import type { PropertyValues, TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
-import { styleMap } from 'lit/directives/style-map.js';
+import { LitElement, nothing } from 'lit';
+import type { TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
 import type { DefinitionRequest, DefinitionView, IpcResult } from '#contract/ipc-contract.ts';
 
@@ -13,13 +12,6 @@ import type { LinkColumns } from './link-offsets-in.ts';
 /** Asks main whether the identifier at a position links anywhere (`lsp:definition` with `link`). */
 export type DefinitionAsk = (request: DefinitionRequest) => Promise<IpcResult<DefinitionView>>;
 
-/** One line segment of the underline, in viewport coordinates. */
-interface LinkBox {
-  readonly left: number;
-  readonly top: number;
-  readonly width: number;
-}
-
 /** What the last question settled: the identifier it was about and whether it links. */
 interface Settled {
   readonly scope: string;
@@ -28,47 +20,24 @@ interface Settled {
   readonly isLinked: boolean;
 }
 
+/** The name `index.css` styles with `::highlight()`: the link color and an underline. */
+const highlightName = 'beuve-definition-link';
 /** How long the pointer rests on an identifier, ⌘/Ctrl held, before the language server is asked. */
 const settleMs = 60;
 
 /**
- * The ⌘/Ctrl-hover underline (ADR 0105): while the modifier is held and the pointer is over a
- * token of a diff or a sheet, asks the language server whether the identifier under it has a
- * definition, and underlines exactly that identifier, with a pointer cursor, only if it does.
- * That is what VS Code and Zed do; a click then follows the definition as it always has. The
- * owner reports tokens with {@link BeuveDefinitionLink.point} and
- * {@link BeuveDefinitionLink.leave}. The underline is an overlay in the top layer that takes no
- * pointer events, so the library's DOM is untouched apart from the token's cursor, and it goes
- * away with the modifier, the pointer, a click, a scroll, a wheel turn or a blur. One question
- * per identifier: the answer, a yes or a no, stands until the pointer is on another one.
+ * The ⌘/Ctrl-hover link (ADR 0105): while the modifier is held and the pointer is over a token of
+ * a diff or a sheet, asks the language server whether the identifier under it has a definition,
+ * and colors and underlines exactly that identifier, with a pointer cursor, only if it does. That
+ * is what VS Code and Zed do; a click then follows the definition as it always has. The owner
+ * reports tokens with {@link BeuveDefinitionLink.point} and {@link BeuveDefinitionLink.leave}.
+ * The styling is a CSS Custom Highlight over a range of the identifier's text, so the library's
+ * DOM is untouched apart from the token's cursor, and it stays on the text through scrolling. It
+ * goes away with the modifier, the pointer, a click or a blur. One question per identifier: the
+ * answer, a yes or a no, stands until the pointer is on another one.
  */
 @customElement('beuve-definition-link')
 export class BeuveDefinitionLink extends LitElement {
-  static override styles = css`
-    :host {
-      display: contents;
-    }
-
-    .layer {
-      position: fixed;
-      inset: 0 auto auto 0;
-      width: 0;
-      height: 0;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      overflow: visible;
-      background: none;
-      pointer-events: none;
-    }
-
-    .box {
-      position: fixed;
-      height: 1px;
-      background: var(--beuve-accent);
-    }
-  `;
-
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by everything that makes an answer in flight stale. */
   private generation = 0;
@@ -77,6 +46,7 @@ export class BeuveDefinitionLink extends LitElement {
   private isHeld = false;
   private settled: Settled | undefined;
   private cursorElement: HTMLElement | undefined;
+  private highlight: Highlight | undefined;
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     this.pointer = { clientX: event.clientX, clientY: event.clientY };
@@ -102,8 +72,6 @@ export class BeuveDefinitionLink extends LitElement {
   @property() accessor sessionId = '';
   /** The commit the code on screen is at; the session head when absent. */
   @property() accessor sha: string | undefined;
-
-  @state() accessor boxes: readonly LinkBox[] = [];
 
   /** The modifier went down or up. */
   private sync(isHeld: boolean): void {
@@ -139,7 +107,7 @@ export class BeuveDefinitionLink extends LitElement {
       settled.columns.start <= character &&
       character < settled.columns.end
     ) {
-      if (settled.isLinked && this.boxes.length === 0) {
+      if (settled.isLinked && this.highlight === undefined) {
         this.show(pending, settled.columns);
       }
       return;
@@ -182,9 +150,8 @@ export class BeuveDefinitionLink extends LitElement {
     if (range === undefined) {
       return;
     }
-    this.boxes = Array.from(range.getClientRects(), (rect) => {
-      return { left: rect.left, top: rect.bottom - 1, width: rect.width };
-    });
+    this.highlight = new Highlight(range);
+    CSS.highlights.set(highlightName, this.highlight);
     tokenElement.style.cursor = 'pointer';
     this.cursorElement = tokenElement;
   }
@@ -205,7 +172,7 @@ export class BeuveDefinitionLink extends LitElement {
     this.hide();
   }
 
-  /** Clears the underline now and drops any question in flight. */
+  /** Clears the link now and drops any question in flight. */
   hide(): void {
     clearTimeout(this.settleTimer);
     this.generation += 1;
@@ -213,8 +180,10 @@ export class BeuveDefinitionLink extends LitElement {
       this.cursorElement.style.cursor = '';
       this.cursorElement = undefined;
     }
-    if (this.boxes.length > 0) {
-      this.boxes = [];
+    const { highlight } = this;
+    this.highlight = undefined;
+    if (highlight !== undefined && CSS.highlights.get(highlightName) === highlight) {
+      CSS.highlights.delete(highlightName);
     }
   }
 
@@ -226,8 +195,6 @@ export class BeuveDefinitionLink extends LitElement {
     addEventListener('keyup', this.onKey);
     addEventListener('blur', this.onBlur);
     addEventListener('pointerdown', this.onDismiss, true);
-    addEventListener('wheel', this.onDismiss, { capture: true, passive: true });
-    addEventListener('scroll', this.onDismiss, { capture: true, passive: true });
   }
 
   override disconnectedCallback(): void {
@@ -238,40 +205,11 @@ export class BeuveDefinitionLink extends LitElement {
     removeEventListener('keyup', this.onKey);
     removeEventListener('blur', this.onBlur);
     removeEventListener('pointerdown', this.onDismiss, true);
-    removeEventListener('wheel', this.onDismiss, true);
-    removeEventListener('scroll', this.onDismiss, true);
     this.hide();
   }
 
-  protected override updated(changed: PropertyValues<this>): void {
-    const layer = this.renderRoot.querySelector<HTMLElement>('.layer');
-    if (layer === null || !changed.has('boxes')) {
-      return;
-    }
-    if (this.boxes.length === 0) {
-      if (layer.matches(':popover-open')) {
-        layer.hidePopover();
-      }
-      return;
-    }
-    if (!layer.matches(':popover-open')) {
-      layer.showPopover();
-    }
-  }
-
-  protected override render(): TemplateResult {
-    return html`<div class="layer" popover="manual">
-      ${this.boxes.map((box) => {
-        return html`<div
-          class="box"
-          style=${styleMap({
-            left: `${String(box.left)}px`,
-            top: `${String(box.top)}px`,
-            width: `${String(box.width)}px`,
-          })}
-        ></div>`;
-      })}
-    </div>`;
+  protected override render(): typeof nothing | TemplateResult {
+    return nothing;
   }
 }
 
