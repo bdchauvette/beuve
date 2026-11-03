@@ -25,6 +25,7 @@ import type { ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
 import type { LspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
 import { findEnclosingSymbol } from '#internal/lsp/find-enclosing-symbol.ts';
 import type { LspError } from '#internal/lsp/lsp-error.ts';
+import { findModuleSpecifier } from '#internal/lsp/find-module-specifier.ts';
 import { planDefinitionProbes } from '#internal/lsp/plan-definition-probes.ts';
 import type { ProbeToken } from '#internal/lsp/plan-definition-probes.ts';
 import type {
@@ -342,9 +343,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         message: `${request.path} has no line ${String(request.line)}`,
       });
     }
-    const probes = planDefinitionProbes(lineText, request.character, {
-      link: request.link === true,
-    });
+    const probes = probesFor(lineText, request);
     if (request.link === true && probes.length === 0) {
       return ok({ sha, targets: [] });
     }
@@ -621,6 +620,18 @@ function isAt(target: LocationView, { path, line, token }: AskedToken): boolean 
     start.character <= token.end &&
     target.range.end.character >= token.start
   );
+}
+
+/** A module specifier under the pointer is the token (its file is the definition); else the line's identifiers. */
+function probesFor(lineText: string, request: DefinitionRequest): readonly ProbeToken[] {
+  const { character } = request;
+  if (character !== undefined) {
+    const specifier = findModuleSpecifier(lineText, character);
+    if (specifier !== undefined) {
+      return [specifier];
+    }
+  }
+  return planDefinitionProbes(lineText, character, { link: request.link === true });
 }
 
 function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView['token']> {

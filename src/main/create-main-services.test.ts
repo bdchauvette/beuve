@@ -484,6 +484,26 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
         link({ line: 3, character: 20 }),
       ]);
       expect(unlinked.map((view) => view.targets)).toStrictEqual([[], [], [], []]);
+      const specifier = await link({ line: 1, character: 28 });
+      expect(specifier.token).toMatchObject({
+        startCharacter: 26,
+        endCharacter: 32,
+        text: './auth',
+      });
+      expect(specifier.targets).toMatchObject([
+        { file: { kind: 'workspace', path: 'src/auth.ts' } },
+      ]);
+      const clicked = okValueFrom(
+        await services.lsp.definition({
+          sessionId,
+          path: 'src/handler.ts',
+          line: 1,
+          character: 28,
+        }),
+      );
+      expect(clicked.targets).toStrictEqual(specifier.targets);
+      const onQuote = await link({ line: 1, character: 25 });
+      expect(onQuote.targets).toStrictEqual([]);
       await expect(
         services.lsp.definition({ sessionId, sha: base, path: 'src/complex.ts', line: 1 }),
       ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
