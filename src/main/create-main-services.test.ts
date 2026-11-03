@@ -284,31 +284,6 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
 
 describe('createMainServices (integration: worktrees and typescript-language-server)', () => {
   test(
-    'answers MCP diagnostics with 1-based lines from a checkout of the session head',
-    { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories, worktreeRoot }) => {
-      const { sessionId, repo } = await openTypescriptSession(services, repositories);
-      const outcome = await services.mcpTools.getLspDiagnostics({ path: 'src/broken.ts' });
-      expect(outcome).toMatchObject({
-        ok: true,
-        value: {
-          sessionId,
-          path: 'src/broken.ts',
-          serverId: 'typescript',
-          diagnostics: [
-            { line: 1, column: 14, severity: 'error', code: '2322', source: 'typescript' },
-          ],
-        },
-      });
-      const clean = await services.mcpTools.getLspDiagnostics({ sessionId, path: 'src/auth.ts' });
-      expect(clean).toMatchObject({ ok: true, value: { diagnostics: [] } });
-      await expect(repo.git('status', '--porcelain')).resolves.toBe('');
-      await expect(repo.git('branch', '--show-current')).resolves.toBe('main');
-      expect(checkouts(worktreeRoot)).toStrictEqual([await repo.git('rev-parse', 'feature')]);
-    },
-  );
-
-  test(
     'lists the callers of a modified callee, badged against the review diff',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories }) => {
@@ -396,7 +371,7 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   test(
     'hovers at the head and at an older pinned commit, and refuses a line the file lacks',
     { concurrent: false, timeout: 60_000 },
-    async ({ expect, services, repositories }) => {
+    async ({ expect, services, repositories, worktreeRoot }) => {
       const { sessionId, repo } = await openTypescriptSession(services, repositories);
       const [head, base] = await Promise.all([
         repo.git('rev-parse', 'feature'),
@@ -408,6 +383,9 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
       expect(atHead.sha).toBe(head);
       expect(atHead.hover?.markdown).toContain('validate');
       expect(atHead.hover?.range).toMatchObject({ startLine: 4, endLine: 4 });
+      await expect(repo.git('status', '--porcelain')).resolves.toBe('');
+      await expect(repo.git('branch', '--show-current')).resolves.toBe('main');
+      expect(checkouts(worktreeRoot)).toStrictEqual([head]);
       const atBase = okValueFrom(
         await services.lsp.hover({
           sessionId,
@@ -566,11 +544,10 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
       const after = await repo.commit('fix the type error');
       await repo.git('switch', '--quiet', 'main');
 
-      const outcome = await services.mcpTools.getLspDiagnostics({
-        sessionId,
-        path: path.join(repo.directory, 'src/broken.ts'),
-      });
-      expect(outcome).toMatchObject({ ok: true, value: { headSha: after, diagnostics: [] } });
+      const hovered = okValueFrom(
+        await services.lsp.hover({ sessionId, path: 'src/broken.ts', line: 1, character: 14 }),
+      );
+      expect(hovered.sha).toBe(after);
       expect(checkouts(worktreeRoot)).toStrictEqual([after]);
       expect(after).not.toBe(before);
 

@@ -22,8 +22,6 @@ import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import type { ChatMessageId } from '#internal/chat/chat-message.ts';
 import type { ChatFinding } from '#internal/chat/chat-review.ts';
 import { findChatMessage } from '#internal/chat/find-chat-message.ts';
-import { buildAgentReview } from '#internal/ura/build-agent-review.ts';
-import type { AgentReview } from '#internal/ura/build-agent-review.ts';
 import { compileUraArtifact } from '#internal/ura/compile-ura-artifact.ts';
 import { createUraItem } from '#internal/ura/create-ura-item.ts';
 import { deriveUraVerdict } from '#internal/ura/derive-ura-verdict.ts';
@@ -36,7 +34,6 @@ import { listUraItems } from '#internal/ura/list-ura-items.ts';
 import { listUraPostings } from '#internal/ura/list-ura-postings.ts';
 import { reanchorUraAnchor } from '#internal/ura/reanchor-ura-anchor.ts';
 import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
-import { renderAgentReviewXml } from '#internal/ura/render-agent-review-xml.ts';
 import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
@@ -74,7 +71,7 @@ import { uraSummaryFrom } from './ura-summary-from.ts';
 import { verdictNoticeFrom } from './verdict-notice-from.ts';
 import { uraFailure } from './ura-failure.ts';
 
-/** The URA staging dock (Zone 3) as the renderer and the MCP server reach it (ADR 0023, 0027). */
+/** The URA staging dock (Zone 3) as the renderer reaches it (ADR 0023, 0027). */
 export interface UraServices {
   readonly list: (request: ListUraItemsRequest) => Promise<IpcResult<UraListView>>;
   readonly create: (request: CreateUraItemRequest) => Promise<IpcResult<UraItemView>>;
@@ -100,8 +97,6 @@ export interface UraServices {
   readonly listPostings: (sessionId: string) => readonly UraPosting[];
   /** Records that a posted review carried these items, and announces the change. */
   readonly recordPostings: (sessionId: string, postings: readonly UraPosting[]) => void;
-  /** The `beuve.ura/1` payload and its XML form, with the derived verdict, for MCP. */
-  readonly readAgentReview: (sessionId: string) => Promise<IpcResult<AgentReviewDocument>>;
   /** Tells listeners a session's items moved, because its head did. */
   readonly observeHead: (sessionId: string) => void;
   /** Subscribes to `ura:changed`; returns the unsubscribe function. */
@@ -114,12 +109,6 @@ export interface CompileArtifactOptions {
   /** The base tip the caller resolved for this operation, so the fork point can't move (ADR 0079). */
   readonly baseTip?: CommitSha;
   readonly verdict?: UraVerdictView;
-}
-
-/** The `beuve.ura/1` payload and its XML form. */
-export interface AgentReviewDocument {
-  readonly review: AgentReview;
-  readonly xml: string;
 }
 
 /** A staged item, and whether staging created it or found it already there. */
@@ -611,17 +600,6 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     recordPostings: (sessionId, postings): void => {
       recordUraPostings(db, postings);
       changed(sessionId);
-    },
-
-    readAgentReview: async (sessionId): Promise<IpcResult<AgentReviewDocument>> => {
-      const artifact = await compile(sessionId, undefined);
-      if (artifact.ok) {
-        return ok({
-          review: buildAgentReview(artifact.value),
-          xml: renderAgentReviewXml(artifact.value),
-        });
-      }
-      return artifact;
     },
 
     observeHead: changed,

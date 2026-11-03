@@ -314,26 +314,23 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     ).toMatchObject({ verdict: 'approve', itemCount: 1 });
   });
 
-  test('answers beuve_read_human_review with the agent JSON and its XML, defaulting the session', async ({
-    expect,
-    services,
-    note,
-  }) => {
+  test('exports the agent JSON and its XML', async ({ expect, services, sessionId, note }) => {
     await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
-    const read = okValueFrom(await services.mcpTools.readHumanReview({}));
-    expect(read.structured).toMatchObject({
+    const json = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
+    expect(JSON.parse(json.text)).toMatchObject({
       schema: 'beuve.ura/1',
       verdict: 'comment',
       counts: { issue: 1 },
       items: [{ anchor: { kind: 'lines', path: 'src/app.ts', startLine: 5, endLine: 6 } }],
     });
-    expect(read.text).toContain('<beuve-review schema="beuve.ura/1" verdict="comment"');
-    await expect(services.mcpTools.readHumanReview({ sessionId: 'nope' })).resolves.toMatchObject({
-      ok: false,
-    });
+    const xml = okValueFrom(await services.ura.export({ sessionId, target: 'agent-xml' }));
+    expect(xml.text).toContain('<beuve-review schema="beuve.ura/1" verdict="comment"');
+    await expect(
+      services.ura.export({ sessionId: 'nope', target: 'agent-json' }),
+    ).resolves.toMatchObject({ ok: false });
   });
 
-  test('persists the reviewer-chosen verdict for exports and beuve_read_human_review', async ({
+  test('persists the reviewer-chosen verdict for exports', async ({
     expect,
     services,
     repo,
@@ -344,11 +341,8 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
   }) => {
     await note({ startLine: 2, endLine: 2, title: 'Prefer const' });
     const read = async (): Promise<ReadReview> => {
-      const review = await services.mcpTools.readHumanReview({});
-      if (!review.ok) {
-        throw new Error(review.error);
-      }
-      return { verdict: review.value.structured['verdict'], text: review.value.text };
+      const review = okValueFrom(await services.ura.export({ sessionId, target: 'agent-xml' }));
+      return { verdict: review.verdict, text: review.text };
     };
     const initial = await read();
     expect(initial.verdict).toBe('comment');
@@ -443,8 +437,8 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(moved.chosenVerdict).toBeUndefined();
     expect(moved.derivedVerdict).toBe('comment');
     expect(moved.verdictNotice).toBe('Verdict cleared: new commits since you chose it');
-    const read = await services.mcpTools.readHumanReview({});
-    expect(read.ok && read.value.structured['verdict']).toBe('comment');
+    const read = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
+    expect(read.verdict).toBe('comment');
 
     okValueFrom(
       services.ura.setVerdict({
@@ -523,8 +517,8 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(listed.chosenVerdict).toBeUndefined();
     expect(listed.derivedVerdict).toBe('request-changes');
     expect(listed.verdictNotice).toContain('Approve verdict was cleared');
-    const read = await services.mcpTools.readHumanReview({});
-    expect(read.ok && read.value.structured['verdict']).toBe('request-changes');
+    const read = okValueFrom(await services.ura.export({ sessionId, target: 'agent-json' }));
+    expect(read.verdict).toBe('request-changes');
     expect(
       services.ura.setVerdict({
         sessionId,
@@ -628,7 +622,7 @@ function storeReview(db: DatabaseSync, { sessionId, head, findings }: StoredRevi
   }
 }
 
-/** What an agent reads back of the human review: its verdict and its text. */
+/** What the agent export says of the human review: its verdict and its text. */
 interface ReadReview {
   readonly verdict: unknown;
   readonly text: string;

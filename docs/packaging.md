@@ -127,7 +127,7 @@ A Developer ID signed and notarized build would make this unnecessary.
 
 `app.asar` holds the esbuild output (`dist/`, without source maps) and `package.json`. `app.asar.unpacked` holds `typescript` and `typescript-language-server`, which the bundled Node (`resources/node/node`) runs from the real file system. Run from inside the archive, tsserver reports wrong diagnostics. `app.asar.unpacked` also holds the Claude Code binary of the Agent SDK's platform package (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>`, about 280 MB), which a model set to Bundled runs (ADR 0070); a binary inside the archive can't be executed. The Tree-sitter wasm files (`dist/main/wasm/`, ADR 0014) load from inside the archive. Nothing else from `node_modules` ships, because the bundles already contain it. After upgrading either package, rebuild `dist:linux-dir` and check that `p` (peek) and the MCP `beuve_get_lsp_diagnostics` tool still work in the packaged app.
 
-In a packaged app, `BEUVE_GITHUB_API_URL` and `BEUVE_EDITOR_LAUNCH_LOG` are ignored, and the log says so. `BEUVE_CLAUDE_PATH`, `BEUVE_GH_PATH`, `BEUVE_MCP_PORT` and `BEUVE_LOG_LEVEL` keep working. A macOS app started from Finder doesn't see your shell's variables. Use `launchctl setenv` or launch it from a terminal with `open -a beuve`.
+In a packaged app, `BEUVE_GITHUB_API_URL` and `BEUVE_EDITOR_LAUNCH_LOG` are ignored, and the log says so. `BEUVE_CLAUDE_PATH`, `BEUVE_GH_PATH` and `BEUVE_LOG_LEVEL` keep working. A macOS app started from Finder doesn't see your shell's variables. Use `launchctl setenv` or launch it from a terminal with `open -a beuve`.
 
 ## Smoke testing on Linux
 

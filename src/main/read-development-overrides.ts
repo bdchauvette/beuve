@@ -15,7 +15,7 @@ export interface DevelopmentOverrides {
 /**
  * The development-only overrides main applies (ADR 0040, ADR 0048): none at all when the app is
  * packaged, whatever the environment says; the variables found are listed in `ignored` so main can
- * log them. User-facing variables (`BEUVE_CLAUDE_PATH`, `BEUVE_GH_PATH`, `BEUVE_MCP_PORT`,
+ * log them. User-facing variables (`BEUVE_CLAUDE_PATH`, `BEUVE_GH_PATH`,
  * `BEUVE_LOG_LEVEL`) are not overrides and are read elsewhere. Pure.
  */
 export function readDevelopmentOverrides(

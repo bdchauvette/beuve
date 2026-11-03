@@ -1,6 +1,6 @@
 # 0011. Typed IPC contract layer and localhost MCP transport
 
-- Status: Accepted
+- Status: Accepted; the MCP transport is superseded by [0106](0106-drop-the-embedded-mcp-server.md)
 - Date: 2026-10-28
 
 ## Context

@@ -9,7 +9,6 @@ import type {
   CiStatusView,
   GithubAuthStatusView,
   LspServerView,
-  McpStatus,
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
@@ -49,7 +48,7 @@ const bucketTone: Readonly<Record<CiCheckView['bucket'], string>> = {
 /**
  * Bottom bar: the language servers (click for each one's state), a transient notice, whose turn
  * the open pull request is (ADR 0066, reasons on hover), its CI rollup (click for the checks, each
- * a link to its run), GitHub sign-in, MCP server state and app version. Its text is not selectable:
+ * a link to its run), GitHub sign-in and app version. Its text is not selectable:
  * these are controls and readouts, not content.
  *
  * Emits `beuve-status-action` (a catalog command), `beuve-status-open-url` (a link in a popover)
@@ -267,7 +266,6 @@ export class BeuveStatusBar extends LitElement {
 
   /** The language servers beuve has started; absent until the first answer. */
   @property({ attribute: false }) accessor lspServers: readonly LspServerView[] | undefined;
-  @property({ attribute: false }) accessor mcpStatus: McpStatus | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
   /** CI for the open pull request session's head; absent for local sessions. */
@@ -453,38 +451,12 @@ export class BeuveStatusBar extends LitElement {
     >`;
   }
 
-  private renderMcp(): TemplateResult {
-    const status = this.mcpStatus;
-    if (status === undefined) {
-      return html`<span><span class="dot"></span>MCP: no bridge</span>`;
-    }
-    switch (status.state) {
-      case 'running': {
-        return html`<span title=${status.url}
-          ><span class="dot running"></span>MCP ${status.url}</span
-        >`;
-      }
-      case 'starting': {
-        return html`<span><span class="dot starting"></span>MCP starting</span>`;
-      }
-      case 'stopped': {
-        return html`<span><span class="dot"></span>MCP stopped</span>`;
-      }
-      case 'failed': {
-        return html`<span title=${status.message}
-          ><span class="dot failed"></span>MCP failed</span
-        >`;
-      }
-    }
-  }
-
   override render(): TemplateResult {
     return html`
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
-      ${this.renderMcp()}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}
     `;
   }
