@@ -19,7 +19,7 @@ export interface SidebarTabDetail {
 const zoneIds: ReadonlySet<string> = new Set(['intent', 'ura', 'chat']);
 
 /**
- * Intent and files, the review and the chat as three quiet tabs (keys 1, 2 and 3). Emits
+ * Overview (or Files), the review and the chat as three quiet tabs (keys 1, 2 and 3). Emits
  * `beuve-sidebar-tab` with the {@link SidebarTabDetail} chosen.
  */
 @customElement('beuve-sidebar-tabs')
@@ -78,7 +78,7 @@ export class BeuveSidebarTabs extends LitElement {
   /** The tab that is showing. */
   @property() accessor selected: SidebarZone = 'intent';
 
-  /** Whether the review is a pull request, which the first tab then calls Intent & files. */
+  /** Whether the review is a pull request, which the first tab then calls Overview. */
   @property({ type: Boolean }) accessor isPullRequest = false;
 
   /** How many items the review has staged, shown beside its tab. */
@@ -92,7 +92,7 @@ export class BeuveSidebarTabs extends LitElement {
   private tabs(): readonly Tab[] {
     let first = 'Files';
     if (this.isPullRequest) {
-      first = 'Intent & files';
+      first = 'Overview';
     }
     return [
       { zone: 'intent', label: first, count: 0 },
