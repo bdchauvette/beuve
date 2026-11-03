@@ -412,8 +412,7 @@ export class BeuveDiffStream extends LitElement {
         display: inline-flex;
         align-items: center;
         font: var(--beuve-font-small);
-        gap: var(--beuve-space-2);
-        margin-left: var(--beuve-space-2);
+        gap: var(--beuve-space-3);
       }
 
       .segmented {
