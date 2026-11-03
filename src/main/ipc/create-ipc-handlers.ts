@@ -218,14 +218,19 @@ const sheetPath = z
   }, 'expected a repository-relative path');
 const character = z.number().int().min(0).max(10_000_000);
 
-const definitionRequest = z.strictObject({
-  sessionId,
-  sha: fullSha.optional(),
-  path: sheetPath,
-  line: z.number().int().min(1).max(10_000_000),
-  character: character.optional(),
-  kind: z.enum(['definition', 'type-definition']).optional(),
-});
+const definitionRequest = z
+  .strictObject({
+    sessionId,
+    sha: fullSha.optional(),
+    path: sheetPath,
+    line: z.number().int().min(1).max(10_000_000),
+    character: character.optional(),
+    kind: z.enum(['definition', 'type-definition']).optional(),
+    link: z.literal(true).optional(),
+  })
+  .refine((value) => {
+    return value.link === undefined || value.character !== undefined;
+  }, 'a link probe needs a character');
 
 const hoverRequest = z.strictObject({
   sessionId,
@@ -648,12 +653,13 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { sha, character: column, kind, ...required } = parsed.data;
+      const { sha, character: column, kind, link, ...required } = parsed.data;
       const definition: DefinitionRequest = {
         ...required,
         ...(sha !== undefined && { sha }),
         ...(column !== undefined && { character: column }),
         ...(kind !== undefined && { kind }),
+        ...(link !== undefined && { link }),
       };
       return services.lsp.definition(definition);
     },

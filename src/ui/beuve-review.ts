@@ -18,6 +18,8 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-chat-drawer.ts';
+import './beuve-definition-link.ts';
+import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
 import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
 import type { HoverPoint } from './hover-point.ts';
@@ -290,10 +292,14 @@ export class BeuveReview extends LitElement {
 
   private readonly onTokenHover = (event: CustomEvent<HoverPoint>): void => {
     this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.point(event.detail);
+    this.renderRoot
+      .querySelector<BeuveDefinitionLink>('beuve-definition-link')
+      ?.point(event.detail);
   };
 
   private readonly onTokenHoverEnd = (): void => {
     this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
+    this.renderRoot.querySelector<BeuveDefinitionLink>('beuve-definition-link')?.leave();
   };
 
   /** ⌘/Ctrl-click on a token: Go to Definition on it, as the menu command does. */
@@ -301,6 +307,15 @@ export class BeuveReview extends LitElement {
     this.renderRoot.querySelector<BeuveHoverCard>('beuve-hover-card')?.leave();
     const { target, token } = event.detail;
     void this.sheetAction(sheetActionFrom('open-definition', target, token));
+  };
+
+  /** Whether the identifier under ⌘/Ctrl-hover links to a definition (ADR 0105). */
+  private readonly askDefinition: DefinitionAsk = async (request) => {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
+      return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
+    }
+    return bridge.invoke('lsp:definition', request);
   };
 
   /** The language server's hover for a token of the diff on screen. */
@@ -1486,6 +1501,15 @@ export class BeuveReview extends LitElement {
               .sessionId=${this.review.session.id}
               .sha=${this.review.headSha}
             ></beuve-hover-card>`
+      }
+      ${
+        this.review === undefined
+          ? nothing
+          : html`<beuve-definition-link
+              .ask=${this.askDefinition}
+              .sessionId=${this.review.session.id}
+              .sha=${this.review.headSha}
+            ></beuve-definition-link>`
       }
       ${
         this.navigation.inlineSheet === undefined || this.review === undefined

@@ -13,6 +13,8 @@ import type {
 import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
+import './beuve-definition-link.ts';
+import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
 import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
 import './beuve-sheet-code.ts';
@@ -233,6 +235,14 @@ export class BeuveSheetView extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-sheet-close', { bubbles: true, composed: true }));
   };
 
+  private readonly askDefinition: DefinitionAsk = async (request) => {
+    const bridge = this.api;
+    if (bridge === undefined) {
+      return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
+    }
+    return bridge.invoke('lsp:definition', request);
+  };
+
   private readonly askHover: HoverAsk = async (request) => {
     const bridge = this.api;
     if (bridge === undefined) {
@@ -320,12 +330,15 @@ export class BeuveSheetView extends LitElement {
           }}
           @beuve-sheet-token-hover=${(event: CustomEvent<SheetTokenHoverDetail>): void => {
             const path = this.current()?.path;
-            if (path !== undefined) {
-              this.hoverCard()?.point({ ...event.detail, path });
+            if (path === undefined) {
+              return;
             }
+            this.hoverCard()?.point({ ...event.detail, path });
+            this.definitionLink()?.point({ ...event.detail, path });
           }}
           @beuve-sheet-token-hover-end=${(): void => {
             this.hoverCard()?.leave();
+            this.definitionLink()?.leave();
           }}
           @beuve-sheet-token=${(event: CustomEvent<SheetTokenDetail>): void => {
             const { line, character, isJump } = event.detail;
@@ -342,6 +355,10 @@ export class BeuveSheetView extends LitElement {
 
   private hoverCard(): BeuveHoverCard | undefined {
     return this.renderRoot.querySelector('beuve-hover-card') ?? undefined;
+  }
+
+  private definitionLink(): BeuveDefinitionLink | undefined {
+    return this.renderRoot.querySelector('beuve-definition-link') ?? undefined;
   }
 
   private headNote(): string {
@@ -823,6 +840,11 @@ export class BeuveSheetView extends LitElement {
         .sessionId=${this.sessionId}
         .sha=${this.sha}
       ></beuve-hover-card>
+      <beuve-definition-link
+        .ask=${this.askDefinition}
+        .sessionId=${this.sessionId}
+        .sha=${this.sha}
+      ></beuve-definition-link>
     `;
   }
 }

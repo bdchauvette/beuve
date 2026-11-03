@@ -332,13 +332,20 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
       { ...good, sha: 'abc1234' },
       { ...good, line: 0 },
       { ...good, kind: 'references' },
+      { ...good, link: true },
+      { ...good, character: 2, link: false },
     ]) {
       await expectInvalid(expect, handlers['lsp:definition'](bad));
     }
     const sha = 'a'.repeat(40);
     await handlers['lsp:definition'](good);
     await handlers['lsp:definition']({ ...good, sha, character: 2, kind: 'type-definition' });
-    expect(calls).toStrictEqual([good, { ...good, sha, character: 2, kind: 'type-definition' }]);
+    await handlers['lsp:definition']({ ...good, character: 2, link: true });
+    expect(calls).toStrictEqual([
+      good,
+      { ...good, sha, character: 2, kind: 'type-definition' },
+      { ...good, character: 2, link: true },
+    ]);
   });
 
   test('validates lsp:hover paths, commits and positions', async ({ expect }) => {
