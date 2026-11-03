@@ -46,7 +46,12 @@ import type { CommandId } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import type { PaletteAction } from './plan-palette.ts';
-import type { FileJump, SuggestionJump, UraCreateRequest } from './beuve-diff-stream.ts';
+import type {
+  FileJump,
+  OpenCommitDetail,
+  SuggestionJump,
+  UraCreateRequest,
+} from './beuve-diff-stream.ts';
 import type { FilePairLoader, TokenJumpDetail } from './beuve-file-card.ts';
 import type { ChatController } from './chat-controller.ts';
 import type { GithubController } from './github-controller.ts';
@@ -261,6 +266,10 @@ export class BeuveReview extends LitElement {
         this.reviewEdits.cancel();
       }
     }
+  };
+
+  private readonly onOpenCommit = (event: CustomEvent<OpenCommitDetail>): void => {
+    void this.openCommit(event.detail.sha);
   };
 
   private readonly onMarkReviewed = (): void => {
@@ -582,6 +591,21 @@ export class BeuveReview extends LitElement {
       return;
     }
     await this.reviewEdits.open(this.reviewEditsLocation(review));
+  }
+
+  /** A commit hash in the header: opens the commit's page on the session's GitHub remote. */
+  private async openCommit(sha: string): Promise<void> {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    const opened = await bridge.invoke('remote:open-commit', { sessionId: review.session.id, sha });
+    if (!opened.ok) {
+      this.showNotice({ tone: 'error', text: opened.error.message });
+    } else if (opened.value.kind === 'no-remote') {
+      this.showNotice({ tone: 'info', text: 'This repository has no GitHub remote to link to.' });
+    }
   }
 
   /** Open in Editor: opens the head-side file in the reviewer's editor (ADR 0033). */
@@ -939,6 +963,7 @@ export class BeuveReview extends LitElement {
       @beuve-display-change=${this.onDisplayChange}
       @beuve-status-notice=${this.onStatusNotice}
       @beuve-ura-update=${this.onUraUpdate}
+      @beuve-open-commit=${this.onOpenCommit}
       @beuve-mark-reviewed=${this.onMarkReviewed}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}

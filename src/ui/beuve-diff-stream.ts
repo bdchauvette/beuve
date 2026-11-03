@@ -130,6 +130,11 @@ interface NoteAddDetail {
   readonly anchor: UraAnchorView;
 }
 
+/** `beuve-open-commit`: a commit hash of the header, to open on the remote (ADR 0106). */
+export interface OpenCommitDetail {
+  readonly sha: string;
+}
+
 /**
  * Zone 2: the diff stream. Shows the open session's review as `@pierre/diffs` file cards with a
  * header naming the review kind. Cards
@@ -145,7 +150,7 @@ interface NoteAddDetail {
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
  * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
- * `beuve-peek-close`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
+ * `beuve-peek-close`, `beuve-open-commit`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
 @customElement('beuve-diff-stream')
@@ -275,6 +280,20 @@ export class BeuveDiffStream extends LitElement {
       .counts {
         font: var(--beuve-font-mono);
         color: var(--beuve-text-muted);
+      }
+
+      .commit {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .commit:hover {
+        color: var(--beuve-accent);
+        text-decoration: underline;
       }
 
       .spacer {
@@ -786,6 +805,17 @@ export class BeuveDiffStream extends LitElement {
           ),
           whitespace: (): void => {
             this.changeDisplay({ ignoreWhitespace: !this.display.ignoreWhitespace });
+          },
+          'open-commit': ({ sha }): void => {
+            if (sha !== undefined) {
+              this.dispatchEvent(
+                new CustomEvent('beuve-open-commit', {
+                  detail: { sha },
+                  bubbles: true,
+                  composed: true,
+                }),
+              );
+            }
           },
         },
         keydown: { card: forwardToCard },
@@ -1362,7 +1392,9 @@ export class BeuveDiffStream extends LitElement {
     return html`
       <div class="summary">
         <span class="scope ${review.scope.kind}">${describeReviewScope(review.scope)}</span>
-        <span class="range" title=${rangeTitle(review)}>${rangeLabel(review)}</span>
+        <span class="range" title=${rangeTitle(review)}>
+          ${this.renderCommit(rangeStartOf(review))}..${this.renderCommit(review.headSha)}
+        </span>
         <span class="counts"
           >${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} +${additions}
           −${deletions}</span
@@ -1425,6 +1457,20 @@ export class BeuveDiffStream extends LitElement {
         }
       </div>
     `;
+  }
+
+  /** A short sha that opens its commit on the remote (ADR 0106). */
+  private renderCommit(sha: string): TemplateResult {
+    return html`<button
+      type="button"
+      class="commit"
+      tabindex="-1"
+      title="Open ${sha.slice(0, 8)} on GitHub"
+      data-action="open-commit"
+      data-sha=${sha}
+    >
+      ${sha.slice(0, 8)}
+    </button>`;
   }
 
   private renderProgress(): TemplateResult | typeof nothing {
@@ -1842,13 +1888,12 @@ async function waitForComposer(card: BeuveFileCard | undefined): Promise<HTMLEle
   return undefined;
 }
 
-/** Short shas of what the diff spans: fork point to head, or last reviewed head to head. */
-function rangeLabel(review: ReviewView): string {
-  let from = review.baseSha;
+/** The commits the diff spans: fork point to head, or last reviewed head to head. */
+function rangeStartOf(review: ReviewView): string {
   if (review.scope.kind === 'interdiff') {
-    from = review.scope.fromHeadSha;
+    return review.scope.fromHeadSha;
   }
-  return `${from.slice(0, 8)}..${review.headSha.slice(0, 8)}`;
+  return review.baseSha;
 }
 
 function rangeTitle(review: ReviewView): string {

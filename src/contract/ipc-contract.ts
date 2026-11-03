@@ -562,6 +562,15 @@ export type PermalinkView =
   | { readonly kind: 'link'; readonly url: string; readonly remote: string }
   | { readonly kind: 'no-remote' };
 
+/**
+ * A link (ADR 0106) to commit `sha` on the session's primary remote, chosen as for a permalink.
+ * `sha` is a full commit name of the session's repository.
+ */
+export interface CommitLinkRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+}
+
 /** Where `lsp:definition` jumps open: a sheet window each, or the overlay in the main window. */
 export type SheetModeView = 'window' | 'inline';
 
@@ -2000,6 +2009,10 @@ export interface InvokeChannelMap {
   };
   'remote:open-permalink': {
     readonly request: PermalinkRequest;
+    readonly response: IpcResult<PermalinkView>;
+  };
+  'remote:open-commit': {
+    readonly request: CommitLinkRequest;
     readonly response: IpcResult<PermalinkView>;
   };
   'flow:get-graph': {
