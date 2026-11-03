@@ -1105,7 +1105,7 @@ function stubServices(
       status: notWiredError,
     },
     sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
-    remote: { permalink: notWired, openPermalink: notWired },
+    remote: { permalink: notWired, openPermalink: notWired, openCommit: notWired },
     shell: { openUrl: notWired },
     flow: { getGraph: notWired },
     editor: {
