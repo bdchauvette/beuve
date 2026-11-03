@@ -55,8 +55,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
   {
     target: 'agent-xml',
     label: 'Copy for Claude Code (XML)',
-    title:
-      'The review as beuve.ura/1 XML, to paste into Claude Code. Agents can also read it over MCP (beuve_read_human_review).',
+    title: 'The review as beuve.ura/1 XML, to paste into Claude Code.',
   },
   {
     target: 'github',
@@ -832,10 +831,11 @@ export class BeuveUraDock extends LitElement {
           ? nothing
           : html`<p class="note ${this.notice.tone}" role="status">${this.notice.text}</p>`
       }
-      <p class="note">
-        ${stagedCount === 0 ? 'Nothing staged: an export carries only the verdict. ' : ''}Agents
-        read the same review over MCP (<code>beuve_read_human_review</code>).
-      </p>
+      ${
+        stagedCount === 0
+          ? html`<p class="note">Nothing staged: an export carries only the verdict.</p>`
+          : nothing
+      }
     </section>`;
   }
 

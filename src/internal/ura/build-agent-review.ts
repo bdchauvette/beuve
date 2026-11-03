@@ -41,8 +41,8 @@ export interface AgentReviewItem {
 }
 
 /**
- * The structured review an agent acts on (and the MCP tool `beuve_read_human_review` returns):
- * plain JSON data, no instructions; optional keys are omitted rather than `null`. Items are in the reviewer's order.
+ * The structured review an agent acts on: plain JSON data, no instructions; optional keys are
+ * omitted rather than `null`. Items are in the reviewer's order.
  */
 export interface AgentReview {
   readonly schema: AgentReviewSchema;

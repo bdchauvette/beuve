@@ -24,13 +24,13 @@ Objectives:
 
 - Zero blinders and call-stack X-ray: a package-aware neighborhood file tree, read-only LSP call-stack peek portals, and AST control-flow visualizers, without opening editor tabs.
 - Preliminary agentic review pass: an optional background worker on session load scans interdiffs and leaves non-blocking purple insights.
-- Agentic verification loop: a built-in MCP server exposing LSP diagnostics so coding agents can self-correct before human review.
+- Agentic verification loop: a built-in MCP server exposing LSP diagnostics so coding agents can self-correct before human review (removed by ADR 0106).
 - Context-aware Q&A chat (Zone 4): read-only, backed by local worktree embeddings and LSP symbols.
 - Unified agent and human workflows: local agent runs (e.g. Claude Code) and GitHub PRs reviewed the same way, including stack navigation and CI status.
 - Incremental reviews (interdiffs), inspired by Flirt: don't review the same code twice when fixups are pushed.
 - Change impact and complexity gating (ImpactGate): removed by ADR 0102; to be reconsidered.
 - Keyboard-first, modal-lite, Vim/Helix-inspired navigation.
-- Universal Review Artifacts (URA): review decisions compiled into one schema and exported to Claude Code (MCP/XML), GitHub PR reviews, or applied directly.
+- Universal Review Artifacts (URA): review decisions compiled into one schema and exported to Claude Code (XML; MCP removed by ADR 0106), GitHub PR reviews, or applied directly.
 
 ## 2. Engineering philosophy
 
@@ -65,10 +65,10 @@ _Note (2026-10-30, ADR 0002 amendment): the shared-utilities directory this spec
     │   ├── x/                 shared utilities, zero external deps, grouped by general domain
     │   │   ├── brand/  collections/  git/  image/  jsonrpc/  log/
     │   │   └── net/  release/  result/  sqlite/  text/  time/
-    │   ├── main/              Electron main process, IPC bridge, MCP server
+    │   ├── main/              Electron main process, IPC bridge
     │   ├── preload/           context-bridge preload
     │   └── ui/                Lit renderer
-    └── test/                  integration, MCP agentic, Playwright E2E
+    └── test/                  integration, Playwright E2E
 
 ## 4. Spatial architecture: four zones
 
@@ -76,7 +76,7 @@ ADR 0044 overrides the geometry below: the diff stream and one tabbed sidebar (Z
 
 - Zone 1, Intent sidebar and radar tree (260px). Top: requirements (REQ-1, REQ-2) extracted from PR descriptions or agent prompts, mapped to hunks; unmapped diffs flagged as scope creep. Bottom: `@pierre/trees` package-aware tree that auto-expands packages with modified files, and highlights touched files. `f` toggles diff-only mode.
 - Zone 2, semantic diff stream (flexible). `@pierre/diffs` cards ordered by call-graph logic rather than path. Interdiff mode (rev 1 → rev 2). Inline tools: call-stack peek (`p`), control-flow graph (`Shift+p`), inline edit (`e`), open in IDE (`o`).
-- Zone 3, URA staging dock (320px). Collects patches, severity tags and notes; exports to GitHub PR review or Claude Code (MCP or XML with metrics).
+- Zone 3, URA staging dock (320px). Collects patches, severity tags and notes; exports to GitHub PR review or Claude Code (XML with metrics).
 - Zone 4, read-only Q&A chat (toggleable drawer). Indexed on worktree files, diff hunks and LSP symbols. Cannot write files. Answers carry citation pills that jump Zone 2 to the hunk, and a button to stage an explanation as a URA comment.
 
 ## 5. Key components and workflows
@@ -85,7 +85,7 @@ A. Keyboard (superseded by ADR 0068: every command is a menu item with a chorded
 
 B. Preliminary agentic review: on session init and worktree checkout, a background worker analyzes the interdiff and emits insights (edge cases, security, type mismatches) rendered as purple badges. `y` promotes to URA, `d` dismisses.
 
-C. MCP server: embedded in the main process (`@modelcontextprotocol/sdk`). Tools: `beuve_get_lsp_diagnostics`, `beuve_read_human_review`.
+C. MCP server (removed by ADR 0106; the reviewer pastes the exported review into Claude Code instead).
 
 D. Peek portals and CFGs: `p` builds an expandable caller/callee tree from `textDocument/incomingCalls`, badging each caller Modified or Untouched. `Shift+p` renders a Tree-sitter-derived mini flowchart with modified lines highlighted.
 
@@ -116,6 +116,6 @@ The main window uses `titleBarStyle: 'hiddenInset'`, 1440×900, context isolatio
 
 ## 8. Roadmap
 
-- Phase 1: scaffold layout and aliases, SQLite init, git worktree manager, LSP JSON-RPC multiplexer, automated preliminary reviewer, embedded MCP server.
+- Phase 1: scaffold layout and aliases, SQLite init, git worktree manager, LSP JSON-RPC multiplexer, automated preliminary reviewer, embedded MCP server (later removed, ADR 0106).
 - Phase 2: `@pierre/diffs`, package-aware `@pierre/trees` with `f` toggle, Zone 4 chat drawer, AST control-flow visualizer.
 - Phase 3: global keyboard router, interdiff view, URA dock export targets.

@@ -8,7 +8,6 @@ import type {
   DiffDisplayView,
   EditorId,
   LspServerView,
-  McpStatus,
   OpenPullRequestRequest,
   ReviewOrderMode,
   ReviewView,
@@ -400,7 +399,6 @@ export class BeuveApp extends LitElement {
   @state() accessor overlayOpen = false;
   @state() accessor statusNotice: StatusNotice | undefined;
   @state() accessor appInfo: AppInfo | undefined;
-  @state() accessor mcpStatus: McpStatus | undefined;
   /** The open session's URA items, every status, placed on its current head. */
   /** The language servers beuve has started, as the status bar lists them. */
   @state() accessor lspServers: readonly LspServerView[] | undefined;
@@ -434,9 +432,6 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.unsubscribes = [
-      bridge.on('mcp:status', (status) => {
-        this.mcpStatus = status;
-      }),
       bridge.on('menu:run', ({ id }) => {
         this.runCommandId(id);
       }),
@@ -955,7 +950,6 @@ export class BeuveApp extends LitElement {
       </beuve-review>
       <beuve-status-bar
         .lspServers=${this.lspServers}
-        .mcpStatus=${this.mcpStatus}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
         .ci=${this.github.ci}

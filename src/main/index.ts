@@ -18,7 +18,6 @@ import { secureUserData } from './secure-user-data.ts';
 import { startApp } from './start-app.ts';
 
 const logger = createLogger('main');
-const defaultMcpPort = 47_291;
 const links = new LinkInbox();
 
 // macOS delivers beuve:// links as `open-url`, possibly before `ready` (ADR 0098).
@@ -85,7 +84,7 @@ async function launch(): Promise<void> {
         message: describeNodeRuntimeError(nodeRuntime.error),
       });
     }
-    await startApp(app, {
+    startApp(app, {
       services: createMainServices({
         db,
         logger,
@@ -145,7 +144,6 @@ async function launch(): Promise<void> {
       sheetHtmlPath: path.join(import.meta.dirname, '../ui/sheet.html'),
       settingsPreloadPath: path.join(import.meta.dirname, '../preload/settings-preload.cjs'),
       settingsHtmlPath: path.join(import.meta.dirname, '../ui/settings.html'),
-      mcpPort: parsePort(process.env['BEUVE_MCP_PORT']) ?? defaultMcpPort,
       links,
       logger,
     });
@@ -186,14 +184,6 @@ function focusExistingWindow(): void {
     window.restore();
   }
   window.focus();
-}
-
-function parsePort(value: string | undefined): number | undefined {
-  const port = Number(value);
-  if (value !== undefined && Number.isSafeInteger(port) && port >= 0 && port < 65_536) {
-    return port;
-  }
-  return undefined;
 }
 
 /** Where the bundled Claude Code binary is, when the app ships one it can run. */

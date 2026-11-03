@@ -15,7 +15,6 @@ import { ok } from '#x/result/ok.ts';
 import type { Err, Ok } from '#x/result/result.ts';
 
 import type { MainServices, SessionServices } from '../main-services.ts';
-import { unimplementedMcpTools } from '../mcp/unimplemented-mcp-tools.ts';
 
 import { test } from '../testing/test.ts';
 import { createIpcHandlers } from './create-ipc-handlers.ts';
@@ -1191,7 +1190,6 @@ function stubServices(
       listRemote: notWired,
       test: notWired,
     },
-    mcpTools: unimplementedMcpTools,
     pruneWorktrees: doNothing,
     dispose: doNothing,
   };

@@ -7,7 +7,7 @@ import type { App, WebContents } from 'electron';
 import type { Logger } from '#x/log/create-logger.ts';
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
-import type { AppInfo, ChooseFolderRequest, McpStatus } from '#contract/ipc-contract.ts';
+import type { AppInfo, ChooseFolderRequest } from '#contract/ipc-contract.ts';
 import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
@@ -21,7 +21,6 @@ import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
 import type { MainServices } from './main-services.ts';
 import { handlePullRequestLink } from './links/handle-pull-request-link.ts';
 import type { LinkInbox } from './links/link-inbox.ts';
-import { launchMcpServer } from './mcp/launch-mcp-server.ts';
 import { createAppMenus } from './menu/create-app-menus.ts';
 import { createMainWindow } from './window/create-main-window.ts';
 import { createSettingsWindow } from './window/create-settings-window.ts';
@@ -41,7 +40,6 @@ export interface StartAppOptions {
   /** The Settings window's page and preload (ADR 0068). */
   readonly settingsPreloadPath: string;
   readonly settingsHtmlPath: string;
-  readonly mcpPort: number;
   /** `beuve://` links to open pull requests with (ADR 0098). */
   readonly links: LinkInbox;
   readonly logger: Logger;
@@ -50,19 +48,12 @@ export interface StartAppOptions {
 /**
  * Composes the running app once Electron is ready: worktree cleanup, security policy, IPC,
  * review progress, chat, URA and GitHub events, the clipboard, the menus (ADR 0068), the main
- * window (whose focus sets the GitHub polling pace), sheets, Settings and the MCP server; preliminary reviews are aborted and language
- * servers disposed before quitting. Call from `app.once('ready')`; never awaited at top
- * level (see CLAUDE.md).
+ * window (whose focus sets the GitHub polling pace), sheets and Settings; language servers are
+ * disposed before quitting. Call from `app.once('ready')`, never at the top level of the entry
+ * (see CLAUDE.md).
  */
-export async function startApp(app: App, options: StartAppOptions): Promise<void> {
+export function startApp(app: App, options: StartAppOptions): void {
   const { logger, services } = options;
-  let mcpStatus: McpStatus = { state: 'starting' };
-  const publishMcpStatus = (status: McpStatus): void => {
-    mcpStatus = status;
-    for (const window of BrowserWindow.getAllWindows()) {
-      sendEvent(window.webContents, 'mcp:status', status);
-    }
-  };
   const handleMainCommand = (id: CommandId): void => {
     switch (id) {
       case 'settings': {
@@ -119,9 +110,6 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     window.once('closed', () => {
       // `window.webContents` throws once the window is destroyed.
       mainWindowContents.delete(webContents);
-    });
-    window.webContents.on('did-finish-load', () => {
-      sendEvent(window.webContents, 'mcp:status', mcpStatus);
     });
     // Poll GitHub on the interval while beuve has focus, less often otherwise (ADR 0038).
     window.on('focus', () => {
@@ -255,16 +243,7 @@ export async function startApp(app: App, options: StartAppOptions): Promise<void
     }
   });
 
-  const stopMcp = await launchMcpServer({
-    directory: app.getPath('userData'),
-    services: services.mcpTools,
-    logger,
-    version: app.getVersion(),
-    port: options.mcpPort,
-    onStatus: publishMcpStatus,
-  });
   stopBeforeQuit(app, async (): Promise<void> => {
-    await stopMcp();
     await services.dispose();
   });
 }

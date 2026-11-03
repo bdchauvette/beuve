@@ -31,9 +31,6 @@ import type { ProbeToken } from '#internal/lsp/plan-definition-probes.ts';
 import type {
   CallHierarchyCall,
   CallHierarchyNode,
-  DiagnosticsFreshness,
-  DiagnosticSeverity,
-  DiagnosticView,
   DocumentSymbolView,
   LocationView,
   Position,
@@ -57,27 +54,6 @@ import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
 import { headSpansFrom } from './head-spans-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
-/** Diagnostics for agents: lines and columns are 1-based, columns in UTF-16 code units. */
-export interface AgentDiagnosticsReport {
-  readonly sessionId: string;
-  readonly headSha: string;
-  readonly path: string;
-  readonly serverId: string;
-  readonly freshness: DiagnosticsFreshness;
-  readonly diagnostics: readonly AgentDiagnostic[];
-}
-
-export interface AgentDiagnostic {
-  readonly line: number;
-  readonly column: number;
-  readonly endLine: number;
-  readonly endColumn: number;
-  readonly severity: DiagnosticSeverity | 'unspecified';
-  readonly code?: string;
-  readonly source?: string;
-  readonly message: string;
-}
-
 /** Language-server features over a checkout of the session head (ADR 0020). */
 export interface LspServices {
   readonly callHierarchy: (request: CallHierarchyRequest) => Promise<IpcResult<CallHierarchyView>>;
@@ -100,15 +76,6 @@ export interface LspServices {
   readonly restart: (request: LspRestartRequest) => Promise<IpcResult<LspRestartedView>>;
   /** The language servers beuve has started and their state, for the status bar. */
   readonly status: () => IpcResult<LspStatusView>;
-  readonly diagnostics: (
-    request: AgentDiagnosticsRequest,
-  ) => Promise<Result<AgentDiagnosticsReport, IpcError>>;
-}
-
-/** A head file whose diagnostics an agent asks for (MCP). */
-export interface AgentDiagnosticsRequest {
-  readonly sessionId: string;
-  readonly path: string;
 }
 
 /** A head file being asked about, in the checkout that answers. */
@@ -554,45 +521,6 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       }
       return calls;
     },
-
-    diagnostics: async ({
-      sessionId,
-      path: requested,
-    }): Promise<Result<AgentDiagnosticsReport, IpcError>> => {
-      const stopwatch = new Stopwatch();
-      const loaded = loadSession(context, sessionId);
-      if (!loaded.ok) {
-        return loaded;
-      }
-      const refreshed = await refreshSession(context, loaded.value);
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-      const { session, repository } = refreshed.value;
-      const checkedOut = await checkout(session.id, repository, session.headSha);
-      if (!checkedOut.ok) {
-        return checkedOut;
-      }
-      using workspace = checkedOut.value;
-      const file = relativeFrom(repository, requested);
-      const report = await multiplexer.getDiagnostics({ root: workspace.root, path: file });
-      if (!report.ok) {
-        return fail(report.error);
-      }
-      logger.debug('diagnostics', {
-        path: file,
-        freshness: report.value.freshness,
-        duration: stopwatch.elapsed(),
-      });
-      return ok({
-        sessionId: session.id,
-        headSha: session.headSha,
-        path: report.value.path,
-        serverId: report.value.serverId,
-        freshness: report.value.freshness,
-        diagnostics: report.value.diagnostics.map((diagnostic) => agentDiagnosticFrom(diagnostic)),
-      });
-    },
   };
 }
 
@@ -725,19 +653,5 @@ function nodeViewFrom(node: CallHierarchyNode, spans: ChangedLines): CallHierarc
     endLine: node.range.end.line + 1,
     selectionLine: node.selectionRange.start.line + 1,
     badge: badgeCallHierarchyNode(node, spans),
-  };
-}
-
-function agentDiagnosticFrom(diagnostic: DiagnosticView): AgentDiagnostic {
-  const { start, end } = diagnostic.range;
-  return {
-    line: start.line + 1,
-    column: start.character + 1,
-    endLine: end.line + 1,
-    endColumn: end.character + 1,
-    severity: diagnostic.severity ?? 'unspecified',
-    ...(diagnostic.code !== undefined && { code: diagnostic.code }),
-    ...(diagnostic.source !== undefined && { source: diagnostic.source }),
-    message: diagnostic.message,
   };
 }
