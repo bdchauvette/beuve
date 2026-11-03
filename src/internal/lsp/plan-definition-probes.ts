@@ -104,6 +104,15 @@ const maxProbes = 6;
 const callFollows = /^\s*[(<]/u;
 const quotes: ReadonlySet<string> = new Set(['"', "'", '`']);
 
+/** How {@link planDefinitionProbes} is used. */
+export interface ProbePlanOptions {
+  /**
+   * The pointer's identifier alone and only if the pointer is on it (not just after it) and it
+   * isn't a keyword: nothing else on the line is probed (ADR 0105). Needs `character`.
+   */
+  readonly link?: boolean;
+}
+
 /**
  * Which tokens of a line to ask the language server about, best first (ADR 0067). With a known
  * `character`, the identifier under it (or just before it) alone. Otherwise the line's
@@ -111,8 +120,22 @@ const quotes: ReadonlySet<string> = new Set(['"', "'", '`']);
  * `(` or `<`), then the rest left to right, and names the line itself declares last, since their
  * definition is the line itself. At most six. Pure.
  */
-export function planDefinitionProbes(text: string, character?: number): readonly ProbeToken[] {
+export function planDefinitionProbes(
+  text: string,
+  character?: number,
+  options: ProbePlanOptions = {},
+): readonly ProbeToken[] {
   const tokens = identifiersOf(text);
+  if (options.link === true) {
+    return tokens.filter((token) => {
+      return (
+        character !== undefined &&
+        token.start <= character &&
+        character < token.end &&
+        !keywords.has(token.text)
+      );
+    });
+  }
   if (character !== undefined) {
     const under = tokens.find((token) => token.start <= character && character <= token.end);
     if (under !== undefined) {

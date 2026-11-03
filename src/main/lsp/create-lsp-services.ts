@@ -342,7 +342,12 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         message: `${request.path} has no line ${String(request.line)}`,
       });
     }
-    const probes = planDefinitionProbes(lineText, request.character);
+    const probes = planDefinitionProbes(lineText, request.character, {
+      link: request.link === true,
+    });
+    if (request.link === true && probes.length === 0) {
+      return ok({ sha, targets: [] });
+    }
     let first: { token: ProbeToken; targets: readonly LocationView[] } | undefined;
     for (const token of probes) {
       const found = await multiplexer.definition({
@@ -364,7 +369,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       const elsewhere = resolved.value.filter((target) => {
         return !isAt(target, { path: request.path, line, token });
       });
-      if (elsewhere.length > 0) {
+      if (elsewhere.length > 0 || request.link === true) {
         return ok({
           sha,
           token: tokenView(line, token),

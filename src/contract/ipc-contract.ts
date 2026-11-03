@@ -430,6 +430,13 @@ export interface DefinitionRequest {
   readonly line: number;
   readonly character?: number;
   readonly kind?: 'definition' | 'type-definition';
+  /**
+   * Ask whether the identifier at `character` (required) links anywhere, for the underline under
+   * ⌘/Ctrl-hover (ADR 0105): only that identifier is probed, the enclosing symbol is not a
+   * fallback, and a target that is the identifier itself doesn't count. `targets` is empty when
+   * nothing links.
+   */
+  readonly link?: true;
 }
 
 /** A place in a file: 1-based lines, 0-based UTF-16 characters, the end exclusive. */

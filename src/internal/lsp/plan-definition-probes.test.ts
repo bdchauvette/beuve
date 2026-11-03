@@ -44,4 +44,19 @@ describe('planDefinitionProbes', () => {
     expect(planDefinitionProbes(' '.repeat(3))).toStrictEqual([]);
     expect(textsOf('a b c d e f g h')).toHaveLength(6);
   });
+
+  test('plans a link probe for the identifier the pointer is on, never a keyword or a neighbour', ({
+    expect,
+  }) => {
+    const line = '  return validate(token) ? 200 : 401;';
+    const linkTexts = (character: number): string[] => {
+      return planDefinitionProbes(line, character, { link: true }).map((token) => token.text);
+    };
+    expect(linkTexts(9)).toStrictEqual(['validate']);
+    expect(linkTexts(16)).toStrictEqual(['validate']);
+    expect(linkTexts(17)).toStrictEqual([]);
+    expect(linkTexts(4)).toStrictEqual([]);
+    expect(linkTexts(0)).toStrictEqual([]);
+    expect(planDefinitionProbes(line, undefined, { link: true })).toStrictEqual([]);
+  });
 });

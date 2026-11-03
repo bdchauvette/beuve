@@ -38,7 +38,6 @@ import { characterOffsetAt } from './character-offset-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import type { ClickedToken } from './run-sheet-action.ts';
-import { trackJumpModifier } from './track-jump-modifier.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
@@ -377,10 +376,6 @@ export class BeuveFileCard extends LitElement {
         padding: var(--beuve-space-2) var(--beuve-space-3);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
-      }
-
-      :host([data-jump]) diffs-container {
-        cursor: pointer;
       }
 
       diffs-container {
@@ -836,7 +831,6 @@ export class BeuveFileCard extends LitElement {
   /** The editing keys' listeners, while a Suggest Edit edit is in progress. */
   private editKeys: AbortController | undefined;
   /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
-  private jumpModifier: AbortController | undefined;
   /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
   @state() private accessor revealed: readonly RevealedRange[] = [];
 
@@ -1482,20 +1476,6 @@ ${splitPatch(file.patch).map((line) => {
     if (left !== undefined) {
       this.diff?.setCodeScrollLeft(left);
     }
-  }
-
-  override connectedCallback(): void {
-    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
-    super.connectedCallback();
-    this.jumpModifier = new AbortController();
-    trackJumpModifier(this, this.jumpModifier.signal);
-  }
-
-  override disconnectedCallback(): void {
-    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
-    super.disconnectedCallback();
-    this.jumpModifier?.abort();
-    this.jumpModifier = undefined;
   }
 
   /**

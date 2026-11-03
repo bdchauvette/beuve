@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { describe } from 'vitest';
 
-import type { CallHierarchyRequest, ReviewView } from '#contract/ipc-contract.ts';
+import type { CallHierarchyRequest, DefinitionView, ReviewView } from '#contract/ipc-contract.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
@@ -464,6 +464,26 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
         }),
       );
       expect(own.targets).toMatchObject([{ file: { path: 'src/handler.ts' }, startLine: 7 }]);
+      const link = async (at: LinkAt): Promise<DefinitionView> => {
+        return okValueFrom(
+          await services.lsp.definition({
+            sessionId,
+            path: 'src/handler.ts',
+            ...at,
+            link: true,
+          }),
+        );
+      };
+      const linked = await link({ line: 4, character: 12 });
+      expect(linked.token).toMatchObject({ startCharacter: 9, endCharacter: 17, text: 'validate' });
+      expect(linked.targets).toMatchObject([{ file: { path: 'src/auth.ts' }, startLine: 1 }]);
+      const unlinked = await Promise.all([
+        link({ line: 4, character: 17 }),
+        link({ line: 4, character: 4 }),
+        link({ line: 4, character: 0 }),
+        link({ line: 3, character: 20 }),
+      ]);
+      expect(unlinked.map((view) => view.targets)).toStrictEqual([[], [], [], []]);
       await expect(
         services.lsp.definition({ sessionId, sha: base, path: 'src/complex.ts', line: 1 }),
       ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
@@ -707,4 +727,9 @@ interface FeatureBranch {
 
 function featureLines(): string[] {
   return ['pub fn feature() -> u8 {', '  1', '}'];
+}
+
+interface LinkAt {
+  readonly line: number;
+  readonly character: number;
 }
