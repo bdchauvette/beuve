@@ -38,6 +38,10 @@ function ok(value: unknown): OkReply {
   return { ok: true, value };
 }
 
+function emptyTimelineReply(): OkReply {
+  return ok({ kind: 'timeline', events: [], isTruncated: false });
+}
+
 function failed(error: FailedOptions): FailedReply {
   return { ok: false, error };
 }
@@ -83,6 +87,7 @@ describe('GithubController', () => {
       review: reviewOf(),
       replies: {
         'github:preview-review': previewReply(reviewOf().headSha),
+        'github:get-timeline': emptyTimelineReply(),
       },
     });
     github.hostConnected();
@@ -92,6 +97,79 @@ describe('GithubController', () => {
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
     expect(notices.map(({ tone }) => tone)).toStrictEqual(['info']);
     await expect.poll(() => selected).toStrictEqual(['s1']);
+  });
+
+  test('reads the open session’s timeline and shows its events', async ({ expect }) => {
+    const events = [
+      {
+        kind: 'comment',
+        author: 'vic',
+        body: 'Thanks',
+        at: '2026-10-01T10:00:00Z',
+        url: 'https://github.com/o/r/pull/1#c1',
+      },
+    ];
+    const { github, invoked } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': ok({ kind: 'timeline', events, isTruncated: true }) },
+    });
+    expect(github.timeline).toBeUndefined();
+    const loading = github.loadTimeline('s1');
+    expect(github.timeline).toStrictEqual({ kind: 'loading' });
+    await loading;
+    expect(invoked).toStrictEqual([['github:get-timeline', { sessionId: 's1' }]]);
+    expect(github.timeline).toStrictEqual({ kind: 'ready', events, isTruncated: true });
+  });
+
+  test('says why the timeline could not be read', async ({ expect }) => {
+    const refused = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:get-timeline': ok({
+          kind: 'failed',
+          failure: 'not-found',
+          message: 'GitHub says no',
+        }),
+      },
+    });
+    await refused.github.loadTimeline('s1');
+    expect(refused.github.timeline).toStrictEqual({ kind: 'failed', message: 'GitHub says no' });
+
+    const broken = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:get-timeline': failed({ code: 'refused', message: 'not a pull request' }),
+      },
+    });
+    await broken.github.loadTimeline('s1');
+    expect(broken.github.timeline).toStrictEqual({ kind: 'failed', message: 'not a pull request' });
+  });
+
+  test('keeps the events on screen while an update refreshes them', async ({ expect }) => {
+    const { github, emit, invoked } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': emptyTimelineReply() },
+    });
+    github.hostConnected();
+    await github.loadTimeline('s1');
+    const shown = github.timeline;
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: false }));
+    expect(github.timeline).toBe(shown);
+    await expect
+      .poll(() => {
+        return invoked.filter(([channel]) => channel === 'github:get-timeline').length;
+      })
+      .toBe(2);
+  });
+
+  test('forgets the timeline when another session opens', async ({ expect }) => {
+    const { github } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': emptyTimelineReply() },
+    });
+    await github.loadTimeline('s1');
+    github.reset();
+    expect(github.timeline).toBeUndefined();
   });
 
   test('invalidating leaves an idle or posted state alone', ({ expect }) => {

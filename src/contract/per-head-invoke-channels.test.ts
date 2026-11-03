@@ -85,5 +85,6 @@ function headFreeSessionChannels(): Readonly<
     'review-edits:preview-discard': read,
     'review-edits:discard': 'removes the edits branch, which belongs to the session, not a head',
     'github:get-pr': read,
+    'github:get-timeline': read,
   };
 }

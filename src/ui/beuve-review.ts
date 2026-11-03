@@ -940,6 +940,7 @@ export class BeuveReview extends LitElement {
       ?focused=${this.focusedZone === 'overview'}
       .pullRequest=${this.github.pullRequest}
       .ci=${this.github.ci}
+      .timeline=${this.github.timeline}
       @beuve-open-stack=${this.onOpenStack}
       @beuve-open-link=${this.onOpenLink}
       @beuve-open-url=${this.onOpenUrl}

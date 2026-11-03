@@ -6,12 +6,14 @@ import type { CiStatusView, PullRequestSessionView } from '#contract/ipc-contrac
 
 import './beuve-pull-request-checks.ts';
 import './beuve-pull-request-intent.ts';
+import './beuve-pull-request-timeline.ts';
+import type { TimelineState } from './timeline-state.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
  * The Overview tab of a pull request session (ADR 0109): the pull request's title, state, author,
- * branches, description and stack neighbours, then its CI checks. It emits what they emit:
- * `beuve-open-link`, `beuve-open-stack` and `beuve-open-url`.
+ * branches, description and stack neighbours, then its CI checks and its activity (ADR 0110). It
+ * emits what they emit: `beuve-open-link`, `beuve-open-stack` and `beuve-open-url`.
  */
 @customElement('beuve-overview-sidebar')
 export class BeuveOverviewSidebar extends LitElement {
@@ -31,6 +33,8 @@ export class BeuveOverviewSidebar extends LitElement {
   @property({ attribute: false }) accessor pullRequest: PullRequestSessionView | undefined;
   /** The head's CI, once fetched. */
   @property({ attribute: false }) accessor ci: CiStatusView | undefined;
+  /** The pull request's commits, reviews and comments. */
+  @property({ attribute: false }) accessor timeline: TimelineState | undefined;
 
   override render(): TemplateResult {
     return html`<div class="body">
@@ -46,6 +50,13 @@ export class BeuveOverviewSidebar extends LitElement {
           ? nothing
           : html`<section>
               <beuve-pull-request-checks .ci=${this.ci}></beuve-pull-request-checks>
+            </section>`
+      }
+      ${
+        this.timeline === undefined
+          ? nothing
+          : html`<section>
+              <beuve-pull-request-timeline .timeline=${this.timeline}></beuve-pull-request-timeline>
             </section>`
       }
     </div>`;

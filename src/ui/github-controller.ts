@@ -15,6 +15,7 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import type { GithubPostState } from './github-post-state.ts';
 import type { ReviewRef } from './review-ref.ts';
+import type { TimelineState } from './timeline-state.ts';
 
 /** Post the staged review to GitHub, with this verdict over the derived one. */
 export interface GithubPostDetail {
@@ -39,6 +40,8 @@ export interface GithubEnvironment {
 interface GithubSnapshot {
   readonly pullRequest: PullRequestSessionView | undefined;
   readonly ci: CiStatusView | undefined;
+  /** The open pull request's activity (ADR 0110). */
+  readonly timeline: TimelineState | undefined;
   readonly auth: GithubAuthStatusView | undefined;
   readonly post: GithubPostState;
   readonly isOpening: boolean;
@@ -48,6 +51,7 @@ interface GithubSnapshot {
 const initial: GithubSnapshot = {
   pullRequest: undefined,
   ci: undefined,
+  timeline: undefined,
   auth: undefined,
   post: { kind: 'idle' },
   isOpening: false,
@@ -67,6 +71,8 @@ export class GithubController implements ReactiveController {
   private snapshot: GithubSnapshot = initial;
   /** The `requestId` of the `github:open-pr` in flight, for `request:cancel`. */
   private requestId: string | undefined;
+  /** Counts timeline reads, so an older answer never replaces a newer one. */
+  private timelineRead = 0;
   private unsubscribes: (() => void)[] = [];
 
   constructor(host: ReactiveControllerHost, environment: GithubEnvironment) {
@@ -92,6 +98,7 @@ export class GithubController implements ReactiveController {
         ...(attention !== undefined && { attention }),
       },
     });
+    void this.loadTimeline(event.sessionId);
     if (!event.headMoved) {
       return;
     }
@@ -151,6 +158,11 @@ export class GithubController implements ReactiveController {
     return this.snapshot.ci;
   }
 
+  /** The open pull request's commits, reviews and comments; absent for local sessions. */
+  get timeline(): TimelineState | undefined {
+    return this.snapshot.timeline;
+  }
+
   /** Who beuve posts to GitHub as. */
   get auth(): GithubAuthStatusView | undefined {
     return this.snapshot.auth;
@@ -172,7 +184,13 @@ export class GithubController implements ReactiveController {
 
   /** Forgets the open session's pull request, CI and post state: another session is opening. */
   reset(): void {
-    this.patch({ pullRequest: undefined, ci: undefined, post: { kind: 'idle' } });
+    this.timelineRead += 1;
+    this.patch({
+      pullRequest: undefined,
+      ci: undefined,
+      timeline: undefined,
+      post: { kind: 'idle' },
+    });
   }
 
   /** Who beuve posts to GitHub as; `host` defaults to the open pull request's. */
@@ -206,6 +224,42 @@ export class GithubController implements ReactiveController {
     if (this.snapshot.auth?.host !== loaded.value.pullRequest.host) {
       void this.loadAuth(loaded.value.pullRequest.host);
     }
+  }
+
+  /**
+   * Reads the pull request's commits, reviews and comments for the Overview. A list already shown
+   * stays while it is refreshed; an answer that is not the latest, or for another session, is
+   * dropped.
+   */
+  async loadTimeline(sessionId: string): Promise<void> {
+    const bridge = this.environment.bridge();
+    if (bridge === undefined) {
+      return;
+    }
+    this.timelineRead += 1;
+    const read = this.timelineRead;
+    if (this.snapshot.timeline?.kind !== 'ready') {
+      this.patch({ timeline: { kind: 'loading' } });
+    }
+    const loaded = await bridge.invoke('github:get-timeline', { sessionId });
+    if (read !== this.timelineRead || this.environment.review()?.sessionId !== sessionId) {
+      return;
+    }
+    if (!loaded.ok) {
+      this.patch({ timeline: { kind: 'failed', message: loaded.error.message } });
+      return;
+    }
+    if (loaded.value.kind === 'failed') {
+      this.patch({ timeline: { kind: 'failed', message: loaded.value.message } });
+      return;
+    }
+    this.patch({
+      timeline: {
+        kind: 'ready',
+        events: loaded.value.events,
+        isTruncated: loaded.value.isTruncated,
+      },
+    });
   }
 
   /** Fetches a pull request and opens it as a session; one at a time. */

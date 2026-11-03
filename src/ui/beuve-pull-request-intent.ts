@@ -8,6 +8,7 @@ import { ActionDelegation } from './action-delegation.ts';
 import { describePullRequestState } from './describe-pull-request-state.ts';
 import { createMarkdownNodes } from './create-markdown-nodes.ts';
 import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
+import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 
 /**
@@ -18,172 +19,111 @@ import { parseMarkdown } from './parse-markdown.ts';
  */
 @customElement('beuve-pull-request-intent')
 export class BeuvePullRequestIntent extends LitElement {
-  static override styles = css`
-    :host {
-      display: grid;
-      gap: var(--beuve-space-2);
-    }
+  static override styles = [
+    markdownBodyStyles,
+    css`
+      :host {
+        display: grid;
+        gap: var(--beuve-space-2);
+      }
 
-    h3 {
-      margin: 0;
-      font: var(--beuve-font-body);
-      font-weight: 600;
-      overflow-wrap: anywhere;
-    }
+      h3 {
+        margin: 0;
+        font: var(--beuve-font-body);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
 
-    .meta {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--beuve-space-1) var(--beuve-space-2);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--beuve-space-1) var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .branches {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-      overflow-wrap: anywhere;
-    }
+      .branches {
+        font: var(--beuve-font-mono);
+        font-size: 11px;
+        overflow-wrap: anywhere;
+      }
 
-    .badge {
-      padding: 0 6px;
-      border: 1px solid currentColor;
-      border-radius: 999px;
-      font-weight: 600;
-    }
+      .badge {
+        padding: 0 6px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        font-weight: 600;
+      }
 
-    .badge.ok {
-      color: var(--beuve-ok);
-    }
+      .badge.ok {
+        color: var(--beuve-ok);
+      }
 
-    .badge.merged {
-      color: var(--beuve-violet);
-    }
+      .badge.merged {
+        color: var(--beuve-violet);
+      }
 
-    .badge.danger {
-      color: var(--beuve-danger);
-    }
+      .badge.danger {
+        color: var(--beuve-danger);
+      }
 
-    .body {
-      max-height: 240px;
-      overflow: auto;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text);
-      overflow-wrap: anywhere;
-    }
+      .body {
+        max-height: 240px;
+        overflow: auto;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text);
+        overflow-wrap: anywhere;
+      }
 
-    .body :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
-      margin: 0 0 var(--beuve-space-2);
-    }
+      .empty {
+        margin: 0;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .body :is(h1, h2, h3, h4, h5, h6) {
-      font: inherit;
-      font-weight: 600;
-    }
+      a {
+        color: var(--beuve-accent);
+        overflow-wrap: anywhere;
+      }
 
-    .body :is(ul, ol) {
-      padding-left: var(--beuve-space-4);
-    }
+      button.link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--beuve-accent);
+        font: inherit;
+        text-align: left;
+        text-decoration: underline;
+        cursor: pointer;
+        overflow-wrap: anywhere;
+      }
 
-    .body blockquote {
-      padding-left: var(--beuve-space-2);
-      border-left: 2px solid var(--beuve-border);
-      color: var(--beuve-text-muted);
-    }
+      .stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-1);
+      }
 
-    .body .table {
-      overflow-x: auto;
-    }
+      .chip {
+        max-width: 100%;
+        overflow: hidden;
+        padding: 1px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: 999px;
+        background: var(--beuve-surface-sunken);
+        color: var(--beuve-text);
+        font: var(--beuve-font-small);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+      }
 
-    .body table {
-      border-collapse: collapse;
-      font: inherit;
-    }
-
-    .body :is(th, td) {
-      padding: 2px var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      text-align: start;
-      vertical-align: top;
-      overflow-wrap: normal;
-    }
-
-    .body th {
-      background: var(--beuve-surface-sunken);
-      font-weight: 600;
-    }
-
-    .body .align-center {
-      text-align: center;
-    }
-
-    .body .align-right {
-      text-align: end;
-    }
-
-    .body pre {
-      margin: 0 0 var(--beuve-space-2);
-      padding: var(--beuve-space-1) var(--beuve-space-2);
-      overflow: auto;
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-    }
-
-    code {
-      font: var(--beuve-font-mono);
-      font-size: 11px;
-    }
-
-    .empty {
-      margin: 0;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
-
-    a {
-      color: var(--beuve-accent);
-      overflow-wrap: anywhere;
-    }
-
-    button.link {
-      padding: 0;
-      border: 0;
-      background: none;
-      color: var(--beuve-accent);
-      font: inherit;
-      text-align: left;
-      text-decoration: underline;
-      cursor: pointer;
-      overflow-wrap: anywhere;
-    }
-
-    .stack {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-1);
-    }
-
-    .chip {
-      max-width: 100%;
-      overflow: hidden;
-      padding: 1px var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: 999px;
-      background: var(--beuve-surface-sunken);
-      color: var(--beuve-text);
-      font: var(--beuve-font-small);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-
-    .chip:hover {
-      border-color: var(--beuve-accent);
-    }
-  `;
+      .chip:hover {
+        border-color: var(--beuve-accent);
+      }
+    `,
+  ];
 
   private shownBody: { readonly body: string; readonly nodes: Element[] } | undefined;
 

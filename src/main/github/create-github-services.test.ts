@@ -580,6 +580,62 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     });
   });
 
+  test('reads the pull request’s commits, reviews and comments, oldest first', async ({
+    expect,
+    services,
+    opened,
+    world,
+  }) => {
+    const { api, firstHead } = world;
+    const sessionId = await opened();
+    api.pullCommits.set(7, [
+      {
+        sha: firstHead,
+        message: 'feature\n\nbody',
+        login: 'octocat',
+        authorName: 'Octo Cat',
+        date: '2026-10-28T10:00:00Z',
+      },
+    ]);
+    api.conversation.set(7, [
+      { login: 'vic', body: 'Looks promising', createdAt: '2026-10-28T10:10:00Z' },
+    ]);
+    api.submittedReviews.set(7, [
+      { ...reviewBy('APPROVED', firstHead), body: 'LGTM', submittedAt: '2026-10-28T10:20:00Z' },
+    ]);
+    const timeline = okValueFrom(await services.github.getTimeline(sessionId));
+    expect(timeline).toMatchObject({ kind: 'timeline', isTruncated: false });
+    expect('events' in timeline && timeline.events.map((event) => event.kind)).toStrictEqual([
+      'commit',
+      'comment',
+      'review',
+    ]);
+    expect('events' in timeline && timeline.events[0]).toMatchObject({
+      kind: 'commit',
+      headline: 'feature',
+      author: 'octocat',
+    });
+    expect('events' in timeline && timeline.events[2]).toMatchObject({
+      kind: 'review',
+      verdict: 'approved',
+      author: 'rita',
+      body: 'LGTM',
+    });
+  });
+
+  test('answers a failure, not an error, when GitHub cannot be read', async ({
+    expect,
+    services,
+    opened,
+    world,
+  }) => {
+    const sessionId = await opened();
+    world.api.pullRequests.delete(7);
+    expect(okValueFrom(await services.github.getTimeline(sessionId))).toMatchObject({
+      kind: 'failed',
+    });
+  });
+
   test('gives the pull request to the chat as intent', async ({
     expect,
     services,

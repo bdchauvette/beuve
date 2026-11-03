@@ -1165,6 +1165,7 @@ function stubServices(
       authStatus: notWired,
       openPullRequest: notWired,
       getPullRequest: notWired,
+      getTimeline: notWired,
       previewReview: notWired,
       postReview: notWired,
       openLink: notWired,

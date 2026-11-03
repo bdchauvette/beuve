@@ -166,9 +166,11 @@ export class BeuveApp extends LitElement {
       void this.ura.refresh(review.session.id);
       void this.reviewEdits.load(review.session.id);
       void this.chat.load(review.session.id);
-      if (review.session.source.kind === 'github-pull-request') {
-        void this.github.loadPullRequest(review.session.id);
+      if (review.session.source.kind !== 'github-pull-request') {
+        return;
       }
+      void this.github.loadPullRequest(review.session.id);
+      void this.github.loadTimeline(review.session.id);
     },
   });
   private readonly github = new GithubController(this, {

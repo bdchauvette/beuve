@@ -60,6 +60,7 @@ import type {
   OpenPullRequestResponse,
   PostGithubReviewResponse,
   PullRequestSessionView,
+  PullRequestTimelineView,
   ChatCommandRequest,
   RepositoryInspectionView,
   RepositoryTreeView,
@@ -1069,6 +1070,15 @@ export function createIpcHandlers(
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
         return services.github.getPullRequest(parsed.data.sessionId);
+      }
+      return invalid(parsed.error);
+    },
+    'github:get-timeline': async (
+      request,
+    ): Promise<IpcResult<PullRequestTimelineView | GithubFailureView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.github.getTimeline(parsed.data.sessionId);
       }
       return invalid(parsed.error);
     },

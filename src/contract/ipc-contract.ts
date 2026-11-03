@@ -1537,6 +1537,56 @@ export interface PullRequestView {
   readonly updatedAt: string;
 }
 
+/** `github:get-timeline`: the pull request session whose history to read (ADR 0110). */
+export interface GetTimelineRequest {
+  readonly sessionId: string;
+}
+
+/** A submitted review's verdict, as the timeline names it. */
+export type TimelineVerdictView = 'approved' | 'changes-requested' | 'commented' | 'dismissed';
+
+/** One commit pushed to the pull request. */
+export interface CommitTimelineEventView {
+  readonly kind: 'commit';
+  readonly sha: string;
+  /** The first line of the commit message. */
+  readonly headline: string;
+  readonly author: string;
+  /** An ISO 8601 instant. */
+  readonly at: string;
+  /** The commit's page on GitHub. */
+  readonly url: string;
+}
+
+/** A submitted review; `body` is untrusted Markdown and may be empty. */
+export interface ReviewTimelineEventView {
+  readonly kind: 'review';
+  readonly verdict: TimelineVerdictView;
+  readonly author: string;
+  readonly body: string;
+  readonly at: string;
+  readonly url: string;
+}
+
+/** A comment in the pull request's conversation; `body` is untrusted Markdown. */
+export interface CommentTimelineEventView {
+  readonly kind: 'comment';
+  readonly author: string;
+  readonly body: string;
+  readonly at: string;
+  readonly url: string;
+}
+
+export type TimelineEventView =
+  CommitTimelineEventView | ReviewTimelineEventView | CommentTimelineEventView;
+
+/** A pull request's history, oldest first; `isTruncated` when GitHub had more than was read. */
+export interface PullRequestTimelineView {
+  readonly kind: 'timeline';
+  readonly events: readonly TimelineEventView[];
+  readonly isTruncated: boolean;
+}
+
 /** A neighbour in a stack of pull requests, opened with `github:open-pr` and the same clone. */
 export interface PullRequestStackEntryView {
   readonly ref: string;
@@ -2161,6 +2211,10 @@ export interface InvokeChannelMap {
   'github:get-pr': {
     readonly request: GetReviewRequest;
     readonly response: IpcResult<PullRequestSessionView>;
+  };
+  'github:get-timeline': {
+    readonly request: GetTimelineRequest;
+    readonly response: IpcResult<PullRequestTimelineView | GithubFailureView>;
   };
   'github:preview-review': {
     readonly request: PostGithubReviewRequest;
