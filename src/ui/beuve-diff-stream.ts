@@ -340,6 +340,7 @@ export class BeuveDiffStream extends LitElement {
         background: none;
         color: var(--beuve-text-muted);
         font: inherit;
+        white-space: nowrap;
       }
 
       .tools button:hover,
@@ -406,6 +407,7 @@ export class BeuveDiffStream extends LitElement {
       .tools {
         display: inline-flex;
         align-items: center;
+        font: var(--beuve-font-small);
         gap: var(--beuve-space-2);
         margin-left: var(--beuve-space-2);
         padding-left: var(--beuve-space-3);
