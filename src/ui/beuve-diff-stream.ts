@@ -343,6 +343,10 @@ export class BeuveDiffStream extends LitElement {
         white-space: nowrap;
       }
 
+      .tools button {
+        padding: 2px var(--beuve-space-1);
+      }
+
       .tools button:hover,
       .order-button:hover,
       .order-button:has(+ [popover]:popover-open) {
@@ -435,31 +439,14 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .segmented button.effective {
-        text-decoration: underline dashed;
-        text-underline-offset: 3px;
+        outline: 1px dashed var(--beuve-text-muted);
+        outline-offset: -3px;
       }
 
-      .check {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 14px;
-        height: 14px;
-        border: 1px solid var(--beuve-text-muted);
-        border-radius: 3px;
-      }
-
-      .check svg {
-        visibility: hidden;
-      }
-
-      .tools button[aria-checked='true'] .check {
-        border-color: var(--beuve-text);
+      .tools > button[aria-pressed='true'] {
+        border-color: var(--beuve-border);
         background: var(--beuve-bg);
-      }
-
-      .tools button[aria-checked='true'] .check svg {
-        visibility: visible;
+        color: var(--beuve-text);
       }
 
       .group {
@@ -1560,33 +1547,37 @@ export class BeuveDiffStream extends LitElement {
           type="button"
           role="radio"
           tabindex="-1"
+          aria-label="Split"
+          title="Split"
           aria-checked=${layout === 'split' ? 'true' : 'false'}
           data-action="layout"
           data-layout="split"
         >
-          ${displayIcon('split')}Split
+          ${displayIcon('split')}
         </button>
         <button
           type="button"
           role="radio"
           tabindex="-1"
+          aria-label="Inline"
+          title="Inline"
           aria-checked=${layout === 'split' ? 'false' : 'true'}
           class=${isNarrow && layout === 'split' ? 'effective' : ''}
           data-action="layout"
           data-layout="unified"
         >
-          ${displayIcon('inline')}Inline
+          ${displayIcon('inline')}
         </button>
       </span>
       <button
         type="button"
-        role="checkbox"
         tabindex="-1"
-        aria-checked=${ignoreWhitespace ? 'true' : 'false'}
+        aria-label="Hide whitespace changes"
+        aria-pressed=${ignoreWhitespace ? 'true' : 'false'}
         title=${ignoreWhitespace ? 'Whitespace-only changes are hidden' : 'Hide whitespace-only changes'}
         data-action="whitespace"
       >
-        <span class="check">${displayIcon('check')}</span>Hide whitespace
+        ${displayIcon('whitespace')}
       </button>
     </span>`;
   }
