@@ -71,6 +71,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'toggle-sidebar': app,
     'toggle-terminal': app,
     'sidebar-overview': app,
+    'sidebar-files': app,
     'sidebar-review': app,
     'sidebar-chat': app,
     'sidebar-left': app,

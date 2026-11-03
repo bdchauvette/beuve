@@ -26,7 +26,8 @@ import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
 import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
-import './beuve-intent-sidebar.ts';
+import './beuve-files-sidebar.ts';
+import './beuve-overview-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
 import './beuve-dialog.ts';
 import './beuve-sidebar.ts';
@@ -41,7 +42,7 @@ import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveDiffStream } from './beuve-diff-stream.ts';
 import type { BeuveSheetView } from './beuve-sheet-view.ts';
-import type { BeuveIntentSidebar } from './beuve-intent-sidebar.ts';
+import type { BeuveFilesSidebar } from './beuve-files-sidebar.ts';
 import type { BeuveUraDock } from './beuve-ura-dock.ts';
 import type { MentionTarget } from './chat-draft.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
@@ -61,6 +62,7 @@ import type { ReviewEditsController } from './review-edits-controller.ts';
 import type { SidebarResizeDetail } from './beuve-sidebar-handle.ts';
 import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
+import { zoneOrderFrom } from './zone-order-from.ts';
 import type { AppActions } from './app-actions.ts';
 import { citationPlace } from './citation-place.ts';
 import { describeOutsideDiff } from './describe-outside-diff.ts';
@@ -90,7 +92,6 @@ import type { GithubDockState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
-import { zones } from './zones.ts';
 import './beuve-sheet-view.ts';
 import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
 import type { ZoneId } from './zones.ts';
@@ -224,6 +225,11 @@ export class BeuveReview extends LitElement {
 
   private readonly onOpenLink = (event: CustomEvent<UrlDetail>): void => {
     void this.openLink(event.detail.url);
+  };
+
+  /** A check's link in the Overview: any http(s) URL, as the status bar's CI popover opens them. */
+  private readonly onOpenUrl = (event: CustomEvent<UrlDetail>): void => {
+    void this.openUrl(event.detail.url);
   };
 
   private readonly onOpenChatLink = (event: CustomEvent<UrlDetail>): void => {
@@ -541,6 +547,8 @@ export class BeuveReview extends LitElement {
   private shownReview: ReviewView | undefined;
 
   private shownDisplaySide: SidebarSideView | undefined;
+  /** The session whose Overview was last shown on its own: a pull request opens on it once. */
+  private overviewShownFor: string | undefined;
 
   @state() accessor focusedZone: ZoneId = 'diff';
 
@@ -565,7 +573,7 @@ export class BeuveReview extends LitElement {
   @state() accessor isTerminalFocused = false;
 
   /** The sidebar tab on show: intent and files, the review or the chat. */
-  @state() accessor sidebarTab: SidebarZone = 'intent';
+  @state() accessor sidebarTab: SidebarZone = 'files';
 
   /** The controllers the shell built; nothing renders until it is set. */
   @property({ attribute: false }) accessor model: AppModel | undefined = undefined;
@@ -717,9 +725,12 @@ export class BeuveReview extends LitElement {
         }
         return mentionTargetFromItem(item, this.review?.files ?? []);
       }
-      case 'intent': {
+      case 'overview': {
+        return nothingSelected;
+      }
+      case 'files': {
         const path = this.renderRoot
-          .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
+          .querySelector<BeuveFilesSidebar>('beuve-files-sidebar')
           ?.focusedPath();
         if (path === undefined) {
           return 'Focus a file in the tree to add it.';
@@ -843,10 +854,8 @@ export class BeuveReview extends LitElement {
 
   /** The file focused in the tree, while the tree has the focus. */
   private treePath(): string | undefined {
-    if (this.focusedZone === 'intent') {
-      return this.renderRoot
-        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
-        ?.focusedPath();
+    if (this.focusedZone === 'files') {
+      return this.renderRoot.querySelector<BeuveFilesSidebar>('beuve-files-sidebar')?.focusedPath();
     }
     return undefined;
   }
@@ -890,8 +899,10 @@ export class BeuveReview extends LitElement {
 
   /** Regions Next Region visits: the sidebar's only while it shows. */
   private zoneOrder(): ZoneId[] {
-    const hasSidebar = this.review !== undefined && !this.sidebarHidden;
-    return zones.map(({ id }) => id).filter((id) => id === 'diff' || hasSidebar);
+    return zoneOrderFrom({
+      hasSidebar: this.review !== undefined && !this.sidebarHidden,
+      isPullRequest: this.github.pullRequest !== undefined,
+    });
   }
 
   /** Focus Chat: shows the chat tab and focuses its input; from the chat, goes back to the diff. */
@@ -918,23 +929,37 @@ export class BeuveReview extends LitElement {
     };
   }
 
-  private renderIntent(): TemplateResult {
-    return html`<beuve-intent-sidebar
-      data-zone="intent"
+  private renderOverview(): TemplateResult | typeof nothing {
+    if (this.github.pullRequest === undefined) {
+      return nothing;
+    }
+    return html`<beuve-overview-sidebar
+      data-zone="overview"
       tabindex="-1"
-      ?hidden=${this.sidebarTab !== 'intent'}
-      ?focused=${this.focusedZone === 'intent'}
+      ?hidden=${this.sidebarTab !== 'overview'}
+      ?focused=${this.focusedZone === 'overview'}
       .pullRequest=${this.github.pullRequest}
+      .ci=${this.github.ci}
+      @beuve-open-stack=${this.onOpenStack}
+      @beuve-open-link=${this.onOpenLink}
+      @beuve-open-url=${this.onOpenUrl}
+    ></beuve-overview-sidebar>`;
+  }
+
+  private renderFiles(): TemplateResult {
+    return html`<beuve-files-sidebar
+      data-zone="files"
+      tabindex="-1"
+      ?hidden=${this.sidebarTab !== 'files'}
+      ?focused=${this.focusedZone === 'files'}
       .files=${this.review?.files}
       .tree=${this.reviewData.tree}
       .generatedPaths=${this.reviewDeferrals().generated}
       .reviewMarks=${this.reviewData.marks}
       .treeMode=${this.treeMode}
       @beuve-tree-mode=${this.onTreeMode}
-      @beuve-open-stack=${this.onOpenStack}
-      @beuve-open-link=${this.onOpenLink}
       @beuve-tree-select=${this.onTreeSelect}
-    ></beuve-intent-sidebar>`;
+    ></beuve-files-sidebar>`;
   }
 
   private renderDiff(): TemplateResult {
@@ -1057,6 +1082,28 @@ export class BeuveReview extends LitElement {
     ></beuve-chat-drawer>`;
   }
 
+  /**
+   * A pull request session opens on its Overview, once; a session without a pull request has no
+   * Overview tab, so a selection or focus left on it falls back to Files.
+   */
+  private keepOverviewValid(): void {
+    if (this.github.pullRequest === undefined) {
+      if (this.sidebarTab === 'overview') {
+        this.sidebarTab = 'files';
+      }
+      if (this.focusedZone === 'overview') {
+        this.focusedZone = 'files';
+      }
+      return;
+    }
+    const sessionId = this.review?.session.id;
+    if (sessionId === undefined || sessionId === this.overviewShownFor) {
+      return;
+    }
+    this.overviewShownFor = sessionId;
+    this.sidebarTab = 'overview';
+  }
+
   private renderSidebar(): TemplateResult {
     return html`<beuve-sidebar
       slot="sidebar"
@@ -1068,7 +1115,7 @@ export class BeuveReview extends LitElement {
       @beuve-sidebar-resize=${this.onSidebarResize}
       @beuve-sidebar-tab=${this.onSidebarTab}
     >
-      ${this.renderIntent()} ${this.renderDock()} ${this.renderChat()}
+      ${this.renderOverview()} ${this.renderFiles()} ${this.renderDock()} ${this.renderChat()}
     </beuve-sidebar>`;
   }
 
@@ -1224,9 +1271,9 @@ export class BeuveReview extends LitElement {
     const row = path.find((element) => element.dataset['itemPath'] !== undefined);
     if (row !== undefined) {
       this.renderRoot
-        .querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')
+        .querySelector<BeuveFilesSidebar>('beuve-files-sidebar')
         ?.revealPath(row.dataset['itemPath'] ?? '');
-      this.focusedZone = 'intent';
+      this.focusedZone = 'files';
       return 'tree';
     }
     const card = path.find((element) => element.localName === 'beuve-file-card');
@@ -1345,7 +1392,13 @@ export class BeuveReview extends LitElement {
         return true;
       }
       case 'sidebar-overview': {
-        this.focusSidebar('intent');
+        if (this.github.pullRequest !== undefined) {
+          this.focusSidebar('overview');
+        }
+        return true;
+      }
+      case 'sidebar-files': {
+        this.focusSidebar('files');
         return true;
       }
       case 'sidebar-review': {
@@ -1476,9 +1529,9 @@ export class BeuveReview extends LitElement {
       return;
     }
     this.treeMode = 'neighborhood';
-    this.focusSidebar('intent');
+    this.focusSidebar('files');
     void this.updateComplete.then(() => {
-      this.renderRoot.querySelector<BeuveIntentSidebar>('beuve-intent-sidebar')?.revealPath(path);
+      this.renderRoot.querySelector<BeuveFilesSidebar>('beuve-files-sidebar')?.revealPath(path);
     });
   }
 
@@ -1557,6 +1610,7 @@ export class BeuveReview extends LitElement {
     if (zone !== 'diff' && changed.has('focusedZone')) {
       this.sidebarTab = zone;
     }
+    this.keepOverviewValid();
     const side = this.settings.display.sidebarSide;
     if (side !== this.shownDisplaySide) {
       this.shownDisplaySide = side;

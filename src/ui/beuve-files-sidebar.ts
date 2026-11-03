@@ -5,21 +5,18 @@ import { customElement, property } from 'lit/decorators.js';
 import type {
   DiffFileView,
   FileReviewStateView,
-  PullRequestSessionView,
   RepositoryTreeView,
 } from '#contract/ipc-contract.ts';
 
-import './beuve-pull-request-intent.ts';
 import './beuve-radar-tree.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zoneStyles } from './zone-styles.ts';
 
 /**
- * Zone 1: a pull request session's intent (title, body, stack) and the radar tree of the open
- * review's files under a header row whose All · Changed toggle (View ▸ Changed Files Only) emits
- * `beuve-tree-mode { mode }`; focusing the zone focuses the tree. Sessions are opened from the open dialog and the palette, not here.
- * Requirements mapping arrives later. The tree emits `beuve-tree-select`, the intent
- * `beuve-open-link` and `beuve-open-stack`.
+ * The Files tab: the radar tree of the open review's files under a header row whose All · Changed
+ * toggle (View ▸ Changed Files Only) emits `beuve-tree-mode { mode }`; focusing the zone focuses
+ * the tree, which emits `beuve-tree-select`. Sessions are opened from the open dialog and the
+ * palette, not here. A pull request's description and checks are in the Overview tab (ADR 0109).
  */
 /** A toggle button's label and its tooltip. */
 interface ButtonText {
@@ -27,8 +24,8 @@ interface ButtonText {
   readonly title: string;
 }
 
-@customElement('beuve-intent-sidebar')
-export class BeuveIntentSidebar extends LitElement {
+@customElement('beuve-files-sidebar')
+export class BeuveFilesSidebar extends LitElement {
   static override styles = [
     zoneStyles,
     css`
@@ -84,23 +81,15 @@ export class BeuveIntentSidebar extends LitElement {
         flex: 1;
         margin: 0 calc(-1 * var(--beuve-space-3));
       }
-
-      .intent + .files {
-        margin-top: var(--beuve-space-3);
-        padding-top: var(--beuve-space-3);
-        border-top: 1px solid var(--beuve-border);
-      }
     `,
   ];
 
-  /** Focusing Zone 1 lands in the radar tree, so arrow keys work at once. */
+  /** Focusing the Files zone lands in the radar tree, so arrow keys work at once. */
   private readonly onFocus = (): void => {
     this.renderRoot.querySelector('beuve-radar-tree')?.focusTree();
   };
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
-  /** The open pull request session's intent; absent for local sessions. */
-  @property({ attribute: false }) accessor pullRequest: PullRequestSessionView | undefined;
   /** The open review's files and the head's tree, for the radar tree. */
   @property({ attribute: false }) accessor files: readonly DiffFileView[] | undefined;
   @property({ attribute: false }) accessor tree: RepositoryTreeView | undefined;
@@ -164,23 +153,14 @@ export class BeuveIntentSidebar extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`
-      <div class="body">
-        ${
-          this.pullRequest === undefined
-            ? nothing
-            : html`<section class="intent">
-                <beuve-pull-request-intent .view=${this.pullRequest}></beuve-pull-request-intent>
-              </section>`
-        }
-        ${this.files === undefined ? nothing : this.renderFiles(this.files)}
-      </div>
-    `;
+    return html`<div class="body">
+      ${this.files === undefined ? nothing : this.renderFiles(this.files)}
+    </div>`;
   }
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'beuve-intent-sidebar': BeuveIntentSidebar;
+    'beuve-files-sidebar': BeuveFilesSidebar;
   }
 }

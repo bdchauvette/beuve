@@ -29,3 +29,7 @@ Every command is discoverable in a menu and searchable on macOS, and keys cannot
 ## Amendment 2026-10-30: Models and key storage
 
 ADR 0070 adds Settings ▸ Models and builds the key storage described above: `<userData>/model-secrets.json` holds `safeStorage` ciphertext, keys are entered write-only, and the `models:*` channels are the Settings window's alone (`settingsOnlyInvokeChannels`; the main window is registered with `mainWindowInvokeChannels` instead of every channel). The window is 620 by 780 points.
+
+## Amendment 2026-11-03: sidebar tab keys (ADR 0109)
+
+The sidebar has four tabs for a pull request: ⌘1 Overview, ⌘2 Files, ⌘3 Review, ⌘4 Chat (Ctrl+1 to Ctrl+4 on Linux and Windows). ⌘1 is enabled only for a pull request.

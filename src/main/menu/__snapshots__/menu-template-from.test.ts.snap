@@ -186,11 +186,16 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           },
           {
             "accelerator": "Ctrl+2",
+            "id": "sidebar-files",
+            "label": "&Files",
+          },
+          {
+            "accelerator": "Ctrl+3",
             "id": "sidebar-review",
             "label": "&Review",
           },
           {
-            "accelerator": "Ctrl+3",
+            "accelerator": "Ctrl+4",
             "id": "sidebar-chat",
             "label": "&Chat",
           },
@@ -925,11 +930,16 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           },
           {
             "accelerator": "Cmd+2",
+            "id": "sidebar-files",
+            "label": "Files",
+          },
+          {
+            "accelerator": "Cmd+3",
             "id": "sidebar-review",
             "label": "Review",
           },
           {
-            "accelerator": "Cmd+3",
+            "accelerator": "Cmd+4",
             "id": "sidebar-chat",
             "label": "Chat",
           },

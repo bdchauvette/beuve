@@ -3,23 +3,19 @@ import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { ActionDelegation } from './action-delegation.ts';
+import type { SidebarTab } from './sidebar-tabs-from.ts';
+import { sidebarTabsFrom } from './sidebar-tabs-from.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
-
-interface Tab {
-  readonly zone: SidebarZone;
-  readonly label: string;
-  readonly count: number;
-}
 
 /** A tab was chosen. */
 export interface SidebarTabDetail {
   readonly zone: SidebarZone;
 }
 
-const zoneIds: ReadonlySet<string> = new Set(['intent', 'ura', 'chat']);
+const zoneIds: ReadonlySet<string> = new Set(['overview', 'files', 'ura', 'chat']);
 
 /**
- * Overview (or Files), the review and the chat as three quiet tabs (keys 1, 2 and 3). Emits
+ * Overview (pull requests only), the files, the review and the chat as quiet tabs (keys 1 to 4). Emits
  * `beuve-sidebar-tab` with the {@link SidebarTabDetail} chosen.
  */
 @customElement('beuve-sidebar-tabs')
@@ -76,9 +72,9 @@ export class BeuveSidebarTabs extends LitElement {
   };
 
   /** The tab that is showing. */
-  @property() accessor selected: SidebarZone = 'intent';
+  @property() accessor selected: SidebarZone = 'files';
 
-  /** Whether the review is a pull request, which the first tab then calls Overview. */
+  /** Whether the review is a pull request, which alone has an Overview tab. */
   @property({ type: Boolean }) accessor isPullRequest = false;
 
   /** How many items the review has staged, shown beside its tab. */
@@ -89,19 +85,7 @@ export class BeuveSidebarTabs extends LitElement {
     this.addController(new ActionDelegation(this, this.actions));
   }
 
-  private tabs(): readonly Tab[] {
-    let first = 'Files';
-    if (this.isPullRequest) {
-      first = 'Overview';
-    }
-    return [
-      { zone: 'intent', label: first, count: 0 },
-      { zone: 'ura', label: 'Review', count: this.stagedCount },
-      { zone: 'chat', label: 'Chat', count: 0 },
-    ];
-  }
-
-  private renderTab(tab: Tab): TemplateResult {
+  private renderTab(tab: SidebarTab): TemplateResult {
     let selected = 'false';
     if (tab.zone === this.selected) {
       selected = 'true';
@@ -119,7 +103,11 @@ export class BeuveSidebarTabs extends LitElement {
 
   protected override render(): TemplateResult {
     return html`<nav role="tablist" aria-label="Sidebar">
-      ${this.tabs().map((tab) => this.renderTab(tab))}
+      ${sidebarTabsFrom({ isPullRequest: this.isPullRequest, stagedCount: this.stagedCount }).map(
+        (tab) => {
+          return this.renderTab(tab);
+        },
+      )}
     </nav>`;
   }
 }
