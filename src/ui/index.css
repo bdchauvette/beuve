@@ -1,89 +1,278 @@
+/*
+ * Design tokens (ADR 0114), in three tiers. Components use only the semantic and component tiers;
+ * `local/css-design-tokens` rejects color literals, raw font sizes and `--beuve-scale-*` in them.
+ *
+ * 1. Scales: color primitives from Radix Colors 3.0.0 (MIT, radix-ui.com/colors), light from slate,
+ *    dark from sage (the Radix gray nearest Alabaster Dark's blue-green blacks, ADR 0025), each
+ *    redefined for dark mode so the tiers above never change. Only the steps in use are listed; add
+ *    others from the same release. Radix step roles: 1–2 backgrounds, 3–5 element backgrounds
+ *    (rest, hover, pressed), 6–8 borders, 9–10 solid fills, 11–12 text. `a`-steps are the alpha
+ *    variants, for tints laid over another surface. Type, space and radius follow GitHub Primer
+ *    (primer/primitives 11), in rem so a larger root size scales them together.
+ * 2. Semantic: what a color or size is for (surface, border, muted text, accent, status).
+ * 3. Component: diff colors, one set per `data-diff-colors` scheme on the root.
+ */
+
 :root {
   color-scheme: light dark;
 
-  --beuve-space-1: 4px;
-  --beuve-space-2: 8px;
-  --beuve-space-3: 12px;
-  --beuve-space-4: 16px;
-  --beuve-space-6: 24px;
-  --beuve-radius: 6px;
-  --beuve-font-body: 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --beuve-font-small: 11px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --beuve-font-mono: 12px/1.5 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* ── 1. Scales ─────────────────────────────────────────────────────────── */
 
-  --beuve-titlebar-height: 38px;
-  --beuve-statusbar-height: 26px;
-  --beuve-sidebar-width: clamp(300px, 26vw, 380px);
+  --beuve-scale-gray-1: #fcfcfd;
+  --beuve-scale-gray-2: #f9f9fb;
+  --beuve-scale-gray-3: #f0f0f3;
+  --beuve-scale-gray-4: #e8e8ec;
+  --beuve-scale-gray-5: #e0e1e6;
+  --beuve-scale-gray-6: #d9d9e0;
+  --beuve-scale-gray-8: #b9bbc6;
+  --beuve-scale-gray-9: #8b8d98;
+  --beuve-scale-gray-11: #60646c;
+  --beuve-scale-gray-12: #1c2024;
+  --beuve-scale-gray-a4: #00002d17;
+  --beuve-scale-gray-a6: #00002f26;
+  --beuve-scale-gray-a7: #00062e32;
+  --beuve-scale-gray-a8: #00083046;
+  --beuve-scale-black-a3: #00000026;
+  --beuve-scale-black-a5: #0000004d;
+
+  --beuve-scale-indigo-9: #3e63dd;
+  --beuve-scale-indigo-11: #3a5bc7;
+  --beuve-scale-indigo-a3: #0047f112;
+  --beuve-scale-violet-11: #6550b9;
+
+  --beuve-scale-green-9: #30a46c;
+  --beuve-scale-green-11: #218358;
+  --beuve-scale-green-a5: #019c393b;
+  --beuve-scale-green-a6: #00963c52;
+  --beuve-scale-green-a7: #00914071;
+
+  --beuve-scale-red-9: #e5484d;
+  --beuve-scale-red-11: #ce2c31;
+  --beuve-scale-red-a5: #ff000632;
+  --beuve-scale-red-a6: #f8000442;
+  --beuve-scale-red-a7: #df000356;
+
+  --beuve-scale-amber-9: #ffc53d;
+  --beuve-scale-amber-11: #ab6400;
+
+  --beuve-scale-blue-9: #0090ff;
+  --beuve-scale-blue-11: #0d74ce;
+  --beuve-scale-blue-a5: #0093ff3d;
+  --beuve-scale-blue-a6: #0088f653;
+  --beuve-scale-blue-a7: #0083eb71;
+
+  --beuve-scale-orange-9: #f76b15;
+  --beuve-scale-orange-11: #cc4e00;
+  --beuve-scale-orange-a4: #ff91014a;
+  --beuve-scale-orange-a5: #ff8b0065;
+  --beuve-scale-orange-a6: #ff81007d;
+
+  /* Alabaster (ADR 0025): code surfaces match the syntax palette in syntax-palettes.ts. */
+  --beuve-scale-alabaster-bg: #f7f7f7;
+  --beuve-scale-alabaster-fg: #000000;
+
+  --beuve-font-family-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --beuve-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Primer's sizes, with 13px (Primer's code size) added for dense lists. Nothing is below 12px. */
+  --beuve-font-size-caption: 0.75rem; /* 12px: timestamps, badges, counts */
+  --beuve-font-size-small: 0.8125rem; /* 13px: dense UI — rows, labels, status bar */
+  --beuve-font-size-body: 0.875rem; /* 14px: prose, inputs, chat */
+  --beuve-font-size-large: 1rem; /* 16px: section titles */
+  --beuve-font-size-title: 1.25rem; /* 20px: page and dialog titles */
+  --beuve-font-size-code: 0.8125rem; /* 13px: diffs, sheets, inline code blocks */
+
+  --beuve-line-height-tight: 1.25;
+  --beuve-line-height-normal: 1.5;
+  --beuve-line-height-relaxed: 1.625;
+  --beuve-line-height-code: 1.25rem; /* 20px; beuve-file-card.ts estimates card heights from it */
+
+  --beuve-font-weight-normal: 400;
+  --beuve-font-weight-medium: 500;
+  --beuve-font-weight-semibold: 600;
+
+  --beuve-space-0-5: 0.125rem;
+  --beuve-space-1: 0.25rem;
+  --beuve-space-2: 0.5rem;
+  --beuve-space-3: 0.75rem;
+  --beuve-space-4: 1rem;
+  --beuve-space-6: 1.5rem;
+  --beuve-space-8: 2rem;
+
+  --beuve-radius-small: 0.25rem;
+  --beuve-radius: 0.375rem;
+  --beuve-radius-large: 0.75rem;
+  --beuve-radius-full: 9999px;
+
+  /* ── 2. Semantic ───────────────────────────────────────────────────────── */
+
+  --beuve-font-caption: var(--beuve-font-weight-normal) var(--beuve-font-size-caption) /
+    var(--beuve-line-height-tight) var(--beuve-font-family-sans);
+  --beuve-font-small: var(--beuve-font-weight-normal) var(--beuve-font-size-small) /
+    var(--beuve-line-height-normal) var(--beuve-font-family-sans);
+  --beuve-font-body: var(--beuve-font-weight-normal) var(--beuve-font-size-body) /
+    var(--beuve-line-height-normal) var(--beuve-font-family-sans);
+  --beuve-font-heading: var(--beuve-font-weight-semibold) var(--beuve-font-size-large) /
+    var(--beuve-line-height-normal) var(--beuve-font-family-sans);
+  --beuve-font-title: var(--beuve-font-weight-semibold) var(--beuve-font-size-title) /
+    var(--beuve-line-height-tight) var(--beuve-font-family-sans);
+  --beuve-font-mono: var(--beuve-font-weight-normal) var(--beuve-font-size-code) /
+    var(--beuve-line-height-normal) var(--beuve-font-family-mono);
+
+  --beuve-titlebar-height: 2.5rem;
+  --beuve-statusbar-height: 1.75rem;
+  --beuve-sidebar-width: clamp(320px, 28vw, 420px);
   --beuve-chat-height: 280px;
+  --beuve-terminal-height: 280px;
 
-  --beuve-bg: #f7f7f8;
+  --beuve-bg: var(--beuve-scale-gray-2);
   --beuve-surface: #ffffff;
-  --beuve-surface-sunken: #efeff1;
-  --beuve-border: #dcdce0;
-  --beuve-text: #1b1c20;
-  --beuve-text-muted: #6a6c75;
-  --beuve-accent: #2f6fde;
-  --beuve-accent-soft: #2f6fde1f;
-  --beuve-violet: #7a4fd6;
-  --beuve-ok: #1f8a4c;
-  --beuve-warn: #a86a00;
-  --beuve-danger: #c8333a;
-  --beuve-scrim: #0000004d;
-  --beuve-scrim-soft: #1b1c2014;
+  --beuve-surface-sunken: var(--beuve-scale-gray-3);
+  --beuve-surface-hover: var(--beuve-scale-gray-4);
+  --beuve-surface-pressed: var(--beuve-scale-gray-5);
+  --beuve-border: var(--beuve-scale-gray-6);
+  --beuve-border-strong: var(--beuve-scale-gray-8);
+  --beuve-text: var(--beuve-scale-gray-12);
+  --beuve-text-muted: var(--beuve-scale-gray-11);
+  --beuve-text-faint: var(--beuve-scale-gray-9);
 
-  /* Code surfaces follow the Alabaster palette (ADR 0025); syntax colors live in syntax-palettes.ts. */
-  --beuve-code-bg: #f7f7f7;
-  --beuve-code-text: #000000;
+  --beuve-accent: var(--beuve-scale-indigo-11);
+  --beuve-accent-soft: var(--beuve-scale-indigo-a3);
+  --beuve-accent-solid: var(--beuve-scale-indigo-9);
+  --beuve-on-accent: #ffffff;
+  --beuve-violet: var(--beuve-scale-violet-11);
+  --beuve-ok: var(--beuve-scale-green-11);
+  --beuve-ok-solid: var(--beuve-scale-green-9);
+  --beuve-warn: var(--beuve-scale-amber-11);
+  --beuve-warn-solid: var(--beuve-scale-amber-9);
+  --beuve-danger: var(--beuve-scale-red-11);
+  --beuve-danger-solid: var(--beuve-scale-red-9);
 
-  --beuve-diff-added-bg: #1f8a4c17;
-  --beuve-diff-added-emphasis: #1f8a4c33;
-  --beuve-diff-added-bar: #1f8a4c;
-  --beuve-diff-added-text: #116335;
-  --beuve-diff-removed-bg: #c8333a14;
-  --beuve-diff-removed-emphasis: #c8333a2e;
-  --beuve-diff-removed-bar: #c8333a;
-  --beuve-diff-removed-text: #a3252b;
-  --beuve-diff-hunk-bg: #2f6fde12;
-  --beuve-diff-hunk-text: #2f6fde;
+  --beuve-scrim: var(--beuve-scale-black-a5);
+  --beuve-scrim-soft: var(--beuve-scale-gray-a4);
+  --beuve-shadow-small: 0 4px 16px var(--beuve-scale-black-a3);
+  --beuve-shadow-large: 0 16px 48px var(--beuve-scale-black-a3);
+
+  --beuve-code-bg: var(--beuve-scale-alabaster-bg);
+  --beuve-code-text: var(--beuve-scale-alabaster-fg);
+
+  /* ── 3. Component: diffs ───────────────────────────────────────────────── */
+
+  /*
+   * Line, gutter number and changed-word tints step up like Primer's diffBlob tokens
+   * (line < number < word), one Radix alpha step apart. Orange and grey sit lower and higher on
+   * their scales so each pair reads at a similar weight. Text colors are for +/− counts and labels;
+   * bars for gutter marks. Default scheme `red-green`.
+   */
+  --beuve-diff-added-bg: var(--beuve-scale-green-a5);
+  --beuve-diff-added-number-bg: var(--beuve-scale-green-a6);
+  --beuve-diff-added-emphasis: var(--beuve-scale-green-a7);
+  --beuve-diff-added-bar: var(--beuve-scale-green-9);
+  --beuve-diff-added-text: var(--beuve-scale-green-11);
+  --beuve-diff-removed-bg: var(--beuve-scale-red-a5);
+  --beuve-diff-removed-number-bg: var(--beuve-scale-red-a6);
+  --beuve-diff-removed-emphasis: var(--beuve-scale-red-a7);
+  --beuve-diff-removed-bar: var(--beuve-scale-red-9);
+  --beuve-diff-removed-text: var(--beuve-scale-red-11);
+  --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
+  --beuve-diff-hunk-text: var(--beuve-accent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --beuve-bg: #0b1011;
-    --beuve-surface: #121a1b;
-    --beuve-surface-sunken: #172122;
-    --beuve-border: #263233;
-    --beuve-text: #e3e5e5;
-    --beuve-text-muted: #8a9799;
-    --beuve-accent: #6b9cff;
-    --beuve-accent-soft: #6b9cff26;
-    --beuve-violet: #a985ff;
-    --beuve-ok: #4cc27f;
-    --beuve-warn: #e0a83a;
-    --beuve-danger: #ff6b70;
-    --beuve-scrim: #00000080;
-    --beuve-scrim-soft: #00000059;
+    --beuve-scale-gray-1: #101211;
+    --beuve-scale-gray-2: #171918;
+    --beuve-scale-gray-3: #202221;
+    --beuve-scale-gray-4: #272a29;
+    --beuve-scale-gray-5: #2e3130;
+    --beuve-scale-gray-6: #373b39;
+    --beuve-scale-gray-8: #5b625f;
+    --beuve-scale-gray-9: #63706b;
+    --beuve-scale-gray-11: #adb5b2;
+    --beuve-scale-gray-12: #eceeed;
+    --beuve-scale-gray-a4: #f2fefd1a;
+    --beuve-scale-gray-a6: #edfbf42d;
+    --beuve-scale-gray-a7: #edfcf73c;
+    --beuve-scale-gray-a8: #ebfdf657;
+    --beuve-scale-black-a3: #00000059;
+    --beuve-scale-black-a5: #00000080;
 
-    --beuve-code-bg: #0e1415;
-    --beuve-code-text: #cecece;
+    --beuve-scale-indigo-9: #3e63dd;
+    --beuve-scale-indigo-11: #9eb1ff;
+    --beuve-scale-indigo-a3: #2f62ff3c;
+    --beuve-scale-violet-11: #baa7ff;
 
-    --beuve-diff-added-bg: #4cc27f1a;
-    --beuve-diff-added-emphasis: #4cc27f38;
-    --beuve-diff-added-bar: #4cc27f;
-    --beuve-diff-added-text: #7ad9a1;
-    --beuve-diff-removed-bg: #ff6b701a;
-    --beuve-diff-removed-emphasis: #ff6b7038;
-    --beuve-diff-removed-bar: #ff6b70;
-    --beuve-diff-removed-text: #ff9a9d;
-    --beuve-diff-hunk-bg: #6b9cff14;
-    --beuve-diff-hunk-text: #8fb3ff;
+    --beuve-scale-green-9: #30a46c;
+    --beuve-scale-green-11: #3dd68c;
+    --beuve-scale-green-a5: #2bffa23c;
+    --beuve-scale-green-a6: #44ffaa4b;
+    --beuve-scale-green-a7: #50fdac5e;
+
+    --beuve-scale-red-9: #e5484d;
+    --beuve-scale-red-11: #ff9592;
+    --beuve-scale-red-a5: #ff204756;
+    --beuve-scale-red-a6: #ff3e5668;
+    --beuve-scale-red-a7: #ff536184;
+
+    --beuve-scale-amber-9: #ffc53d;
+    --beuve-scale-amber-11: #ffca16;
+
+    --beuve-scale-blue-9: #0090ff;
+    --beuve-scale-blue-11: #70b8ff;
+    --beuve-scale-blue-a5: #0081fd6b;
+    --beuve-scale-blue-a6: #0f89fd7f;
+    --beuve-scale-blue-a7: #2a91fe98;
+
+    --beuve-scale-orange-9: #f76b15;
+    --beuve-scale-orange-11: #ffa057;
+    --beuve-scale-orange-a4: #ff590039;
+    --beuve-scale-orange-a5: #ff61004a;
+    --beuve-scale-orange-a6: #fd75045c;
+
+    --beuve-scale-alabaster-bg: #0e1415;
+    --beuve-scale-alabaster-fg: #cecece;
+
+    --beuve-bg: var(--beuve-scale-gray-1);
+    --beuve-surface: var(--beuve-scale-gray-2);
   }
+}
+
+/*
+ * Diff color schemes (ADR 0114), chosen in Settings › Display and set on the root of every window.
+ * `blue-orange` is the pair GitHub's colorblind themes and the Okabe–Ito palette use. `neutral`
+ * reads as before and after rather than bad and good: removed lines are grey, as JetBrains IDEs
+ * show deletions, and added lines blue.
+ */
+:root[data-diff-colors='blue-orange'] {
+  --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
+  --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);
+  --beuve-diff-added-emphasis: var(--beuve-scale-blue-a7);
+  --beuve-diff-added-bar: var(--beuve-scale-blue-9);
+  --beuve-diff-added-text: var(--beuve-scale-blue-11);
+  --beuve-diff-removed-bg: var(--beuve-scale-orange-a4);
+  --beuve-diff-removed-number-bg: var(--beuve-scale-orange-a5);
+  --beuve-diff-removed-emphasis: var(--beuve-scale-orange-a6);
+  --beuve-diff-removed-bar: var(--beuve-scale-orange-9);
+  --beuve-diff-removed-text: var(--beuve-scale-orange-11);
+}
+
+:root[data-diff-colors='neutral'] {
+  --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
+  --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);
+  --beuve-diff-added-emphasis: var(--beuve-scale-blue-a7);
+  --beuve-diff-added-bar: var(--beuve-scale-blue-9);
+  --beuve-diff-added-text: var(--beuve-scale-blue-11);
+  --beuve-diff-removed-bg: var(--beuve-scale-gray-a6);
+  --beuve-diff-removed-number-bg: var(--beuve-scale-gray-a7);
+  --beuve-diff-removed-emphasis: var(--beuve-scale-gray-a8);
+  --beuve-diff-removed-bar: var(--beuve-scale-gray-9);
+  --beuve-diff-removed-text: var(--beuve-scale-gray-11);
 }
 
 html,
 body {
   margin: 0;
-  height: 100%;
+  block-size: 100%;
   overflow: hidden;
   background: var(--beuve-bg);
   color: var(--beuve-text);

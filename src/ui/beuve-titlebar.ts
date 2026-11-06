@@ -15,22 +15,22 @@ export class BeuveTitlebar extends LitElement {
       align-items: center;
       gap: var(--beuve-space-3);
       padding: 0 var(--beuve-space-4);
-      border-bottom: 1px solid var(--beuve-border);
+      border-block-end: 1px solid var(--beuve-border);
       background: var(--beuve-surface-sunken);
       -webkit-app-region: drag;
       user-select: none;
     }
 
     :host([platform='darwin']) {
-      padding-left: 84px;
+      padding-inline-start: 84px;
     }
 
     .brand {
-      font-weight: 600;
+      font-weight: var(--beuve-font-weight-semibold);
     }
 
     button {
-      min-width: 0;
+      min-inline-size: 0;
       padding: 2px var(--beuve-space-2);
       overflow: hidden;
       border: 1px solid transparent;

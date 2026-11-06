@@ -1,4 +1,6 @@
 import { arrowBodyBraces } from './arrow-body-braces.ts';
+import { cssDesignTokens } from './css-design-tokens.ts';
+import { cssLogicalProperties } from './css-logical-properties.ts';
 import { enforceInternalUtils } from './enforce-internal-utils.ts';
 import { forwardAbortSignal } from './forward-abort-signal.ts';
 import { maxParams } from './max-params.ts';
@@ -37,6 +39,8 @@ const plugin = {
   meta: { name: 'local' },
   rules: {
     'arrow-body-braces': arrowBodyBraces,
+    'css-design-tokens': cssDesignTokens,
+    'css-logical-properties': cssLogicalProperties,
     'enforce-internal-utils': enforceInternalUtils,
     'enforce-single-named-export': enforceSingleNamedExport,
     'enforce-top-level-function-syntax': enforceTopLevelFunctionSyntax,

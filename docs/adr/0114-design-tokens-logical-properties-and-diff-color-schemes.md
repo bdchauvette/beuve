@@ -1,0 +1,28 @@
+# 0114. Design tokens, logical properties and diff color schemes
+
+- Status: Accepted; amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
+- Date: 2026-11-06
+
+## Context
+
+`index.css` had a flat list of hand-picked `--beuve-*` values, and components bypassed it in places: 24 raw `font-size: 11px`, a handful of 10, 15, 17 and 20 px sizes, `#fff` on accent buttons, five different shadows. Most UI text was 11 px (`--beuve-font-small`), which is hard to read, and from about 40 most readers have some presbyopia. Diff tints were 9–10% alpha lines and 20–22% changed words. Next to Alabaster's pale code background they nearly disappeared. Red and green is also the pair that red–green colour vision deficiency (about 1 in 12 men) confuses. It also casts removal as an error and addition as success, which is not what a reviewer means by either. Styles mixed physical (`margin-left`, `top`, `width`) and logical properties.
+
+## Decision
+
+- **Three tiers of tokens in `src/ui/index.css`.**
+  - _Scales_ hold the primitives, named `--beuve-scale-<family>-<step>`. Colors come from Radix Colors 3.0.0 (MIT): slate for light gray, sage for dark gray (the Radix gray nearest Alabaster Dark's blue-green blacks), indigo for accent, plus green, red, amber, violet, blue and orange. Each is redefined under `prefers-color-scheme: dark`, and only the steps in use are listed. Semantic tokens follow Radix's step roles: 1–2 backgrounds, 3–5 element states, 6–8 borders, 9–10 solid fills, 11–12 text, `a`-steps for tints over another surface. Type, space and radius follow GitHub Primer (primer/primitives 11), in rem.
+  - _Semantic_ tokens say what a value is for: `--beuve-bg`, `-surface`, `-surface-sunken`/`-hover`/`-pressed`, `-border`/`-border-strong`, `-text`/`-text-muted`/`-text-faint`, `-accent` (text and lines, step 11), `-accent-solid` with `-on-accent` (fills with white text, step 9), `-ok`/`-warn`/`-danger` with `-solid` variants, `-shadow-small`/`-large`, and the `--beuve-font-*` shorthands.
+  - _Component_ tokens are the `--beuve-diff-*` set.
+- **Larger type, nothing under 12 px.** The roles are caption 12 px (timestamps, badges, counts), small 13 px (dense rows, labels, the status bar; was 11), body 14 px (was 13; Primer's, Carbon's and Fluent's default), large 16, title 20, and code 13 px (was 12, and 12.5 in sheets) on a 20 px line. The card height estimate stays valid. 13 px is Primer's code size, used here for dense UI too. Windows 11 also sets 12 px regular as its minimum. The titlebar grows to 40 px and the status bar to 28. The sizes are in rem, so a later text-size preference only changes the root; View › Zoom already scales everything.
+- **Diff tints step up as Primer's `diffBlob` tokens do**: line < gutter number < changed word, one Radix alpha step apart (green, red and blue a5/a6/a7; orange a4/a5/a6 and grey a6/a7/a8, so each pair reads at a similar weight). Bars are step 9, +/− counts step 11. The number cells get their own `--beuve-diff-*-number-bg`.
+- **Three diff color schemes**, Settings › Diff › Colors, stored as `diffColors` in `settings.json` and validated in `display:set`. Every window sets the scheme as `data-diff-colors` on its root (`applyDiffColors`), and `index.css` swaps the `--beuve-diff-*` tokens:
+  - `red-green` is the default and the convention.
+  - `blue-orange`: added blue, removed orange. This is the pair GitHub's colorblind themes use, and it is distinguishable under the common colour vision deficiencies.
+  - `neutral` ("Grey and blue"): removed grey, added blue. It reads as before and after rather than bad and good; JetBrains IDEs show deletions grey too.
+    Review Board and Bitbucket use blue and yellow. That is a candidate if a fourth scheme is ever wanted.
+- **Logical properties.** Styles use `margin-inline-start`, `inset-block-start`, `inline-size`, `text-align: start` and the like. The CSS built as strings (`sheet-gutter-css-from.ts`, `insight-mark-css-from.ts`) does too. Box shorthands whose left and right agree (one to three values, or four with equal sides) are direction-safe and stay. Asymmetric ones become `*-block`/`*-inline`. The goal is a correct mirror under `dir="rtl"`, not vertical writing modes. Exceptions: `overflow-x`/`-y` (Chromium has no logical overflow), `box-shadow` offsets (no logical form), and positions computed from `getBoundingClientRect()` (the hover card), which are physical viewport coordinates.
+- **Linted.** `local/css-design-tokens` rejects color literals, absolute font sizes in `font`/`font-size`/`*font-size*` custom properties, and `--beuve-scale-*` reads in Lit `css` templates. `local/css-logical-properties` rejects physical properties and values and asymmetric shorthands there. Both apply to `src/ui`. `index.css` is the one place literals live.
+
+## Consequences
+
+Colors and sizes are picked from a short named list, so a component's styles say what each value is for. A theme change or a new scheme is an edit to `index.css` alone. Adding a color means adding its Radix steps (both themes) and a semantic token, never a literal in a component. Dense views show less at once: the sidebar is wider (`clamp(320px, 28vw, 420px)`) and the file tree, lists and status bar take more room. A layout with a fixed height sized for 11 px text may clip and needs its height in rem or removed. Strings handed to `@pierre/diffs` and `@pierre/trees` as CSS are outside the lint and are kept logical by hand. The research did not find a published source arguing that red/green diff colors carry a value judgement. That is our reasoning, not a citation.

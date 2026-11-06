@@ -11,11 +11,11 @@ export const formatControlStyles = css`
     margin-inline: 1px;
     padding-inline: 2px;
     border: 1px solid var(--beuve-warn);
-    border-radius: 3px;
+    border-radius: var(--beuve-radius-small);
     color: var(--beuve-warn);
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-family: var(--beuve-font-family-mono);
     font-size: 0.85em;
-    font-weight: normal;
+    font-weight: var(--beuve-font-weight-normal);
     line-height: 1.1;
     white-space: nowrap;
   }

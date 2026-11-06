@@ -36,11 +36,11 @@ export class BeuveRadarTree extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      min-height: 0;
+      min-block-size: 0;
     }
 
     .mount {
-      height: 100%;
+      block-size: 100%;
       --trees-bg-override: var(--beuve-surface);
       --trees-fg-override: var(--beuve-text);
       --trees-fg-muted-override: var(--beuve-text-muted);
@@ -51,8 +51,8 @@ export class BeuveRadarTree extends LitElement {
       --trees-selected-fg-override: var(--beuve-text);
       --trees-selected-focused-border-color-override: var(--beuve-accent);
       --trees-focus-ring-color-override: var(--beuve-accent);
-      --trees-font-family-override: system-ui, -apple-system, 'Segoe UI', sans-serif;
-      --trees-font-size-override: 12px;
+      --trees-font-family-override: var(--beuve-font-family-sans);
+      --trees-font-size-override: var(--beuve-font-size-small);
       --trees-padding-inline-override: 0;
       --trees-git-added-color-override: var(--beuve-ok);
       --trees-git-modified-color-override: var(--beuve-warn);

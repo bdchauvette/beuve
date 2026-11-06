@@ -21,9 +21,9 @@ export class BeuveOverviewSidebar extends LitElement {
     zoneStyles,
     css`
       section + section {
-        margin-top: var(--beuve-space-3);
-        padding-top: var(--beuve-space-3);
-        border-top: 1px solid var(--beuve-border);
+        margin-block-start: var(--beuve-space-3);
+        padding-block-start: var(--beuve-space-3);
+        border-block-start: 1px solid var(--beuve-border);
       }
     `,
   ];

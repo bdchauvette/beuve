@@ -65,16 +65,16 @@ export class BeuveHoverCard extends LitElement {
       position: fixed;
       inset: auto;
       box-sizing: border-box;
-      width: max-content;
-      max-width: min(560px, calc(100vw - 16px));
-      max-height: min(360px, 50vh);
+      inline-size: max-content;
+      max-inline-size: min(560px, calc(100vw - 16px));
+      max-block-size: min(360px, 50vh);
       margin: 0;
       padding: var(--beuve-space-2) var(--beuve-space-3);
       overflow: auto;
       border: 1px solid var(--beuve-border);
       border-radius: var(--beuve-radius);
       background: var(--beuve-surface);
-      box-shadow: 0 6px 24px #0000001f;
+      box-shadow: var(--beuve-shadow-small);
       color: var(--beuve-text);
       font: var(--beuve-font-small);
       overflow-wrap: anywhere;
@@ -85,21 +85,21 @@ export class BeuveHoverCard extends LitElement {
     }
 
     .card > :last-child {
-      margin-bottom: 0;
+      margin-block-end: 0;
     }
 
     .card :is(h1, h2, h3, h4, h5, h6) {
       font: inherit;
-      font-weight: 600;
+      font-weight: var(--beuve-font-weight-semibold);
     }
 
     .card :is(ul, ol) {
-      padding-left: var(--beuve-space-4);
+      padding-inline-start: var(--beuve-space-4);
     }
 
     .card hr {
       border: 0;
-      border-top: 1px solid var(--beuve-border);
+      border-block-start: 1px solid var(--beuve-border);
     }
 
     .card pre {
@@ -108,13 +108,13 @@ export class BeuveHoverCard extends LitElement {
       border-radius: var(--beuve-radius);
       background: var(--beuve-surface-sunken);
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
       white-space: pre-wrap;
     }
 
     .card code {
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
     }
 
     .card a {
@@ -125,21 +125,21 @@ export class BeuveHoverCard extends LitElement {
 
     .card .diagnostic {
       margin: 0 0 var(--beuve-space-2);
-      padding-left: var(--beuve-space-2);
-      border-left: 2px solid var(--beuve-text-muted);
+      padding-inline-start: var(--beuve-space-2);
+      border-inline-start: 2px solid var(--beuve-text-muted);
       white-space: pre-wrap;
     }
 
     .card .diagnostic.error {
-      border-left-color: var(--beuve-danger);
+      border-inline-start-color: var(--beuve-danger);
     }
 
     .card .diagnostic.warning {
-      border-left-color: var(--beuve-warn);
+      border-inline-start-color: var(--beuve-warn);
     }
 
     .card .diagnostic.information {
-      border-left-color: var(--beuve-accent);
+      border-inline-start-color: var(--beuve-accent);
     }
 
     .card .diagnostic-origin {

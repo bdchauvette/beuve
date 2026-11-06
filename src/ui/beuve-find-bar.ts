@@ -32,17 +32,17 @@ export class BeuveFindBar extends LitElement {
       align-items: center;
       gap: var(--beuve-space-2);
       padding: var(--beuve-space-1) var(--beuve-space-3);
-      border-bottom: 1px solid var(--beuve-border);
+      border-block-end: 1px solid var(--beuve-border);
       background: var(--beuve-surface);
       font: var(--beuve-font-small);
     }
 
     input {
       flex: 0 1 320px;
-      min-width: 120px;
+      min-inline-size: 120px;
       padding: 2px var(--beuve-space-2);
       border: 1px solid var(--beuve-border);
-      border-radius: 4px;
+      border-radius: var(--beuve-radius-small);
       background: var(--beuve-bg);
       color: var(--beuve-text);
       font: var(--beuve-font-mono);
@@ -54,7 +54,7 @@ export class BeuveFindBar extends LitElement {
     }
 
     .count {
-      min-width: 7em;
+      min-inline-size: 7em;
       color: var(--beuve-text-muted);
       font-variant-numeric: tabular-nums;
     }
@@ -66,7 +66,7 @@ export class BeuveFindBar extends LitElement {
     button {
       padding: 0 var(--beuve-space-2);
       border: 1px solid var(--beuve-border);
-      border-radius: 4px;
+      border-radius: var(--beuve-radius-small);
       background: var(--beuve-surface);
       color: var(--beuve-text);
       font: inherit;

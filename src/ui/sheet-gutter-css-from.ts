@@ -10,8 +10,8 @@ export interface SheetGutterInput {
 
 /**
  * The style rules a sheet (ADR 0067) adopts into its `@pierre/diffs` shadow root: a thin bar at
- * the left of the line number for added (green) and modified (blue) lines, a small red wedge at
- * the top of the line a removal sits above, a violet dot for staged notes, and a quiet tint on
+ * the inline start of the line number for added and modified lines, a small wedge at
+ * the block start of the line a removal sits above, a violet dot for staged notes, and a quiet tint on
  * lines with find matches (stronger on the current one). Empty when there is nothing to draw.
  * Pure.
  */
@@ -32,13 +32,13 @@ export function sheetGutterCssFrom(input: SheetGutterInput): string {
   }
   for (const line of input.marks.deletedAt) {
     rules.push(
-      `${number(line)}{position:relative}${number(line)}::after{content:'';position:absolute;left:0;top:-3px;border-left:6px solid var(--beuve-diff-removed-bar);border-top:3px solid transparent;border-bottom:3px solid transparent}`,
+      `${number(line)}{position:relative}${number(line)}::after{content:'';position:absolute;inset-inline-start:0;inset-block-start:-3px;border-inline-start:6px solid var(--beuve-diff-removed-bar);border-block:3px solid transparent}`,
     );
   }
   for (const note of input.notes) {
     forEachLine({ startLine: note.startLine, endLine: note.endLine }, (line) => {
       rules.push(
-        `${number(line)}{position:relative}${number(line)}::before{content:'';position:absolute;right:2px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--beuve-violet)}`,
+        `${number(line)}{position:relative}${number(line)}::before{content:'';position:absolute;inset-inline-end:2px;inset-block-start:50%;inline-size:5px;block-size:5px;margin-block-start:-2.5px;border-radius:50%;background:var(--beuve-violet)}`,
       );
     });
   }

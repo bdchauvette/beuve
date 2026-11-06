@@ -30,6 +30,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        diffColors: 'red-green',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -46,6 +47,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        diffColors: 'red-green',
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -55,6 +57,7 @@ describe('createDisplayServices', () => {
     await display.set({ reviewOrder: 'imports' });
     await display.set({ skipReviewed: true });
     await display.set({ sheets: 'inline' });
+    await display.set({ diffColors: 'neutral' });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -68,6 +71,7 @@ describe('createDisplayServices', () => {
       sheets: 'inline',
       reviewQueue: defaultReviewQueuePrefs,
       reviewQueueBranchPrefixes: ['claude/'],
+      diffColors: 'neutral',
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -83,6 +87,7 @@ describe('createDisplayServices', () => {
         sheets: 'inline',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        diffColors: 'neutral',
       },
     });
   });
@@ -104,6 +109,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        diffColors: 'red-green',
       },
     });
   });
@@ -136,6 +142,14 @@ describe('createDisplayServices', () => {
     await display.set({ reviewQueueBranchPrefixes: [] });
     await expect(display.get()).resolves.toMatchObject({
       value: { reviewQueueBranchPrefixes: [] },
+    });
+  });
+
+  test('reads an unknown diff color scheme as red and green', async ({ expect, tempDir }) => {
+    const file = path.join(tempDir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ diffColors: 'sepia' }));
+    await expect(createDisplayServices(file).get()).resolves.toMatchObject({
+      value: { diffColors: 'red-green' },
     });
   });
 });

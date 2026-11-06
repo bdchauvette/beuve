@@ -36,7 +36,7 @@ export class BeuvePullRequestTimeline extends LitElement {
       h2 {
         margin: 0;
         font: var(--beuve-font-small);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
         color: var(--beuve-text-muted);
       }
 
@@ -57,34 +57,34 @@ export class BeuvePullRequestTimeline extends LitElement {
         display: grid;
         grid-template-columns: 7px 1fr;
         column-gap: var(--beuve-space-2);
-        min-width: 0;
+        min-inline-size: 0;
       }
 
       .dot {
         align-self: start;
-        width: 7px;
-        height: 7px;
-        margin-top: 5px;
+        inline-size: 7px;
+        block-size: 7px;
+        margin-block-start: 5px;
         border-radius: 50%;
         background: var(--beuve-text-muted);
       }
 
       .dot.ok {
-        background: var(--beuve-ok);
+        background: var(--beuve-ok-solid);
       }
 
       .dot.warn {
-        background: var(--beuve-warn);
+        background: var(--beuve-warn-solid);
       }
 
       .dot.danger {
-        background: var(--beuve-danger);
+        background: var(--beuve-danger-solid);
       }
 
       .what {
         display: grid;
         gap: 2px;
-        min-width: 0;
+        min-inline-size: 0;
       }
 
       .who {
@@ -92,7 +92,7 @@ export class BeuvePullRequestTimeline extends LitElement {
       }
 
       .who strong {
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .when,
@@ -106,7 +106,7 @@ export class BeuvePullRequestTimeline extends LitElement {
         background: none;
         color: var(--beuve-accent);
         font: inherit;
-        text-align: left;
+        text-align: start;
         cursor: pointer;
       }
 
@@ -124,11 +124,11 @@ export class BeuvePullRequestTimeline extends LitElement {
 
       .sha {
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
       }
 
       .body {
-        max-height: 160px;
+        max-block-size: 160px;
         overflow: auto;
         color: var(--beuve-text);
         overflow-wrap: anywhere;

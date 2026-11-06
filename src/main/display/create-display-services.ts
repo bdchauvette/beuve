@@ -1,4 +1,5 @@
 import type {
+  DiffColorsView,
   DiffDisplayView,
   DiffLayoutView,
   IpcResult,
@@ -26,6 +27,7 @@ export interface DisplayServices {
 }
 
 const reviewOrderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls']);
+const diffColorSchemes: ReadonlySet<string> = new Set(['red-green', 'blue-orange', 'neutral']);
 
 const defaults: Required<DiffDisplayView> = {
   layout: 'split',
@@ -39,13 +41,14 @@ const defaults: Required<DiffDisplayView> = {
   sheets: 'window',
   reviewQueue: defaultReviewQueuePrefs,
   reviewQueueBranchPrefixes: branchPrefixesFrom(undefined),
+  diffColors: 'red-green',
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), `sheets` (ADR 0067), and the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, definitions in sheet windows. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), `sheets` (ADR 0067), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), and `diffColors` (ADR 0114), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, definitions in sheet windows, red and green diffs. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -79,6 +82,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
             sheets: next.sheets,
             reviewQueue: next.reviewQueue,
             reviewQueueBranchPrefixes: next.reviewQueueBranchPrefixes,
+            diffColors: next.diffColors,
           };
         });
       }
@@ -109,6 +113,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     sheets: validOr(sheets, isSheetMode, defaults.sheets),
     reviewQueue: reviewQueuePrefsFrom(settings['reviewQueue']),
     reviewQueueBranchPrefixes: branchPrefixesFrom(settings['reviewQueueBranchPrefixes']),
+    diffColors: validOr(settings['diffColors'], isDiffColors, defaults.diffColors),
   };
 }
 
@@ -142,4 +147,8 @@ function isSheetMode(value: unknown): value is SheetModeView {
 
 function isSidebarSide(value: unknown): value is SidebarSideView {
   return value === 'left' || value === 'right';
+}
+
+function isDiffColors(value: unknown): value is DiffColorsView {
+  return typeof value === 'string' && diffColorSchemes.has(value);
 }

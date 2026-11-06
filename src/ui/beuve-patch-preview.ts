@@ -18,23 +18,23 @@ export class BeuvePatchPreview extends LitElement {
       display: block;
       overflow: hidden;
       border: 1px solid var(--beuve-border);
-      border-radius: 4px;
+      border-radius: var(--beuve-radius-small);
       background: var(--beuve-code-bg);
     }
 
     pre {
-      max-height: 160px;
+      max-block-size: 160px;
       margin: 0;
       padding: 2px 0;
       overflow: auto;
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
       line-height: 16px;
     }
 
     span {
       display: block;
-      min-width: max-content;
+      min-inline-size: max-content;
       padding: 0 var(--beuve-space-2);
     }
 

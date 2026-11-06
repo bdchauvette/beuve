@@ -29,6 +29,7 @@ import './beuve-sidebar.ts';
 import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
+import { applyDiffColors } from './apply-diff-colors.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -89,7 +90,7 @@ export class BeuveApp extends LitElement {
   static override styles = css`
     :host {
       display: grid;
-      height: 100%;
+      block-size: 100%;
       grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(--beuve-statusbar-height);
     }
 
@@ -97,19 +98,19 @@ export class BeuveApp extends LitElement {
       grid-area: main;
       display: flex;
       flex-direction: column;
-      min-width: 0;
-      min-height: 0;
+      min-inline-size: 0;
+      min-block-size: 0;
     }
 
     .main > beuve-terminal-panel {
       flex: none;
-      height: var(--beuve-terminal-height, 300px);
+      block-size: var(--beuve-terminal-height, 300px);
     }
 
     .main > beuve-diff-stream,
     .main > .empty {
       flex: 1;
-      min-height: 0;
+      min-block-size: 0;
     }
 
     .empty {
@@ -123,13 +124,13 @@ export class BeuveApp extends LitElement {
     }
 
     .empty > div {
-      width: min(620px, 100%);
+      inline-size: min(620px, 100%);
     }
 
     .empty h1 {
       margin: 0 0 var(--beuve-space-1);
-      font-size: 17px;
-      font-weight: 600;
+      font-size: var(--beuve-font-size-title);
+      font-weight: var(--beuve-font-weight-semibold);
     }
 
     .empty p {
@@ -138,24 +139,25 @@ export class BeuveApp extends LitElement {
     }
 
     beuve-review-queue[slot='queue'] {
-      max-height: 62vh;
-      margin-bottom: var(--beuve-space-6);
+      max-block-size: 62vh;
+      margin-block-end: var(--beuve-space-6);
     }
 
     beuve-open-panel[slot='empty'] {
-      max-width: 620px;
+      max-inline-size: 620px;
     }
 
     beuve-dialog beuve-review-queue {
-      height: 70vh;
+      block-size: 70vh;
     }
 
     .sheet-overlay {
       position: fixed;
-      inset: var(--beuve-titlebar-height) 0 var(--beuve-statusbar-height) auto;
+      inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
+      inset-inline: auto 0;
       z-index: 15;
-      width: min(760px, 62vw);
-      border-left: 1px solid var(--beuve-border);
+      inline-size: min(760px, 62vw);
+      border-inline-start: 1px solid var(--beuve-border);
       box-shadow: -8px 0 24px var(--beuve-scrim-soft);
     }
   `;
@@ -601,8 +603,9 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  /** What depends on the display changing: the file order, the sidebar side, the diff itself. */
+  /** What depends on the display changing: the file order, the sidebar side, the diff and its colors. */
   private onDisplayApplied({ previous, next }: DisplayTransition): void {
+    applyDiffColors(next.diffColors);
     const isWhitespaceChanged = next.ignoreWhitespace !== previous.ignoreWhitespace;
     const isOrderChanged = next.reviewOrder !== previous.reviewOrder;
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {

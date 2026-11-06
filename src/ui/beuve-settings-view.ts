@@ -14,6 +14,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
+import { applyDiffColors } from './apply-diff-colors.ts';
 import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
@@ -21,8 +22,8 @@ import { formatControlStyles } from './format-control-styles.ts';
 
 /**
  * The Settings window (ADR 0068): the preferences that were reachable only through chat commands
- * (editor, diff layout, whitespace, generated files, insights, review order, skipping reviewed
- * files, definitions, sidebar side), the accounts beuve uses (read-only). Every change is saved at once through the settings
+ * (editor, diff layout and colors, whitespace, generated files, insights, review order, skipping
+ * reviewed files, definitions, sidebar side), the accounts beuve uses (read-only). Every change is saved at once through the settings
  * channels, which also tell the main window; the window is read again when it regains focus.
  */
 /** A checkbox row: its label, the note beside it, its state, and the change it asks for. */
@@ -48,7 +49,7 @@ export class BeuveSettingsView extends LitElement {
     css`
       :host {
         display: block;
-        height: 100%;
+        block-size: 100%;
         overflow: auto;
         box-sizing: border-box;
         padding: var(--beuve-space-4) var(--beuve-space-6) var(--beuve-space-6);
@@ -60,14 +61,14 @@ export class BeuveSettingsView extends LitElement {
       h2 {
         margin: var(--beuve-space-4) 0 var(--beuve-space-2);
         font: var(--beuve-font-small);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
         color: var(--beuve-text-muted);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
 
       h2:first-child {
-        margin-top: 0;
+        margin-block-start: 0;
       }
 
       .group {
@@ -81,12 +82,12 @@ export class BeuveSettingsView extends LitElement {
         grid-template-columns: 180px minmax(0, 1fr);
         align-items: center;
         gap: var(--beuve-space-3);
-        min-height: 32px;
+        min-block-size: 32px;
         padding: var(--beuve-space-1) var(--beuve-space-3);
       }
 
       .row + .row {
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .row > label:first-child,
@@ -121,7 +122,7 @@ export class BeuveSettingsView extends LitElement {
       select,
       input[type='text'] {
         justify-self: start;
-        min-width: 160px;
+        min-inline-size: 160px;
       }
 
       input[type='text'] {
@@ -133,6 +134,43 @@ export class BeuveSettingsView extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: var(--beuve-space-3);
+      }
+
+      .diff-preview {
+        grid-column: 2;
+        margin: 0;
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius-small);
+        overflow: hidden;
+        background: var(--beuve-code-bg);
+        color: var(--beuve-code-text);
+        font: var(--beuve-font-mono);
+      }
+
+      .diff-preview > span {
+        display: block;
+        padding-inline: var(--beuve-space-2);
+        border-inline-start: 3px solid transparent;
+      }
+
+      .diff-preview .removed {
+        border-inline-start-color: var(--beuve-diff-removed-bar);
+        background: var(--beuve-diff-removed-bg);
+      }
+
+      .diff-preview .added {
+        border-inline-start-color: var(--beuve-diff-added-bar);
+        background: var(--beuve-diff-added-bg);
+      }
+
+      .diff-preview .removed mark {
+        background: var(--beuve-diff-removed-emphasis);
+        color: inherit;
+      }
+
+      .diff-preview .added mark {
+        background: var(--beuve-diff-added-emphasis);
+        color: inherit;
       }
 
       .empty {
@@ -183,6 +221,7 @@ export class BeuveSettingsView extends LitElement {
     ]);
     if (display.ok) {
       this.display = display.value;
+      applyDiffColors(display.value.diffColors);
     }
     if (editors.ok) {
       this.editors = editors.value;
@@ -218,6 +257,7 @@ export class BeuveSettingsView extends LitElement {
     const saved = await bridge.invoke('display:set', change);
     if (saved.ok) {
       this.display = saved.value;
+      applyDiffColors(saved.value.diffColors);
       this.error = '';
     } else {
       this.error = saved.error.message;
@@ -367,6 +407,7 @@ export class BeuveSettingsView extends LitElement {
   }
 
   private renderDiff(display: DiffDisplayView): TemplateResult {
+    const colors = display.diffColors ?? 'red-green';
     return html`<h2>Diff</h2>
       <div class="group">
         <div class="row">
@@ -375,6 +416,18 @@ export class BeuveSettingsView extends LitElement {
             ${this.renderRadio({ name: 'layout', label: 'Side by side', isOn: display.layout === 'split', change: { layout: 'split' } })}
             ${this.renderRadio({ name: 'layout', label: 'Inline', isOn: display.layout === 'unified', change: { layout: 'unified' } })}
           </span>
+        </div>
+        <div class="row">
+          <span>Colors</span>
+          <span class="choices">
+            ${this.renderRadio({ name: 'colors', label: 'Red and green', isOn: colors === 'red-green', change: { diffColors: 'red-green' } })}
+            ${this.renderRadio({ name: 'colors', label: 'Blue and orange', isOn: colors === 'blue-orange', change: { diffColors: 'blue-orange' } })}
+            ${this.renderRadio({ name: 'colors', label: 'Grey and blue', isOn: colors === 'neutral', change: { diffColors: 'neutral' } })}
+          </span>
+          <pre
+            class="diff-preview"
+            aria-hidden="true"
+          ><span class="removed">const total = <mark>sum(items)</mark>;</span><span class="added">const total = <mark>items.reduce(add, 0)</mark>;</span></pre>
         </div>
         ${this.renderCheck({
           label: 'Hide whitespace changes',

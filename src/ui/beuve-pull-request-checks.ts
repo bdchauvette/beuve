@@ -38,7 +38,7 @@ export class BeuvePullRequestChecks extends LitElement {
     h2 {
       margin: 0;
       font: var(--beuve-font-small);
-      font-weight: 600;
+      font-weight: var(--beuve-font-weight-semibold);
       color: var(--beuve-text-muted);
     }
 
@@ -59,32 +59,32 @@ export class BeuvePullRequestChecks extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--beuve-space-2);
-      min-width: 0;
+      min-inline-size: 0;
     }
 
     .dot {
       flex: none;
-      width: 7px;
-      height: 7px;
+      inline-size: 7px;
+      block-size: 7px;
       border-radius: 50%;
       background: var(--beuve-text-muted);
     }
 
     .dot.ok {
-      background: var(--beuve-ok);
+      background: var(--beuve-ok-solid);
     }
 
     .dot.warn {
-      background: var(--beuve-warn);
+      background: var(--beuve-warn-solid);
     }
 
     .dot.danger {
-      background: var(--beuve-danger);
+      background: var(--beuve-danger-solid);
     }
 
     .name {
       flex: 1;
-      min-width: 0;
+      min-inline-size: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -96,7 +96,7 @@ export class BeuvePullRequestChecks extends LitElement {
       background: none;
       color: var(--beuve-accent);
       font: inherit;
-      text-align: left;
+      text-align: start;
       cursor: pointer;
     }
 

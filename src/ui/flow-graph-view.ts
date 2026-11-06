@@ -79,8 +79,8 @@ export class FlowGraphView extends LitElement {
 
     svg {
       display: block;
-      max-width: 100%;
-      height: auto;
+      max-inline-size: 100%;
+      block-size: auto;
     }
 
     .edge {
@@ -107,7 +107,7 @@ export class FlowGraphView extends LitElement {
 
     .edge-label {
       fill: var(--beuve-text-muted);
-      font-size: 10px;
+      font-size: var(--beuve-font-size-caption);
       paint-order: stroke;
       stroke: var(--beuve-bg);
       stroke-width: 3px;
@@ -163,8 +163,8 @@ export class FlowGraphView extends LitElement {
 
     .label {
       fill: var(--beuve-code-text, var(--beuve-text));
-      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-      font-size: 11px;
+      font-family: var(--beuve-font-family-mono);
+      font-size: var(--beuve-font-size-caption);
       dominant-baseline: central;
       pointer-events: none;
     }
@@ -180,7 +180,7 @@ export class FlowGraphView extends LitElement {
 
     .marker {
       fill: var(--beuve-accent);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
       dominant-baseline: central;
       pointer-events: none;
     }
@@ -203,8 +203,8 @@ export class FlowGraphView extends LitElement {
 
     .swatch {
       display: inline-block;
-      width: 16px;
-      height: 10px;
+      inline-size: 16px;
+      block-size: 10px;
       border: 1px solid var(--beuve-border);
       border-radius: 5px;
     }
@@ -215,7 +215,7 @@ export class FlowGraphView extends LitElement {
     }
 
     .swatch.dashed {
-      height: 0;
+      block-size: 0;
       border-width: 1px 0 0;
       border-style: dashed;
       border-color: var(--beuve-text-muted);
@@ -223,7 +223,7 @@ export class FlowGraphView extends LitElement {
     }
 
     .swatch.solid {
-      height: 0;
+      block-size: 0;
       border-width: 1px 0 0;
       border-color: var(--beuve-text-muted);
       border-radius: 0;

@@ -71,7 +71,7 @@ export class BeuveChatDrawer extends LitElement {
     zoneStyles,
     css`
       :host {
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .transcript {
@@ -116,18 +116,19 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .answer {
-        padding: var(--beuve-space-1) 0 var(--beuve-space-1) var(--beuve-space-3);
-        border-left: 2px solid var(--beuve-border);
+        padding-block: var(--beuve-space-1);
+        padding-inline: var(--beuve-space-3) 0;
+        border-inline-start: 2px solid var(--beuve-border);
         overflow-wrap: anywhere;
       }
 
       .answer.streaming,
       .answer.submitted {
-        border-left-color: var(--beuve-accent);
+        border-inline-start-color: var(--beuve-accent);
       }
 
       .text > :first-child {
-        margin-top: 0;
+        margin-block-start: 0;
       }
 
       .text :is(p, ul, ol, blockquote, pre, hr, .table, .code-block) {
@@ -137,7 +138,7 @@ export class BeuveChatDrawer extends LitElement {
       .text :is(h1, h2, h3, h4, h5, h6) {
         margin: var(--beuve-space-2) 0 0;
         font-size: 1em;
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
         line-height: 1.3;
       }
 
@@ -150,24 +151,24 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .text :is(ul, ol) {
-        padding-left: var(--beuve-space-4);
+        padding-inline-start: var(--beuve-space-4);
       }
 
       .text li > :is(p, ul, ol):first-child,
       .text li > :is(ul, ol) {
-        margin-top: 0;
+        margin-block-start: 0;
       }
 
       .text blockquote {
-        margin-left: 0;
-        padding-left: var(--beuve-space-2);
-        border-left: 2px solid var(--beuve-border);
+        margin-inline-start: 0;
+        padding-inline-start: var(--beuve-space-2);
+        border-inline-start: 2px solid var(--beuve-border);
         color: var(--beuve-text-muted);
       }
 
       .text hr {
         border: none;
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .text a {
@@ -184,14 +185,14 @@ export class BeuveChatDrawer extends LitElement {
 
       .text code {
         padding: 0 2px;
-        border-radius: 3px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
       }
 
       .text pre,
       .text .code-block {
         overflow-x: auto;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-code-bg, var(--beuve-surface-sunken));
       }
 
@@ -223,7 +224,7 @@ export class BeuveChatDrawer extends LitElement {
 
       .text th {
         background: var(--beuve-surface-sunken);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .text .align-center {
@@ -259,13 +260,13 @@ export class BeuveChatDrawer extends LitElement {
         display: flex;
         gap: var(--beuve-space-1);
         align-items: baseline;
-        min-width: 0;
+        min-inline-size: 0;
       }
 
       .step-name {
         overflow: hidden;
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -285,8 +286,8 @@ export class BeuveChatDrawer extends LitElement {
 
       .visually-hidden {
         position: absolute;
-        width: 1px;
-        height: 1px;
+        inline-size: 1px;
+        block-size: 1px;
         overflow: hidden;
         clip-path: inset(50%);
         white-space: nowrap;
@@ -296,7 +297,7 @@ export class BeuveChatDrawer extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        margin-top: var(--beuve-space-1);
+        margin-block-start: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -308,11 +309,11 @@ export class BeuveChatDrawer extends LitElement {
       button.cite {
         padding: 0 var(--beuve-space-2);
         border: 1px solid color-mix(in srgb, var(--beuve-accent) 40%, transparent);
-        border-radius: 999px;
+        border-radius: var(--beuve-radius-full);
         background: var(--beuve-accent-soft);
         color: var(--beuve-accent);
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         cursor: pointer;
       }
 
@@ -325,7 +326,7 @@ export class BeuveChatDrawer extends LitElement {
       button.action {
         padding: 0 var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
@@ -353,14 +354,14 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .you .queued {
-        margin-left: var(--beuve-space-2);
+        margin-inline-start: var(--beuve-space-2);
         font: var(--beuve-font-small);
         white-space: nowrap;
       }
 
       .you .queued button.action {
-        margin-left: var(--beuve-space-1);
-        font-size: 10px;
+        margin-inline-start: var(--beuve-space-1);
+        font-size: var(--beuve-font-size-caption);
       }
 
       .review-head,
@@ -379,8 +380,8 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .finding {
-        padding-top: var(--beuve-space-2);
-        border-top: 1px solid var(--beuve-border);
+        padding-block-start: var(--beuve-space-2);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .finding.revealed {
@@ -391,8 +392,8 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .finding:first-child {
-        padding-top: 0;
-        border-top: none;
+        padding-block-start: 0;
+        border-block-start: none;
       }
 
       .finding-head {
@@ -405,7 +406,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .severity {
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .severity.risk {
@@ -421,8 +422,8 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .finding-title {
-        margin-top: 2px;
-        font-weight: 600;
+        margin-block-start: 2px;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .finding-title .text > p {
@@ -434,7 +435,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .finding .status {
-        margin-top: var(--beuve-space-1);
+        margin-block-start: var(--beuve-space-1);
       }
 
       .abstract {
@@ -446,7 +447,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .abstract .label {
-        margin-bottom: var(--beuve-space-1);
+        margin-block-end: var(--beuve-space-1);
       }
 
       .queue {
@@ -462,13 +463,13 @@ export class BeuveChatDrawer extends LitElement {
         gap: var(--beuve-space-2);
         flex: none;
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .editor {
         flex: 1;
-        min-width: 0;
-        max-height: 8.5em;
+        min-inline-size: 0;
+        max-block-size: 8.5em;
         overflow-y: auto;
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
@@ -494,16 +495,16 @@ export class BeuveChatDrawer extends LitElement {
 
       .chip {
         display: inline-block;
-        max-width: calc(100% - 4px);
+        max-inline-size: calc(100% - 4px);
         overflow: hidden;
         margin: 0 1px;
         padding: 0 5px;
         border: 1px solid color-mix(in srgb, var(--beuve-accent) 30%, transparent);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-accent-soft);
         color: var(--beuve-accent);
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         line-height: 16px;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -527,7 +528,7 @@ export class BeuveChatDrawer extends LitElement {
 
       button.chip {
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         line-height: 16px;
       }
 
@@ -540,7 +541,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .summary .label {
-        margin-bottom: var(--beuve-space-1);
+        margin-block-end: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -549,7 +550,7 @@ export class BeuveChatDrawer extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        width: 100%;
+        inline-size: 100%;
         padding: 0;
         border: none;
         background: none;
@@ -562,7 +563,7 @@ export class BeuveChatDrawer extends LitElement {
       button.divider::after {
         content: '';
         flex: 1;
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       button.divider:hover,

@@ -66,9 +66,9 @@ export class BeuveTerminalPanel extends LitElement {
       :host {
         display: flex;
         flex-direction: column;
-        min-height: 0;
+        min-block-size: 0;
         background: var(--beuve-surface);
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
       }
 
       .bar {
@@ -76,16 +76,16 @@ export class BeuveTerminalPanel extends LitElement {
         flex: none;
         align-items: center;
         gap: var(--beuve-space-1);
-        height: 28px;
+        block-size: 28px;
         padding: 0 var(--beuve-space-2);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         font: var(--beuve-font-small);
       }
 
       .bar button {
         padding: 2px var(--beuve-space-2);
         border: none;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: var(--beuve-text-muted);
         font: inherit;
@@ -113,13 +113,15 @@ export class BeuveTerminalPanel extends LitElement {
       .hosts {
         position: relative;
         flex: 1;
-        min-height: 0;
-        padding: var(--beuve-space-1) 0 0 var(--beuve-space-2);
+        min-block-size: 0;
+        padding-block: var(--beuve-space-1) 0;
+        padding-inline: var(--beuve-space-2) 0;
       }
 
       .host {
         position: absolute;
-        inset: var(--beuve-space-1) 0 0 var(--beuve-space-2);
+        inset-block: var(--beuve-space-1) 0;
+        inset-inline: var(--beuve-space-2) 0;
       }
 
       .host[hidden] {
@@ -287,7 +289,7 @@ export class BeuveTerminalPanel extends LitElement {
     }
     const xterm = new Terminal({
       fontFamily,
-      fontSize: 12,
+      fontSize: 13,
       cursorBlink: true,
       scrollback: 5000,
       allowProposedApi: false,
@@ -393,8 +395,8 @@ export class BeuveTerminalPanel extends LitElement {
     };
     return {
       background: read({ name: '--beuve-surface', fallback: '#ffffff' }),
-      foreground: read({ name: '--beuve-text', fallback: '#1b1c20' }),
-      cursor: read({ name: '--beuve-accent', fallback: '#2f6fde' }),
+      foreground: read({ name: '--beuve-text', fallback: '#1c2024' }),
+      cursor: read({ name: '--beuve-accent', fallback: '#3a5bc7' }),
     };
   }
 
