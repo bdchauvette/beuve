@@ -17,6 +17,7 @@ export const invokeChannels = Object.freeze([
   'lsp:call-hierarchy',
   'lsp:definition',
   'lsp:hover',
+  'lsp:diagnostics',
   'lsp:restart',
   'lsp:status',
   'sheet:open',

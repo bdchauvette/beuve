@@ -25,6 +25,8 @@ import type {
   ChooseFolderResponse,
   DefinitionRequest,
   DefinitionView,
+  DiagnosticsRequest,
+  DiagnosticsView,
   HoverRequest,
   HoverView,
   OpenSheetRequest,
@@ -243,6 +245,12 @@ const hoverRequest = z.strictObject({
   path: sheetPath,
   line: z.number().int().min(1).max(10_000_000),
   character,
+});
+
+const diagnosticsRequest = z.strictObject({
+  sessionId,
+  sha: fullSha.optional(),
+  path: sheetPath,
 });
 
 const sheetRange = z
@@ -680,6 +688,15 @@ export function createIpcHandlers(
       const { sha, ...required } = parsed.data;
       const hover: HoverRequest = { ...required, ...(sha !== undefined && { sha }) };
       return services.lsp.hover(hover);
+    },
+    'lsp:diagnostics': async (request): Promise<IpcResult<DiagnosticsView>> => {
+      const parsed = diagnosticsRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { sha, ...required } = parsed.data;
+      const diagnostics: DiagnosticsRequest = { ...required, ...(sha !== undefined && { sha }) };
+      return services.lsp.diagnostics(diagnostics);
     },
     'sheet:open': async (request): Promise<IpcResult<OpenedView>> => {
       const parsed = openSheetRequest.safeParse(request);

@@ -513,6 +513,52 @@ export interface HoverView {
 }
 
 /**
+ * The language servers' diagnostics for one file (ADR 0111), asked in a checkout of `sha`, which
+ * must be the session head: diagnostics exist at the head only. The session head when absent.
+ */
+export interface DiagnosticsRequest {
+  readonly sessionId: string;
+  readonly sha?: string;
+  /** Repository-relative path with `/` separators. */
+  readonly path: string;
+}
+
+export type DiagnosticSeverityView = 'error' | 'warning' | 'information' | 'hint';
+
+/**
+ * One problem a server reported, at a place in the head's file. `message` is plain text the server
+ * wrote, to be shown as untrusted text, never as markup. A server that gave no severity reads as
+ * an error, as editors treat it.
+ */
+export interface DiagnosticItemView extends SheetRangeView {
+  readonly severity: DiagnosticSeverityView;
+  readonly message: string;
+  readonly code?: string;
+  /** The tool the server names (such as `ts`), when it does. */
+  readonly source?: string;
+  /** Which of beuve's language servers reported it. */
+  readonly serverId: string;
+}
+
+/**
+ * - `settled`: the server reported on the current text and went quiet.
+ * - `timed-out`: it was still busy at the deadline; `diagnostics` is what it sent so far.
+ * - `not-head`: `sha` is not the session head, which has no diagnostics (ADR 0111).
+ * - `unavailable`: no server handles this file, or it can't give diagnostics for it.
+ */
+export type DiagnosticsState = 'settled' | 'timed-out' | 'not-head' | 'unavailable';
+
+/** What the servers say about a file at `sha`, the commit the answer is for. */
+export interface DiagnosticsView {
+  readonly sha: string;
+  readonly state: DiagnosticsState;
+  /** In file order. Main caps how many reach the renderer, so a runaway server cannot flood it. */
+  readonly diagnostics: readonly DiagnosticItemView[];
+  /** How many more the servers reported than `diagnostics` holds. */
+  readonly omitted: number;
+}
+
+/**
  * Opens a new sheet (ADR 0067): a read-only window showing `path` as it is at commit `sha`,
  * scrolled to and highlighting `range` (or line 1). Every call opens a new window.
  */
@@ -2310,6 +2356,10 @@ export interface InvokeChannelMap {
     readonly request: HoverRequest;
     readonly response: IpcResult<HoverView>;
   };
+  'lsp:diagnostics': {
+    readonly request: DiagnosticsRequest;
+    readonly response: IpcResult<DiagnosticsView>;
+  };
   'sheet:open': {
     readonly request: OpenSheetRequest;
     readonly response: IpcResult<OpenedView>;
@@ -2594,6 +2644,7 @@ export type Unsubscribe = () => void;
 export type SheetInvokeChannel =
   | 'lsp:definition'
   | 'lsp:hover'
+  | 'lsp:diagnostics'
   | 'sheet:open'
   | 'sheet:get-file'
   | 'sheet:get-head'

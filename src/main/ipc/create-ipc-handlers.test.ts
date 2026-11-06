@@ -274,6 +274,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
             return notWired();
           },
           definition: notWired,
+          diagnostics: notWired,
           hover: notWired,
           restart: notWired,
           status: notWiredError,
@@ -314,6 +315,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
             calls.push(request);
             return notWired();
           },
+          diagnostics: notWired,
           hover: notWired,
           restart: notWired,
           status: notWiredError,
@@ -355,6 +357,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
         lsp: {
           callHierarchy: notWired,
           definition: notWired,
+          diagnostics: notWired,
           hover: async (request) => {
             calls.push(request);
             return notWired();
@@ -380,6 +383,41 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
     const sha = 'a'.repeat(40);
     await handlers['lsp:hover'](good);
     await handlers['lsp:hover']({ ...good, sha });
+    expect(calls).toStrictEqual([good, { ...good, sha }]);
+  });
+
+  test('validates lsp:diagnostics paths and commits', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        lsp: {
+          callHierarchy: notWired,
+          definition: notWired,
+          diagnostics: async (request) => {
+            calls.push(request);
+            return notWired();
+          },
+          hover: notWired,
+          restart: notWired,
+          status: notWiredError,
+        },
+      },
+      appInfo(),
+    );
+    const good = { sessionId: 's1', path: 'src/a.ts' };
+    for (const bad of [
+      { ...good, path: '../secret.ts' },
+      { ...good, path: 'src//a.ts' },
+      { ...good, sha: 'HEAD~1' },
+      { ...good, line: 3 },
+      { path: 'src/a.ts' },
+    ]) {
+      await expectInvalid(expect, handlers['lsp:diagnostics'](bad));
+    }
+    const sha = 'a'.repeat(40);
+    await handlers['lsp:diagnostics'](good);
+    await handlers['lsp:diagnostics']({ ...good, sha });
     expect(calls).toStrictEqual([good, { ...good, sha }]);
   });
 
@@ -1100,6 +1138,7 @@ function stubServices(
     lsp: {
       callHierarchy: notWired,
       definition: notWired,
+      diagnostics: notWired,
       hover: notWired,
       restart: notWired,
       status: notWiredError,
