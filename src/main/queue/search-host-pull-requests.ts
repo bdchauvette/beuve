@@ -145,14 +145,14 @@ function warnIncomplete(run: QueueRun, { host, answers }: SearchedHost): void {
   }
   const hidden = Math.max(0, ...fresh.map((results) => results.hiddenOrganizations));
   if (hidden > 0) {
-    let organizations = `${String(hidden)} organizations are`;
+    let organizations = `${String(hidden)} organizations`;
     if (hidden === 1) {
-      organizations = 'one organization is';
+      organizations = 'one organization';
     }
     run.warn({
       kind: 'sso',
       source,
-      message: `Results from ${organizations} missing on ${host}: authorize your token for their SAML single sign-on.`,
+      message: `Pull requests from ${organizations} are missing on ${host}: authorize your token for their SAML single sign-on.`,
       remedy: `gh auth refresh -h ${host}`,
     });
   }
