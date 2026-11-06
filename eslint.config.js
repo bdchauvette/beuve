@@ -24,6 +24,7 @@ const entrypointFiles = [
   'src/ui/sheet-entry.ts',
   'src/ui/settings-entry.ts',
   'src/ui/testing/hostile-harness-entry.ts',
+  'src/ui/testing/gallery-entry.ts',
   'scripts/**/*.ts',
 ];
 const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
