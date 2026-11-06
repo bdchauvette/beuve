@@ -3,9 +3,11 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { applyLanguageSettings } from './apply-language-settings.ts';
 import { isGlobMatch } from './is-glob-match.ts';
 import type {
   LanguageServersConfig,
+  LanguageSettings,
   OverrideMatch,
   ServerSettings,
 } from './language-servers-config-schema.ts';
@@ -41,7 +43,8 @@ const defaultQuiet = Temporal.Duration.from({ milliseconds: 500 });
  * value. A built-in id keeps what the config does not say; `enabled: false` turns a server off;
  * a new id defines a server of the reviewer's, which needs a command and extensions, and
  * everything the config touched is marked as the reviewer's own, which the trust check consults.
- * A server that is incomplete is left out with a problem. Builtins come first, in their order,
+ * A server that is incomplete is left out with a problem. `languages` then narrows which servers
+ * serve each language, and in what order (`applyLanguageSettings`). Builtins come first, in their order,
  * then new ids in the order the config first names them. Pure.
  */
 export function resolveServerDefinitions(options: ResolveServersOptions): ResolvedServers {
@@ -52,15 +55,27 @@ export function resolveServerDefinitions(options: ResolveServersOptions): Resolv
       merged.set(id, mergedSettings(merged.get(id), settings));
     }
   };
+  const languages = new Map<string, LanguageSettings>();
+  const applyLanguages = (
+    settings: Readonly<Record<string, LanguageSettings>> | undefined,
+  ): void => {
+    const entries = Object.entries(settings ?? {});
+    for (const [language, next] of entries) {
+      languages.set(language, { ...languages.get(language), ...next });
+    }
+  };
   for (const layer of options.layers) {
     apply(layer.servers);
+    applyLanguages(layer.languages);
   }
   for (const layer of options.layers) {
     const overrides = layer.overrides ?? [];
     for (const override of overrides) {
-      if (doesOverrideApply(override.match, options)) {
-        apply(override.servers);
+      if (!doesOverrideApply(override.match, options)) {
+        continue;
       }
+      apply(override.servers);
+      applyLanguages(override.languages);
     }
   }
   const definitions: ServerDefinition[] = [];
@@ -79,7 +94,8 @@ export function resolveServerDefinitions(options: ResolveServersOptions): Resolv
       problems.push(built.error);
     }
   }
-  return { definitions, problems };
+  const narrowed = applyLanguageSettings({ definitions, languages });
+  return { definitions: narrowed.definitions, problems: [...problems, ...narrowed.problems] };
 }
 
 /** `next` over `previous`, field by field, except that `env` and `inheritEnv` combine. */
