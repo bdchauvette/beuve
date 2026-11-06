@@ -39,16 +39,16 @@ export class BeuveFilesSidebar extends LitElement {
       .files {
         position: relative;
         display: flex;
-        flex: 1 0 240px;
+        flex: 1 0 var(--beuve-size-scroll);
         flex-direction: column;
-        min-block-size: 240px;
+        min-block-size: var(--beuve-size-scroll);
       }
 
       .files-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        min-block-size: 22px;
+        min-block-size: var(--beuve-size-control-small);
         margin-block-end: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);

@@ -9,8 +9,8 @@ export const statusDotStyles = css`
   .status-dot {
     display: inline-block;
     flex: none;
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
+    inline-size: var(--beuve-size-dot);
+    block-size: var(--beuve-size-dot);
     border-radius: var(--beuve-radius-full);
     background: var(--beuve-text-faint);
   }

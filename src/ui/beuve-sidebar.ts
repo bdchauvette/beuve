@@ -24,12 +24,12 @@ export class BeuveSidebar extends LitElement {
       flex-direction: column;
       min-inline-size: 0;
       min-block-size: 0;
-      border-inline-start: 1px solid var(--beuve-border);
+      border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
       background: var(--beuve-surface);
     }
 
     :host([side='left']) {
-      border-inline-end: 1px solid var(--beuve-border);
+      border-inline-end: var(--beuve-border-width) solid var(--beuve-border);
       border-inline-start: none;
     }
 

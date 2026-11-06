@@ -4,10 +4,10 @@ import { css } from 'lit';
 export const kbdStyles = css`
   kbd {
     display: inline-block;
-    min-inline-size: 1.4em;
+    min-inline-size: calc(1.4 * var(--beuve-measure-em));
     padding: 0 var(--beuve-space-1);
-    border: 1px solid var(--beuve-border);
-    border-block-end-width: 2px;
+    border: var(--beuve-border-width) solid var(--beuve-border);
+    border-block-end-width: var(--beuve-border-width-thick);
     border-radius: var(--beuve-radius-small);
     background: var(--beuve-surface-sunken);
     color: var(--beuve-text);

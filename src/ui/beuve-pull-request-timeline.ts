@@ -59,19 +59,19 @@ export class BeuvePullRequestTimeline extends LitElement {
 
       .events > li {
         display: grid;
-        grid-template-columns: 7px 1fr;
+        grid-template-columns: var(--beuve-size-dot) 1fr;
         column-gap: var(--beuve-space-2);
         min-inline-size: 0;
       }
 
       .status-dot {
         align-self: start;
-        margin-block-start: 0.375rem;
+        margin-block-start: var(--beuve-space-1-5);
       }
 
       .what {
         display: grid;
-        gap: 2px;
+        gap: var(--beuve-space-0-5);
         min-inline-size: 0;
       }
 
@@ -102,7 +102,7 @@ export class BeuvePullRequestTimeline extends LitElement {
       }
 
       .body {
-        max-block-size: 160px;
+        max-block-size: var(--beuve-size-scroll-short);
         overflow: auto;
         color: var(--beuve-text);
         overflow-wrap: anywhere;

@@ -19,10 +19,12 @@ describe('sheetGutterCssFrom', () => {
       currentMatchLine: undefined,
     });
     expect(css).toContain(
-      "[data-column-number='2']{box-shadow:inset 3px 0 0 var(--beuve-diff-added-bar)}",
+      "[data-column-number='2']{box-shadow:inset var(--beuve-border-width-heavy) 0 0 var(--beuve-diff-added-bar)}",
     );
     expect(css).toContain("[data-column-number='3']{box-shadow");
-    expect(css).toContain("[data-column-number='7']{box-shadow:inset 3px 0 0 var(--beuve-accent)}");
+    expect(css).toContain(
+      "[data-column-number='7']{box-shadow:inset var(--beuve-border-width-heavy) 0 0 var(--beuve-accent)}",
+    );
     expect(css).toContain("[data-column-number='9']::after");
     expect(css).not.toContain("'4'");
   });

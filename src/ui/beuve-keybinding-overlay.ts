@@ -29,13 +29,16 @@ export class BeuveKeybindingOverlay extends LitElement {
       }
 
       .panel {
-        inline-size: min(520px, calc(100vw - 48px));
-        max-block-size: calc(100vh - 48px);
+        inline-size: min(
+          var(--beuve-size-dialog-narrow),
+          calc(var(--beuve-size-window-inline) - 2 * var(--beuve-space-6))
+        );
+        max-block-size: calc(var(--beuve-size-window-block) - 2 * var(--beuve-space-6));
         overflow: auto;
         box-sizing: border-box;
         padding: var(--beuve-space-4) var(--beuve-space-6);
-        border: 1px solid var(--beuve-border);
-        border-radius: 10px;
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius-large);
         background: var(--beuve-surface);
         box-shadow: var(--beuve-shadow-large);
       }

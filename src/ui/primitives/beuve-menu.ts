@@ -10,7 +10,7 @@ const itemSelector = "[role='menuitem'], [role='menuitemradio'], [role='menuitem
  * A popover menu (ADR 0115). The trigger (`slot="trigger"`, a button) and the items (buttons
  * with `role="menuitem"`, `menuitemradio` or `menuitemcheckbox`, styled by `menuItemStyles`) stay
  * in the owner's light DOM, so the owner styles them and delegates their clicks. The menu opens
- * under the trigger, end-aligned, flipping when space runs out; it sets the trigger's
+ * under the trigger, start-aligned unless `align="end"`, flipping when space runs out; it sets the trigger's
  * `aria-haspopup` and `aria-expanded`, moves focus with ↑ ↓ Home End, closes on Tab, Escape, a
  * click outside, or a click on an item that is not a checkbox, and gives focus back to the trigger.
  */
@@ -23,17 +23,17 @@ export class BeuveMenu extends LitElement {
 
     [popover] {
       margin: var(--beuve-space-1) 0 0;
-      min-inline-size: 11rem;
-      max-block-size: 60vh;
+      min-inline-size: var(--beuve-size-menu);
+      max-block-size: var(--beuve-size-window-block-60);
       overflow: auto;
       padding: var(--beuve-space-1);
-      border: 1px solid var(--beuve-border);
+      border: var(--beuve-border-width) solid var(--beuve-border);
       border-radius: var(--beuve-radius);
       background: var(--beuve-surface);
       box-shadow: var(--beuve-shadow-small);
       color: var(--beuve-text);
       font: var(--beuve-font-small);
-      position-area: block-end span-inline-start;
+      position-area: block-end span-inline-end;
       position-try-fallbacks: flip-block, flip-inline;
     }
   `;
@@ -112,6 +112,12 @@ export class BeuveMenu extends LitElement {
 
   /** The menu's accessible name. */
   @property() accessor label = '';
+
+  /**
+   * Which edge of the trigger the menu lines up with: `start` (the default) puts the options under
+   * the trigger's text; `end` suits a trigger at the end of a toolbar.
+   */
+  @property({ reflect: true }) accessor align: 'start' | 'end' = 'start';
 
   private get panel(): HTMLElement | undefined {
     return this.renderRoot.querySelector<HTMLElement>('[popover]') ?? undefined;

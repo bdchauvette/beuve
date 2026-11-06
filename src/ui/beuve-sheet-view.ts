@@ -86,7 +86,7 @@ export class BeuveSheetView extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
@@ -117,7 +117,7 @@ export class BeuveSheetView extends LitElement {
         gap: var(--beuve-space-2);
         align-items: center;
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
@@ -125,9 +125,9 @@ export class BeuveSheetView extends LitElement {
 
       .find input {
         flex: 1;
-        max-inline-size: 320px;
-        padding: 2px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        max-inline-size: var(--beuve-size-field-wide);
+        padding: var(--beuve-space-0-5) var(--beuve-space-2);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
@@ -150,8 +150,8 @@ export class BeuveSheetView extends LitElement {
       footer {
         display: flex;
         gap: var(--beuve-space-3);
-        padding: 3px var(--beuve-space-3);
-        border-block-start: 1px solid var(--beuve-border);
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);

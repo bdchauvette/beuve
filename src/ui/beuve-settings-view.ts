@@ -68,7 +68,7 @@ export class BeuveSettingsView extends LitElement {
         font-weight: var(--beuve-font-weight-semibold);
         color: var(--beuve-text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: var(--beuve-letter-spacing-caps);
       }
 
       h2:first-child {
@@ -76,22 +76,22 @@ export class BeuveSettingsView extends LitElement {
       }
 
       .group {
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
       }
 
       .row {
         display: grid;
-        grid-template-columns: 180px minmax(0, 1fr);
+        grid-template-columns: var(--beuve-size-label) minmax(0, 1fr);
         align-items: center;
         gap: var(--beuve-space-3);
-        min-block-size: 32px;
+        min-block-size: var(--beuve-size-row);
         padding: var(--beuve-space-1) var(--beuve-space-3);
       }
 
       .row + .row {
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .row > label:first-child,
@@ -125,7 +125,7 @@ export class BeuveSettingsView extends LitElement {
       select,
       input[type='text'] {
         justify-self: start;
-        min-inline-size: 160px;
+        min-inline-size: var(--beuve-size-field);
       }
 
       input[type='text'] {
@@ -142,7 +142,7 @@ export class BeuveSettingsView extends LitElement {
       .diff-preview {
         grid-column: 2;
         margin: 0;
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         overflow: hidden;
         background: var(--beuve-code-bg);
@@ -153,7 +153,7 @@ export class BeuveSettingsView extends LitElement {
       .diff-preview > span {
         display: block;
         padding-inline: var(--beuve-space-2);
-        border-inline-start: 3px solid transparent;
+        border-inline-start: var(--beuve-border-width-heavy) solid transparent;
       }
 
       .diff-preview .removed {

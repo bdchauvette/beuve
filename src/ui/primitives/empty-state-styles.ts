@@ -3,7 +3,7 @@ import { css } from 'lit';
 /**
  * Nothing to show (ADR 0115). `.empty` is a muted line in a list or panel; its padding is the
  * container's. `.empty-screen` fills a whole view with a centered column (an `h1`, muted `p`s, then
- * content) that is `--empty-screen-width` wide (620px unless set).
+ * content) that is `--empty-screen-width` wide (`--beuve-size-reading` unless set).
  */
 export const emptyStateStyles = css`
   .empty {
@@ -16,13 +16,13 @@ export const emptyStateStyles = css`
     display: flex;
     justify-content: center;
     overflow: auto;
-    padding: 10vh var(--beuve-space-6) var(--beuve-space-6);
+    padding: var(--beuve-size-screen-offset) var(--beuve-space-6) var(--beuve-space-6);
     background: var(--beuve-bg);
     outline: none;
   }
 
   .empty-screen > div {
-    inline-size: min(var(--empty-screen-width, 620px), 100%);
+    inline-size: min(var(--empty-screen-width, var(--beuve-size-reading)), 100%);
   }
 
   .empty-screen h1 {

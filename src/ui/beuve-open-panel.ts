@@ -75,7 +75,7 @@ export class BeuveOpenPanel extends LitElement {
         box-sizing: border-box;
         inline-size: 100%;
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-bg);
         color: var(--beuve-text);
@@ -90,7 +90,7 @@ export class BeuveOpenPanel extends LitElement {
 
       ol {
         display: grid;
-        gap: 1px;
+        gap: var(--beuve-space-px);
         margin: var(--beuve-space-2) 0 0;
         padding: 0;
         list-style: none;
@@ -98,10 +98,10 @@ export class BeuveOpenPanel extends LitElement {
 
       li {
         display: grid;
-        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-columns: var(--beuve-size-glyph-column) minmax(0, 1fr) auto;
         align-items: baseline;
         column-gap: var(--beuve-space-2);
-        padding: 6px var(--beuve-space-2);
+        padding: var(--beuve-space-1-5) var(--beuve-space-2);
         border-radius: var(--beuve-radius);
         cursor: pointer;
       }
@@ -119,7 +119,7 @@ export class BeuveOpenPanel extends LitElement {
       li:active {
         transform: scale(0.985);
         background: var(--beuve-accent-soft);
-        box-shadow: inset 0 0 0 1px var(--beuve-accent);
+        box-shadow: inset 0 0 0 var(--beuve-border-width) var(--beuve-accent);
       }
 
       li.pressed {
@@ -130,11 +130,11 @@ export class BeuveOpenPanel extends LitElement {
       @keyframes press {
         40% {
           transform: scale(0.97);
-          box-shadow: inset 0 0 0 1px var(--beuve-accent);
+          box-shadow: inset 0 0 0 var(--beuve-border-width) var(--beuve-accent);
         }
         to {
           transform: scale(1);
-          box-shadow: inset 0 0 0 1px var(--beuve-accent);
+          box-shadow: inset 0 0 0 var(--beuve-border-width) var(--beuve-accent);
         }
       }
 
@@ -150,7 +150,7 @@ export class BeuveOpenPanel extends LitElement {
 
       li.separated {
         margin-block-start: var(--beuve-space-2);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: 0 0 var(--beuve-radius) var(--beuve-radius);
         padding-block-start: var(--beuve-space-2);
       }
@@ -202,7 +202,7 @@ export class BeuveOpenPanel extends LitElement {
 
       form {
         display: grid;
-        grid-template-columns: 96px minmax(0, 1fr);
+        grid-template-columns: var(--beuve-size-label-narrow) minmax(0, 1fr);
         align-items: baseline;
         gap: var(--beuve-space-2) var(--beuve-space-3);
       }
@@ -224,7 +224,7 @@ export class BeuveOpenPanel extends LitElement {
         flex: 1;
         min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-bg);
         color: var(--beuve-text);

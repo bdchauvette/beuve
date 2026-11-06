@@ -26,14 +26,14 @@ export class BeuveSidebarHandle extends LitElement {
       z-index: 2;
       inset-block-start: 0;
       inset-block-end: 0;
-      inset-inline-start: -3px;
-      inline-size: 6px;
+      inset-inline-start: calc(var(--beuve-size-handle) / -2);
+      inline-size: var(--beuve-size-handle);
       cursor: col-resize;
       touch-action: none;
     }
 
     :host([side='left']) {
-      inset-inline-end: -3px;
+      inset-inline-end: calc(var(--beuve-size-handle) / -2);
       inset-inline-start: auto;
     }
 

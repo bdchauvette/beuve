@@ -54,7 +54,7 @@ export class BeuvePullRequestChecks extends LitElement {
 
       ul {
         display: grid;
-        gap: 2px;
+        gap: var(--beuve-space-0-5);
         margin: 0;
         padding: 0;
         list-style: none;

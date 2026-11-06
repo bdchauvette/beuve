@@ -129,8 +129,10 @@ const orderModes: readonly { readonly mode: ReviewOrderMode; readonly label: str
 ];
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */
+// eslint-disable-next-line local/css-design-tokens -- IntersectionObserver rootMargin takes no var(); a virtualization distance (ADR 0025), not a design value.
 const mountMargin = '1200px 0px';
 /** Cards farther away than this unmount theirs, which bounds the DOM of a long stream (ADR 0025). */
+// eslint-disable-next-line local/css-design-tokens -- IntersectionObserver rootMargin takes no var(); a virtualization distance (ADR 0025), not a design value.
 const unmountMargin = '6000px 0px';
 
 /** What the card's gutter button asks for: a note composer on `anchor`. */
@@ -180,7 +182,7 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .welcome > div {
-        max-inline-size: 420px;
+        max-inline-size: var(--beuve-size-column);
         text-align: center;
       }
 
@@ -198,7 +200,7 @@ export class BeuveDiffStream extends LitElement {
       .note {
         display: inline-block;
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
         font: var(--beuve-font-small);
@@ -224,10 +226,10 @@ export class BeuveDiffStream extends LitElement {
 
       .opening-bar {
         position: relative;
-        inline-size: 160px;
-        block-size: 3px;
+        inline-size: var(--beuve-size-field);
+        block-size: var(--beuve-border-width-heavy);
         overflow: hidden;
-        border-radius: 2px;
+        border-radius: var(--beuve-radius-tiny);
         background: var(--beuve-accent-soft);
       }
 
@@ -245,7 +247,7 @@ export class BeuveDiffStream extends LitElement {
       @keyframes opening-in {
         from {
           opacity: 0;
-          transform: translateY(4px) scale(0.98);
+          transform: translateY(var(--beuve-space-1)) scale(0.98);
         }
       }
 
@@ -276,7 +278,7 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-3);
         flex: none;
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface);
       }
 
@@ -349,8 +351,8 @@ export class BeuveDiffStream extends LitElement {
 
       .order.fell-back .order-button::after {
         content: '';
-        inline-size: 5px;
-        block-size: 5px;
+        inline-size: var(--beuve-size-dot-small);
+        block-size: var(--beuve-size-dot-small);
         border-radius: 50%;
         background: var(--beuve-warn-solid);
       }
@@ -363,8 +365,8 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .segmented > button.effective {
-        outline: 1px dashed var(--beuve-text-muted);
-        outline-offset: -3px;
+        outline: var(--beuve-border-width) dashed var(--beuve-text-muted);
+        outline-offset: calc(-1 * var(--beuve-border-width-heavy));
       }
 
       .group {
@@ -379,7 +381,7 @@ export class BeuveDiffStream extends LitElement {
       .group::after {
         content: '';
         flex: 1;
-        block-size: 1px;
+        block-size: var(--beuve-border-width);
         background: var(--beuve-border);
       }
 
@@ -393,7 +395,7 @@ export class BeuveDiffStream extends LitElement {
         display: flex;
         align-items: baseline;
         gap: var(--beuve-space-2);
-        padding: 2px 0;
+        padding: var(--beuve-space-0-5) 0;
         cursor: pointer;
         list-style: none;
       }
@@ -414,8 +416,8 @@ export class BeuveDiffStream extends LitElement {
       .pairs beuve-commit-pairing {
         margin-block-start: var(--beuve-space-1);
         padding: var(--beuve-space-2) 0;
-        border-block-start: 1px solid var(--beuve-border);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
       }
     `,
   ];

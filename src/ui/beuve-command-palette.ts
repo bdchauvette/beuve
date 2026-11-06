@@ -54,18 +54,21 @@ export class BeuveCommandPalette extends LitElement {
         display: flex;
         justify-content: center;
         align-items: flex-start;
-        padding-block-start: 12vh;
+        padding-block-start: var(--beuve-size-window-offset);
         background: var(--beuve-scrim-soft);
       }
 
       .panel {
         display: flex;
         flex-direction: column;
-        inline-size: min(640px, calc(100vw - 48px));
-        max-block-size: 70vh;
+        inline-size: min(
+          var(--beuve-size-dialog),
+          calc(var(--beuve-size-window-inline) - 2 * var(--beuve-space-6))
+        );
+        max-block-size: var(--beuve-size-window-block-70);
         overflow: hidden;
-        border: 1px solid var(--beuve-border);
-        border-radius: 10px;
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius-large);
         background: var(--beuve-surface);
         box-shadow: var(--beuve-shadow-large);
       }
@@ -74,7 +77,7 @@ export class BeuveCommandPalette extends LitElement {
         flex: none;
         padding: var(--beuve-space-3) var(--beuve-space-4);
         border: none;
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: none;
         color: var(--beuve-text);
         font: inherit;
@@ -92,7 +95,7 @@ export class BeuveCommandPalette extends LitElement {
       }
 
       .group {
-        padding: var(--beuve-space-2) var(--beuve-space-4) 2px;
+        padding: var(--beuve-space-2) var(--beuve-space-4) var(--beuve-space-0-5);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -102,7 +105,7 @@ export class BeuveCommandPalette extends LitElement {
         align-items: baseline;
         gap: var(--beuve-space-3);
         margin: 0 var(--beuve-space-1);
-        padding: 5px var(--beuve-space-3);
+        padding: var(--beuve-space-1-5) var(--beuve-space-3);
         border-radius: var(--beuve-radius);
         cursor: pointer;
       }
@@ -154,7 +157,7 @@ export class BeuveCommandPalette extends LitElement {
         flex-wrap: wrap;
         gap: var(--beuve-space-1) var(--beuve-space-4);
         padding: var(--beuve-space-2) var(--beuve-space-4);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }

@@ -120,18 +120,83 @@
   --beuve-font-weight-medium: 500;
   --beuve-font-weight-semibold: 600;
 
+  --beuve-space-px: 1px;
   --beuve-space-0-5: 0.125rem;
   --beuve-space-1: 0.25rem;
+  --beuve-space-1-5: 0.375rem;
   --beuve-space-2: 0.5rem;
   --beuve-space-3: 0.75rem;
   --beuve-space-4: 1rem;
   --beuve-space-6: 1.5rem;
   --beuve-space-8: 2rem;
 
+  --beuve-radius-tiny: 0.125rem;
   --beuve-radius-small: 0.25rem;
   --beuve-radius: 0.375rem;
   --beuve-radius-large: 0.75rem;
   --beuve-radius-full: 9999px;
+
+  --beuve-border-width: 1px;
+  --beuve-border-width-thick: 2px;
+  --beuve-border-width-heavy: 3px;
+
+  --beuve-letter-spacing-caps: 0.04em;
+  --beuve-font-size-mark: 0.85em; /* a mark inside running text, relative to it */
+  --beuve-line-height-compact: 1rem; /* single-line chips and dense previews */
+
+  /*
+   * Sizes. Text-sized widths are counts of --beuve-measure-em (calc(13 * var(--beuve-measure-em))),
+   * so a column says how much text it holds and grows with the font. The rest are named by purpose.
+   */
+  --beuve-measure-em: 1em;
+  --beuve-measure-ch: 1ch;
+
+  --beuve-size-dot-small: 0.3125rem;
+  --beuve-size-dot: 0.5rem;
+  --beuve-size-icon-small: 0.875rem;
+  --beuve-size-icon: 1rem;
+  --beuve-size-control-small: 1.375rem;
+  --beuve-size-control: 1.75rem;
+  --beuve-size-row: 2rem;
+  --beuve-size-glyph-column: 2.75rem;
+  --beuve-size-handle: 0.375rem;
+
+  --beuve-size-field-narrow: 7.5rem;
+  --beuve-size-field: 10rem;
+  --beuve-size-field-wide: 20rem;
+  --beuve-size-label-narrow: 6rem;
+  --beuve-size-label: 11.25rem;
+  --beuve-size-editor-small: 3rem;
+  --beuve-size-editor: 4.5rem;
+  --beuve-size-editor-max: 8.5em;
+  --beuve-size-scroll-short: 10rem;
+  --beuve-size-scroll: 15rem;
+
+  --beuve-size-menu: 11rem;
+  --beuve-size-popover-min: 16.25rem;
+  --beuve-size-popover: 35rem;
+  --beuve-size-hint-block: 22.5rem;
+  --beuve-size-column: 26.25rem;
+  --beuve-size-dialog-narrow: 32.5rem;
+  --beuve-size-reading: 38.75rem;
+  --beuve-size-dialog: 40rem;
+  --beuve-size-sheet: 47.5rem;
+  --beuve-size-dialog-wide: 68.75rem;
+
+  /* Fractions of the window, for what sizes itself against it. */
+  --beuve-size-window-inline: 100vw;
+  --beuve-size-window-block: 100vh;
+  --beuve-size-window-inline-60: 62vw;
+  --beuve-size-window-block-40: 40vh;
+  --beuve-size-window-block-50: 50vh;
+  --beuve-size-window-block-60: 60vh;
+  --beuve-size-window-block-70: 70vh;
+  --beuve-size-window-offset: 12vh; /* a dialog's distance from the top */
+  --beuve-size-screen-offset: 10vh; /* an empty screen's distance from the top */
+  --beuve-size-screen-offset-tight: 6vh;
+
+  /* macOS draws the traffic lights at a fixed size, so this one is in pixels. */
+  --beuve-titlebar-traffic-lights: 84px;
 
   /* ── 2. Semantic ───────────────────────────────────────────────────────── */
 
@@ -187,6 +252,7 @@
   --beuve-scrim-soft: var(--beuve-scale-gray-a4);
   --beuve-shadow-small: 0 4px 16px var(--beuve-scale-black-a3);
   --beuve-shadow-large: 0 16px 48px var(--beuve-scale-black-a3);
+  --beuve-shadow-sheet: -8px 0 24px var(--beuve-scrim-soft);
 
   --beuve-code-bg: var(--beuve-scale-alabaster-bg);
   --beuve-code-text: var(--beuve-scale-alabaster-fg);

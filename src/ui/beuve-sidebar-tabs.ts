@@ -33,9 +33,9 @@ export class BeuveSidebarTabs extends LitElement {
       beuve-tab-list {
         display: flex;
         gap: var(--beuve-space-4);
-        block-size: 30px;
+        block-size: var(--beuve-size-row);
         padding: 0 var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       button {
@@ -44,17 +44,17 @@ export class BeuveSidebarTabs extends LitElement {
         background: none;
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
-        box-shadow: inset 0 -2px 0 transparent;
+        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 transparent;
         cursor: pointer;
       }
 
       button[aria-selected='true'] {
         color: var(--beuve-text);
-        box-shadow: inset 0 -2px 0 var(--beuve-border);
+        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-border);
       }
 
       .count {
-        margin-inline-start: 3px;
+        margin-inline-start: var(--beuve-space-1);
         color: var(--beuve-text-muted);
       }
     `,

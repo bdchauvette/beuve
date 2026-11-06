@@ -56,27 +56,27 @@ export class BeuveModelSettings extends LitElement {
         font-weight: var(--beuve-font-weight-semibold);
         color: var(--beuve-text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: var(--beuve-letter-spacing-caps);
       }
 
       .group {
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
       }
 
       .row {
         display: grid;
-        grid-template-columns: 180px minmax(0, 1fr);
+        grid-template-columns: var(--beuve-size-label) minmax(0, 1fr);
         align-items: center;
         gap: var(--beuve-space-3);
-        min-block-size: 32px;
+        min-block-size: var(--beuve-size-row);
         padding: var(--beuve-space-1) var(--beuve-space-3);
       }
 
       .row + .row,
       .entry + .entry {
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .entry {
@@ -128,7 +128,7 @@ export class BeuveModelSettings extends LitElement {
 
       select {
         justify-self: start;
-        min-inline-size: 160px;
+        min-inline-size: var(--beuve-size-field);
       }
 
       .choices {
@@ -142,7 +142,7 @@ export class BeuveModelSettings extends LitElement {
         justify-content: flex-end;
         gap: var(--beuve-space-2);
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .add {
@@ -150,7 +150,7 @@ export class BeuveModelSettings extends LitElement {
         gap: var(--beuve-space-2);
         align-items: center;
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .error {

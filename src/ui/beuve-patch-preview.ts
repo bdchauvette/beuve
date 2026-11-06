@@ -17,19 +17,19 @@ export class BeuvePatchPreview extends LitElement {
     :host {
       display: block;
       overflow: hidden;
-      border: 1px solid var(--beuve-border);
+      border: var(--beuve-border-width) solid var(--beuve-border);
       border-radius: var(--beuve-radius-small);
       background: var(--beuve-code-bg);
     }
 
     pre {
-      max-block-size: 160px;
+      max-block-size: var(--beuve-size-scroll-short);
       margin: 0;
-      padding: 2px 0;
+      padding: var(--beuve-space-0-5) 0;
       overflow: auto;
       font: var(--beuve-font-mono);
       font-size: var(--beuve-font-size-caption);
-      line-height: 16px;
+      line-height: var(--beuve-line-height-compact);
     }
 
     span {

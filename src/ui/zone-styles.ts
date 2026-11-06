@@ -22,7 +22,7 @@ export const zoneStyles = css`
     position: absolute;
     inset: 0 0 auto;
     z-index: 4;
-    block-size: 2px;
+    block-size: var(--beuve-border-width-thick);
     background: transparent;
     pointer-events: none;
     transition: background 120ms;

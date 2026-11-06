@@ -27,7 +27,7 @@ export class BeuvePeekPortal extends LitElement {
     css`
       :host {
         display: block;
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-bg);
         font: var(--beuve-font-small);
       }
@@ -70,7 +70,7 @@ export class BeuvePeekPortal extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         inline-size: 100%;
-        padding: 2px var(--beuve-space-1);
+        padding: var(--beuve-space-0-5) var(--beuve-space-1);
         border: 0;
         border-radius: var(--beuve-radius-small);
         background: none;
@@ -87,7 +87,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .twisty {
-        inline-size: 1em;
+        inline-size: var(--beuve-measure-em);
         color: var(--beuve-text-muted);
       }
 
@@ -107,15 +107,15 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       li > .row {
-        padding-inline-end: 52px;
+        padding-inline-end: calc(var(--beuve-size-control) + var(--beuve-space-6));
       }
 
       .open {
         position: absolute;
-        inset-block-start: 2px;
+        inset-block-start: var(--beuve-space-0-5);
         inset-inline-end: 0;
         padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text-muted);
@@ -130,7 +130,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .note {
-        padding-block: 2px;
+        padding-block: var(--beuve-space-0-5);
         padding-inline: var(--beuve-space-6) var(--beuve-space-1);
         color: var(--beuve-text-muted);
       }

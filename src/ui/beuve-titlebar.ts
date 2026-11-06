@@ -19,14 +19,14 @@ export class BeuveTitlebar extends LitElement {
         align-items: center;
         gap: var(--beuve-space-3);
         padding: 0 var(--beuve-space-4);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         -webkit-app-region: drag;
         user-select: none;
       }
 
       :host([platform='darwin']) {
-        padding-inline-start: 84px;
+        padding-inline-start: var(--beuve-titlebar-traffic-lights);
       }
 
       .brand {

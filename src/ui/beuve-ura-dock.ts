@@ -88,7 +88,7 @@ export class BeuveUraDock extends LitElement {
     zoneStyles,
     css`
       :host {
-        border-inline-start: 1px solid var(--beuve-border);
+        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .count {
@@ -101,7 +101,7 @@ export class BeuveUraDock extends LitElement {
       ol {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: var(--beuve-space-0-5);
         margin: 0;
         padding: 0;
         list-style: none;
@@ -109,7 +109,7 @@ export class BeuveUraDock extends LitElement {
 
       li {
         padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: 1px solid transparent;
+        border: var(--beuve-border-width) solid transparent;
         border-radius: var(--beuve-radius);
         cursor: pointer;
       }
@@ -159,7 +159,7 @@ export class BeuveUraDock extends LitElement {
       .severity {
         flex: none;
         padding: 0 var(--beuve-space-1);
-        border: 1px solid currentcolor;
+        border: var(--beuve-border-width) solid currentcolor;
         border-radius: var(--beuve-radius-small);
       }
 
@@ -194,12 +194,12 @@ export class BeuveUraDock extends LitElement {
       }
 
       .title {
-        margin-block-start: 1px;
+        margin-block-start: var(--beuve-space-px);
         overflow-wrap: anywhere;
       }
 
       .title code {
-        padding: 0 2px;
+        padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-mono);
@@ -233,7 +233,7 @@ export class BeuveUraDock extends LitElement {
         box-sizing: border-box;
         min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
@@ -241,7 +241,7 @@ export class BeuveUraDock extends LitElement {
       }
 
       textarea {
-        min-block-size: 72px;
+        min-block-size: var(--beuve-size-editor);
         resize: block;
         font: var(--beuve-font-mono);
       }
@@ -281,7 +281,7 @@ export class BeuveUraDock extends LitElement {
 
       .github.confirm {
         padding: var(--beuve-space-2);
-        border: 1px solid var(--beuve-accent);
+        border: var(--beuve-border-width) solid var(--beuve-accent);
         border-radius: var(--beuve-radius);
         background: var(--beuve-accent-soft);
       }
@@ -297,7 +297,7 @@ export class BeuveUraDock extends LitElement {
         gap: var(--beuve-space-1);
         margin-block-start: var(--beuve-space-2);
         padding-block-start: var(--beuve-space-2);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .review-edits .note {
@@ -319,7 +319,7 @@ export class BeuveUraDock extends LitElement {
       .harvest {
         display: grid;
         gap: var(--beuve-space-1);
-        max-block-size: 40vh;
+        max-block-size: var(--beuve-size-window-block-40);
         margin: 0;
         padding: 0;
         overflow: auto;

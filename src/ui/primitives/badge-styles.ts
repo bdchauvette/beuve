@@ -13,12 +13,12 @@ export const badgeStyles = css`
     align-items: center;
     box-sizing: border-box;
     padding: 0 var(--beuve-space-2);
-    border: 1px solid var(--beuve-border);
+    border: var(--beuve-border-width) solid var(--beuve-border);
     border-radius: var(--beuve-radius-full);
     background: none;
     color: var(--badge-color);
     font: var(--beuve-font-caption);
-    line-height: 1.125rem;
+    line-height: var(--beuve-line-height-tight);
     white-space: nowrap;
   }
 
@@ -52,7 +52,7 @@ export const badgeStyles = css`
 
   .badge.count {
     justify-content: center;
-    min-inline-size: 1.125rem;
+    min-inline-size: var(--beuve-size-icon);
     padding: 0 var(--beuve-space-1);
     border-color: var(--beuve-accent-solid);
     background: var(--beuve-accent-solid);

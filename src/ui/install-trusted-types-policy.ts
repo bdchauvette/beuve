@@ -89,7 +89,7 @@ function failClosed(factory: TrustedTypePolicyFactory | undefined, reason: strin
   }
   const notice = document.createElement('p');
   notice.setAttribute('role', 'alert');
-  notice.style.setProperty('margin', '2rem');
+  notice.style.setProperty('margin', 'var(--beuve-space-8)');
   notice.textContent = message;
   document.body.replaceChildren(notice);
   throw new TypeError(message);
