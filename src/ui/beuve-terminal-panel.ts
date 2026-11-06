@@ -51,7 +51,8 @@ interface ColorVariable {
   readonly fallback: string;
 }
 
-const fontFamily = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const fallbackFontFamily = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const fontSize = 13;
 
 /**
  * The terminal panel (ADR 0095): one xterm per shell of the session, as tabs. It lists the
@@ -285,6 +286,9 @@ export class BeuveTerminalPanel extends LitElement {
 
   /** Creates the tab and xterm for a shell main already runs. */
   private async adopt(terminal: TerminalBacklogView): Promise<void> {
+    const fontFamily = this.fontFamily();
+    // xterm measures a cell when it opens, so the font must be loaded by then (ADR 0121).
+    await document.fonts.load(`${String(fontSize)}px ${fontFamily}`);
     if (this.panes.has(terminal.id)) {
       return;
     }
@@ -299,7 +303,7 @@ export class BeuveTerminalPanel extends LitElement {
     }
     const xterm = new Terminal({
       fontFamily,
-      fontSize: 13,
+      fontSize,
       cursorBlink: true,
       scrollback: 5000,
       allowProposedApi: false,
@@ -392,6 +396,15 @@ export class BeuveTerminalPanel extends LitElement {
   private proposedSize(): TerminalCells {
     const proposed = this.activePane()?.fit.proposeDimensions();
     return { cols: proposed?.cols ?? 100, rows: proposed?.rows ?? 24 };
+  }
+
+  /** The window's monospace family (`--beuve-font-family-mono`, ADR 0121). */
+  private fontFamily(): string {
+    const family = getComputedStyle(this).getPropertyValue('--beuve-font-family-mono').trim();
+    if (family === '') {
+      return fallbackFontFamily;
+    }
+    return family;
   }
 
   /**

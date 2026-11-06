@@ -215,6 +215,9 @@ function uiOptions(): BuildOptions {
     format: 'esm',
     splitting: true,
     chunkNames: 'chunks/[name]-[hash]',
+    // Commit Mono's files, which index.css names in `@font-face` (ADR 0121).
+    loader: { '.woff2': 'file' },
+    assetNames: 'fonts/[name]-[hash]',
     minify: true,
     metafile: true,
     plugins: [curatedShikiPlugin()],
