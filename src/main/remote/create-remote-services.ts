@@ -122,7 +122,7 @@ async function primaryRemoteOf(
   }
   const { source } = session;
   let pullRequestBase: GithubRemote | undefined;
-  if (source.kind === 'github-pull-request') {
+  if (source.kind !== 'local') {
     pullRequestBase = { host: source.host, owner: source.owner, repo: source.repo };
   }
   return ok(choosePrimaryRemote(remotes.value, pullRequestBase));

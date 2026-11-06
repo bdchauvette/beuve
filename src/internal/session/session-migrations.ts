@@ -1,8 +1,10 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * The session domain's schema (ADR 0006, 0009, 0012, 0037, 0064); squashed until the first release. The review state is derived from
- * `checkpoints`, so `sessions` has no denormalized last-checkpoint column.
+ * The session domain's schema (ADR 0006, 0009, 0012, 0037, 0064, 0112); squashed until the first
+ * release. The review state is derived from `checkpoints`, so `sessions` has no denormalized
+ * last-checkpoint column. A row's kind is checked row by row, so a remote branch can become a
+ * pull request in place (`promoteSession`) and keep its id.
  */
 export const sessionMigrations: readonly Migration[] = [
   {
@@ -10,7 +12,7 @@ export const sessionMigrations: readonly Migration[] = [
     up: `
       CREATE TABLE sessions (
         id TEXT PRIMARY KEY CHECK (length(id) = 36),
-        kind TEXT NOT NULL CHECK (kind IN ('local', 'github-pull-request')),
+        kind TEXT NOT NULL CHECK (kind IN ('local', 'github-pull-request', 'remote-branch')),
         repo_path TEXT NOT NULL CHECK (repo_path <> ''),
         base_ref TEXT NOT NULL CHECK (trim(base_ref) <> ''),
         head_ref TEXT,
@@ -22,22 +24,34 @@ export const sessionMigrations: readonly Migration[] = [
         updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
         host TEXT CHECK (
           host IS NULL OR (
-            kind = 'github-pull-request'
+            kind IN ('github-pull-request', 'remote-branch')
             AND length(host) BETWEEN 1 AND 253
             AND host NOT GLOB '*[^a-z0-9.-]*'
             AND host NOT GLOB '[.-]*'
           )
         ),
+        forge TEXT CHECK (forge IS NULL OR (kind = 'remote-branch' AND forge IN ('github'))),
+        branch TEXT,
         CHECK (
           (kind = 'local'
             AND head_ref IS NOT NULL AND trim(head_ref) <> ''
-            AND owner IS NULL AND repo IS NULL AND pr_number IS NULL)
+            AND owner IS NULL AND repo IS NULL AND pr_number IS NULL
+            AND forge IS NULL AND branch IS NULL)
           OR
           (kind = 'github-pull-request'
             AND head_ref IS NULL
             AND owner IS NOT NULL AND trim(owner) <> ''
             AND repo IS NOT NULL AND trim(repo) <> ''
-            AND pr_number IS NOT NULL AND pr_number > 0)
+            AND pr_number IS NOT NULL AND pr_number > 0
+            AND forge IS NULL AND branch IS NULL)
+          OR
+          (kind = 'remote-branch'
+            AND head_ref IS NULL AND pr_number IS NULL
+            AND forge IS NOT NULL
+            AND host IS NOT NULL
+            AND owner IS NOT NULL AND trim(owner) <> ''
+            AND repo IS NOT NULL AND trim(repo) <> ''
+            AND branch IS NOT NULL AND trim(branch) <> '')
         )
       ) STRICT;
 
@@ -45,6 +59,8 @@ export const sessionMigrations: readonly Migration[] = [
         ON sessions (repo_path, base_ref, head_ref) WHERE kind = 'local';
       CREATE UNIQUE INDEX sessions_pull_request
         ON sessions (repo_path, host, owner, repo, pr_number) WHERE kind = 'github-pull-request';
+      CREATE UNIQUE INDEX sessions_remote_branch
+        ON sessions (repo_path, forge, host, owner, repo, branch) WHERE kind = 'remote-branch';
       CREATE INDEX sessions_by_recency ON sessions (updated_at DESC);
 
       CREATE TABLE checkpoints (

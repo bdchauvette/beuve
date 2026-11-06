@@ -8,9 +8,9 @@ export interface GithubRepositoryName {
 }
 
 /**
- * The clone the reviewer last used for a GitHub repository, from their pull request sessions
- * (most recently updated first), so the open panel can show it before asking main. Main also
- * remembers clones itself (ADR 0037); this only makes that visible and editable. Pure.
+ * The clone the reviewer last used for a GitHub repository, from their pull request and branch
+ * sessions (most recently updated first), so the open panel can show it before asking main.
+ * Main also remembers clones itself (ADR 0037); this only makes that visible and editable. Pure.
  */
 export function findKnownClone(
   sessions: readonly SessionSummary[],
@@ -20,7 +20,7 @@ export function findKnownClone(
   return sessions
     .filter(({ source }) => {
       return (
-        source.kind === 'github-pull-request' &&
+        source.kind !== 'local' &&
         `${source.host}/${source.owner}/${source.repo}`.toLowerCase() === key
       );
     })

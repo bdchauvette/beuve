@@ -1,6 +1,7 @@
 import { describe } from 'vitest';
 
 import { buildAgentReview } from './build-agent-review.ts';
+import { renderAgentReviewXml } from './render-agent-review-xml.ts';
 import { createSampleArtifact } from './testing/create-sample-artifact.ts';
 import { test } from './testing/test.ts';
 
@@ -165,5 +166,36 @@ describe('buildAgentReview', () => {
       items: [],
     });
     expect('fromHeadSha' in buildAgentReview(local).change).toBe(false);
+  });
+
+  test('describes a followed branch without a pull request (ADR 0112)', ({ expect }) => {
+    const artifact = createSampleArtifact();
+    const branch = {
+      ...artifact,
+      summary: {
+        ...artifact.summary,
+        change: {
+          kind: 'remote-branch',
+          repoPath: '/r',
+          baseRef: 'refs/beuve/branch/0123/base',
+          host: 'github.com',
+          owner: 'o',
+          repo: 'r',
+          branch: 'claude/x',
+        },
+      },
+    } as const;
+    expect(buildAgentReview(branch).change.repository).toStrictEqual({
+      kind: 'remote-branch',
+      path: '/r',
+      baseRef: 'refs/beuve/branch/0123/base',
+      host: 'github.com',
+      owner: 'o',
+      repo: 'r',
+      branch: 'claude/x',
+    });
+    expect(renderAgentReviewXml(branch)).toContain(
+      '<repository kind="remote-branch" path="/r" base-ref="refs/beuve/branch/0123/base" host="github.com" owner="o" repo="r" branch="claude/x"/>',
+    );
   });
 });

@@ -10,8 +10,8 @@ export type CheckpointId = Brand<string, 'CheckpointId'>;
 export type CommitSha = Brand<string, 'CommitSha'>;
 
 /**
- * What is under review. `baseRef` is the branch the change merges into: for a pull request, the
- * local ref main fetches its base branch into.
+ * What is under review. `baseRef` is the branch the change merges into: for a pull request or a
+ * remote branch, the local ref main fetches its base branch into.
  */
 export type SessionSource =
   | {
@@ -29,7 +29,25 @@ export type SessionSource =
       readonly owner: string;
       readonly repo: string;
       readonly number: number;
+    }
+  | {
+      /** A branch on a hosted remote, without a pull request yet (ADR 0112). */
+      readonly kind: 'remote-branch';
+      readonly repoPath: string;
+      /** The local ref the remote's default branch is fetched into. */
+      readonly baseRef: string;
+      /** The adapter that fetches and polls the branch. */
+      readonly forge: RemoteForge;
+      /** The remote's hostname, lowercase. */
+      readonly host: string;
+      readonly owner: string;
+      readonly repo: string;
+      /** The branch name on the remote, e.g. `claude/fix-login` (not `refs/heads/…`). */
+      readonly branch: string;
     };
+
+/** The hosting services a remote-branch session can follow (ADR 0112). */
+export type RemoteForge = 'github';
 
 /**
  * "I have reviewed the change from `baseSha` to `headSha`." `baseSha` is the fork point the

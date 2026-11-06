@@ -27,7 +27,7 @@ export function selectSessions(
   const rows = db
     .prepare(
       `SELECT s.id, s.kind, s.repo_path, s.base_ref, s.head_ref, s.host, s.owner, s.repo, s.pr_number,
-              s.head_sha, s.created_at, s.updated_at,
+              s.forge, s.branch, s.head_sha, s.created_at, s.updated_at,
               c.id AS checkpoint_id, c.session_id AS checkpoint_session_id,
               c.base_sha AS checkpoint_base_sha, c.head_sha AS checkpoint_head_sha,
               c.created_at AS checkpoint_created_at
@@ -89,31 +89,12 @@ function sessionFromRow(row: Row): Result<Session, CorruptRow> {
 }
 
 function sourceFromRow(row: Row): SessionSource | string {
-  const { kind, repo_path: repoPath, base_ref: baseRef, head_ref: headRef } = row;
-  const { host, owner, repo, pr_number: number } = row;
+  const { repo_path: repoPath, base_ref: baseRef } = row;
   if (typeof repoPath !== 'string' || typeof baseRef !== 'string') {
     return 'repo_path and base_ref must be text';
   }
-  let source: SessionSource;
-  if (
-    kind === 'local' &&
-    typeof headRef === 'string' &&
-    host === null &&
-    owner === null &&
-    repo === null &&
-    number === null
-  ) {
-    source = { kind, repoPath, baseRef, headRef };
-  } else if (
-    kind === 'github-pull-request' &&
-    headRef === null &&
-    typeof host === 'string' &&
-    typeof owner === 'string' &&
-    typeof repo === 'string' &&
-    typeof number === 'number'
-  ) {
-    source = { kind, repoPath, baseRef, host, owner, repo, number };
-  } else {
+  const source = unparsedSourceFromRow(row, { repoPath, baseRef });
+  if (source === undefined) {
     return 'kind and source columns disagree';
   }
   const parsed = parseSessionSource(source);
@@ -121,6 +102,49 @@ function sourceFromRow(row: Row): SessionSource | string {
     return parsed.value;
   }
   return parsed.error.reason;
+}
+
+/** The columns every kind has. */
+interface CommonColumns {
+  readonly repoPath: string;
+  readonly baseRef: string;
+}
+
+function unparsedSourceFromRow(row: Row, common: CommonColumns): SessionSource | undefined {
+  const { kind, head_ref: headRef, host, owner, repo, pr_number: number, forge, branch } = row;
+  const hasNoRemoteBranch = forge === null && branch === null;
+  if (
+    kind === 'local' &&
+    typeof headRef === 'string' &&
+    host === null &&
+    owner === null &&
+    repo === null &&
+    number === null &&
+    hasNoRemoteBranch
+  ) {
+    return { kind, ...common, headRef };
+  }
+  if (typeof host !== 'string' || typeof owner !== 'string' || typeof repo !== 'string') {
+    return undefined;
+  }
+  if (
+    kind === 'github-pull-request' &&
+    headRef === null &&
+    typeof number === 'number' &&
+    hasNoRemoteBranch
+  ) {
+    return { kind, ...common, host, owner, repo, number };
+  }
+  if (
+    kind === 'remote-branch' &&
+    headRef === null &&
+    number === null &&
+    forge === 'github' &&
+    typeof branch === 'string'
+  ) {
+    return { kind, ...common, forge, host, owner, repo, branch };
+  }
+  return undefined;
 }
 
 function reviewFromRow(row: Row): Result<ReviewState, CorruptRow> {

@@ -7,12 +7,14 @@ import type { Result } from '#x/result/result.ts';
 import type { SessionError, SessionSource } from './session.ts';
 
 const hostCharacters = /^[a-z\d.-]+$/u;
+const forges: ReadonlySet<string> = new Set(['github']);
 
 type InvalidSource = Extract<SessionError, { kind: 'invalid-source' }>;
 
 /**
  * Checks the invariants the type can't express: an absolute repository path, non-blank
- * refs and names, a lowercase hostname and a positive integer pull request number.
+ * refs, names and branches, a lowercase hostname, a known forge and a positive integer pull
+ * request number.
  */
 export function parseSessionSource(source: SessionSource): Result<SessionSource, InvalidSource> {
   const problem = findProblem(source);
@@ -37,18 +39,46 @@ function findProblem(source: SessionSource): string | undefined {
       return undefined;
     }
     case 'github-pull-request': {
-      if (isBlank(source.owner) || isBlank(source.repo)) {
-        return 'owner and repo must not be blank';
-      }
-      if (!isHostname(source.host)) {
-        return 'host must be a lowercase hostname';
+      const problem = remoteProblem(source);
+      if (problem !== undefined) {
+        return problem;
       }
       if (Number.isSafeInteger(source.number) && source.number > 0) {
         return undefined;
       }
       return 'number must be a positive integer';
     }
+    case 'remote-branch': {
+      const problem = remoteProblem(source);
+      if (problem !== undefined) {
+        return problem;
+      }
+      if (!forges.has(source.forge)) {
+        return 'forge must be a known forge';
+      }
+      if (isBlank(source.branch)) {
+        return 'branch must not be blank';
+      }
+      return undefined;
+    }
   }
+}
+
+/** A hosted repository's host, owner and name. */
+interface RemoteRepository {
+  readonly host: string;
+  readonly owner: string;
+  readonly repo: string;
+}
+
+function remoteProblem(source: RemoteRepository): string | undefined {
+  if (isBlank(source.owner) || isBlank(source.repo)) {
+    return 'owner and repo must not be blank';
+  }
+  if (!isHostname(source.host)) {
+    return 'host must be a lowercase hostname';
+  }
+  return undefined;
 }
 
 function isBlank(value: string): boolean {

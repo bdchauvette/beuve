@@ -1,23 +1,12 @@
-import type {
-  GithubFailureView,
-  OpenPullRequestRequest,
-  OpenPullRequestResponse,
-} from '#contract/ipc-contract.ts';
+import type { OpenPullRequestRequest, OpenPullRequestResponse } from '#contract/ipc-contract.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
 import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
-import { openRepository } from '#internal/git/open-repository.ts';
-import type { GitRepository } from '#internal/git/open-repository.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
 import { parsePullRequestRef } from '#internal/github/parse-pull-request-ref.ts';
 import type { PullRequest, PullRequestRef } from '#internal/github/pull-request.ts';
 import { savePullRequest } from '#internal/github/save-pull-request.ts';
 import { findSessionBySource } from '#internal/session/find-session-by-source.ts';
 import type { Session } from '#internal/session/session.ts';
-import { err } from '#x/result/err.ts';
-import { ok } from '#x/result/ok.ts';
-import type { Result } from '#x/result/result.ts';
-
-import { ipcErrorFromGitError } from '../sessions/ipc-error-from-git-error.ts';
 import { sessionSummaryFrom } from '../sessions/session-summary-from.ts';
 
 import { canonicalPullRequestRef } from './canonical-pull-request-ref.ts';
@@ -25,9 +14,10 @@ import { fetchPullRequest } from './fetch-pull-request.ts';
 import { findMatchingRemote } from './find-matching-remote.ts';
 import type { GithubContext } from './github-context.ts';
 import { githubFailure } from './github-failure.ts';
+import { openGithubClone } from './open-github-clone.ts';
 import { syncPullRequestHead } from './sync-pull-request-head.ts';
 import { pullRequestViewFrom } from './pull-request-view-from.ts';
-import { upsertPullRequestSession } from './upsert-pull-request-session.ts';
+import { upsertFetchedSession } from './upsert-fetched-session.ts';
 
 /** A pull request session main has just opened or resumed. */
 export interface OpenedPullRequest {
@@ -62,7 +52,11 @@ export async function openPullRequest(
     return fetched.error;
   }
   const ref = canonicalPullRequestRef(asked.value, fetched.value);
-  const repository = await openClone(context, ref, { repoPath: request.repoPath, signal });
+  const repository = await openGithubClone(context, {
+    repository: ref,
+    repoPath: request.repoPath,
+    signal,
+  });
   if (!repository.ok) {
     return repository.error;
   }
@@ -103,7 +97,7 @@ export async function openPullRequest(
   if (before.ok) {
     observedFrom = before.value;
   }
-  const session = upsertPullRequestSession(context.session, {
+  const session = upsertFetchedSession(context.session, {
     source: { ...source, baseRef: synced.value.baseRef },
     headSha: synced.value.headSha,
     observedFrom,
@@ -125,37 +119,4 @@ export async function openPullRequest(
     pullRequest: pullRequestViewFrom(stored.value),
     repoPath: repository.value.root,
   };
-}
-
-/** Where the reviewer said the clone is, if they did, and the request's signal. */
-interface CloneLookup {
-  readonly repoPath: string | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
-async function openClone(
-  context: GithubContext,
-  ref: PullRequestRef,
-  { repoPath, signal }: CloneLookup,
-): Promise<Result<GitRepository, GithubFailureView>> {
-  const target = repoPath ?? (await context.clonePaths.read(ref));
-  const name = `${ref.owner}/${ref.repo}`;
-  if (target === undefined) {
-    return err(
-      githubFailure(
-        'needs-local-clone',
-        `Enter the path of a local clone of ${name}; beuve fetches the pull request into it.`,
-      ),
-    );
-  }
-  const opened = await openRepository(target, { ...context.session.git, signal });
-  if (opened.ok) {
-    return ok(opened.value);
-  }
-  return err(
-    githubFailure(
-      'needs-local-clone',
-      `${ipcErrorFromGitError(opened.error).message}. Enter the path of a local clone of ${name}.`,
-    ),
-  );
 }

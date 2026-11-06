@@ -23,7 +23,7 @@ export interface AppInfo {
 /** Which side of the diff the sidebar sits on (ADR 0044). */
 export type SidebarSideView = 'left' | 'right';
 
-/** What a session reviews: a local branch or a GitHub pull request. */
+/** What a session reviews: a local branch, a GitHub pull request or a followed GitHub branch. */
 export type SessionSourceView =
   | {
       readonly kind: 'local';
@@ -40,7 +40,26 @@ export type SessionSourceView =
       readonly owner: string;
       readonly repo: string;
       readonly number: number;
+    }
+  | {
+      /** A branch on a GitHub remote without a pull request yet (ADR 0112). */
+      readonly kind: 'remote-branch';
+      readonly repoPath: string;
+      /** The local ref the remote's default branch is fetched into, `refs/beuve/branch/<key>/base`. */
+      readonly baseRef: string;
+      readonly forge: 'github';
+      readonly host: string;
+      readonly owner: string;
+      readonly repo: string;
+      readonly branch: string;
     };
+
+/** What the session list shows of a followed branch (ADR 0112). */
+export interface RemoteBranchBadgeView {
+  /** `gone` once the remote no longer has the branch. */
+  readonly state: 'present' | 'gone';
+  readonly defaultBranch: string;
+}
 
 /** What the session list shows of a pull request, from the metadata main last stored. */
 export interface PullRequestBadgeView {
@@ -65,6 +84,8 @@ export interface SessionSummary {
   readonly updatedAt: string;
   /** Pull request sessions whose metadata main has stored (ADR 0037); `session:list` only. */
   readonly pullRequest?: PullRequestBadgeView;
+  /** Remote-branch sessions whose branch main has stored (ADR 0112); `session:list` only. */
+  readonly remoteBranch?: RemoteBranchBadgeView;
 }
 
 /** Start (or resume) reviewing `headRef` against `baseRef` in the repository containing `repoPath`. */
@@ -1631,6 +1652,73 @@ export interface OpenPullRequestRequest {
 }
 
 /**
+ * Follow (or resume following) a branch on GitHub that may have no pull request (ADR 0112). `ref`
+ * is a tree URL (`https://github.com/o/r/tree/<branch>`), `owner/repo:branch` or
+ * `host/owner/repo:branch`; `repoPath` a local clone with a remote for that repository. Without
+ * it, main uses the clone last used for that repository (ADR 0037).
+ */
+export interface OpenRemoteBranchRequest {
+  readonly ref: string;
+  readonly repoPath?: string;
+  /** Names this request for `request:cancel` (ADR 0079). */
+  readonly requestId?: string;
+}
+
+/**
+ * A followed branch as main last saw it (ADR 0112). `pullRequest` is the open pull request for
+ * the branch while another session already reviews it (`sessionId`); otherwise the session was
+ * promoted to it. `agentSessionUrl` is the head commit's `Claude-Session` trailer, an https URL.
+ */
+export interface RemoteBranchView {
+  readonly host: string;
+  readonly owner: string;
+  readonly repo: string;
+  readonly branch: string;
+  readonly defaultBranch: string;
+  readonly headSha: string;
+  readonly state: 'present' | 'gone';
+  readonly htmlUrl: string;
+  readonly pullRequest?: {
+    readonly number: number;
+    readonly htmlUrl: string;
+    readonly sessionId?: string;
+  };
+  readonly agentSessionUrl?: string;
+}
+
+export type OpenRemoteBranchResponse =
+  | GithubFailureView
+  | {
+      readonly kind: 'opened';
+      readonly session: SessionSummary;
+      /**
+       * Absent when the branch already had an open pull request and no branch session, so its
+       * pull request was opened instead (`session` is then that pull request's session).
+       */
+      readonly branch?: RemoteBranchView;
+      /** The clone's top level, remembered for this repository. */
+      readonly repoPath: string;
+    };
+
+/** `github:get-branch`: the open branch session's branch. Asking makes it the polled session. */
+export interface RemoteBranchSessionView {
+  readonly sessionId: string;
+  readonly branch: RemoteBranchView;
+}
+
+/**
+ * Pushed when polling finds a followed branch changed: a new head (`headMoved`), gone or back,
+ * a pull request found, or the session promoted to that pull request's session (`promoted`;
+ * the renderer then reloads it as a pull request).
+ */
+export interface RemoteBranchUpdatedView {
+  readonly sessionId: string;
+  readonly branch: RemoteBranchView;
+  readonly headMoved: boolean;
+  readonly promoted: boolean;
+}
+
+/**
  * `request:cancel` (ADR 0079): stops the calling window's outstanding request that carried this
  * `requestId`. The request then answers `cancelled`, which the renderer drops quietly.
  */
@@ -1847,6 +1935,12 @@ export interface MenuContextRequest {
 /** `menu:run-main`: runs a command main handles itself (Settings, About, …) from the palette. */
 export interface MenuRunMainRequest {
   readonly id: CommandId;
+}
+
+/** `link:open-branch` (main to a main window): a confirmed `beuve://` link asks to follow this branch (ADR 0112). */
+export interface OpenRemoteBranchLinkView {
+  /** `host/owner/repo:branch`, as `github:open-branch` takes it. */
+  readonly ref: string;
 }
 
 /** `link:open-pr` (main to a main window): a confirmed `beuve://` link asks to open this pull request (ADR 0098). */
@@ -2212,6 +2306,14 @@ export interface InvokeChannelMap {
     readonly request: GetReviewRequest;
     readonly response: IpcResult<PullRequestSessionView>;
   };
+  'github:open-branch': {
+    readonly request: OpenRemoteBranchRequest;
+    readonly response: IpcResult<OpenRemoteBranchResponse>;
+  };
+  'github:get-branch': {
+    readonly request: GetReviewRequest;
+    readonly response: IpcResult<RemoteBranchSessionView>;
+  };
   'github:get-timeline': {
     readonly request: GetTimelineRequest;
     readonly response: IpcResult<PullRequestTimelineView | GithubFailureView>;
@@ -2286,6 +2388,8 @@ export interface EventChannelMap {
   'ura:changed': UraChangedView;
   'github:pr-updated': PullRequestUpdatedView;
   'github:ci-status': CiStatusChangedView;
+  /** A followed branch changed, went away, came back or got a pull request (ADR 0112). */
+  'github:branch-updated': RemoteBranchUpdatedView;
   /** A terminal wrote output (ADR 0095). */
   'terminal:data': TerminalDataEvent;
   /** A terminal's shell ended. */
@@ -2294,6 +2398,8 @@ export interface EventChannelMap {
   'menu:run': MenuRunView;
   /** Open a pull request a `beuve://` link asked for and the reviewer confirmed (ADR 0098). */
   'link:open-pr': OpenPullRequestLinkView;
+  /** Follow a branch a `beuve://` link asked for and the reviewer confirmed (ADR 0112). */
+  'link:open-branch': OpenRemoteBranchLinkView;
   /** Preferences changed in another window (the Settings window); read them again. */
   'settings:changed': Readonly<Record<string, never>>;
 }

@@ -2,6 +2,8 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
+import { isSafeBranchName } from './is-safe-branch-name.ts';
+
 export interface PullRequestFetch {
   /** `git` arguments, for main to run through the git domain's runner (no shell). */
   readonly args: readonly string[];
@@ -35,7 +37,7 @@ export function buildPullRequestFetch(
   if (!isRemote(input.remote)) {
     return err(`not a remote name or https URL: ${input.remote}`);
   }
-  if (input.baseBranch !== undefined && !isBranchName(input.baseBranch)) {
+  if (input.baseBranch !== undefined && !isSafeBranchName(input.baseBranch)) {
     return err(`not a safe branch name: ${input.baseBranch}`);
   }
   const prefix = `refs/beuve/pr/${String(input.number)}`;
@@ -57,7 +59,6 @@ export function buildPullRequestFetch(
 }
 
 const remoteName = /^[\w.-]+$/;
-const branchCharacters = /^[\w./-]+$/;
 
 function isRemote(remote: string): boolean {
   if (remote.startsWith('https://')) {
@@ -71,19 +72,4 @@ function isRemote(remote: string): boolean {
     );
   }
   return remoteName.test(remote) && !remote.startsWith('-') && !remote.startsWith('.');
-}
-
-/** A conservative subset of `git check-ref-format --branch`. */
-function isBranchName(name: string): boolean {
-  return (
-    branchCharacters.test(name) &&
-    !name.startsWith('-') &&
-    !name.startsWith('/') &&
-    !name.endsWith('/') &&
-    !name.endsWith('.') &&
-    !name.endsWith('.lock') &&
-    !name.includes('..') &&
-    !name.includes('//') &&
-    name.split('/').every((segment) => !segment.startsWith('.'))
-  );
 }

@@ -61,6 +61,16 @@ export interface AgentReview {
           readonly owner: string;
           readonly repo: string;
           readonly number: number;
+        }
+      | {
+          /** A branch followed without a pull request (ADR 0112). */
+          readonly kind: 'remote-branch';
+          readonly path: string;
+          readonly baseRef: string;
+          readonly host: string;
+          readonly owner: string;
+          readonly repo: string;
+          readonly branch: string;
         };
     readonly scope: 'full' | 'interdiff';
     /** The fork point the review was diffed against. */
@@ -116,6 +126,17 @@ function repositoryFrom(
       path: change.repoPath,
       baseRef: change.baseRef,
       headRef: change.headRef,
+    };
+  }
+  if (change.kind === 'remote-branch') {
+    return {
+      kind: 'remote-branch',
+      path: change.repoPath,
+      baseRef: change.baseRef,
+      host: change.host,
+      owner: change.owner,
+      repo: change.repo,
+      branch: change.branch,
     };
   }
   return {

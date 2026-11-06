@@ -81,6 +81,10 @@ export interface FakeGithubApi {
   readonly owner: string;
   readonly repo: string;
   readonly pullRequests: Map<number, FakePullRequest>;
+  /** Branch tips by branch name, as `GET …/branches/{branch}` reports them (ADR 0112). */
+  readonly branches: Map<string, string>;
+  /** What `GET /repos/{o}/{r}` reports as the default branch. */
+  defaultBranch: string;
   /** Checks by commit sha. */
   readonly checks: Map<string, FakeCheck[]>;
   /** Reviews already submitted, by pull request number. */
@@ -115,11 +119,11 @@ const apiRoot = 'https://api.github.com';
 const jsonNull = null;
 
 /**
- * A small stateful stand-in for GitHub's REST API for one repository: pull requests (with
- * ETags and 304s), the open-pull-request list used for stacks, commit statuses and check runs,
- * and review submission with GitHub's own-pull-request and off-diff 422s. Tokens are checked,
- * so a revoked token answers 401. It never touches the network; `handle` can also back a local
- * HTTP server for a development run.
+ * A small stateful stand-in for GitHub's REST API for one repository: the repository and its
+ * branches, pull requests (with ETags and 304s), the open-pull-request list used for stacks and
+ * branch sessions, commit statuses and check runs, and review submission with GitHub's
+ * own-pull-request and off-diff 422s. Tokens are checked, so a revoked token answers 401. It
+ * never touches the network; `handle` can also back a local HTTP server for a development run.
  */
 export function createFakeGithubApi({
   owner = 'octo-org',
@@ -129,6 +133,8 @@ export function createFakeGithubApi({
     owner,
     repo,
     pullRequests: new Map(),
+    branches: new Map(),
+    defaultBranch: 'main',
     checks: new Map(),
     submittedReviews: new Map(),
     requestedReviewers: new Map(),
@@ -167,11 +173,31 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
     return json(401, { message: 'Bad credentials' });
   }
   const prefix = `/repos/${api.owner}/${api.repo}`;
+  if (url.pathname === prefix && request.method === 'GET') {
+    return conditional(request, {
+      name: api.repo,
+      full_name: `${api.owner}/${api.repo}`,
+      owner: { login: api.owner },
+      default_branch: api.defaultBranch,
+      html_url: `https://github.com/${api.owner}/${api.repo}`,
+    });
+  }
   if (!url.pathname.startsWith(`${prefix}/`)) {
     return json(404, { message: 'Not Found' });
   }
   const rest = url.pathname.slice(prefix.length).split('/').filter(Boolean);
   const [first, second, third] = rest;
+  if (first === 'branches' && request.method === 'GET') {
+    const name = rest
+      .slice(1)
+      .map((segment) => decodeURIComponent(segment))
+      .join('/');
+    const sha = api.branches.get(name);
+    if (sha === undefined) {
+      return json(404, { message: 'Branch not found' });
+    }
+    return conditional(request, { name, commit: { sha }, protected: false });
+  }
   if (first === 'pulls' && second === undefined && request.method === 'GET') {
     return conditional(request, listPulls(api, url.searchParams));
   }

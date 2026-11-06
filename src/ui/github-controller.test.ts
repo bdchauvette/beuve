@@ -50,7 +50,7 @@ describe('GithubController', () => {
   test('subscribes to both events while the host is connected', ({ expect }) => {
     const { github, listening } = createGithubHarness();
     github.hostConnected();
-    expect(listening()).toBe(2);
+    expect(listening()).toBe(3);
     github.hostDisconnected();
     expect(listening()).toBe(0);
   });
@@ -327,6 +327,41 @@ describe('GithubController', () => {
     await github.open({ ref: 'o/r#9' });
     expect(github.failure).toBeUndefined();
     expect(dialogs).toStrictEqual([]);
+  });
+
+  test('follows a branch link through github:open-branch (ADR 0112)', async ({ expect }) => {
+    const { github, invoked, selected } = createGithubHarness({
+      replies: { 'github:open-branch': ok({ kind: 'opened', session: { id: 's7' } }) },
+    });
+    await github.open({ ref: 'https://github.com/o/r/tree/claude/x', repoPath: '/clone' });
+    expect(invoked.map(([channel]) => channel)).toStrictEqual(['github:open-branch']);
+    expect(invoked[0]?.[1]).toMatchObject({
+      ref: 'https://github.com/o/r/tree/claude/x',
+      repoPath: '/clone',
+    });
+    expect(selected).toStrictEqual(['s7']);
+  });
+
+  test.for([
+    ['a new head', { headMoved: true, promoted: false, state: 'present' }, ['s1'], 'New commits'],
+    ['a promotion', { headMoved: false, promoted: true, state: 'present' }, ['s1'], 'as #7'],
+    ['a deleted branch', { headMoved: false, promoted: false, state: 'gone' }, [], 'is gone'],
+  ] as const)('a branch update with %s says so', async ([, change, reloads, text], { expect }) => {
+    const { github, emit, notices, selected } = createGithubHarness({ review: reviewOf() });
+    github.hostConnected();
+    emit('github:branch-updated', {
+      sessionId: 's1',
+      headMoved: change.headMoved,
+      promoted: change.promoted,
+      branch: {
+        branch: 'claude/x',
+        state: change.state,
+        pullRequest: { number: 7, htmlUrl: 'https://github.com/o/r/pull/7' },
+      },
+    });
+    expect(github.branch).toMatchObject({ branch: 'claude/x' });
+    expect(notices.at(-1)?.text).toContain(text);
+    await expect.poll(() => selected).toStrictEqual(reloads);
   });
 
   test('closes the dialog and selects the opened session', async ({ expect }) => {

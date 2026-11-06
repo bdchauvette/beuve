@@ -9,6 +9,7 @@ import type {
   CiStatusView,
   GithubAuthStatusView,
   LspServerView,
+  RemoteBranchView,
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
@@ -17,6 +18,7 @@ import { describeCiStatus } from './describe-ci-status.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { describeLspStatus } from './describe-lsp-status.ts';
+import { describeRemoteBranch } from './describe-remote-branch.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 
@@ -273,6 +275,8 @@ export class BeuveStatusBar extends LitElement {
   @property({ attribute: false }) accessor githubAuth: GithubAuthStatusView | undefined;
   /** Whose turn the open pull request is; absent for local sessions and until it is known. */
   @property({ attribute: false }) accessor attention: AttentionView | undefined;
+  /** The open remote-branch session's branch (ADR 0112); absent for other sessions. */
+  @property({ attribute: false }) accessor remoteBranch: RemoteBranchView | undefined;
 
   constructor() {
     super();
@@ -444,6 +448,25 @@ export class BeuveStatusBar extends LitElement {
     </li>`;
   }
 
+  /** The followed branch's state and, when its head commit names one, the agent session's link. */
+  private renderRemoteBranch(branch: RemoteBranchView): TemplateResult {
+    const line = describeRemoteBranch(branch);
+    return html`<span title=${line.title}><span class="dot ${line.tone}"></span>${line.text}</span>
+      ${
+        branch.agentSessionUrl === undefined
+          ? nothing
+          : html`<button
+              type="button"
+              class="link"
+              data-action="open-url"
+              data-url=${branch.agentSessionUrl}
+              title=${branch.agentSessionUrl}
+            >
+              Agent session
+            </button>`
+      }`;
+  }
+
   private renderGithub(auth: GithubAuthStatusView): TemplateResult {
     const line = describeGithubAuth(auth);
     return html`<span title=${line.title}
@@ -455,6 +478,7 @@ export class BeuveStatusBar extends LitElement {
     return html`
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
+      ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}
       ${this.appInfo === undefined ? nothing : html`<span>beuve ${this.appInfo.version}</span>`}

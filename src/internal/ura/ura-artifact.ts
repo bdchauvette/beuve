@@ -23,6 +23,15 @@ export interface UraSummary {
         readonly owner: string;
         readonly repo: string;
         readonly number: number;
+      }
+    | {
+        readonly kind: 'remote-branch';
+        readonly repoPath: string;
+        readonly baseRef: string;
+        readonly host: string;
+        readonly owner: string;
+        readonly repo: string;
+        readonly branch: string;
       };
   readonly baseSha: CommitSha;
   readonly headSha: CommitSha;

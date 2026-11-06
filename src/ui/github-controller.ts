@@ -7,6 +7,8 @@ import type {
   OpenPullRequestRequest,
   PullRequestSessionView,
   PullRequestUpdatedView,
+  RemoteBranchUpdatedView,
+  RemoteBranchView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -14,6 +16,7 @@ import type { OpenFailure } from './beuve-open-panel.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import type { GithubPostState } from './github-post-state.ts';
+import { parseOpenQuery } from './parse-open-query.ts';
 import type { ReviewRef } from './review-ref.ts';
 import type { TimelineState } from './timeline-state.ts';
 
@@ -39,6 +42,8 @@ export interface GithubEnvironment {
 
 interface GithubSnapshot {
   readonly pullRequest: PullRequestSessionView | undefined;
+  /** The open remote-branch session's branch (ADR 0112). */
+  readonly branch: RemoteBranchView | undefined;
   readonly ci: CiStatusView | undefined;
   /** The open pull request's activity (ADR 0110). */
   readonly timeline: TimelineState | undefined;
@@ -50,6 +55,7 @@ interface GithubSnapshot {
 
 const initial: GithubSnapshot = {
   pullRequest: undefined,
+  branch: undefined,
   ci: undefined,
   timeline: undefined,
   auth: undefined,
@@ -110,6 +116,42 @@ export class GithubController implements ReactiveController {
     void this.environment.selectSession(event.sessionId);
   }
 
+  /**
+   * Polling found a followed branch changed (ADR 0112). A promotion reloads the session, which
+   * now opens as its pull request; a new head reloads the review, which offers the interdiff.
+   */
+  private applyBranchUpdate(event: RemoteBranchUpdatedView): void {
+    void this.environment.refreshSessions();
+    if (event.sessionId !== this.environment.review()?.sessionId) {
+      return;
+    }
+    this.patch({ branch: event.branch });
+    const name = event.branch.branch;
+    if (event.promoted) {
+      this.environment.notify({
+        tone: 'info',
+        text: `${name} has a pull request now; this review continues as #${String(event.branch.pullRequest?.number ?? '')}.`,
+      });
+      void this.environment.selectSession(event.sessionId);
+      return;
+    }
+    if (event.branch.state === 'gone') {
+      this.environment.notify({
+        tone: 'info',
+        text: `${name} is gone from GitHub; the review keeps its last head.`,
+      });
+      return;
+    }
+    if (!event.headMoved) {
+      return;
+    }
+    this.environment.notify({
+      tone: 'info',
+      text: `New commits on ${name}; the review now shows what changed.`,
+    });
+    void this.environment.selectSession(event.sessionId);
+  }
+
   /** Main refused because the head moved: say so quietly and show the new commits. */
   private headMoved(sessionId: string): void {
     this.patch({ post: { kind: 'head-moved' } });
@@ -139,6 +181,9 @@ export class GithubController implements ReactiveController {
           this.patch({ ci });
         }
       }),
+      bridge.on('github:branch-updated', (event) => {
+        this.applyBranchUpdate(event);
+      }),
     ];
   }
 
@@ -152,6 +197,11 @@ export class GithubController implements ReactiveController {
   /** The open pull request session's metadata and stack; absent for local sessions. */
   get pullRequest(): PullRequestSessionView | undefined {
     return this.snapshot.pullRequest;
+  }
+
+  /** The open remote-branch session's branch; absent for other sessions. */
+  get branch(): RemoteBranchView | undefined {
+    return this.snapshot.branch;
   }
 
   get ci(): CiStatusView | undefined {
@@ -187,6 +237,7 @@ export class GithubController implements ReactiveController {
     this.timelineRead += 1;
     this.patch({
       pullRequest: undefined,
+      branch: undefined,
       ci: undefined,
       timeline: undefined,
       post: { kind: 'idle' },
@@ -226,6 +277,23 @@ export class GithubController implements ReactiveController {
     }
   }
 
+  /** The followed branch of a remote-branch session; asking makes it the polled session. */
+  async loadBranch(sessionId: string): Promise<void> {
+    const bridge = this.environment.bridge();
+    if (bridge === undefined) {
+      return;
+    }
+    const loaded = await bridge.invoke('github:get-branch', { sessionId });
+    if (this.environment.review()?.sessionId !== sessionId) {
+      return;
+    }
+    if (!loaded.ok) {
+      this.environment.notify({ tone: 'error', text: loaded.error.message });
+      return;
+    }
+    this.patch({ branch: loaded.value.branch });
+  }
+
   /**
    * Reads the pull request's commits, reviews and comments for the Overview. A list already shown
    * stays while it is refreshed; an answer that is not the latest, or for another session, is
@@ -262,7 +330,10 @@ export class GithubController implements ReactiveController {
     });
   }
 
-  /** Fetches a pull request and opens it as a session; one at a time. */
+  /**
+   * Fetches a pull request, or a branch to follow (a tree URL or `owner/repo:branch`, ADR 0112),
+   * and opens it as a session; one at a time.
+   */
   async open(request: OpenPullRequestRequest): Promise<void> {
     const bridge = this.environment.bridge();
     if (bridge === undefined || this.snapshot.isOpening) {
@@ -271,7 +342,11 @@ export class GithubController implements ReactiveController {
     const requestId = crypto.randomUUID();
     this.requestId = requestId;
     this.patch({ isOpening: true, failure: undefined });
-    const opened = await bridge.invoke('github:open-pr', { ...request, requestId });
+    let channel: 'github:open-pr' | 'github:open-branch' = 'github:open-pr';
+    if (parseOpenQuery(request.ref).kind === 'branch') {
+      channel = 'github:open-branch';
+    }
+    const opened = await bridge.invoke(channel, { ...request, requestId });
     this.requestId = undefined;
     this.patch({ isOpening: false });
     if (!opened.ok && opened.error.code === 'cancelled') {

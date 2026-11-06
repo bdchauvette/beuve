@@ -11,25 +11,25 @@ import { sessionFailure } from '../sessions/session-failure.ts';
 
 import { moveSessionHead } from './move-session-head.ts';
 
-/** A pull request's session source, the head just fetched, and the session as first observed. */
-export interface PullRequestHead {
-  readonly source: Extract<SessionSource, { kind: 'github-pull-request' }>;
+/** A fetched session's source, the head just fetched, and the session as first observed. */
+export interface FetchedHead {
+  readonly source: Exclude<SessionSource, { kind: 'local' }>;
   readonly headSha: CommitSha;
   readonly observedFrom: Session | undefined;
 }
 
 /**
  * Resumes the session reviewing `source` (found with `findSessionBySource`, so opening a pull
- * request twice is one session) or creates it. A moved head is stored and announced through
+ * request or a remote branch twice is one session) or creates it. A moved head is stored and announced through
  * `onHeadMoved`, which aborts work for the old head and re-anchors URA items.
  *
  * `observedFrom` is the session as it was when the caller started observing the head (before its
  * fetch): if another writer, such as the poller, moved the head since, that newer write stands
  * and the session comes back as stored (ADR 0079).
  */
-export function upsertPullRequestSession(
+export function upsertFetchedSession(
   context: SessionContext,
-  { source, headSha, observedFrom }: PullRequestHead,
+  { source, headSha, observedFrom }: FetchedHead,
 ): Result<Session, IpcError> {
   const { db, deps, logger } = context;
   const existing = findSessionBySource(db, source);
