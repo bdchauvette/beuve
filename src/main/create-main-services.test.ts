@@ -492,6 +492,26 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'tells a Go reviewer, with the default servers, when gopls is not installed',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories }) => {
+      const services = createServices({ lsp: { environment: { PATH: '' } } });
+      const { repo } = await repositories.fromTemplate(goBranchTemplate());
+      const created = await services.sessions.createLocal({
+        repoPath: repo.directory,
+        baseRef: 'main',
+        headRef: 'feature',
+      });
+      const { id: sessionId } = okValueFrom(created);
+      const answer = okValueFrom(await services.lsp.diagnostics({ sessionId, path: 'main.go' }));
+      expect(answer).toMatchObject({ state: 'unavailable', diagnostics: [] });
+      expect(answer.notice).toContain('The gopls language server is not installed');
+      expect(answer.notice).toContain('restart the language servers');
+      expect(okValueFrom(services.lsp.status()).servers).toStrictEqual([]);
+    },
+  );
+
+  test(
     'runs a server the configuration defines beside the built-in one, and tags each diagnostic with its server',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, createServices, repositories, tempDir, logger, signal }) => {
@@ -919,6 +939,22 @@ function typescriptBranchTemplate(): RepositoryTemplate<undefined> {
     name: 'main: typescript branch',
     build: async (repo): Promise<undefined> => {
       await typescriptBranch(repo);
+    },
+  };
+}
+
+/** main: a Go module with `main.go`. feature: changes `main.go`. */
+function goBranchTemplate(): RepositoryTemplate<undefined> {
+  return {
+    name: 'main: go branch',
+    build: async (repo): Promise<undefined> => {
+      repo.write('go.mod', lines(['module example.com/sample', '', 'go 1.24']));
+      repo.write('main.go', lines(['package main', '', 'func main() {}']));
+      await repo.commit('base');
+      await repo.git('switch', '--quiet', '--create', 'feature');
+      repo.write('main.go', lines(['package main', '', 'func main() {', '\tprintln("hi")', '}']));
+      await repo.commit('feature');
+      await repo.git('switch', '--quiet', 'main');
     },
   };
 }

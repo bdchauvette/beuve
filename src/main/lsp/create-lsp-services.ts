@@ -487,6 +487,15 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const configProblems = await bindServers(session, lease.path);
     const report = await multiplexer.getDiagnostics({ root: lease.path, path: request.path });
     if (!report.ok) {
+      if (report.error.kind === 'server-not-found') {
+        return ok({
+          sha,
+          state: 'unavailable',
+          diagnostics: [],
+          omitted: 0,
+          notice: [notInstalledNotice(report.error), ...configProblems].join(' '),
+        });
+      }
       if (report.error.kind === 'server-untrusted') {
         return ok({
           sha,
@@ -504,7 +513,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const items = report.value.diagnostics.map((diagnostic) => {
       return diagnosticItemFrom(diagnostic);
     });
-    const notices = [...refusedReasonsFrom(report.value.skipped), ...configProblems];
+    const notices = [...skippedNoticesFrom(report.value.skipped), ...configProblems];
     const environmentNotice = options.environments?.noticeFor(await canonicalRootOf(lease.path));
     if (environmentNotice !== undefined) {
       notices.push(environmentNotice);
@@ -719,15 +728,25 @@ function stateOf(freshness: DiagnosticsFreshness): DiagnosticsView['state'] {
   return 'settled';
 }
 
-/** Why servers that handle the file were not started, when the trust check refused them. */
-function refusedReasonsFrom(skipped: readonly SkippedServer[]): string[] {
-  const reasons: string[] = [];
+/**
+ * What the reviewer can act on among the servers that handle the file but gave nothing: one the
+ * trust check refused, and one that is not installed. Others (crashes, timeouts) are in the log.
+ */
+function skippedNoticesFrom(skipped: readonly SkippedServer[]): string[] {
+  const notices: string[] = [];
   for (const { error } of skipped) {
     if (error.kind === 'server-untrusted') {
-      reasons.push(error.reason);
+      notices.push(error.reason);
+    } else if (error.kind === 'server-not-found') {
+      notices.push(notInstalledNotice(error));
     }
   }
-  return reasons;
+  return notices;
+}
+
+/** A language server's program was not found: what to do about it. */
+function notInstalledNotice(error: Extract<LspError, { kind: 'server-not-found' }>): string {
+  return `The ${error.serverId} language server is not installed: ${error.command} was not found. Install it, then restart the language servers (Review menu).`;
 }
 
 function diagnosticItemFrom(diagnostic: DiagnosticView): DiagnosticItemView {

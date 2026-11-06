@@ -65,6 +65,20 @@ Each step is its own change and ADR amendment where it decides something:
 5. Go: a `gopls` definition. Before writing it, run `gopls` against a sample module and record what it does: pull or push, which capabilities, which environment variables it needs, whether it touches the network (module or toolchain downloads) and how long it takes to settle on a cold checkout. Those facts decide its default `env`.
 6. Python, as the first test of the configuration model with a server beuve does not bundle.
 
+### What `gopls` was seen to do (step 5)
+
+Run against sample modules through beuve's own multiplexer, with `gopls` v0.24.0 and Go 1.24.7 on Linux, on 2026-11-06. This is one version on one machine and small modules, not a survey; the findings decide the built-in definition's settings, and should be re-checked when `gopls` changes.
+
+- **Protocol.** Push diagnostics. Compile errors carry `source: compiler` and codes such as `UnusedImport`, `UnusedVar`, `IncompatibleAssign`, `BrokenImport`; analyzer findings carry the analyzer as source (`printf`, `rangeint`) and code `default`. A cold first file settled in about 2 s, later files in about 0.6 s.
+- **Analyzers come second.** They arrive after the type check. With the 500 ms quiet period beuve settled first and called a file with a `printf` problem clean; with 3 s both findings arrived. The Go definition therefore waits 3 s (`diagnosticsQuietMs` can change it), which makes a Go file take at least that long to settle. While a package has compile errors, no analyzer findings were seen.
+- **Roots.** A `go.mod` marks a module; a repository with a nested module got a second server rooted there, and each reported its own files.
+- **Mutation and network.** With `GOFLAGS=-mod=mod`, `go` added a `require` to the checkout's `go.mod`, created a `go.sum`, and downloaded the module. With nothing set, it did none of that, and a missing dependency was an ordinary `BrokenImport` error.
+- **A toolchain line is a download.** A `toolchain go1.99.0` line in the reviewed `go.mod` made `go` request that toolchain's zip from the proxy, which is a program fetched on the branch's say-so. `GOTOOLCHAIN=local` made no request and `gopls` still reported normally.
+- **A `go.mod` newer than the installed Go.** `go 1.99` with `GOTOOLCHAIN=local` made `gopls` fail to initialise (it reports a warning on line 1) and never settle, so beuve waits out its deadline (20 s) and marks the answer incomplete.
+- **Offline.** With `GOPROXY=off`, a dependency missing from the module cache is a `BrokenImport` error with no network request; with it in the cache, the file is clean. That fits ADR 0095: the reviewer installs dependencies in the terminal, then restarts the servers.
+
+So the built-in definition sets `GOTOOLCHAIN=local` and `GOPROXY=off`, passes on `GOPATH`, `GOMODCACHE`, `GOCACHE`, `GOROOT` and the `XDG_*` locations, and does not pass on `GOFLAGS`. It does not force `GOFLAGS=-mod=readonly`, because that would ignore a `vendor` directory. A `GOFLAGS` set with `go env -w` lives in Go's own environment file, which is not turned off, so a reviewer who set `-mod=mod` there would still see it; they can set `GOFLAGS` in the config. Not done: `go.work` as a root marker, and the `go.mod` newer than the installed Go case, which settles only at the deadline.
+
 ## Consequences
 
 - Reviewers see type and lint errors where the code is, for any ecosystem with an LSP server, with no per-ecosystem logic in beuve beyond a default definition for each language we choose to ship.
