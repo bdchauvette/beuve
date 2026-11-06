@@ -550,7 +550,7 @@ export class BeuveFileCard extends LitElement {
       }
 
       .insight-text .table {
-        overflow-x: auto;
+        overflow-inline: auto;
       }
 
       .insight-text table {
@@ -583,7 +583,7 @@ export class BeuveFileCard extends LitElement {
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
-        overflow-x: auto;
+        overflow-inline: auto;
       }
 
       .insight-actions {
@@ -596,7 +596,7 @@ export class BeuveFileCard extends LitElement {
       pre {
         margin: 0;
         padding: var(--beuve-space-1) 0;
-        overflow-x: auto;
+        overflow-inline: auto;
         font: var(--beuve-font-mono);
       }
 

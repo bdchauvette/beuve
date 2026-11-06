@@ -20,6 +20,10 @@ const sides: Readonly<Record<string, string>> = {
   right: 'inline-end',
 };
 const sizes: Readonly<Record<string, string>> = { width: 'inline-size', height: 'block-size' };
+const overflows: Readonly<Record<string, string>> = {
+  'overflow-x': 'overflow-inline',
+  'overflow-y': 'overflow-block',
+};
 const corners: Readonly<Record<string, string>> = {
   'top-left': 'start-start',
   'top-right': 'start-end',
@@ -55,7 +59,6 @@ const boxShorthands: ReadonlySet<string> = new Set([
  * A four-value box shorthand whose left and right differ (`padding: 0 0 0 8px`) becomes
  * `padding-block` and `padding-inline`, and a border radius whose corners differ across the inline
  * axis becomes the `border-start-start-radius` family; shorthands that mirror left and right stay.
- * `overflow-x`/`-y` are allowed: Chromium has no logical overflow yet.
  */
 export const cssLogicalProperties = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
   meta: {
@@ -114,6 +117,10 @@ function physicalPropertyFrom(property: string): Finding | undefined {
   const inset = sides[property];
   if (inset !== undefined) {
     return report(`inset-${inset}`);
+  }
+  const overflow = overflows[property];
+  if (overflow !== undefined) {
+    return report(overflow);
   }
   const size = sizeProperty.exec(property);
   if (size !== null) {
