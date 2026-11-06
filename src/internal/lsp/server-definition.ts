@@ -28,6 +28,12 @@ export interface ServerDefinition {
    * nearest directory from the file up to the checkout that holds one, else the checkout (ADR 0111).
    */
   readonly rootMarkers?: readonly string[];
+  /**
+   * `false` hides this server's diagnostics while it still answers hover, definition, call
+   * hierarchy and symbols (ADR 0111): for a noisy linter, say, that you would rather keep than
+   * remove. It is not asked for diagnostics, so it is not even started for them. On by default.
+   */
+  readonly diagnostics?: boolean;
   /** Where the program comes from; the trust check decides on it before the server starts. */
   readonly source: ServerSource;
   /** Where this definition came from; beuve's own when absent. */

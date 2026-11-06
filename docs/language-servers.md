@@ -15,6 +15,7 @@ There is a complete example in [examples/language-servers.json](examples/languag
 Every field is optional for a server beuve already has, because the entry only changes what it names. A server of your own needs a `command` and `extensions`.
 
 - `enabled`: `false` turns a server off.
+- `diagnostics`: `false` hides this server's diagnostics but keeps it answering hover, go to definition, call hierarchy and symbols. Use it for a linter that is too noisy to read but that you would rather keep than remove. A server with diagnostics off is not asked for them, so it is not even started for them.
 - `command` and `args`: the program, found on the `PATH` your login shell gives, or an absolute path. It is run without a shell.
 - `extensions`: file extension to LSP language id, such as `".go": "go"`. A file can be handled by several servers.
 - `rootMarkers`: names of files or directories (`go.mod`, `pyproject.toml`) that mark a project. The server for a file runs in the nearest directory, from the file up to the checkout, that has one, so a repository with several projects gets one server each.

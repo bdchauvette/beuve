@@ -43,6 +43,8 @@ const serverSettings = z.strictObject({
   inheritEnv: z.array(environmentName).max(100).optional(),
   /** `path` (the default) looks the program up on `PATH`; `project` runs one from the checkout. */
   source: z.enum(['path', 'project']).optional(),
+  /** `false` hides this server's diagnostics but keeps hover, definition and the rest. */
+  diagnostics: z.boolean().optional(),
   diagnosticsQuietMs: z.number().int().min(0).max(30_000).optional(),
 });
 

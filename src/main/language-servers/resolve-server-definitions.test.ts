@@ -215,6 +215,16 @@ describe('resolveServerDefinitions', () => {
     expect(definitions[0]?.env).toStrictEqual({ GOTOOLCHAIN: 'auto', GOPROXY: 'off' });
   });
 
+  test("turns off a server's diagnostics without turning the server off", ({ expect }) => {
+    const { definitions } = resolve([
+      goplsLayer(),
+      { servers: { gopls: { diagnostics: false }, typescript: { diagnostics: false } } },
+    ]);
+    expect(definitions.map((definition) => definition.diagnostics)).toStrictEqual([false, false]);
+    expect(definitions.map((definition) => definition.id)).toStrictEqual(['typescript', 'gopls']);
+    expect(resolve([goplsLayer()]).definitions[1]?.diagnostics).toBeUndefined();
+  });
+
   test("lets the config ask for a program from the project, which is then the reviewer's own", ({
     expect,
   }) => {

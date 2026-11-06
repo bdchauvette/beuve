@@ -26,6 +26,16 @@ describe('parseLanguageServersConfig', () => {
     expect(parseLanguageServersConfig('{}')).toStrictEqual({ ok: true, value: {} });
   });
 
+  test('takes diagnostics as a switch', ({ expect }) => {
+    expect(parseLanguageServersConfig('{"servers":{"ruff":{"diagnostics":false}}}')).toMatchObject({
+      ok: true,
+      value: { servers: { ruff: { diagnostics: false } } },
+    });
+    expect(parseLanguageServersConfig('{"servers":{"ruff":{"diagnostics":"no"}}}')).toMatchObject({
+      ok: false,
+    });
+  });
+
   test('says when it is not JSON', ({ expect }) => {
     expect(parseLanguageServersConfig('{ servers: ')).toStrictEqual({
       ok: false,

@@ -510,6 +510,44 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     });
   });
 
+  test('does not ask, or start, a server whose diagnostics are off, and still lets it answer the rest', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        { ...named(fakeServer(fakeServerScript, 'normal'), 'linter'), diagnostics: false },
+        named(fakeServer(fakeServerScript, 'normal'), 'checker'),
+      ],
+    });
+    closing(lsp);
+    const report = okValueFrom(await lsp.getDiagnostics(scriptedRequest(project.root)));
+    expect(report.diagnostics.map((diagnostic) => diagnostic.serverId)).toStrictEqual(['checker']);
+    expect(lsp.status().map((status) => status.serverId)).toStrictEqual(['checker']);
+    const [node] = okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    expect(node?.name).toBe('echo');
+    expect(lsp.status().map((status) => status.serverId)).toStrictEqual(['checker', 'linter']);
+  });
+
+  test('has no diagnostics to give when every server that handles the file has them off', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [{ ...fakeServer(fakeServerScript, 'normal'), diagnostics: false }],
+    });
+    closing(lsp);
+    await expect(lsp.getDiagnostics(scriptedRequest(project.root))).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'unsupported-language' },
+    });
+    expect(lsp.status()).toStrictEqual([]);
+  });
+
   test('passes over a server that cannot start when another one can answer', async ({
     expect,
     closing,
