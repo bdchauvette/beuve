@@ -9,6 +9,7 @@ function commit(sha: string, login: string | undefined): Record<string, unknown>
     commit: {
       message: `${sha} subject\n\nbody`,
       author: { name: 'Ada', date: '2026-10-01T00:00:00Z' },
+      committer: { name: 'GitHub', date: '2026-10-02T00:00:00Z' },
     },
     author: accountOf(login),
   };
@@ -63,12 +64,14 @@ describe('compareCommits', () => {
             message: 'AAA subject\n\nbody',
             author: 'octocat',
             date: '2026-10-01T00:00:00Z',
+            committedAt: '2026-10-02T00:00:00Z',
           },
           {
             sha: 'bbb',
             message: 'bbb subject\n\nbody',
             author: 'Ada',
             date: '2026-10-01T00:00:00Z',
+            committedAt: '2026-10-02T00:00:00Z',
           },
         ],
         isTruncated: false,

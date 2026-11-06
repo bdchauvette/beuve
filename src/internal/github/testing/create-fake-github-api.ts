@@ -70,6 +70,23 @@ export interface FakePullCommit {
   readonly login: string | undefined;
   readonly authorName: string;
   readonly date: string;
+  /** The committer date; the author date by default. */
+  readonly committedAt?: string;
+}
+
+/** A review request on a pull request, as `GET …/issues/{n}/events` lists it (ADR 0113). */
+export interface FakeReviewRequestEvent {
+  readonly at: string;
+  /** The login asked, for a request of a person. */
+  readonly reviewer?: string;
+  /** The team slug asked, for a request of a team. */
+  readonly team?: string;
+}
+
+/** A team the viewer is on, as `GET /user/teams` lists it. */
+export interface FakeTeam {
+  readonly organization: string;
+  readonly slug: string;
 }
 
 /** A comment in a pull request's conversation, as `GET …/issues/{n}/comments` lists it. */
@@ -128,6 +145,10 @@ export interface FakeGithubApi {
   readonly pullCommits: Map<number, FakePullCommit[]>;
   /** Conversation comments, by pull request number. */
   readonly conversation: Map<number, FakeConversationComment[]>;
+  /** Review requests, by pull request number (ADR 0113). */
+  readonly reviewRequestEvents: Map<number, FakeReviewRequestEvent[]>;
+  /** The viewer's teams; `undefined` answers 403, as for a token without `read:org`. */
+  viewerTeams: FakeTeam[] | undefined;
   /** Users and team slugs asked to review, by pull request number. */
   readonly requestedReviewers: Map<number, { users: string[]; teams: string[] }>;
   /** The login the token belongs to: GitHub refuses its approvals on its own pull requests. */
@@ -177,6 +198,8 @@ export function createFakeGithubApi({
     checks: new Map(),
     submittedReviews: new Map(),
     requestedReviewers: new Map(),
+    reviewRequestEvents: new Map(),
+    viewerTeams: [],
     pullCommits: new Map(),
     conversation: new Map(),
     viewer: 'reviewer',
@@ -229,6 +252,17 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   const forked = handleFork(api, { request, url });
   if (forked !== undefined) {
     return forked;
+  }
+  if (url.pathname === '/user/teams' && request.method === 'GET') {
+    if (api.viewerTeams === undefined) {
+      return json(403, { message: 'Resource not accessible by integration' });
+    }
+    return conditional(
+      request,
+      api.viewerTeams.map((team) => {
+        return { slug: team.slug, organization: { login: team.organization } };
+      }),
+    );
   }
   const prefix = `/repos/${api.owner}/${api.repo}`;
   if (url.pathname === prefix && request.method === 'GET') {
@@ -315,6 +349,23 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
           body: entry.body,
           created_at: entry.createdAt,
           html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(second)}#issuecomment-${String(index + 1)}`,
+        };
+      }),
+    );
+  }
+  if (first === 'issues' && third === 'events' && request.method === 'GET') {
+    return conditional(
+      request,
+      (api.reviewRequestEvents.get(Number(second)) ?? []).map((entry) => {
+        return {
+          event: 'review_requested',
+          created_at: entry.at,
+          requested_reviewer: requestedOf(entry.reviewer, (login) => {
+            return { login };
+          }),
+          requested_team: requestedOf(entry.team, (slug) => {
+            return { slug, name: slug };
+          }),
         };
       }),
     );
@@ -553,7 +604,11 @@ function comparisonFrom(api: FakeGithubApi, comparison: FakeComparison): Record<
       return {
         sha: entry.sha,
         html_url: `https://github.com/${api.owner}/${api.repo}/commit/${entry.sha}`,
-        commit: { message: entry.message, author: { name: entry.authorName, date: entry.date } },
+        commit: {
+          message: entry.message,
+          author: { name: entry.authorName, date: entry.date },
+          committer: { name: 'GitHub', date: entry.committedAt ?? entry.date },
+        },
         author: authorOf(entry.login),
       };
     }),
@@ -658,4 +713,12 @@ function submittedAtOf(entry: FakeSubmittedReview): unknown {
     return jsonNull;
   }
   return entry.submittedAt;
+}
+
+/** A requested reviewer or team as the event spells it; `null` when the event is about the other. */
+function requestedOf(name: string | undefined, shape: (name: string) => unknown): unknown {
+  if (name === undefined) {
+    return jsonNull;
+  }
+  return shape(name);
 }
