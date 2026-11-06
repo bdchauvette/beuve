@@ -1,6 +1,6 @@
 # 0114. Design tokens, logical properties and diff color schemes
 
-- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), default diff colors amended 2026-11-06, diff colors fixed by amendment 2026-11-06, attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
+- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), default diff colors amended 2026-11-06, diff colors fixed by amendment 2026-11-06, themes kept out of settings by [0122](0122-themes-are-edited-in-the-source.md), attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
 - Date: 2026-11-06
 
 ## Context
@@ -54,4 +54,4 @@ beuve is a home-cooked tool, configured the way suckless tools are: by editing t
 - **Removed.** Settings › Diff › Colors, the `diffColors` field of `display:get`/`display:set` and its schema, `applyDiffColors`, the `[data-diff-colors]` blocks in `index.css`, and the Storybook toolbar's scheme switch. The `--beuve-diff-*` tokens in `:root` are the scheme. The Radix steps only the other schemes used (green and red a5–a7, all of orange) stay, so switching back is an edit to the diff tokens alone. `index.css` now keeps a scale's steps whether or not anything reads them, rather than listing only the steps in use.
 - **Changing the colors.** Edit the `--beuve-diff-*` tokens in `src/ui/index.css`, adding the Radix steps they need, and rebuild. The removed schemes' token blocks are in git history, and the steps above stay a reasonable guide: line < gutter number < changed word, one alpha step apart, bars step 9, counts step 11.
 - **Existing settings.** A `diffColors` key in an older `settings.json` is no longer read. It stays in the file, like any key beuve does not know, and does nothing. A reviewer who had red and green, or another scheme, now sees blue and yellow.
-- **Not a general rule yet.** This removes one setting. It does not decide that no appearance setting may ever be added. A later setting of that kind should say why editing the source is not enough.
+- **The general rule** is [ADR 0122](0122-themes-are-edited-in-the-source.md): themes are edited in the source, fonts may be settings.

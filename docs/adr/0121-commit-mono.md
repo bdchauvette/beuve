@@ -1,11 +1,11 @@
 # 0121. Commit Mono, bundled, for code
 
-- Status: Accepted
+- Status: Accepted (font setting allowed by [0122](0122-themes-are-edited-in-the-source.md))
 - Date: 2026-11-06
 
 ## Context
 
-Code, diffs, sheets, hashes and the terminal used the system monospace stack (`ui-monospace`, SF Mono, Menlo, Consolas). Which font that is depends on the machine, so the same diff reads differently on macOS and Linux, and ADR 0119's bold definitions and italic types depend on whatever bold and italic the system font has. beuve is configured by editing the source and rebuilding (ADR 0114's last amendment), so the font is a choice made here, not a setting.
+Code, diffs, sheets, hashes and the terminal used the system monospace stack (`ui-monospace`, SF Mono, Menlo, Consolas). Which font that is depends on the machine, so the same diff reads differently on macOS and Linux, and ADR 0119's bold definitions and italic types depend on whatever bold and italic the system font has. A bundled font gives every machine the same default. Unlike themes, the font may later become a setting ([ADR 0122](0122-themes-are-edited-in-the-source.md)), because what reads well depends on the machine.
 
 ## Decision
 
