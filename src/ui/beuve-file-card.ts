@@ -41,6 +41,7 @@ import { headRowSelector } from './head-row-selector.ts';
 import { characterOffsetAt } from './character-offset-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
+import { languageFromShebang } from './language-from-shebang.ts';
 import type { ClickedToken } from './run-sheet-action.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
@@ -1921,7 +1922,7 @@ async function loadEditor(): Promise<typeof DiffsEdit> {
 
 const checkIcon: SVGTemplateResult = svg`<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 7.2 6 9.6l4.6-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-/** Parses the patch, keyed by its blobs and hunks, and turns highlighting off for languages beuve doesn't ship. */
+/** Parses the patch, keyed by its blobs and hunks, picks a grammar from the `#!` line when the name gives none, and turns highlighting off for languages beuve doesn't ship. */
 function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetadata | undefined {
   // The hunks tell apart diffs of the same blobs: a whitespace-ignoring variant, or an interdiff.
   const hunks = file.hunks.map((hunk) => hunk.header).join('\n');
@@ -1934,7 +1935,8 @@ function metadataFrom(library: typeof Diffs, file: DiffFileView): FileDiffMetada
   if (Object.hasOwn(highlightedLanguages, language)) {
     return metadata;
   }
-  return library.setLanguageOverride(metadata, 'text');
+  // A name with no extension can still name its interpreter: `bin/deploy` (ADR 0120).
+  return library.setLanguageOverride(metadata, languageFromShebang(file.shebang) ?? 'text');
 }
 
 async function loadFiles(

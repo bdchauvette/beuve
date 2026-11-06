@@ -1,6 +1,6 @@
 # 0120. More languages, styled from the grammars as Shiki ships them
 
-- Status: Accepted; amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (grammars) and [0119](0119-syntax-by-weight-and-slant.md) (declarations)
+- Status: Accepted (shebang detection amended 2026-11-06); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (grammars) and [0119](0119-syntax-by-weight-and-slant.md) (declarations)
 - Date: 2026-11-06
 
 ## Context
@@ -32,4 +32,11 @@ Perl and awk also leave most punctuation unscoped, and Perl its numbers. Reviewe
 
 ## Consequences
 
-Ruby, Perl, awk and fish files are highlighted, with less detail in Perl, awk and fish than elsewhere: fish shows only keywords and comments, and Perl shows unscoped numbers and punctuation as plain text. Shiki's Ruby grammar embeds a dozen languages for heredocs, so the lazy chunks grow by about 1 MB, loaded only when a Ruby file is shown. An extensionless script (`bin/deploy` with a `#!/usr/bin/env bash` line) is still plain text, because the library picks a grammar from the file name alone. The per-language tests in `textmate-theme-from.test.ts` pin what each shipped grammar gives, so a Shiki update that changes it shows up as a test failure.
+Ruby, Perl, awk and fish files are highlighted, with less detail in Perl, awk and fish than elsewhere: fish shows only keywords and comments, and Perl shows unscoped numbers and punctuation as plain text. Shiki's Ruby grammar embeds a dozen languages for heredocs, so the lazy chunks grow by about 1 MB, loaded only when a Ruby file is shown. An extensionless script (`bin/deploy` with a `#!/usr/bin/env bash` line) is highlighted by its interpreter (amendment below). The per-language tests in `textmate-theme-from.test.ts` pin what each shipped grammar gives, so a Shiki update that changes it shows up as a test failure.
+
+## Amendment 2026-11-06: shebang detection
+
+The library picks a grammar from the file name alone, so `bin/deploy` rendered as plain text. A patch has the `#!` line only when a hunk touches line 1, so the line comes from the blob:
+
+- **Main** reads, for each review file whose name has no extension, the first line of its head blob (the base blob for a deleted file) in one `readBlobs` batch on the warm `cat-file` reader, capped at 256 KiB per blob. A `#!` line goes to the renderer as `DiffFileView.shebang` (`read-shebangs.ts`, called by `loadReview`). Binary, submodule and oversized blobs have none. A read that fails is logged and the review loads without them, since only highlighting depends on them. Commit-pair interdiffs do not carry it.
+- **The renderer** maps the line to a grammar with `languageFromShebang`. It reads through `env` and its options and assignments (`#!/usr/bin/env -S python3 -u`) and drops version suffixes (`python3.12`, `perl5`). It covers the shells (sh, bash, zsh, dash, ksh), fish, Python, Ruby, Perl, Node and Bun (JavaScript), Deno, ts-node and tsx (TypeScript), and the awks. The file card applies it when the name gives no highlighted language. The definition sheet, which has the whole file, applies it to the file's first line.

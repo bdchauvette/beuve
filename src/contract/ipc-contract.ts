@@ -238,6 +238,11 @@ export interface DiffFileView {
   /** Full blob names of the base and head sides (ADR 0018); absent for a side that doesn't exist. */
   readonly oldBlobSha?: string;
   readonly newBlobSha?: string;
+  /**
+   * The file's `#!` line, for a file whose name has no extension (ADR 0120), so `bin/deploy` can
+   * be highlighted by its interpreter. Absent when there is none or the name has an extension.
+   */
+  readonly shebang?: string;
   /** Reviewed mark state (ADR 0064). Set on every file of a `ReviewView`; absent in commit interdiffs. */
   readonly reviewed?: FileReviewStateView;
 }
