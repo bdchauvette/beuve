@@ -5,9 +5,14 @@
  * days.
  *
  * `locale` defaults to the runtime's own: the user's language in the renderer, the application
- * locale in the main process. Pass it only to pin the text (tests).
+ * locale in the main process. Pass it only to pin the text (tests). `style` is the
+ * `Intl.DurationFormat` style; `long` reads `1 minute, 30 seconds`.
  */
-export function formatDuration(duration: Temporal.Duration, locale?: Intl.LocalesArgument): string {
+export function formatDuration(
+  duration: Temporal.Duration,
+  locale?: Intl.LocalesArgument,
+  style: DurationStyle = 'narrow',
+): string {
   const rounded = duration.round({
     largestUnit: 'hour',
     smallestUnit: 'millisecond',
@@ -17,8 +22,18 @@ export function formatDuration(duration: Temporal.Duration, locale?: Intl.Locale
     return new Intl.NumberFormat(locale, {
       style: 'unit',
       unit: 'millisecond',
-      unitDisplay: 'narrow',
+      unitDisplay: unitDisplays[style],
     }).format(0);
   }
-  return new Intl.DurationFormat(locale, { style: 'narrow' }).format(rounded);
+  return new Intl.DurationFormat(locale, { style }).format(rounded);
 }
+
+/** The styles `Intl.DurationFormat` offers. */
+export type DurationStyle = 'long' | 'short' | 'narrow' | 'digital';
+
+const unitDisplays: Readonly<Record<DurationStyle, 'long' | 'short' | 'narrow'>> = {
+  long: 'long',
+  short: 'short',
+  narrow: 'narrow',
+  digital: 'narrow',
+};

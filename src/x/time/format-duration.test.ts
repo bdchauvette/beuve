@@ -27,3 +27,11 @@ test('rounds to the nearest millisecond', ({ expect }) => {
 
   expect(formatDuration(duration, 'en')).toBe('1s');
 });
+
+test('takes the Intl.DurationFormat style', ({ expect }) => {
+  const duration = Temporal.Duration.from({ seconds: 90 });
+
+  expect(formatDuration(duration, 'en', 'long')).toBe('1 minute, 30 seconds');
+  expect(formatDuration(duration, 'en', 'digital')).toBe('0:01:30');
+  expect(formatDuration(new Temporal.Duration(), 'en', 'long')).toBe('0 milliseconds');
+});
