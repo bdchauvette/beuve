@@ -8,6 +8,8 @@ const extensions: Readonly<Record<string, string>> = Object.freeze({
   python: 'py',
   rust: 'rs',
   golang: 'go',
+  ruby: 'rb',
+  perl: 'pl',
   yaml: 'yml',
   text: 'txt',
   plaintext: 'txt',

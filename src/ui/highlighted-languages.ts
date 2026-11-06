@@ -23,4 +23,8 @@ export const highlightedLanguages: Readonly<Record<string, string>> = Object.fre
   go: 'go',
   python: 'python',
   rust: 'rust',
+  ruby: 'ruby',
+  perl: 'perl',
+  awk: 'awk',
+  fish: 'fish',
 });

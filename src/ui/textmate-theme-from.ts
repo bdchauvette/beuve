@@ -29,7 +29,8 @@ export interface TextmateSettings {
  * beuve's TextMate theme (ADR 0025, 0119). Weight, slant and contrast carry the meaning, so color
  * stays free for the diff's own tints: definitions and numbers are bold, types are italic,
  * keywords and punctuation are muted, and names, property keys, operators and strings are regular
- * text. Comments are the one colored class. Grammars tag names at use sites with the same
+ * text. Comments are the one colored class. A declaration (a variable, constant or parameter) is a
+ * definition too; where a grammar does not mark one, `grammar-injections.ts` adds the scope. Grammars tag names at use sites with the same
  * `entity.name` scopes as definitions, so a rule takes calls, tags and commands back to regular;
  * the scope matcher prefers the longer selector. The same preference keeps whatever a comment or
  * string holds (a JSDoc tag, a regex quantifier, a quote) in the comment's or string's style.
@@ -56,9 +57,9 @@ export function textmateThemeFrom(
         scope: regularScopes,
       }),
       rule({
-        name: 'Definitions',
+        name: 'Definitions and declarations',
         settings: { foreground: palette.foreground, fontStyle: bold },
-        scope: ['entity.name'],
+        scope: definitionScopes,
       }),
       rule({
         name: 'Types',
@@ -111,6 +112,8 @@ function rule({ name, settings, scope }: RuleParts): TextmateRule {
  */
 const regularScopes: readonly string[] = [
   'source',
+  'variable.parameter.positional',
+  'variable.parameter.function-call',
   'variable',
   'support',
   'entity.other',
@@ -135,6 +138,23 @@ const regularScopes: readonly string[] = [
 ];
 
 /**
+ * What grammars give the names that definitions and declarations introduce, and the
+ * `variable.parameter` uses taken back: shell's `$1` and Python's keyword arguments at a call.
+ */
+const definitionScopes: readonly string[] = [
+  'entity.name',
+  'meta.definition.variable variable',
+  'variable.parameter',
+  'variable.other.assignment',
+  'variable.other.for',
+  'variable.other.declaration',
+  'variable.ruby',
+  'source.ruby variable.other.block',
+  'source.go variable.other.constant',
+  'variable.css',
+];
+
+/**
  * Python's grammar scopes no annotation types beyond the builtins, but everything else on a `def`
  * line has a scope of its own, so what is left unscoped there is a type.
  */
@@ -155,6 +175,7 @@ const typeDefinitionScopes: readonly string[] = [
   'entity.name.type.enum',
   'entity.name.type.struct',
   'entity.name.type.trait',
+  'entity.name.type.module',
 ];
 
 const mutedScopes: readonly string[] = [
