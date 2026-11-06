@@ -8,6 +8,9 @@ import type {
   DefinitionRequest,
   DefinitionTargetView,
   DefinitionView,
+  DiagnosticItemView,
+  DiagnosticsRequest,
+  DiagnosticsView,
   HoverRequest,
   HoverView,
   IpcError,
@@ -31,6 +34,8 @@ import type { ProbeToken } from '#internal/lsp/plan-definition-probes.ts';
 import type {
   CallHierarchyCall,
   CallHierarchyNode,
+  DiagnosticsFreshness,
+  DiagnosticView,
   DocumentSymbolView,
   LocationView,
   Position,
@@ -69,6 +74,12 @@ export interface LspServices {
    * answers "nothing to say", not an error: a pointer rests on all kinds of files.
    */
   readonly hover: (request: HoverRequest) => Promise<IpcResult<HoverView>>;
+  /**
+   * What the language servers report about a file of the session head (ADR 0111), once they have
+   * settled or the deadline passed. Any other commit answers `not-head`; a file no server handles
+   * answers `unavailable`. Both are answers, not errors: the renderer asks about every file it shows.
+   */
+  readonly diagnostics: (request: DiagnosticsRequest) => Promise<IpcResult<DiagnosticsView>>;
   /**
    * Stops the language servers of the session head's checkout, so the next request starts them
    * afresh: after the reviewer installed dependencies there, or when a server misbehaves.
@@ -416,9 +427,43 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     return ok({ sha, hover: { markdown, range: sheetRangeFrom(range) } });
   };
 
+  const diagnostics = async (request: DiagnosticsRequest): Promise<IpcResult<DiagnosticsView>> => {
+    const commit = await resolveSheetCommit(context, request);
+    if (!commit.ok) {
+      return commit;
+    }
+    const { sha } = commit.value;
+    const { session, repository } = commit.value.refreshed;
+    if (sha !== session.headSha) {
+      return ok({ sha, state: 'not-head', diagnostics: [], omitted: 0 });
+    }
+    const leased = await worktrees.acquire(repository, claimOf(session, sha));
+    if (!leased.ok) {
+      return worktreeFailure(logger, leased.error);
+    }
+    using lease = leased.value;
+    const report = await multiplexer.getDiagnostics({ root: lease.path, path: request.path });
+    if (!report.ok) {
+      if (isUndiagnosable(report.error)) {
+        return ok({ sha, state: 'unavailable', diagnostics: [], omitted: 0 });
+      }
+      return fail(report.error);
+    }
+    const items = report.value.diagnostics.map((diagnostic) => {
+      return diagnosticItemFrom(diagnostic, report.value.serverId);
+    });
+    return ok({
+      sha,
+      state: stateOf(report.value.freshness),
+      diagnostics: items.slice(0, maxDiagnosticsPerFile),
+      omitted: Math.max(0, items.length - maxDiagnosticsPerFile),
+    });
+  };
+
   return {
     definition: define,
     hover,
+    diagnostics,
     status: (): IpcResult<LspStatusView> => {
       return ok({
         servers: multiplexer.status().map(({ serverId, root, state, openDocuments, restarts }) => {
@@ -574,6 +619,34 @@ function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView[
 
 function targetViewFrom(target: LocationView): DefinitionTargetView {
   return { file: { ...target.file }, ...sheetRangeFrom(target.range) };
+}
+
+/** How many diagnostics of one file reach the renderer. */
+const maxDiagnosticsPerFile = 500;
+/** A diagnostic's message is cut here, so one server cannot send the renderer a book. */
+const maxMessageLength = 4096;
+
+/** Failures that only mean no server can give diagnostics for this file. */
+function isUndiagnosable(error: LspError): boolean {
+  return isUnhoverable(error) || error.kind === 'invalid-path';
+}
+
+function stateOf(freshness: DiagnosticsFreshness): DiagnosticsView['state'] {
+  if (freshness === 'timed-out') {
+    return 'timed-out';
+  }
+  return 'settled';
+}
+
+function diagnosticItemFrom(diagnostic: DiagnosticView, serverId: string): DiagnosticItemView {
+  return {
+    ...sheetRangeFrom(diagnostic.range),
+    severity: diagnostic.severity ?? 'error',
+    message: diagnostic.message.slice(0, maxMessageLength),
+    ...(diagnostic.code !== undefined && { code: diagnostic.code }),
+    ...(diagnostic.source !== undefined && { source: diagnostic.source }),
+    serverId,
+  };
 }
 
 /** Failures that only mean no server can hover over this file. */

@@ -56,6 +56,7 @@ function headFreeSessionChannels(): Readonly<
     'session:get-file-attributes': read,
     'lsp:definition': 'a read pinned to its own `sha`',
     'lsp:hover': 'a read pinned to its own `sha`',
+    'lsp:diagnostics': 'a read pinned to its own `sha`, which must be the head',
     'lsp:restart': 'restarts servers; it stores nothing about a head',
     'sheet:open': 'opens a window pinned to its own `sha`',
     'sheet:get-file': 'a read pinned to its own `sha`',

@@ -4,6 +4,7 @@ import type { SheetInvokeChannel } from './ipc-contract.ts';
 export const sheetInvokeChannels = Object.freeze([
   'lsp:definition',
   'lsp:hover',
+  'lsp:diagnostics',
   'sheet:open',
   'sheet:get-file',
   'sheet:get-head',

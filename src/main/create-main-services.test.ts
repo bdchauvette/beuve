@@ -369,6 +369,56 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'reports diagnostics at the head only, and says so for other commits and files',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, services, repositories }) => {
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const [head, base] = await Promise.all([
+        repo.git('rev-parse', 'feature'),
+        repo.git('rev-parse', 'main'),
+      ]);
+      const broken = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(broken).toMatchObject({ sha: head, state: 'settled', omitted: 0 });
+      expect(broken.diagnostics).toStrictEqual([
+        {
+          severity: 'error',
+          message: expect.stringContaining('not assignable') as string,
+          code: '2322',
+          source: 'typescript',
+          serverId: 'typescript',
+          startLine: 1,
+          startCharacter: 13,
+          endLine: 1,
+          endCharacter: 19,
+        },
+      ]);
+      const clean = okValueFrom(await services.lsp.diagnostics({ sessionId, path: 'src/auth.ts' }));
+      expect(clean).toMatchObject({ state: 'settled', diagnostics: [] });
+
+      const older = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, sha: base, path: 'src/broken.ts' }),
+      );
+      expect(older).toStrictEqual({ sha: base, state: 'not-head', diagnostics: [], omitted: 0 });
+      const atHead = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, sha: head, path: 'src/broken.ts' }),
+      );
+      expect(atHead.diagnostics).toHaveLength(1);
+      const unsupported = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'tsconfig.json' }),
+      );
+      expect(unsupported).toStrictEqual({
+        sha: head,
+        state: 'unavailable',
+        diagnostics: [],
+        omitted: 0,
+      });
+      await expect(repo.git('status', '--porcelain')).resolves.toBe('');
+    },
+  );
+
+  test(
     'hovers at the head and at an older pinned commit, and refuses a line the file lacks',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, services, repositories, worktreeRoot }) => {

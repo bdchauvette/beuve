@@ -56,7 +56,10 @@ export interface MainServices {
   readonly sessions: SessionServices;
   readonly files: FileServices;
   readonly order: OrderServices;
-  readonly lsp: Pick<LspServices, 'callHierarchy' | 'definition' | 'hover' | 'restart' | 'status'>;
+  readonly lsp: Pick<
+    LspServices,
+    'callHierarchy' | 'definition' | 'diagnostics' | 'hover' | 'restart' | 'status'
+  >;
   /** Sheets: whole files pinned to a commit (ADR 0067). */
   readonly sheets: SheetServices;
   /** Permalinks to the primary remote (ADR 0067). */
