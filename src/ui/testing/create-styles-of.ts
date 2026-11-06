@@ -1,9 +1,21 @@
-import { getSharedHighlighter, registerCustomTheme } from '@pierre/diffs';
-
+import { diffsThemeNames } from '../diffs-theme-names.ts';
+import { loadDiffsLibrary } from '../load-diffs-library.ts';
 import { syntaxPalettes } from '../syntax-palettes.ts';
-import { textmateThemeFrom } from '../textmate-theme-from.ts';
 
-const languages = ['typescript', 'go', 'rust', 'python', 'shellscript', 'markdown'] as const;
+const languages = [
+  'typescript',
+  'go',
+  'rust',
+  'python',
+  'shellscript',
+  'fish',
+  'ruby',
+  'perl',
+  'awk',
+  'css',
+  'html',
+  'markdown',
+] as const;
 
 /** A grammar {@link createStylesOf} loads. */
 export type TestLanguage = (typeof languages)[number];
@@ -20,16 +32,18 @@ export type TokenStyle =
 /** The style of the first character of each `«…»`-marked span of `marked`, markers removed. */
 export type StylesOf = (lang: TestLanguage, marked: string) => TokenStyle[];
 
-const themeName = 'beuve-test-light';
+const themeName = diffsThemeNames.light;
 const italicFlag = 1;
 const boldFlag = 2;
 
-/** Registers the light palette's TextMate theme with Shiki and returns {@link StylesOf} over it. */
+/**
+ * Loads the library as the app does (beuve's themes and grammar injections registered) and
+ * returns {@link StylesOf} over the light theme.
+ */
 export async function createStylesOf(): Promise<StylesOf> {
   const light = syntaxPalettes.light;
-  // eslint-disable-next-line @typescript-eslint/require-await -- the library's loaders are async.
-  registerCustomTheme(themeName, async () => textmateThemeFrom(themeName, 'light', light));
-  const highlighter = await getSharedHighlighter({
+  const library = await loadDiffsLibrary();
+  const highlighter = await library.getSharedHighlighter({
     themes: [themeName],
     langs: [...languages],
     preferredHighlighter: 'shiki-js',
