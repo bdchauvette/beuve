@@ -21,7 +21,7 @@ ADR 0114 put colors and sizes on tokens, but every component still drew its own 
   - `beuve-time`: renders `<time datetime>` with text from `Intl.DateTimeFormat`, its options as attributes (`date-style`, `time-style`, `year`, `month`, `day`, `weekday`, `hour`, `minute`, `second`, `time-zone-name`). With `format="relative"` it uses `Intl.RelativeTimeFormat` (`numeric`, `format-style`), refreshes itself while connected, and falls back to a date after `relative-until` (default seven days). Its title is always the full absolute time.
   - `beuve-duration`: renders `<time datetime="PT…">` with text from `Intl.DurationFormat` (`format-style`, default `narrow`), balanced as `formatDuration` balances. `style` is a global attribute, hence `format-style`.
   - The formatting is pure functions (`timeTextFrom`, `durationTextFrom`) tested in Node. The elements only read attributes, render and tick.
-- **Gallery.** `src/ui/gallery-entry.ts` renders every primitive. It is an entrypoint nothing imports, so no shipped bundle contains it. `scripts/check-gallery.ts` bundles it with esbuild and renders it in a bare Electron window. It saves PNGs per theme and diff scheme with `--screenshots <dir>`, and fails on a console error or a CSP violation.
+- **Gallery.** `src/ui/gallery-entry.ts` renders every primitive. It is an entrypoint nothing imports, so no shipped bundle contains it. `scripts/check-gallery.ts` bundles it with esbuild and renders it in a bare Electron window. It saves PNGs per theme and diff scheme with `--screenshots <dir>`, and fails on a console error or a CSP violation. CI's build workflow runs it on Linux and macOS and uploads the screenshots on every run.
 
 ## Consequences
 
