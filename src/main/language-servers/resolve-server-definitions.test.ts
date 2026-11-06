@@ -1,5 +1,6 @@
 import { describe } from 'vitest';
 
+import { goServerDefinition } from '#internal/lsp/go-server-definition.ts';
 import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { test } from '#testing/test.ts';
 
@@ -171,6 +172,47 @@ describe('resolveServerDefinitions', () => {
       'The nocommand language server has no command.',
       'The noextensions language server handles no file extensions.',
     ]);
+  });
+
+  test("adds to a built-in server's env and inheritEnv without dropping its own safety settings", ({
+    expect,
+  }) => {
+    const { definitions } = resolveServerDefinitions({
+      builtins: [goServerDefinition()],
+      layers: [
+        { servers: { gopls: { env: { GOFLAGS: '-tags=integration' }, inheritEnv: ['GOFLAGS'] } } },
+        { servers: { gopls: { env: { GOPRIVATE: 'example.com/*' } } } },
+      ],
+      repository: repository(),
+      home: '/home/me',
+    });
+    expect(definitions[0]?.env).toStrictEqual({
+      GOTOOLCHAIN: 'local',
+      GOPROXY: 'off',
+      GOFLAGS: '-tags=integration',
+      GOPRIVATE: 'example.com/*',
+    });
+    expect(definitions[0]?.inheritEnv).toStrictEqual([
+      'GOPATH',
+      'GOMODCACHE',
+      'GOCACHE',
+      'GOROOT',
+      'XDG_CACHE_HOME',
+      'XDG_CONFIG_HOME',
+      'GOFLAGS',
+    ]);
+  });
+
+  test("lets the config give one of a built-in server's variables a new value, and nothing else changes", ({
+    expect,
+  }) => {
+    const { definitions } = resolveServerDefinitions({
+      builtins: [goServerDefinition()],
+      layers: [{ servers: { gopls: { env: { GOTOOLCHAIN: 'auto' } } } }],
+      repository: repository(),
+      home: '/home/me',
+    });
+    expect(definitions[0]?.env).toStrictEqual({ GOTOOLCHAIN: 'auto', GOPROXY: 'off' });
   });
 
   test("lets the config ask for a program from the project, which is then the reviewer's own", ({

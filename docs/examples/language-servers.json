@@ -1,0 +1,28 @@
+{
+  "servers": {
+    "pyright": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "extensions": { ".py": "python", ".pyi": "python" },
+      "rootMarkers": ["pyproject.toml", "setup.py", "setup.cfg"]
+    },
+    "ruff": {
+      "command": "ruff",
+      "args": ["server"],
+      "extensions": { ".py": "python", ".pyi": "python" },
+      "rootMarkers": ["pyproject.toml", "ruff.toml"]
+    }
+  },
+  "overrides": [
+    {
+      "match": { "path": "~/work/**" },
+      "servers": {
+        "gopls": { "env": { "GOFLAGS": "-tags=integration" }, "inheritEnv": ["GOFLAGS"] }
+      }
+    },
+    {
+      "match": { "remote": "github.com/octo/*" },
+      "servers": { "ruff": { "enabled": false } }
+    }
+  ]
+}

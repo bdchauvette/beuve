@@ -35,7 +35,10 @@ const defaultQuiet = Temporal.Duration.from({ milliseconds: 500 });
  * The language servers for one repository (ADR 0111). The layers' `servers` merge per id and per
  * field (a later layer's field replaces an earlier one's; nothing merges inside a field), then the
  * layers' overrides, in order, are applied the same way for those whose `match` names the
- * repository. A built-in id keeps what the config does not say; `enabled: false` turns a server off;
+ * repository. Two fields merge inside, because built-in definitions put safety settings in them:
+ * `env` per variable and `inheritEnv` as a union, so adding a variable never drops the built-in
+ * ones (for `gopls`, `GOTOOLCHAIN=local` and `GOPROXY=off`); a variable can still be given a new
+ * value. A built-in id keeps what the config does not say; `enabled: false` turns a server off;
  * a new id defines a server of the reviewer's, which needs a command and extensions, and
  * everything the config touched is marked as the reviewer's own, which the trust check consults.
  * A server that is incomplete is left out with a problem. Builtins come first, in their order,
@@ -46,7 +49,7 @@ export function resolveServerDefinitions(options: ResolveServersOptions): Resolv
   const apply = (servers: Readonly<Record<string, ServerSettings>> | undefined): void => {
     const entries = Object.entries(servers ?? {});
     for (const [id, settings] of entries) {
-      merged.set(id, { ...merged.get(id), ...settings });
+      merged.set(id, mergedSettings(merged.get(id), settings));
     }
   };
   for (const layer of options.layers) {
@@ -79,6 +82,43 @@ export function resolveServerDefinitions(options: ResolveServersOptions): Resolv
   return { definitions, problems };
 }
 
+/** `next` over `previous`, field by field, except that `env` and `inheritEnv` combine. */
+function mergedSettings(
+  previous: ServerSettings | undefined,
+  next: ServerSettings,
+): ServerSettings {
+  const merged: ServerSettings = { ...previous, ...next };
+  const env = mergedEnv(previous?.env, next.env);
+  if (env !== undefined) {
+    merged.env = env;
+  }
+  const inheritEnv = unionOf(previous?.inheritEnv, next.inheritEnv);
+  if (inheritEnv !== undefined) {
+    merged.inheritEnv = inheritEnv;
+  }
+  return merged;
+}
+
+function mergedEnv(
+  previous: Readonly<Record<string, string>> | undefined,
+  next: Readonly<Record<string, string>> | undefined,
+): Record<string, string> | undefined {
+  if (previous === undefined && next === undefined) {
+    return undefined;
+  }
+  return { ...previous, ...next };
+}
+
+function unionOf(
+  previous: readonly string[] | undefined,
+  next: readonly string[] | undefined,
+): string[] | undefined {
+  if (previous === undefined && next === undefined) {
+    return undefined;
+  }
+  return [...new Set([...(previous ?? []), ...(next ?? [])])];
+}
+
 /** What one server's definition is made of: beuve's own, and what the config says. */
 interface DefinitionParts {
   readonly base: ServerDefinition | undefined;
@@ -101,8 +141,8 @@ function definitionFrom(id: string, parts: DefinitionParts): Result<ServerDefini
   const rootMarkers = settings?.rootMarkers ?? base?.rootMarkers;
   const initializationOptions = settings?.initializationOptions ?? base?.initializationOptions;
   const settingsForServer = settings?.settings ?? base?.settings;
-  const env = settings?.env ?? base?.env;
-  const inheritEnv = settings?.inheritEnv ?? base?.inheritEnv;
+  const env = mergedEnv(base?.env, settings?.env);
+  const inheritEnv = unionOf(base?.inheritEnv, settings?.inheritEnv);
   let diagnosticsQuiet = base?.diagnosticsQuiet ?? defaultQuiet;
   if (settings?.diagnosticsQuietMs !== undefined) {
     diagnosticsQuiet = Temporal.Duration.from({ milliseconds: settings.diagnosticsQuietMs });
