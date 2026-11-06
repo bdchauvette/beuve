@@ -400,6 +400,14 @@ export class BeuveSettingsView extends LitElement {
             return { showInsights: isOn };
           },
         })}
+        ${this.renderCheck({
+          label: 'Show diagnostics',
+          detail: 'Language-server underlines and counts',
+          isOn: display.showDiagnostics,
+          change: (isOn) => {
+            return { showDiagnostics: isOn };
+          },
+        })}
       </div>
       <h2>Window</h2>
       <div class="group">

@@ -9,7 +9,14 @@ describe('menuStateFrom', () => {
   test('reports nothing but the display toggles with no session', ({ expect }) => {
     expect(menuStateFrom(idle())).toStrictEqual({
       conditions: [],
-      checked: ['sidebar-right', 'diff-split', 'toggle-insights', 'order-path', 'sheets-window'],
+      checked: [
+        'sidebar-right',
+        'diff-split',
+        'toggle-insights',
+        'toggle-diagnostics',
+        'order-path',
+        'sheets-window',
+      ],
     });
   });
 
@@ -49,6 +56,7 @@ describe('menuStateFrom', () => {
       'sidebar-right',
       'diff-inline',
       'toggle-insights',
+      'toggle-diagnostics',
       'tree-mode',
       'order-calls',
       'sheets-inline',
@@ -80,6 +88,7 @@ function idle(): MenuStateInput {
       sidebarSide: 'right',
       showGenerated: false,
       showInsights: true,
+      showDiagnostics: true,
     },
     treeMode: 'neighborhood',
     preferredEditor: undefined,

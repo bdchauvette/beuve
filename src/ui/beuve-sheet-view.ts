@@ -269,7 +269,7 @@ export class BeuveSheetView extends LitElement {
 
   private readonly diagnosticsFor: DiagnosticsFor = (path, position: DiagnosticPosition) => {
     const file = this.fileDiagnostics.byPath.get(path);
-    if (file?.kind !== 'ready') {
+    if (file?.kind !== 'ready' || !this.hasDiagnosticsOn) {
       return [];
     }
     return diagnosticsAt(file.view.diagnostics, position);
@@ -305,6 +305,8 @@ export class BeuveSheetView extends LitElement {
   @state() accessor notice: { readonly text: string; readonly isError: boolean } | undefined;
   /** When the session head moved on since the sheet was printed, the head now. */
   @state() accessor movedHead: string | undefined;
+  /** The reviewer's View, Diff, Show Diagnostics, read each time a file is shown. */
+  @state() accessor hasDiagnosticsOn = true;
 
   private renderFind(find: FindState): TemplateResult {
     return html`<div class="find">
@@ -561,6 +563,7 @@ export class BeuveSheetView extends LitElement {
       this.loaded = { status: 'error', message: 'This sheet has no connection to beuve.' };
       return;
     }
+    void this.readDiagnosticsSwitch(bridge);
     const isSameFile = this.loaded.status === 'ready' && place.path === this.loaded.file.path;
     if (!isSameFile) {
       this.loaded = { status: 'loading' };
@@ -697,6 +700,13 @@ export class BeuveSheetView extends LitElement {
     this.notice = { text, isError };
   }
 
+  private async readDiagnosticsSwitch(bridge: SheetApi): Promise<void> {
+    const display = await bridge.invoke('display:get');
+    if (display.ok) {
+      this.hasDiagnosticsOn = display.value.showDiagnostics;
+    }
+  }
+
   /** Whether the file on screen is the session head's: only then are there diagnostics. */
   private isAtHead(): boolean {
     return (
@@ -708,7 +718,7 @@ export class BeuveSheetView extends LitElement {
 
   /** The diagnostics of the file on screen, when it is the head's and the servers have answered. */
   private shownDiagnostics(): readonly DiagnosticItemView[] {
-    if (this.loaded.status !== 'ready') {
+    if (this.loaded.status !== 'ready' || !this.hasDiagnosticsOn) {
       return [];
     }
     const file = this.fileDiagnostics.byPath.get(this.loaded.file.path);

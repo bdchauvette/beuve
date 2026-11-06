@@ -5,6 +5,7 @@ export const sheetInvokeChannels = Object.freeze([
   'lsp:definition',
   'lsp:hover',
   'lsp:diagnostics',
+  'display:get',
   'sheet:open',
   'sheet:get-file',
   'sheet:get-head',

@@ -30,6 +30,8 @@ describe('displayChangeFor', () => {
     ['toggle-generated', 'showGenerated', true, false],
     ['toggle-insights', 'showInsights', true, false],
     ['toggle-insights', 'showInsights', false, true],
+    ['toggle-diagnostics', 'showDiagnostics', true, false],
+    ['toggle-diagnostics', 'showDiagnostics', false, true],
     ['toggle-skip-reviewed', 'skipReviewed', false, true],
     ['toggle-skip-reviewed', 'skipReviewed', true, false],
   ] as const)('%s flips %s from %s to %s', ([id, key, from, to], { expect }) => {
@@ -46,6 +48,7 @@ describe('displayChangeFor', () => {
       sidebarSide: 'right',
       showGenerated: false,
       showInsights: true,
+      showDiagnostics: true,
       reviewOrder: 'path',
     };
     expect(displayChangeFor('toggle-skip-reviewed', display)).toStrictEqual({ skipReviewed: true });

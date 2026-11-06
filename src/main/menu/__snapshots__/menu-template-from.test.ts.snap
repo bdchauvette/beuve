@@ -253,6 +253,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "Show &Review Insights",
             "type": "checkbox",
           },
+          {
+            "id": "toggle-diagnostics",
+            "label": "Show &Diagnostics",
+            "type": "checkbox",
+          },
         ],
       },
       {
@@ -1000,6 +1005,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "toggle-insights",
             "label": "Show Review Insights",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-diagnostics",
+            "label": "Show Diagnostics",
             "type": "checkbox",
           },
         ],

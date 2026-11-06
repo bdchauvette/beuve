@@ -103,6 +103,10 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
       slash: '/insights show|hide',
       help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
     },
+    'toggle-diagnostics': {
+      ...app,
+      help: "show or hide the language servers' underlines and counts on the diff; the servers keep running and the configuration is untouched; remembered in settings.json",
+    },
     'tree-mode': app,
     'order-path': {
       ...app,

@@ -10,6 +10,7 @@ export type DisplayCommandId = Extract<
   | 'whitespace'
   | 'toggle-generated'
   | 'toggle-insights'
+  | 'toggle-diagnostics'
   | 'toggle-skip-reviewed'
   | 'order-path'
   | 'order-imports'
@@ -38,6 +39,9 @@ export function displayChangeFor(
     }
     case 'toggle-insights': {
       return { showInsights: !display.showInsights };
+    }
+    case 'toggle-diagnostics': {
+      return { showDiagnostics: !display.showDiagnostics };
     }
     case 'toggle-skip-reviewed': {
       return { skipReviewed: display.skipReviewed !== true };
