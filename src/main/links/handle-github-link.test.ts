@@ -2,11 +2,11 @@ import { describe } from 'vitest';
 
 import { test } from '#testing/test.ts';
 
-import { handlePullRequestLink } from './handle-pull-request-link.ts';
-import type { PullRequestLinkActions } from './handle-pull-request-link.ts';
+import { handleGithubLink } from './handle-github-link.ts';
+import type { GithubLinkActions } from './handle-github-link.ts';
 
 interface RecordingActions {
-  readonly actions: PullRequestLinkActions;
+  readonly actions: GithubLinkActions;
   readonly calls: string[];
 }
 
@@ -19,37 +19,52 @@ function recordingActions(isConfirmed: boolean): RecordingActions {
   return {
     calls,
     actions: {
-      confirm: async (text): Promise<boolean> => {
-        calls.push(`confirm ${text}`);
+      confirm: async ({ kind, text }): Promise<boolean> => {
+        calls.push(`confirm ${kind} ${text}`);
         const isAnswered = await Promise.resolve(isConfirmed);
         return isAnswered;
       },
       reportInvalid: (reason): void => {
         calls.push(`invalid ${reason}`);
       },
-      open: (text): void => {
-        calls.push(`open ${text}`);
+      open: ({ kind, text }): void => {
+        calls.push(`open ${kind} ${text}`);
       },
     },
   };
 }
 
-describe('handlePullRequestLink', () => {
+describe('handleGithubLink', () => {
   test('opens the pull request once confirmed', async ({ expect }) => {
     const { actions, calls } = recordingActions(true);
-    await handlePullRequestLink(validLink(), actions);
-    expect(calls).toStrictEqual(['confirm github.com/o/r#3', 'open github.com/o/r#3']);
+    await handleGithubLink(validLink(), actions);
+    expect(calls).toStrictEqual([
+      'confirm pull-request github.com/o/r#3',
+      'open pull-request github.com/o/r#3',
+    ]);
+  });
+
+  test('follows a branch once confirmed', async ({ expect }) => {
+    const { actions, calls } = recordingActions(true);
+    await handleGithubLink(
+      `beuve://open?url=${encodeURIComponent('https://github.com/o/r/tree/claude/x')}`,
+      actions,
+    );
+    expect(calls).toStrictEqual([
+      'confirm branch github.com/o/r:claude/x',
+      'open branch github.com/o/r:claude/x',
+    ]);
   });
 
   test('opens nothing when declined', async ({ expect }) => {
     const { actions, calls } = recordingActions(false);
-    await handlePullRequestLink(validLink(), actions);
-    expect(calls).toStrictEqual(['confirm github.com/o/r#3']);
+    await handleGithubLink(validLink(), actions);
+    expect(calls).toStrictEqual(['confirm pull-request github.com/o/r#3']);
   });
 
   test('reports a link it cannot read without asking', async ({ expect }) => {
     const { actions, calls } = recordingActions(true);
-    await handlePullRequestLink('beuve://clone', actions);
+    await handleGithubLink('beuve://clone', actions);
     expect(calls).toStrictEqual(['invalid unknown beuve:// action: clone']);
   });
 });

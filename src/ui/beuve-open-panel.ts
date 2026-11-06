@@ -42,7 +42,10 @@ interface PressedRow {
 }
 
 type Row =
-  | { readonly kind: 'open-pull'; readonly query: Extract<OpenQuery, { kind: 'pull-request' }> }
+  | {
+      readonly kind: 'open-pull';
+      readonly query: Extract<OpenQuery, { kind: 'pull-request' | 'branch' }>;
+    }
   | { readonly kind: 'open-folder'; readonly path: string }
   | { readonly kind: 'session'; readonly session: SessionSummary }
   | { readonly kind: 'step'; readonly step: 'pull' | 'local' };
@@ -365,7 +368,7 @@ export class BeuveOpenPanel extends LitElement {
   private readonly onPullRefInput = (event: InputEvent): void => {
     this.pullRef = (event.currentTarget as HTMLInputElement).value;
     const parsed = parseOpenQuery(this.pullRef);
-    if (parsed.kind !== 'pull-request' || this.clonePath !== '') {
+    if ((parsed.kind !== 'pull-request' && parsed.kind !== 'branch') || this.clonePath !== '') {
       return;
     }
     const clone = findKnownClone(this.sessions, parsed);
@@ -497,7 +500,8 @@ export class BeuveOpenPanel extends LitElement {
     const parsed = parseOpenQuery(this.text);
     const rows: Row[] = [];
     switch (parsed.kind) {
-      case 'pull-request': {
+      case 'pull-request':
+      case 'branch': {
         rows.push({ kind: 'open-pull', query: parsed });
         break;
       }
@@ -600,8 +604,13 @@ export class BeuveOpenPanel extends LitElement {
       case 'open-pull': {
         const { query: pull } = row;
         const clone = findKnownClone(this.sessions, pull);
-        return html`<span class="glyph">#${pull.number}</span>
-          <span class="line">Open ${pull.owner}/${pull.repo}#${pull.number}</span>
+        return html`${
+            pull.kind === 'branch'
+              ? html`<span class="glyph">br</span>
+                  <span class="line">Follow ${pull.owner}/${pull.repo}:${pull.branch}</span>`
+              : html`<span class="glyph">#${pull.number}</span>
+                  <span class="line">Open ${pull.owner}/${pull.repo}#${pull.number}</span>`
+          }
           <span class="when enter" aria-hidden="true">↩</span>
           <span class="detail"
             >${
@@ -630,9 +639,11 @@ export class BeuveOpenPanel extends LitElement {
       case 'step': {
         if (row.step === 'pull') {
           return html`<span class="glyph">PR</span>
-            <span class="line">Pull request…</span>
+            <span class="line">Pull request or branch…</span>
             <span class="when"></span>
-            <span class="detail">A GitHub link or owner/repo#n, fetched into a local clone</span>`;
+            <span class="detail"
+              >A GitHub link, owner/repo#n or owner/repo:branch, fetched into a local clone</span
+            >`;
         }
         return html`<span class="glyph">git</span>
           <span class="line">Local branch…</span>
@@ -657,6 +668,16 @@ export class BeuveOpenPanel extends LitElement {
             pullRequest === undefined ? nothing : renderStateBadge(pullRequest)
           }${source.owner}/${source.repo}
           · into ${pullRequest?.baseBranch ?? 'base'} · ${folder} · ${reviewed}</span
+        >`;
+    }
+    if (source.kind === 'remote-branch') {
+      const isGone = session.remoteBranch?.state === 'gone';
+      return html`<span class="glyph">br</span>
+        <span class="line">${source.owner}/${source.repo} <code>${source.branch}</code></span>
+        <span class="when">${when}</span>
+        <span class="detail" title=${source.repoPath}
+          >${isGone ? 'gone from GitHub · ' : nothing}following · ${shortenPath(source.repoPath)} ·
+          ${reviewed}</span
         >`;
     }
     return html`<span class="glyph">git</span>
@@ -705,13 +726,13 @@ export class BeuveOpenPanel extends LitElement {
     return html`
       ${this.renderBack()}
       <form @submit=${this.onSubmitPull} @keydown=${this.onFormKeyDown}>
-        <label for="ref">Pull request</label>
+        <label for="ref">Pull request or branch</label>
         <div class="field">
           <input
             id="ref"
             name="ref"
             required
-            placeholder="https://github.com/owner/repo/pull/123 or owner/repo#123"
+            placeholder="A pull request or branch link, owner/repo#123 or owner/repo:branch"
             autocomplete="off"
             spellcheck="false"
             .value=${live(this.pullRef)}
@@ -924,7 +945,7 @@ export class BeuveOpenPanel extends LitElement {
     if (changed.has('pullFailure') && this.pullFailure !== undefined && this.step !== 'pull') {
       const parsed = parseOpenQuery(this.text);
       let ref = this.pullRef;
-      if (parsed.kind === 'pull-request') {
+      if (parsed.kind === 'pull-request' || parsed.kind === 'branch') {
         ref = parsed.ref;
       }
       this.showPullStep(ref, undefined);

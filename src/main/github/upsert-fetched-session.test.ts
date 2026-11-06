@@ -8,10 +8,10 @@ import { loadSession } from '../sessions/load-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import { test } from '../testing/test.ts';
 import { moveSessionHead } from './move-session-head.ts';
-import { upsertPullRequestSession } from './upsert-pull-request-session.ts';
-import type { PullRequestHead } from './upsert-pull-request-session.ts';
+import { upsertFetchedSession } from './upsert-fetched-session.ts';
+import type { FetchedHead } from './upsert-fetched-session.ts';
 
-describe('upsertPullRequestSession', () => {
+describe('upsertFetchedSession', () => {
   test('a slower open that finishes last does not move the head back (ADR 0079)', ({
     expect,
     db,
@@ -31,12 +31,12 @@ describe('upsertPullRequestSession', () => {
     };
     const source = pullRequest();
     const opened = okValueFrom(
-      upsertPullRequestSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
+      upsertFetchedSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
     );
     const observedFrom = okValueFrom(loadSession(context, opened.id));
     okValueFrom(moveSessionHead(context, observedFrom, sha('3')));
     const reopened = okValueFrom(
-      upsertPullRequestSession(context, { source, headSha: sha('2'), observedFrom }),
+      upsertFetchedSession(context, { source, headSha: sha('2'), observedFrom }),
     );
     expect(reopened.headSha).toBe(sha('3'));
     expect(okValueFrom(loadSession(context, opened.id)).headSha).toBe(sha('3'));
@@ -53,15 +53,15 @@ describe('upsertPullRequestSession', () => {
     };
     const source = pullRequest();
     const opened = okValueFrom(
-      upsertPullRequestSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
+      upsertFetchedSession(context, { source, headSha: sha('1'), observedFrom: undefined }),
     );
     const observedFrom = okValueFrom(loadSession(context, opened.id));
-    const moved = upsertPullRequestSession(context, { source, headSha: sha('2'), observedFrom });
+    const moved = upsertFetchedSession(context, { source, headSha: sha('2'), observedFrom });
     expect(okValueFrom(moved).headSha).toBe(sha('2'));
   });
 });
 
-function pullRequest(): PullRequestHead['source'] {
+function pullRequest(): FetchedHead['source'] {
   return {
     kind: 'github-pull-request',
     repoPath: '/repo',

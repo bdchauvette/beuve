@@ -19,7 +19,8 @@ import { RequestScopes } from './ipc/request-scopes.ts';
 import { sendEvent } from './ipc/send-event.ts';
 import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
 import type { MainServices } from './main-services.ts';
-import { handlePullRequestLink } from './links/handle-pull-request-link.ts';
+import { handleGithubLink } from './links/handle-github-link.ts';
+import type { GithubLinkTarget } from './links/handle-github-link.ts';
 import type { LinkInbox } from './links/link-inbox.ts';
 import { createAppMenus } from './menu/create-app-menus.ts';
 import { createMainWindow } from './window/create-main-window.ts';
@@ -151,6 +152,11 @@ export function startApp(app: App, options: StartAppOptions): void {
       sendEvent(window.webContents, 'github:ci-status', event);
     }
   });
+  services.github.onBranchUpdated((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      sendEvent(window.webContents, 'github:branch-updated', event);
+    }
+  });
   void services.pruneWorktrees();
   hardenSession(session.defaultSession);
   const scopes = new RequestScopes();
@@ -202,7 +208,7 @@ export function startApp(app: App, options: StartAppOptions): void {
     logger,
   });
 
-  const showInMainWindow = (ref: string): void => {
+  const showInMainWindow = (target: GithubLinkTarget): void => {
     const window =
       BrowserWindow.getAllWindows().find((candidate) => isMainWindow(candidate, options)) ??
       openWindow();
@@ -212,18 +218,23 @@ export function startApp(app: App, options: StartAppOptions): void {
     window.show();
     window.focus();
     const { webContents } = window;
+    const send = (): void => {
+      if (target.kind === 'branch') {
+        sendEvent(webContents, 'link:open-branch', { ref: target.text });
+      } else {
+        sendEvent(webContents, 'link:open-pr', { ref: target.text });
+      }
+    };
     if (webContents.isLoading()) {
-      webContents.once('did-finish-load', () => {
-        sendEvent(webContents, 'link:open-pr', { ref });
-      });
+      webContents.once('did-finish-load', send);
       return;
     }
-    sendEvent(webContents, 'link:open-pr', { ref });
+    send();
   };
 
   openWindow();
   options.links.attach((link) => {
-    void handlePullRequestLink(link, {
+    void handleGithubLink(link, {
       confirm: isOpenConfirmed,
       reportInvalid: (reason) => {
         logger.warn('refused a beuve:// link', { reason });
@@ -281,11 +292,18 @@ async function showOpenDialog(
   return dialog.showOpenDialog(owner, options);
 }
 
-/** Asks, as a sheet of the focused window when there is one, before a link opens a pull request. */
-async function isOpenConfirmed(text: string): Promise<boolean> {
+/**
+ * Asks, as a sheet of the focused window when there is one, before a link opens a pull request or
+ * follows a branch.
+ */
+async function isOpenConfirmed({ kind, text }: GithubLinkTarget): Promise<boolean> {
+  let message = `Open pull request ${text}?`;
+  if (kind === 'branch') {
+    message = `Follow branch ${text}?`;
+  }
   const options: Electron.MessageBoxOptions = {
     type: 'question',
-    message: `Open pull request ${text}?`,
+    message,
     detail:
       'A link asked beuve to open it. beuve will fetch its head into a local review checkout; it never pushes.',
     buttons: ['Open', 'Cancel'],

@@ -1,10 +1,10 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * The github domain's schema (ADR 0006, 0037): the last pull request metadata GitHub reported,
- * keyed by the pull request itself rather than a session, so two clones reviewing one pull
- * request share it and nothing here depends on the session domain's tables. No tokens, ETags or
- * CI results are stored.
+ * The github domain's schema (ADR 0006, 0037, 0112): the last pull request and followed-branch
+ * metadata GitHub reported, keyed by the pull request or branch itself rather than a session, so
+ * two clones reviewing one change share it and nothing here depends on the session domain's
+ * tables. No tokens, ETags or CI results are stored.
  */
 export const githubMigrations: readonly Migration[] = [
   {
@@ -29,6 +29,20 @@ export const githubMigrations: readonly Migration[] = [
         github_updated_at TEXT NOT NULL,
         fetched_at TEXT NOT NULL,
         PRIMARY KEY (host, owner, repo, number)
+      ) STRICT;
+
+      CREATE TABLE github_branches (
+        host TEXT NOT NULL CHECK (host <> '' AND host NOT GLOB '*[^a-z0-9.-]*'),
+        owner TEXT NOT NULL CHECK (owner <> ''),
+        repo TEXT NOT NULL CHECK (repo <> ''),
+        branch TEXT NOT NULL CHECK (branch <> ''),
+        default_branch TEXT NOT NULL CHECK (default_branch <> ''),
+        html_url TEXT NOT NULL CHECK (html_url GLOB 'https://*'),
+        head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
+        state TEXT NOT NULL CHECK (state IN ('present', 'gone')),
+        pull_number INTEGER CHECK (pull_number IS NULL OR pull_number > 0),
+        fetched_at TEXT NOT NULL,
+        PRIMARY KEY (host, owner, repo, branch)
       ) STRICT;
     `,
   },

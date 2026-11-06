@@ -60,6 +60,8 @@ import type {
   OpenPullRequestResponse,
   PostGithubReviewResponse,
   PullRequestSessionView,
+  OpenRemoteBranchResponse,
+  RemoteBranchSessionView,
   PullRequestTimelineView,
   ChatCommandRequest,
   RepositoryInspectionView,
@@ -1070,6 +1072,27 @@ export function createIpcHandlers(
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
         return services.github.getPullRequest(parsed.data.sessionId);
+      }
+      return invalid(parsed.error);
+    },
+    'github:open-branch': async (request, sender): Promise<IpcResult<OpenRemoteBranchResponse>> => {
+      const parsed = openPullRequestRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { ref, repoPath, requestId: id } = parsed.data;
+      // One open at a time per window, pull request or branch (ADR 0112).
+      return scoped({ sender, kind: 'open-pull-request', id }, async (options) => {
+        return services.github.openBranch(
+          { ref, ...(repoPath !== undefined && { repoPath }) },
+          options,
+        );
+      });
+    },
+    'github:get-branch': async (request): Promise<IpcResult<RemoteBranchSessionView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.github.getBranch(parsed.data.sessionId);
       }
       return invalid(parsed.error);
     },

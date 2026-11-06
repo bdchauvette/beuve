@@ -166,6 +166,10 @@ export class BeuveApp extends LitElement {
       void this.ura.refresh(review.session.id);
       void this.reviewEdits.load(review.session.id);
       void this.chat.load(review.session.id);
+      if (review.session.source.kind === 'remote-branch') {
+        void this.github.loadBranch(review.session.id);
+        return;
+      }
       if (review.session.source.kind !== 'github-pull-request') {
         return;
       }
@@ -439,6 +443,9 @@ export class BeuveApp extends LitElement {
         this.runCommandId(id);
       }),
       bridge.on('link:open-pr', ({ ref }) => {
+        void this.github.open({ ref });
+      }),
+      bridge.on('link:open-branch', ({ ref }) => {
         void this.github.open({ ref });
       }),
     ];
@@ -957,6 +964,7 @@ export class BeuveApp extends LitElement {
         .notice=${this.statusNotice}
         .ci=${this.github.ci}
         .attention=${this.github.pullRequest?.attention}
+        .remoteBranch=${this.github.branch}
         .githubAuth=${this.github.auth}
         @beuve-status-action=${this.onStatusAction}
         @beuve-status-open-url=${this.onStatusOpenUrl}

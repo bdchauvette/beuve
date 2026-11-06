@@ -74,7 +74,7 @@ export interface MainServices {
   >;
   /** Shells in beuve's checkouts (ADR 0095). */
   readonly terminal: TerminalServices;
-  readonly github: Omit<GithubServices, 'badgeFor' | 'intentFor' | 'watch'>;
+  readonly github: Omit<GithubServices, 'badgeFor' | 'branchBadgeFor' | 'intentFor' | 'watch'>;
   /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };
   /** The model registry, its keys and Test, for the Settings window only (ADR 0070). */

@@ -23,6 +23,20 @@ export function insertSession(
         `INSERT INTO sessions (id, kind, repo_path, base_ref, head_sha, head_ref, created_at, updated_at)
          VALUES (?, 'local', ?, ?, ?, ?, ?, ?);`,
       ).run(...common, source.headRef, ...timestamps);
+    } else if (source.kind === 'remote-branch') {
+      db.prepare(
+        `INSERT INTO sessions (id, kind, repo_path, base_ref, head_sha, forge, host, owner, repo,
+                               branch, created_at, updated_at)
+         VALUES (?, 'remote-branch', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      ).run(
+        ...common,
+        source.forge,
+        source.host,
+        source.owner,
+        source.repo,
+        source.branch,
+        ...timestamps,
+      );
     } else {
       db.prepare(
         `INSERT INTO sessions (id, kind, repo_path, base_ref, head_sha, host, owner, repo, pr_number,

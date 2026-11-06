@@ -9,14 +9,20 @@ import type {
   OpenedView,
   OpenPullRequestRequest,
   OpenPullRequestResponse,
+  OpenRemoteBranchRequest,
+  OpenRemoteBranchResponse,
   PostGithubReviewRequest,
   PostGithubReviewResponse,
   PullRequestBadgeView,
   PullRequestSessionView,
   PullRequestTimelineView,
   PullRequestUpdatedView,
+  RemoteBranchBadgeView,
+  RemoteBranchSessionView,
+  RemoteBranchUpdatedView,
   SessionSourceView,
 } from '#contract/ipc-contract.ts';
+import { findStoredBranch } from '#internal/github/find-stored-branch.ts';
 import { findPullRequestStack } from '#internal/github/find-pull-request-stack.ts';
 import { findStoredPullRequest } from '#internal/github/find-stored-pull-request.ts';
 import { getPullRequestTimeline } from '#internal/github/get-pull-request-timeline.ts';
@@ -40,9 +46,11 @@ import { failureFromGithubError } from './failure-from-github-error.ts';
 import type { GithubContext } from './github-context.ts';
 import { isAllowedGithubLink } from './is-allowed-github-link.ts';
 import { openPullRequest } from './open-pull-request.ts';
+import { openRemoteBranch } from './open-remote-branch.ts';
 import { postGithubReview } from './post-github-review.ts';
 import { prepareGithubReview } from './prepare-github-review.ts';
 import { pullRequestViewFrom } from './pull-request-view-from.ts';
+import { readRemoteBranchView } from './read-remote-branch-view.ts';
 import { stackViewFrom } from './stack-view-from.ts';
 
 /** GitHub pull request sessions as the renderer reaches them (ADR 0037–0040). */
@@ -55,6 +63,13 @@ export interface GithubServices {
     options?: RequestOptions,
   ) => Promise<IpcResult<OpenPullRequestResponse>>;
   readonly getPullRequest: (sessionId: string) => Promise<IpcResult<PullRequestSessionView>>;
+  /** Follows a GitHub branch that may have no pull request (ADR 0112). */
+  readonly openBranch: (
+    request: OpenRemoteBranchRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<OpenRemoteBranchResponse>>;
+  /** The stored branch of a remote-branch session; makes it the polled session. */
+  readonly getBranch: (sessionId: string) => Promise<IpcResult<RemoteBranchSessionView>>;
   /** The pull request's commits, reviews and comments, oldest first (ADR 0110). */
   readonly getTimeline: (
     sessionId: string,
@@ -68,6 +83,8 @@ export interface GithubServices {
   readonly openLink: (request: OpenGithubLinkRequest) => Promise<IpcResult<OpenedView>>;
   /** The stored title, state and base branch of a pull request session, for the session list. */
   readonly badgeFor: (source: SessionSourceView) => PullRequestBadgeView | undefined;
+  /** The stored state of a remote-branch session's branch, for the session list (ADR 0112). */
+  readonly branchBadgeFor: (source: SessionSourceView) => RemoteBranchBadgeView | undefined;
   /** The PR body as review intent (ADR 0022's `intent`), for pull request sessions. */
   readonly intentFor: (sessionId: string) => string | undefined;
   /** Polls this session while it is the one the reviewer has open; `undefined` stops polling. */
@@ -77,6 +94,7 @@ export interface GithubServices {
   readonly setForeground: (isForeground: boolean) => void;
   readonly onPullRequestUpdated: (listener: (event: PullRequestUpdatedView) => void) => () => void;
   readonly onCiStatus: (listener: (event: CiStatusChangedView) => void) => () => void;
+  readonly onBranchUpdated: (listener: (event: RemoteBranchUpdatedView) => void) => () => void;
   readonly dispose: () => void;
 }
 
@@ -138,7 +156,7 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       return hosts;
     }
     for (const session of listed.value) {
-      if (session.source.kind === 'github-pull-request') {
+      if (session.source.kind !== 'local') {
         hosts.add(session.source.host);
       }
     }
@@ -151,10 +169,31 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       return 'github.com';
     }
     const session = loadSession(options.context, sessionId);
-    if (session.ok && session.value.source.kind === 'github-pull-request') {
+    if (session.ok && session.value.source.kind !== 'local') {
       return session.value.source.host;
     }
     return 'github.com';
+  };
+
+  const openPull = async (
+    request: OpenPullRequestRequest,
+    call: RequestOptions = {},
+  ): Promise<OpenPullRequestResponse> => {
+    return openPullRequest(github, request, {
+      onOpened: ({ session, pullRequest }) => {
+        poller.watch(session.id);
+        void (async (): Promise<void> => {
+          const stack = await options.clients.withClient(hostOf(session.source), async (client) => {
+            // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
+            return findPullRequestStack(client, pullRequest);
+          });
+          if (stack.ok && session.source.kind === 'github-pull-request') {
+            poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));
+          }
+        })();
+      },
+      signal: call.signal,
+    });
   };
 
   return {
@@ -173,25 +212,34 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     },
 
     openPullRequest: async (request, call = {}): Promise<IpcResult<OpenPullRequestResponse>> => {
-      const opened = await openPullRequest(github, request, {
-        onOpened: ({ session, pullRequest }) => {
+      return ok(await openPull(request, call));
+    },
+
+    openBranch: async (request, call = {}): Promise<IpcResult<OpenRemoteBranchResponse>> => {
+      const opened = await openRemoteBranch(github, request, {
+        onOpened: (session) => {
           poller.watch(session.id);
-          void (async (): Promise<void> => {
-            const stack = await options.clients.withClient(
-              hostOf(session.source),
-              async (client) => {
-                // eslint-disable-next-line local/forward-abort-signal -- the stack lookup outlives the open request.
-                return findPullRequestStack(client, pullRequest);
-              },
-            );
-            if (stack.ok && session.source.kind === 'github-pull-request') {
-              poller.rememberStack(session.id, stackViewFrom(session.source.host, stack.value));
-            }
-          })();
         },
+        openPullRequest: openPull,
         signal: call.signal,
       });
       return ok(opened);
+    },
+
+    getBranch: async (sessionId): Promise<IpcResult<RemoteBranchSessionView>> => {
+      const loaded = loadSession(options.context, sessionId);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      if (loaded.value.source.kind !== 'remote-branch') {
+        return err({ code: 'refused', message: 'not a remote-branch session' });
+      }
+      const branch = await readRemoteBranchView(github, loaded.value);
+      if (branch === undefined) {
+        return err({ code: 'not-found', message: 'beuve has stored nothing for this branch' });
+      }
+      poller.watch(sessionId);
+      return ok({ sessionId, branch });
     },
 
     getPullRequest: async (sessionId): Promise<IpcResult<PullRequestSessionView>> => {
@@ -305,6 +353,18 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
       };
     },
 
+    branchBadgeFor: (source): RemoteBranchBadgeView | undefined => {
+      if (source.kind !== 'remote-branch') {
+        return undefined;
+      }
+      const { host, owner, repo, branch } = source;
+      const stored = findStoredBranch(db, { host, owner, repo, branch });
+      if (!stored.ok || stored.value === undefined) {
+        return undefined;
+      }
+      return { state: stored.value.state, defaultBranch: stored.value.defaultBranch };
+    },
+
     intentFor: (sessionId): string | undefined => {
       const stored = storedForSession(sessionId);
       if (stored === undefined) {
@@ -318,13 +378,14 @@ export function createGithubServices(options: GithubServicesOptions): GithubServ
     setForeground: poller.setForeground,
     onPullRequestUpdated: poller.onUpdated,
     onCiStatus: poller.onCiStatus,
+    onBranchUpdated: poller.onBranchUpdated,
     dispose: poller.dispose,
   };
 }
 
-/** The GitHub host a session's pull request lives on; github.com for any other session. */
+/** The GitHub host a session's pull request or branch lives on; github.com for a local one. */
 function hostOf(source: Session['source']): string {
-  if (source.kind === 'github-pull-request') {
+  if (source.kind !== 'local') {
     return source.host;
   }
   return 'github.com';

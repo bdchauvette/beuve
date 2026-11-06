@@ -4,6 +4,7 @@ import type {
   PullRequestStackView,
   PullRequestUpdatedView,
   CiStatusView,
+  RemoteBranchUpdatedView,
 } from '#contract/ipc-contract.ts';
 import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
@@ -29,17 +30,23 @@ import { moveSessionHead } from './move-session-head.ts';
 import { syncPullRequestHead } from './sync-pull-request-head.ts';
 import { attentionViewFrom } from './attention-view-from.ts';
 import { ciStatusViewFrom } from './ci-status-view-from.ts';
+import { pollRemoteBranch } from './poll-remote-branch.ts';
+import type { BranchPollState } from './poll-remote-branch.ts';
 import { pullRequestViewFrom } from './pull-request-view-from.ts';
 import { stackViewFrom } from './stack-view-from.ts';
 import { multiplyDuration } from '#x/time/multiply-duration.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 /**
- * Keeps the open pull request session in step with GitHub (ADR 0038): one session at a time,
- * conditional requests, a new head fetched, verified and stored with `advanceHead`, CI pushed.
+ * Keeps the open pull request or remote-branch session in step with GitHub (ADR 0038, 0112): one
+ * session at a time, conditional requests, a new head fetched, verified and stored with
+ * `advanceHead`, CI pushed, a branch promoted to its pull request's session once there is one.
  */
 export interface PullRequestPoller {
-  /** Polls this session from now on (at once, then on the interval); `undefined` stops. */
+  /**
+   * Polls this session from now on (at once, then on the interval); `undefined` stops. A branch
+   * found gone stops polling until the session is watched again.
+   */
   readonly watch: (sessionId: string | undefined) => void;
   /** One poll now, joining one already running. Resolves when it is done. Never rejects. */
   readonly pollNow: (sessionId: string) => Promise<void>;
@@ -51,6 +58,7 @@ export interface PullRequestPoller {
   readonly rememberStack: (sessionId: string, stack: PullRequestStackView) => void;
   readonly onUpdated: (listener: (event: PullRequestUpdatedView) => void) => () => void;
   readonly onCiStatus: (listener: (event: CiStatusChangedView) => void) => () => void;
+  readonly onBranchUpdated: (listener: (event: RemoteBranchUpdatedView) => void) => () => void;
   readonly dispose: () => void;
 }
 
@@ -103,6 +111,8 @@ interface PollState {
   failures: number;
   /** Measures the time since the last poll started. */
   lastPolled: Stopwatch | undefined;
+  /** A remote-branch session's own polling state (ADR 0112). */
+  branch?: BranchPollState;
 }
 
 const backgroundFactor = 5;
@@ -115,9 +125,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
   const interval = options.interval ?? Temporal.Duration.from({ seconds: 60 });
   const isScheduled = options.scheduled ?? true;
   const states = new Map<string, PollState>();
-  const inFlight = new Map<string, Promise<Temporal.Duration>>();
+  const inFlight = new Map<string, Promise<Temporal.Duration | undefined>>();
   const updatedListeners = new Set<(event: PullRequestUpdatedView) => void>();
   const ciListeners = new Set<(event: CiStatusChangedView) => void>();
+  const branchListeners = new Set<(event: RemoteBranchUpdatedView) => void>();
   let watched: string | undefined;
   let isForeground = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -275,7 +286,40 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     });
   };
 
-  const pollOnce = async (sessionId: string): Promise<Temporal.Duration> => {
+  /** One branch poll; a promoted session is polled again at once, as a pull request. */
+  const pollBranch = async (
+    session: Session,
+    state: PollState,
+  ): Promise<Temporal.Duration | undefined> => {
+    state.branch ??= { polls: 0 };
+    const polled = await pollRemoteBranch(context, {
+      session,
+      state: state.branch,
+      signal: disposal.signal,
+    });
+    if (polled.kind === 'failed') {
+      logger.info('github poll: branch unavailable', { kind: polled.error.kind });
+      return failed(state, polled.error);
+    }
+    state.failures = 0;
+    if (polled.event !== undefined) {
+      emit(branchListeners, polled.event);
+    }
+    switch (polled.kind) {
+      case 'gone': {
+        return undefined;
+      }
+      case 'promoted': {
+        delete state.branch;
+        return pollOnce(session.id);
+      }
+      case 'polled': {
+        return interval;
+      }
+    }
+  };
+
+  const pollOnce = async (sessionId: string): Promise<Temporal.Duration | undefined> => {
     const state = stateOf(sessionId);
     state.lastPolled = new Stopwatch();
     const loaded = loadSession(context.session, sessionId);
@@ -284,6 +328,9 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     }
     const session = loaded.value;
     const { source } = session;
+    if (source.kind === 'remote-branch') {
+      return pollBranch(session, state);
+    }
     if (source.kind !== 'github-pull-request') {
       return interval;
     }
@@ -358,12 +405,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     return interval;
   };
 
-  const pollShared = async (sessionId: string): Promise<Temporal.Duration> => {
+  const pollShared = async (sessionId: string): Promise<Temporal.Duration | undefined> => {
     const running = inFlight.get(sessionId);
     if (running !== undefined) {
       return running;
     }
-    const started = (async (): Promise<Temporal.Duration> => {
+    const started = (async (): Promise<Temporal.Duration | undefined> => {
       try {
         return await pollOnce(sessionId);
       } catch (error: unknown) {
@@ -388,6 +435,10 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       void (async (): Promise<void> => {
         const next = await pollShared(sessionId);
         if (watched !== sessionId) {
+          return;
+        }
+        if (next === undefined) {
+          watched = undefined;
           return;
         }
         if (isForeground) {
@@ -448,6 +499,12 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
       ciListeners.add(listener);
       return (): void => {
         ciListeners.delete(listener);
+      };
+    },
+    onBranchUpdated: (listener): (() => void) => {
+      branchListeners.add(listener);
+      return (): void => {
+        branchListeners.delete(listener);
       };
     },
     dispose: (): void => {

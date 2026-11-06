@@ -45,6 +45,19 @@ test('insertSession keeps the same pull request number on two hosts apart', ({ e
   expect(findSessionBySource(db, pull())).toStrictEqual({ ok: true, value: first });
 });
 
+test('insertSession round-trips a remote branch and keys it by branch', ({ expect, db }) => {
+  const first = make(branch(), 1);
+  const other = make({ ...branch(), branch: 'claude/other' }, 2);
+  expect(insertSession(db, first).ok).toBe(true);
+  expect(insertSession(db, other).ok).toBe(true);
+  expect(findSessionBySource(db, branch())).toStrictEqual({ ok: true, value: first });
+  const duplicate = make(branch(), 3);
+  expect(insertSession(db, duplicate)).toStrictEqual({
+    ok: false,
+    error: { kind: 'duplicate-session', source: branch() },
+  });
+});
+
 test('insertSession refuses a second session for the same change', ({ expect, db }) => {
   insertSession(db, make(local(), 1));
   const duplicate = make(local(), 2);
@@ -81,9 +94,24 @@ function pull(): PullRequestSource {
   };
 }
 
+function branch(): BranchSource {
+  return {
+    kind: 'remote-branch',
+    repoPath: '/repo',
+    baseRef: 'refs/beuve/branch/0123/base',
+    forge: 'github',
+    host: 'github.com',
+    owner: 'acme',
+    repo: 'beuve',
+    branch: 'claude/fix',
+  };
+}
+
 function make(source: SessionSource, n: number): UnreviewedSession {
   return okValueFrom(createSession(source, 'a'.repeat(40) as CommitSha, countingSessionDeps(n)));
 }
+
+type BranchSource = Extract<SessionSource, { readonly kind: 'remote-branch' }>;
 
 type LocalSource = Extract<SessionSource, { readonly kind: 'local' }>;
 

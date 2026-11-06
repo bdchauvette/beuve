@@ -11,6 +11,7 @@ import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { palettePrefixes } from './palette-prefixes.ts';
 import type { PaletteGroup } from './palette-prefixes.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
+import type { OpenQuery } from './parse-open-query.ts';
 import { shortenPath } from './shorten-path.ts';
 
 /** The palette's sources, as `beuve-app` holds them. */
@@ -174,33 +175,9 @@ function commandKeys(command: CommandDefinition, platform: KeyPlatform): string[
 }
 
 function openCandidates(text: string, sessions: readonly SessionSummary[]): Candidate[] {
-  const parsed = parseOpenQuery(text);
-  const pasted: Candidate[] = [];
-  if (parsed.kind === 'pull-request') {
-    const repoPath = findKnownClone(sessions, parsed);
-    pasted.push({
-      pinned: true,
-      entry: {
-        id: 'open:pasted-pull',
-        group: 'open',
-        title: `Open ${parsed.owner}/${parsed.repo}#${String(parsed.number)}`,
-        detail: cloneDetail(repoPath),
-        action: { kind: 'open-pull', ref: parsed.ref, ...(repoPath !== undefined && { repoPath }) },
-      },
-    });
-  } else if (parsed.kind === 'path') {
-    pasted.push({
-      pinned: true,
-      entry: {
-        id: 'open:pasted-path',
-        group: 'open',
-        title: `Review a branch in ${parsed.path}`,
-        action: { kind: 'open-step', step: 'local', path: parsed.path },
-      },
-    });
-  }
-  if (parsed.kind === 'pull-request' || parsed.kind === 'path') {
-    return pasted;
+  const pasted = pastedCandidate(parseOpenQuery(text), sessions);
+  if (pasted !== undefined) {
+    return [pasted];
   }
   const recent = sessions
     .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -228,6 +205,64 @@ function openCandidates(text: string, sessions: readonly SessionSummary[]): Cand
   return [...recent, ...steps];
 }
 
+/** The one entry a pasted pull request, branch or folder offers; `undefined` for other text. */
+function pastedCandidate(
+  parsed: OpenQuery,
+  sessions: readonly SessionSummary[],
+): Candidate | undefined {
+  switch (parsed.kind) {
+    case 'pull-request': {
+      const repoPath = findKnownClone(sessions, parsed);
+      return {
+        pinned: true,
+        entry: {
+          id: 'open:pasted-pull',
+          group: 'open',
+          title: `Open ${parsed.owner}/${parsed.repo}#${String(parsed.number)}`,
+          detail: cloneDetail(repoPath),
+          action: {
+            kind: 'open-pull',
+            ref: parsed.ref,
+            ...(repoPath !== undefined && { repoPath }),
+          },
+        },
+      };
+    }
+    case 'branch': {
+      const repoPath = findKnownClone(sessions, parsed);
+      return {
+        pinned: true,
+        entry: {
+          id: 'open:pasted-branch',
+          group: 'open',
+          title: `Follow ${parsed.owner}/${parsed.repo}:${parsed.branch}`,
+          detail: cloneDetail(repoPath),
+          action: {
+            kind: 'open-pull',
+            ref: parsed.ref,
+            ...(repoPath !== undefined && { repoPath }),
+          },
+        },
+      };
+    }
+    case 'path': {
+      return {
+        pinned: true,
+        entry: {
+          id: 'open:pasted-path',
+          group: 'open',
+          title: `Review a branch in ${parsed.path}`,
+          action: { kind: 'open-step', step: 'local', path: parsed.path },
+        },
+      };
+    }
+    case 'empty':
+    case 'filter': {
+      return undefined;
+    }
+  }
+}
+
 function cloneDetail(repoPath: string | undefined): string {
   if (repoPath === undefined) {
     return 'choose the local clone';
@@ -248,6 +283,23 @@ function sessionCandidate(session: SessionSummary): Candidate {
         group: 'open',
         title: `${number} ${title}`,
         detail: `${source.owner}/${source.repo} · ${folder}`,
+        action: { kind: 'session', sessionId: session.id },
+      },
+    };
+  }
+  if (source.kind === 'remote-branch') {
+    const name = `${source.owner}/${source.repo}:${source.branch}`;
+    let state = '';
+    if (session.remoteBranch?.state === 'gone') {
+      state = ' · gone';
+    }
+    return {
+      searchText: `${name} ${folder}`,
+      entry: {
+        id: `session:${session.id}`,
+        group: 'open',
+        title: source.branch,
+        detail: `${source.owner}/${source.repo} · ${folder}${state}`,
         action: { kind: 'session', sessionId: session.id },
       },
     };

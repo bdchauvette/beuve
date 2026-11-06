@@ -26,6 +26,32 @@ describe('parseOpenQuery', () => {
     });
   });
 
+  test('recognizes branches to follow by tree URL or owner/repo:branch (ADR 0112)', ({
+    expect,
+  }) => {
+    expect(parseOpenQuery('https://github.com/octo-org/hello/tree/claude/fix-x')).toStrictEqual({
+      kind: 'branch',
+      ref: 'https://github.com/octo-org/hello/tree/claude/fix-x',
+      host: 'github.com',
+      owner: 'octo-org',
+      repo: 'hello',
+      branch: 'claude/fix-x',
+    });
+    expect(parseOpenQuery('octo-org/hello:claude/x')).toMatchObject({
+      kind: 'branch',
+      host: 'github.com',
+      branch: 'claude/x',
+    });
+    expect(parseOpenQuery('GHE.example.com/a/b:main')).toMatchObject({
+      kind: 'branch',
+      host: 'ghe.example.com',
+      owner: 'a',
+      repo: 'b',
+    });
+    expect(parseOpenQuery('https://github.com/o/r/tree/')).toMatchObject({ kind: 'filter' });
+    expect(parseOpenQuery('a:b')).toMatchObject({ kind: 'filter' });
+  });
+
   test('treats absolute and home paths as folders', ({ expect }) => {
     expect(parseOpenQuery('/src/beuve')).toStrictEqual({ kind: 'path', path: '/src/beuve' });
     expect(parseOpenQuery('~/code/x')).toStrictEqual({ kind: 'path', path: '~/code/x' });

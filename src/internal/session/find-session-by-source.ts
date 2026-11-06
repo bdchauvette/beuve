@@ -28,6 +28,13 @@ function sessionsReviewing(
       [source.repoPath, source.baseRef, source.headRef],
     );
   }
+  if (source.kind === 'remote-branch') {
+    return selectSessions(
+      db,
+      "s.kind = 'remote-branch' AND s.repo_path = ? AND s.forge = ? AND s.host = ? AND s.owner = ? AND s.repo = ? AND s.branch = ?",
+      [source.repoPath, source.forge, source.host, source.owner, source.repo, source.branch],
+    );
+  }
   return selectSessions(
     db,
     "s.kind = 'github-pull-request' AND s.repo_path = ? AND s.host = ? AND s.owner = ? AND s.repo = ? AND s.pr_number = ?",

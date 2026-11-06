@@ -27,6 +27,7 @@ describe('sessionMigrations', () => {
     expect(() => {
       insertLocal(db, {});
       insertPull(db, { id: row().otherId });
+      insertBranch(db, { id: row().checkpointId });
     }).not.toThrow();
   });
 
@@ -50,10 +51,54 @@ describe('sessionMigrations', () => {
     ['a head ref', { head_ref: 'feature' }],
     ['an uppercase host', { host: 'GitHub.com' }],
     ['a host with a scheme', { host: 'https://github.com' }],
+    ['a branch', { branch: 'feature' }],
+    ['a forge', { forge: 'github' }],
   ])('rejects a pull request session with %s', ([, overrides], { expect, db }) => {
     expect(() => {
       insertPull(db, overrides);
     }).toThrow('CHECK constraint failed');
+  });
+
+  test.for<[string, Record<string, unknown>]>([
+    ['a missing branch', { branch: undefined }],
+    ['a blank branch', { branch: ' ' }],
+    ['an unknown forge', { forge: 'gitlab' }],
+    ['a missing forge', { forge: undefined }],
+    ['a missing host', { host: undefined }],
+    ['a pull request number', { pr_number: 3 }],
+    ['a head ref', { head_ref: 'feature' }],
+  ])('rejects a remote-branch session with %s', ([, overrides], { expect, db }) => {
+    expect(() => {
+      insertBranch(db, overrides);
+    }).toThrow('CHECK constraint failed');
+  });
+
+  test('lets a remote-branch row become a pull request row in place (ADR 0112)', ({
+    expect,
+    db,
+  }) => {
+    insertBranch(db, {});
+    db.prepare(
+      `UPDATE sessions SET kind = 'github-pull-request', pr_number = 9, forge = NULL, branch = NULL
+        WHERE id = ?;`,
+    ).run(row().id);
+    expect(db.prepare('SELECT kind, pr_number FROM sessions;').get()).toMatchObject({
+      kind: 'github-pull-request',
+      pr_number: 9,
+    });
+    expect(() => {
+      db.prepare("UPDATE sessions SET kind = 'remote-branch' WHERE id = ?;").run(row().id);
+    }).toThrow('CHECK constraint failed');
+  });
+
+  test('keeps one session per remote branch and clone', ({ expect, db }) => {
+    insertBranch(db, {});
+    expect(() => {
+      insertBranch(db, { id: row().checkpointId, branch: 'claude/other' });
+    }).not.toThrow();
+    expect(() => {
+      insertBranch(db, { id: row().otherId });
+    }).toThrow('UNIQUE constraint failed');
   });
 
   test('rejects text in the integer column (STRICT)', ({ expect, db }) => {
@@ -154,6 +199,25 @@ function insertPull(db: DatabaseSync, overrides: Record<string, unknown>): void 
     repo: 'beuve',
     pr_number: 7,
     host: 'github.com',
+    head_sha: sha,
+    created_at: time,
+    updated_at: time,
+    ...overrides,
+  });
+}
+
+function insertBranch(db: DatabaseSync, overrides: Record<string, unknown>): void {
+  const { id, sha, time } = row();
+  insert(db, {
+    id,
+    kind: 'remote-branch',
+    repo_path: '/repo',
+    base_ref: 'refs/beuve/branch/0123/base',
+    forge: 'github',
+    host: 'github.com',
+    owner: 'acme',
+    repo: 'beuve',
+    branch: 'claude/fix',
     head_sha: sha,
     created_at: time,
     updated_at: time,

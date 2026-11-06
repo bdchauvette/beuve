@@ -18,7 +18,10 @@ export interface GithubHarness {
   readonly dialogs: readonly boolean[];
   readonly updates: () => number;
   /** Delivers an event to the controller's subscription, if one is held. */
-  readonly emit: (channel: 'github:pr-updated' | 'github:ci-status', payload: unknown) => void;
+  readonly emit: (
+    channel: 'github:pr-updated' | 'github:ci-status' | 'github:branch-updated',
+    payload: unknown,
+  ) => void;
   readonly listening: () => number;
 }
 

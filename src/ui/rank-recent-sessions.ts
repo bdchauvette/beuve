@@ -38,5 +38,8 @@ function searchParts(session: SessionSummary): readonly string[] {
       source.repoPath,
     ];
   }
+  if (source.kind === 'remote-branch') {
+    return [`${source.owner}/${source.repo}:${source.branch}`, source.repoPath];
+  }
   return [source.repoPath, source.baseRef, source.headRef];
 }

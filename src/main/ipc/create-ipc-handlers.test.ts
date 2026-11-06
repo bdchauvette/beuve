@@ -1165,6 +1165,8 @@ function stubServices(
       authStatus: notWired,
       openPullRequest: notWired,
       getPullRequest: notWired,
+      openBranch: notWired,
+      getBranch: notWired,
       getTimeline: notWired,
       previewReview: notWired,
       postReview: notWired,
@@ -1175,6 +1177,9 @@ function stubServices(
         return doNothingSync;
       },
       onCiStatus: (): (() => void) => {
+        return doNothingSync;
+      },
+      onBranchUpdated: (): (() => void) => {
         return doNothingSync;
       },
       dispose: doNothingSync,

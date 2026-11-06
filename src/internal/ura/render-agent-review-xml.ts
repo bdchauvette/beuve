@@ -47,6 +47,17 @@ function repositoryAttributes(repository: AgentReview['change']['repository']): 
       'head-ref': repository.headRef,
     };
   }
+  if (repository.kind === 'remote-branch') {
+    return {
+      kind: repository.kind,
+      path: repository.path,
+      'base-ref': repository.baseRef,
+      host: repository.host,
+      owner: repository.owner,
+      repo: repository.repo,
+      branch: repository.branch,
+    };
+  }
   return {
     kind: repository.kind,
     path: repository.path,

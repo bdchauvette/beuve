@@ -4,7 +4,6 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   ClaudeStatusView,
   IpcResult,
-  PullRequestBadgeView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -184,19 +183,19 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     trackOpenSession(
       createSessionServices({ ...options, onHeadMoved, caches }),
       open,
-      (id, isPull) => {
-        if (isPull) {
+      (id, isPolled) => {
+        if (isPolled) {
           gh.services?.watch(id);
         } else {
           gh.services?.watch(undefined);
         }
       },
     ),
-    (summary): PullRequestBadgeView | undefined => {
-      if (summary.source.kind === 'github-pull-request') {
-        return gh.services?.badgeFor(summary.source);
-      }
-      return undefined;
+    (summary): SessionBadges => {
+      return {
+        pullRequest: gh.services?.badgeFor(summary.source),
+        remoteBranch: gh.services?.branchBadgeFor(summary.source),
+      };
     },
   );
   const parser = createSyntaxParser(options.syntax);
@@ -388,19 +387,19 @@ function summaryOf(value: ReviewView | SessionSummary): SessionSummary {
 
 /**
  * Remembers the session the reviewer last opened and tells `onOpened` whether it is a pull
- * request (which main then polls, ADR 0038).
+ * request or a followed branch, which main then polls (ADR 0038, 0112).
  */
 function trackOpenSession(
   sessions: SessionServices,
   open: OpenSession,
-  onOpened: (sessionId: string, isPullRequest: boolean) => void,
+  onOpened: (sessionId: string, isPolled: boolean) => void,
 ): SessionServices {
   const remember = <T extends ReviewView | SessionSummary>(result: IpcResult<T>): IpcResult<T> => {
     if (result.ok) {
       const value: ReviewView | SessionSummary = result.value;
       const summary = summaryOf(value);
       open.sessionId = summary.id;
-      onOpened(summary.id, summary.source.kind === 'github-pull-request');
+      onOpened(summary.id, summary.source.kind !== 'local');
     }
     return result;
   };
@@ -412,10 +411,19 @@ function trackOpenSession(
   };
 }
 
-/** Adds each pull request session's stored title and state to `session:list` (ADR 0037). */
+/** What `session:list` adds to a summary from GitHub metadata main stored. */
+interface SessionBadges {
+  readonly pullRequest: SessionSummary['pullRequest'];
+  readonly remoteBranch: SessionSummary['remoteBranch'];
+}
+
+/**
+ * Adds each pull request session's stored title and state, and each followed branch's state, to
+ * `session:list` (ADR 0037, 0112).
+ */
 function withPullRequestBadges(
   sessions: SessionServices,
-  badgeFor: (summary: SessionSummary) => SessionSummary['pullRequest'],
+  badgesFor: (summary: SessionSummary) => SessionBadges,
 ): SessionServices {
   return {
     ...sessions,
@@ -427,11 +435,12 @@ function withPullRequestBadges(
       return {
         ok: true,
         value: listed.value.map((summary) => {
-          const badge = badgeFor(summary);
-          if (badge === undefined) {
-            return summary;
-          }
-          return { ...summary, pullRequest: badge };
+          const { pullRequest, remoteBranch } = badgesFor(summary);
+          return {
+            ...summary,
+            ...(pullRequest !== undefined && { pullRequest }),
+            ...(remoteBranch !== undefined && { remoteBranch }),
+          };
         }),
       };
     },
