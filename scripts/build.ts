@@ -57,22 +57,18 @@ async function buildAll(): Promise<void> {
  * the renderer's stylesheet, and `hostile-harness.html`, which is `index.html` with the harness
  * entry in place of the app's, so it has the production CSP. `--pass-through-policy` builds the
  * harness with a `default` policy that admits every string, the check's negative control; it
- * never touches `dist/`. `--gallery` builds the primitives gallery there too (ADR 0115).
+ * never touches `dist/`.
  */
 async function buildTestPages(): Promise<void> {
   const { values } = parseArgs({
     options: {
       'hostile-harness': { type: 'boolean', default: false },
       'pass-through-policy': { type: 'boolean', default: false },
-      gallery: { type: 'boolean', default: false },
     },
   });
   await rm(distTest, { recursive: true, force: true });
   if (values['hostile-harness']) {
     await buildHostileHarness(values['pass-through-policy']);
-  }
-  if (values.gallery) {
-    await buildGallery();
   }
 }
 
@@ -107,37 +103,6 @@ async function buildHostileHarness(isPassThrough: boolean): Promise<void> {
   } else {
     console.log(page);
   }
-}
-
-/**
- * The primitives gallery of `scripts/check-gallery.ts` (ADR 0115) in `dist-test/ui/`: its entry,
- * the renderer's stylesheet, and `gallery.html`, which is `index.html` with the gallery entry in
- * place of the app's, so it has the production CSP.
- */
-async function buildGallery(): Promise<void> {
-  const outdir = path.join(distTest, 'ui');
-  await build({
-    ...uiOptions(),
-    entryPoints: {
-      gallery: path.join(root, 'src/ui/testing/gallery-entry.ts'),
-      index: path.join(root, 'src/ui/index.css'),
-    },
-    outdir,
-    metafile: false,
-  });
-  let page = await readFile(path.join(root, 'src/ui/index.html'), 'utf8');
-  for (const [from, to] of [
-    ['<title>beuve</title>', '<title>beuve primitives</title>'],
-    ['src="./index.js"', 'src="./gallery.js"'],
-    ['<beuve-app></beuve-app>', '<beuve-gallery></beuve-gallery>'],
-  ] as const) {
-    if (!page.includes(from)) {
-      throw new Error(`src/ui/index.html has no ${from}; update the gallery page`);
-    }
-    page = page.replace(from, () => to);
-  }
-  await writeFile(path.join(outdir, 'gallery.html'), page);
-  console.log(`gallery: ${path.relative(root, outdir)}/gallery.html`);
 }
 
 function harnessPolicy(isPassThrough: boolean): string {
