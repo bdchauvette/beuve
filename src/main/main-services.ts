@@ -26,6 +26,7 @@ import type { ReviewQueueServices } from './queue/create-review-queue-services.t
 import type { LanguageServerConfigServices } from './language-servers/create-language-server-config-services.ts';
 import type { ModelServices } from './models/create-model-services.ts';
 import type { RemoteServices } from './remote/create-remote-services.ts';
+import type { CommitServices } from './commits/create-commit-services.ts';
 import type { ShellServices } from './shell/create-shell-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TerminalServices } from './terminal/create-terminal-services.ts';
@@ -65,6 +66,8 @@ export interface MainServices {
   readonly sheets: SheetServices;
   /** Permalinks to the primary remote (ADR 0067). */
   readonly remote: RemoteServices;
+  /** One commit's people and message, for a commit hash's card (ADR 0116). */
+  readonly commits: CommitServices;
   /** The browser for chat answers' links (ADR 0040, amended). */
   readonly shell: ShellServices;
   readonly flow: FlowServices;
