@@ -65,6 +65,16 @@ jobs:
       - name: Run a shell in the built app's terminal panel (macOS)
         if: runner.os == 'macOS'
         run: time node scripts/check-terminal.ts --screenshots "$RUNNER_TEMP/terminal"
+      # Language-server diagnostics (ADR 0111): a type error in a generated TypeScript repository is
+      # counted in its card's header, underlined on exactly its text and explained on hover.
+      - name: Show language-server diagnostics in the built app (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          time xvfb-run -a -s '-screen 0 1600x1000x24' \
+            node scripts/check-diagnostics.ts --screenshots "$RUNNER_TEMP/diagnostics"
+      - name: Show language-server diagnostics in the built app (macOS)
+        if: runner.os == 'macOS'
+        run: time node scripts/check-diagnostics.ts --screenshots "$RUNNER_TEMP/diagnostics"
       # The packaged app with the runAsNode fuse off and the bundled Node (ADR 0083-0085).
       - name: Package for Linux and check its fuses and bundled Node
         if: runner.os == 'Linux'

@@ -2,11 +2,18 @@ import { css, html, LitElement } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { HoverRequest, HoverView, IpcResult } from '#contract/ipc-contract.ts';
+import type {
+  DiagnosticItemView,
+  HoverRequest,
+  HoverView,
+  IpcResult,
+} from '#contract/ipc-contract.ts';
 
 import { characterOffsetAt } from './character-offset-at.ts';
+import { createDiagnosticNode } from './create-diagnostic-node.ts';
 import { createMarkdownNodes } from './create-markdown-nodes.ts';
 import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
+import type { DiagnosticPosition } from './diagnostics-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 import { placeHoverCard } from './place-hover-card.ts';
@@ -15,10 +22,19 @@ import type { HoverAnchor } from './place-hover-card.ts';
 /** Asks main what the language server says at a position (`lsp:hover`). */
 export type HoverAsk = (request: HoverRequest) => Promise<IpcResult<HoverView>>;
 
-/** What the card shows, and where it was asked about, so the same spot isn't asked twice. */
+/** The diagnostics the window already has for a place in a file (ADR 0111). */
+export type DiagnosticsFor = (path: string, position: DiagnosticPosition) => DiagnosticItemView[];
+
+/**
+ * What the card shows, and where it was asked about, so the same spot isn't asked twice. The
+ * diagnostics there show at once; `isAnswered` says the language server's text has come (or
+ * there is none), so only a spot that is still waiting for it is asked again.
+ */
 interface ShownHover {
   readonly key: string;
   readonly markdown: string;
+  readonly diagnostics: readonly DiagnosticItemView[];
+  readonly isAnswered: boolean;
   readonly anchor: HoverAnchor;
 }
 
@@ -106,6 +122,29 @@ export class BeuveHoverCard extends LitElement {
       text-decoration: underline dotted;
       cursor: default;
     }
+
+    .card .diagnostic {
+      margin: 0 0 var(--beuve-space-2);
+      padding-left: var(--beuve-space-2);
+      border-left: 2px solid var(--beuve-text-muted);
+      white-space: pre-wrap;
+    }
+
+    .card .diagnostic.error {
+      border-left-color: var(--beuve-danger);
+    }
+
+    .card .diagnostic.warning {
+      border-left-color: var(--beuve-warn);
+    }
+
+    .card .diagnostic.information {
+      border-left-color: var(--beuve-accent);
+    }
+
+    .card .diagnostic-origin {
+      color: var(--beuve-text-muted);
+    }
   `;
 
   private dwellTimer: ReturnType<typeof setTimeout> | undefined;
@@ -114,7 +153,7 @@ export class BeuveHoverCard extends LitElement {
   private generation = 0;
   private pending: HoverPoint | undefined;
   private pointer = { clientX: 0, clientY: 0 };
-  private renderedMarkdown = '';
+  private renderedKey = '';
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     this.pointer = { clientX: event.clientX, clientY: event.clientY };
@@ -137,6 +176,8 @@ export class BeuveHoverCard extends LitElement {
   };
 
   @property({ attribute: false }) accessor ask: HoverAsk | undefined;
+  /** The diagnostics for a place in a file, which show above what the server says there. */
+  @property({ attribute: false }) accessor diagnosticsFor: DiagnosticsFor | undefined;
   @property() accessor sessionId = '';
   /** The commit the code on screen is at; the session head when absent. */
   @property() accessor sha: string | undefined;
@@ -150,11 +191,16 @@ export class BeuveHoverCard extends LitElement {
     }
     const character = pending.lineCharStart + characterOffsetAt(pending.tokenElement, this.pointer);
     const key = `${this.sessionId}\0${this.sha ?? ''}\0${pending.path}\0${String(pending.line)}\0${String(character)}`;
-    if (this.shown?.key === key) {
+    if (this.shown?.key === key && this.shown.isAnswered) {
       return;
     }
     const bounds = pending.tokenElement.getBoundingClientRect();
     const anchor: HoverAnchor = { x: this.pointer.clientX, top: bounds.top, bottom: bounds.bottom };
+    const diagnostics =
+      this.diagnosticsFor?.(pending.path, { line: pending.line, character }) ?? [];
+    if (diagnostics.length > 0 && this.shown?.key !== key) {
+      this.shown = { key, markdown: '', diagnostics, isAnswered: false, anchor };
+    }
     const generation = this.generation;
     const answer = await ask({
       sessionId: this.sessionId,
@@ -166,11 +212,15 @@ export class BeuveHoverCard extends LitElement {
     if (generation !== this.generation) {
       return;
     }
-    if (!answer.ok || answer.value.hover === undefined) {
+    let markdown = '';
+    if (answer.ok && answer.value.hover !== undefined) {
+      markdown = answer.value.hover.markdown;
+    }
+    if (markdown === '' && diagnostics.length === 0) {
       this.shown = undefined;
       return;
     }
-    this.shown = { key, markdown: answer.value.hover.markdown, anchor };
+    this.shown = { key, markdown, diagnostics, isAnswered: true, anchor };
   }
 
   /**
@@ -244,17 +294,19 @@ export class BeuveHoverCard extends LitElement {
       if (card.matches(':popover-open')) {
         card.hidePopover();
       }
-      this.renderedMarkdown = '';
+      this.renderedKey = '';
       return;
     }
     if (!changed.has('shown') && card.matches(':popover-open')) {
       return;
     }
-    if (shown.markdown !== this.renderedMarkdown) {
+    const rendered = `${shown.key}\0${String(shown.isAnswered)}`;
+    if (rendered !== this.renderedKey) {
       card.replaceChildren(
+        ...shown.diagnostics.map((diagnostic) => createDiagnosticNode(diagnostic)),
         ...createMarkdownNodes(parseMarkdown(shown.markdown), createPlainMarkdownRenderers()),
       );
-      this.renderedMarkdown = shown.markdown;
+      this.renderedKey = rendered;
     }
     if (!card.matches(':popover-open')) {
       card.showPopover();

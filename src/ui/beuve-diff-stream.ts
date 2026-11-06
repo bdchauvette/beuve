@@ -21,6 +21,7 @@ import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
+import type { FileDiagnostics } from './file-diagnostics.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
 import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
@@ -106,6 +107,7 @@ const defaultDisplay: DiffDisplayView = {
 
 const noUraItems: readonly UraItemView[] = [];
 const noInsights: readonly ReviewInsight[] = [];
+const noDiagnostics: ReadonlyMap<string, FileDiagnostics> = new Map();
 const noPaths: ReadonlySet<string> = new Set();
 /** {@link findInReview}'s default cap. */
 const findLimit = 5000;
@@ -746,6 +748,9 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings to show as notes under their lines, not yet staged (ADR 0061). */
   @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
+  /** The language servers' diagnostics per file path, for the head on screen (ADR 0111). */
+  @property({ attribute: false }) accessor diagnostics: ReadonlyMap<string, FileDiagnostics> =
+    noDiagnostics;
   /** The reviewer's diff layout and whitespace preference (ADR 0042). */
   @property({ attribute: false }) accessor display: DiffDisplayView = defaultDisplay;
   @property({ attribute: false }) accessor suggestionJump: SuggestionJump | undefined;
@@ -1442,6 +1447,7 @@ export class BeuveDiffStream extends LitElement {
                           .flow=${this.flow?.path === file.path ? this.flow : undefined}
                           .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
                           .insights=${insightsByPath.get(file.path) ?? noInsights}
+                          .diagnostics=${this.diagnostics.get(file.path)}
                           .composer=${this.composer?.path === file.path ? this.composer : undefined}
                           .deferral=${this.deferrals.get(file.path)}
                           ?collapsed=${this.isCollapsed(file)}
