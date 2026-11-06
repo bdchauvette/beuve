@@ -24,6 +24,10 @@ Every field is optional for a server beuve already has, because the entry only c
 - `source`: `path` (the default) or `project`, a program from the checked-out repository, written as a path relative to it. See below.
 - `diagnosticsQuietMs`: how long a server must be quiet before its answer counts as final. Raise it for a server that sends its checks in stages.
 
+## Hiding diagnostics
+
+View, Diff, Show Diagnostics (and Settings, Show diagnostics) hides the underlines, the header counts and the hover messages in every window without changing the configuration. The choice is remembered in `settings.json` as `showDiagnostics`. The servers keep running, so turning it back on shows the answers again at once. A sheet window reads the choice when it shows a file, so one that is already open catches up on its next file.
+
 ## Choosing servers for a language
 
 `languages` says which servers serve a language, by LSP language id (`python`, `go`, `typescript`), as Zed's per-language `language_servers` does. Each entry has `servers`, a list in the order the servers are tried, and `enabled`.

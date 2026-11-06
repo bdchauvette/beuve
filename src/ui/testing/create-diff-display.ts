@@ -8,6 +8,7 @@ export function createDiffDisplay(overrides: Partial<DiffDisplayView> = {}): Dif
     sidebarSide: 'right',
     showGenerated: false,
     showInsights: true,
+    showDiagnostics: true,
     reviewOrder: 'path',
     skipReviewed: false,
     ...overrides,

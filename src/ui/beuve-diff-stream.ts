@@ -103,6 +103,7 @@ const defaultDisplay: DiffDisplayView = {
   sidebarSide: 'right',
   showGenerated: false,
   showInsights: true,
+  showDiagnostics: true,
 };
 
 const noUraItems: readonly UraItemView[] = [];

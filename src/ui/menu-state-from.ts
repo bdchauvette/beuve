@@ -69,6 +69,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['whitespace', display.ignoreWhitespace],
     ['toggle-generated', display.showGenerated],
     ['toggle-insights', display.showInsights],
+    ['toggle-diagnostics', display.showDiagnostics],
     ['tree-mode', input.treeMode === 'diff-only'],
     ['order-path', order === 'path'],
     ['order-imports', order === 'imports'],

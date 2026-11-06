@@ -1493,6 +1493,8 @@ export interface DiffDisplayView {
   readonly showGenerated: boolean;
   /** Whether `/review` findings show as insights on the diff lines (ADR 0061); on by default. */
   readonly showInsights: boolean;
+  /** Whether language-server diagnostics show as underlines and counts (ADR 0111); on by default. */
+  readonly showDiagnostics: boolean;
   /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
   readonly reviewOrder?: ReviewOrderMode;
   /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
@@ -1512,6 +1514,7 @@ export interface SetDiffDisplayRequest {
   readonly sidebarSide?: SidebarSideView;
   readonly showGenerated?: boolean;
   readonly showInsights?: boolean;
+  readonly showDiagnostics?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
   readonly sheets?: SheetModeView;
@@ -2661,6 +2664,7 @@ export type SheetInvokeChannel =
   | 'lsp:definition'
   | 'lsp:hover'
   | 'lsp:diagnostics'
+  | 'display:get'
   | 'sheet:open'
   | 'sheet:get-file'
   | 'sheet:get-head'

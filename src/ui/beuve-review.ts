@@ -74,7 +74,7 @@ import { diagnosticsAt } from './diagnostics-at.ts';
 import type { DiagnosticPosition } from './diagnostics-at.ts';
 import { DiagnosticsController } from './diagnostics-controller.ts';
 import type { DiagnosticsTarget } from './diagnostics-controller.ts';
-import type { DiagnosticsWantedDetail } from './file-diagnostics.ts';
+import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostics.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { dockItemOf } from './dock-item-of.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
@@ -345,7 +345,7 @@ export class BeuveReview extends LitElement {
 
   /** The diagnostics under a place in a file of the diff on screen, for the hover card. */
   private readonly diagnosticsFor: DiagnosticsFor = (path, position: DiagnosticPosition) => {
-    const file = this.fileDiagnostics.byPath.get(path);
+    const file = this.shownDiagnostics().get(path);
     if (file?.kind !== 'ready') {
       return [];
     }
@@ -694,6 +694,14 @@ export class BeuveReview extends LitElement {
     return this.deferralPlan;
   }
 
+  /** What is known of the diagnostics, unless the reviewer hides them (they are still fetched). */
+  private shownDiagnostics(): ReadonlyMap<string, FileDiagnostics> {
+    if (!this.settings.display.showDiagnostics) {
+      return noDiagnostics;
+    }
+    return this.fileDiagnostics.byPath;
+  }
+
   /** Restart Language Servers: the head checkout's servers start afresh on the next request. */
   private async restartLanguageServers(): Promise<void> {
     const bridge = beuveBridge();
@@ -1029,7 +1037,7 @@ export class BeuveReview extends LitElement {
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
-      .diagnostics=${this.fileDiagnostics.byPath}
+      .diagnostics=${this.shownDiagnostics()}
       .display=${this.settings.display}
       .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
@@ -1687,6 +1695,7 @@ const nothingSelected =
   'Select lines, focus a hunk, a staged note or a file to add it to the chat.';
 
 const noInsights: readonly ReviewInsight[] = [];
+const noDiagnostics: ReadonlyMap<string, FileDiagnostics> = new Map();
 
 /** The parts of the menu state only the review knows (ADR 0068). */
 export type ReviewMenuFacts = Pick<

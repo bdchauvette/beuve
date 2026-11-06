@@ -32,6 +32,7 @@ const initialDisplay: DiffDisplayView = {
   sidebarSide: 'right',
   showGenerated: false,
   showInsights: true,
+  showDiagnostics: true,
   reviewOrder: 'path',
   skipReviewed: false,
 };

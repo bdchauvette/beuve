@@ -73,6 +73,7 @@ import './beuve-sheet-view.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeSheets } from './describe-sheets.ts';
 import { describeGenerated } from './describe-generated.ts';
+import { describeDiagnosticsSwitch } from './describe-diagnostics-switch.ts';
 import { describeInsights } from './describe-insights.ts';
 import { describeSkipReviewed } from './describe-skip-reviewed.ts';
 import { describeOrder } from './describe-order.ts';
@@ -624,6 +625,9 @@ export class BeuveApp extends LitElement {
     if (change.showInsights !== undefined) {
       this.showNotice({ tone: 'info', text: describeInsights(display.showInsights) });
     }
+    if (change.showDiagnostics !== undefined) {
+      this.showNotice({ tone: 'info', text: describeDiagnosticsSwitch(display.showDiagnostics) });
+    }
     if (change.skipReviewed !== undefined) {
       this.showNotice({ tone: 'info', text: describeSkipReviewed(display.skipReviewed) });
     }
@@ -780,6 +784,7 @@ export class BeuveApp extends LitElement {
       case 'whitespace':
       case 'toggle-generated':
       case 'toggle-insights':
+      case 'toggle-diagnostics':
       case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':
