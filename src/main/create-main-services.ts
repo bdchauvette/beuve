@@ -70,6 +70,7 @@ import type { ModelResolverDeps } from './models/resolve-language-model.ts';
 import { createSessionServices } from './sessions/create-session-services.ts';
 import { createSheetServices } from './sheets/create-sheet-services.ts';
 import { createRemoteServices } from './remote/create-remote-services.ts';
+import { createCommitServices } from './commits/create-commit-services.ts';
 import { createShellServices } from './shell/create-shell-services.ts';
 import { createGitCaches } from './sessions/create-git-caches.ts';
 import type { SessionContext } from './sessions/session-context.ts';
@@ -382,6 +383,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         openExternal: options.github.openExternal,
       }),
     }),
+    commits: createCommitServices({ context }),
     shell: createShellServices({
       ...(options.shell?.openExternal !== undefined && {
         openExternal: options.shell.openExternal,

@@ -26,6 +26,7 @@ export const invokeChannels = Object.freeze([
   'remote:permalink',
   'remote:open-permalink',
   'remote:open-commit',
+  'session:get-commit',
   'flow:get-graph',
   'terminal:open',
   'terminal:list',

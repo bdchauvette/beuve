@@ -788,6 +788,24 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'reads a commit of the session for its card, and not a commit the clone lacks',
+    { timeout: 30_000 },
+    async ({ expect, services, repositories, signal }) => {
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const base = await repo.git('rev-parse', 'main');
+      const subject = await repo.git('show', '--no-patch', '--format=%s', base);
+      const commit = okValueFrom(
+        await services.commits.getCommit({ sessionId, sha: base }, { signal }),
+      );
+      expect(commit).toMatchObject({ sha: base, subject });
+      expect(Temporal.Instant.from(commit.author.at)).toBeInstanceOf(Temporal.Instant);
+      await expect(
+        services.commits.getCommit({ sessionId, sha: 'f'.repeat(40) }, { signal }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } });
+    },
+  );
+
+  test(
     'links to a file at a commit on the primary remote',
     { timeout: 30_000 },
     async ({ expect, services, repositories }) => {

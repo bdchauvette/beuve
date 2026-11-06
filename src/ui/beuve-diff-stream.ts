@@ -66,6 +66,7 @@ import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
 
@@ -294,20 +295,6 @@ export class BeuveDiffStream extends LitElement {
       .counts {
         font: var(--beuve-font-mono);
         color: var(--beuve-text-muted);
-      }
-
-      .commit {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .commit:hover {
-        color: var(--beuve-accent);
-        text-decoration: underline;
       }
 
       .spacer {
@@ -1260,7 +1247,7 @@ export class BeuveDiffStream extends LitElement {
           <beuve-time datetime=${saved.at.toString()} time-style="short"></beuve-time>`;
       }
       return html`<span class="saved" title="Next time, show only what changed since this point"
-        >Progress saved · ${savedSha.slice(0, 7)}${time}</span
+        >Progress saved · <beuve-commit sha=${savedSha}></beuve-commit>${time}</span
       >`;
     }
     return html`<button
@@ -1362,16 +1349,14 @@ export class BeuveDiffStream extends LitElement {
 
   /** A short sha that opens its commit on the remote (ADR 0108). */
   private renderCommit(sha: string): TemplateResult {
-    return html`<button
-      type="button"
+    return html`<beuve-commit
       class="commit"
-      tabindex="-1"
-      title="Open ${sha.slice(0, 8)} on GitHub"
+      sha=${sha}
+      abbreviation="8"
+      hint="Click to open on GitHub"
       data-action="open-commit"
       data-sha=${sha}
-    >
-      ${sha.slice(0, 8)}
-    </button>`;
+    ></beuve-commit>`;
   }
 
   private renderProgress(): TemplateResult | typeof nothing {

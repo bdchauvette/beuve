@@ -13,6 +13,7 @@ import { parseMarkdown } from './parse-markdown.ts';
 import type { TimelineState } from './timeline-state.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
+import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 
 /** Only the latest events are drawn, so a very long history stays quick. */
@@ -176,15 +177,13 @@ export class BeuvePullRequestTimeline extends LitElement {
           event.kind === 'commit'
             ? html`<div class="headline">
                 ${event.headline}
-                <button
-                  type="button"
-                  class="button link sha"
-                  title=${`Open ${event.sha} on GitHub`}
+                <beuve-commit
+                  class="sha"
+                  sha=${event.sha}
+                  hint="Click to open on GitHub"
                   data-action="link"
                   data-url=${event.url}
-                >
-                  ${event.sha.slice(0, 7)}
-                </button>
+                ></beuve-commit>
               </div>`
             : nothing
         }

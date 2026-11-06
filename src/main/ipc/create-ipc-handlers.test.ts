@@ -1111,6 +1111,22 @@ describe('github channels', () => {
   });
 });
 
+describe('session:get-commit', () => {
+  test('takes a full commit sha of a session, and nothing else', async ({ expect }) => {
+    const handlers = createIpcHandlers(stubServices({}), appInfo());
+    const invalid = { ok: false, error: { code: 'invalid-request' } };
+    await expect(
+      handlers['session:get-commit']({ sessionId: 's1', sha: 'abc1234' }),
+    ).resolves.toMatchObject(invalid);
+    await expect(handlers['session:get-commit']({ sessionId: 's1' })).resolves.toMatchObject(
+      invalid,
+    );
+    await expect(
+      handlers['session:get-commit']({ sessionId: 's1', sha: sha(), extra: true }),
+    ).resolves.toMatchObject(invalid);
+  });
+});
+
 async function expectInvalid(expect: ExpectStatic, response: unknown): Promise<void> {
   expect(await response).toMatchObject({ ok: false, error: { code: 'invalid-request' } });
 }
@@ -1145,6 +1161,7 @@ function stubServices(
     },
     sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
     remote: { permalink: notWired, openPermalink: notWired, openCommit: notWired },
+    commits: { getCommit: notWired },
     shell: { openUrl: notWired },
     flow: { getGraph: notWired },
     editor: {

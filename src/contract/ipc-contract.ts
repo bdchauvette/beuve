@@ -657,6 +657,31 @@ export interface CommitLinkRequest {
   readonly sha: string;
 }
 
+/** `session:get-commit` (ADR 0116): commit `sha`, a full commit name of the session's repository. */
+export interface GetCommitRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+}
+
+/** Who wrote or committed a commit; `at` is an ISO 8601 instant. */
+export interface CommitSignatureView {
+  readonly name: string;
+  readonly email: string;
+  readonly at: string;
+}
+
+/** A commit's parents, people and message, for a commit hash's card (ADR 0116). */
+export interface CommitInfoView {
+  readonly sha: string;
+  readonly parents: readonly string[];
+  readonly author: CommitSignatureView;
+  readonly committer: CommitSignatureView;
+  /** The message's first line. */
+  readonly subject: string;
+  /** The rest of the message, without the blank lines after the subject; empty when none. */
+  readonly body: string;
+}
+
 /** Where `lsp:definition` jumps open: a sheet window each, or the overlay in the main window. */
 export type SheetModeView = 'window' | 'inline';
 
@@ -2407,6 +2432,10 @@ export interface InvokeChannelMap {
   'remote:open-commit': {
     readonly request: CommitLinkRequest;
     readonly response: IpcResult<PermalinkView>;
+  };
+  'session:get-commit': {
+    readonly request: GetCommitRequest;
+    readonly response: IpcResult<CommitInfoView>;
   };
   'flow:get-graph': {
     readonly request: GetFlowGraphRequest;

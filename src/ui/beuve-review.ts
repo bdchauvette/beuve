@@ -7,6 +7,7 @@ import type {
   ChatCitationView,
   ChatMentionView,
   ChatMessageView,
+  CommitInfoView,
   DiffDisplayView,
   DiffFileView,
   FileAttributesView,
@@ -130,6 +131,7 @@ import { sheetActionFrom } from './sheet-action-from.ts';
 import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
 import { isEditableElement } from './is-editable-element.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
+import type { CommitInfoRequestDetail, CopyTextDetail } from './primitives/beuve-commit.ts';
 
 /**
  * The open review (ADR 0104): the diff, the sidebar and the terminal, rendered from the shared
@@ -197,6 +199,34 @@ export class BeuveReview extends LitElement {
       this.focusedZone = zone.dataset['zone'] as ZoneId;
     }
     this.scheduleMenuSync();
+  };
+
+  /** Commits read for commit hashes' cards (ADR 0116), per session and hash. */
+  private readonly commitInfos = new Map<string, Promise<CommitInfoView | undefined>>();
+
+  /** `beuve-commit-info` from a commit hash anywhere in the review: its commit, read once. */
+  private readonly onCommitInfo = (event: CustomEvent<CommitInfoRequestDetail>): void => {
+    const bridge = beuveBridge();
+    const sessionId = this.review?.session.id;
+    if (bridge === undefined || sessionId === undefined) {
+      return;
+    }
+    event.stopPropagation();
+    const { sha } = event.detail;
+    const answer = this.commitInfos.getOrInsertComputed(`${sessionId}\0${sha}`, async () => {
+      const read = await bridge.invoke('session:get-commit', { sessionId, sha });
+      if (!read.ok) {
+        return;
+      }
+      return read.value;
+    });
+    event.detail.respond(answer);
+  };
+
+  /** `beuve-copy-text`: a commit card's Copy, through main's clipboard. */
+  private readonly onCopyText = (event: CustomEvent<CopyTextDetail>): void => {
+    event.stopPropagation();
+    void this.copyText(event.detail.text);
   };
 
   /** A stack chip: the neighbour lives in the same repository, so it uses the same clone. */
@@ -712,6 +742,15 @@ export class BeuveReview extends LitElement {
     }
     const text = relativeLineTextFrom(target);
     if (text === undefined) {
+      return;
+    }
+    await this.copyText(text);
+  }
+
+  /** Puts `text` on the clipboard and says so. */
+  private async copyText(text: string): Promise<void> {
+    const bridge = beuveBridge();
+    if (bridge === undefined) {
       return;
     }
     const copied = await bridge.invoke('clipboard:write-text', { text });
@@ -1352,12 +1391,16 @@ export class BeuveReview extends LitElement {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
     this.addEventListener('focusin', this.onFocusIn);
+    this.addEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
+    this.addEventListener('beuve-copy-text', this.onCopyText as EventListener);
   }
 
   override disconnectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.disconnectedCallback();
     this.removeEventListener('focusin', this.onFocusIn);
+    this.removeEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
+    this.removeEventListener('beuve-copy-text', this.onCopyText as EventListener);
   }
 
   /** Runs a catalog command this container handles; `false` when it is not one of its own. */
