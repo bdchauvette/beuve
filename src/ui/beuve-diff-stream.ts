@@ -66,6 +66,7 @@ import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
 
 /**
@@ -1251,10 +1252,10 @@ export class BeuveDiffStream extends LitElement {
       savedSha = review.session.lastReviewedSha;
     }
     if (savedSha !== undefined && !this.marking) {
-      let time = '';
+      let time: TemplateResult | typeof nothing = nothing;
       if (saved?.sha === savedSha) {
-        const at = saved.at.toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainTime();
-        time = ` · ${at.toString({ smallestUnit: 'minute' })}`;
+        time = html` ·
+          <beuve-time datetime=${saved.at.toString()} time-style="short"></beuve-time>`;
       }
       return html`<span class="saved" title="Next time, show only what changed since this point"
         >Progress saved · ${savedSha.slice(0, 7)}${time}</span

@@ -40,6 +40,7 @@ import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-h
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import './primitives/beuve-time.ts';
 
 /** Where a sheet lives: its own window, or the overlay in the main window (`/sheets inline`). */
 export type SheetMode = 'window' | 'inline';
@@ -180,7 +181,7 @@ export class BeuveSheetView extends LitElement {
   /** The session head when the sheet was printed, from its first read. */
   private printedHead: string | undefined;
   private readonly files = new Map<string, Promise<IpcResult<SheetFileView>>>();
-  private readonly printedAt = Temporal.Now.plainTimeISO().toString({ smallestUnit: 'minute' });
+  private readonly printedAt = Temporal.Now.instant().toString();
   private lastMenuState: string | undefined;
 
   private readonly onFocusChange = (): void => {
@@ -860,7 +861,9 @@ export class BeuveSheetView extends LitElement {
           →
         </button>
         <span class="title" title=${`${place?.path ?? ''} at ${this.sha}`}>${pathText(title)}</span>
-        <span class="stamp">printed ${this.printedAt}</span>
+        <span class="stamp"
+          >printed <beuve-time datetime=${this.printedAt} time-style="short"></beuve-time
+        ></span>
         <button
           class="button"
           type="button"

@@ -8,12 +8,12 @@ import { ActionDelegation } from './action-delegation.ts';
 import { createMarkdownNodes } from './create-markdown-nodes.ts';
 import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
 import { describeTimelineEvent } from './describe-timeline-event.ts';
-import { formatRelativeTime } from './format-relative-time.ts';
 import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 import type { TimelineState } from './timeline-state.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
+import './primitives/beuve-time.ts';
 
 /** Only the latest events are drawn, so a very long history stays quick. */
 const maxShown = 100;
@@ -154,7 +154,7 @@ export class BeuvePullRequestTimeline extends LitElement {
     return nodes;
   }
 
-  private renderEvent(event: TimelineEventView, now: Temporal.Instant): TemplateResult {
+  private renderEvent(event: TimelineEventView): TemplateResult {
     const { verb, tone } = describeTimelineEvent(event);
     const hasBody = event.kind !== 'commit' && event.body.trim() !== '';
     return html`<li>
@@ -165,11 +165,11 @@ export class BeuvePullRequestTimeline extends LitElement {
           <button
             type="button"
             class="button link when"
-            title=${`${event.at}: open on GitHub`}
+            title="Open on GitHub"
             data-action="link"
             data-url=${event.url}
           >
-            ${formatRelativeTime(event.at, now)}
+            <beuve-time datetime=${event.at} format="relative"></beuve-time>
           </button>
         </div>
         ${
@@ -228,7 +228,6 @@ export class BeuvePullRequestTimeline extends LitElement {
         <p class="note">Nothing has happened on this pull request yet.</p>`;
     }
     const shown = timeline.events.slice(-maxShown);
-    const now = Temporal.Now.instant();
     return html`<h2>Activity</h2>
       ${
         shown.length < timeline.events.length
@@ -238,7 +237,7 @@ export class BeuvePullRequestTimeline extends LitElement {
           : nothing
       }
       <ol class="events">
-        ${shown.map((event) => this.renderEvent(event, now))}
+        ${shown.map((event) => this.renderEvent(event))}
       </ol>
       ${timeline.isTruncated ? html`<p class="note">GitHub has more history than was read.</p>` : nothing}`;
   }

@@ -16,12 +16,12 @@ import type {
 import { ActionDelegation } from './action-delegation.ts';
 import { describePullRequestState } from './describe-pull-request-state.ts';
 import { findKnownClone } from './find-known-clone.ts';
-import { formatRelativeTime } from './format-relative-time.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
 import type { OpenQuery } from './parse-open-query.ts';
 import { rankRecentSessions } from './rank-recent-sessions.ts';
 import { shortenPath } from './shorten-path.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import './primitives/beuve-time.ts';
 
 /** Shows the system folder picker; `undefined` when cancelled or unavailable. */
 export type FolderChooser = (defaultPath: string | undefined) => Promise<string | undefined>;
@@ -275,8 +275,6 @@ export class BeuveOpenPanel extends LitElement {
       }
     `,
   ];
-
-  private now = Temporal.Now.instant();
 
   private readonly onQueryInput = (event: InputEvent): void => {
     this.text = (event.currentTarget as HTMLInputElement).value;
@@ -623,7 +621,7 @@ export class BeuveOpenPanel extends LitElement {
   private renderSession(session: SessionSummary): TemplateResult {
     const { source } = session;
     const folder = source.repoPath.split('/').findLast((part) => part !== '') ?? source.repoPath;
-    const when = formatRelativeTime(session.updatedAt, this.now);
+    const when = html`<beuve-time datetime=${session.updatedAt} format="relative"></beuve-time>`;
     const reviewed = reviewedText(session);
     if (source.kind === 'github-pull-request') {
       const { pullRequest } = session;
@@ -860,7 +858,6 @@ export class BeuveOpenPanel extends LitElement {
     this.text = '';
     this.cursor = 0;
     this.pressed = undefined;
-    this.now = Temporal.Now.instant();
   }
 
   /** Shows the pull request step, e.g. for a link pasted into the palette. */

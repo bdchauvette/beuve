@@ -24,7 +24,6 @@ import { describeQueueCi } from './describe-queue-ci.ts';
 import { displayIcon } from './display-icon.ts';
 import { filterQueueItems } from './filter-queue-items.ts';
 import { formatControlStyles } from './format-control-styles.ts';
-import { formatRelativeTime } from './format-relative-time.ts';
 import { groupQueueItems } from './group-queue-items.ts';
 import { pathText } from './path-text.ts';
 import { queueIcon } from './queue-icon.ts';
@@ -35,6 +34,7 @@ import { statusDotStyles } from './primitives/status-dot-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
 
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
@@ -292,8 +292,6 @@ export class BeuveReviewQueue extends LitElement {
     `,
   ];
 
-  private clock: ReturnType<typeof setInterval> | undefined;
-
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     const rows = this.visibleItems();
     if (rows.length === 0) {
@@ -431,7 +429,7 @@ export class BeuveReviewQueue extends LitElement {
     return { queued, matched: new Set(matched), groups };
   }
 
-  private renderBody({ all, groups, matched, cursor, now }: BodyParts): TemplateResult {
+  private renderBody({ all, groups, matched, cursor }: BodyParts): TemplateResult {
     if (this.queue === undefined) {
       return html`<div class="empty">
         ${this.error === '' ? 'Reading the queue…' : this.error}
@@ -458,7 +456,6 @@ export class BeuveReviewQueue extends LitElement {
           index,
           isCursor: item === cursor,
           isMatched: matched.has(item),
-          now,
         });
         index += 1;
         return row;
@@ -466,7 +463,7 @@ export class BeuveReviewQueue extends LitElement {
     })}`;
   }
 
-  private renderRow({ item, index, isCursor, isMatched, now }: RowParts): TemplateResult {
+  private renderRow({ item, index, isCursor, isMatched }: RowParts): TemplateResult {
     const ci = describeQueueCi(item.ci);
     const turn = describeAttention(item.attention);
     const aside = asideOf(item, isMatched);
@@ -536,11 +533,12 @@ export class BeuveReviewQueue extends LitElement {
         >${turn?.text ?? ''}</span
       >
       <span class="local ${local.tone}" title=${local.title}>${local.text}</span>
-      <span
+      <beuve-time
         class="age"
-        title=${`${waitingLabels[item.waitingSinceSource]} ${formatRelativeTime(item.waitingSince, now)} (${item.waitingSince}); opened ${item.createdAt}`}
-        >${formatRelativeTime(item.waitingSince, now)}</span
-      >
+        datetime=${item.waitingSince}
+        format="relative"
+        title=${`${waitingLabels[item.waitingSinceSource]} ${item.waitingSince}; opened ${item.createdAt}`}
+      ></beuve-time>
     </div>`;
   }
 
@@ -718,26 +716,10 @@ export class BeuveReviewQueue extends LitElement {
     });
   }
 
-  override connectedCallback(): void {
-    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
-    super.connectedCallback();
-    // Ages and "Updated N min ago" move with the clock.
-    this.clock = setInterval(() => {
-      this.requestUpdate();
-    }, 30_000);
-  }
-
-  override disconnectedCallback(): void {
-    // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
-    super.disconnectedCallback();
-    clearInterval(this.clock);
-  }
-
   protected override render(): TemplateResult {
     const { queued: all, matched, groups } = this.layout();
     const rows = groups.flatMap((group) => group.items);
     const cursor = rows.find((item) => item.key === this.cursorKey) ?? rows[0];
-    const now = Temporal.Now.instant();
     return html`
       <header>
         <h2>
@@ -759,7 +741,7 @@ export class BeuveReviewQueue extends LitElement {
         />
         ${this.renderFilterMenu(all)} ${this.renderGroupMenu()} ${this.renderSortMenu()}
         <span class="updated" title=${this.queue?.refreshedAt ?? ''}
-          >${describeUpdated(this.queue, now)}</span
+          >${describeUpdated(this.queue)}</span
         >
         <button
           class="button"
@@ -781,7 +763,7 @@ export class BeuveReviewQueue extends LitElement {
         aria-activedescendant=${cursor === undefined ? nothing : `row-${String(rows.indexOf(cursor))}`}
         @keydown=${this.onKeyDown}
       >
-        ${this.renderBody({ all, groups, matched, cursor, now })}
+        ${this.renderBody({ all, groups, matched, cursor })}
       </div>
     `;
   }
@@ -801,7 +783,6 @@ interface BodyParts {
   readonly groups: ReturnType<typeof groupQueueItems>;
   readonly matched: ReadonlySet<ReviewQueueItemView>;
   readonly cursor: ReviewQueueItemView | undefined;
-  readonly now: Temporal.Instant;
 }
 
 /** One row and where it is. */
@@ -811,7 +792,6 @@ interface RowParts {
   readonly isCursor: boolean;
   /** It passed the filters; a stack member that did not shows dimmed. */
   readonly isMatched: boolean;
-  readonly now: Temporal.Instant;
 }
 
 /** Why a row shows dimmed beside its stack. */
@@ -910,15 +890,15 @@ function asideOf(item: ReviewQueueItemView, isMatched: boolean): RowAside | unde
   return undefined;
 }
 
-/** "Updated 3 min ago", "Updating…" or nothing yet. */
-function describeUpdated(queue: ReviewQueueView | undefined, now: Temporal.Instant): string {
+/** "Updated 3 minutes ago", "Updating…" or nothing yet. */
+function describeUpdated(queue: ReviewQueueView | undefined): TemplateResult | string {
   if (queue?.isRefreshing === true) {
     return 'Updating…';
   }
   if (queue?.refreshedAt === undefined) {
     return '';
   }
-  return `Updated ${formatRelativeTime(queue.refreshedAt, now)}`;
+  return html`Updated <beuve-time datetime=${queue.refreshedAt} format="relative"></beuve-time>`;
 }
 
 /** How many filters differ from the defaults. */
