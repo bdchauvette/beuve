@@ -1,15 +1,29 @@
 import type { ReactiveControllerHost } from 'lit';
 
-import type { BeuveApi, ReviewView } from '#contract/ipc-contract.ts';
+import type { DiagnosticsRequest, DiagnosticsView, IpcResult } from '#contract/ipc-contract.ts';
 
 import type { FileDiagnostics } from './file-diagnostics.ts';
+
+/** The one channel the diagnostics use, which the main window's and a sheet's bridges both have. */
+export interface DiagnosticsBridge {
+  readonly invoke: (
+    channel: 'lsp:diagnostics',
+    request: DiagnosticsRequest,
+  ) => Promise<IpcResult<DiagnosticsView>>;
+}
+
+/** Whose head the diagnostics are of: the session, and the commit its head is at. */
+export interface DiagnosticsTarget {
+  readonly sessionId: string;
+  readonly headSha: string;
+}
 
 /** What the diagnostics need from the window around them. */
 export interface DiagnosticsEnvironment {
   /** The preload bridge, or `undefined` outside Electron. */
-  readonly bridge: () => BeuveApi | undefined;
-  /** The open review; diagnostics are of its head. */
-  readonly review: () => ReviewView | undefined;
+  readonly bridge: () => DiagnosticsBridge | undefined;
+  /** The head on screen, or `undefined` when there is none (no review, or a commit that is not the head). */
+  readonly target: () => DiagnosticsTarget | undefined;
 }
 
 const noFiles: ReadonlyMap<string, FileDiagnostics> = new Map();
@@ -41,11 +55,11 @@ export class DiagnosticsController {
   }
 
   private scopeNow(): string | undefined {
-    const review = this.environment.review();
-    if (review === undefined) {
+    const target = this.environment.target();
+    if (target === undefined) {
       return undefined;
     }
-    return `${review.session.id}\0${review.headSha}`;
+    return `${target.sessionId}\0${target.headSha}`;
   }
 
   private begin(scope: string): void {
@@ -73,16 +87,16 @@ export class DiagnosticsController {
   private async ask(path: string): Promise<void> {
     const { generation } = this;
     const bridge = this.environment.bridge();
-    const review = this.environment.review();
-    if (bridge === undefined || review === undefined) {
+    const target = this.environment.target();
+    if (bridge === undefined || target === undefined) {
       this.patch(path, { kind: 'failed' });
       return;
     }
     this.inFlight += 1;
     try {
       const answer = await bridge.invoke('lsp:diagnostics', {
-        sessionId: review.session.id,
-        sha: review.headSha,
+        sessionId: target.sessionId,
+        sha: target.headSha,
         path,
       });
       if (generation === this.generation) {

@@ -1,8 +1,9 @@
 import { describe } from 'vitest';
 
-import type { BeuveApi, DiagnosticsView, ReviewView } from '#contract/ipc-contract.ts';
+import type { DiagnosticsView, ReviewView } from '#contract/ipc-contract.ts';
 
 import { DiagnosticsController } from './diagnostics-controller.ts';
+import type { DiagnosticsBridge, DiagnosticsTarget } from './diagnostics-controller.ts';
 import { createFakeHost } from './testing/create-fake-host.ts';
 import { createReviewView } from './testing/create-review-view.ts';
 import { test } from './testing/test.ts';
@@ -20,7 +21,7 @@ interface DiagnosticsQuestion {
 }
 
 interface HeldBridge {
-  readonly bridge: BeuveApi;
+  readonly bridge: DiagnosticsBridge;
   readonly asked: AskedQuestion[];
 }
 
@@ -28,15 +29,12 @@ interface HeldBridge {
 function createHeldBridge(): HeldBridge {
   const asked: AskedQuestion[] = [];
   const bridge = {
-    invoke: async (channel: string, request: DiagnosticsQuestion): Promise<unknown> => {
-      if (channel !== 'lsp:diagnostics') {
-        throw new Error(`unexpected channel ${channel}`);
-      }
+    invoke: async (_channel: 'lsp:diagnostics', request: DiagnosticsQuestion): Promise<unknown> => {
       return new Promise((resolve) => {
         asked.push({ request, answer: resolve });
       });
     },
-  } as unknown as BeuveApi;
+  } as unknown as DiagnosticsBridge;
   return { bridge, asked };
 }
 
@@ -66,11 +64,14 @@ function createHarness(review: ReviewView | undefined): Harness {
   const { host, updates } = createFakeHost();
   let current = review;
   const diagnostics = new DiagnosticsController(host, {
-    bridge: (): BeuveApi => {
+    bridge: (): DiagnosticsBridge => {
       return held.bridge;
     },
-    review: (): ReviewView | undefined => {
-      return current;
+    target: (): DiagnosticsTarget | undefined => {
+      if (current === undefined) {
+        return undefined;
+      }
+      return { sessionId: current.session.id, headSha: current.headSha };
     },
   });
   return {

@@ -3,6 +3,7 @@ import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import type {
+  DiagnosticItemView,
   IpcResult,
   PermalinkView,
   SheetApi,
@@ -16,7 +17,11 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import './beuve-definition-link.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
-import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
+import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
+import { diagnosticsAt } from './diagnostics-at.ts';
+import type { DiagnosticPosition } from './diagnostics-at.ts';
+import { DiagnosticsController } from './diagnostics-controller.ts';
+import type { DiagnosticsTarget } from './diagnostics-controller.ts';
 import './beuve-sheet-code.ts';
 import type {
   BeuveSheetCode,
@@ -182,6 +187,12 @@ export class BeuveSheetView extends LitElement {
         color: var(--beuve-danger);
       }
 
+      footer .info {
+        flex: none;
+        color: var(--beuve-accent);
+        cursor: default;
+      }
+
       kbd {
         font: var(--beuve-font-mono);
         font-size: 10.5px;
@@ -241,6 +252,27 @@ export class BeuveSheetView extends LitElement {
       return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
     }
     return bridge.invoke('lsp:definition', request);
+  };
+
+  /** The language servers' diagnostics, which a sheet has only at the session head (ADR 0111). */
+  private readonly fileDiagnostics = new DiagnosticsController(this, {
+    bridge: (): SheetApi | undefined => {
+      return this.api;
+    },
+    target: (): DiagnosticsTarget | undefined => {
+      if (!this.isAtHead()) {
+        return undefined;
+      }
+      return { sessionId: this.sessionId, headSha: this.sha };
+    },
+  });
+
+  private readonly diagnosticsFor: DiagnosticsFor = (path, position: DiagnosticPosition) => {
+    const file = this.fileDiagnostics.byPath.get(path);
+    if (file?.kind !== 'ready') {
+      return [];
+    }
+    return diagnosticsAt(file.view.diagnostics, position);
   };
 
   private readonly askHover: HoverAsk = async (request) => {
@@ -325,6 +357,7 @@ export class BeuveSheetView extends LitElement {
           .matchLines=${find?.matches.map((match) => match.line) ?? []}
           .currentMatchLine=${find?.matches[find.index]?.line}
           .selected=${this.cursor}
+          .diagnostics=${this.shownDiagnostics()}
           @beuve-sheet-select=${(event: CustomEvent<SheetSelectDetail>): void => {
             this.cursor = event.detail;
           }}
@@ -664,6 +697,36 @@ export class BeuveSheetView extends LitElement {
     this.notice = { text, isError };
   }
 
+  /** Whether the file on screen is the session head's: only then are there diagnostics. */
+  private isAtHead(): boolean {
+    return (
+      this.loaded.status === 'ready' &&
+      this.loaded.file.headSha === this.sha &&
+      this.movedHead === undefined
+    );
+  }
+
+  /** The diagnostics of the file on screen, when it is the head's and the servers have answered. */
+  private shownDiagnostics(): readonly DiagnosticItemView[] {
+    if (this.loaded.status !== 'ready') {
+      return [];
+    }
+    const file = this.fileDiagnostics.byPath.get(this.loaded.file.path);
+    if (file?.kind !== 'ready') {
+      return [];
+    }
+    return file.view.diagnostics;
+  }
+
+  /** A quiet heads-up, not a warning: a sheet at an older commit has no diagnostics (ADR 0111). */
+  private renderDiagnosticsInfo(): TemplateResult | typeof nothing {
+    if (this.loaded.status !== 'ready' || this.isAtHead()) {
+      return nothing;
+    }
+    const text = 'Diagnostics are only shown at the session head.';
+    return html`<span class="info" role="img" title=${text} aria-label=${text}>ⓘ</span>`;
+  }
+
   /**
    * Runs a menu command in the sheet (ADR 0068): its window's menu sends them, and in the main
    * window `beuve-app` hands them over while the inline sheet has the focus. True when handled.
@@ -765,6 +828,9 @@ export class BeuveSheetView extends LitElement {
 
   protected override updated(): void {
     this.syncMenuState();
+    if (this.loaded.status === 'ready' && this.isAtHead()) {
+      this.fileDiagnostics.want(this.loaded.file.path);
+    }
   }
 
   override render(): TemplateResult {
@@ -834,9 +900,11 @@ export class BeuveSheetView extends LitElement {
         <span class="notice ${this.notice?.isError === true ? 'error' : ''}"
           >${this.notice?.text ?? this.headNote()}</span
         >
+        ${this.renderDiagnosticsInfo()}
       </footer>
       <beuve-hover-card
         .ask=${this.askHover}
+        .diagnosticsFor=${this.diagnosticsFor}
         .sessionId=${this.sessionId}
         .sha=${this.sha}
       ></beuve-hover-card>

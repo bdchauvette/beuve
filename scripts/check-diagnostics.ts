@@ -45,7 +45,8 @@ await checkDiagnostics();
  * has one type error and one clean changed file, and checks that the card of the broken file counts
  * the error in its header, underlines exactly the text the server named, shows the message in the
  * hover card when the pointer rests on it, and that the clean file's card says nothing. Restart
- * Language Servers must bring the diagnostics back. The page must report no violation, uncaught
+ * Language Servers must bring the diagnostics back. A sheet at the head underlines the error too;
+ * a sheet at an older commit has none and shows a quiet heads-up. The page must report no violation, uncaught
  * exception or console error.
  *
  * Build first (`node scripts/build.ts`). On Linux run it under a display, for example
@@ -170,6 +171,50 @@ async function runSteps(main: MainWindow, repository: string): Promise<void> {
     expression: `${card}?.diagnostics?.kind === 'ready' && ${errorRanges}?.size === 1`,
     what: 'the diagnostics to come back after the restart',
   });
+
+  console.log('diagnostics: a sheet at the head underlines the error and shows no heads-up');
+  await showSheet(main, { id: 'head-sheet', sha: `${app}.review.headSha` });
+  await until(main, {
+    expression: `${sheetCode('head-sheet')}?.diagnostics?.length === 1 && ${errorRanges}?.size === 2`,
+    what: 'the head sheet to underline the error beside the card',
+  });
+  await expectValue(
+    main,
+    `${sheet('head-sheet')}.renderRoot.querySelector('footer .info') === null`,
+    true,
+  );
+
+  console.log('diagnostics: a sheet at an older commit has none, and says so quietly');
+  await devtools.evaluate(page, `${sheet('head-sheet')}.remove()`);
+  await showSheet(main, { id: 'old-sheet', sha: `${app}.review.baseSha` });
+  await until(main, {
+    expression: `${sheet('old-sheet')}.renderRoot.querySelector('footer .info')?.title.includes('only shown at the session head')`,
+    what: 'the older sheet to show its heads-up',
+  });
+  await expectValue(main, `${sheetCode('old-sheet')}.diagnostics.length`, 0);
+  await expectValue(main, `${errorRanges}.size`, 1);
+}
+
+/** The element id of a sheet, and the page expression for the commit it is pinned to. */
+interface SheetOptions {
+  readonly id: string;
+  readonly sha: string;
+}
+
+/** Opens a sheet of `src/a.ts` at `sha` (a page expression) in the main window, as the inline sheet is. */
+async function showSheet(main: MainWindow, options: SheetOptions): Promise<void> {
+  await main.devtools.evaluate(
+    main.page,
+    `(() => { const sheet = document.createElement('beuve-sheet-view'); sheet.id = ${JSON.stringify(options.id)}; sheet.mode = 'inline'; sheet.api = window.beuve; sheet.sessionId = ${app}.review.session.id; sheet.sha = ${options.sha}; sheet.place = { path: 'src/a.ts' }; document.body.append(sheet); })()`,
+  );
+}
+
+function sheet(id: string): string {
+  return `document.getElementById(${JSON.stringify(id)})`;
+}
+
+function sheetCode(id: string): string {
+  return `${sheet(id)}?.renderRoot.querySelector('beuve-sheet-code')`;
 }
 
 /** Waits until `expression` holds in the page, or fails saying what it was waiting for. */
