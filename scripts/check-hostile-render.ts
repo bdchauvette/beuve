@@ -47,6 +47,12 @@ interface Run {
 }
 
 /** Text a page shows, where it shows it, and what it must hold. */
+/** A file and the line to open a sheet window at. */
+interface SheetWindowPlace {
+  readonly path: string;
+  readonly line: number;
+}
+
 interface TextCheck {
   readonly where: string;
   readonly text: string;
@@ -96,8 +102,8 @@ await checkHostileRender();
 /**
  * Renders the shared hostile-input corpus (`src/ui/testing/hostile-corpus.ts`, ADR 0077) in the
  * built app. A generated repository holds it as far as a file system can, and the diff stream
- * (split and unified, each card against its benign twin's), peek, an inline sheet, a sheet window
- * and the Settings window must render it with no Content Security Policy violation, no uncaught
+ * (split and unified, each card against its benign twin's), peek, sheet windows and the Settings
+ * window must render it with no Content Security Policy violation, no uncaught
  * exception or console error, no element or attribute that runs script or loads from elsewhere,
  * and every hostile name and line visible as text. Then the test-only harness page renders every
  * corpus case through the components and the same oracle, and the Trusted Types default policy's
@@ -162,9 +168,10 @@ async function checkHostileRender(): Promise<void> {
     await checkDiffStream(run, main, repository);
     console.log('hostile render: names with bidi and invisible characters');
     await checkPathDisplay(run, main, repository);
-    console.log('hostile render: peek and an inline sheet');
-    await checkPeekAndInlineSheet(run, main, repository);
-    console.log('hostile render: a sheet window');
+    console.log('hostile render: peek');
+    await checkPeek(run, main, repository);
+    console.log('hostile render: sheet windows');
+    await checkNamedSheet(run, main, repository);
     await checkSheetWindow(run, main, repository);
     console.log('hostile render: the Settings window');
     await checkSettingsWindow(run, main);
@@ -202,17 +209,27 @@ async function eventually(
 }
 
 /**
- * Sets where definitions open and waits until the app has applied it: the setting round-trips
- * through main, and a sheet action before it lands opens the other way.
+ * Opens `place.path` at `place.line` (the range's start line, as `sheet:open` takes it) in a sheet window from the main window and returns that
+ * window's page, with the probe installed. The page is found by the path in its query string, so
+ * an earlier sheet of another file is not mistaken for it.
  */
-async function chooseSheets(
+async function openSheetWindow(
   devtools: DevtoolsConnection,
   main: SessionId,
-  mode: 'inline' | 'window',
-): Promise<void> {
+  place: SheetWindowPlace,
+): Promise<SessionId> {
   const app = "document.querySelector('beuve-app')";
-  await devtools.evaluate(main, `${app}.runCommandId('sheets-${mode}')`);
-  await devtools.waitFor(main, `${app}.settings.display.sheets === '${mode}'`, wait());
+  const line = String(place.line);
+  await devtools.evaluate(
+    main,
+    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(place.path)}, range: { startLine: ${line}, startCharacter: 0, endLine: ${line}, endCharacter: 1 } })`,
+  );
+  const sheet = await devtools.waitForPage((url) => {
+    return url.includes('/sheet.html') && URL.parse(url)?.searchParams.get('path') === place.path;
+  }, wait());
+  await devtools.waitFor(sheet, "!!document.querySelector('beuve-sheet-view')", wait());
+  await devtools.evaluate(sheet, pageProbe);
+  return sheet;
 }
 
 /** A fresh deadline for one wait. */
@@ -395,7 +412,6 @@ async function checkPathDisplay(
   repository: HostileRepository,
 ): Promise<void> {
   const { devtools, findings, shoot } = run;
-  const app = "document.querySelector('beuve-app')";
   for (const file of repository.files) {
     const header = String(
       await devtools.evaluate(
@@ -434,33 +450,23 @@ async function checkPathDisplay(
   await devtools.evaluate(main, `(${cardOf(spoofing ?? '')})?.scrollIntoView()`);
   await delay(300);
   await shoot(main, 'names-tree-and-header');
-  await chooseSheets(devtools, main, 'inline');
-  await devtools.evaluate(
-    main,
-    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(spoofing)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
-  );
-  const sheet = "__hostileProbe.all('beuve-sheet-view')[0]";
+  const sheet = await openSheetWindow(devtools, main, { path: spoofing ?? '', line: 1 });
+  const view = "document.querySelector('beuve-sheet-view')";
   const title =
     (await eventually(
       devtools,
-      main,
-      `${sheet}?.renderRoot?.querySelector('header .title')?.textContent.includes('gpj')
-        && ${sheet}.renderRoot.querySelector('header .title').textContent`,
+      sheet,
+      `${view}?.renderRoot?.querySelector('header .title')?.textContent.includes('gpj')
+        && ${view}.renderRoot.querySelector('header .title').textContent`,
     )) ?? '';
   expectShown(findings, { where: 'sheet title', text: textOf(title), expected: [spoofing ?? ''] });
-  if (
-    (await eventually(
-      devtools,
-      main,
-      `${sheet} && __hostileProbe.rows(${sheet}.renderRoot) > 0`,
-    )) === undefined
-  ) {
-    const shown = await devtools.evaluate(main, `__hostileProbe.text(${sheet}.renderRoot)`);
+  if ((await eventually(devtools, sheet, '__hostileProbe.rows() > 0')) === undefined) {
+    const shown = await devtools.evaluate(sheet, '__hostileProbe.text()');
     findings.failures.push(
       `sheet of ${JSON.stringify(spoofing)} rendered no rows: ${String(shown)}`,
     );
   }
-  await shoot(main, 'names-sheet');
+  await shoot(sheet, 'names-sheet');
 }
 
 /**
@@ -497,12 +503,8 @@ function cardOf(filePath: string): string {
   return `__hostileProbe.all('beuve-file-card').find((card) => card.file?.path === ${JSON.stringify(filePath)})`;
 }
 
-/** Peeks at the hostile lines, then opens an inline sheet of a hostile-named file. */
-async function checkPeekAndInlineSheet(
-  run: Run,
-  main: SessionId,
-  repository: HostileRepository,
-): Promise<void> {
+/** Peeks at the hostile lines. */
+async function checkPeek(run: Run, main: SessionId, repository: HostileRepository): Promise<void> {
   const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";
   const { peek } = repository;
@@ -551,36 +553,28 @@ async function checkPeekAndInlineSheet(
     main,
     `${app}.renderRoot.querySelector('beuve-review').navigation.closePeek()`,
   );
+}
 
+/** Opens a sheet window of a hostile-named file and checks its name and lines show as text. */
+async function checkNamedSheet(
+  run: Run,
+  main: SessionId,
+  repository: HostileRepository,
+): Promise<void> {
+  const { devtools, findings, shoot } = run;
   const named = repository.files.find((file) => file.path === repository.sheet);
-  await chooseSheets(devtools, main, 'inline');
-  await devtools.evaluate(
-    main,
-    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(named?.path)}, range: { startLine: 1, startCharacter: 0, endLine: 1, endCharacter: 1 } })`,
-  );
-  const sheet = "__hostileProbe.all('beuve-sheet-view')[0]";
-  if (
-    (await eventually(
-      devtools,
-      main,
-      `${sheet} && __hostileProbe.rows(${sheet}.renderRoot) > 0`,
-    )) === undefined
-  ) {
-    findings.failures.push('inline sheet rendered no rows');
+  const sheet = await openSheetWindow(devtools, main, { path: named?.path ?? '', line: 1 });
+  if ((await eventually(devtools, sheet, '__hostileProbe.rows() > 0')) === undefined) {
+    findings.failures.push('the named file’s sheet window rendered no rows');
   }
-  const sheetText = String(
-    await devtools.evaluate(
-      main,
-      `__hostileProbe.text(${sheet}?.renderRoot ?? document.createElement('i'))`,
-    ),
-  );
+  const text = String(await devtools.evaluate(sheet, '__hostileProbe.text()'));
   expectVisible(findings, {
-    where: 'inline sheet',
-    text: sheetText,
+    where: 'named file’s sheet window',
+    text,
     expected: [named?.path ?? '', ...(named?.lines ?? [])],
   });
-  await expectSafe(run, main, 'inline sheet');
-  await shoot(main, 'sheet-inline');
+  await expectSafe(run, sheet, 'named file’s sheet window');
+  await shoot(sheet, 'sheet-named');
 }
 
 /** Opens the hostile lines in a sheet window and checks that window. */
@@ -590,19 +584,11 @@ async function checkSheetWindow(
   repository: HostileRepository,
 ): Promise<void> {
   const { devtools, findings, shoot } = run;
-  const app = "document.querySelector('beuve-app')";
   const { contents } = repository;
-  await chooseSheets(devtools, main, 'window');
-  const line = contents.line - 1;
-  await devtools.evaluate(
-    main,
-    `${app}.renderRoot.querySelector('beuve-review').sheetAction({ kind: 'open', path: ${JSON.stringify(contents.path)}, range: { startLine: ${String(line)}, startCharacter: 0, endLine: ${String(line)}, endCharacter: 1 } })`,
-  );
-  const sheet = await devtools.waitForPage((url) => {
-    return url.includes('/sheet.html');
-  }, wait());
-  await devtools.waitFor(sheet, "!!document.querySelector('beuve-sheet-view')", wait());
-  await devtools.evaluate(sheet, pageProbe);
+  const sheet = await openSheetWindow(devtools, main, {
+    path: contents.path,
+    line: contents.line - 1,
+  });
   if ((await eventually(devtools, sheet, '__hostileProbe.rows() > 0')) === undefined) {
     findings.failures.push('sheet window rendered no rows');
   }

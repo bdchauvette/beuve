@@ -42,7 +42,6 @@ import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveDiffStream } from './beuve-diff-stream.ts';
-import type { BeuveSheetView } from './beuve-sheet-view.ts';
 import type { BeuveFilesSidebar } from './beuve-files-sidebar.ts';
 import type { BeuveUraDock } from './beuve-ura-dock.ts';
 import type { MentionTarget } from './chat-draft.ts';
@@ -98,7 +97,6 @@ import type { GithubDockState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
-import './beuve-sheet-view.ts';
 import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
 import type { ZoneId } from './zones.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
@@ -172,16 +170,6 @@ export class BeuveReview extends LitElement {
       .main > .empty-screen {
         flex: 1;
         min-block-size: 0;
-      }
-
-      .sheet-overlay {
-        position: fixed;
-        inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
-        inset-inline: auto 0;
-        z-index: 15;
-        inline-size: min(var(--beuve-size-sheet), var(--beuve-size-window-inline-60));
-        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
-        box-shadow: var(--beuve-shadow-sheet);
       }
     `,
   ];
@@ -309,11 +297,6 @@ export class BeuveReview extends LitElement {
 
   private readonly onSheetRequest = (event: CustomEvent<SheetOpenDetail>): void => {
     void this.sheetAction({ kind: 'open', ...event.detail });
-  };
-
-  private readonly onSheetClose = (): void => {
-    this.navigation.closeSheet();
-    this.focusedZone = 'diff';
   };
 
   private readonly onPeekExpand = (event: CustomEvent<PeekExpandDetail>): void => {
@@ -572,9 +555,6 @@ export class BeuveReview extends LitElement {
     },
     notify: (notice): void => {
       this.showNotice(notice);
-    },
-    sheetMode: (): 'window' | 'inline' => {
-      return this.settings.display.sheets ?? 'window';
     },
   });
   /** The language servers' diagnostics for the files on screen (ADR 0111). */
@@ -896,19 +876,6 @@ export class BeuveReview extends LitElement {
     return this.insightCache.insights;
   }
 
-  /** Back, Forward, Find and the definition and permalink commands go to a focused inline sheet. */
-  private runSheetCommand(id: CommandId): boolean {
-    return this.focusedSheet()?.runCommand(id) === true;
-  }
-
-  private focusedSheet(): BeuveSheetView | undefined {
-    const sheet = this.renderRoot.querySelector<BeuveSheetView>('beuve-sheet-view') ?? undefined;
-    if (sheet?.matches(':focus-within') === true) {
-      return sheet;
-    }
-    return undefined;
-  }
-
   private stream(): BeuveDiffStream | undefined {
     return this.renderRoot.querySelector<BeuveDiffStream>('beuve-diff-stream') ?? undefined;
   }
@@ -937,12 +904,7 @@ export class BeuveReview extends LitElement {
 
   /** Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). */
   private async sheetAction(action: SheetAction): Promise<void> {
-    if (!(await this.navigation.runSheet(action))) {
-      return;
-    }
-
-    await this.updateComplete;
-    this.renderRoot.querySelector<HTMLElement>('beuve-sheet-view')?.focus();
+    await this.navigation.runSheet(action);
   }
 
   /** The palette's "commits since the last review": opens them in the stream, focused. */
@@ -1312,13 +1274,10 @@ export class BeuveReview extends LitElement {
   /** What a right-click landed on, recording the answer, note or tree row it chose. */
   contextKindAt(
     event: MouseEvent,
-  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'sheet' | 'text' | undefined {
+  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'text' | undefined {
     const path = event.composedPath().filter((target) => target instanceof HTMLElement);
     if (path.some((element) => isEditableElement(element))) {
       return 'text';
-    }
-    if (path.some((element) => element.localName === 'beuve-sheet-view')) {
-      return 'sheet';
     }
     const answer = path.find((element) => element.dataset['messageId'] !== undefined);
     if (answer !== undefined) {
@@ -1405,9 +1364,6 @@ export class BeuveReview extends LitElement {
 
   /** Runs a catalog command this container handles; `false` when it is not one of its own. */
   run(id: CommandId): boolean {
-    if (this.runSheetCommand(id)) {
-      return true;
-    }
     switch (id) {
       case 'cycle-zone': {
         this.focusedZone = cycleZone(this.zoneOrder(), this.focusedZone, 1);
@@ -1622,7 +1578,6 @@ export class BeuveReview extends LitElement {
       isTerminalFocused: this.isTerminalFocused,
       treeMode: this.treeMode,
       isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
-      sheetHistory: this.focusedSheet()?.historyState(),
     };
   }
 
@@ -1658,19 +1613,6 @@ export class BeuveReview extends LitElement {
               .sessionId=${this.review.session.id}
               .sha=${this.review.headSha}
             ></beuve-definition-link>`
-      }
-      ${
-        this.navigation.inlineSheet === undefined || this.review === undefined
-          ? nothing
-          : html`<beuve-sheet-view
-              class="sheet-overlay"
-              mode="inline"
-              .api=${beuveBridge()}
-              .sessionId=${this.review.session.id}
-              .sha=${this.navigation.inlineSheet.sha}
-              .place=${this.navigation.inlineSheet.place}
-              @beuve-sheet-close=${this.onSheetClose}
-            ></beuve-sheet-view>`
       }
     `;
   }
@@ -1736,7 +1678,6 @@ export type ReviewMenuFacts = Pick<
   | 'isTerminalFocused'
   | 'treeMode'
   | 'isFindCaseSensitive'
-  | 'sheetHistory'
 >;
 
 /** What the open command palette points at, when Add to Chat runs from it. */

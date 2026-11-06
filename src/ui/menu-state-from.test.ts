@@ -15,7 +15,6 @@ describe('menuStateFrom', () => {
         'toggle-insights',
         'toggle-diagnostics',
         'order-path',
-        'sheets-window',
       ],
     });
   });
@@ -28,10 +27,6 @@ describe('menuStateFrom', () => {
     [
       { isBusy: true, isPullRequest: true, stagedCount: 2 },
       ['session', 'file', 'diff-target', 'busy', 'pull-request', 'staged'],
-    ],
-    [
-      { sheetHistory: { canGoBack: true, canGoForward: false } },
-      ['session', 'file', 'diff-target', 'back'],
     ],
     [{ isTerminalFocused: true }, ['session', 'file', 'diff-target', 'terminal-focus']],
   ] as const)('focus %o gives %o', ([change, conditions], { expect }) => {
@@ -48,7 +43,7 @@ describe('menuStateFrom', () => {
       isFindCaseSensitive: true,
       treeMode: 'diff-only',
       isTerminalShown: true,
-      display: { ...open().display, layout: 'unified', reviewOrder: 'calls', sheets: 'inline' },
+      display: { ...open().display, layout: 'unified', reviewOrder: 'calls' },
     });
     expect(checked).toStrictEqual([
       'toggle-sidebar',
@@ -59,7 +54,6 @@ describe('menuStateFrom', () => {
       'toggle-diagnostics',
       'tree-mode',
       'order-calls',
-      'sheets-inline',
       'toggle-reviewed',
       'editor-vscode',
       'dock-addressed',
@@ -93,7 +87,6 @@ function idle(): MenuStateInput {
     treeMode: 'neighborhood',
     preferredEditor: undefined,
     isFindCaseSensitive: false,
-    sheetHistory: undefined,
   };
 }
 

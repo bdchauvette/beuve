@@ -2,7 +2,6 @@ import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import type { DiffDisplayView, EditorId, MenuStateRequest } from '#contract/ipc-contract.ts';
 
 import type { RadarTreeMode } from './plan-radar-tree.ts';
-import type { SheetHistoryState } from './step-sheet-history.ts';
 import type { ZoneId } from './zones.ts';
 
 /** What the main window knows that decides its menu items (ADR 0068). */
@@ -27,8 +26,6 @@ export interface MenuStateInput {
   readonly treeMode: RadarTreeMode;
   readonly preferredEditor: EditorId | undefined;
   readonly isFindCaseSensitive: boolean;
-  /** The inline sheet's history, while it has the focus. */
-  readonly sheetHistory: SheetHistoryState | undefined;
 }
 
 /**
@@ -53,8 +50,6 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ...has('busy', input.isBusy),
     ...has('pull-request', input.isPullRequest),
     ...has('staged', input.stagedCount > 0),
-    ...has('back', input.sheetHistory?.canGoBack === true),
-    ...has('forward', input.sheetHistory?.canGoForward === true),
     ...has('text-focus', input.isTextFocused),
     ...has('terminal-focus', input.isTerminalFocused),
   ];
@@ -74,8 +69,6 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['order-path', order === 'path'],
     ['order-imports', order === 'imports'],
     ['order-calls', order === 'calls'],
-    ['sheets-window', (display.sheets ?? 'window') === 'window'],
-    ['sheets-inline', display.sheets === 'inline'],
     ['toggle-skip-reviewed', display.skipReviewed === true],
     ['toggle-reviewed', isFile && input.isActiveReviewed],
     ['editor-zed', input.preferredEditor === 'zed'],

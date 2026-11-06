@@ -687,9 +687,6 @@ export interface CommitInfoView {
   readonly body: string;
 }
 
-/** Where `lsp:definition` jumps open: a sheet window each, or the overlay in the main window. */
-export type SheetModeView = 'window' | 'inline';
-
 /**
  * The control-flow graph of the function enclosing head line `line` (1-based) of `path`, a file
  * of the review `session:get-review` shows for the session now (ADR 0028, 0029).
@@ -1529,8 +1526,6 @@ export interface DiffDisplayView {
   readonly reviewOrder?: ReviewOrderMode;
   /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
   readonly skipReviewed?: boolean;
-  /** How definitions open (ADR 0067); `window` until chosen. Always set by main. */
-  readonly sheets?: SheetModeView;
   /** The review queue's sort, grouping and filters (ADR 0113). Always set by main. */
   readonly reviewQueue?: ReviewQueuePrefsView;
   /** Branch name prefixes the review queue lists agent branches for (ADR 0113). Always set by main. */
@@ -1547,7 +1542,6 @@ export interface SetDiffDisplayRequest {
   readonly showDiagnostics?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
-  readonly sheets?: SheetModeView;
   readonly reviewQueue?: ReviewQueuePrefsView;
   readonly reviewQueueBranchPrefixes?: readonly string[];
 }

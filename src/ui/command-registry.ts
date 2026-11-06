@@ -16,7 +16,10 @@ export type CommandRun =
   | { readonly kind: 'slash'; readonly text: string; readonly isPrefill: boolean }
   /** Main runs it (Settings, About, …): the palette asks with `menu:run-main`. */
   | { readonly kind: 'main' }
-  /** Describes a key that only means something in place (typing in the chat, a portal). */
+  /**
+   * Nothing runs in the main window: a key that only means something in place (typing in the
+   * chat, a portal), or a command only a sheet window has (Back, Forward).
+   */
   | { readonly kind: 'none' };
 
 /** What the main window adds to a catalog command. */
@@ -115,16 +118,10 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     },
     'order-imports': app,
     'order-calls': app,
-    'sheets-window': {
-      ...app,
-      slash: '/sheets window|inline',
-      help: 'definitions open in a new sheet window each, or over the diff (just /sheets shows the current one)',
-    },
-    'sheets-inline': app,
     expand: diff,
     collapse: diff,
-    back: app,
-    forward: app,
+    back: none,
+    forward: none,
     'next-hunk': diff,
     'previous-hunk': diff,
     'next-file': diff,

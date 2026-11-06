@@ -14,8 +14,6 @@ describe('displayChangeFor', () => {
     ['order-path', { reviewOrder: 'path' }],
     ['order-imports', { reviewOrder: 'imports' }],
     ['order-calls', { reviewOrder: 'calls' }],
-    ['sheets-window', { sheets: 'window' }],
-    ['sheets-inline', { sheets: 'inline' }],
   ] as const)('%s sets %j regardless of the display', ([id, change], { expect }) => {
     expect(displayChangeFor(id, createDiffDisplay())).toStrictEqual(change);
     expect(

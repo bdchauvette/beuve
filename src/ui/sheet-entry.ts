@@ -24,7 +24,6 @@ sheet.shortcuts = {
 api?.onMenuRun?.(({ id }) => {
   sheet.runCommand(id);
 });
-sheet.mode = 'window';
 sheet.sessionId = query.get('session') ?? '';
 sheet.sha = query.get('sha') ?? '';
 sheet.place = { path: query.get('path') ?? '', range: rangeFrom(query) };

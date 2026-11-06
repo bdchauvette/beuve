@@ -295,21 +295,6 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
-        "label": "Open Definitions &In",
-        "submenu": [
-          {
-            "id": "sheets-window",
-            "label": "&Sheet Windows",
-            "type": "radio",
-          },
-          {
-            "id": "sheets-inline",
-            "label": "&Over the Diff",
-            "type": "radio",
-          },
-        ],
-      },
-      {
         "type": "separator",
       },
       {
@@ -1044,21 +1029,6 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "order-calls",
             "label": "Calls",
-            "type": "radio",
-          },
-        ],
-      },
-      {
-        "label": "Open Definitions In",
-        "submenu": [
-          {
-            "id": "sheets-window",
-            "label": "Sheet Windows",
-            "type": "radio",
-          },
-          {
-            "id": "sheets-inline",
-            "label": "Over the Diff",
             "type": "radio",
           },
         ],

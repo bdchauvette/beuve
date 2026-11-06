@@ -45,7 +45,9 @@ describe('commandRegistry', () => {
     expect(bare).toStrictEqual([]);
   });
 
-  test('runs main commands in main and documents in-place keys only', ({ expect }) => {
+  test('runs main commands in main, and runs every main-window command with a menu item or key', ({
+    expect,
+  }) => {
     expect(
       commandRegistry
         .filter((command) => (command.run.kind === 'main') !== (command.handler === 'main'))
@@ -56,6 +58,7 @@ describe('commandRegistry', () => {
         .filter((command) => {
           return (
             command.run.kind === 'none' &&
+            command.windows.includes('main') &&
             (command.menu !== undefined || command.keys !== undefined)
           );
         })
@@ -96,7 +99,6 @@ describe('commandRegistry', () => {
       '/insights',
       '/order',
       '/sidebar',
-      '/sheets',
       '/clear',
       '/compact',
       '/help',

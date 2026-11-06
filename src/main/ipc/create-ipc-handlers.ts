@@ -474,7 +474,6 @@ const displayRequest = z.strictObject({
   showDiagnostics: z.boolean().optional(),
   reviewOrder: reviewOrderMode.optional(),
   skipReviewed: z.boolean().optional(),
-  sheets: z.enum(['window', 'inline']).optional(),
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
 });
@@ -1087,7 +1086,6 @@ export function createIpcHandlers(
         showDiagnostics,
         reviewOrder,
         skipReviewed,
-        sheets,
         reviewQueue,
         reviewQueueBranchPrefixes,
       } = parsed.data;
@@ -1100,7 +1098,6 @@ export function createIpcHandlers(
         ...(showDiagnostics !== undefined && { showDiagnostics }),
         ...(reviewOrder !== undefined && { reviewOrder }),
         ...(skipReviewed !== undefined && { skipReviewed }),
-        ...(sheets !== undefined && { sheets }),
         ...(reviewQueue !== undefined && { reviewQueue }),
         ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
       });

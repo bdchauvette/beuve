@@ -15,8 +15,6 @@ export type DisplayCommandId = Extract<
   | 'order-path'
   | 'order-imports'
   | 'order-calls'
-  | 'sheets-window'
-  | 'sheets-inline'
 >;
 
 /** The display change a menu, shortcut or palette command asks for, given the current display. Pure. */
@@ -54,12 +52,6 @@ export function displayChangeFor(
     }
     case 'order-calls': {
       return { reviewOrder: 'calls' };
-    }
-    case 'sheets-window': {
-      return { sheets: 'window' };
-    }
-    case 'sheets-inline': {
-      return { sheets: 'inline' };
     }
   }
 }
