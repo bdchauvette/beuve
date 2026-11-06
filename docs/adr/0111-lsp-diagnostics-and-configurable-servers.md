@@ -22,6 +22,7 @@ What exists today limits this:
 - No code actions, quick fixes or edits (ADR 0016). Staging a diagnostic as a review note is a natural follow-up and is not decided here.
 - Results arrive as the servers produce them. Main keeps the latest report per open document and pushes changes to the renderer, each marked as still checking or settled, instead of one call that blocks on a guess. ADR 0016's settle rules (pull when offered, else the first push report after the latest sync plus a quiet period) decide when "checking" ends; the code they ran in is recoverable from the closed PR that removed it.
 - A servers' view of the checkout is only as complete as what is installed there. The popover says so once, in general words ("from `<server>`, in beuve's checkout; install dependencies in the terminal, then Review › Restart Language Servers"), rather than detecting per ecosystem which dependencies are missing (the table ADR 0095 dropped).
+- **Only the head.** Diagnostics appear in the diff and in sheets at the session head's commit. A sheet pinned to an older commit (ADR 0067) shows none; it shows a small information icon, styled as a heads-up and not as a warning or error marker, whose tooltip says diagnostics are only available at the head. When the head moves, a sheet that was at the head is older, and gets the same icon.
 
 ### Servers
 
@@ -33,10 +34,20 @@ What exists today limits this:
   - `path`: an absolute command, or a name looked up on `PATH`. The default for everything but TypeScript.
   - `project`: a path relative to the checkout (for example `node_modules/.bin/…`), or for TypeScript, the project's own `tsserver`. This runs code that came with the reviewed branch.
 - **`project` is the reviewer's choice and only theirs.** It takes effect only when the reviewer's own configuration asks for it, for the repositories they name. This is the same posture as the terminal (ADR 0095): beuve does not start repository code on opening a review, but the reviewer can decide to. ADR 0017's default (workspace binaries off, TypeScript pinned to beuve's own) stays for everything not opted in.
+- **Finding programs: the reviewer's login-shell environment, as IDEs do.** A GUI app started from the Dock or Finder has a minimal `PATH`, so `gopls` from Homebrew, `go install`, `mise` or `asdf` would not be found. VS Code (`shellEnv.ts`) runs the user's shell as `-i -l -c`, reads the environment back as JSON from its own binary between random markers, gives up after 10 seconds (a setting, 1 to 120), does it once per process, and skips it when launched from a terminal and on Windows. Zed does the same from the home directory. Beuve does the same: once at startup, from the home directory, skipped when launched from a terminal, with a timeout. If it fails or times out, beuve uses the process environment and shows an information notice. The resolved `PATH` is used to look up server commands. Everything else still passes through ADR 0017's allow-list, plus the names a definition lists in `inheritEnv` (for Go, variables such as `GOPATH`).
+- **Not per project.** Zed also runs a login shell in the project's root, to pick up per-directory environments such as direnv and mise. Beuve does not: opening a review must not run configuration that came with the reviewed branch, and a shell started in the checkout can load it (`.envrc`, `mise.toml`). Version-manager shims on the reviewer's `PATH` still work. A reviewer who needs a per-repository environment sets it as `env` in an override.
+
+### Trust
+
+- **One decision point.** Every server start goes through one trust check. It takes the server definition, where its program comes from (`builtin`, `path` or `project`), where the definition came from (a built-in, the reviewer's file, or an override) and the repository, and answers allow, deny with a reason, or, later, ask. No code path starts a server without it.
+- **A stub for now.** Version one answers from fixed rules: `builtin` and `path` are allowed; `project` is allowed only when the reviewer's own configuration asks for it for that repository, which counts as their consent; anything else, including a source kind the check does not know, is denied. It fails closed.
+- **A denial is a normal outcome.** It is a typed result, not an exception, and the UI shows it as an information notice on the file ("the project's TypeScript server was not started: not trusted"). The denied path is built, rendered and tested from the first step, not added when a prompt exists.
+- **Left for later:** how trust is granted or remembered (a prompt, a per-repository confirmation, a store). ADR 0096 removed the earlier trust grant, so a design starts from what the reviewer is asked and why, not from reviving it. Linters that load the repository's configuration (ESLint's config is code) are the first case that needs it.
 
 ### Configuration
 
-- **One JSON file, `language-servers.json`, in `userData` beside `settings.json`**, written and read like the other user data (ADR 0082: owner-only, atomic replace). It is hand-edited; Settings gets a button that opens it and the existing Review › Restart Language Servers re-reads it. It is validated with a strict schema (unknown keys and wrong types are errors, as for the model registry in ADR 0070). A missing or invalid file never blocks startup: beuve uses the built-ins and shows the error in Settings and the status bar.
+- **One JSON file, `language-servers.json`, read from the places Ghostty reads its config.** Ghostty reads `$XDG_CONFIG_HOME/ghostty/` (`~/.config/ghostty/` when the variable is unset) on every platform and, on macOS, also `~/Library/Application Support/com.mitchellh.ghostty/`, loaded after the XDG files so it wins on conflict. Beuve reads `$XDG_CONFIG_HOME/beuve/language-servers.json` (`~/.config/beuve/` when unset) on every platform and `language-servers.json` in `userData` (on macOS, `~/Library/Application Support/beuve/`), loaded second so it wins. Neither is required. The files merge in that order: `servers` per id and per field, and `overrides` concatenated. Windows is not a target today (beuve ships for macOS and Linux, ADR 0048); when it is, `userData` applies there.
+- **Hand-edited, read-only to beuve.** Beuve never rewrites these files, so ADR 0082's atomic-write rule does not apply to them. Settings gets a button that opens the file, creating an empty one in the XDG location if none exists. Review › Restart Language Servers re-reads them, as Ghostty reloads its config on a shortcut. The schema is strict (unknown keys and wrong types are errors, as for the model registry in ADR 0070). A missing or invalid file never blocks startup: beuve uses the built-ins and shows the error in Settings and the status bar.
 - **`servers`** maps an id to a definition. A built-in id merges field by field over the built-in (so the reviewer can change `gopls`'s arguments or settings), `enabled: false` turns a server off, and a new id defines a custom server.
 - **`overrides`** is an ordered list of `{ match, servers }`. `match` is a path glob against the reviewer's own clone of the repository (`~` expands), so one entry can cover a directory of repositories and another a single repository, or a `remote` pattern such as `github.com/owner/*` for pull request sessions, which have no clone of the reviewer's. Entries apply in file order, later ones over earlier ones, merged per server id and per field over `servers`.
 - **No configuration is read from the reviewed repository.** A `.beuve/language-servers.json` in a repository would let a pull request choose the programs beuve runs. A later ADR may read one as a suggestion that the reviewer approves; this one does not.
@@ -46,22 +57,27 @@ What exists today limits this:
 Each step is its own change and ADR amendment where it decides something:
 
 1. Restore diagnostics in `src/internal/lsp`, with the push to the renderer, for TypeScript.
-2. The multi-server registry and `rootMarkers`.
-3. The configuration file, its schema, overrides and the Settings entry.
-4. Go: a `gopls` definition. Before writing it, run `gopls` against a sample module and record what it does: pull or push, which capabilities, which environment variables it needs, whether it touches the network (module or toolchain downloads) and how long it takes to settle on a cold checkout. Those facts decide its default `env`.
-5. Python, as the first test of the configuration model with a server beuve does not bundle.
+2. The login-shell environment, and the trust check with its stub, including the denied notice.
+3. The multi-server registry and `rootMarkers`.
+4. The configuration file, its schema, overrides, both locations and the Settings entry.
+5. Go: a `gopls` definition. Before writing it, run `gopls` against a sample module and record what it does: pull or push, which capabilities, which environment variables it needs, whether it touches the network (module or toolchain downloads) and how long it takes to settle on a cold checkout. Those facts decide its default `env`.
+6. Python, as the first test of the configuration model with a server beuve does not bundle.
 
 ## Consequences
 
 - Reviewers see type and lint errors where the code is, for any ecosystem with an LSP server, with no per-ecosystem logic in beuve beyond a default definition for each language we choose to ship.
-- Beuve gains a user-edited config file and a path-matching rule to maintain, and the rule that repository content never defines a program to run. The cost is that a repository cannot carry its own server setup: the reviewer writes it once in their own file.
+- Beuve gains a user-edited config file (in two possible places) and a path-matching rule to maintain, and the rule that repository content never defines a program to run. The cost is that a repository cannot carry its own server setup: the reviewer writes it once in their own file.
 - `source: project` makes it possible to use the project's own TypeScript, so diagnostics match the project, after the reviewer installs dependencies and opts in. Until then TypeScript diagnostics come from beuve's version and may differ from the project's.
-- Servers are found through `PATH`, and a macOS app started from Finder has a minimal one (ADR 0017). A definition can name an absolute command; whether beuve should also resolve names through the reviewer's login shell is open (see below).
+- Server commands are found through the reviewer's login-shell `PATH`, so Dock and Finder launches work like an IDE's. This puts back the login-shell capture ADR 0095 removed for installs, for a different purpose: once per process, with a timeout, in the home directory and never in a checkout. It runs the reviewer's shell start-up files at launch, as their terminals already do. A definition can still name an absolute command.
+- Trust is a stubbed seam with the denied path already built and tested. Granting trust is not designed yet, and `project` sources are limited to what the reviewer's own file opts into until it is.
+- Diagnostics exist at the session head only. A reviewer reading an old commit in a sheet sees the information icon and no markers.
 - A server per module root and several servers per file mean more processes. The idle shutdown (ADR 0017) bounds that.
 
-## Open questions
+## Decisions on the open questions
 
-- Whether `PATH` lookups should use the reviewer's login-shell `PATH`, which fixes Finder launches but reintroduces the login-shell capture ADR 0095 removed.
-- Whether hand-edited JSON in `userData` is findable enough, or the file should live under `~/.config/beuve/` as well or instead.
-- Whether sheets pinned to older commits (ADR 0067) also show diagnostics.
-- Linters that load the repository's own configuration (ESLint's config is code) belong under `source: project` and the reviewer's opt-in. Whether that is enough, or needs a per-repository confirmation, is left for the step that adds the first linter.
+The first draft left four questions open. The reviewer decided them on 2026-11-06:
+
+1. **Finding programs:** follow what IDEs do, a login-shell environment resolved once (see Servers). Beuve deliberately does not copy Zed's per-project shell.
+2. **Config location:** follow Ghostty, XDG on every platform plus the platform's own directory on macOS (see Configuration).
+3. **Sheets at older commits:** no diagnostics; an information icon says so (see What the reviewer sees).
+4. **Trust:** not designed yet. Build a single trust check with a stub that fails closed, so every code path exists from the start (see Trust).
