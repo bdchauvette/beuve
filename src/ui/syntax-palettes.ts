@@ -1,6 +1,6 @@
 /*!
- * The syntax palettes copy Alabaster's colors:
- * Alabaster — Copyright (c) 2018 Nikita Prokopov (https://github.com/tonsky/sublime-scheme-alabaster)
+ * The syntax palettes copy values from Radix Colors:
+ * Radix Colors 3.0.0 — Copyright (c) 2021 Radix (https://github.com/radix-ui/colors)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,14 @@
  */
 
 /**
- * The colors of the four things Alabaster highlights, plus the editor's own (ADR 0025). Hex
- * strings only: they reach the DOM as inline styles the library writes (ADR 0018).
+ * The editor's colors, the four colored classes, and the muted color of keywords, operators and
+ * punctuation (ADR 0025, 0119). Hex strings only: they reach the DOM as inline styles the library
+ * writes (ADR 0018), so they repeat Radix values `index.css` also holds.
  */
 export interface SyntaxPalette {
   readonly background: string;
   readonly foreground: string;
+  readonly muted: string;
   readonly string: string;
   readonly constant: string;
   readonly comment: string;
@@ -35,24 +37,27 @@ export interface SyntaxPalette {
 }
 
 /**
- * Nikita Prokopov's Alabaster (light) and Alabaster Dark, from the Sublime Text originals in
- * tonsky/sublime-scheme-alabaster: light comments are red, dark ones yellow, as there.
+ * Radix Colors 3.0.0 steps, by role (ADR 0119): the code background is the chrome's background
+ * step, text is gray 12, keywords and punctuation gray 11; strings green 11, constants purple 11,
+ * comments amber 11, definitions blue 11. Gray is slate in light and sage in dark, as in `index.css`.
  */
 export const syntaxPalettes: Readonly<Record<'light' | 'dark', SyntaxPalette>> = Object.freeze({
   light: {
-    background: '#f7f7f7',
-    foreground: '#000000',
-    string: '#448c27',
-    constant: '#7a3e9d',
-    comment: '#aa3731',
-    definition: '#325cc0',
+    background: '#f9f9fb',
+    foreground: '#1c2024',
+    muted: '#60646c',
+    string: '#218358',
+    constant: '#8145b5',
+    comment: '#ab6400',
+    definition: '#0d74ce',
   },
   dark: {
-    background: '#0e1415',
-    foreground: '#cecece',
-    string: '#95cb82',
-    constant: '#cc8bc9',
-    comment: '#dfdf8e',
-    definition: '#71ade7',
+    background: '#101211',
+    foreground: '#eceeed',
+    muted: '#adb5b2',
+    string: '#3dd68c',
+    constant: '#d19dff',
+    comment: '#ffca16',
+    definition: '#70b8ff',
   },
 });

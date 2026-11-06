@@ -20,11 +20,13 @@ export interface TextmateRule {
 }
 
 /**
- * An Alabaster-style TextMate theme (ADR 0025): strings, constants, comments and definitions get
- * color, everything else is plain foreground. No keyword, operator or punctuation colors, no bold
- * or italics. Grammars tag names at use sites with the same `entity.name` scopes as definitions,
- * so the "plain" rule takes back calls, type references, tags and commands; the scope matcher
- * prefers the longer selector, so it overrides the broad definition rule.
+ * An Alabaster-style TextMate theme (ADR 0025, 0119): strings, constants, comments and definitions
+ * get color, keywords, operators and punctuation are muted so names stand out, and everything else
+ * is plain foreground. No bold or italics. Grammars tag names at use sites with the same
+ * `entity.name` scopes as definitions, so the "plain" rule takes back calls, type references, tags
+ * and commands; the scope matcher prefers the longer selector, so it overrides the broad definition
+ * rule. The same preference keeps whatever a comment or string holds (a JSDoc tag, a regex
+ * quantifier, a quote) in the comment's or string's color.
  */
 export function textmateThemeFrom(
   name: string,
@@ -44,18 +46,12 @@ export function textmateThemeFrom(
       rule({
         name: 'Comments',
         foreground: palette.comment,
-        scope: ['comment', 'punctuation.definition.comment'],
+        scope: commentScopes,
       }),
       rule({
         name: 'Strings',
         foreground: palette.string,
-        scope: [
-          'string',
-          'constant.character.escape',
-          'constant.other.placeholder',
-          'constant.character.format.placeholder',
-          'markup.inline.raw',
-        ],
+        scope: stringScopes,
       }),
       rule({ name: 'Constants', foreground: palette.constant, scope: ['constant'] }),
       rule({
@@ -70,6 +66,11 @@ export function textmateThemeFrom(
           'entity.name.type.struct',
           'entity.name.type.trait',
         ],
+      }),
+      rule({
+        name: 'Muted: keywords, operators and punctuation',
+        foreground: palette.muted,
+        scope: mutedScopes,
       }),
       rule({
         name: 'Plain: uses of names and template code',
@@ -91,7 +92,46 @@ function rule({ name, foreground, scope }: RuleParts): TextmateRule {
   return { name, scope: [...scope], settings: { foreground } };
 }
 
+const commentScopes: readonly string[] = [
+  'comment',
+  'punctuation.definition.comment',
+  'comment keyword',
+  'comment storage',
+  'comment punctuation',
+  'comment meta.brace',
+  'comment entity',
+  'comment entity.name',
+  'comment entity.name.type',
+  'comment variable',
+  'comment constant',
+];
+
+const stringScopes: readonly string[] = [
+  'string',
+  'punctuation.definition.string',
+  'string keyword',
+  'string punctuation',
+  'string meta.brace',
+  'string storage',
+  'constant.character.escape',
+  'constant.other.placeholder',
+  'constant.character.format.placeholder',
+  'markup.inline.raw',
+];
+
+const mutedScopes: readonly string[] = [
+  'keyword',
+  'storage',
+  'punctuation',
+  'meta.brace',
+  'meta.template.expression keyword',
+  'meta.template.expression storage',
+  'meta.template.expression punctuation',
+  'meta.template.expression meta.brace',
+];
+
 const plainScopes: readonly string[] = [
+  'source.go storage.type',
   'entity.name.type',
   'entity.name.tag',
   'entity.name.command',
