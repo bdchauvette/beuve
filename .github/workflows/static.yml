@@ -22,7 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script: [typecheck:ci, lint:ci, format:ci, deps:ci]
+        # storybook:ci builds the stories (ADR 0117), so one that no longer compiles fails here.
+        script: [typecheck:ci, lint:ci, format:ci, deps:ci, storybook:ci]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

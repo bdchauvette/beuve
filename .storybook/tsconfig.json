@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../src/ui/tsconfig.json",
+  "files": ["main.ts", "preview.ts"],
+  "include": ["../types/dom"],
+  "exclude": []
+}
