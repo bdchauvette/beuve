@@ -343,9 +343,30 @@ describe('GithubController', () => {
   });
 
   test.for([
-    ['a new head', { headMoved: true, promoted: false, state: 'present' }, ['s1'], 'New commits'],
-    ['a promotion', { headMoved: false, promoted: true, state: 'present' }, ['s1'], 'as #7'],
-    ['a deleted branch', { headMoved: false, promoted: false, state: 'gone' }, [], 'is gone'],
+    [
+      'a new head',
+      { headMoved: true, promoted: false, state: 'present', pullOwner: 'o' },
+      ['s1'],
+      'New commits',
+    ],
+    [
+      'a promotion',
+      { headMoved: false, promoted: true, state: 'present', pullOwner: 'o' },
+      ['s1'],
+      'as #7.',
+    ],
+    [
+      'a promotion upstream',
+      { headMoved: false, promoted: true, state: 'present', pullOwner: 'up' },
+      ['s1'],
+      'as up/r#7.',
+    ],
+    [
+      'a deleted branch',
+      { headMoved: false, promoted: false, state: 'gone', pullOwner: 'o' },
+      [],
+      'is gone',
+    ],
   ] as const)('a branch update with %s says so', async ([, change, reloads, text], { expect }) => {
     const { github, emit, notices, selected } = createGithubHarness({ review: reviewOf() });
     github.hostConnected();
@@ -354,9 +375,16 @@ describe('GithubController', () => {
       headMoved: change.headMoved,
       promoted: change.promoted,
       branch: {
+        owner: 'o',
+        repo: 'r',
         branch: 'claude/x',
         state: change.state,
-        pullRequest: { number: 7, htmlUrl: 'https://github.com/o/r/pull/7' },
+        pullRequest: {
+          owner: change.pullOwner,
+          repo: 'r',
+          number: 7,
+          htmlUrl: `https://github.com/${change.pullOwner}/r/pull/7`,
+        },
       },
     });
     expect(github.branch).toMatchObject({ branch: 'claude/x' });

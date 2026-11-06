@@ -246,7 +246,7 @@ async function promote(
   }
   const remote = await openSessionRemote(
     context,
-    { session, repository: { host: source.host, ...found.base } },
+    { session, repository: { host: source.host, ...found.base }, missingRemote: 'expected' },
     signal,
   );
   if (remote === undefined) {
