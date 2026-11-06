@@ -292,6 +292,25 @@ export class BeuveSettingsView extends LitElement {
           />
         </div>
         <div class="row">
+          <label
+            for="queue-prefixes"
+            title="The review queue lists branches with these prefixes and no pull request, in repositories you opened before. Separate prefixes with commas; leave empty to list none."
+          >
+            Review queue lists branches starting with
+          </label>
+          <input
+            id="queue-prefixes"
+            type="text"
+            spellcheck="false"
+            .value=${(display.reviewQueueBranchPrefixes ?? ['claude/']).join(', ')}
+            @change=${(event: Event): void => {
+              void this.setDisplay({
+                reviewQueueBranchPrefixes: prefixesFrom((event.target as HTMLInputElement).value),
+              });
+            }}
+          />
+        </div>
+        <div class="row">
           <label for="order">Order files by</label>
           <select
             id="order"
@@ -475,6 +494,14 @@ const orders: readonly (readonly [ReviewOrderMode, string])[] = [
   ['imports', 'Imports (what a file uses comes first)'],
   ['calls', 'Calls (asks the language server)'],
 ];
+
+/** `claude/, codex/` as a list of prefixes; main drops what is not a safe ref prefix. */
+function prefixesFrom(text: string): string[] {
+  return text
+    .split(',')
+    .map((prefix) => prefix.trim())
+    .filter((prefix) => prefix !== '');
+}
 
 /** An account row before its status has arrived. */
 function renderChecking(): TemplateResult {

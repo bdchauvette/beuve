@@ -116,6 +116,15 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'review-queue',
+    title: 'Review Queue',
+    menu: { menu: 'file', group: 0 },
+    keys: { mac: 'Shift+Cmd+R', linux: 'Ctrl+Shift+R' },
+    opensMainWindow: true,
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'export-agent-xml',
     title: 'Copy Review for Claude Code (XML)',
     label: 'Copy for Claude Code (XML)',

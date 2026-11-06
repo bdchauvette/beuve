@@ -30,6 +30,10 @@ export class BeuveDialog extends LitElement {
       background: var(--beuve-surface);
       box-shadow: 0 16px 48px #00000040;
     }
+
+    :host([wide]) .dialog {
+      width: min(1100px, calc(100vw - 48px));
+    }
   `;
 
   private readonly onClick = (event: MouseEvent): void => {
@@ -42,6 +46,9 @@ export class BeuveDialog extends LitElement {
 
   /** The dialog's accessible name. */
   @property() accessor label = '';
+
+  /** A wide dialog, for a list with columns (the review queue). */
+  @property({ type: Boolean, reflect: true }) accessor wide = false;
 
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.

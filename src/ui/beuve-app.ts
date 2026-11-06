@@ -10,6 +10,7 @@ import type {
   LspServerView,
   OpenPullRequestRequest,
   ReviewOrderMode,
+  ReviewQueuePrefsView,
   ReviewView,
   SetDiffDisplayRequest,
   UraExportTarget,
@@ -45,6 +46,14 @@ import type { AppActions } from './app-actions.ts';
 import type { AppModel } from './app-model.ts';
 import './beuve-review.ts';
 import type { BeuveReview } from './beuve-review.ts';
+import './beuve-review-queue.ts';
+import type {
+  BeuveReviewQueue,
+  QueueOpenDetail,
+  QueueOpenUrlDetail,
+} from './beuve-review-queue.ts';
+import { QueueController } from './queue-controller.ts';
+import { defaultReviewQueuePrefs } from '#contract/default-review-queue-prefs.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
@@ -125,6 +134,19 @@ export class BeuveApp extends LitElement {
     .empty p {
       margin: 0 0 var(--beuve-space-4);
       color: var(--beuve-text-muted);
+    }
+
+    beuve-review-queue[slot='queue'] {
+      max-height: 62vh;
+      margin-bottom: var(--beuve-space-6);
+    }
+
+    beuve-open-panel[slot='empty'] {
+      max-width: 620px;
+    }
+
+    beuve-dialog beuve-review-queue {
+      height: 70vh;
     }
 
     .sheet-overlay {
@@ -249,6 +271,7 @@ export class BeuveApp extends LitElement {
       this.runChatAppCommand(command);
     },
   });
+  private readonly queue = new QueueController(this, { bridge: beuveBridge });
   private readonly model: AppModel = {
     session: this.session,
     github: this.github,
@@ -328,6 +351,35 @@ export class BeuveApp extends LitElement {
 
   private readonly onDialogDismiss = (): void => {
     this.closeOpenDialog();
+  };
+
+  /** Enter on a queue row: the queue closes and the item opens as a session (ADR 0113). */
+  private readonly onQueueOpen = (event: CustomEvent<QueueOpenDetail>): void => {
+    void this.openQueueItem(event.detail.ref);
+  };
+
+  private readonly onQueuePrefs = (event: CustomEvent<ReviewQueuePrefsView>): void => {
+    void this.settings.change({ reviewQueue: event.detail });
+  };
+
+  private readonly onQueueRefresh = (): void => {
+    void this.queue.refresh();
+  };
+
+  private readonly onQueueOpenUrl = (event: CustomEvent<QueueOpenUrlDetail>): void => {
+    void this.openUrl(event.detail.url);
+  };
+
+  private readonly onQueueDismiss = (): void => {
+    this.closeQueue();
+  };
+
+  private readonly onQueueKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    this.closeQueue();
   };
 
   private readonly onTitlebarOpen = (): void => {
@@ -410,6 +462,8 @@ export class BeuveApp extends LitElement {
   /** The language servers beuve has started, as the status bar lists them. */
   @state() accessor lspServers: readonly LspServerView[] | undefined;
   @state() accessor openDialog = false;
+  /** The review queue's dialog, over an open review (ADR 0113). */
+  @state() accessor queueOpen = false;
 
   /** The palette's starting text while it is open. */
   @state() accessor paletteText: string | undefined;
@@ -474,7 +528,45 @@ export class BeuveApp extends LitElement {
       this.dataset['platform'] = info.value.platform;
     }
     await this.settings.load();
+    void this.queue.load();
     await this.github.loadAuth();
+  }
+
+  /**
+   * Review Queue (ADR 0113): over an open review, a wide dialog; on the home screen, which shows
+   * the queue already, the keyboard goes to it.
+   */
+  private showQueue(): void {
+    void this.queue.load();
+    this.openDialog = false;
+    this.overlayOpen = false;
+    this.paletteText = undefined;
+    if (this.review !== undefined) {
+      this.queueOpen = true;
+    }
+    void this.updateComplete.then(() => {
+      this.renderRoot.querySelector<BeuveReviewQueue>('beuve-review-queue')?.focusList();
+    });
+  }
+
+  private closeQueue(): void {
+    this.queueOpen = false;
+    this.reviewElement()?.refocusZone();
+  }
+
+  /**
+   * Opens a queue item through the usual open paths; one that needs a local clone shows the Open
+   * dialog's pull request step for it, with the failure.
+   */
+  private async openQueueItem(ref: string): Promise<void> {
+    this.queueOpen = false;
+    await this.github.open({ ref });
+    if (this.github.failure === undefined) {
+      return;
+    }
+    this.showOpenDialog();
+    await this.updateComplete;
+    this.openPanel()?.showPullStep(ref);
   }
 
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
@@ -652,6 +744,10 @@ export class BeuveApp extends LitElement {
         this.showOpenDialog();
         return;
       }
+      case 'review-queue': {
+        this.showQueue();
+        return;
+      }
       case 'palette':
       case 'go-to-file': {
         if (this.paletteText !== undefined) {
@@ -761,7 +857,8 @@ export class BeuveApp extends LitElement {
     const state = menuStateFrom({
       ...facts,
       hasSession: this.review !== undefined,
-      isTextFocused: isTextFocused() || this.paletteText !== undefined || this.openDialog,
+      isTextFocused:
+        isTextFocused() || this.paletteText !== undefined || this.openDialog || this.queueOpen,
       isBusy: this.chat.isBusy,
       isPullRequest: this.github.pullRequest !== undefined,
       stagedCount: this.ura.stagedCount,
@@ -779,6 +876,7 @@ export class BeuveApp extends LitElement {
   private showOpenDialog(): void {
     void this.session.refresh();
     this.overlayOpen = false;
+    this.queueOpen = false;
     this.openDialog = true;
     void this.updateComplete.then(() => {
       const panel = this.openPanel();
@@ -946,6 +1044,19 @@ export class BeuveApp extends LitElement {
     ></beuve-open-panel>`;
   }
 
+  private renderQueue(slot: 'queue' | undefined): TemplateResult {
+    return html`<beuve-review-queue
+      slot=${slot ?? nothing}
+      .queue=${this.queue.queue}
+      .error=${this.queue.error}
+      .prefs=${this.settings.display.reviewQueue ?? defaultReviewQueuePrefs}
+      @beuve-queue-open=${this.onQueueOpen}
+      @beuve-queue-prefs=${this.onQueuePrefs}
+      @beuve-queue-refresh=${this.onQueueRefresh}
+      @beuve-queue-open-url=${this.onQueueOpenUrl}
+    ></beuve-review-queue>`;
+  }
+
   override render(): TemplateResult {
     return html`
       ${this.renderTitlebar()}
@@ -953,9 +1064,10 @@ export class BeuveApp extends LitElement {
         .model=${this.model}
         .actions=${this.actions}
         .platform=${this.appInfo?.platform ?? ''}
-        ?isModalOpen=${this.paletteText !== undefined || this.openDialog}
+        ?isModalOpen=${this.paletteText !== undefined || this.openDialog || this.queueOpen}
         .revision=${this.revision}
       >
+        ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
         ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}
       </beuve-review>
       <beuve-status-bar
@@ -974,6 +1086,18 @@ export class BeuveApp extends LitElement {
         this.openDialog
           ? html`<beuve-dialog label="Open" @beuve-dialog-dismiss=${this.onDialogDismiss}>
               ${this.renderOpenPanel(true, undefined)}
+            </beuve-dialog>`
+          : nothing
+      }
+      ${
+        this.queueOpen
+          ? html`<beuve-dialog
+              wide
+              label="Review Queue"
+              @beuve-dialog-dismiss=${this.onQueueDismiss}
+              @keydown=${this.onQueueKeyDown}
+            >
+              ${this.renderQueue(undefined)}
             </beuve-dialog>`
           : nothing
       }
