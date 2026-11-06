@@ -3,8 +3,6 @@ import { compareCommits } from '#internal/github/compare-commits.ts';
 import type { Comparison } from '#internal/github/compare-commits.ts';
 import { getRepository } from '#internal/github/get-repository.ts';
 import { listMatchingBranches } from '#internal/github/list-matching-branches.ts';
-import { listOpenPullRequests } from '#internal/github/list-open-pull-requests.ts';
-import type { RepositoryName } from '#internal/github/get-repository.ts';
 import { mapConcurrently } from '#x/async/map-concurrently.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -13,6 +11,7 @@ import type { RepositoryKey } from '../github/create-clone-path-settings.ts';
 
 import type { QueueCache } from './create-queue-cache.ts';
 import type { QueueCallError, QueueRun } from './queue-run.ts';
+import { readOpenPulls } from './read-open-pulls.ts';
 
 /** A branch with no open pull request that is ahead of the default branch. */
 export interface BranchCandidate {
@@ -79,7 +78,13 @@ export async function listRepositoryBranches(
   if (tips.size === 0) {
     return [];
   }
-  const withPulls = await openPullHeads(run, { host, name, repoKey, cache });
+  const fullName = `${target.owner}/${target.repo}`.toLowerCase();
+  const pulls = await readOpenPulls(run, { host, ...name, cache });
+  const withPulls = new Set(
+    pulls
+      .filter((pull) => pull.head.repository?.fullName.toLowerCase() === fullName)
+      .map((pull) => pull.head.ref),
+  );
   const unpulled = tips
     .values()
     .filter((tip) => !withPulls.has(tip.name))
@@ -122,46 +127,6 @@ async function repositoryDetails(
     cache.repositories.set(repoKey, answer.value);
   }
   return answer;
-}
-
-/** What the open pull request lookup needs. */
-interface OpenPullLookup {
-  readonly host: string;
-  readonly name: RepositoryName;
-  readonly repoKey: string;
-  readonly cache: QueueCache;
-}
-
-/**
- * The head branches of the repository's open pull requests within it, conditional on the last
- * ETag; the last answer (or none) when GitHub does not answer.
- */
-async function openPullHeads(
-  run: QueueRun,
-  { host, name, repoKey, cache }: OpenPullLookup,
-): Promise<ReadonlySet<string>> {
-  const cached = cache.openPulls.get(repoKey);
-  const listed = await run.withClient(host, async (client) => {
-    return listOpenPullRequests(client, name, {
-      ...(cached?.etag !== undefined && { etag: cached.etag }),
-      signal: run.signal,
-    });
-  });
-  if (!listed.ok) {
-    run.report(`${host}/${name.owner}/${name.repo} pull requests`, listed.error);
-    return cached?.heads ?? new Set();
-  }
-  if (listed.value.kind === 'not-modified') {
-    return cached?.heads ?? new Set();
-  }
-  const fullName = `${name.owner}/${name.repo}`.toLowerCase();
-  const heads = new Set(
-    listed.value.value.items
-      .filter((pull) => pull.head.repository?.fullName.toLowerCase() === fullName)
-      .map((pull) => pull.head.ref),
-  );
-  cache.openPulls.set(repoKey, { etag: listed.value.etag, heads });
-  return heads;
 }
 
 /** One branch tip to compare with its repository's default branch. */

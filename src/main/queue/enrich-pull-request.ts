@@ -2,39 +2,52 @@ import type { QueueCiView } from '#contract/ipc-contract.ts';
 import { getPullRequest } from '#internal/github/get-pull-request.ts';
 import { getPullRequestReviews } from '#internal/github/get-pull-request-reviews.ts';
 import { getReviewRequests } from '#internal/github/get-review-requests.ts';
+import type { ReviewRequestEvent } from '#internal/github/list-review-request-events.ts';
 import type { SearchedPullRequest } from '#internal/github/search-pull-requests.ts';
 
 import type { CachedPull, QueueCache } from './create-queue-cache.ts';
 import type { QueueRun } from './queue-run.ts';
 import { readQueueCi } from './read-queue-ci.ts';
+import { readRequestEvents } from './read-request-events.ts';
 
 /** A searched pull request to read the details of. */
 export interface PullToEnrich {
   readonly host: string;
   readonly key: string;
   readonly pull: SearchedPullRequest;
+  /** Its review was requested of the viewer, so when matters (ADR 0113 amendment). */
+  readonly isRequested: boolean;
   readonly cache: QueueCache;
 }
 
-/** What the queue knows of a pull request beyond the search: details, reviews and CI. */
+/** What the queue knows of a pull request beyond the search: details, reviews, CI and requests. */
 export interface EnrichedPull {
   readonly details: CachedPull | undefined;
   readonly ci: QueueCiView | undefined;
+  /** Its review requests, oldest first; read only for requested reviews. */
+  readonly requestEvents: readonly ReviewRequestEvent[] | undefined;
 }
 
 /**
  * Reads what a queued pull request's row needs beyond the search (ADR 0113): its details (size,
- * head, branches), reviews and requested reviewers only when its `updated_at` moved, and its CI on
- * every refresh with the last ETags, which mostly answer 304. A failed read is reported and the
- * last answer kept.
+ * head, branches), reviews, requested reviewers and, for a requested review, its review requests
+ * only when its `updated_at` moved, and its CI on every refresh with the last ETags, which mostly
+ * answer 304. A failed read is reported and the last answer kept.
  */
 export async function enrichPullRequest(
   run: QueueRun,
-  { host, key, pull, cache }: PullToEnrich,
+  target: PullToEnrich,
 ): Promise<EnrichedPull> {
-  const details = await readDetails(run, { host, key, pull, cache });
+  const { host, key, pull, cache } = target;
+  const readEvents = async (): Promise<readonly ReviewRequestEvent[] | undefined> => {
+    if (!target.isRequested) {
+      return undefined;
+    }
+    return readRequestEvents(run, { host, key, pull, cache });
+  };
+  const [details, requestEvents] = await Promise.all([readDetails(run, target), readEvents()]);
   if (details === undefined) {
-    return { details, ci: undefined };
+    return { details, ci: undefined, requestEvents };
   }
   const ci = await readQueueCi(run, {
     host,
@@ -44,7 +57,7 @@ export async function enrichPullRequest(
     sha: details.pullRequest.head.sha,
     cache,
   });
-  return { details, ci };
+  return { details, ci, requestEvents };
 }
 
 async function readDetails(

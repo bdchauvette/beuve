@@ -13,7 +13,8 @@ export interface QueueFilterInput {
  * everything. Unless `showWaitingOnOthers`, the viewer's own pull requests that are someone
  * else's turn are hidden; a review request is never hidden by that, so under the default filters
  * every requested review shows, whatever its turn, draft state or CI. The text matches the title,
- * repository, number, branch and author, ignoring case. Pure.
+ * repository, number, branch and author, ignoring case. Stack context rows never pass: they are
+ * not waiting on the viewer, and `withStackContext` brings them back beside what does. Pure.
  */
 export function filterQueueItems(
   items: readonly ReviewQueueItemView[],
@@ -26,6 +27,7 @@ export function filterQueueItems(
   const repositories = new Set(filters.repositories.map((name) => name.toLowerCase()));
   return items.filter((item) => {
     return (
+      item.isContext !== true &&
       isAllowed(filters.kinds, item.kind) &&
       (repositories.size === 0 || repositories.has(repositoryOf(item))) &&
       isAllowed(filters.authors, item.author) &&

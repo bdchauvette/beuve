@@ -23,7 +23,7 @@ function sample(): ReviewQueueItemView[] {
       updatedAt: '2026-10-03T00:00:00Z',
       waitingSince: '2026-10-03T00:00:00Z',
       size: { additions: 5, deletions: 1, changedFiles: 1 },
-      stack: { id: 'github.com/o/r#4', depth: 1, size: 2 },
+      stack: { id: 'github.com/o/r#4', depth: 1, size: 2, position: 1 },
       local: { state: 'partial' },
     }),
     createQueueItem({
@@ -40,7 +40,7 @@ function sample(): ReviewQueueItemView[] {
       updatedAt: '2026-10-04T00:00:00Z',
       waitingSince: '2026-10-04T00:00:00Z',
       size: { additions: 50, deletions: 50, changedFiles: 3 },
-      stack: { id: 'github.com/o/r#4', depth: 0, size: 2 },
+      stack: { id: 'github.com/o/r#4', depth: 0, size: 2, position: 0 },
     }),
   ];
 }
