@@ -29,8 +29,9 @@
  * `local/css-design-tokens` rejects color literals, raw font sizes and `--beuve-scale-*` in them.
  *
  * 1. Scales: color primitives from Radix Colors 3.0.0 (MIT, radix-ui.com/colors), light from slate,
- *    dark from sage (the Radix gray nearest Alabaster Dark's blue-green blacks, ADR 0025), each
- *    redefined for dark mode so the tiers above never change. Only the steps in use are listed; add
+ *    dark from sage (the Radix gray nearest Alabaster Dark's blue-green blacks, ADR 0025), each a
+ *    `light-dark()` pair, resolved by the `color-scheme` in force: `light dark` on the root follows
+ *    the system, and a page may pin one (Storybook does). The tiers above never change. Only the steps in use are listed; add
  *    others from the same release. Radix step roles: 1–2 backgrounds, 3–5 element backgrounds
  *    (rest, hover, pressed), 6–8 borders, 9–10 solid fills, 11–12 text. `a`-steps are the alpha
  *    variants, for tints laid over another surface. Type, space and radius follow GitHub Primer
@@ -44,61 +45,61 @@
 
   /* ── 1. Scales ─────────────────────────────────────────────────────────── */
 
-  --beuve-scale-gray-1: #fcfcfd;
-  --beuve-scale-gray-2: #f9f9fb;
-  --beuve-scale-gray-3: #f0f0f3;
-  --beuve-scale-gray-4: #e8e8ec;
-  --beuve-scale-gray-5: #e0e1e6;
-  --beuve-scale-gray-6: #d9d9e0;
-  --beuve-scale-gray-8: #b9bbc6;
-  --beuve-scale-gray-9: #8b8d98;
-  --beuve-scale-gray-11: #60646c;
-  --beuve-scale-gray-12: #1c2024;
-  --beuve-scale-gray-a4: #00002d17;
-  --beuve-scale-gray-a6: #00002f26;
-  --beuve-scale-gray-a7: #00062e32;
-  --beuve-scale-gray-a8: #00083046;
-  --beuve-scale-black-a3: #00000026;
-  --beuve-scale-black-a5: #0000004d;
+  --beuve-scale-gray-1: light-dark(#fcfcfd, #101211);
+  --beuve-scale-gray-2: light-dark(#f9f9fb, #171918);
+  --beuve-scale-gray-3: light-dark(#f0f0f3, #202221);
+  --beuve-scale-gray-4: light-dark(#e8e8ec, #272a29);
+  --beuve-scale-gray-5: light-dark(#e0e1e6, #2e3130);
+  --beuve-scale-gray-6: light-dark(#d9d9e0, #373b39);
+  --beuve-scale-gray-8: light-dark(#b9bbc6, #5b625f);
+  --beuve-scale-gray-9: light-dark(#8b8d98, #63706b);
+  --beuve-scale-gray-11: light-dark(#60646c, #adb5b2);
+  --beuve-scale-gray-12: light-dark(#1c2024, #eceeed);
+  --beuve-scale-gray-a4: light-dark(#00002d17, #f2fefd1a);
+  --beuve-scale-gray-a6: light-dark(#00002f26, #edfbf42d);
+  --beuve-scale-gray-a7: light-dark(#00062e32, #edfcf73c);
+  --beuve-scale-gray-a8: light-dark(#00083046, #ebfdf657);
+  --beuve-scale-black-a3: light-dark(#00000026, #00000059);
+  --beuve-scale-black-a5: light-dark(#0000004d, #00000080);
 
   --beuve-scale-indigo-9: #3e63dd;
-  --beuve-scale-indigo-10: #3358d4;
-  --beuve-scale-indigo-11: #3a5bc7;
-  --beuve-scale-indigo-a3: #0047f112;
-  --beuve-scale-violet-11: #6550b9;
+  --beuve-scale-indigo-10: light-dark(#3358d4, #5472e4);
+  --beuve-scale-indigo-11: light-dark(#3a5bc7, #9eb1ff);
+  --beuve-scale-indigo-a3: light-dark(#0047f112, #2f62ff3c);
+  --beuve-scale-violet-11: light-dark(#6550b9, #baa7ff);
 
   --beuve-scale-green-9: #30a46c;
-  --beuve-scale-green-11: #218358;
-  --beuve-scale-green-a5: #019c393b;
-  --beuve-scale-green-a6: #00963c52;
-  --beuve-scale-green-a7: #00914071;
+  --beuve-scale-green-11: light-dark(#218358, #3dd68c);
+  --beuve-scale-green-a5: light-dark(#019c393b, #2bffa23c);
+  --beuve-scale-green-a6: light-dark(#00963c52, #44ffaa4b);
+  --beuve-scale-green-a7: light-dark(#00914071, #50fdac5e);
 
   --beuve-scale-red-9: #e5484d;
-  --beuve-scale-red-11: #ce2c31;
-  --beuve-scale-red-a4: #ff000824;
-  --beuve-scale-red-a5: #ff000632;
-  --beuve-scale-red-a6: #f8000442;
-  --beuve-scale-red-a7: #df000356;
+  --beuve-scale-red-11: light-dark(#ce2c31, #ff9592);
+  --beuve-scale-red-a4: light-dark(#ff000824, #fe0a3b44);
+  --beuve-scale-red-a5: light-dark(#ff000632, #ff204756);
+  --beuve-scale-red-a6: light-dark(#f8000442, #ff3e5668);
+  --beuve-scale-red-a7: light-dark(#df000356, #ff536184);
 
   --beuve-scale-amber-9: #ffc53d;
-  --beuve-scale-amber-11: #ab6400;
-  --beuve-scale-amber-a4: #ffd40063;
+  --beuve-scale-amber-11: light-dark(#ab6400, #ffca16);
+  --beuve-scale-amber-a4: light-dark(#ffd40063, #fc820032);
 
   --beuve-scale-blue-9: #0090ff;
-  --beuve-scale-blue-11: #0d74ce;
-  --beuve-scale-blue-a5: #0093ff3d;
-  --beuve-scale-blue-a6: #0088f653;
-  --beuve-scale-blue-a7: #0083eb71;
+  --beuve-scale-blue-11: light-dark(#0d74ce, #70b8ff);
+  --beuve-scale-blue-a5: light-dark(#0093ff3d, #0081fd6b);
+  --beuve-scale-blue-a6: light-dark(#0088f653, #0f89fd7f);
+  --beuve-scale-blue-a7: light-dark(#0083eb71, #2a91fe98);
 
   --beuve-scale-orange-9: #f76b15;
-  --beuve-scale-orange-11: #cc4e00;
-  --beuve-scale-orange-a4: #ff91014a;
-  --beuve-scale-orange-a5: #ff8b0065;
-  --beuve-scale-orange-a6: #ff81007d;
+  --beuve-scale-orange-11: light-dark(#cc4e00, #ffa057);
+  --beuve-scale-orange-a4: light-dark(#ff91014a, #ff590039);
+  --beuve-scale-orange-a5: light-dark(#ff8b0065, #ff61004a);
+  --beuve-scale-orange-a6: light-dark(#ff81007d, #fd75045c);
 
   /* Alabaster (ADR 0025): code surfaces match the syntax palette in syntax-palettes.ts. */
-  --beuve-scale-alabaster-bg: #f7f7f7;
-  --beuve-scale-alabaster-fg: #000000;
+  --beuve-scale-alabaster-bg: light-dark(#f7f7f7, #0e1415);
+  --beuve-scale-alabaster-fg: light-dark(#000000, #cecece);
 
   --beuve-font-family-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --beuve-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -219,8 +220,8 @@
   --beuve-chat-height: 280px;
   --beuve-terminal-height: 280px;
 
-  --beuve-bg: var(--beuve-scale-gray-2);
-  --beuve-surface: #ffffff;
+  --beuve-bg: light-dark(var(--beuve-scale-gray-2), var(--beuve-scale-gray-1));
+  --beuve-surface: light-dark(#ffffff, var(--beuve-scale-gray-2));
   --beuve-surface-sunken: var(--beuve-scale-gray-3);
   --beuve-surface-hover: var(--beuve-scale-gray-4);
   --beuve-surface-pressed: var(--beuve-scale-gray-5);
@@ -277,68 +278,6 @@
   --beuve-diff-removed-text: var(--beuve-scale-red-11);
   --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
   --beuve-diff-hunk-text: var(--beuve-accent);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --beuve-scale-gray-1: #101211;
-    --beuve-scale-gray-2: #171918;
-    --beuve-scale-gray-3: #202221;
-    --beuve-scale-gray-4: #272a29;
-    --beuve-scale-gray-5: #2e3130;
-    --beuve-scale-gray-6: #373b39;
-    --beuve-scale-gray-8: #5b625f;
-    --beuve-scale-gray-9: #63706b;
-    --beuve-scale-gray-11: #adb5b2;
-    --beuve-scale-gray-12: #eceeed;
-    --beuve-scale-gray-a4: #f2fefd1a;
-    --beuve-scale-gray-a6: #edfbf42d;
-    --beuve-scale-gray-a7: #edfcf73c;
-    --beuve-scale-gray-a8: #ebfdf657;
-    --beuve-scale-black-a3: #00000059;
-    --beuve-scale-black-a5: #00000080;
-
-    --beuve-scale-indigo-9: #3e63dd;
-    --beuve-scale-indigo-10: #5472e4;
-    --beuve-scale-indigo-11: #9eb1ff;
-    --beuve-scale-indigo-a3: #2f62ff3c;
-    --beuve-scale-violet-11: #baa7ff;
-
-    --beuve-scale-green-9: #30a46c;
-    --beuve-scale-green-11: #3dd68c;
-    --beuve-scale-green-a5: #2bffa23c;
-    --beuve-scale-green-a6: #44ffaa4b;
-    --beuve-scale-green-a7: #50fdac5e;
-
-    --beuve-scale-red-9: #e5484d;
-    --beuve-scale-red-11: #ff9592;
-    --beuve-scale-red-a4: #fe0a3b44;
-    --beuve-scale-red-a5: #ff204756;
-    --beuve-scale-red-a6: #ff3e5668;
-    --beuve-scale-red-a7: #ff536184;
-
-    --beuve-scale-amber-9: #ffc53d;
-    --beuve-scale-amber-11: #ffca16;
-    --beuve-scale-amber-a4: #fc820032;
-
-    --beuve-scale-blue-9: #0090ff;
-    --beuve-scale-blue-11: #70b8ff;
-    --beuve-scale-blue-a5: #0081fd6b;
-    --beuve-scale-blue-a6: #0f89fd7f;
-    --beuve-scale-blue-a7: #2a91fe98;
-
-    --beuve-scale-orange-9: #f76b15;
-    --beuve-scale-orange-11: #ffa057;
-    --beuve-scale-orange-a4: #ff590039;
-    --beuve-scale-orange-a5: #ff61004a;
-    --beuve-scale-orange-a6: #fd75045c;
-
-    --beuve-scale-alabaster-bg: #0e1415;
-    --beuve-scale-alabaster-fg: #cecece;
-
-    --beuve-bg: var(--beuve-scale-gray-1);
-    --beuve-surface: var(--beuve-scale-gray-2);
-  }
 }
 
 /*

@@ -27,7 +27,14 @@ const entrypointFiles = [
   'src/ui/testing/gallery-entry.ts',
   'scripts/**/*.ts',
 ];
-const configFiles = ['*.config.{js,ts}', '.dependency-cruiser.js', 'types/**/*.d.ts'];
+const configFiles = [
+  '*.config.{js,ts}',
+  '.dependency-cruiser.js',
+  'types/**/*.d.ts',
+  // Storybook (ADR 0117): its config and the stories' meta are default exports, each story a named one.
+  '.storybook/*.ts',
+  'src/ui/stories/*.stories.ts',
+];
 const blockingProcessImports = ['node:child_process', 'child_process'].map((name) => {
   return {
     name,
@@ -107,7 +114,14 @@ const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) => {
 });
 
 export default defineConfig(
-  globalIgnores(['dist/', 'dist-test/', 'out/', 'coverage/', '.claude/worktrees/']),
+  globalIgnores([
+    'dist/',
+    'dist-test/',
+    'dist-storybook/',
+    'out/',
+    'coverage/',
+    '.claude/worktrees/',
+  ]),
 
   {
     name: 'beuve/linter-options',

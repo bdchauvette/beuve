@@ -1,5 +1,6 @@
 dist/
 dist-test/
+dist-storybook/
 out/
 vendor/
 coverage/

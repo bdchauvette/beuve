@@ -394,20 +394,25 @@ export class BeuveTerminalPanel extends LitElement {
     return { cols: proposed?.cols ?? 100, rows: proposed?.rows ?? 24 };
   }
 
+  /**
+   * xterm wants plain colors, and the tokens are `light-dark()` pairs (ADR 0114), so each is read
+   * back as the computed color of a probe that uses it, in this element's color scheme.
+   */
   private theme(): TerminalColors {
-    const style = getComputedStyle(this);
+    const probe = document.createElement('span');
+    probe.hidden = true;
+    this.renderRoot.append(probe);
     const read = (variable: ColorVariable): string => {
-      const value = style.getPropertyValue(variable.name).trim();
-      if (value === '') {
-        return variable.fallback;
-      }
-      return value;
+      probe.style.setProperty('color', `var(${variable.name}, ${variable.fallback})`);
+      return getComputedStyle(probe).color;
     };
-    return {
+    const colors = {
       background: read({ name: '--beuve-surface', fallback: '#ffffff' }),
       foreground: read({ name: '--beuve-text', fallback: '#1c2024' }),
       cursor: read({ name: '--beuve-accent', fallback: '#3a5bc7' }),
     };
+    probe.remove();
+    return colors;
   }
 
   override connectedCallback(): void {

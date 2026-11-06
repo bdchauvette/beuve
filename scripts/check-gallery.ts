@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -31,7 +31,7 @@ const waitSeconds = 60;
 const themes = ['light', 'dark'] as const;
 const schemes = ['red-green', 'blue-orange', 'neutral'] as const;
 const gallery = "document.querySelector('beuve-gallery')";
-const menu = `${gallery}.renderRoot.querySelector('beuve-menu')`;
+const menu = deep('beuve-menu');
 /** Installed before the page's scripts, so no violation goes unseen. */
 const violationProbe = `window.__violations = [];
 document.addEventListener('securitypolicyviolation', (event) => {
@@ -41,7 +41,7 @@ document.addEventListener('securitypolicyviolation', (event) => {
 await checkGallery();
 
 /**
- * Opens the primitives gallery (ADR 0115) in the built app's window, with the production Content
+ * Opens the primitives gallery (ADR 0115, 0117), which renders every Storybook story, in the built app's window, with the production Content
  * Security Policy, in light and dark and each diff color scheme, then with its menu open and a
  * button showing the focus ring. With `--screenshots <dir>` it saves a full-height PNG of each.
  * The page must report no CSP or Trusted Types violation, uncaught exception or console error.
@@ -94,7 +94,7 @@ async function checkGallery(): Promise<void> {
     if (values.screenshots !== undefined) {
       directory = path.resolve(values.screenshots);
     }
-    await runSteps({ devtools, page, directory });
+    await runSteps({ devtools, page, directory }, findings);
     const violations = (await devtools.evaluate(page, 'window.__violations')) as string[];
     findings.failures.push(...violations.map((violation) => `violation: ${violation}`));
   } catch (error) {
@@ -105,8 +105,18 @@ async function checkGallery(): Promise<void> {
   report(findings, launched.output());
 }
 
-async function runSteps(view: Gallery): Promise<void> {
+async function runSteps(view: Gallery, findings: Findings): Promise<void> {
   const { devtools, page } = view;
+  const listed = await readdir(path.join(root, 'src/ui/stories'));
+  const files = listed.filter((name) => {
+    return name.endsWith('.stories.ts');
+  });
+  const titles = (await devtools.evaluate(page, `${gallery}.titles`)) as readonly string[];
+  if (titles.length !== files.length) {
+    findings.failures.push(
+      `the gallery renders ${String(titles.length)} stories modules, src/ui/stories has ${String(files.length)}: add the missing one to gallery-entry.ts`,
+    );
+  }
   for (const theme of themes) {
     await devtools.send(
       'Emulation.setEmulatedMedia',
@@ -126,7 +136,7 @@ async function runSteps(view: Gallery): Promise<void> {
   await devtools.waitFor(page, `${menu}.isOpen`, wait());
   await devtools.evaluate(
     page,
-    `void [...${gallery}.renderRoot.querySelectorAll('section:first-of-type .button')].at(-1).focus({ focusVisible: true })`,
+    `void ${deep('.button.primary.large')}.focus({ focusVisible: true })`,
   );
   await shoot(view, 'dark-focus');
   console.log('gallery: the menu opens and a button shows the focus ring');
@@ -181,6 +191,11 @@ function report(findings: Findings, output: string): void {
   }
   console.error(`the app's output:\n${tailOf(output, 2000)}`);
   process.exitCode = 1;
+}
+
+/** The first element matching `selector` anywhere in the gallery, through every shadow root. */
+function deep(selector: string): string {
+  return `((root) => { const walk = (node) => { const found = node.querySelector(${JSON.stringify(selector)}); if (found) { return found; } for (const element of node.querySelectorAll('*')) { if (element.shadowRoot) { const inner = walk(element.shadowRoot); if (inner) { return inner; } } } return null; }; return walk(root); })(${gallery}.renderRoot)`;
 }
 
 /** A fresh deadline for one wait. */
