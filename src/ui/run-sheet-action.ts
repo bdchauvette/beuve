@@ -37,25 +37,18 @@ export interface SheetActionContext {
   readonly sessionId: string;
   readonly headSha: string;
   readonly baseSha: string;
-  /** `/sheets window|inline` (ADR 0067). */
-  readonly mode: 'window' | 'inline';
 }
-
-/** Either a status-bar notice, or a sheet for the main window's overlay to show. */
-export type SheetOutcome =
-  | { readonly kind: 'notice'; readonly notice: StatusNotice }
-  | { readonly kind: 'inline'; readonly sha: string; readonly place: SheetPlace };
 
 /**
  * Runs Go to Definition, Go to Type Definition, Copy GitHub Permalink, Open on GitHub and a peek node's "Open" from the main window
  * (ADR 0067): a definition at the target's head line (main picks the token) opens a new sheet
- * window, or the inline overlay; a permalink goes to the clipboard or the browser, for the
+ * window; a permalink goes to the clipboard or the browser, for the
  * target's own side and lines. All IPC goes through `bridge`; main validates everything again.
  */
 export async function runSheetAction(
   context: SheetActionContext,
   action: SheetAction,
-): Promise<SheetOutcome> {
+): Promise<StatusNotice> {
   switch (action.kind) {
     case 'definition':
     case 'type-definition': {
@@ -74,7 +67,7 @@ export async function runSheetAction(
 async function define(
   context: SheetActionContext,
   action: DefinitionAction,
-): Promise<SheetOutcome> {
+): Promise<StatusNotice> {
   const { target, token, kind } = action;
   if (target.kind === 'change') {
     return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
@@ -92,7 +85,7 @@ async function define(
     kind,
   });
   if (!answer.ok) {
-    return { kind: 'notice', notice: { tone: 'error', text: answer.error.message } };
+    return { tone: 'error', text: answer.error.message };
   }
   const request = sheetRequestFrom(context.sessionId, answer.value);
   if (typeof request === 'string') {
@@ -103,10 +96,7 @@ async function define(
 
 type DefinitionAction = Extract<SheetAction, { readonly kind: 'definition' | 'type-definition' }>;
 
-async function open(context: SheetActionContext, place: SheetPlace): Promise<SheetOutcome> {
-  if (context.mode === 'inline') {
-    return { kind: 'inline', sha: context.headSha, place };
-  }
+async function open(context: SheetActionContext, place: SheetPlace): Promise<StatusNotice> {
   const opened = await context.bridge.invoke('sheet:open', {
     sessionId: context.sessionId,
     sha: context.headSha,
@@ -116,14 +106,14 @@ async function open(context: SheetActionContext, place: SheetPlace): Promise<She
   if (opened.ok) {
     return info(`Opened ${placeText(place)} in a sheet.`);
   }
-  return { kind: 'notice', notice: { tone: 'error', text: opened.error.message } };
+  return { tone: 'error', text: opened.error.message };
 }
 
 async function link(
   context: SheetActionContext,
   target: ReviewTarget,
   isOpening: boolean,
-): Promise<SheetOutcome> {
+): Promise<StatusNotice> {
   const place = permalinkPlaceFrom(target);
   if (place === undefined) {
     return info('Pick a file or lines to link to.');
@@ -143,7 +133,7 @@ async function link(
     ...where,
   });
   if (!answer.ok) {
-    return { kind: 'notice', notice: { tone: 'error', text: answer.error.message } };
+    return { tone: 'error', text: answer.error.message };
   }
   if (isOpening || answer.value.kind !== 'link') {
     return info(describeLink(answer.value, isOpening));
@@ -152,7 +142,7 @@ async function link(
   if (copied.ok) {
     return info(`Copied ${answer.value.url}`);
   }
-  return { kind: 'notice', notice: { tone: 'error', text: copied.error.message } };
+  return { tone: 'error', text: copied.error.message };
 }
 
 /** The path, with the line a range starts on. */
@@ -174,6 +164,6 @@ function describeLink(link: PermalinkView, isOpening: boolean): string {
   return `Link: ${link.url}`;
 }
 
-function info(text: string): SheetOutcome {
-  return { kind: 'notice', notice: { tone: 'info', text } };
+function info(text: string): StatusNotice {
+  return { tone: 'info', text };
 }

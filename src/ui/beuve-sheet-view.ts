@@ -41,9 +41,6 @@ import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import './primitives/beuve-time.ts';
 
-/** Where a sheet lives: its own window, or the overlay in the main window (`/sheets inline`). */
-export type SheetMode = 'window' | 'inline';
-
 type Loaded =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly file: SheetFileView }
@@ -190,7 +187,7 @@ export class BeuveSheetView extends LitElement {
   };
 
   private readonly onContextMenu = (event: MouseEvent): void => {
-    if (this.mode !== 'window' || this.api === undefined) {
+    if (this.api === undefined) {
       return;
     }
     event.preventDefault();
@@ -216,11 +213,7 @@ export class BeuveSheetView extends LitElement {
   };
 
   private readonly close = (): void => {
-    if (this.mode === 'window') {
-      close();
-      return;
-    }
-    this.dispatchEvent(new CustomEvent('beuve-sheet-close', { bubbles: true, composed: true }));
+    close();
   };
 
   private readonly askDefinition: DefinitionAsk = async (request) => {
@@ -265,7 +258,6 @@ export class BeuveSheetView extends LitElement {
   /** The commit the sheet is pinned to. */
   @property() accessor sha = '';
   @property({ attribute: false }) accessor place: SheetPlace | undefined;
-  @property() accessor mode: SheetMode = 'window';
   /** `process.platform`'s shortcuts for the toolbar's tooltips (ADR 0068); none in a test. */
   @property({ attribute: false }) accessor shortcuts: {
     readonly back: string;
@@ -437,7 +429,7 @@ export class BeuveSheetView extends LitElement {
 
   /** Tells main which menu items the sheet window enables (ADR 0068). */
   private syncMenuState(): void {
-    if (this.mode !== 'window' || this.api === undefined) {
+    if (this.api === undefined) {
       return;
     }
     const { canGoBack, canGoForward } = this.historyState();
@@ -828,7 +820,7 @@ export class BeuveSheetView extends LitElement {
     if (place !== undefined) {
       title = sheetTitleFrom({ path: place.path, sha: this.sha, line });
     }
-    if (title !== '' && this.mode === 'window') {
+    if (title !== '') {
       document.title = revealFormatControls(title);
     }
     const { index, places } = this.history;
@@ -882,13 +874,6 @@ export class BeuveSheetView extends LitElement {
         >
           Open on GitHub
         </button>
-        ${
-          this.mode === 'inline'
-            ? html`<button class="button" type="button" title="Close (Esc)" @click=${this.close}>
-                Close
-              </button>`
-            : nothing
-        }
       </header>
       ${this.find === undefined ? nothing : this.renderFind(this.find)}
       <div class="body">${this.renderBody()}</div>

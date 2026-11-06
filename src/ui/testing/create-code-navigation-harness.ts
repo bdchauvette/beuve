@@ -21,8 +21,6 @@ export interface CodeNavigationHarnessOptions {
   readonly review?: ReviewView;
   /** The whole result each channel answers with; unlisted channels answer `ok`. */
   readonly replies?: Readonly<Record<string, unknown>>;
-  /** Where definitions open; a new window each by default. */
-  readonly sheetMode?: 'window' | 'inline';
 }
 
 export function createCodeNavigationHarness(
@@ -43,9 +41,6 @@ export function createCodeNavigationHarness(
     },
     notify: (notice): void => {
       notices.push(notice);
-    },
-    sheetMode: (): 'window' | 'inline' => {
-      return options.sheetMode ?? 'window';
     },
   });
   return {

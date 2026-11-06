@@ -42,7 +42,6 @@ describe('CodeNavigationController', () => {
     const { navigation } = createCodeNavigationHarness();
     expect(navigation.peek).toBeUndefined();
     expect(navigation.flow).toBeUndefined();
-    expect(navigation.inlineSheet).toBeUndefined();
   });
 
   test('asks for the callers at the head the reviewer sees', async ({ expect }) => {
@@ -197,44 +196,14 @@ describe('CodeNavigationController', () => {
     const { navigation, notices, invoked } = createCodeNavigationHarness({
       review: createReviewView(),
     });
-    const isShowsInline = await navigation.runSheet({
-      kind: 'open',
-      path: 'a.ts',
-      range: rangeOf(),
-    });
-    expect(isShowsInline).toBe(false);
+    await navigation.runSheet({ kind: 'open', path: 'a.ts', range: rangeOf() });
     expect(invoked.map(([channel]) => channel)).toStrictEqual(['sheet:open']);
     expect(notices).toStrictEqual([{ tone: 'info', text: 'Opened a.ts:1 in a sheet.' }]);
-    expect(navigation.inlineSheet).toBeUndefined();
-  });
-
-  test('shows a definition over the diff in inline mode', async ({ expect }) => {
-    const review = createReviewView();
-    const { navigation, notices, invoked } = createCodeNavigationHarness({
-      review,
-      sheetMode: 'inline',
-    });
-    const isShowsInline = await navigation.runSheet({
-      kind: 'open',
-      path: 'a.ts',
-      range: rangeOf(),
-    });
-    expect(isShowsInline).toBe(true);
-    expect(invoked).toStrictEqual([]);
-    expect(notices).toStrictEqual([]);
-    expect(navigation.inlineSheet).toStrictEqual({
-      sha: review.headSha,
-      place: { path: 'a.ts', range: rangeOf() },
-    });
-    navigation.closeSheet();
-    expect(navigation.inlineSheet).toBeUndefined();
   });
 
   test('opens no sheet without a review', async ({ expect }) => {
     const { navigation, invoked } = createCodeNavigationHarness();
-    await expect(
-      navigation.runSheet({ kind: 'open', path: 'a.ts', range: rangeOf() }),
-    ).resolves.toBe(false);
+    await navigation.runSheet({ kind: 'open', path: 'a.ts', range: rangeOf() });
     expect(invoked).toStrictEqual([]);
   });
 });

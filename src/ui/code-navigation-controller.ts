@@ -9,7 +9,6 @@ import { peekStateFrom } from './peek-state-from.ts';
 import type { PeekChildren, PeekState } from './peek-state.ts';
 import { runSheetAction } from './run-sheet-action.ts';
 import type { SheetAction } from './run-sheet-action.ts';
-import type { SheetPlace } from './step-sheet-history.ts';
 
 /** What code navigation needs from the window around it. */
 export interface CodeNavigationEnvironment {
@@ -18,26 +17,16 @@ export interface CodeNavigationEnvironment {
   /** The open review; an answer that finds another one open is dropped. */
   readonly review: () => ReviewView | undefined;
   readonly notify: (notice: StatusNotice) => void;
-  /** Where definitions open: a new window each, or over the diff (`/sheets`, ADR 0067). */
-  readonly sheetMode: () => 'window' | 'inline';
-}
-
-/** The sheet shown over the diff with `/sheets inline` (ADR 0067). */
-export interface InlineSheet {
-  readonly sha: string;
-  readonly place: SheetPlace;
 }
 
 interface CodeNavigationSnapshot {
   readonly peek: PeekState | undefined;
   readonly flow: FlowState | undefined;
-  readonly inlineSheet: InlineSheet | undefined;
 }
 
 const initial: CodeNavigationSnapshot = {
   peek: undefined,
   flow: undefined,
-  inlineSheet: undefined,
 };
 
 /**
@@ -71,10 +60,6 @@ export class CodeNavigationController {
     return this.snapshot.flow;
   }
 
-  get inlineSheet(): InlineSheet | undefined {
-    return this.snapshot.inlineSheet;
-  }
-
   /** A new review is showing: its portals start closed. */
   reset(): void {
     this.patch({ peek: undefined, flow: undefined });
@@ -86,10 +71,6 @@ export class CodeNavigationController {
 
   closeFlow(): void {
     this.patch({ flow: undefined });
-  }
-
-  closeSheet(): void {
-    this.patch({ inlineSheet: undefined });
   }
 
   /** The incoming callers of the function around `line`; a file without a head line says so. */
@@ -195,15 +176,14 @@ export class CodeNavigationController {
   }
 
   /**
-   * Definitions open as sheets, permalinks go to the clipboard or browser (ADR 0067). Resolves
-   * `true` when a sheet now shows over the diff, which the owner then focuses; anything else is
-   * a notice.
+   * Definitions open in sheet windows, permalinks go to the clipboard or browser (ADR 0067); the
+   * outcome is a notice.
    */
-  async runSheet(action: SheetAction): Promise<boolean> {
+  async runSheet(action: SheetAction): Promise<void> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined) {
-      return false;
+      return;
     }
     const outcome = await runSheetAction(
       {
@@ -211,15 +191,9 @@ export class CodeNavigationController {
         sessionId: review.session.id,
         headSha: review.headSha,
         baseSha: review.baseSha,
-        mode: this.environment.sheetMode(),
       },
       action,
     );
-    if (outcome.kind === 'inline') {
-      this.patch({ inlineSheet: { sha: outcome.sha, place: outcome.place } });
-      return true;
-    }
-    this.environment.notify(outcome.notice);
-    return false;
+    this.environment.notify(outcome);
   }
 }

@@ -415,24 +415,6 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'sheets-window',
-    title: 'Open Definitions in Sheet Windows',
-    label: 'Sheet Windows',
-    menu: { menu: 'view', group: 3, submenu: 'Open Definitions In' },
-    toggle: 'radio',
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
-    id: 'sheets-inline',
-    title: 'Open Definitions over the Diff',
-    label: 'Over the Diff',
-    menu: { menu: 'view', group: 3, submenu: 'Open Definitions In' },
-    toggle: 'radio',
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
     id: 'expand',
     title: 'Expand File',
     menu: { menu: 'view', group: 4 },
@@ -462,7 +444,7 @@ const entries = Object.freeze([
     keys: { mac: 'Cmd+[', linux: 'Alt+Left' },
     when: ['back'],
     textConflict: true,
-    windows: ['main', 'sheet'],
+    windows: ['sheet'],
     handler: 'window',
   },
   {
@@ -472,7 +454,7 @@ const entries = Object.freeze([
     keys: { mac: 'Cmd+]', linux: 'Alt+Right' },
     when: ['forward'],
     textConflict: true,
-    windows: ['main', 'sheet'],
+    windows: ['sheet'],
     handler: 'window',
   },
   {

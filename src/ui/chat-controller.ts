@@ -21,7 +21,7 @@ export type ChatAppCommand = Extract<
   ChatCommand,
   {
     readonly kind:
-      'editor' | 'diff' | 'generated' | 'sheets' | 'insights' | 'whitespace' | 'order' | 'sidebar';
+      'editor' | 'diff' | 'generated' | 'insights' | 'whitespace' | 'order' | 'sidebar';
   }
 >;
 
@@ -289,7 +289,6 @@ export class ChatController implements ReactiveController {
       case 'editor':
       case 'diff':
       case 'generated':
-      case 'sheets':
       case 'insights':
       case 'whitespace':
       case 'order':

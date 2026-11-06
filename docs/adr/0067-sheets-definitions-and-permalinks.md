@@ -1,6 +1,6 @@
 # 0067. Sheets: whole files pinned to a commit, definition jumps and permalinks
 
-- Status: Accepted; amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
+- Status: Accepted (inline sheets removed 2026-11-06); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
 - Date: 2026-10-30
 
 ## Context
@@ -23,3 +23,7 @@ Reviewers can lay several drafts of a file side by side and follow definitions t
 ## Amendment 2026-10-30: keys and menus (ADR 0068)
 
 The sheet keys are menu commands now: Go to Definition ⌘B / Ctrl+B, Type Definition ⇧⌘B, Back and Forward ⌘[ ⌘] / Alt+← →, Copy GitHub Permalink ⇧⌘C, Open on GitHub (menu only), Find Next ⌘G, and Next/Previous Change over the change marks; in the sheet itself ↑/↓, Home/End and Esc. Sheets have a menu bar (hidden until Alt on Linux), and `sheetInvokeChannels` adds `menu:set-state` and `menu:context`.
+
+## Amendment 2026-11-06: sheets are windows only
+
+Definitions open in a sheet window, always. The other mode, one sheet over the diff in the main window (`/sheets inline`, View › Open Definitions In › Over the Diff), is gone, with the `sheets` display preference, the `/sheets` chat command, the two menu radios and the Settings row. Keeping both meant two homes for one view: the overlay needed its own close event, focus routing for Back, Forward and Find, menu conditions from its history and a `'sheet'` context kind in the main window, and it bypassed `sheet:open`'s validation (the hostile-render check had been opening it at line 0, which `sheet:open` refuses). Back and Forward are now sheet-window commands only (`windows: ['sheet']`); the main window has no history of its own. `beuve-sheet-view` has no `mode` and closes its window on Esc. A `sheets` key in an older `settings.json` is no longer read.

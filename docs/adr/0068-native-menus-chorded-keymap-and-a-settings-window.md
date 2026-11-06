@@ -1,6 +1,6 @@
 # 0068. Native menus from one command catalog, a chorded keymap, and a Settings window
 
-- Status: Accepted; amends [0044](0044-two-column-shell-open-flow-and-command-palette.md) (keys, Tab, status bar hints), [0064](0064-reviewed-marks-per-file-and-diff.md) and [0067](0067-sheets-definitions-and-permalinks.md) (their keys, sheets' menu bar), spec 5A
+- Status: Accepted (Settings holds only what no menu sets, amended 2026-11-06); amends [0044](0044-two-column-shell-open-flow-and-command-palette.md) (keys, Tab, status bar hints), [0064](0064-reviewed-marks-per-file-and-diff.md) and [0067](0067-sheets-definitions-and-permalinks.md) (their keys, sheets' menu bar), spec 5A
 - Date: 2026-10-30
 
 ## Context
@@ -33,3 +33,7 @@ ADR 0070 adds Settings ▸ Models and builds the key storage described above: `<
 ## Amendment 2026-11-03: sidebar tab keys (ADR 0109)
 
 The sidebar has four tabs for a pull request: ⌘1 Overview, ⌘2 Files, ⌘3 Review, ⌘4 Chat (Ctrl+1 to Ctrl+4 on Linux and Windows). ⌘1 is enabled only for a pull request.
+
+## Amendment 2026-11-06: Settings holds only what no menu sets
+
+A preference with a menu toggle is set from the menu, and only there: diff layout, whitespace, generated files, insights, diagnostics, review order, skipping reviewed files, sidebar side and the preferred editor (Review › Open With) leave the Settings window. The menu items, their chat commands and `settings.json` keep them; Settings showed the same state a second time and had to be kept in step with the menus. Settings now holds the review-edits and review-queue branch prefixes (Branches), the accounts, the language server configuration and the models. `display:set` and `editor:set-preferred` stay on the Settings window's channels, the first for the queue prefixes. A new preference that gets a menu toggle does not get a Settings row, and one without a menu item may.

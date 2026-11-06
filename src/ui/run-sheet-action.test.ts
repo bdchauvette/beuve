@@ -32,14 +32,12 @@ function stayUnsubscribed(): void {
 function contextWith(
   answers: Readonly<Record<string, unknown>>,
   calls: [string, unknown][],
-  mode: 'window' | 'inline' = 'window',
 ): SheetActionContext {
   return {
     bridge: fakeBridge(answers, calls),
     sessionId: 's1',
     headSha: 'h'.repeat(40),
     baseSha: 'b'.repeat(40),
-    mode,
   };
 }
 
@@ -90,7 +88,7 @@ describe('runSheetAction', () => {
         },
       ],
     ]);
-    expect(outcome).toMatchObject({ kind: 'notice', notice: { tone: 'info' } });
+    expect(outcome).toMatchObject({ tone: 'info' });
   });
 
   test('asks about the clicked token’s line and column instead of the target’s', async ({
@@ -119,24 +117,6 @@ describe('runSheetAction', () => {
     ]);
   });
 
-  test('shows the definition inline when sheets open over the diff', async ({ expect }) => {
-    const calls: [string, unknown][] = [];
-    const file = createDiffFileView('src/handler.ts', [' a']);
-    const outcome = await runSheetAction(
-      contextWith({ 'lsp:definition': definitionAnswer() }, calls, 'inline'),
-      { kind: 'type-definition', target: { kind: 'line', file, line: 1 } },
-    );
-    expect(outcome).toStrictEqual({
-      kind: 'inline',
-      sha: 'h'.repeat(40),
-      place: {
-        path: 'src/auth.ts',
-        range: { startLine: 1, startCharacter: 16, endLine: 1, endCharacter: 24 },
-      },
-    });
-    expect(calls.map(([channel]) => channel)).toStrictEqual(['lsp:definition']);
-  });
-
   test('copies a permalink for the target’s side, or says there is no remote', async ({
     expect,
   }) => {
@@ -163,24 +143,19 @@ describe('runSheetAction', () => {
       ],
       ['clipboard:write-text', { text: url }],
     ]);
-    expect(copied).toStrictEqual({
-      kind: 'notice',
-      notice: { tone: 'info', text: `Copied ${url}` },
-    });
+    expect(copied).toStrictEqual({ tone: 'info', text: `Copied ${url}` });
     const none = await runSheetAction(
       contextWith({ 'remote:open-permalink': { ok: true, value: { kind: 'no-remote' } } }, []),
       { kind: 'open-link', target: { kind: 'file', file, line: undefined } },
     );
-    expect(none).toMatchObject({
-      notice: { text: 'This repository has no GitHub remote to link to.' },
-    });
+    expect(none).toMatchObject({ text: 'This repository has no GitHub remote to link to.' });
   });
 
   test('asks for a line when the target is the whole change', async ({ expect }) => {
     const calls: [string, unknown][] = [];
     await expect(
       runSheetAction(contextWith({}, calls), { kind: 'definition', target: { kind: 'change' } }),
-    ).resolves.toMatchObject({ kind: 'notice', notice: { tone: 'info' } });
+    ).resolves.toMatchObject({ tone: 'info' });
     expect(calls).toStrictEqual([]);
   });
 });

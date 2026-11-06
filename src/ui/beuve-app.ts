@@ -69,9 +69,7 @@ import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
-import './beuve-sheet-view.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
-import { describeSheets } from './describe-sheets.ts';
 import { describeGenerated } from './describe-generated.ts';
 import { describeDiagnosticsSwitch } from './describe-diagnostics-switch.ts';
 import { describeInsights } from './describe-insights.ts';
@@ -125,16 +123,6 @@ export class BeuveApp extends LitElement {
 
       beuve-dialog beuve-review-queue {
         block-size: var(--beuve-size-window-block-70);
-      }
-
-      .sheet-overlay {
-        position: fixed;
-        inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
-        inset-inline: auto 0;
-        z-index: 15;
-        inline-size: min(var(--beuve-size-sheet), var(--beuve-size-window-inline-60));
-        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
-        box-shadow: var(--beuve-shadow-sheet);
       }
     `,
   ];
@@ -673,16 +661,6 @@ export class BeuveApp extends LitElement {
         });
         return;
       }
-      case 'sheets': {
-        void this.setDisplay({ ...(command.mode !== undefined && { sheets: command.mode }) }).then(
-          (display) => {
-            if (display !== undefined) {
-              this.chat.note('info', describeSheets(display.sheets));
-            }
-          },
-        );
-        return;
-      }
       case 'insights': {
         void this.setDisplay({
           ...(command.showInsights !== undefined && { showInsights: command.showInsights }),
@@ -767,9 +745,7 @@ export class BeuveApp extends LitElement {
       case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':
-      case 'order-calls':
-      case 'sheets-window':
-      case 'sheets-inline': {
+      case 'order-calls': {
         void this.setDisplay(displayChangeFor(id, this.settings.display));
         return;
       }
