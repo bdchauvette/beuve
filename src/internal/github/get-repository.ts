@@ -4,11 +4,21 @@ import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
-import type { RepositoryDetails } from './branch-ref.ts';
+import type { RepositoryDetails, UpstreamRepository } from './branch-ref.ts';
 import { decodeWith } from './decode-with.ts';
 import type { GithubCallOptions, GithubClient } from './github-client.ts';
 import type { GithubError } from './github-error.ts';
 import { githubPath } from './github-path.ts';
+
+const upstreamSchema = z
+  .object({
+    name: z.string(),
+    owner: z.object({ login: z.string() }),
+    default_branch: z.string(),
+  })
+  .transform((raw): UpstreamRepository => {
+    return { owner: raw.owner.login, repo: raw.name, defaultBranch: raw.default_branch };
+  });
 
 const repositorySchema = z
   .object({
@@ -16,6 +26,8 @@ const repositorySchema = z
     owner: z.object({ login: z.string() }),
     default_branch: z.string(),
     html_url: z.string(),
+    parent: upstreamSchema.nullish(),
+    source: upstreamSchema.nullish(),
   })
   .transform((raw): RepositoryDetails => {
     return {
@@ -23,6 +35,8 @@ const repositorySchema = z
       repo: raw.name,
       defaultBranch: raw.default_branch,
       htmlUrl: raw.html_url,
+      ...(raw.parent !== null && raw.parent !== undefined && { parent: raw.parent }),
+      ...(raw.source !== null && raw.source !== undefined && { source: raw.source }),
     };
   });
 
@@ -32,7 +46,10 @@ export interface RepositoryName {
   readonly repo: string;
 }
 
-/** `GET /repos/{owner}/{repo}`: its current name and default branch (ADR 0112). */
+/**
+ * `GET /repos/{owner}/{repo}`: its current name and default branch, and for a fork the
+ * repositories it was forked from (ADR 0112).
+ */
 export async function getRepository<E>(
   client: GithubClient<E>,
   repository: RepositoryName,
