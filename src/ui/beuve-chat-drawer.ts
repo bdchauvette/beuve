@@ -1842,7 +1842,7 @@ function markerNode(text: string): Node {
   return marker;
 }
 
-/** A fenced block: highlighted once closed (ADR 0025's Alabaster themes), plain while open. */
+/** A fenced block: highlighted once closed (ADR 0119's syntax themes), plain while open. */
 function codeBlockNode(block: CodeBlock): Element {
   if (!block.closed) {
     const pre = document.createElement('pre');

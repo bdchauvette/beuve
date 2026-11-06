@@ -34,7 +34,7 @@ export interface SheetSelectDetail {
 
 /**
  * The code of a sheet (ADR 0067): a whole file through `@pierre/diffs`' `File`, highlighted with
- * beuve's Alabaster themes (ADR 0025), line numbers on, read-only. The gutter shows the change's
+ * beuve's syntax themes (ADR 0119), line numbers on, read-only. The gutter shows the change's
  * marks, staged notes and find hits (`sheetGutterCssFrom`); `selected` is the line cursor or the
  * jump's range. Emits `beuve-sheet-token` for a clicked token and `beuve-sheet-select` for
  * lines selected by mouse, and `beuve-sheet-token-hover` / `beuve-sheet-token-hover-end` as the
