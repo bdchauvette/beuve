@@ -15,8 +15,26 @@ export interface FakePullRequest {
   isDraft: boolean;
   state: 'open' | 'closed';
   updatedAt: string;
+  /** The fork the head branch is in (one of `forks`); the base repository by default. */
+  headRepository?: FakeRepositoryName;
+
   /** Lines and files changed, as `GET …/pulls/{n}` reports them; none by default. */
   size?: { readonly additions: number; readonly deletions: number; readonly changedFiles: number };
+}
+
+/** A repository's owner and name. */
+export interface FakeRepositoryName {
+  readonly owner: string;
+  readonly repo: string;
+}
+
+/**
+ * A fork of the fake's repository: `GET /repos/{o}/{r}` names the fake's repository as its
+ * parent and source, its branches answer like the repository's, and it has no pull requests.
+ */
+export interface FakeFork extends FakeRepositoryName {
+  /** Branch tips by branch name. */
+  readonly branches: Map<string, string>;
 }
 
 /** What `GET …/compare/{base}...{head}` answers for a head (ADR 0113). */
@@ -92,6 +110,8 @@ export interface FakeGithubApi {
   readonly pullRequests: Map<number, FakePullRequest>;
   /** Branch tips by branch name, as `GET …/branches/{branch}` reports them (ADR 0112). */
   readonly branches: Map<string, string>;
+  /** Forks of the repository, by `owner/repo`. */
+  readonly forks: Map<string, FakeFork>;
   /** Pull request numbers each search query (`q`) finds, in this repository (ADR 0113). */
   readonly searches: Map<string, number[]>;
   /** Headers every search answer carries, such as `x-github-sso` or `x-oauth-scopes`. */
@@ -149,6 +169,7 @@ export function createFakeGithubApi({
     repo,
     pullRequests: new Map(),
     branches: new Map(),
+    forks: new Map(),
     searches: new Map(),
     searchHeaders: {},
     comparisons: new Map(),
@@ -205,15 +226,13 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
     });
     return { ...answer, headers: { ...answer.headers, ...api.searchHeaders } };
   }
+  const forked = handleFork(api, { request, url });
+  if (forked !== undefined) {
+    return forked;
+  }
   const prefix = `/repos/${api.owner}/${api.repo}`;
   if (url.pathname === prefix && request.method === 'GET') {
-    return conditional(request, {
-      name: api.repo,
-      full_name: `${api.owner}/${api.repo}`,
-      owner: { login: api.owner },
-      default_branch: api.defaultBranch,
-      html_url: `https://github.com/${api.owner}/${api.repo}`,
-    });
+    return conditional(request, { ...repositoryJson(api), fork: false });
   }
   if (!url.pathname.startsWith(`${prefix}/`)) {
     return json(404, { message: 'Not Found' });
@@ -221,15 +240,7 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   const rest = url.pathname.slice(prefix.length).split('/').filter(Boolean);
   const [first, second, third] = rest;
   if (first === 'branches' && request.method === 'GET') {
-    const name = rest
-      .slice(1)
-      .map((segment) => decodeURIComponent(segment))
-      .join('/');
-    const sha = api.branches.get(name);
-    if (sha === undefined) {
-      return json(404, { message: 'Branch not found' });
-    }
-    return conditional(request, { name, commit: { sha }, protected: false });
+    return branch(request, { branches: api.branches, rest });
   }
   if (first === 'git' && second === 'matching-refs' && third === 'heads') {
     const wanted = `${rest
@@ -335,6 +346,83 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   return json(404, { message: 'Not Found' });
 }
 
+/** A request and its parsed URL. */
+interface ParsedRequest {
+  readonly request: FakeHttpRequest;
+  readonly url: URL;
+}
+
+/** Answers a request for one of the forks; `undefined` when it is about none of them. */
+function handleFork(
+  api: FakeGithubApi,
+  { request, url }: ParsedRequest,
+): FakeHttpResponse | undefined {
+  const fork = api.forks.values().find((candidate) => {
+    const prefix = `/repos/${candidate.owner}/${candidate.repo}`;
+    return url.pathname === prefix || url.pathname.startsWith(`${prefix}/`);
+  });
+  if (fork === undefined || request.method !== 'GET') {
+    return undefined;
+  }
+  const prefix = `/repos/${fork.owner}/${fork.repo}`;
+  const rest = url.pathname.slice(prefix.length).split('/').filter(Boolean);
+  const [first, second] = rest;
+  if (first === undefined) {
+    const upstream = repositoryJson(api);
+    return conditional(request, {
+      ...repositoryJson({ ...fork, defaultBranch: api.defaultBranch }),
+      fork: true,
+      parent: upstream,
+      source: upstream,
+    });
+  }
+  if (first === 'branches') {
+    return branch(request, { branches: fork.branches, rest });
+  }
+  if (first === 'pulls' && second === undefined) {
+    return conditional(request, []);
+  }
+  return json(404, { message: 'Not Found' });
+}
+
+/** A repository and its default branch. */
+interface RepositoryDescription extends FakeRepositoryName {
+  readonly defaultBranch: string;
+}
+
+/** A repository as `GET /repos/{o}/{r}` describes it, without the fork fields. */
+function repositoryJson({
+  owner,
+  repo,
+  defaultBranch,
+}: RepositoryDescription): Record<string, unknown> {
+  return {
+    name: repo,
+    full_name: `${owner}/${repo}`,
+    owner: { login: owner },
+    default_branch: defaultBranch,
+    html_url: `https://github.com/${owner}/${repo}`,
+  };
+}
+
+/** A repository's branch tips, and the path segments after the repository. */
+interface BranchLookup {
+  readonly branches: ReadonlyMap<string, string>;
+  readonly rest: readonly string[];
+}
+
+function branch(request: FakeHttpRequest, { branches, rest }: BranchLookup): FakeHttpResponse {
+  const name = rest
+    .slice(1)
+    .map((segment) => decodeURIComponent(segment))
+    .join('/');
+  const sha = branches.get(name);
+  if (sha === undefined) {
+    return json(404, { message: 'Branch not found' });
+  }
+  return conditional(request, { name, commit: { sha }, protected: false });
+}
+
 function bearer(headers: Readonly<Record<string, string>>): string | undefined {
   const value = Object.entries(headers).find(([name]) => name.toLowerCase() === 'authorization');
   if (value?.[1].startsWith('Bearer ') === true) {
@@ -350,7 +438,7 @@ function listPulls(api: FakeGithubApi, query: URLSearchParams): unknown[] {
   for (const pull of api.pullRequests.values()) {
     const isListed =
       pull.state === 'open' &&
-      (head === null || head === `${api.owner}:${pull.headRef}`) &&
+      (head === null || head === `${pull.headRepository?.owner ?? api.owner}:${pull.headRef}`) &&
       (base === null || base === pull.baseRef);
     if (isListed) {
       listed.push(githubPullFrom(api, pull));
@@ -404,12 +492,8 @@ function review(
 }
 
 function githubPullFrom(api: FakeGithubApi, pull: FakePullRequest): Record<string, unknown> {
-  const repository = {
-    name: api.repo,
-    full_name: `${api.owner}/${api.repo}`,
-    clone_url: `https://github.com/${api.owner}/${api.repo}.git`,
-    owner: { login: api.owner },
-  };
+  const repository = pullRepositoryJson(api);
+  const headRepository = pullRepositoryJson(pull.headRepository ?? api);
   return {
     number: pull.number,
     title: pull.title,
@@ -422,12 +506,21 @@ function githubPullFrom(api: FakeGithubApi, pull: FakePullRequest): Record<strin
     created_at: '2026-10-01T00:00:00Z',
     updated_at: pull.updatedAt,
     base: { ref: pull.baseRef, sha: pull.baseSha, repo: repository },
-    head: { ref: pull.headRef, sha: pull.headSha, repo: repository },
+    head: { ref: pull.headRef, sha: pull.headSha, repo: headRepository },
     ...(pull.size !== undefined && {
       additions: pull.size.additions,
       deletions: pull.size.deletions,
       changed_files: pull.size.changedFiles,
     }),
+  };
+}
+
+function pullRepositoryJson({ owner, repo }: FakeRepositoryName): Record<string, unknown> {
+  return {
+    name: repo,
+    full_name: `${owner}/${repo}`,
+    clone_url: `https://github.com/${owner}/${repo}.git`,
+    owner: { login: owner },
   };
 }
 
