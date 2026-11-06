@@ -8,6 +8,7 @@ import { ActionDelegation } from './action-delegation.ts';
 import type { PeekState } from './peek-state.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'External' };
 
@@ -19,6 +20,7 @@ const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'E
 @customElement('beuve-peek-portal')
 export class BeuvePeekPortal extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -26,21 +28,6 @@ export class BeuvePeekPortal extends LitElement {
         border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-bg);
         font: var(--beuve-font-small);
-      }
-
-      .close,
-      .again {
-        padding: 0 var(--beuve-space-1);
-        border: none;
-        background: none;
-        color: var(--beuve-text-muted);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .close {
-        font-size: var(--beuve-font-size-large);
-        line-height: 1;
       }
 
       .heading {
@@ -348,7 +335,7 @@ export class BeuvePeekPortal extends LitElement {
         <span class="spacer"></span>
         <button
           type="button"
-          class="close"
+          class="button icon close"
           title="Close (Esc)"
           aria-label="Close"
           @click=${(): void => {

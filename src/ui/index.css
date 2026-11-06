@@ -62,6 +62,7 @@
   --beuve-scale-black-a5: #0000004d;
 
   --beuve-scale-indigo-9: #3e63dd;
+  --beuve-scale-indigo-10: #3358d4;
   --beuve-scale-indigo-11: #3a5bc7;
   --beuve-scale-indigo-a3: #0047f112;
   --beuve-scale-violet-11: #6550b9;
@@ -167,6 +168,7 @@
   --beuve-accent: var(--beuve-scale-indigo-11);
   --beuve-accent-soft: var(--beuve-scale-indigo-a3);
   --beuve-accent-solid: var(--beuve-scale-indigo-9);
+  --beuve-accent-solid-hover: var(--beuve-scale-indigo-10);
   --beuve-on-accent: #ffffff;
   --beuve-violet: var(--beuve-scale-violet-11);
   --beuve-ok: var(--beuve-scale-green-11);
@@ -177,6 +179,9 @@
   --beuve-danger: var(--beuve-scale-red-11);
   --beuve-danger-solid: var(--beuve-scale-red-9);
   --beuve-danger-soft: var(--beuve-scale-red-a4);
+
+  --beuve-focus-ring: 2px solid var(--beuve-accent);
+  --beuve-focus-ring-offset: 1px;
 
   --beuve-scrim: var(--beuve-scale-black-a5);
   --beuve-scrim-soft: var(--beuve-scale-gray-a4);
@@ -228,6 +233,7 @@
     --beuve-scale-black-a5: #00000080;
 
     --beuve-scale-indigo-9: #3e63dd;
+    --beuve-scale-indigo-10: #5472e4;
     --beuve-scale-indigo-11: #9eb1ff;
     --beuve-scale-indigo-a3: #2f62ff3c;
     --beuve-scale-violet-11: #baa7ff;

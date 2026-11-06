@@ -21,6 +21,7 @@ import { parseOpenQuery } from './parse-open-query.ts';
 import type { OpenQuery } from './parse-open-query.ts';
 import { rankRecentSessions } from './rank-recent-sessions.ts';
 import { shortenPath } from './shorten-path.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Shows the system folder picker; `undefined` when cancelled or unavailable. */
 export type FolderChooser = (defaultPath: string | undefined) => Promise<string | undefined>;
@@ -62,252 +63,219 @@ type Row =
  */
 @customElement('beuve-open-panel')
 export class BeuveOpenPanel extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      color: var(--beuve-text);
-    }
-
-    .query {
-      box-sizing: border-box;
-      inline-size: 100%;
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: inherit;
-      font-size: var(--beuve-font-size-body);
-    }
-
-    input:focus {
-      border-color: var(--beuve-accent);
-      outline: none;
-    }
-
-    ol {
-      display: grid;
-      gap: 1px;
-      margin: var(--beuve-space-2) 0 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    li {
-      display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) auto;
-      align-items: baseline;
-      column-gap: var(--beuve-space-2);
-      padding: 6px var(--beuve-space-2);
-      border-radius: var(--beuve-radius);
-      cursor: pointer;
-    }
-
-    li {
-      transition:
-        background-color 80ms ease-out,
-        transform 80ms ease-out;
-    }
-
-    li[aria-selected='true'] {
-      background: var(--beuve-accent-soft);
-    }
-
-    li:active {
-      transform: scale(0.985);
-      background: var(--beuve-accent-soft);
-      box-shadow: inset 0 0 0 1px var(--beuve-accent);
-    }
-
-    li.pressed {
-      background: var(--beuve-accent-soft);
-      animation: press 140ms ease-out both;
-    }
-
-    @keyframes press {
-      40% {
-        transform: scale(0.97);
-        box-shadow: inset 0 0 0 1px var(--beuve-accent);
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: block;
+        color: var(--beuve-text);
       }
-      to {
-        transform: scale(1);
-        box-shadow: inset 0 0 0 1px var(--beuve-accent);
-      }
-    }
 
-    @media (prefers-reduced-motion: reduce) {
+      .query {
+        box-sizing: border-box;
+        inline-size: 100%;
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: inherit;
+        font-size: var(--beuve-font-size-body);
+      }
+
+      input:focus {
+        border-color: var(--beuve-accent);
+        outline: none;
+      }
+
+      ol {
+        display: grid;
+        gap: 1px;
+        margin: var(--beuve-space-2) 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
       li {
-        transition: none;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        align-items: baseline;
+        column-gap: var(--beuve-space-2);
+        padding: 6px var(--beuve-space-2);
+        border-radius: var(--beuve-radius);
+        cursor: pointer;
+      }
+
+      li {
+        transition:
+          background-color 80ms ease-out,
+          transform 80ms ease-out;
+      }
+
+      li[aria-selected='true'] {
+        background: var(--beuve-accent-soft);
       }
 
       li:active {
-        transform: none;
+        transform: scale(0.985);
+        background: var(--beuve-accent-soft);
+        box-shadow: inset 0 0 0 1px var(--beuve-accent);
       }
-    }
 
-    li.separated {
-      margin-block-start: var(--beuve-space-2);
-      border-block-start: 1px solid var(--beuve-border);
-      border-radius: 0 0 var(--beuve-radius) var(--beuve-radius);
-      padding-block-start: var(--beuve-space-2);
-    }
+      li.pressed {
+        background: var(--beuve-accent-soft);
+        animation: press 140ms ease-out both;
+      }
 
-    .glyph {
-      font: var(--beuve-font-mono);
-      font-size: var(--beuve-font-size-caption);
-      color: var(--beuve-text-muted);
-      text-align: end;
-      white-space: nowrap;
-    }
+      @keyframes press {
+        40% {
+          transform: scale(0.97);
+          box-shadow: inset 0 0 0 1px var(--beuve-accent);
+        }
+        to {
+          transform: scale(1);
+          box-shadow: inset 0 0 0 1px var(--beuve-accent);
+        }
+      }
 
-    .line {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      @media (prefers-reduced-motion: reduce) {
+        li {
+          transition: none;
+        }
 
-    .detail {
-      grid-column: 2 / 4;
-      overflow: hidden;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+        li:active {
+          transform: none;
+        }
+      }
 
-    .when {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      white-space: nowrap;
-    }
+      li.separated {
+        margin-block-start: var(--beuve-space-2);
+        border-block-start: 1px solid var(--beuve-border);
+        border-radius: 0 0 var(--beuve-radius) var(--beuve-radius);
+        padding-block-start: var(--beuve-space-2);
+      }
 
-    li[aria-selected='false'] .when.enter {
-      visibility: hidden;
-    }
+      .glyph {
+        font: var(--beuve-font-mono);
+        font-size: var(--beuve-font-size-caption);
+        color: var(--beuve-text-muted);
+        text-align: end;
+        white-space: nowrap;
+      }
 
-    .link {
-      padding: 0;
-      border: none;
-      background: none;
-      color: var(--beuve-accent);
-      font: inherit;
-      cursor: pointer;
-    }
+      .line {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .state.ok {
-      color: var(--beuve-ok);
-    }
+      .detail {
+        grid-column: 2 / 4;
+        overflow: hidden;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .state.merged {
-      color: var(--beuve-violet);
-    }
+      .when {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
 
-    .state.danger {
-      color: var(--beuve-danger);
-    }
+      li[aria-selected='false'] .when.enter {
+        visibility: hidden;
+      }
 
-    form {
-      display: grid;
-      grid-template-columns: 96px minmax(0, 1fr);
-      align-items: baseline;
-      gap: var(--beuve-space-2) var(--beuve-space-3);
-    }
+      .state.ok {
+        color: var(--beuve-ok);
+      }
 
-    form label {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      text-align: end;
-    }
+      .state.merged {
+        color: var(--beuve-violet);
+      }
 
-    .field {
-      display: flex;
-      gap: var(--beuve-space-2);
-      min-inline-size: 0;
-    }
+      .state.danger {
+        color: var(--beuve-danger);
+      }
 
-    .field input,
-    .refs input {
-      flex: 1;
-      min-inline-size: 0;
-      padding: var(--beuve-space-1) var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: var(--beuve-font-mono);
-    }
+      form {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        align-items: baseline;
+        gap: var(--beuve-space-2) var(--beuve-space-3);
+      }
 
-    .refs {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items: center;
-      gap: var(--beuve-space-2);
-    }
+      form label {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        text-align: end;
+      }
 
-    .refs span {
-      color: var(--beuve-text-muted);
-    }
+      .field {
+        display: flex;
+        gap: var(--beuve-space-2);
+        min-inline-size: 0;
+      }
 
-    .note {
-      grid-column: 2;
-      margin: calc(-1 * var(--beuve-space-1)) 0 0;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      overflow-wrap: anywhere;
-    }
+      .field input,
+      .refs input {
+        flex: 1;
+        min-inline-size: 0;
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: var(--beuve-font-mono);
+      }
 
-    .actions {
-      grid-column: 2;
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-3);
-    }
+      .refs {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: var(--beuve-space-2);
+      }
 
-    button {
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface-sunken);
-      color: var(--beuve-text);
-      font: inherit;
-      cursor: pointer;
-      white-space: nowrap;
-    }
+      .refs span {
+        color: var(--beuve-text-muted);
+      }
 
-    button.primary {
-      border-color: var(--beuve-accent);
-      background: var(--beuve-accent-solid);
-      color: var(--beuve-on-accent);
-    }
+      .note {
+        grid-column: 2;
+        margin: calc(-1 * var(--beuve-space-1)) 0 0;
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        overflow-wrap: anywhere;
+      }
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
+      .actions {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-3);
+      }
 
-    .back {
-      margin-block-end: var(--beuve-space-3);
-      padding: 0;
-      border: none;
-      background: none;
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .back {
+        margin-block-end: var(--beuve-space-3);
+      }
 
-    .error {
-      grid-column: 2;
-      margin: 0;
-      font: var(--beuve-font-small);
-      color: var(--beuve-danger);
-      overflow-wrap: anywhere;
-    }
+      .error {
+        grid-column: 2;
+        margin: 0;
+        font: var(--beuve-font-small);
+        color: var(--beuve-danger);
+        overflow-wrap: anywhere;
+      }
 
-    code,
-    kbd {
-      font: var(--beuve-font-mono);
-      font-size: var(--beuve-font-size-caption);
-    }
-  `;
+      code,
+      kbd {
+        font: var(--beuve-font-mono);
+        font-size: var(--beuve-font-size-caption);
+      }
+    `,
+  ];
 
   private now = Temporal.Now.instant();
 
@@ -619,7 +587,7 @@ export class BeuveOpenPanel extends LitElement {
                 : html`into ${shortenPath(clone)} ·
                     <button
                       type="button"
-                      class="link"
+                      class="button link"
                       data-action="change-clone"
                       data-index=${index}
                     >
@@ -753,19 +721,24 @@ export class BeuveOpenPanel extends LitElement {
               this.cloneNote = '';
             }}
           />
-          <button type="button" @click=${this.onChooseClone}>Choose…</button>
+          <button class="button large" type="button" @click=${this.onChooseClone}>Choose…</button>
         </div>
         <p class="note">
           ${this.cloneNote === '' ? nothing : html`${this.cloneNote} `}beuve fetches the pull
           request into this clone; it never clones for you.
         </p>
         <div class="actions">
-          <button class="primary" type="submit" ?disabled=${this.openingPull}>
+          <button class="button large primary" type="submit" ?disabled=${this.openingPull}>
             ${this.openingPull ? 'Fetching…' : 'Open pull request'}
           </button>
           ${
             this.openingPull
-              ? html`<button type="button" data-action="cancel-pull" @click=${this.onCancelPull}>
+              ? html`<button
+                  class="button large"
+                  type="button"
+                  data-action="cancel-pull"
+                  @click=${this.onCancelPull}
+                >
                   Cancel
                 </button>`
               : nothing
@@ -810,7 +783,7 @@ export class BeuveOpenPanel extends LitElement {
             .value=${live(this.repoPath)}
             @change=${this.onRepoChange}
           />
-          <button type="button" @click=${this.onChooseRepo}>Choose…</button>
+          <button class="button large" type="button" @click=${this.onChooseRepo}>Choose…</button>
         </div>
         ${this.renderInspection(view)}
         <label for="head">Review</label>
@@ -849,7 +822,7 @@ export class BeuveOpenPanel extends LitElement {
         </datalist>
         <p class="note">Shows what the head changed since it forked from the base.</p>
         <div class="actions">
-          <button class="primary" type="submit" ?disabled=${this.openingLocal}>
+          <button class="button large primary" type="submit" ?disabled=${this.openingLocal}>
             ${this.openingLocal ? 'Opening…' : 'Open'}
           </button>
         </div>
@@ -860,7 +833,7 @@ export class BeuveOpenPanel extends LitElement {
 
   private renderBack(): TemplateResult {
     return html`<button
-      class="back"
+      class="button quiet back"
       type="button"
       @keydown=${this.onFormKeyDown}
       @click=${(): void => {

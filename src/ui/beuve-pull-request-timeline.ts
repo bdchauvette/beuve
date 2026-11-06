@@ -12,6 +12,7 @@ import { formatRelativeTime } from './format-relative-time.ts';
 import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 import type { TimelineState } from './timeline-state.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Only the latest events are drawn, so a very long history stays quick. */
 const maxShown = 100;
@@ -25,6 +26,7 @@ const maxShown = 100;
 @customElement('beuve-pull-request-timeline')
 export class BeuvePullRequestTimeline extends LitElement {
   static override styles = [
+    buttonStyles,
     markdownBodyStyles,
     css`
       :host {
@@ -100,21 +102,7 @@ export class BeuvePullRequestTimeline extends LitElement {
         color: var(--beuve-text-muted);
       }
 
-      button.link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--beuve-accent);
-        font: inherit;
-        text-align: start;
-        cursor: pointer;
-      }
-
-      button.link:hover {
-        text-decoration: underline;
-      }
-
-      button.when {
+      .button.when {
         color: var(--beuve-text-muted);
       }
 
@@ -190,7 +178,7 @@ export class BeuvePullRequestTimeline extends LitElement {
           <strong>${event.author}</strong> ${verb}
           <button
             type="button"
-            class="link when"
+            class="button link when"
             title=${`${event.at}: open on GitHub`}
             data-action="link"
             data-url=${event.url}
@@ -204,7 +192,7 @@ export class BeuvePullRequestTimeline extends LitElement {
                 ${event.headline}
                 <button
                   type="button"
-                  class="link sha"
+                  class="button link sha"
                   title=${`Open ${event.sha} on GitHub`}
                   data-action="link"
                   data-url=${event.url}

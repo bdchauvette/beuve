@@ -11,6 +11,7 @@ import { planPalette } from './plan-palette.ts';
 import type { PaletteEntry, PaletteSources } from './plan-palette.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 const leadingPrefix = /^\s*[>@#!]/u;
 
@@ -39,6 +40,7 @@ const placeholders: Readonly<Record<string, string>> = {
 @customElement('beuve-command-palette')
 export class BeuveCommandPalette extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -163,15 +165,6 @@ export class BeuveCommandPalette extends LitElement {
         border-block-start: 1px solid var(--beuve-border);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
-      }
-
-      footer button {
-        padding: 0;
-        border: none;
-        background: none;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
       }
 
       footer code {
@@ -356,7 +349,12 @@ export class BeuveCommandPalette extends LitElement {
         }
         <footer>
           ${Object.entries(palettePrefixes).map(([key, group]) => {
-            return html`<button type="button" data-action="prefix" data-prefix=${key}>
+            return html`<button
+              class="button quiet"
+              type="button"
+              data-action="prefix"
+              data-prefix=${key}
+            >
               <code>${key}</code> ${groupLabels[group].toLowerCase()}
             </button>`;
           })}

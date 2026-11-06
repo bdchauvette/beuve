@@ -36,6 +36,7 @@ import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
 export interface DockNotice {
@@ -82,6 +83,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
 @customElement('beuve-ura-dock')
 export class BeuveUraDock extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     zoneStyles,
     css`
@@ -261,32 +263,6 @@ export class BeuveUraDock extends LitElement {
         flex: 1;
       }
 
-      button {
-        padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-        text-align: start;
-        cursor: pointer;
-      }
-
-      button:hover:not(:disabled) {
-        border-color: var(--beuve-accent);
-      }
-
-      button:disabled {
-        color: var(--beuve-text-muted);
-        cursor: default;
-      }
-
-      button.primary {
-        border-color: var(--beuve-accent);
-        background: var(--beuve-accent-solid);
-        color: var(--beuve-on-accent);
-      }
-
       .exports {
         display: grid;
         gap: var(--beuve-space-1);
@@ -353,15 +329,6 @@ export class BeuveUraDock extends LitElement {
 
       .harvest li {
         cursor: default;
-      }
-
-      button.link {
-        display: inline;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--beuve-accent);
-        text-decoration: underline;
       }
 
       .posted {
@@ -748,8 +715,12 @@ export class BeuveUraDock extends LitElement {
       ${this.renderSuggestionActions(item)}
       <div class="row">
         <span class="spacer"></span>
-        <button type="button" title="Cancel (Esc)" data-action="cancel-edit">Cancel</button>
-        <button type="submit" class="primary" title=${`Save (${this.saveKey()})`}>Save</button>
+        <button class="button" type="button" title="Cancel (Esc)" data-action="cancel-edit">
+          Cancel
+        </button>
+        <button type="submit" class="button primary" title=${`Save (${this.saveKey()})`}>
+          Save
+        </button>
       </div>
     </form>`;
   }
@@ -769,7 +740,12 @@ export class BeuveUraDock extends LitElement {
     return html`<div class="suggestion-actions">
       ${
         isEditable
-          ? html`<button type="button" data-action="edit-suggestion" data-item-id=${item.id}>
+          ? html`<button
+              class="button"
+              type="button"
+              data-action="edit-suggestion"
+              data-item-id=${item.id}
+            >
               ${item.suggestedPatch === undefined ? 'Suggest a change…' : 'Edit suggestion…'}
             </button>`
           : nothing
@@ -777,7 +753,12 @@ export class BeuveUraDock extends LitElement {
       ${
         item.suggestedPatch === undefined
           ? nothing
-          : html`<button type="button" data-action="remove-suggestion" data-item-id=${item.id}>
+          : html`<button
+              class="button"
+              type="button"
+              data-action="remove-suggestion"
+              data-item-id=${item.id}
+            >
               Remove suggestion
             </button>`
       }
@@ -816,6 +797,7 @@ export class BeuveUraDock extends LitElement {
           .filter((entry) => entry.target !== 'github' || this.github === undefined)
           .map((entry) => {
             return html`<button
+              class="button"
               type="button"
               title=${entry.title}
               ?disabled=${!this.hasSession || this.exporting}
@@ -859,11 +841,18 @@ export class BeuveUraDock extends LitElement {
                 >: ${describeEditCounts(view)}${view.isOnSessionHead ? '' : ', on an older head'}
               </p>
               <div class="actions">
-                <button type="button" data-action="review-edits" data-op="open">Open</button>
-                <button type="button" data-action="review-edits" data-op="preview">
+                <button class="button" type="button" data-action="review-edits" data-op="open">
+                  Open
+                </button>
+                <button class="button" type="button" data-action="review-edits" data-op="preview">
                   Turn into suggestions…
                 </button>
-                <button type="button" data-action="review-edits" data-op="discard-preview">
+                <button
+                  class="button"
+                  type="button"
+                  data-action="review-edits"
+                  data-op="discard-preview"
+                >
                   Discard…
                 </button>
               </div>`
@@ -904,10 +893,12 @@ export class BeuveUraDock extends LitElement {
             })}
           </ol>
           <div class="actions">
-            <button type="button" data-action="review-edits" data-op="cancel">Cancel</button>
+            <button class="button" type="button" data-action="review-edits" data-op="cancel">
+              Cancel
+            </button>
             <button
               type="button"
-              class="primary"
+              class="button primary"
               ?disabled=${staged.length === 0}
               data-action="review-edits"
               data-op="stage"
@@ -931,8 +922,15 @@ export class BeuveUraDock extends LitElement {
             })}
           </ul>
           <div class="actions">
-            <button type="button" data-action="review-edits" data-op="cancel">Cancel</button>
-            <button type="button" class="primary" data-action="review-edits" data-op="discard">
+            <button class="button" type="button" data-action="review-edits" data-op="cancel">
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="button primary"
+              data-action="review-edits"
+              data-op="discard"
+            >
               Discard
             </button>
           </div>
@@ -954,7 +952,7 @@ export class BeuveUraDock extends LitElement {
         return html`<div class="github">
           <button
             type="button"
-            class="primary"
+            class="button primary"
             ?disabled=${!this.hasSession}
             title="Post the staged items as one review on ${github.target}"
             @click=${(): void => {
@@ -987,6 +985,7 @@ export class BeuveUraDock extends LitElement {
           ></textarea>
           <div class="actions">
             <button
+              class="button"
               type="button"
               @click=${(): void => {
                 this.emit('beuve-github-cancel', {});
@@ -996,7 +995,7 @@ export class BeuveUraDock extends LitElement {
             </button>
             <button
               type="button"
-              class="primary"
+              class="button primary"
               @click=${(): void => {
                 this.emit('beuve-github-post', { summary: this.editedSummary(post.preview) });
               }}
@@ -1011,6 +1010,7 @@ export class BeuveUraDock extends LitElement {
           <p class="note">${post.message} Post as comment instead?</p>
           <div class="actions">
             <button
+              class="button"
               type="button"
               @click=${(): void => {
                 this.emit('beuve-github-cancel', {});
@@ -1020,7 +1020,7 @@ export class BeuveUraDock extends LitElement {
             </button>
             <button
               type="button"
-              class="primary"
+              class="button primary"
               @click=${(): void => {
                 this.emit('beuve-github-post', { verdict: 'comment', summary: post.summary });
               }}
@@ -1036,7 +1036,7 @@ export class BeuveUraDock extends LitElement {
             ${post.text}
             <button
               type="button"
-              class="link"
+              class="button link"
               title=${post.url}
               @click=${(): void => {
                 this.emit('beuve-open-link', { url: post.url });
@@ -1046,6 +1046,7 @@ export class BeuveUraDock extends LitElement {
             </button>
           </p>
           <button
+            class="button"
             type="button"
             @click=${(): void => {
               this.emit('beuve-github-preview', {});

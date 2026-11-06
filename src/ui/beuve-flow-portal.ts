@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import './flow-graph-view.ts';
 import type { FlowState } from './flow-state.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The control-flow portal (spec 5D, Show Control Flow): a heading and the function's flowchart in the
@@ -13,71 +14,59 @@ import type { FlowState } from './flow-state.ts';
  */
 @customElement('beuve-flow-portal')
 export class BeuveFlowPortal extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      border-block-end: 1px solid var(--beuve-border);
-      background: var(--beuve-bg);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: block;
+        border-block-end: 1px solid var(--beuve-border);
+        background: var(--beuve-bg);
+        font: var(--beuve-font-small);
+      }
 
-    .close,
-    .again {
-      padding: 0 var(--beuve-space-1);
-      border: none;
-      background: none;
-      color: var(--beuve-text-muted);
-      font: inherit;
-      cursor: pointer;
-    }
+      .heading {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+      }
 
-    .close {
-      font-size: var(--beuve-font-size-large);
-      line-height: 1;
-    }
+      .heading code {
+        font: var(--beuve-font-mono);
+        color: var(--beuve-text);
+      }
 
-    .heading {
-      display: flex;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3) var(--beuve-space-1);
-      color: var(--beuve-text-muted);
-    }
+      .spacer {
+        flex: 1;
+      }
 
-    .heading code {
-      font: var(--beuve-font-mono);
-      color: var(--beuve-text);
-    }
+      beuve-flow-graph {
+        max-block-size: 60vh;
+        padding: 0 var(--beuve-space-3) var(--beuve-space-2);
+      }
 
-    .spacer {
-      flex: 1;
-    }
+      .note {
+        margin: 0;
+        padding: 2px var(--beuve-space-3) var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+      }
 
-    beuve-flow-graph {
-      max-block-size: 60vh;
-      padding: 0 var(--beuve-space-3) var(--beuve-space-2);
-    }
+      .note.error {
+        color: var(--beuve-danger);
+      }
 
-    .note {
-      margin: 0;
-      padding: 2px var(--beuve-space-3) var(--beuve-space-2);
-      color: var(--beuve-text-muted);
-    }
-
-    .note.error {
-      color: var(--beuve-danger);
-    }
-
-    kbd {
-      padding: 0 var(--beuve-space-1);
-      border: 1px solid var(--beuve-border);
-      border-block-end-width: 2px;
-      border-radius: var(--beuve-radius-small);
-      background: var(--beuve-surface-sunken);
-      font: var(--beuve-font-mono);
-      font-size: var(--beuve-font-size-caption);
-    }
-  `;
+      kbd {
+        padding: 0 var(--beuve-space-1);
+        border: 1px solid var(--beuve-border);
+        border-block-end-width: 2px;
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-mono);
+        font-size: var(--beuve-font-size-caption);
+      }
+    `,
+  ];
 
   @property({ attribute: false }) accessor flow: FlowState | undefined;
 
@@ -120,7 +109,7 @@ export class BeuveFlowPortal extends LitElement {
         <span class="spacer"></span>
         <button
           type="button"
-          class="close"
+          class="button icon close"
           title="Close (Esc)"
           aria-label="Close"
           @click=${(): void => {

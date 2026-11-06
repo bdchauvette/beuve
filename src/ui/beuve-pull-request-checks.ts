@@ -6,6 +6,7 @@ import type { CiBucketView, CiCheckView, CiStatusView } from '#contract/ipc-cont
 
 import { ActionDelegation } from './action-delegation.ts';
 import { describeCiStatus } from './describe-ci-status.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Worst first, so a failing check is at the top of the list. */
 const bucketRank: Readonly<Record<CiBucketView, number>> = {
@@ -28,86 +29,75 @@ const bucketTone: Readonly<Record<CiBucketView, string>> = {
  */
 @customElement('beuve-pull-request-checks')
 export class BeuvePullRequestChecks extends LitElement {
-  static override styles = css`
-    :host {
-      display: grid;
-      gap: var(--beuve-space-2);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: grid;
+        gap: var(--beuve-space-2);
+        font: var(--beuve-font-small);
+      }
 
-    h2 {
-      margin: 0;
-      font: var(--beuve-font-small);
-      font-weight: var(--beuve-font-weight-semibold);
-      color: var(--beuve-text-muted);
-    }
+      h2 {
+        margin: 0;
+        font: var(--beuve-font-small);
+        font-weight: var(--beuve-font-weight-semibold);
+        color: var(--beuve-text-muted);
+      }
 
-    p {
-      margin: 0;
-      color: var(--beuve-text-muted);
-    }
+      p {
+        margin: 0;
+        color: var(--beuve-text-muted);
+      }
 
-    ul {
-      display: grid;
-      gap: 2px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
+      ul {
+        display: grid;
+        gap: 2px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
 
-    li {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-      min-inline-size: 0;
-    }
+      li {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        min-inline-size: 0;
+      }
 
-    .dot {
-      flex: none;
-      inline-size: 7px;
-      block-size: 7px;
-      border-radius: 50%;
-      background: var(--beuve-text-muted);
-    }
+      .dot {
+        flex: none;
+        inline-size: 7px;
+        block-size: 7px;
+        border-radius: 50%;
+        background: var(--beuve-text-muted);
+      }
 
-    .dot.ok {
-      background: var(--beuve-ok-solid);
-    }
+      .dot.ok {
+        background: var(--beuve-ok-solid);
+      }
 
-    .dot.warn {
-      background: var(--beuve-warn-solid);
-    }
+      .dot.warn {
+        background: var(--beuve-warn-solid);
+      }
 
-    .dot.danger {
-      background: var(--beuve-danger-solid);
-    }
+      .dot.danger {
+        background: var(--beuve-danger-solid);
+      }
 
-    .name {
-      flex: 1;
-      min-inline-size: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+      .name {
+        flex: 1;
+        min-inline-size: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    button.name {
-      padding: 0;
-      border: 0;
-      background: none;
-      color: var(--beuve-accent);
-      font: inherit;
-      text-align: start;
-      cursor: pointer;
-    }
-
-    button.name:hover {
-      text-decoration: underline;
-    }
-
-    .state {
-      color: var(--beuve-text-muted);
-    }
-  `;
+      .state {
+        color: var(--beuve-text-muted);
+      }
+    `,
+  ];
 
   /** The head's CI; absent until it is fetched. */
   @property({ attribute: false }) accessor ci: CiStatusView | undefined;
@@ -141,7 +131,7 @@ export class BeuvePullRequestChecks extends LitElement {
           ? html`<span class="name" title=${check.name}>${check.name}</span>`
           : html`<button
               type="button"
-              class="name"
+              class="button link name"
               title=${`Open ${check.name} on GitHub`}
               data-action="open-url"
               data-url=${check.url}

@@ -21,6 +21,7 @@ import { describeLspStatus } from './describe-lsp-status.ts';
 import { describeRemoteBranch } from './describe-remote-branch.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** `beuve-status-open-url`: a link in a status popover, for the owner to open. */
 export interface StatusOpenUrlDetail {
@@ -59,6 +60,7 @@ const bucketTone: Readonly<Record<CiCheckView['bucket'], string>> = {
 @customElement('beuve-status-bar')
 export class BeuveStatusBar extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -75,21 +77,8 @@ export class BeuveStatusBar extends LitElement {
         -webkit-user-select: none;
       }
 
-      .chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 0 var(--beuve-space-1);
-        border: 0;
-        border-radius: var(--beuve-radius-small);
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .chip:hover,
       .chip:has(+ [popover]:popover-open) {
-        background: var(--beuve-surface-hover, var(--beuve-surface));
+        background: var(--beuve-surface-hover);
         color: var(--beuve-text);
       }
 
@@ -158,20 +147,6 @@ export class BeuveStatusBar extends LitElement {
         text-overflow: ellipsis;
       }
 
-      .link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--beuve-accent);
-        font: inherit;
-        text-align: start;
-        cursor: pointer;
-      }
-
-      .link:hover {
-        text-decoration: underline;
-      }
-
       .popover-actions {
         display: flex;
         justify-content: flex-end;
@@ -234,21 +209,6 @@ export class BeuveStatusBar extends LitElement {
 
       .attention {
         cursor: default;
-      }
-
-      button {
-        flex: none;
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: transparent;
-        color: var(--beuve-text);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: var(--beuve-surface-hover, var(--beuve-surface));
       }
 
       .attention.yours {
@@ -317,7 +277,7 @@ export class BeuveStatusBar extends LitElement {
           ? nothing
           : html`<button
               type="button"
-              class="notice-action"
+              class="button notice-action"
               data-action="notice-action"
               data-command=${action.command}
             >
@@ -341,7 +301,7 @@ export class BeuveStatusBar extends LitElement {
     const line = describeLspStatus(servers);
     return html`<button
         type="button"
-        class="chip"
+        class="button quiet chip"
         popovertarget="lsp"
         title=${line.title}
         aria-haspopup="dialog"
@@ -369,7 +329,9 @@ export class BeuveStatusBar extends LitElement {
               </ul>`
         }
         <div class="popover-actions">
-          <button type="button" data-action="restart-servers">Restart language servers</button>
+          <button class="button" type="button" data-action="restart-servers">
+            Restart language servers
+          </button>
         </div>
       </div>`;
   }
@@ -395,7 +357,7 @@ export class BeuveStatusBar extends LitElement {
     });
     return html`<button
         type="button"
-        class="chip"
+        class="button quiet chip"
         popovertarget="ci"
         title=${line.title}
         aria-haspopup="dialog"
@@ -436,7 +398,7 @@ export class BeuveStatusBar extends LitElement {
           ? html`<span class="grow" title=${check.name}>${check.name}</span>`
           : html`<button
               type="button"
-              class="link grow"
+              class="button link grow"
               title=${`Open ${check.name} on GitHub`}
               data-action="open-url"
               data-url=${check.url}
@@ -457,7 +419,7 @@ export class BeuveStatusBar extends LitElement {
           ? nothing
           : html`<button
               type="button"
-              class="link"
+              class="button link"
               data-action="open-url"
               data-url=${branch.agentSessionUrl}
               title=${branch.agentSessionUrl}

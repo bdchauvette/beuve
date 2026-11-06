@@ -9,6 +9,7 @@ import { countNoun } from './count-noun.ts';
 import { describeCommitPair } from './describe-commit-pair.ts';
 import type { CommitPairRow } from './describe-commit-pair.ts';
 import { moveCommitPairCursor } from './move-commit-pair-cursor.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Detail of `beuve-commit-pair-filter`: the pair to filter the diff stream to, or none. */
 export interface CommitPairFilterDetail {
@@ -24,118 +25,112 @@ export interface CommitPairFilterDetail {
  */
 @customElement('beuve-commit-pairing')
 export class BeuveCommitPairing extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      font: var(--beuve-font-body);
-      color: var(--beuve-text);
-    }
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: block;
+        font: var(--beuve-font-body);
+        color: var(--beuve-text);
+      }
 
-    header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: var(--beuve-space-2);
-      padding: 0 var(--beuve-space-2) var(--beuve-space-1);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--beuve-space-2);
+        padding: 0 var(--beuve-space-2) var(--beuve-space-1);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    header button {
-      padding: 0;
-      border: 0;
-      background: none;
-      font: inherit;
-      color: var(--beuve-accent);
-      cursor: pointer;
-    }
+      ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border-radius: var(--beuve-radius);
+        outline: none;
+      }
 
-    ol {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      border-radius: var(--beuve-radius);
-      outline: none;
-    }
+      ol:focus-visible {
+        box-shadow: 0 0 0 2px var(--beuve-accent-soft);
+      }
 
-    ol:focus-visible {
-      box-shadow: 0 0 0 2px var(--beuve-accent-soft);
-    }
+      li {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        padding: 3px var(--beuve-space-2);
+        border-radius: var(--beuve-radius-small);
+        cursor: pointer;
+      }
 
-    li {
-      display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
-      align-items: baseline;
-      gap: var(--beuve-space-2);
-      padding: 3px var(--beuve-space-2);
-      border-radius: var(--beuve-radius-small);
-      cursor: pointer;
-    }
+      li:hover {
+        background: var(--beuve-surface-sunken);
+      }
 
-    li:hover {
-      background: var(--beuve-surface-sunken);
-    }
+      li.cursor {
+        box-shadow: inset 2px 0 0 var(--beuve-accent);
+      }
 
-    li.cursor {
-      box-shadow: inset 2px 0 0 var(--beuve-accent);
-    }
+      li[aria-selected='true'] {
+        background: var(--beuve-accent-soft);
+      }
 
-    li[aria-selected='true'] {
-      background: var(--beuve-accent-soft);
-    }
+      li.dropped {
+        cursor: default;
+      }
 
-    li.dropped {
-      cursor: default;
-    }
+      li.dropped .subject {
+        color: var(--beuve-text-muted);
+        text-decoration: line-through;
+      }
 
-    li.dropped .subject {
-      color: var(--beuve-text-muted);
-      text-decoration: line-through;
-    }
+      .commits,
+      .stats {
+        font: var(--beuve-font-mono);
+        font-size: var(--beuve-font-size-caption);
+        color: var(--beuve-text-muted);
+        white-space: nowrap;
+      }
 
-    .commits,
-    .stats {
-      font: var(--beuve-font-mono);
-      font-size: var(--beuve-font-size-caption);
-      color: var(--beuve-text-muted);
-      white-space: nowrap;
-    }
+      .chip {
+        padding: 0 6px;
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius-full);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
 
-    .chip {
-      padding: 0 6px;
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius-full);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
+      .modified .chip {
+        border-color: var(--beuve-warn);
+        color: var(--beuve-warn);
+      }
 
-    .modified .chip {
-      border-color: var(--beuve-warn);
-      color: var(--beuve-warn);
-    }
+      .added .chip {
+        border-color: var(--beuve-ok);
+        color: var(--beuve-ok);
+      }
 
-    .added .chip {
-      border-color: var(--beuve-ok);
-      color: var(--beuve-ok);
-    }
+      .dropped .chip {
+        border-color: var(--beuve-danger);
+        color: var(--beuve-danger);
+      }
 
-    .dropped .chip {
-      border-color: var(--beuve-danger);
-      color: var(--beuve-danger);
-    }
+      .subject {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-    .subject {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .empty {
-      padding: 0 var(--beuve-space-2);
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-    }
-  `;
+      .empty {
+        padding: 0 var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+    `,
+  ];
 
   @state() private accessor cursor = 0;
 
@@ -250,7 +245,7 @@ export class BeuveCommitPairing extends LitElement {
       ${
         this.selectedId === undefined
           ? nothing
-          : html`<button type="button" @click=${this.clear}>Show all</button>`
+          : html`<button class="button link" type="button" @click=${this.clear}>Show all</button>`
       }
     </header>`;
   }
