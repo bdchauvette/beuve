@@ -60,6 +60,18 @@ describe('filterQueueItems', () => {
     ).toStrictEqual([requested]);
   });
 
+  test('never lets a stack’s context row through on its own', ({ expect }) => {
+    const context = createQueueItem({
+      number: 9,
+      reasons: [],
+      isContext: true,
+      attention: { turn: 'unknown', reasons: [] },
+      stack: { id: 'github.com/o/r#9', depth: 0, position: 0, size: 2 },
+    });
+    const filters = { ...defaultReviewQueuePrefs.filters, showWaitingOnOthers: true };
+    expect(filterQueueItems([context], { filters, text: '' })).toStrictEqual([]);
+  });
+
   test.for<[string, Partial<QueueFiltersView>, string, (number | string | undefined)[]]>([
     ['the defaults hide only own pull requests waiting on others', {}, '', [1, 2, 4, 'claude/fix']],
     ['waiting on others shown', { showWaitingOnOthers: true }, '', [1, 2, 3, 4, 'claude/fix']],

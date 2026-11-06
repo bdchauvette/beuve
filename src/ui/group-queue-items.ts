@@ -31,9 +31,9 @@ const kindLabels = { 'pull-request': 'Pull requests', branch: 'Branches' } as co
 
 /**
  * The sorted queue items under headings (ADR 0113), keeping their order within each group:
- * by repository (alphabetical), stack (stacks of two or more, then the rest), turn (yours
- * first), kind (pull requests first) or local review state (new commits first). Groups are in
- * a fixed order, not the items'. Pure.
+ * by repository (alphabetical), stack (stacks of two or more in the order of their first item,
+ * each in stack order, then the rest), turn (yours first), kind (pull requests first) or local
+ * review state (new commits first). Groups are in a fixed order, not the items'. Pure.
  */
 export function groupQueueItems(
   items: readonly ReviewQueueItemView[],
@@ -61,7 +61,14 @@ export function groupQueueItems(
         const bottom = items.find((candidate) => candidate.key === item.stack?.id) ?? item;
         return { id: item.stack.id, label: `Stack on ${labelOf(bottom)}` };
       });
-      return groups.toSorted((left, right) => Number(left.id === '~') - Number(right.id === '~'));
+      return groups
+        .toSorted((left, right) => Number(left.id === '~') - Number(right.id === '~'))
+        .map((stack) => {
+          if (stack.id === '~') {
+            return stack;
+          }
+          return { ...stack, items: stack.items.toSorted(compareStackPositions) };
+        });
     }
     case 'turn': {
       return inOrder(
@@ -126,6 +133,11 @@ function inOrder(
 ): QueueGroup[] {
   const order = Object.keys(labels);
   return groups.toSorted((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
+}
+
+/** Bottom first, each pull request before those based on it. */
+function compareStackPositions(left: ReviewQueueItemView, right: ReviewQueueItemView): number {
+  return (left.stack?.position ?? 0) - (right.stack?.position ?? 0);
 }
 
 /** `#12 Title`, or the branch for a branch. */

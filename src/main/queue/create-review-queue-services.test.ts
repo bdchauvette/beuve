@@ -10,10 +10,10 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 import { test } from '../github/testing/test.ts';
 
 /**
- * Around the world's pull request 7: a draft review request with changes requested and failing
- * CI (8), the viewer's own pull request stacked on 7 (9), a pull request from an agent branch (10),
- * and three agent branches: one ahead with a Claude-Session trailer, one merged, one with that
- * pull request.
+ * Around the world's pull request 7, requested of the viewer's team `core`: a draft review
+ * request of the viewer by name with changes requested and failing CI (8), the viewer's own pull
+ * request stacked on 7 (9), a pull request from an agent branch (10), and three agent branches:
+ * one ahead with a Claude-Session trailer, one merged, one with that pull request.
  */
 function queueWorld(api: FakeGithubApi, firstHead: string): void {
   const open = 'is:open is:pr archived:false';
@@ -67,6 +67,17 @@ function queueWorld(api: FakeGithubApi, firstHead: string): void {
     state: 'open',
     updatedAt: '2026-10-22T10:00:00Z',
   });
+  api.reviewRequestEvents.set(7, [
+    { at: '2026-10-02T10:00:00Z', team: 'core' },
+    { at: '2026-10-03T10:00:00Z', team: 'docs' },
+    { at: '2026-10-04T10:00:00Z', reviewer: 'sam' },
+  ]);
+  api.reviewRequestEvents.set(8, [
+    { at: '2026-10-05T10:00:00Z', reviewer: 'reviewer' },
+    { at: '2026-10-06T10:00:00Z', team: 'core' },
+    { at: '2026-10-07T10:00:00Z', reviewer: 'reviewer' },
+  ]);
+  api.viewerTeams = [{ organization: 'octo-org', slug: 'core' }];
   api.searches.set(`${open} review-requested:@me`, [7, 8]);
   api.searches.set(`${open} user-review-requested:@me`, [8]);
   api.searches.set(`${open} author:@me`, [9]);
@@ -95,6 +106,7 @@ function queueWorld(api: FakeGithubApi, firstHead: string): void {
         login: 'claude',
         authorName: 'Claude',
         date: '2026-10-23T10:00:00Z',
+        committedAt: '2026-10-23T11:00:00Z',
       },
     ],
     files: [
@@ -149,7 +161,9 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
       branch: 'feature',
       headSha: world.firstHead,
       local: { state: 'opened', sessionId, markedFiles: 0 },
-      stack: { id: 'github.com/octo-org/hello-world#7', depth: 0, size: 2 },
+      waitingSince: '2026-10-02T10:00:00Z',
+      waitingSinceSource: 'requested',
+      stack: { id: 'github.com/octo-org/hello-world#7', depth: 0, size: 2, position: 0 },
     });
     expect(items.get('github.com/octo-org/hello-world#8')).toMatchObject({
       reasons: ['requested'],
@@ -159,11 +173,15 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
       ci: { overall: 'failure', failing: 1 },
       attention: { turn: 'author' },
       local: { state: 'none' },
+      waitingSince: '2026-10-07T10:00:00Z',
+      waitingSinceSource: 'requested',
     });
     expect(items.get('github.com/octo-org/hello-world#9')).toMatchObject({
       reasons: ['authored'],
       author: 'reviewer',
-      stack: { id: 'github.com/octo-org/hello-world#7', depth: 1, size: 2 },
+      waitingSince: '2026-10-22T10:00:00Z',
+      waitingSinceSource: 'updated',
+      stack: { id: 'github.com/octo-org/hello-world#7', depth: 1, size: 2, position: 1 },
     });
     expect(items.get('github.com/octo-org/hello-world:claude/fix-login')).toStrictEqual({
       key: 'github.com/octo-org/hello-world:claude/fix-login',
@@ -182,7 +200,8 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
       htmlUrl: 'https://github.com/octo-org/hello-world/tree/claude/fix-login',
       createdAt: '2026-10-23T09:00:00Z',
       updatedAt: '2026-10-23T10:00:00Z',
-      waitingSince: '2026-10-23T10:00:00Z',
+      waitingSince: '2026-10-23T11:00:00Z',
+      waitingSinceSource: 'pushed',
       ci: { overall: 'none', failing: 0 },
       attention: { turn: 'you', reasons: ['an agent branch has no pull request yet'] },
       reasons: ['branch'],
@@ -212,6 +231,10 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
     const asked = world.api.log.slice(before);
     expect(asked.filter((line) => /\/pulls\/\d+$/u.test(line))).toStrictEqual([]);
     expect(asked.filter((line) => line.includes('/compare/'))).toStrictEqual([]);
+    expect(asked.filter((line) => /\/events|\/user\/teams/u.test(line))).toStrictEqual([]);
+    expect(asked.filter((line) => line.includes('/pulls?'))).toStrictEqual([
+      'GET /repos/octo-org/hello-world/pulls?state=open&sort=updated&direction=desc&per_page=100',
+    ]);
     expect(second.items).toHaveLength(3);
 
     Object.assign(world.api.pullRequests.get(8) ?? {}, {
@@ -220,12 +243,121 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
     });
     const mark = world.api.log.length;
     const third = okValueFrom(await services.queue.refresh());
-    expect(world.api.log.slice(mark).filter((line) => /\/pulls\/\d+$/u.test(line))).toStrictEqual([
+    expect(
+      world.api.log.slice(mark).filter((line) => /\/pulls\/\d+$|\/events/u.test(line)),
+    ).toStrictEqual([
       'GET /repos/octo-org/hello-world/pulls/8',
+      'GET /repos/octo-org/hello-world/issues/8/events?per_page=100',
     ]);
     expect(byKey(third.items).get('github.com/octo-org/hello-world#8')).toMatchObject({
       isDraft: false,
     });
+  });
+
+  test('without the viewer’s teams, a team request waits since the latest team request', async ({
+    expect,
+    services,
+    world,
+  }) => {
+    queueWorld(world.api, world.firstHead);
+    world.api.viewerTeams = undefined;
+    const queue = okValueFrom(await services.queue.refresh());
+    expect(byKey(queue.items).get('github.com/octo-org/hello-world#7')).toMatchObject({
+      waitingSince: '2026-10-03T10:00:00Z',
+      waitingSinceSource: 'requested',
+    });
+    expect(queue.problems.map(({ kind }) => kind).toSorted(compareText)).toStrictEqual([
+      'scopes',
+      'sso',
+    ]);
+  });
+
+  test('keeps a stack whole: its unqueued members are context rows, read lightly', async ({
+    expect,
+    services,
+    world,
+  }) => {
+    queueWorld(world.api, world.firstHead);
+    const open = 'is:open is:pr archived:false';
+    world.api.pullRequests.set(11, {
+      number: 11,
+      title: 'Top of the stack',
+      body: '',
+      author: 'octocat',
+      headRef: 'top',
+      headSha: 'f'.repeat(40),
+      baseRef: 'on-top',
+      baseSha: 'd'.repeat(40),
+      isDraft: false,
+      state: 'open',
+      updatedAt: '2026-10-25T10:00:00Z',
+    });
+    world.api.pullRequests.set(12, {
+      number: 12,
+      title: 'Beside the top',
+      body: '',
+      author: 'octocat',
+      headRef: 'beside',
+      headSha: '9'.repeat(40),
+      baseRef: 'on-top',
+      baseSha: 'd'.repeat(40),
+      isDraft: true,
+      state: 'open',
+      updatedAt: '2026-10-26T10:00:00Z',
+    });
+    world.api.searches.set(`${open} review-requested:@me`, [7, 11]);
+    world.api.searches.set(`${open} user-review-requested:@me`, [11]);
+    world.api.searches.set(`${open} author:@me`, []);
+
+    const queue = okValueFrom(await services.queue.refresh());
+    const items = byKey(queue.items);
+    const id = 'github.com/octo-org/hello-world#7';
+    expect(
+      queue.items
+        .map((item) => {
+          const place = `${String(item.stack?.position)}/${String(item.stack?.size)}`;
+          return `#${String(item.number)} ${place} ${String(item.isContext === true)}`;
+        })
+        .toSorted(compareText),
+    ).toStrictEqual(['#11 2/4 false', '#12 3/4 true', '#7 0/4 false', '#9 1/4 true']);
+    expect(items.get('github.com/octo-org/hello-world#9')).toStrictEqual({
+      key: 'github.com/octo-org/hello-world#9',
+      kind: 'pull-request',
+      forge: 'github',
+      host: 'github.com',
+      owner: 'octo-org',
+      repo: 'hello-world',
+      number: 9,
+      branch: 'on-top',
+      baseBranch: 'feature',
+      headSha: 'd'.repeat(40),
+      title: 'Build on the answer',
+      author: 'reviewer',
+      isDraft: false,
+      htmlUrl: 'https://github.com/octo-org/hello-world/pull/9',
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-22T10:00:00Z',
+      waitingSince: '2026-10-22T10:00:00Z',
+      waitingSinceSource: 'updated',
+      attention: {
+        turn: 'unknown',
+        reasons: ['not waiting on you: in the stack of one that is'],
+      },
+      reasons: [],
+      stack: { id, depth: 1, size: 4, position: 1 },
+      local: { state: 'none' },
+      isContext: true,
+    });
+    expect(items.get('github.com/octo-org/hello-world#11')).toMatchObject({
+      stack: { id, depth: 2, size: 4, position: 2 },
+    });
+    expect(items.get('github.com/octo-org/hello-world#12')).toMatchObject({
+      isDraft: true,
+      stack: { id, depth: 2, size: 4, position: 3 },
+    });
+    const asked = world.api.log.join('\n');
+    expect(asked).not.toContain('/pulls/9');
+    expect(asked).not.toContain(`/commits/${'d'.repeat(40)}`);
   });
 
   test('pushes the snapshot as it starts and finishes refreshing', async ({

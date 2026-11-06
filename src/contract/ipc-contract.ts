@@ -1904,14 +1904,27 @@ export interface QueueLocalReviewView {
   readonly markedFiles?: number;
 }
 
-/** A queue item's place in a stack of pull requests within one repository. */
+/**
+ * A queue item's place in a stack of open pull requests within one repository (ADR 0113
+ * amendment): the whole stack as GitHub has it, not only its queued members.
+ */
 export interface QueueStackView {
-  /** The bottom item's key, shared by every item of the stack. */
+  /** The bottom pull request's key, shared by every item of the stack and stable across refreshes. */
   readonly id: string;
   /** 0 for the bottom pull request, 1 for the one based on it, … */
   readonly depth: number;
+  /** Pull requests in the whole stack, queued or not. */
   readonly size: number;
+  /** Its index in the stack's order: bottom first, each pull request before those based on it. */
+  readonly position: number;
 }
+
+/**
+ * What a queue item's `waitingSince` is (ADR 0113 amendment): when the viewer's review was last
+ * requested, when changes were last requested of their own pull request, an agent branch's last
+ * commit, or, failing those, the pull request's last activity (`updated_at`).
+ */
+export type QueueWaitingSourceView = 'requested' | 'changes-requested' | 'pushed' | 'updated';
 
 /** Lines and files a change touches. */
 export interface ChangeSizeView {
@@ -1929,7 +1942,9 @@ export interface QueueCiView {
 /**
  * One thing waiting on the viewer (ADR 0113). `key` is `host/owner/repo#n` or
  * `host/owner/repo:branch`, which is also what `github:open-pr` or `github:open-branch` takes as
- * `ref`. Timestamps are ISO-8601; `waitingSince` approximates when it started waiting.
+ * `ref`. Timestamps are ISO-8601; `waitingSince` is when it started waiting, as
+ * `waitingSinceSource` says. A context row (`isContext`) is a pull request of a queued item's
+ * stack that is not itself waiting on the viewer: shown only within its stack, never counted.
  */
 export interface ReviewQueueItemView {
   readonly key: string;
@@ -1949,6 +1964,7 @@ export interface ReviewQueueItemView {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly waitingSince: string;
+  readonly waitingSinceSource: QueueWaitingSourceView;
   readonly headSha?: string;
   readonly size?: ChangeSizeView;
   readonly ci?: QueueCiView;
@@ -1962,6 +1978,8 @@ export interface ReviewQueueItemView {
   readonly agentSessionUrl?: string;
   /** Its source failed in the last refresh, so this is the last answer it gave. */
   readonly isStale?: boolean;
+  /** Not waiting on the viewer: in the snapshot only as part of a queued item's stack. */
+  readonly isContext?: boolean;
 }
 
 /**

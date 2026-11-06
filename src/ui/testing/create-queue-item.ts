@@ -26,6 +26,7 @@ export function createQueueItem(overrides: QueueItemOverrides = {}): ReviewQueue
     createdAt: '2026-10-01T00:00:00Z',
     updatedAt: '2026-10-02T00:00:00Z',
     waitingSince: '2026-10-02T00:00:00Z',
+    waitingSinceSource: 'requested',
     attention: { turn: 'you', reasons: ['a review was requested from you'] },
     reasons: ['requested'],
     request: 'direct',

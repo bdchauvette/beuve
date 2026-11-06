@@ -10,6 +10,7 @@ import type {
   QueueGroupView,
   QueueItemKindView,
   QueueSortView,
+  QueueWaitingSourceView,
   ReviewQueueItemView,
   ReviewQueuePrefsView,
   ReviewQueueView,
@@ -28,6 +29,7 @@ import { groupQueueItems } from './group-queue-items.ts';
 import { pathText } from './path-text.ts';
 import { queueIcon } from './queue-icon.ts';
 import { sortQueueItems } from './sort-queue-items.ts';
+import { withStackContext } from './with-stack-context.ts';
 
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
@@ -44,7 +46,9 @@ export interface QueueOpenUrlDetail {
  * and filtered as the preferences say, with what may be missing from it. A presentational
  * component (ADR 0104): it takes the snapshot and the preferences, and reports intent with
  * `beuve-queue-open`, `beuve-queue-prefs` (the whole new preferences), `beuve-queue-refresh` and
- * `beuve-queue-open-url`. The free text and the cursor are its own. ↑/↓ move, ↩ opens.
+ * `beuve-queue-open-url`. The free text and the cursor are its own. ↑/↓ move, ↩ opens. Grouped
+ * by stack, every stack with a matching member shows whole: members not waiting on the viewer or
+ * hidden by the filters are dimmed, openable, and not counted (ADR 0113 amendment).
  */
 @customElement('beuve-review-queue')
 export class BeuveReviewQueue extends LitElement {
@@ -292,6 +296,10 @@ export class BeuveReviewQueue extends LitElement {
         opacity: 0.7;
       }
 
+      .row.context {
+        opacity: 0.55;
+      }
+
       .row > span {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -533,15 +541,26 @@ export class BeuveReviewQueue extends LitElement {
 
   /** The rows in the order they show, groups flattened. */
   private visibleItems(): ReviewQueueItemView[] {
-    const filtered = filterQueueItems(this.queue?.items ?? [], {
-      filters: this.prefs.filters,
-      text: this.text,
-    });
-    const sorted = sortQueueItems(filtered, this.prefs.sort);
-    return groupQueueItems(sorted, this.prefs.group).flatMap((group) => group.items);
+    return this.layout().groups.flatMap((group) => group.items);
   }
 
-  private renderBody({ all, groups, cursor, now }: BodyParts): TemplateResult {
+  /**
+   * The queued items, those the filters let through, and the groups to show: with the rest of
+   * their stacks when grouping by stack.
+   */
+  private layout(): QueueLayout {
+    const all = this.queue?.items ?? [];
+    const queued = all.filter((item) => item.isContext !== true);
+    const matched = filterQueueItems(queued, { filters: this.prefs.filters, text: this.text });
+    let shown = matched;
+    if (this.prefs.group === 'stack') {
+      shown = withStackContext({ all, matched });
+    }
+    const groups = groupQueueItems(sortQueueItems(shown, this.prefs.sort), this.prefs.group);
+    return { queued, matched: new Set(matched), groups };
+  }
+
+  private renderBody({ all, groups, matched, cursor, now }: BodyParts): TemplateResult {
     if (this.queue === undefined) {
       return html`<div class="empty">
         ${this.error === '' ? 'Reading the queue…' : this.error}
@@ -563,22 +582,29 @@ export class BeuveReviewQueue extends LitElement {
     return html`${groups.map((group) => {
       return html`${group.label === '' ? nothing : html`<div class="heading" role="presentation">${group.label}</div>`}
       ${group.items.map((item) => {
-        const row = this.renderRow({ item, index, isCursor: item === cursor, now });
+        const row = this.renderRow({
+          item,
+          index,
+          isCursor: item === cursor,
+          isMatched: matched.has(item),
+          now,
+        });
         index += 1;
         return row;
       })}`;
     })}`;
   }
 
-  private renderRow({ item, index, isCursor, now }: RowParts): TemplateResult {
+  private renderRow({ item, index, isCursor, isMatched, now }: RowParts): TemplateResult {
     const ci = describeQueueCi(item.ci);
     const turn = describeAttention(item.attention);
+    const aside = asideOf(item, isMatched);
     const local = describeLocalReview(item.local);
     const repository = `${item.owner}/${item.repo}`;
     const depth = item.stack?.depth ?? 0;
     return html`<div
       id="row-${String(index)}"
-      class="row ${item.isStale === true ? 'stale' : ''}"
+      class="row ${item.isStale === true ? 'stale' : ''} ${aside === undefined ? '' : 'context'}"
       role="option"
       aria-selected=${isCursor ? 'true' : 'false'}
       data-action="open"
@@ -599,6 +625,10 @@ export class BeuveReviewQueue extends LitElement {
       <span class="title" title=${item.title}
         >${depth > 0 ? html`<span class="stacked">${'↳ '.repeat(depth)}</span>` : nothing}${item.title}${
           item.isDraft ? html`<span class="chip">Draft</span>` : nothing
+        }${
+          aside === undefined
+            ? nothing
+            : html`<span class="chip" title=${aside.title}>${aside.text}</span>`
         }${
           item.request === 'team'
             ? html`<span class="chip" title="Requested of a team you are on">Team</span>`
@@ -637,7 +667,7 @@ export class BeuveReviewQueue extends LitElement {
       <span class="local ${local.tone}" title=${local.title}>${local.text}</span>
       <span
         class="age"
-        title=${`Waiting since ${item.waitingSince} (last update); opened ${item.createdAt}`}
+        title=${`${waitingLabels[item.waitingSinceSource]} ${formatRelativeTime(item.waitingSince, now)} (${item.waitingSince}); opened ${item.createdAt}`}
         >${formatRelativeTime(item.waitingSince, now)}</span
       >
     </div>`;
@@ -842,9 +872,7 @@ export class BeuveReviewQueue extends LitElement {
   }
 
   protected override render(): TemplateResult {
-    const all = this.queue?.items ?? [];
-    const filtered = filterQueueItems(all, { filters: this.prefs.filters, text: this.text });
-    const groups = groupQueueItems(sortQueueItems(filtered, this.prefs.sort), this.prefs.group);
+    const { queued: all, matched, groups } = this.layout();
     const rows = groups.flatMap((group) => group.items);
     const cursor = rows.find((item) => item.key === this.cursorKey) ?? rows[0];
     const now = Temporal.Now.instant();
@@ -853,9 +881,9 @@ export class BeuveReviewQueue extends LitElement {
         <h2>
           Review Queue<span class="count"
             >${
-              filtered.length === all.length
+              matched.size === all.length
                 ? String(all.length)
-                : `${String(filtered.length)} of ${String(all.length)}`
+                : `${String(matched.size)} of ${String(all.length)}`
             }</span
           >
         </h2>
@@ -890,16 +918,25 @@ export class BeuveReviewQueue extends LitElement {
         aria-activedescendant=${cursor === undefined ? nothing : `row-${String(rows.indexOf(cursor))}`}
         @keydown=${this.onKeyDown}
       >
-        ${this.renderBody({ all, groups, cursor, now })}
+        ${this.renderBody({ all, groups, matched, cursor, now })}
       </div>
     `;
   }
+}
+
+/** The queue as it shows: what is queued, what the filters let through, and the groups. */
+interface QueueLayout {
+  /** Every item waiting on the viewer: the count's total, and what filters choose from. */
+  readonly queued: readonly ReviewQueueItemView[];
+  readonly matched: ReadonlySet<ReviewQueueItemView>;
+  readonly groups: ReturnType<typeof groupQueueItems>;
 }
 
 /** What the list body renders from. */
 interface BodyParts {
   readonly all: readonly ReviewQueueItemView[];
   readonly groups: ReturnType<typeof groupQueueItems>;
+  readonly matched: ReadonlySet<ReviewQueueItemView>;
   readonly cursor: ReviewQueueItemView | undefined;
   readonly now: Temporal.Instant;
 }
@@ -909,7 +946,15 @@ interface RowParts {
   readonly item: ReviewQueueItemView;
   readonly index: number;
   readonly isCursor: boolean;
+  /** It passed the filters; a stack member that did not shows dimmed. */
+  readonly isMatched: boolean;
   readonly now: Temporal.Instant;
+}
+
+/** Why a row shows dimmed beside its stack. */
+interface RowAside {
+  readonly text: string;
+  readonly title: string;
 }
 
 /** One checkable filter in the menu. */
@@ -927,6 +972,14 @@ interface FilterToggle {
 }
 
 const githubPrefix = /^github\.com\//u;
+
+/** What the age column's time is, for its tooltip. */
+const waitingLabels: Readonly<Record<QueueWaitingSourceView, string>> = {
+  requested: 'Your review was asked',
+  'changes-requested': 'Changes were requested',
+  pushed: 'Last commit',
+  updated: 'Last activity',
+};
 
 const sortLabels: readonly (readonly [QueueSortView, string])[] = [
   ['turn', 'Your turn first'],
@@ -979,6 +1032,20 @@ const ciLabels: readonly (readonly [QueueCiFilterView, string])[] = [
   ['pending', 'Running'],
   ['success', 'Passing'],
 ];
+
+/** A stack member that shows only beside its stack: not waiting on the viewer, or filtered out. */
+function asideOf(item: ReviewQueueItemView, isMatched: boolean): RowAside | undefined {
+  if (item.isContext === true) {
+    return {
+      text: 'Not waiting on you',
+      title: 'In the stack of a pull request that is waiting on you',
+    };
+  }
+  if (!isMatched) {
+    return { text: 'Filtered out', title: 'Hidden by your filters; shown with its stack' };
+  }
+  return undefined;
+}
 
 /** "Updated 3 min ago", "Updating…" or nothing yet. */
 function describeUpdated(queue: ReviewQueueView | undefined, now: Temporal.Instant): string {

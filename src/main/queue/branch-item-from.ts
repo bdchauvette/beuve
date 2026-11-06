@@ -14,8 +14,9 @@ export interface BranchItemInput {
 
 /**
  * An agent branch's queue row (ADR 0113), from its comparison with the default branch: the head
- * commit's subject is the title, its author the author and its date the update; the first
- * commit's date stands for when it was created. It reads as the viewer's turn, and carries the
+ * commit's subject is the title, its author the author and its date the update; it waits since
+ * the head was committed (ADR 0113 amendment); the first commit's date stands for when it was
+ * created. It reads as the viewer's turn, and carries the
  * head commit's `Claude-Session` link when there is one. Pure.
  */
 export function branchItemFrom({ candidate, ci }: BranchItemInput): QueueItemDraft {
@@ -41,7 +42,8 @@ export function branchItemFrom({ candidate, ci }: BranchItemInput): QueueItemDra
     htmlUrl: `${repository.htmlUrl}/tree/${tip.name}`,
     createdAt: first?.date ?? updatedAt,
     updatedAt,
-    waitingSince: updatedAt,
+    waitingSince: head?.committedAt ?? updatedAt,
+    waitingSinceSource: 'pushed',
     ...(ci !== undefined && { ci }),
     attention: { turn: 'you', reasons: ['an agent branch has no pull request yet'] },
     reasons: ['branch'],

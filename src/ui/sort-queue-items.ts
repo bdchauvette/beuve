@@ -25,7 +25,7 @@ const localRanks: Readonly<Record<LocalReviewStateView, number>> = {
 /**
  * The queue items in the order `sort` names (ADR 0113): your turn first (then waiting longest),
  * waiting longest, oldest, recently updated, smallest, largest (unknown sizes last), stack order
- * (each stack bottom first, stacks together, in your-turn order of their first item), or new since
+ * (each stack in stack order, stacks together, in your-turn order of their first item), or new since
  * your review (then recently updated). Ties break on repository, then number or branch, so the
  * order never depends on the input's. Pure.
  */
@@ -70,7 +70,10 @@ const comparers: Readonly<Record<Exclude<QueueSortView, 'stack'>, Compare>> = {
   },
 };
 
-/** Each stack kept together and bottom first; stacks in your-turn order of their first item. */
+/**
+ * Each stack kept together in its order (bottom first, each pull request before those based on
+ * it); stacks in your-turn order of their first item.
+ */
 function stackOrder(items: readonly ReviewQueueItemView[]): ReviewQueueItemView[] {
   const byTurn = sortQueueItems(items, 'turn');
   const stacks = new Map<string, ReviewQueueItemView[]>();
@@ -86,7 +89,9 @@ function stackOrder(items: readonly ReviewQueueItemView[]): ReviewQueueItemView[
     .values()
     .flatMap((stack) => {
       return stack.toSorted((left, right) => {
-        return (left.stack?.depth ?? 0) - (right.stack?.depth ?? 0) || compareIdentity(left, right);
+        return (
+          (left.stack?.position ?? 0) - (right.stack?.position ?? 0) || compareIdentity(left, right)
+        );
       });
     })
     .toArray();

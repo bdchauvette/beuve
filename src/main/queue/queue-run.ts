@@ -29,6 +29,7 @@ export class QueueRun {
   private readonly clients: GithubClients;
   private resetAt: string | undefined;
   private isLimited = false;
+  private readonly shared = new Map<string, Promise<unknown>>();
   readonly problems: QueueProblemView[] = [];
   readonly signal: AbortSignal;
 
@@ -63,6 +64,20 @@ export class QueueRun {
       this.resetAt = result.error.resetAt;
     }
     return result;
+  }
+
+  /**
+   * `read`'s answer, read once a run under `key`: a second caller (the branch listing and the
+   * stacks both read a repository's open pull requests) gets the first one's.
+   */
+  async once<T>(key: string, read: () => Promise<T>): Promise<T> {
+    const known = this.shared.get(key);
+    if (known !== undefined) {
+      return known as Promise<T>;
+    }
+    const reading = read();
+    this.shared.set(key, reading);
+    return reading;
   }
 
   /** Records that `source` failed; its items stay as the last refresh left them. */

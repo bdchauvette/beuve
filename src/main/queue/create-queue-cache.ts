@@ -2,9 +2,11 @@ import type { QueueCiView } from '#contract/ipc-contract.ts';
 import type { RemoteBranchTip, RepositoryDetails } from '#internal/github/branch-ref.ts';
 import type { Comparison } from '#internal/github/compare-commits.ts';
 import type { CiEtags } from '#internal/github/get-ci-status.ts';
+import type { ReviewRequestEvent } from '#internal/github/list-review-request-events.ts';
 import type { PullRequestReview, ReviewRequests } from '#internal/github/pull-request-review.ts';
 import type { PullRequest } from '#internal/github/pull-request.ts';
 import type { SearchResults } from '#internal/github/search-pull-requests.ts';
+import type { Stopwatch } from '#x/time/stopwatch.ts';
 
 /** A search's last answer and the ETag to ask with. */
 export interface CachedSearch {
@@ -34,10 +36,24 @@ export interface CachedBranches {
   readonly tips: readonly RemoteBranchTip[];
 }
 
-/** The head branches of a repository's open pull requests. */
+/** A repository's open pull requests (one page of the most recently updated). */
 export interface CachedOpenPulls {
   readonly etag: string | undefined;
-  readonly heads: ReadonlySet<string>;
+  readonly pulls: readonly PullRequest[];
+}
+
+/** When the viewer was asked to review a pull request, as of its `updated_at`. */
+export interface CachedRequestEvents {
+  readonly updatedAt: string;
+  /** `undefined` when GitHub had more events than are read, so the latest may be missing. */
+  readonly events: readonly ReviewRequestEvent[] | undefined;
+}
+
+/** The viewer's teams on a host, as `org/slug` lowercase, and how long ago they were read. */
+export interface CachedTeams {
+  readonly age: Stopwatch;
+  /** `undefined` when they could not be read (a token without `read:org`). */
+  readonly teams: ReadonlySet<string> | undefined;
 }
 
 /** A branch compared with the default branch, for one head. */
@@ -57,6 +73,9 @@ export interface QueueCache {
   readonly viewers: Map<string, string | undefined>;
   readonly searches: Map<string, CachedSearch>;
   readonly pulls: Map<string, CachedPull>;
+  readonly requestEvents: Map<string, CachedRequestEvents>;
+  /** By host. */
+  readonly teams: Map<string, CachedTeams>;
   readonly ci: Map<string, CachedCi>;
   readonly repositories: Map<string, RepositoryDetails>;
   /** By repository key and prefix. */
@@ -72,6 +91,8 @@ export function createQueueCache(): QueueCache {
     viewers: new Map(),
     searches: new Map(),
     pulls: new Map(),
+    requestEvents: new Map(),
+    teams: new Map(),
     ci: new Map(),
     repositories: new Map(),
     branches: new Map(),
