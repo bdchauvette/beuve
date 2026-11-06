@@ -175,7 +175,7 @@ const estimatedSeparatorHeight = 32;
 /**
  * One file of the review diff (ADR 0018, 0025): a header with its status, path and line counts,
  * the call-stack peek portal while it is
- * open, and the patch rendered by `@pierre/diffs` with Alabaster-style highlighting. The diff mounts while the stream sets `mounted` (the card is near
+ * open, and the patch rendered by `@pierre/diffs` with beuve's syntax highlighting (ADR 0119). The diff mounts while the stream sets `mounted` (the card is near
  * the viewport); otherwise a placeholder of the diff's last or estimated height stands in. If the
  * library fails to render, the card falls back to a plain `<pre>` of the patch. Staged URA items
  * show as subtle markers under their lines and the Add Note composer opens under the lines it stages.
