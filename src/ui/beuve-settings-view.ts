@@ -14,6 +14,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
+import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { formatControlStyles } from './format-control-styles.ts';
@@ -166,6 +167,8 @@ export class BeuveSettingsView extends LitElement {
   @state() accessor github: GithubAuthStatusView | undefined;
   @state() accessor claude: ClaudeStatusView | undefined;
   @state() accessor error = '';
+  /** What opening the language server configuration did last, for the row's detail line. */
+  @state() accessor languageServersNote = '';
 
   /** Reads every setting and account afresh. */
   private async load(): Promise<void> {
@@ -231,6 +234,21 @@ export class BeuveSettingsView extends LitElement {
       this.editors = saved.value;
     } else {
       this.error = saved.error.message;
+    }
+  }
+
+  /** Opens `language-servers.json` in the reviewer's editor, creating an empty one if there is none (ADR 0111). */
+  private async openLanguageServers(): Promise<void> {
+    const { api: bridge } = this;
+    if (bridge === undefined) {
+      return;
+    }
+    const opened = await bridge.invoke('language-servers:open-config');
+    if (opened.ok) {
+      this.error = '';
+      this.languageServersNote = describeOpenedConfig(opened.value);
+    } else {
+      this.error = opened.error.message;
     }
   }
 
@@ -443,6 +461,33 @@ export class BeuveSettingsView extends LitElement {
       </div>`;
   }
 
+  /**
+   * Language servers beyond beuve's own, and changes to them, are configured in a JSON file the
+   * reviewer edits (ADR 0111): the button opens it, and Review › Restart Language Servers reads it
+   * again.
+   */
+  private renderLanguageServers(): TemplateResult {
+    return html`<h2>Language servers</h2>
+      <div class="group">
+        <div class="row" data-setting="language-servers">
+          <span>Configuration</span>
+          <span>
+            <button
+              type="button"
+              @click=${(): void => {
+                void this.openLanguageServers();
+              }}
+            >
+              Open language-servers.json
+            </button>
+            <div class="detail">
+              ${this.languageServersNote === '' ? defaultLanguageServersNote : this.languageServersNote}
+            </div>
+          </span>
+        </div>
+      </div>`;
+  }
+
   private renderGithub(): TemplateResult {
     if (this.github === undefined) {
       return renderChecking();
@@ -480,7 +525,7 @@ export class BeuveSettingsView extends LitElement {
     const { display } = this;
     return html`
       ${display === undefined ? nothing : html`${this.renderReview(display)} ${this.renderDiff(display)}`}
-      ${this.renderAccounts()}
+      ${this.renderAccounts()} ${this.renderLanguageServers()}
       <beuve-model-settings .api=${this.api}></beuve-model-settings>
       ${this.error === '' ? nothing : html`<p class="error" role="alert">${this.error}</p>`}
     `;
@@ -488,6 +533,9 @@ export class BeuveSettingsView extends LitElement {
 }
 
 const githubPrefix = /^GitHub: /u;
+
+const defaultLanguageServersNote =
+  'Read from ~/.config/beuve and from beuve’s own settings folder, the second winning. Restart Language Servers (Review menu) reads it again.';
 
 const orders: readonly (readonly [ReviewOrderMode, string])[] = [
   ['path', 'Path'],

@@ -376,15 +376,28 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     expect(lsp.status()).toStrictEqual([]);
   });
 
-  test('starts a project server the trust check allows', async ({
+  test('starts a project server the trust check allows, from a program inside the checkout', async ({
     expect,
     closing,
     typescriptProject: project,
     fakeServerScript,
   }) => {
+    mkdirSync(path.join(project.root, 'tools'));
+    writeFileSync(
+      path.join(project.root, 'tools/fake-ls'),
+      `#!/bin/sh\nexec '${process.execPath}' '${fakeServerScript}' normal\n`,
+      { mode: 0o755 },
+    );
     const asked: ServerTrustRequest[] = [];
     const lsp = createLspMultiplexer({
-      servers: [{ ...fakeServer(fakeServerScript, 'normal'), source: 'project' }],
+      servers: [
+        {
+          ...fakeServer(fakeServerScript, 'normal'),
+          source: 'project',
+          command: 'tools/fake-ls',
+          args: [],
+        },
+      ],
       trust: (request) => {
         asked.push(request);
         return { allowed: true };
@@ -393,6 +406,32 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     closing(lsp);
     okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
     expect(asked).toMatchObject([{ kind: 'server-program', serverId: 'fake', source: 'project' }]);
+  });
+
+  test('does not run a project program that is outside the checkout, even when trusted', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        {
+          ...fakeServer(fakeServerScript, 'normal'),
+          source: 'project',
+          command: '../escape',
+          args: [],
+        },
+      ],
+      trust: () => {
+        return { allowed: true };
+      },
+    });
+    closing(lsp);
+    await expect(lsp.prepareCallHierarchy(scriptedRequest(project.root))).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'server-not-found', command: '../escape' },
+    });
   });
 
   test('finds its server through the environment given for its checkout', async ({

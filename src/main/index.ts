@@ -16,6 +16,8 @@ import { openAppDatabase } from './database/open-app-database.ts';
 import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
 import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
+import { createLanguageServerRegistry } from './language-servers/create-language-server-registry.ts';
+import { languageServersConfigPaths } from './language-servers/language-servers-config-paths.ts';
 import { createShellEnvironments } from './shell-environment/create-shell-environments.ts';
 import { readShellEnvironment } from './shell-environment/read-shell-environment.ts';
 import { secureUserData } from './secure-user-data.ts';
@@ -91,6 +93,16 @@ async function launch(): Promise<void> {
     // The environment language servers run in is the one the reviewer's login shell gives, as in an
     // IDE (ADR 0111): read once now, and per checkout. Not when a terminal started beuve (it
     // already has that environment) and not on Windows.
+    const languageServerPaths = languageServersConfigPaths({
+      xdgConfigHome: process.env['XDG_CONFIG_HOME'],
+      home: os.homedir(),
+      userData,
+    });
+    const languageServers = await createLanguageServerRegistry({
+      paths: languageServerPaths,
+      home: os.homedir(),
+      logger,
+    });
     let nodeCommand: string | undefined;
     if (nodeRuntime.ok) {
       nodeCommand = nodeRuntime.value.command;
@@ -113,6 +125,14 @@ async function launch(): Promise<void> {
         reviewEditsRoot: path.join(userData, 'review-edits'),
         nodeRuntime,
         shellEnvironments,
+        languageServers,
+        languageServerConfig: {
+          paths: languageServerPaths,
+          openPath: async (file) => {
+            return shell.openPath(file);
+          },
+          logger,
+        },
         editor: {
           settingsPath,
           platform: createSystemEditorPlatform({

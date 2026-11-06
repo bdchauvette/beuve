@@ -1,4 +1,5 @@
 import { readdirSync, realpathSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -13,6 +14,8 @@ import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/t
 import type { TestRepositories } from '#internal/git/testing/test.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { writeFakeLanguageServer } from '#internal/lsp/testing/write-fake-language-server.ts';
+import { createLanguageServerRegistry } from './language-servers/create-language-server-registry.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices } from './main-services.ts';
 import type { ShellEnvironments } from './shell-environment/create-shell-environments.ts';
@@ -447,6 +450,101 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
         services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 4, character: 10 }),
       ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
       expect(okValueFrom(services.lsp.status()).servers).toStrictEqual([]);
+    },
+  );
+
+  test(
+    'applies the reviewer’s language server configuration per repository, and re-reads it on restart',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories, tempDir, logger, signal }) => {
+      const file = path.join(tempDir, 'language-servers.json');
+      await writeFile(file, '{}', { signal });
+      const languageServers = await createLanguageServerRegistry({
+        paths: [file],
+        home: tempDir,
+        logger: logger.logger,
+      });
+      const services = createServices({ languageServers });
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const before = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(before).toMatchObject({ state: 'settled' });
+      expect(before.diagnostics).toHaveLength(1);
+
+      const elsewhere = {
+        match: { path: '/nowhere/**' },
+        servers: { typescript: { enabled: false } },
+      };
+      const here = { match: { path: repo.directory }, servers: { typescript: { enabled: false } } };
+      await writeFile(file, JSON.stringify({ overrides: [elsewhere, here] }), { signal });
+      okValueFrom(await services.lsp.restart({ sessionId }));
+      const off = okValueFrom(await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }));
+      expect(off).toMatchObject({ state: 'unavailable', diagnostics: [] });
+
+      await writeFile(file, JSON.stringify({ overrides: [elsewhere] }), { signal });
+      okValueFrom(await services.lsp.restart({ sessionId }));
+      const back = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(back.diagnostics).toHaveLength(1);
+    },
+  );
+
+  test(
+    'runs a server the configuration defines beside the built-in one, and tags each diagnostic with its server',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories, tempDir, logger, signal }) => {
+      const script = writeFakeLanguageServer(tempDir);
+      const file = path.join(tempDir, 'language-servers.json');
+      const custom = {
+        command: process.execPath,
+        args: [script, 'normal'],
+        extensions: { '.ts': 'typescript' },
+        diagnosticsQuietMs: 20,
+      };
+      await writeFile(file, JSON.stringify({ servers: { scripted: custom } }), { signal });
+      const languageServers = await createLanguageServerRegistry({
+        paths: [file],
+        home: tempDir,
+        logger: logger.logger,
+      });
+      const services = createServices({ languageServers });
+      const { sessionId } = await openTypescriptSession(services, repositories);
+      const answer = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(answer.state).toBe('settled');
+      const tagged = answer.diagnostics.map((item) => {
+        return [item.serverId, item.severity];
+      });
+      expect(tagged).toStrictEqual([
+        ['typescript', 'error'],
+        ['scripted', 'warning'],
+      ]);
+    },
+  );
+
+  test(
+    'says what is wrong with the configuration beside the diagnostics, and keeps beuve’s own servers',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories, tempDir, logger, signal }) => {
+      const file = path.join(tempDir, 'language-servers.json');
+      await writeFile(file, '{"servers":{"go":{"cmd":"gopls"}}}', { signal });
+      const languageServers = await createLanguageServerRegistry({
+        paths: [file],
+        home: tempDir,
+        logger: logger.logger,
+      });
+      const services = createServices({ languageServers });
+      const { sessionId } = await openTypescriptSession(services, repositories);
+      const answer = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(answer.state).toBe('settled');
+      expect(answer.diagnostics).toHaveLength(1);
+      expect(answer.notice).toContain(file);
+      expect(answer.notice).toContain('cmd');
     },
   );
 

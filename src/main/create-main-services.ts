@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   ClaudeStatusView,
   IpcResult,
+  OpenedConfigView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -22,6 +23,7 @@ import { systemSessionDeps } from '#internal/session/system-session-deps.ts';
 import { createSyntaxParser } from '#internal/syntax/create-syntax-parser.ts';
 import type { SyntaxParserOptions } from '#internal/syntax/create-syntax-parser.ts';
 import type { Logger } from '#x/log/create-logger.ts';
+import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -41,7 +43,14 @@ import { createGithubServices } from './github/create-github-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import { createOrderServices } from './order/create-order-services.ts';
 import { createReviewQueueServices } from './queue/create-review-queue-services.ts';
+import { createLanguageServerConfigServices } from './language-servers/create-language-server-config-services.ts';
+import type {
+  LanguageServerConfigServices,
+  LanguageServerConfigServicesOptions,
+} from './language-servers/create-language-server-config-services.ts';
+import type { LanguageServerRegistry } from './language-servers/create-language-server-registry.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
+import { createServerBindings } from './lsp/create-server-bindings.ts';
 import type {
   ShellEnvironment,
   ShellEnvironments,
@@ -104,6 +113,13 @@ export interface MainServicesOptions {
    * (ADR 0111); without them the servers get beuve's own environment.
    */
   readonly shellEnvironments?: ShellEnvironments;
+  /**
+   * The reviewer's `language-servers.json` files, read (ADR 0111); without them the language
+   * servers are beuve's own for every repository.
+   */
+  readonly languageServers?: LanguageServerRegistry;
+  /** Where the language server configuration can live, and how to open a file; for Settings. */
+  readonly languageServerConfig?: LanguageServerConfigServicesOptions;
   /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
   /**
@@ -216,10 +232,15 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   );
   const parser = createSyntaxParser(options.syntax);
   const { shellEnvironments } = options;
+  const builtinServers = languageServersFor(options.nodeRuntime);
+  const serverBindings = createServerBindings();
   const multiplexer = createLspMultiplexer({
-    servers: languageServersFor(options.nodeRuntime),
+    servers: builtinServers,
     trustWorkspaceBinaries: false,
     logger,
+    serversFor: (root: string) => {
+      return serverBindings.serversFor(root);
+    },
     ...(shellEnvironments !== undefined && {
       environmentFor: async (root: string): Promise<ShellEnvironment['variables']> => {
         const environment = await shellEnvironments.forRoot(root);
@@ -246,6 +267,13 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     multiplexer,
     worktrees,
     ...(shellEnvironments !== undefined && { environments: shellEnvironments }),
+    ...(options.languageServers !== undefined && {
+      servers: {
+        registry: options.languageServers,
+        bindings: serverBindings,
+        builtins: options.lsp?.servers ?? builtinServers,
+      },
+    }),
   });
   const registry = createModelRegistryStore(options.models?.settingsPath);
   const secrets = createSecretStore({
@@ -385,6 +413,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       hasBundledClaudeCode: options.models?.hasBundledClaudeCode ?? false,
       logger,
     }),
+    languageServerConfig: languageServerConfigServices(options),
     pruneWorktrees: async (): Promise<void> => {
       const stored = listSessions(options.db);
       let keep: WorktreeKeep[] = [];
@@ -410,6 +439,18 @@ export function createMainServices(options: MainServicesOptions): MainServices {
 /** The session the reviewer last opened, if any; GitHub polls it. */
 interface OpenSession {
   sessionId: string | undefined;
+}
+
+function languageServerConfigServices(options: MainServicesOptions): LanguageServerConfigServices {
+  if (options.languageServerConfig !== undefined) {
+    return createLanguageServerConfigServices(options.languageServerConfig);
+  }
+  return {
+    open: async (): Promise<IpcResult<OpenedConfigView>> => {
+      await Promise.resolve();
+      return err({ code: 'not-wired', message: 'the language server configuration is not wired' });
+    },
+  };
 }
 
 function languageServersFor(
