@@ -50,7 +50,6 @@
     "check": "npm run typecheck && npm run lint && npm run format:ci && npm run deps && npm run test",
     "start": "npm run build && electron .",
     "fetch-node": "node scripts/fetch-node.ts",
-    "check:gallery": "node scripts/check-gallery.ts",
     "check:packaged": "node scripts/check-packaged-app.ts",
     "check:signatures": "node scripts/check-signatures.ts",
     "dist:mac": "npm run build && node scripts/fetch-node.ts --target darwin-arm64 && node scripts/dist-mac.ts",
