@@ -30,7 +30,7 @@ export interface TextmateSettings {
  * stays free for the diff's own tints: definitions and numbers are bold, types are italic,
  * keywords and punctuation are muted, and names, property keys, operators and strings are regular
  * text. Comments are the one colored class. A declaration (a variable, constant or parameter) is a
- * definition too; where a grammar does not mark one, `grammar-injections.ts` adds the scope. Grammars tag names at use sites with the same
+ * definition too, where the language's grammar marks it as one. Grammars tag names at use sites with the same
  * `entity.name` scopes as definitions, so a rule takes calls, tags and commands back to regular;
  * the scope matcher prefers the longer selector. The same preference keeps whatever a comment or
  * string holds (a JSDoc tag, a regex quantifier, a quote) in the comment's or string's style.
@@ -147,7 +147,6 @@ const definitionScopes: readonly string[] = [
   'variable.parameter',
   'variable.other.assignment',
   'variable.other.for',
-  'variable.other.declaration',
   'variable.ruby',
   'source.ruby variable.other.block',
   'source.go variable.other.constant',
