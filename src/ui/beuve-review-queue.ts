@@ -69,7 +69,7 @@ export class BeuveReviewQueue extends LitElement {
 
       h2 {
         margin: 0 auto 0 0;
-        font-size: 15px;
+        font-size: 17px;
         font-weight: 600;
       }
 
