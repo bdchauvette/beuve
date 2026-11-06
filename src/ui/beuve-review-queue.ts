@@ -34,6 +34,8 @@ import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
+import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import './primitives/beuve-menu.ts';
 
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
@@ -57,6 +59,7 @@ export interface QueueOpenUrlDetail {
 @customElement('beuve-review-queue')
 export class BeuveReviewQueue extends LitElement {
   static override styles = [
+    menuItemStyles,
     emptyStateStyles,
     badgeStyles,
     statusDotStyles,
@@ -104,11 +107,6 @@ export class BeuveReviewQueue extends LitElement {
         display: inline-flex;
       }
 
-      header .button:has(+ [popover]:popover-open) {
-        background: var(--beuve-surface-hover);
-        color: var(--beuve-text);
-      }
-
       header button[aria-busy='true'] svg {
         animation: spin 1s linear infinite;
       }
@@ -117,81 +115,6 @@ export class BeuveReviewQueue extends LitElement {
         to {
           rotate: 1turn;
         }
-      }
-
-      #sort-button {
-        anchor-name: --queue-sort;
-      }
-
-      #group-button {
-        anchor-name: --queue-group;
-      }
-
-      #filter-button {
-        anchor-name: --queue-filter;
-      }
-
-      [popover] {
-        position: fixed;
-        inset: auto;
-        inset-block-start: anchor(bottom);
-        inset-inline-end: anchor(right);
-        margin: var(--beuve-space-1) 0 0;
-        min-inline-size: 180px;
-        max-block-size: 60vh;
-        overflow: auto;
-        padding: var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-surface);
-        box-shadow: var(--beuve-shadow-small);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-      }
-
-      #sort-menu {
-        position-anchor: --queue-sort;
-      }
-
-      #group-menu {
-        position-anchor: --queue-group;
-      }
-
-      #filter-menu {
-        position-anchor: --queue-filter;
-      }
-
-      [popover] h3 {
-        margin: var(--beuve-space-2) var(--beuve-space-2) 2px;
-        font: inherit;
-        color: var(--beuve-text-muted);
-      }
-
-      [popover] button {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-2);
-        inline-size: 100%;
-        padding: 2px var(--beuve-space-2);
-        border: 0;
-        border-radius: var(--beuve-radius-small);
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-align: start;
-      }
-
-      [popover] button:hover {
-        background: var(--beuve-bg);
-      }
-
-      [popover] button svg {
-        flex: none;
-        visibility: hidden;
-      }
-
-      [popover] button[aria-checked='true'] svg {
-        visibility: visible;
       }
 
       input[type='search'] {
@@ -444,13 +367,13 @@ export class BeuveReviewQueue extends LitElement {
           sort: ({ value }): void => {
             const sort = sortLabels.find(([id]) => id === value)?.[0];
             if (sort !== undefined) {
-              this.change({ ...this.prefs, sort }, '#sort-menu');
+              this.change({ ...this.prefs, sort });
             }
           },
           group: ({ value }): void => {
             const group = groupLabels.find(([id]) => id === value)?.[0];
             if (group !== undefined) {
-              this.change({ ...this.prefs, group }, '#group-menu');
+              this.change({ ...this.prefs, group });
             }
           },
           filter: ({ facet, value }): void => {
@@ -460,10 +383,7 @@ export class BeuveReviewQueue extends LitElement {
           },
           'clear-filters': (): void => {
             this.text = '';
-            this.change(
-              { ...this.prefs, filters: defaultReviewQueuePrefs.filters },
-              '#filter-menu',
-            );
+            this.change({ ...this.prefs, filters: defaultReviewQueuePrefs.filters });
           },
         },
       }),
@@ -478,10 +398,7 @@ export class BeuveReviewQueue extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
-  private change(prefs: ReviewQueuePrefsView, menu: string | undefined): void {
-    if (menu !== undefined) {
-      this.renderRoot.querySelector<HTMLElement>(menu)?.hidePopover();
-    }
+  private change(prefs: ReviewQueuePrefsView): void {
     this.emit('beuve-queue-prefs', prefs);
   }
 
@@ -490,7 +407,7 @@ export class BeuveReviewQueue extends LitElement {
     if (next === undefined) {
       return;
     }
-    this.change({ ...this.prefs, filters: next }, undefined);
+    this.change({ ...this.prefs, filters: next });
   }
 
   /** The rows in the order they show, groups flattened. */
@@ -646,62 +563,54 @@ export class BeuveReviewQueue extends LitElement {
 
   private renderSortMenu(): TemplateResult {
     const current = sortLabels.find(([id]) => id === this.prefs.sort)?.[1] ?? '';
-    return html`<span class="control">
+    return html`<beuve-menu class="control" label="Sort">
       <button
+        slot="trigger"
         class="button"
-        id="sort-button"
         type="button"
-        popovertarget="sort-menu"
-        aria-haspopup="menu"
         aria-label="Sort: ${current}"
         title="Sort the queue"
       >
         ${displayIcon('sort')}<span>${current}</span>${displayIcon('chevron')}
       </button>
-      <div id="sort-menu" popover role="menu" aria-label="Sort">
-        ${sortLabels.map(([id, label]) => {
-          return html`<button
-            type="button"
-            role="menuitemradio"
-            aria-checked=${id === this.prefs.sort ? 'true' : 'false'}
-            data-action="sort"
-            data-value=${id}
-          >
-            ${displayIcon('check')}${label}
-          </button>`;
-        })}
-      </div>
-    </span>`;
+      ${sortLabels.map(([id, label]) => {
+        return html`<button
+          type="button"
+          role="menuitemradio"
+          aria-checked=${id === this.prefs.sort ? 'true' : 'false'}
+          data-action="sort"
+          data-value=${id}
+        >
+          ${displayIcon('check')}${label}
+        </button>`;
+      })}
+    </beuve-menu>`;
   }
 
   private renderGroupMenu(): TemplateResult {
     const current = groupLabels.find(([id]) => id === this.prefs.group)?.[1] ?? '';
-    return html`<span class="control">
+    return html`<beuve-menu class="control" label="Group by">
       <button
+        slot="trigger"
         class="button"
-        id="group-button"
         type="button"
-        popovertarget="group-menu"
-        aria-haspopup="menu"
         aria-label="Group: ${current}"
         title="Group the queue"
       >
         ${queueIcon('group')}<span>${current}</span>${displayIcon('chevron')}
       </button>
-      <div id="group-menu" popover role="menu" aria-label="Group by">
-        ${groupLabels.map(([id, label]) => {
-          return html`<button
-            type="button"
-            role="menuitemradio"
-            aria-checked=${id === this.prefs.group ? 'true' : 'false'}
-            data-action="group"
-            data-value=${id}
-          >
-            ${displayIcon('check')}${label}
-          </button>`;
-        })}
-      </div>
-    </span>`;
+      ${groupLabels.map(([id, label]) => {
+        return html`<button
+          type="button"
+          role="menuitemradio"
+          aria-checked=${id === this.prefs.group ? 'true' : 'false'}
+          data-action="group"
+          data-value=${id}
+        >
+          ${displayIcon('check')}${label}
+        </button>`;
+      })}
+    </beuve-menu>`;
   }
 
   private renderFilterMenu(all: readonly ReviewQueueItemView[]): TemplateResult {
@@ -726,16 +635,14 @@ export class BeuveReviewQueue extends LitElement {
       </button>`;
     };
     const section = (title: string, options: readonly FilterOption[]): TemplateResult => {
-      return html`<h3>${title}</h3>
+      return html`<h3 class="menu-heading">${title}</h3>
         ${options.map((entry) => option(entry))}`;
     };
-    return html`<span class="control">
+    return html`<beuve-menu class="control" label="Filters">
       <button
+        slot="trigger"
         class="button"
-        id="filter-button"
         type="button"
-        popovertarget="filter-menu"
-        aria-haspopup="menu"
         aria-label="Filters${active === 0 ? '' : ` (${String(active)} on)`}"
         title="Filter the queue"
       >
@@ -743,67 +650,65 @@ export class BeuveReviewQueue extends LitElement {
           active === 0 ? nothing : html`<span class="badge count">${active}</span>`
         }
       </button>
-      <div id="filter-menu" popover role="menu" aria-label="Filters">
-        ${section('Show', [
-          {
-            facet: 'flag',
-            value: 'waiting',
-            label: 'Your pull requests waiting on others',
-            isOn: filters.showWaitingOnOthers,
-          },
-          { facet: 'flag', value: 'drafts', label: 'Hide drafts', isOn: filters.hideDrafts },
-        ])}
-        ${section(
-          'Kind',
-          kindLabels.map(([value, label]) => {
-            return { facet: 'kind', value, label, isOn: filters.kinds.includes(value) };
-          }),
-        )}
-        ${section(
-          'Requested',
-          requestLabels.map(([value, label]) => {
-            return { facet: 'request', value, label, isOn: filters.request === value };
-          }),
-        )}
-        ${section(
-          'Turn',
-          turnLabels.map(([value, label]) => {
-            return { facet: 'turn', value, label, isOn: filters.turns.includes(value) };
-          }),
-        )}
-        ${section(
-          'Your review',
-          localLabels.map(([value, label]) => {
-            return { facet: 'local', value, label, isOn: filters.local.includes(value) };
-          }),
-        )}
-        ${section(
-          'CI',
-          ciLabels.map(([value, label]) => {
-            return { facet: 'ci', value, label, isOn: filters.ci.includes(value) };
-          }),
-        )}
-        ${section(
-          'Repository',
-          repositories.map((value) => {
-            return {
-              facet: 'repository',
-              value,
-              label: value.replace(githubPrefix, ''),
-              isOn: filters.repositories.includes(value),
-            };
-          }),
-        )}
-        ${section(
-          'Author',
-          authors.map((value) => {
-            return { facet: 'author', value, label: value, isOn: filters.authors.includes(value) };
-          }),
-        )}
-        <h3></h3>
-        <button type="button" role="menuitem" data-action="clear-filters">Clear filters</button>
-      </div>
-    </span>`;
+      ${section('Show', [
+        {
+          facet: 'flag',
+          value: 'waiting',
+          label: 'Your pull requests waiting on others',
+          isOn: filters.showWaitingOnOthers,
+        },
+        { facet: 'flag', value: 'drafts', label: 'Hide drafts', isOn: filters.hideDrafts },
+      ])}
+      ${section(
+        'Kind',
+        kindLabels.map(([value, label]) => {
+          return { facet: 'kind', value, label, isOn: filters.kinds.includes(value) };
+        }),
+      )}
+      ${section(
+        'Requested',
+        requestLabels.map(([value, label]) => {
+          return { facet: 'request', value, label, isOn: filters.request === value };
+        }),
+      )}
+      ${section(
+        'Turn',
+        turnLabels.map(([value, label]) => {
+          return { facet: 'turn', value, label, isOn: filters.turns.includes(value) };
+        }),
+      )}
+      ${section(
+        'Your review',
+        localLabels.map(([value, label]) => {
+          return { facet: 'local', value, label, isOn: filters.local.includes(value) };
+        }),
+      )}
+      ${section(
+        'CI',
+        ciLabels.map(([value, label]) => {
+          return { facet: 'ci', value, label, isOn: filters.ci.includes(value) };
+        }),
+      )}
+      ${section(
+        'Repository',
+        repositories.map((value) => {
+          return {
+            facet: 'repository',
+            value,
+            label: value.replace(githubPrefix, ''),
+            isOn: filters.repositories.includes(value),
+          };
+        }),
+      )}
+      ${section(
+        'Author',
+        authors.map((value) => {
+          return { facet: 'author', value, label: value, isOn: filters.authors.includes(value) };
+        }),
+      )}
+      <h3></h3>
+      <button type="button" role="menuitem" data-action="clear-filters">Clear filters</button>
+    </beuve-menu>`;
   }
 
   /** Puts the keyboard on the list. */

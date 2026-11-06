@@ -65,6 +65,8 @@ import type { ReviewStops } from './step-review-position-skipping.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
+import { menuItemStyles } from './primitives/menu-item-styles.ts';
+import './primitives/beuve-menu.ts';
 
 /**
  * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
@@ -161,6 +163,7 @@ export interface OpenCommitDetail {
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
   static override styles = [
+    menuItemStyles,
     segmentedStyles,
     buttonStyles,
     zoneStyles,
@@ -340,7 +343,6 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .order-button {
-        anchor-name: --order-button;
         border-color: var(--beuve-border);
       }
 
@@ -350,48 +352,6 @@ export class BeuveDiffStream extends LitElement {
         block-size: 5px;
         border-radius: 50%;
         background: var(--beuve-warn-solid);
-      }
-
-      .order [popover] {
-        position: fixed;
-        position-anchor: --order-button;
-        inset: auto;
-        inset-block-start: anchor(bottom);
-        inset-inline-end: anchor(right);
-        margin: var(--beuve-space-1) 0 0;
-        min-inline-size: 140px;
-        padding: var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-surface);
-        box-shadow: var(--beuve-shadow-small);
-        color: var(--beuve-text);
-      }
-
-      .order [popover] button {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-2);
-        inline-size: 100%;
-        padding: 2px var(--beuve-space-2);
-        border: 0;
-        border-radius: var(--beuve-radius-small);
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-align: start;
-      }
-
-      .order [popover] button:hover {
-        background: var(--beuve-surface-hover, var(--beuve-bg));
-      }
-
-      .order [popover] button svg {
-        visibility: hidden;
-      }
-
-      .order [popover] button[aria-checked='true'] svg {
-        visibility: visible;
       }
 
       .tools {
@@ -1429,19 +1389,18 @@ export class BeuveDiffStream extends LitElement {
     const fallback = describeOrderFallback(order);
     const help = 'The order files are listed in; config and mechanical files go last (/order)';
     const current = orderModes.find(({ mode }) => mode === requested)?.label ?? 'Path';
-    return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}">
-      <button
-        type="button"
-        class="button quiet order-button"
-        tabindex="-1"
-        popovertarget="order-menu"
-        aria-haspopup="menu"
-        aria-label="File order: ${current}"
-        title=${fallback === undefined ? help : `${fallback}. ${help}`}
-      >
-        ${displayIcon('sort')}<span>${current}</span>${displayIcon('chevron')}
-      </button>
-      <div id="order-menu" popover role="menu" aria-label="File order">
+    return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}"
+      ><beuve-menu label="File order">
+        <button
+          slot="trigger"
+          type="button"
+          class="button quiet order-button"
+          tabindex="-1"
+          aria-label="File order: ${current}"
+          title=${fallback === undefined ? help : `${fallback}. ${help}`}
+        >
+          ${displayIcon('sort')}<span>${current}</span>${displayIcon('chevron')}
+        </button>
         ${orderModes.map(({ mode, label }) => {
           return html`<button
             type="button"
@@ -1454,12 +1413,11 @@ export class BeuveDiffStream extends LitElement {
             ${displayIcon('check')}${label}
           </button>`;
         })}
-      </div>
-    </span>`;
+      </beuve-menu></span
+    >`;
   }
 
   private chooseOrder(mode: ReviewOrderMode): void {
-    this.renderRoot.querySelector<HTMLElement>('#order-menu')?.hidePopover();
     if (mode !== (this.display.reviewOrder ?? 'path')) {
       this.changeDisplay({ reviewOrder: mode });
     }
