@@ -19,6 +19,11 @@ export interface SessionRemote {
 export interface RemoteLookup {
   readonly session: Session;
   readonly repository: GithubRemote;
+  /**
+   * `expected` when a missing remote is a known state the caller reports itself (a fork's
+   * upstream the clone has no remote for, ADR 0112), logged at debug instead of on every poll.
+   */
+  readonly missingRemote?: 'warn' | 'expected';
 }
 
 /**
@@ -27,7 +32,7 @@ export interface RemoteLookup {
  */
 export async function openSessionRemote(
   context: GithubContext,
-  { session, repository }: RemoteLookup,
+  { session, repository, missingRemote = 'warn' }: RemoteLookup,
   signal: AbortSignal,
 ): Promise<SessionRemote | undefined> {
   const { logger } = context.session;
@@ -42,6 +47,10 @@ export async function openSessionRemote(
     remote = findMatchingRemote(remotes.value, repository);
   }
   if (remote === undefined) {
+    if (missingRemote === 'expected') {
+      logger.debug('github poll: no remote for the repository', { repository });
+      return undefined;
+    }
     logger.warn('github poll: no remote for the repository', { repository });
     return undefined;
   }

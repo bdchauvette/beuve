@@ -1,6 +1,8 @@
 import type { RemoteBranchView } from '#contract/ipc-contract.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
+import { pullRequestLabelFrom } from './pull-request-label-from.ts';
+
 /** The status bar's followed-branch segment (ADR 0112). */
 export interface RemoteBranchLine {
   readonly tone: 'ok' | 'warn' | 'muted';
@@ -30,7 +32,7 @@ export function describeRemoteBranch(branch: RemoteBranchView): RemoteBranchLine
   if (pullRequest?.sessionId !== undefined) {
     return {
       tone: 'muted',
-      text: `${name} · PR ${pullRequestName(branch, pullRequest)} has its own review`,
+      text: `${name} · PR ${pullRequestLabelFrom(branch, pullRequest)} has its own review`,
       title: `${title} Its pull request is open in another review session.`,
     };
   }
@@ -38,24 +40,9 @@ export function describeRemoteBranch(branch: RemoteBranchView): RemoteBranchLine
     const repository = revealFormatControls(`${pullRequest.owner}/${pullRequest.repo}`);
     return {
       tone: 'warn',
-      text: `${name} · PR ${pullRequestName(branch, pullRequest)} is open; add a remote for ${repository} to review it as a pull request`,
+      text: `${name} · PR ${pullRequestLabelFrom(branch, pullRequest)} is open; add a remote for ${repository} to review it as a pull request`,
       title: `${title} beuve never changes the clone's remotes; once one names ${repository}, this review continues as the pull request.`,
     };
   }
   return { tone: 'ok', text: `Following ${name}`, title };
-}
-
-/** `#7` in the branch's own repository, `owner/repo#7` in an upstream of its fork. */
-function pullRequestName(
-  branch: RemoteBranchView,
-  pullRequest: NonNullable<RemoteBranchView['pullRequest']>,
-): string {
-  const number = `#${String(pullRequest.number)}`;
-  const isOwn =
-    pullRequest.owner.toLowerCase() === branch.owner.toLowerCase() &&
-    pullRequest.repo.toLowerCase() === branch.repo.toLowerCase();
-  if (isOwn) {
-    return number;
-  }
-  return `${revealFormatControls(`${pullRequest.owner}/${pullRequest.repo}`)}${number}`;
 }

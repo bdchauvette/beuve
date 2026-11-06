@@ -17,6 +17,7 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import type { GithubPostState } from './github-post-state.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
+import { pullRequestLabelFrom } from './pull-request-label-from.ts';
 import type { ReviewRef } from './review-ref.ts';
 import type { TimelineState } from './timeline-state.ts';
 
@@ -128,10 +129,12 @@ export class GithubController implements ReactiveController {
     this.patch({ branch: event.branch });
     const name = event.branch.branch;
     if (event.promoted) {
-      this.environment.notify({
-        tone: 'info',
-        text: `${name} has a pull request now; this review continues as #${String(event.branch.pullRequest?.number ?? '')}.`,
-      });
+      const { pullRequest } = event.branch;
+      let text = `${name} has a pull request now; this review continues as its pull request.`;
+      if (pullRequest !== undefined) {
+        text = `${name} has a pull request now; this review continues as ${pullRequestLabelFrom(event.branch, pullRequest)}.`;
+      }
+      this.environment.notify({ tone: 'info', text });
       void this.environment.selectSession(event.sessionId);
       return;
     }
