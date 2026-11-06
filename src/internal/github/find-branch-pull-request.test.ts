@@ -30,7 +30,10 @@ describe('findBranchPullRequest', () => {
     });
     const found = await findBranchPullRequest(
       client,
-      { owner: 'octo-org', repo: 'hello-world', branch: 'claude/x' },
+      {
+        base: { owner: 'octo-org', repo: 'hello-world' },
+        head: { owner: 'octo-org', repo: 'hello-world', branch: 'claude/x' },
+      },
       { signal },
     );
     expect(found).toMatchObject({
@@ -55,7 +58,10 @@ describe('findBranchPullRequest', () => {
     await expect(
       findBranchPullRequest(
         client,
-        { owner: 'octo-org', repo: 'hello-world', branch: 'claude/x' },
+        {
+          base: { owner: 'octo-org', repo: 'hello-world' },
+          head: { owner: 'octo-org', repo: 'hello-world', branch: 'claude/x' },
+        },
         { signal },
       ),
     ).resolves.toStrictEqual({
@@ -71,9 +77,41 @@ describe('findBranchPullRequest', () => {
     await expect(
       findBranchPullRequest(
         client,
-        { owner: 'o', repo: 'r', branch: 'b' },
+        { base: { owner: 'o', repo: 'r' }, head: { owner: 'o', repo: 'r', branch: 'b' } },
         { etag: '"p1"', signal },
       ),
     ).resolves.toStrictEqual({ ok: true, value: { kind: 'not-modified' } });
+  });
+
+  test('asks an upstream for the pull request from a fork’s branch', async ({
+    expect,
+    fakeGithub,
+    signal,
+  }) => {
+    const { pullRequest } = fixtures;
+    const fromFork = { ...pullRequest, number: 3 };
+    const fromOtherFork = {
+      ...pullRequest,
+      number: 2,
+      head: {
+        ...pullRequest.head,
+        repo: { ...pullRequest.head.repo, full_name: 'someone/hello-world' },
+      },
+    };
+    const { client, requests } = fakeGithub(() => {
+      return { status: 200, body: [fromFork, fromOtherFork] };
+    });
+    const found = await findBranchPullRequest(
+      client,
+      {
+        base: { owner: 'octo-org', repo: 'hello-world' },
+        head: { owner: 'forker', repo: 'hello-world', branch: 'new-topic' },
+      },
+      { signal },
+    );
+    expect(found).toMatchObject({ ok: true, value: { kind: 'modified', value: { number: 3 } } });
+    expect(requests[0]?.url).toBe(
+      'https://api.github.com/repos/octo-org/hello-world/pulls?state=open&head=forker%3Anew-topic&per_page=100',
+    );
   });
 });

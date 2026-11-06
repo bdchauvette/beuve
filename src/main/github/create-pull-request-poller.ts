@@ -291,7 +291,7 @@ export function createPullRequestPoller(options: PullRequestPollerOptions): Pull
     session: Session,
     state: PollState,
   ): Promise<Temporal.Duration | undefined> => {
-    state.branch ??= { polls: 0 };
+    state.branch ??= { polls: 0, pulls: new Map() };
     const polled = await pollRemoteBranch(context, {
       session,
       state: state.branch,

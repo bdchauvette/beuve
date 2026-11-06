@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { describe } from 'vitest';
 
 import type { OpenRemoteBranchResponse, RemoteBranchUpdatedView } from '#contract/ipc-contract.ts';
@@ -205,6 +207,197 @@ describe('remote-branch sessions (ADR 0112; integration: fake GitHub, local bare
     ).resolves.toMatchObject({ ok: true, value: { kind: 'failed', failure: 'not-found' } });
   });
 });
+
+describe('remote-branch sessions on a fork (ADR 0112 amendment: pull requests from forks)', () => {
+  test('finds the pull request a fork’s branch opened upstream and promotes to it', async ({
+    expect,
+    services,
+    world,
+    signal,
+  }) => {
+    const { api, firstHead } = world;
+    await addFork(world);
+    const events = recordBranchEvents(services);
+    const opened = await openForkBranch(services, world.clone.directory);
+    expect(opened).toMatchObject({
+      kind: 'opened',
+      session: { source: { kind: 'remote-branch', owner: 'forker', repo: 'hello-world' } },
+      branch: { owner: 'forker', headSha: firstHead },
+    });
+    expect(opened).not.toHaveProperty('branch.pullRequest');
+    const sessionId = openedId(opened);
+    okValueFrom(await services.sessions.markReviewed({ sessionId, expectedHeadSha: firstHead }));
+
+    await openForkPullRequest(world);
+    await services.github.pollNow(sessionId);
+    expect(api.log).toContain(
+      'GET /repos/octo-org/hello-world/pulls?state=open&head=forker%3Aclaude%2Ffix&per_page=100',
+    );
+    expect(events).toMatchObject([
+      {
+        sessionId,
+        promoted: true,
+        branch: { owner: 'forker', pullRequest: { owner: 'octo-org', number: 8, sessionId } },
+      },
+    ]);
+    const promoted = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
+    expect(promoted.session).toMatchObject({
+      id: sessionId,
+      lastReviewedSha: firstHead,
+      source: {
+        kind: 'github-pull-request',
+        owner: 'octo-org',
+        repo: 'hello-world',
+        number: 8,
+        baseRef: 'refs/beuve/pr/8/base',
+      },
+    });
+    expect(okValueFrom(services.sessions.list())).toHaveLength(1);
+  });
+
+  test('opens the upstream pull request instead when the fork’s branch already has one', async ({
+    expect,
+    services,
+    world,
+  }) => {
+    await addFork(world);
+    await openForkPullRequest(world);
+    await expect(openForkBranch(services, world.clone.directory)).resolves.toMatchObject({
+      kind: 'opened',
+      session: { source: { kind: 'github-pull-request', owner: 'octo-org', number: 8 } },
+    });
+  });
+
+  test('without a remote for the upstream, keeps following and promotes once one is added', async ({
+    expect,
+    services,
+    world,
+    signal,
+  }) => {
+    const { clone } = world;
+    await addFork(world);
+    await clone.git('remote', 'remove', 'origin');
+    await openForkPullRequest(world);
+    const events = recordBranchEvents(services);
+    const opened = await openForkBranch(services, clone.directory);
+    expect(opened).toMatchObject({
+      kind: 'opened',
+      session: { source: { kind: 'remote-branch', owner: 'forker' } },
+      branch: {
+        pullRequest: {
+          owner: 'octo-org',
+          repo: 'hello-world',
+          number: 8,
+          htmlUrl: 'https://github.com/octo-org/hello-world/pull/8',
+          needsRemote: true,
+        },
+      },
+    });
+    const sessionId = openedId(opened);
+
+    await services.github.pollNow(sessionId);
+    expect(events).toStrictEqual([]);
+    const branch = okValueFrom(await services.github.getBranch(sessionId)).branch;
+    expect(branch.pullRequest).toMatchObject({ number: 8, needsRemote: true });
+    await expect(clone.git('remote')).resolves.toBe('fork');
+
+    await clone.git('remote', 'add', 'origin', 'https://github.com/octo-org/hello-world.git');
+    await services.github.pollNow(sessionId);
+    expect(events).toMatchObject([{ sessionId, promoted: true }]);
+    const promoted = okValueFrom(await services.sessions.getReview({ sessionId }, { signal }));
+    expect(promoted.session.source).toMatchObject({
+      kind: 'github-pull-request',
+      owner: 'octo-org',
+      number: 8,
+    });
+  });
+
+  test('leaves a fork’s branch session alone when the upstream pull request has a session', async ({
+    expect,
+    services,
+    world,
+    signal,
+  }) => {
+    await addFork(world);
+    const events = recordBranchEvents(services);
+    const sessionId = openedId(await openForkBranch(services, world.clone.directory));
+    await openForkPullRequest(world);
+    const pullSession = okValueFrom(
+      await services.github.openPullRequest(
+        { ref: 'octo-org/hello-world#8', repoPath: world.clone.directory },
+        { signal },
+      ),
+    );
+    expect(pullSession).toMatchObject({ kind: 'opened' });
+
+    await services.github.pollNow(sessionId);
+    const ids = okValueFrom(services.sessions.list()).map((summary) => summary.id);
+    expect(ids).toHaveLength(2);
+    expect(events).toMatchObject([
+      {
+        sessionId,
+        promoted: false,
+        branch: {
+          pullRequest: {
+            owner: 'octo-org',
+            number: 8,
+            sessionId: ids.find((id) => id !== sessionId),
+          },
+        },
+      },
+    ]);
+  });
+});
+
+/**
+ * Forks the world's repository as `forker/hello-world`: a second bare remote holding `main` and
+ * `claude/fix` at the first head, the fake API's fork, and the clone's `fork` remote for it.
+ */
+async function addFork(world: GithubWorld): Promise<void> {
+  const { upstream, clone, api, baseSha, firstHead } = world;
+  const bare = path.join(path.dirname(world.bare), 'fork.git');
+  const url = 'https://github.com/forker/hello-world.git';
+  await upstream.git('init', '--quiet', '--bare', bare);
+  await upstream.git(
+    'push',
+    '--quiet',
+    bare,
+    `${baseSha}:refs/heads/main`,
+    `${firstHead}:refs/heads/claude/fix`,
+  );
+  await clone.git('remote', 'add', 'fork', url);
+  await clone.git('config', `url.${bare}.insteadOf`, url);
+  api.forks.set('forker/hello-world', {
+    owner: 'forker',
+    repo: 'hello-world',
+    branches: new Map([['claude/fix', firstHead]]),
+  });
+}
+
+/** Opens pull request 8 from `forker:claude/fix` into the world's repository. */
+async function openForkPullRequest(world: GithubWorld): Promise<void> {
+  await world.upstream.git('push', '--quiet', world.bare, `${world.firstHead}:refs/pull/8/head`);
+  const pull = world.api.pullRequests.get(7) ?? fail();
+  world.api.pullRequests.set(8, {
+    ...pull,
+    number: 8,
+    headRef: 'claude/fix',
+    headSha: world.firstHead,
+    headRepository: { owner: 'forker', repo: 'hello-world' },
+  });
+}
+
+async function openForkBranch(
+  services: MainServices,
+  repoPath: string,
+): Promise<OpenRemoteBranchResponse> {
+  return okValueFrom(
+    await services.github.openBranch({
+      ref: 'https://github.com/forker/hello-world/tree/claude/fix',
+      repoPath,
+    }),
+  );
+}
 
 /** Pushes `sha` to the bare remote's `claude/fix` and tells the fake API. */
 async function publishBranch(world: GithubWorld, sha: string): Promise<void> {

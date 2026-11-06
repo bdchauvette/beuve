@@ -1,19 +1,19 @@
 import type { RemoteBranchUpdatedView } from '#contract/ipc-contract.ts';
 import type { AuthError } from '#internal/auth/auth-error.ts';
 import type { BranchRef, RemoteBranchTip } from '#internal/github/branch-ref.ts';
-import { findBranchPullRequest } from '#internal/github/find-branch-pull-request.ts';
 import { findStoredBranch } from '#internal/github/find-stored-branch.ts';
 import { getBranch } from '#internal/github/get-branch.ts';
 import type { GithubError } from '#internal/github/github-error.ts';
-import type { PullRequest } from '#internal/github/pull-request.ts';
 import { saveStoredBranch } from '#internal/github/save-stored-branch.ts';
-import type { StoredBranch } from '#internal/github/stored-branch.ts';
+import type { BranchPullRequestRef, StoredBranch } from '#internal/github/stored-branch.ts';
 import type { Session } from '#internal/session/session.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 
 import type { GithubContext } from './github-context.ts';
 import { githubFailure } from './github-failure.ts';
+import { lookUpBranchPullRequest } from './look-up-branch-pull-request.ts';
+import type { BranchPullRequest, PullRequestAnswers } from './look-up-branch-pull-request.ts';
 import { moveSessionHead } from './move-session-head.ts';
 import { openSessionRemote } from './open-session-remote.ts';
 import { promoteBranchSession } from './promote-branch-session.ts';
@@ -23,7 +23,8 @@ import { syncRemoteBranch } from './sync-remote-branch.ts';
 /** What one remote-branch session's polls remember between polls (ADR 0112). */
 export interface BranchPollState {
   branchEtag?: string | undefined;
-  pullsEtag?: string | undefined;
+  /** What each repository asked for the branch's pull request last answered, with its ETag. */
+  readonly pulls: PullRequestAnswers;
   /** The head as the last poll left it; another writer moving it drops `branchEtag`. */
   headSeen?: string | undefined;
   /** Polls so far, for the pull request check's slower cadence. */
@@ -56,8 +57,10 @@ const pullRequestCheckEvery = 5;
  * One poll of a remote-branch session (ADR 0112): `GET …/branches/{branch}` with its ETag; a new
  * tip is fetched, verified and stored with `advanceHead`; a 404 marks the branch `gone` and keeps
  * the last head. On the first poll, whenever the branch changed and otherwise every fifth poll,
- * the open pull request for the branch is looked up (conditionally too) and, when there is one,
- * the session is promoted to it in place.
+ * the open pull request for the branch is looked up (conditionally too) in its repository and,
+ * for a fork, the upstreams; when there is one, the session is promoted to it in place. A pull
+ * request found but not promoted to (reviewed elsewhere, or no remote for its repository) is
+ * tried again on every poll from the remembered answers, so adding the remote promotes it.
  */
 export async function pollRemoteBranch(
   context: GithubContext,
@@ -110,28 +113,33 @@ export async function pollRemoteBranch(
   state.headSeen = current.headSha;
   let record: StoredBranch = { ...stored.value, state: 'present', headSha: current.headSha };
   const isPullCheckDue = isAnswered || state.polls % pullRequestCheckEvery === 1;
-  if (isPullCheckDue) {
-    const found = await findPullRequest(context, { ref, state, signal });
-    if (found.kind === 'found' && found.pullRequest !== undefined) {
-      const promoted = await promote(
-        context,
-        { session: current, state, signal },
-        found.pullRequest,
-      );
+  if (isPullCheckDue || stored.value.pullRequest !== undefined) {
+    const lookup = await lookUpBranchPullRequest(context, {
+      ref,
+      parent: stored.value.parent,
+      source: stored.value.source,
+      answers: state.pulls,
+      isOffline: !isPullCheckDue,
+      signal,
+    });
+    if (lookup.kind === 'known' && lookup.found !== undefined) {
+      const promoted = await promote(context, { session: current, state, signal }, lookup.found);
       if (promoted.kind === 'promoted') {
-        saveStoredBranch(db, { ...record, pullNumber: found.pullRequest.number });
+        saveStoredBranch(db, { ...record, pullRequest: refOf(lookup.found) });
         return {
           kind: 'promoted',
           event: await eventFor(context, { session: current, isHeadMoved, isPromoted: true }),
         };
       }
-      record = { ...record, pullNumber: promoted.pullNumber };
-    } else if (found.kind === 'found') {
-      record = { ...record, pullNumber: undefined };
+      record = { ...record, pullRequest: promoted.pullRequest };
+    } else if (lookup.kind === 'known') {
+      record = { ...record, pullRequest: undefined };
     }
   }
   const isChanged =
-    isHeadMoved || stored.value.state === 'gone' || record.pullNumber !== stored.value.pullNumber;
+    isHeadMoved ||
+    stored.value.state === 'gone' ||
+    !isSamePullRequest(record.pullRequest, stored.value.pullRequest);
   if (!isChanged) {
     return { kind: 'polled', event: undefined };
   }
@@ -148,7 +156,7 @@ async function markGone(
   stored: StoredBranch,
 ): Promise<BranchPollOutcome> {
   state.branchEtag = undefined;
-  state.pullsEtag = undefined;
+  state.pulls.clear();
   if (stored.state === 'gone') {
     return { kind: 'gone', event: undefined };
   }
@@ -216,73 +224,65 @@ async function moveBranchHead(
   return undefined;
 }
 
-/** The branch to look a pull request up for, and the poll's state and signal. */
-interface PullRequestQuery {
-  readonly ref: BranchRef;
-  readonly state: BranchPollState;
-  readonly signal: AbortSignal;
-}
-
-/** The answer of the pull request lookup: `unchanged` (304 or failed), else what GitHub listed. */
-type PullRequestLookup =
-  | { readonly kind: 'unchanged' }
-  | { readonly kind: 'found'; readonly pullRequest: PullRequest | undefined };
-
-async function findPullRequest(
-  context: GithubContext,
-  { ref, state, signal }: PullRequestQuery,
-): Promise<PullRequestLookup> {
-  const listed = await context.clients.withClient(ref.host, async (client) => {
-    return findBranchPullRequest(client, ref, {
-      ...(state.pullsEtag !== undefined && { etag: state.pullsEtag }),
-      signal,
-    });
-  });
-  if (!listed.ok) {
-    context.session.logger.info('github poll: pull requests unavailable', {
-      kind: listed.error.kind,
-    });
-    return { kind: 'unchanged' };
-  }
-  if (listed.value.kind === 'not-modified') {
-    return { kind: 'unchanged' };
-  }
-  state.pullsEtag = listed.value.etag;
-  return { kind: 'found', pullRequest: listed.value.value };
-}
-
-/** What a promotion attempt leaves on the stored branch: the pull request reviewed elsewhere. */
+/** What a promotion attempt leaves on the stored branch: the pull request it couldn't become. */
 type PromotionResult =
   | { readonly kind: 'promoted' }
-  | { readonly kind: 'kept'; readonly pullNumber: number | undefined };
+  | { readonly kind: 'kept'; readonly pullRequest: BranchPullRequestRef | undefined };
 
+/**
+ * Promotes the session to `found` through the clone's remote for the pull request's repository
+ * (an upstream's, for a fork's pull request). Without that remote, or while another session
+ * reviews it, the session stays a branch and keeps the pull request; a failed fetch keeps none,
+ * so the next due check tries again.
+ */
 async function promote(
   context: GithubContext,
-  { session, state, signal }: BranchPoll,
-  pullRequest: PullRequest,
+  { session, signal }: BranchPoll,
+  found: BranchPullRequest,
 ): Promise<PromotionResult> {
   const { source } = session;
   if (source.kind !== 'remote-branch') {
-    return { kind: 'kept', pullNumber: undefined };
+    return { kind: 'kept', pullRequest: undefined };
   }
-  const remote = await openSessionRemote(context, { session, repository: source }, signal);
+  const remote = await openSessionRemote(
+    context,
+    { session, repository: { host: source.host, ...found.base } },
+    signal,
+  );
   if (remote === undefined) {
-    state.pullsEtag = undefined;
-    return { kind: 'kept', pullNumber: undefined };
+    return { kind: 'kept', pullRequest: refOf(found) };
   }
-  const promoted = await promoteBranchSession(context, { session, pullRequest, remote }, signal);
+  const promoted = await promoteBranchSession(
+    context,
+    { session, pullRequest: found.pullRequest, base: found.base, remote },
+    signal,
+  );
   switch (promoted.kind) {
     case 'promoted': {
       return { kind: 'promoted' };
     }
     case 'already-reviewed': {
-      return { kind: 'kept', pullNumber: pullRequest.number };
+      return { kind: 'kept', pullRequest: refOf(found) };
     }
     case 'failed': {
-      state.pullsEtag = undefined;
-      return { kind: 'kept', pullNumber: undefined };
+      return { kind: 'kept', pullRequest: undefined };
     }
   }
+}
+
+function refOf({ base, pullRequest }: BranchPullRequest): BranchPullRequestRef {
+  return { owner: base.owner, repo: base.repo, number: pullRequest.number };
+}
+
+function isSamePullRequest(
+  a: BranchPullRequestRef | undefined,
+  b: BranchPullRequestRef | undefined,
+): boolean {
+  return (
+    a?.number === b?.number &&
+    a?.owner.toLowerCase() === b?.owner.toLowerCase() &&
+    a?.repo.toLowerCase() === b?.repo.toLowerCase()
+  );
 }
 
 /** The session the event is about, and what happened to it. */

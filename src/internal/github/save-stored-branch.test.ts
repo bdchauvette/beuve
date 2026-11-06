@@ -14,10 +14,16 @@ function record(): BranchRecord {
     ref: { host: 'github.com', owner: 'octo-org', repo: 'hello-world', branch: 'claude/x' },
     defaultBranch: 'main',
     htmlUrl: 'https://github.com/octo-org/hello-world/tree/claude/x',
+    parent: undefined,
+    source: undefined,
     headSha: 'a'.repeat(40),
     state: 'present',
-    pullNumber: undefined,
+    pullRequest: undefined,
   };
+}
+
+function own(): BranchRecord['pullRequest'] {
+  return { owner: 'octo-org', repo: 'hello-world', number: 7 };
 }
 
 describe('saveStoredBranch', () => {
@@ -34,13 +40,25 @@ describe('saveStoredBranch', () => {
         value: { ...record(), fetchedAt: '2026-11-06T12:00:00.000Z' },
       });
       clock.set('2026-11-06T13:00:00.000Z');
-      saveStoredBranch(db, { ...record(), state: 'gone', pullNumber: 7 });
+      saveStoredBranch(db, { ...record(), state: 'gone', pullRequest: own() });
       expect(findStoredBranch(db, record().ref)).toMatchObject({
         ok: true,
-        value: { state: 'gone', pullNumber: 7, fetchedAt: '2026-11-06T13:00:00.000Z' },
+        value: { state: 'gone', pullRequest: own(), fetchedAt: '2026-11-06T13:00:00.000Z' },
       });
     },
   );
+
+  test('keeps a fork’s upstreams and its pull request upstream', ({ expect, db }) => {
+    runMigrations(db, githubMigrations);
+    const fork: BranchRecord = {
+      ...record(),
+      parent: { owner: 'mid', repo: 'hello-world' },
+      source: { owner: 'root', repo: 'hello' },
+      pullRequest: { owner: 'root', repo: 'hello', number: 3 },
+    };
+    saveStoredBranch(db, fork);
+    expect(findStoredBranch(db, record().ref)).toMatchObject({ ok: true, value: fork });
+  });
 
   test('refuses a state it does not know', ({ expect, db }) => {
     runMigrations(db, githubMigrations);
