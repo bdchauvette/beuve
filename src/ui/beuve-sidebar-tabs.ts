@@ -6,6 +6,8 @@ import { ActionDelegation } from './action-delegation.ts';
 import type { SidebarTab } from './sidebar-tabs-from.ts';
 import { sidebarTabsFrom } from './sidebar-tabs-from.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
+import { focusRingStyles } from './primitives/focus-ring-styles.ts';
+import './primitives/beuve-tab-list.ts';
 
 /** A tab was chosen. */
 export interface SidebarTabDetail {
@@ -20,48 +22,51 @@ const zoneIds: ReadonlySet<string> = new Set(['overview', 'files', 'ura', 'chat'
  */
 @customElement('beuve-sidebar-tabs')
 export class BeuveSidebarTabs extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      flex: none;
-    }
+  static override styles = [
+    focusRingStyles,
+    css`
+      :host {
+        display: block;
+        flex: none;
+      }
 
-    nav {
-      display: flex;
-      gap: var(--beuve-space-4);
-      block-size: 30px;
-      padding: 0 var(--beuve-space-3);
-      border-block-end: 1px solid var(--beuve-border);
-    }
+      beuve-tab-list {
+        display: flex;
+        gap: var(--beuve-space-4);
+        block-size: 30px;
+        padding: 0 var(--beuve-space-3);
+        border-block-end: 1px solid var(--beuve-border);
+      }
 
-    button {
-      padding: 0;
-      border: none;
-      background: none;
-      color: var(--beuve-text-muted);
-      font: var(--beuve-font-small);
-      box-shadow: inset 0 -2px 0 transparent;
-      cursor: pointer;
-    }
+      button {
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+        box-shadow: inset 0 -2px 0 transparent;
+        cursor: pointer;
+      }
 
-    button[aria-selected='true'] {
-      color: var(--beuve-text);
-      box-shadow: inset 0 -2px 0 var(--beuve-border);
-    }
+      button[aria-selected='true'] {
+        color: var(--beuve-text);
+        box-shadow: inset 0 -2px 0 var(--beuve-border);
+      }
 
-    .count {
-      margin-inline-start: 3px;
-      color: var(--beuve-text-muted);
-    }
-  `;
+      .count {
+        margin-inline-start: 3px;
+        color: var(--beuve-text-muted);
+      }
+    `,
+  ];
 
   private readonly actions = {
     click: {
-      choose: ({ zone = '' }): void => {
-        if (zoneIds.has(zone)) {
+      choose: ({ tab = '' }): void => {
+        if (zoneIds.has(tab)) {
           this.dispatchEvent(
             new CustomEvent<SidebarTabDetail>('beuve-sidebar-tab', {
-              detail: { zone: zone as SidebarZone },
+              detail: { zone: tab as SidebarZone },
               bubbles: true,
               composed: true,
             }),
@@ -95,19 +100,19 @@ export class BeuveSidebarTabs extends LitElement {
       role="tab"
       aria-selected=${selected}
       data-action="choose"
-      data-zone=${tab.zone}
+      data-tab=${tab.zone}
     >
       ${tab.label}${tab.count === 0 ? nothing : html`<span class="count">${tab.count}</span>`}
     </button>`;
   }
 
   protected override render(): TemplateResult {
-    return html`<nav role="tablist" aria-label="Sidebar">
+    return html`<beuve-tab-list label="Sidebar">
       ${sidebarTabsFrom({ isPullRequest: this.isPullRequest, stagedCount: this.stagedCount }).map(
         (tab) => {
           return this.renderTab(tab);
         },
       )}
-    </nav>`;
+    </beuve-tab-list>`;
   }
 }

@@ -15,6 +15,7 @@ import type {
 
 import { ActionDelegation } from './action-delegation.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import './primitives/beuve-tab-list.ts';
 
 /** Whether a terminal of the panel has the keyboard; the window reports it to the menus. */
 export interface TerminalFocusDetail {
@@ -101,6 +102,12 @@ export class BeuveTerminalPanel extends LitElement {
 
       .bar [role='tab'].ended {
         text-decoration: line-through;
+      }
+
+      .bar .tabs {
+        gap: var(--beuve-space-1);
+        min-inline-size: 0;
+        overflow-x: auto;
       }
 
       .bar .tab {
@@ -198,7 +205,7 @@ export class BeuveTerminalPanel extends LitElement {
     if (isOlder) {
       label += ' (earlier head)';
     }
-    return html`<span class="tab">
+    return html`<span class="tab" role="presentation">
       <button
         role="tab"
         class=${tab.isRunning ? '' : 'ended'}
@@ -458,8 +465,10 @@ export class BeuveTerminalPanel extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="bar" role="tablist" aria-label="Terminals">
-        ${this.tabs.map((tab) => this.renderTab(tab))}
+      <div class="bar">
+        <beuve-tab-list class="tabs" label="Terminals">
+          ${this.tabs.map((tab) => this.renderTab(tab))}
+        </beuve-tab-list>
         <button
           class="button icon"
           data-action="new"
