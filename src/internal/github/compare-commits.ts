@@ -25,6 +25,8 @@ export interface ComparedCommit {
   readonly author: string;
   /** The author date. */
   readonly date: string;
+  /** The committer date: when it was last committed (a rebase or amend moves it); else the author date. */
+  readonly committedAt: string;
 }
 
 /** What `head` adds over its merge base with `base`. */
@@ -42,7 +44,11 @@ export interface Comparison {
 const maxListedFiles = 300;
 
 const gitAuthorSchema = z.object({ name: z.string().nullable().optional(), date: z.string() });
-const gitCommitSchema = z.object({ message: z.string(), author: gitAuthorSchema.nullable() });
+const gitCommitSchema = z.object({
+  message: z.string(),
+  author: gitAuthorSchema.nullable(),
+  committer: gitAuthorSchema.nullable().optional(),
+});
 const accountSchema = z.object({ login: z.string() });
 const fileSchema = z.object({ additions: z.number().int(), deletions: z.number().int() });
 
@@ -53,11 +59,13 @@ const commitSchema = z
     author: accountSchema.nullable().optional(),
   })
   .transform((raw): ComparedCommit => {
+    const date = raw.commit.author?.date ?? '';
     return {
       sha: raw.sha.toLowerCase(),
       message: raw.commit.message,
       author: raw.author?.login ?? raw.commit.author?.name ?? 'ghost',
-      date: raw.commit.author?.date ?? '',
+      date,
+      committedAt: raw.commit.committer?.date ?? date,
     };
   });
 
