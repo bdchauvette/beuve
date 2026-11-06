@@ -159,11 +159,11 @@ export class BeuveReview extends LitElement {
 
       .main > beuve-terminal-panel {
         flex: none;
-        block-size: var(--beuve-terminal-height, 300px);
+        block-size: var(--beuve-terminal-height);
       }
       .empty-screen {
-        padding-block-start: 6vh;
-        --empty-screen-width: 1100px;
+        padding-block-start: var(--beuve-size-screen-offset-tight);
+        --empty-screen-width: var(--beuve-size-dialog-wide);
       }
 
       .main > beuve-diff-stream,
@@ -177,9 +177,9 @@ export class BeuveReview extends LitElement {
         inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
         inset-inline: auto 0;
         z-index: 15;
-        inline-size: min(760px, 62vw);
-        border-inline-start: 1px solid var(--beuve-border);
-        box-shadow: -8px 0 24px var(--beuve-scrim-soft);
+        inline-size: min(var(--beuve-size-sheet), var(--beuve-size-window-inline-60));
+        border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
+        box-shadow: var(--beuve-shadow-sheet);
       }
     `,
   ];

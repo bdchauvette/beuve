@@ -80,7 +80,7 @@ class BeuveGallery extends LitElement {
       section {
         margin-block-end: var(--beuve-space-6);
         padding: var(--beuve-space-4);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
       }
@@ -91,7 +91,7 @@ class BeuveGallery extends LitElement {
         font: var(--beuve-font-small);
         font-weight: var(--beuve-font-weight-semibold);
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: var(--beuve-letter-spacing-caps);
       }
 
       .row {
@@ -103,7 +103,7 @@ class BeuveGallery extends LitElement {
       }
 
       .label {
-        inline-size: 8rem;
+        inline-size: var(--beuve-size-label-narrow);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
       }
@@ -111,20 +111,20 @@ class BeuveGallery extends LitElement {
       .swatch {
         display: grid;
         gap: var(--beuve-space-1);
-        inline-size: 7.5rem;
+        inline-size: var(--beuve-size-field-narrow);
         font: var(--beuve-font-caption);
       }
 
       .swatch > span:first-child {
-        block-size: 2.5rem;
-        border: 1px solid var(--beuve-border);
+        block-size: var(--beuve-size-row);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
       }
 
       .diff {
         margin: 0;
         overflow: hidden;
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-code-bg);
         color: var(--beuve-code-text);
@@ -134,12 +134,12 @@ class BeuveGallery extends LitElement {
 
       .diff > span {
         display: grid;
-        grid-template-columns: 2.5rem 1fr;
+        grid-template-columns: var(--beuve-size-glyph-column) 1fr;
       }
 
       .diff .number {
         padding-inline-end: var(--beuve-space-2);
-        border-inline-start: 3px solid transparent;
+        border-inline-start: var(--beuve-border-width-heavy) solid transparent;
         color: var(--beuve-text-muted);
         text-align: end;
       }
@@ -178,12 +178,12 @@ class BeuveGallery extends LitElement {
         background: none;
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
-        box-shadow: inset 0 -2px 0 transparent;
+        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 transparent;
       }
 
       .tabs [role='tab'][aria-selected='true'] {
         color: var(--beuve-text);
-        box-shadow: inset 0 -2px 0 var(--beuve-accent);
+        box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-accent);
       }
 
       .empty-screen {

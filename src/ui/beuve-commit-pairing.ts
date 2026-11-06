@@ -65,7 +65,7 @@ export class BeuveCommitPairing extends LitElement {
       }
 
       ol:focus-visible {
-        box-shadow: 0 0 0 2px var(--beuve-accent-soft);
+        box-shadow: 0 0 0 var(--beuve-border-width-thick) var(--beuve-accent-soft);
       }
 
       li {
@@ -73,7 +73,7 @@ export class BeuveCommitPairing extends LitElement {
         grid-template-columns: auto auto minmax(0, 1fr) auto;
         align-items: baseline;
         gap: var(--beuve-space-2);
-        padding: 3px var(--beuve-space-2);
+        padding: var(--beuve-space-1) var(--beuve-space-2);
         border-radius: var(--beuve-radius-small);
         cursor: pointer;
       }
@@ -83,7 +83,7 @@ export class BeuveCommitPairing extends LitElement {
       }
 
       li.cursor {
-        box-shadow: inset 2px 0 0 var(--beuve-accent);
+        box-shadow: inset var(--beuve-border-width-thick) 0 0 var(--beuve-accent);
       }
 
       li[aria-selected='true'] {

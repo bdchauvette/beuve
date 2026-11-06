@@ -190,7 +190,7 @@ export class BeuveFileCard extends LitElement {
     css`
       :host {
         display: block;
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-code-bg);
         overflow: clip;
@@ -198,7 +198,7 @@ export class BeuveFileCard extends LitElement {
 
       :host([active]) {
         border-color: var(--beuve-accent);
-        box-shadow: 0 0 0 1px var(--beuve-accent);
+        box-shadow: 0 0 0 var(--beuve-border-width) var(--beuve-accent);
       }
 
       .header {
@@ -212,7 +212,7 @@ export class BeuveFileCard extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
       }
 
@@ -238,7 +238,7 @@ export class BeuveFileCard extends LitElement {
         flex: none;
         gap: var(--beuve-space-1);
         justify-content: flex-end;
-        min-inline-size: 11ch;
+        min-inline-size: calc(11 * var(--beuve-measure-ch));
         font-variant-numeric: tabular-nums;
       }
 
@@ -257,8 +257,8 @@ export class BeuveFileCard extends LitElement {
         align-items: baseline;
         gap: var(--beuve-space-2);
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
-        border-inline-start: 3px solid var(--beuve-accent);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
+        border-inline-start: var(--beuve-border-width-heavy) solid var(--beuve-accent);
         background: var(--beuve-surface);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -301,8 +301,8 @@ export class BeuveFileCard extends LitElement {
       .reviewed-mark {
         display: inline-flex;
         flex: none;
-        inline-size: 14px;
-        block-size: 14px;
+        inline-size: var(--beuve-size-icon-small);
+        block-size: var(--beuve-size-icon-small);
         padding: 0;
         border: none;
         background: none;
@@ -326,7 +326,7 @@ export class BeuveFileCard extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
         padding: 0 var(--beuve-space-1);
-        border: 1px dashed var(--beuve-border);
+        border: var(--beuve-border-width) dashed var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -388,9 +388,9 @@ export class BeuveFileCard extends LitElement {
         display: flex;
         align-items: baseline;
         gap: var(--beuve-space-2);
-        margin: 2px var(--beuve-space-3);
+        margin: var(--beuve-space-0-5) var(--beuve-space-3);
         padding: 0 var(--beuve-space-2);
-        border-inline-start: 2px solid var(--beuve-accent);
+        border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-accent);
         font: var(--beuve-font-small);
         white-space: nowrap;
         color: var(--beuve-text-muted);
@@ -437,12 +437,12 @@ export class BeuveFileCard extends LitElement {
       }
 
       .ura-marker .ura-outside:focus-visible {
-        outline: 1px solid var(--beuve-accent);
-        outline-offset: 1px;
+        outline: var(--beuve-border-width) solid var(--beuve-accent);
+        outline-offset: var(--beuve-focus-ring-offset);
       }
 
       .ura-marker .ura-title code {
-        padding: 0 2px;
+        padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-mono);
@@ -462,9 +462,9 @@ export class BeuveFileCard extends LitElement {
 
       .insight {
         --insight-color: var(--beuve-text-muted);
-        margin: 2px var(--beuve-space-3);
+        margin: var(--beuve-space-0-5) var(--beuve-space-3);
         padding: 0 var(--beuve-space-2);
-        border-inline-start: 2px solid var(--insight-color);
+        border-inline-start: var(--beuve-border-width-thick) solid var(--insight-color);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -497,8 +497,8 @@ export class BeuveFileCard extends LitElement {
       }
 
       .insight-line:focus-visible {
-        outline: 1px solid var(--beuve-accent);
-        outline-offset: 1px;
+        outline: var(--beuve-border-width) solid var(--beuve-accent);
+        outline-offset: var(--beuve-focus-ring-offset);
       }
 
       .insight-category {
@@ -524,7 +524,7 @@ export class BeuveFileCard extends LitElement {
       }
 
       .insight code {
-        padding: 0 2px;
+        padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-mono);
@@ -559,8 +559,8 @@ export class BeuveFileCard extends LitElement {
       }
 
       .insight-text :is(th, td) {
-        padding: 1px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        padding: var(--beuve-space-px) var(--beuve-space-2);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         text-align: start;
         vertical-align: top;
       }

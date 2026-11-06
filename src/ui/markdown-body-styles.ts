@@ -21,7 +21,7 @@ export const markdownBodyStyles = css`
 
   .body blockquote {
     padding-inline-start: var(--beuve-space-2);
-    border-inline-start: 2px solid var(--beuve-border);
+    border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-border);
     color: var(--beuve-text-muted);
   }
 
@@ -35,8 +35,8 @@ export const markdownBodyStyles = css`
   }
 
   .body :is(th, td) {
-    padding: 2px var(--beuve-space-2);
-    border: 1px solid var(--beuve-border);
+    padding: var(--beuve-space-0-5) var(--beuve-space-2);
+    border: var(--beuve-border-width) solid var(--beuve-border);
     text-align: start;
     vertical-align: top;
     overflow-wrap: normal;

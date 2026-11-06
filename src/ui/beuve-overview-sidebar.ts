@@ -23,7 +23,7 @@ export class BeuveOverviewSidebar extends LitElement {
       section + section {
         margin-block-start: var(--beuve-space-3);
         padding-block-start: var(--beuve-space-3);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
     `,
   ];

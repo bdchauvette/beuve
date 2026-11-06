@@ -113,7 +113,7 @@ export class FlowGraphView extends LitElement {
         font-size: var(--beuve-font-size-caption);
         paint-order: stroke;
         stroke: var(--beuve-bg);
-        stroke-width: 3px;
+        stroke-width: var(--beuve-border-width-heavy);
         stroke-linejoin: round;
       }
 
@@ -206,10 +206,10 @@ export class FlowGraphView extends LitElement {
 
       .swatch {
         display: inline-block;
-        inline-size: 16px;
-        block-size: 10px;
-        border: 1px solid var(--beuve-border);
-        border-radius: 5px;
+        inline-size: var(--beuve-size-icon);
+        block-size: var(--beuve-space-2);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius-full);
       }
 
       .swatch.changed {
@@ -219,7 +219,7 @@ export class FlowGraphView extends LitElement {
 
       .swatch.dashed {
         block-size: 0;
-        border-width: 1px 0 0;
+        border-width: var(--beuve-border-width) 0 0;
         border-style: dashed;
         border-color: var(--beuve-text-muted);
         border-radius: 0;
@@ -227,7 +227,7 @@ export class FlowGraphView extends LitElement {
 
       .swatch.solid {
         block-size: 0;
-        border-width: 1px 0 0;
+        border-width: var(--beuve-border-width) 0 0;
         border-color: var(--beuve-text-muted);
         border-radius: 0;
       }

@@ -19,7 +19,7 @@ export const buttonStyles = css`
     gap: var(--beuve-space-1);
     box-sizing: border-box;
     padding: var(--beuve-space-0-5) var(--beuve-space-2);
-    border: 1px solid var(--beuve-border);
+    border: var(--beuve-border-width) solid var(--beuve-border);
     border-radius: var(--beuve-radius-small);
     background: var(--beuve-surface);
     color: var(--beuve-text);
@@ -77,8 +77,8 @@ export const buttonStyles = css`
   }
 
   .button.icon {
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
+    inline-size: var(--beuve-size-control);
+    block-size: var(--beuve-size-control);
     padding: 0;
     font-size: var(--beuve-font-size-large);
     line-height: 1;

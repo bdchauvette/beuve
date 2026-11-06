@@ -19,7 +19,7 @@ export class BeuveFlowPortal extends LitElement {
     css`
       :host {
         display: block;
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-bg);
         font: var(--beuve-font-small);
       }
@@ -42,13 +42,13 @@ export class BeuveFlowPortal extends LitElement {
       }
 
       beuve-flow-graph {
-        max-block-size: 60vh;
+        max-block-size: var(--beuve-size-window-block-60);
         padding: 0 var(--beuve-space-3) var(--beuve-space-2);
       }
 
       .note {
         margin: 0;
-        padding: 2px var(--beuve-space-3) var(--beuve-space-2);
+        padding: var(--beuve-space-0-5) var(--beuve-space-3) var(--beuve-space-2);
         color: var(--beuve-text-muted);
       }
 

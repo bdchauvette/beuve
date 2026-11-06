@@ -8,13 +8,13 @@ import { css } from 'lit';
 export const formatControlStyles = css`
   .format-control {
     display: inline-block;
-    margin-inline: 1px;
-    padding-inline: 2px;
-    border: 1px solid var(--beuve-warn);
+    margin-inline: var(--beuve-space-px);
+    padding-inline: var(--beuve-space-0-5);
+    border: var(--beuve-border-width) solid var(--beuve-warn);
     border-radius: var(--beuve-radius-small);
     color: var(--beuve-warn);
     font-family: var(--beuve-font-family-mono);
-    font-size: 0.85em;
+    font-size: var(--beuve-font-size-mark);
     font-weight: var(--beuve-font-weight-normal);
     line-height: 1.1;
     white-space: nowrap;

@@ -13,7 +13,7 @@ export const segmentedStyles = css`
   .segmented {
     display: inline-flex;
     overflow: hidden;
-    border: 1px solid var(--beuve-border);
+    border: var(--beuve-border-width) solid var(--beuve-border);
     border-radius: var(--beuve-radius-small);
   }
 
@@ -31,7 +31,7 @@ export const segmentedStyles = css`
   }
 
   .segmented > button + button {
-    border-inline-start: 1px solid var(--beuve-border);
+    border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
   }
 
   .segmented > button:hover {

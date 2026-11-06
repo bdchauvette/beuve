@@ -79,7 +79,7 @@ export class BeuveStatusBar extends LitElement {
         align-items: center;
         gap: var(--beuve-space-4);
         padding: 0 var(--beuve-space-3);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -101,13 +101,16 @@ export class BeuveStatusBar extends LitElement {
         position: fixed;
         inset: auto;
         inset-block-end: calc(var(--beuve-statusbar-height) + var(--beuve-space-1));
-        min-inline-size: 260px;
-        max-inline-size: min(560px, calc(100vw - 2 * var(--beuve-space-3)));
-        max-block-size: 50vh;
+        min-inline-size: var(--beuve-size-popover-min);
+        max-inline-size: min(
+          var(--beuve-size-popover),
+          calc(var(--beuve-size-window-inline) - 2 * var(--beuve-space-3))
+        );
+        max-block-size: var(--beuve-size-window-block-50);
         margin: 0;
         padding: var(--beuve-space-2) var(--beuve-space-3);
         overflow: auto;
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
         box-shadow: var(--beuve-shadow-small);

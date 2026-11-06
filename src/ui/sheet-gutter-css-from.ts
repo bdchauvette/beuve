@@ -18,7 +18,7 @@ export interface SheetGutterInput {
 export function sheetGutterCssFrom(input: SheetGutterInput): string {
   const rules: string[] = [];
   const bar = (line: number, color: string): void => {
-    rules.push(`${number(line)}{box-shadow:inset 3px 0 0 ${color}}`);
+    rules.push(`${number(line)}{box-shadow:inset var(--beuve-border-width-heavy) 0 0 ${color}}`);
   };
   for (const span of input.marks.added) {
     forEachLine(span, (line) => {
@@ -32,13 +32,13 @@ export function sheetGutterCssFrom(input: SheetGutterInput): string {
   }
   for (const line of input.marks.deletedAt) {
     rules.push(
-      `${number(line)}{position:relative}${number(line)}::after{content:'';position:absolute;inset-inline-start:0;inset-block-start:-3px;border-inline-start:6px solid var(--beuve-diff-removed-bar);border-block:3px solid transparent}`,
+      `${number(line)}{position:relative}${number(line)}::after{content:'';position:absolute;inset-inline-start:0;inset-block-start:calc(-1 * var(--beuve-border-width-heavy));border-inline-start:calc(2 * var(--beuve-border-width-heavy)) solid var(--beuve-diff-removed-bar);border-block:var(--beuve-border-width-heavy) solid transparent}`,
     );
   }
   for (const note of input.notes) {
     forEachLine({ startLine: note.startLine, endLine: note.endLine }, (line) => {
       rules.push(
-        `${number(line)}{position:relative}${number(line)}::before{content:'';position:absolute;inset-inline-end:2px;inset-block-start:50%;inline-size:5px;block-size:5px;margin-block-start:-2.5px;border-radius:50%;background:var(--beuve-violet)}`,
+        `${number(line)}{position:relative}${number(line)}::before{content:'';position:absolute;inset-inline-end:var(--beuve-space-0-5);inset-block-start:50%;inline-size:var(--beuve-size-dot-small);block-size:var(--beuve-size-dot-small);margin-block-start:calc(var(--beuve-size-dot-small) / -2);border-radius:50%;background:var(--beuve-violet)}`,
       );
     });
   }

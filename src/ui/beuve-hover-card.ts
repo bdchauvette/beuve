@@ -66,12 +66,15 @@ export class BeuveHoverCard extends LitElement {
       inset: auto;
       box-sizing: border-box;
       inline-size: max-content;
-      max-inline-size: min(560px, calc(100vw - 16px));
-      max-block-size: min(360px, 50vh);
+      max-inline-size: min(
+        var(--beuve-size-popover),
+        calc(var(--beuve-size-window-inline) - 2 * var(--beuve-space-2))
+      );
+      max-block-size: min(var(--beuve-size-hint-block), var(--beuve-size-window-block-50));
       margin: 0;
       padding: var(--beuve-space-2) var(--beuve-space-3);
       overflow: auto;
-      border: 1px solid var(--beuve-border);
+      border: var(--beuve-border-width) solid var(--beuve-border);
       border-radius: var(--beuve-radius);
       background: var(--beuve-surface);
       box-shadow: var(--beuve-shadow-small);
@@ -99,7 +102,7 @@ export class BeuveHoverCard extends LitElement {
 
     .card hr {
       border: 0;
-      border-block-start: 1px solid var(--beuve-border);
+      border-block-start: var(--beuve-border-width) solid var(--beuve-border);
     }
 
     .card pre {
@@ -126,7 +129,7 @@ export class BeuveHoverCard extends LitElement {
     .card .diagnostic {
       margin: 0 0 var(--beuve-space-2);
       padding-inline-start: var(--beuve-space-2);
-      border-inline-start: 2px solid var(--beuve-text-muted);
+      border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-text-muted);
       white-space: pre-wrap;
     }
 

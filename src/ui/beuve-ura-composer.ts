@@ -47,8 +47,8 @@ export class BeuveUraComposer extends LitElement {
         grid-template-columns: minmax(0, 1fr);
         gap: var(--beuve-space-1);
         padding: var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-inline-start: 3px solid var(--beuve-accent);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-inline-start: var(--beuve-border-width-heavy) solid var(--beuve-accent);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
       }
@@ -75,7 +75,7 @@ export class BeuveUraComposer extends LitElement {
         box-sizing: border-box;
         min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
@@ -88,7 +88,7 @@ export class BeuveUraComposer extends LitElement {
 
       textarea {
         inline-size: 100%;
-        min-block-size: 48px;
+        min-block-size: var(--beuve-size-editor-small);
         resize: block;
         font: var(--beuve-font-mono);
       }
@@ -102,7 +102,7 @@ export class BeuveUraComposer extends LitElement {
 
       .suggestion {
         display: grid;
-        gap: 2px;
+        gap: var(--beuve-space-0-5);
       }
 
       .suggestion .label {

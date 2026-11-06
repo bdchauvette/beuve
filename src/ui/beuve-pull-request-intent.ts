@@ -56,7 +56,7 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .body {
-        max-block-size: 240px;
+        max-block-size: var(--beuve-size-scroll);
         overflow: auto;
         font: var(--beuve-font-small);
         color: var(--beuve-text);

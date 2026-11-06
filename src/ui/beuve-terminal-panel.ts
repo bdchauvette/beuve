@@ -71,7 +71,7 @@ export class BeuveTerminalPanel extends LitElement {
         flex-direction: column;
         min-block-size: 0;
         background: var(--beuve-surface);
-        border-block-start: 1px solid var(--beuve-border);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .bar {
@@ -79,14 +79,14 @@ export class BeuveTerminalPanel extends LitElement {
         flex: none;
         align-items: center;
         gap: var(--beuve-space-1);
-        block-size: 28px;
+        block-size: var(--beuve-size-control);
         padding: 0 var(--beuve-space-2);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         font: var(--beuve-font-small);
       }
 
       .bar [role='tab'] {
-        padding: 2px var(--beuve-space-2);
+        padding: var(--beuve-space-0-5) var(--beuve-space-2);
         border: none;
         border-radius: var(--beuve-radius-small);
         background: none;

@@ -118,9 +118,9 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       input[type='search'] {
-        inline-size: 14em;
-        padding: 2px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
+        inline-size: calc(14 * var(--beuve-measure-em));
+        padding: var(--beuve-space-0-5) var(--beuve-space-2);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
@@ -130,7 +130,7 @@ export class BeuveReviewQueue extends LitElement {
       .problems {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: var(--beuve-space-0-5);
         margin: 0;
         padding: 0;
         list-style: none;
@@ -153,7 +153,7 @@ export class BeuveReviewQueue extends LitElement {
         flex: 1;
         min-block-size: 0;
         overflow: auto;
-        border: 1px solid var(--beuve-border);
+        border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
         outline: none;
@@ -168,7 +168,7 @@ export class BeuveReviewQueue extends LitElement {
         inset-block-start: 0;
         z-index: 1;
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-small);
         font-weight: var(--beuve-font-weight-semibold);
@@ -178,12 +178,22 @@ export class BeuveReviewQueue extends LitElement {
       .row {
         display: grid;
         grid-template-columns:
-          16px minmax(8em, 13em) minmax(0, 1fr) minmax(4em, 7em) 7.5em 8px 6.5em 6.5em
-          4.5em;
+          var(--beuve-size-icon) minmax(
+            calc(8 * var(--beuve-measure-em)),
+            calc(13 * var(--beuve-measure-em))
+          )
+          minmax(0, 1fr) minmax(
+            calc(4 * var(--beuve-measure-em)),
+            calc(7 * var(--beuve-measure-em))
+          )
+          calc(7.5 * var(--beuve-measure-em)) var(--beuve-size-dot) calc(
+            6.5 * var(--beuve-measure-em)
+          )
+          calc(6.5 * var(--beuve-measure-em)) calc(4.5 * var(--beuve-measure-em));
         align-items: center;
         gap: var(--beuve-space-2);
-        padding: 3px var(--beuve-space-3);
-        border-block-end: 1px solid var(--beuve-border);
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+        border-block-end: var(--beuve-border-width) solid var(--beuve-border);
         cursor: default;
       }
 

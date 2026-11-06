@@ -27,7 +27,7 @@ export function insightMarkCssFrom(style: DiffLayoutView, marks: readonly Insigh
   };
   return marks
     .map(({ line, severity }) => {
-      return `${cell(line)}{position:relative}${cell(line)}::before{content:'';position:absolute;inset-inline-start:3px;inset-block-start:50%;inline-size:5px;block-size:5px;margin-block-start:-2.5px;border-radius:50%;background:${colors[severity]};opacity:.85}`;
+      return `${cell(line)}{position:relative}${cell(line)}::before{content:'';position:absolute;inset-inline-start:var(--beuve-border-width-heavy);inset-block-start:50%;inline-size:var(--beuve-size-dot-small);block-size:var(--beuve-size-dot-small);margin-block-start:calc(var(--beuve-size-dot-small) / -2);border-radius:50%;background:${colors[severity]};opacity:.85}`;
     })
     .join('\n');
 }
