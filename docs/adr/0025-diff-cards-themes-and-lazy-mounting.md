@@ -24,3 +24,7 @@ Diffs read like Alabaster: what's colored means something, and the four rules ar
 ## Amendment 2026-10-30: no insight annotations
 
 ADR 0055 removes agent insights from the cards. Line annotations now carry staged URA markers and the composer only (`to-head-side-annotations.ts`, formerly `to-insight-annotations.ts`); `beuve-agent-insight` is gone. The violet the insights used is the `--beuve-violet` token.
+
+## Amendment 2026-11-06: Alabaster's license notice
+
+Alabaster is MIT (Copyright (c) 2018 Nikita Prokopov). Its notice was missing; ADR 0114 adds it to `syntax-palettes.ts` and `index.css` as legal comments the bundle keeps, and to `THIRD_PARTY_NOTICES.md`.
