@@ -22,6 +22,7 @@ import { describeRemoteBranch } from './describe-remote-branch.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /** `beuve-status-open-url`: a link in a status popover, for the owner to open. */
 export interface StatusOpenUrlDetail {
@@ -57,9 +58,19 @@ const bucketTone: Readonly<Record<CiCheckView['bucket'], string>> = {
  * Emits `beuve-status-action` (a catalog command), `beuve-status-open-url` (a link in a popover)
  * and `beuve-status-popover` when a popover opens, so the owner can refresh what it shows.
  */
+/** Server states and describer tones that are not dot tones themselves. */
+const dotTones: Readonly<Record<string, string>> = {
+  running: 'ok',
+  starting: 'warn',
+  stopping: 'warn',
+  failed: 'danger',
+  busy: 'accent',
+};
+
 @customElement('beuve-status-bar')
 export class BeuveStatusBar extends LitElement {
   static override styles = [
+    statusDotStyles,
     buttonStyles,
     formatControlStyles,
     css`
@@ -80,6 +91,10 @@ export class BeuveStatusBar extends LitElement {
       .chip:has(+ [popover]:popover-open) {
         background: var(--beuve-surface-hover);
         color: var(--beuve-text);
+      }
+
+      .status-dot {
+        margin-inline-end: var(--beuve-space-1);
       }
 
       [popover] {
@@ -160,41 +175,6 @@ export class BeuveStatusBar extends LitElement {
 
       .spacer {
         flex: 1;
-      }
-
-      .dot {
-        display: inline-block;
-        inline-size: 7px;
-        block-size: 7px;
-        margin-inline-end: var(--beuve-space-1);
-        border-radius: 50%;
-        background: var(--beuve-text-muted);
-      }
-
-      .dot.running {
-        background: var(--beuve-ok-solid);
-      }
-
-      .dot.starting,
-      .dot.stopping {
-        background: var(--beuve-warn-solid);
-      }
-
-      .dot.failed,
-      .dot.danger {
-        background: var(--beuve-danger-solid);
-      }
-
-      .dot.ok {
-        background: var(--beuve-ok-solid);
-      }
-
-      .dot.warn {
-        background: var(--beuve-warn-solid);
-      }
-
-      .dot.busy {
-        background: var(--beuve-accent);
       }
 
       .notice {
@@ -306,7 +286,7 @@ export class BeuveStatusBar extends LitElement {
         title=${line.title}
         aria-haspopup="dialog"
       >
-        <span class="dot ${line.tone}"></span>${line.text}
+        <span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}
       </button>
       <div
         id="lsp"
@@ -343,7 +323,7 @@ export class BeuveStatusBar extends LitElement {
       detail = `${documents} · restarted ${String(server.restarts)}×`;
     }
     return html`<li class="row">
-      <span class="dot ${server.state}"></span>
+      <span class="status-dot" data-tone=${dotToneFrom(server.state)}></span>
       <span>${server.serverId}</span>
       <span class="grow" title=${server.root}>${pathText(server.root)}</span>
       <span class="detail">${server.state} · ${detail}</span>
@@ -362,7 +342,7 @@ export class BeuveStatusBar extends LitElement {
         title=${line.title}
         aria-haspopup="dialog"
       >
-        <span class="dot ${line.tone}"></span>${line.text}
+        <span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}
       </button>
       <div
         id="ci"
@@ -392,7 +372,7 @@ export class BeuveStatusBar extends LitElement {
 
   private renderCheck(check: CiCheckView): TemplateResult {
     return html`<li class="row">
-      <span class="dot ${bucketTone[check.bucket]}"></span>
+      <span class="status-dot" data-tone=${bucketTone[check.bucket]}></span>
       ${
         check.url === undefined
           ? html`<span class="grow" title=${check.name}>${check.name}</span>`
@@ -413,7 +393,9 @@ export class BeuveStatusBar extends LitElement {
   /** The followed branch's state and, when its head commit names one, the agent session's link. */
   private renderRemoteBranch(branch: RemoteBranchView): TemplateResult {
     const line = describeRemoteBranch(branch);
-    return html`<span title=${line.title}><span class="dot ${line.tone}"></span>${line.text}</span>
+    return html`<span title=${line.title}
+        ><span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}</span
+      >
       ${
         branch.agentSessionUrl === undefined
           ? nothing
@@ -432,7 +414,7 @@ export class BeuveStatusBar extends LitElement {
   private renderGithub(auth: GithubAuthStatusView): TemplateResult {
     const line = describeGithubAuth(auth);
     return html`<span title=${line.title}
-      ><span class="dot ${line.tone}"></span>${line.text}</span
+      ><span class="status-dot" data-tone=${dotToneFrom(line.tone)}></span>${line.text}</span
     >`;
   }
 
@@ -457,4 +439,9 @@ declare global {
   interface HTMLElementTagNameMap {
     'beuve-status-bar': BeuveStatusBar;
   }
+}
+
+/** The status dot tone (ADR 0115) for a describer's tone or a language server's state. */
+function dotToneFrom(state: string): string {
+  return dotTones[state] ?? state;
 }

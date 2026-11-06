@@ -9,6 +9,7 @@ import type { PeekState } from './peek-state.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { badgeStyles } from './primitives/badge-styles.ts';
 
 const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'External' };
 
@@ -20,6 +21,7 @@ const badgeLabels = { modified: 'Modified', untouched: 'Untouched', external: 'E
 @customElement('beuve-peek-portal')
 export class BeuvePeekPortal extends LitElement {
   static override styles = [
+    badgeStyles,
     buttonStyles,
     formatControlStyles,
     css`
@@ -57,6 +59,10 @@ export class BeuvePeekPortal extends LitElement {
       .tree {
         padding-block: 0 var(--beuve-space-2);
         padding-inline: 0 var(--beuve-space-3);
+      }
+
+      .row .badge {
+        margin-inline-start: auto;
       }
 
       .row {
@@ -123,23 +129,6 @@ export class BeuvePeekPortal extends LitElement {
         opacity: 1;
       }
 
-      .badge {
-        margin-inline-start: auto;
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        color: var(--beuve-text-muted);
-      }
-
-      .badge.modified {
-        border-color: var(--beuve-warn);
-        color: var(--beuve-warn);
-      }
-
-      .badge.external {
-        border-style: dashed;
-      }
-
       .note {
         padding-block: 2px;
         padding-inline: var(--beuve-space-6) var(--beuve-space-1);
@@ -148,16 +137,6 @@ export class BeuvePeekPortal extends LitElement {
 
       .note.error {
         color: var(--beuve-danger);
-      }
-
-      kbd {
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-block-end-width: 2px;
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
       }
     `,
   ];
@@ -248,7 +227,11 @@ export class BeuvePeekPortal extends LitElement {
         <span class="twisty">${isOpen ? '▾' : '▸'}</span>
         <span class="name">${pathText(node.name)}</span>
         <span class="where">${pathText(location(node, callSiteLines))}</span>
-        <span class="badge ${node.badge}">${badgeLabels[node.badge]}</span>
+        <span
+          class="badge ${node.badge === 'external' ? 'dashed' : ''}"
+          data-tone=${node.badge === 'modified' ? 'warn' : nothing}
+          >${badgeLabels[node.badge]}</span
+        >
       </button>
       ${node.file.kind === 'workspace' ? this.renderOpen(node) : nothing}
       ${isOpen ? this.renderChildren(node) : nothing}

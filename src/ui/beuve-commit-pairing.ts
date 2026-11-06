@@ -10,6 +10,8 @@ import { describeCommitPair } from './describe-commit-pair.ts';
 import type { CommitPairRow } from './describe-commit-pair.ts';
 import { moveCommitPairCursor } from './move-commit-pair-cursor.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { badgeStyles } from './primitives/badge-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /** Detail of `beuve-commit-pair-filter`: the pair to filter the diff stream to, or none. */
 export interface CommitPairFilterDetail {
@@ -23,9 +25,19 @@ export interface CommitPairFilterDetail {
  * `Escape` clears. Each change emits a bubbling, composed `beuve-commit-pair-filter` event with a
  * {@link CommitPairFilterDetail}; the owner sets `selectedId` from it.
  */
+/** The badge tone (ADR 0115) of each kind of pair. */
+const pairTones: Readonly<Record<CommitPairView['kind'], string>> = {
+  unchanged: 'muted',
+  modified: 'warn',
+  added: 'ok',
+  dropped: 'danger',
+};
+
 @customElement('beuve-commit-pairing')
 export class BeuveCommitPairing extends LitElement {
   static override styles = [
+    emptyStateStyles,
+    badgeStyles,
     buttonStyles,
     css`
       :host {
@@ -95,29 +107,6 @@ export class BeuveCommitPairing extends LitElement {
         white-space: nowrap;
       }
 
-      .chip {
-        padding: 0 6px;
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-full);
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-      }
-
-      .modified .chip {
-        border-color: var(--beuve-warn);
-        color: var(--beuve-warn);
-      }
-
-      .added .chip {
-        border-color: var(--beuve-ok);
-        color: var(--beuve-ok);
-      }
-
-      .dropped .chip {
-        border-color: var(--beuve-danger);
-        color: var(--beuve-danger);
-      }
-
       .subject {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -127,7 +116,6 @@ export class BeuveCommitPairing extends LitElement {
       .empty {
         padding: 0 var(--beuve-space-2);
         font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
       }
     `,
   ];
@@ -206,7 +194,7 @@ export class BeuveCommitPairing extends LitElement {
         data-index=${index}
       >
         <span class="commits">${row.commits}</span>
-        <span class="chip">${row.chip}</span>
+        <span class="badge" data-tone=${pairTones[row.kind]}>${row.chip}</span>
         <span class="subject">${row.subject}</span>
         <span class="stats">${row.stats}</span>
       </li>

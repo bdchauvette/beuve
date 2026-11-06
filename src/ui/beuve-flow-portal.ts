@@ -55,16 +55,6 @@ export class BeuveFlowPortal extends LitElement {
       .note.error {
         color: var(--beuve-danger);
       }
-
-      kbd {
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-block-end-width: 2px;
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
-      }
     `,
   ];
 

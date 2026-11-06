@@ -85,6 +85,8 @@ import { shortcutOf } from './shortcut-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { badgeStyles } from './primitives/badge-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -181,6 +183,8 @@ const estimatedSeparatorHeight = 32;
 @customElement('beuve-file-card')
 export class BeuveFileCard extends LitElement {
   static override styles = [
+    emptyStateStyles,
+    badgeStyles,
     buttonStyles,
     formatControlStyles,
     css`
@@ -226,11 +230,6 @@ export class BeuveFileCard extends LitElement {
       }
 
       .status {
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
         text-transform: uppercase;
       }
 
@@ -356,16 +355,9 @@ export class BeuveFileCard extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
-      .collapsed-body kbd {
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
-      }
-
       .empty {
-        margin: 0;
         padding: var(--beuve-space-2) var(--beuve-space-3);
         font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
       }
 
       diffs-container {
@@ -1773,7 +1765,7 @@ ${splitPatch(file.patch).map((line) => {
           data-action="title"
         >
           ${this.renderReviewedMark()}
-          <span class="status">${file.status}</span>
+          <span class="badge status">${file.status}</span>
           <span class="path" title=${file.path}>
             ${
               file.oldPath === undefined

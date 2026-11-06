@@ -174,11 +174,6 @@ export class BeuveSheetView extends LitElement {
         color: var(--beuve-accent);
         cursor: default;
       }
-
-      kbd {
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
-      }
     `,
   ];
 

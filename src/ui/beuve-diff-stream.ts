@@ -64,6 +64,7 @@ import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { segmentedStyles } from './primitives/segmented-styles.ts';
 
 /**
  * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
@@ -160,6 +161,7 @@ export interface OpenCommitDetail {
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
   static override styles = [
+    segmentedStyles,
     buttonStyles,
     zoneStyles,
     css`
@@ -399,27 +401,7 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-3);
       }
 
-      .segmented {
-        display: inline-flex;
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        overflow: hidden;
-      }
-
-      .segmented button {
-        border-radius: 0;
-      }
-
-      .segmented button + button {
-        border-inline-start: 1px solid var(--beuve-border);
-      }
-
-      .segmented button[aria-checked='true'] {
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
-      }
-
-      .segmented button.effective {
+      .segmented > button.effective {
         outline: 1px dashed var(--beuve-text-muted);
         outline-offset: -3px;
       }
@@ -1544,7 +1526,6 @@ export class BeuveDiffStream extends LitElement {
     return html`<span class="tools" role="group" aria-label="Diff display" title=${label.title}>
       <span class="segmented" role="radiogroup" aria-label="Diff layout">
         <button
-          class="button quiet"
           type="button"
           role="radio"
           tabindex="-1"
@@ -1557,7 +1538,7 @@ export class BeuveDiffStream extends LitElement {
           ${displayIcon('split')}
         </button>
         <button
-          class="button quiet ${isNarrow && layout === 'split' ? 'effective' : ''}"
+          class=${isNarrow && layout === 'split' ? 'effective' : ''}
           type="button"
           role="radio"
           tabindex="-1"

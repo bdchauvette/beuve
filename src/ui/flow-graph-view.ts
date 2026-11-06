@@ -13,6 +13,7 @@ import type {
   PositionedFlowEdge,
   PositionedFlowNode,
 } from './flow-layout.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /** A node of the graph to draw; the flow domain's graph nodes satisfy it structurally. */
 export interface FlowViewNode extends FlowLayoutNode {
@@ -68,176 +69,174 @@ const roundedKinds: ReadonlySet<string> = new Set([
 
 @customElement('beuve-flow-graph')
 export class FlowGraphView extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-      overflow: auto;
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    emptyStateStyles,
+    css`
+      :host {
+        display: block;
+        overflow: auto;
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: var(--beuve-font-small);
+      }
 
-    svg {
-      display: block;
-      max-inline-size: 100%;
-      block-size: auto;
-    }
+      svg {
+        display: block;
+        max-inline-size: 100%;
+        block-size: auto;
+      }
 
-    .edge {
-      fill: none;
-      stroke: var(--beuve-text-muted);
-      stroke-width: 1;
-    }
+      .edge {
+        fill: none;
+        stroke: var(--beuve-text-muted);
+        stroke-width: 1;
+      }
 
-    .edge.back,
-    .edge.continue,
-    .edge.break,
-    .edge.exception,
-    .edge.finally {
-      stroke-dasharray: 4 3;
-    }
+      .edge.back,
+      .edge.continue,
+      .edge.break,
+      .edge.exception,
+      .edge.finally {
+        stroke-dasharray: 4 3;
+      }
 
-    .edge.exception {
-      stroke: var(--beuve-danger);
-    }
+      .edge.exception {
+        stroke: var(--beuve-danger);
+      }
 
-    .arrow {
-      fill: var(--beuve-text-muted);
-    }
+      .arrow {
+        fill: var(--beuve-text-muted);
+      }
 
-    .edge-label {
-      fill: var(--beuve-text-muted);
-      font-size: var(--beuve-font-size-caption);
-      paint-order: stroke;
-      stroke: var(--beuve-bg);
-      stroke-width: 3px;
-      stroke-linejoin: round;
-    }
+      .edge-label {
+        fill: var(--beuve-text-muted);
+        font-size: var(--beuve-font-size-caption);
+        paint-order: stroke;
+        stroke: var(--beuve-bg);
+        stroke-width: 3px;
+        stroke-linejoin: round;
+      }
 
-    .node {
-      cursor: pointer;
-      outline: none;
-    }
+      .node {
+        cursor: pointer;
+        outline: none;
+      }
 
-    .shape {
-      fill: var(--beuve-code-bg, var(--beuve-surface));
-      stroke: var(--beuve-border);
-      stroke-width: 1;
-    }
+      .shape {
+        fill: var(--beuve-code-bg, var(--beuve-surface));
+        stroke: var(--beuve-border);
+        stroke-width: 1;
+      }
 
-    .node.entry .shape,
-    .node.exit .shape {
-      fill: none;
-      stroke-dasharray: 2 2;
-    }
+      .node.entry .shape,
+      .node.exit .shape {
+        fill: none;
+        stroke-dasharray: 2 2;
+      }
 
-    .node.return .shape,
-    .node.throw .shape {
-      stroke: var(--beuve-text-muted);
-    }
+      .node.return .shape,
+      .node.throw .shape {
+        stroke: var(--beuve-text-muted);
+      }
 
-    .node.throw .shape {
-      stroke: var(--beuve-danger);
-    }
+      .node.throw .shape {
+        stroke: var(--beuve-danger);
+      }
 
-    .node.changed .shape {
-      fill: var(--beuve-diff-added-bg);
-      stroke: var(--beuve-diff-added-bar);
-      stroke-width: 1.5;
-    }
+      .node.changed .shape {
+        fill: var(--beuve-diff-added-bg);
+        stroke: var(--beuve-diff-added-bar);
+        stroke-width: 1.5;
+      }
 
-    .node:hover .shape {
-      stroke: var(--beuve-accent);
-    }
+      .node:hover .shape {
+        stroke: var(--beuve-accent);
+      }
 
-    .node:focus-visible .shape {
-      stroke: var(--beuve-accent);
-      stroke-width: 2;
-    }
+      .node:focus-visible .shape {
+        stroke: var(--beuve-accent);
+        stroke-width: 2;
+      }
 
-    .bar {
-      stroke: var(--beuve-diff-added-bar);
-      stroke-width: 3;
-      stroke-linecap: round;
-    }
+      .bar {
+        stroke: var(--beuve-diff-added-bar);
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
 
-    .label {
-      fill: var(--beuve-code-text, var(--beuve-text));
-      font-family: var(--beuve-font-family-mono);
-      font-size: var(--beuve-font-size-caption);
-      dominant-baseline: central;
-      pointer-events: none;
-    }
+      .label {
+        fill: var(--beuve-code-text, var(--beuve-text));
+        font-family: var(--beuve-font-family-mono);
+        font-size: var(--beuve-font-size-caption);
+        dominant-baseline: central;
+        pointer-events: none;
+      }
 
-    .node.changed .label {
-      fill: var(--beuve-diff-added-text);
-    }
+      .node.changed .label {
+        fill: var(--beuve-diff-added-text);
+      }
 
-    .node.entry .label,
-    .node.exit .label {
-      fill: var(--beuve-text-muted);
-    }
+      .node.entry .label,
+      .node.exit .label {
+        fill: var(--beuve-text-muted);
+      }
 
-    .marker {
-      fill: var(--beuve-accent);
-      font-size: var(--beuve-font-size-caption);
-      dominant-baseline: central;
-      pointer-events: none;
-    }
+      .marker {
+        fill: var(--beuve-accent);
+        font-size: var(--beuve-font-size-caption);
+        dominant-baseline: central;
+        pointer-events: none;
+      }
 
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-1) var(--beuve-space-4);
-      margin: var(--beuve-space-2) 0 0;
-      padding: 0;
-      list-style: none;
-      color: var(--beuve-text-muted);
-    }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-1) var(--beuve-space-4);
+        margin: var(--beuve-space-2) 0 0;
+        padding: 0;
+        list-style: none;
+        color: var(--beuve-text-muted);
+      }
 
-    .legend li {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--beuve-space-1);
-    }
+      .legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--beuve-space-1);
+      }
 
-    .swatch {
-      display: inline-block;
-      inline-size: 16px;
-      block-size: 10px;
-      border: 1px solid var(--beuve-border);
-      border-radius: 5px;
-    }
+      .swatch {
+        display: inline-block;
+        inline-size: 16px;
+        block-size: 10px;
+        border: 1px solid var(--beuve-border);
+        border-radius: 5px;
+      }
 
-    .swatch.changed {
-      border-color: var(--beuve-diff-added-bar);
-      background: var(--beuve-diff-added-bg);
-    }
+      .swatch.changed {
+        border-color: var(--beuve-diff-added-bar);
+        background: var(--beuve-diff-added-bg);
+      }
 
-    .swatch.dashed {
-      block-size: 0;
-      border-width: 1px 0 0;
-      border-style: dashed;
-      border-color: var(--beuve-text-muted);
-      border-radius: 0;
-    }
+      .swatch.dashed {
+        block-size: 0;
+        border-width: 1px 0 0;
+        border-style: dashed;
+        border-color: var(--beuve-text-muted);
+        border-radius: 0;
+      }
 
-    .swatch.solid {
-      block-size: 0;
-      border-width: 1px 0 0;
-      border-color: var(--beuve-text-muted);
-      border-radius: 0;
-    }
+      .swatch.solid {
+        block-size: 0;
+        border-width: 1px 0 0;
+        border-color: var(--beuve-text-muted);
+        border-radius: 0;
+      }
 
-    .accent {
-      color: var(--beuve-accent);
-    }
-
-    .empty {
-      margin: 0;
-      color: var(--beuve-text-muted);
-    }
-  `;
+      .accent {
+        color: var(--beuve-accent);
+      }
+    `,
+  ];
 
   private layout: FlowLayout | undefined;
 

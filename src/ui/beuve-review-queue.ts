@@ -31,6 +31,9 @@ import { queueIcon } from './queue-icon.ts';
 import { sortQueueItems } from './sort-queue-items.ts';
 import { withStackContext } from './with-stack-context.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { statusDotStyles } from './primitives/status-dot-styles.ts';
+import { badgeStyles } from './primitives/badge-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
@@ -54,6 +57,9 @@ export interface QueueOpenUrlDetail {
 @customElement('beuve-review-queue')
 export class BeuveReviewQueue extends LitElement {
   static override styles = [
+    emptyStateStyles,
+    badgeStyles,
+    statusDotStyles,
     buttonStyles,
     formatControlStyles,
     css`
@@ -111,16 +117,6 @@ export class BeuveReviewQueue extends LitElement {
         to {
           rotate: 1turn;
         }
-      }
-
-      .badge {
-        min-inline-size: 14px;
-        padding: 0 3px;
-        border-radius: 7px;
-        background: var(--beuve-accent);
-        color: var(--beuve-bg);
-        font-size: var(--beuve-font-size-caption);
-        text-align: center;
       }
 
       #sort-button {
@@ -312,18 +308,8 @@ export class BeuveReviewQueue extends LitElement {
         color: var(--beuve-text-muted);
       }
 
-      .chip {
+      .title .badge {
         margin-inline-start: var(--beuve-space-1);
-        padding: 0 4px;
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
-      }
-
-      .title button.chip {
-        background: none;
-        cursor: pointer;
       }
 
       .author,
@@ -346,13 +332,6 @@ export class BeuveReviewQueue extends LitElement {
         text-align: end;
       }
 
-      .dot {
-        inline-size: 8px;
-        block-size: 8px;
-        border-radius: 50%;
-        background: var(--beuve-border);
-      }
-
       .ok {
         color: var(--beuve-ok);
       }
@@ -373,18 +352,6 @@ export class BeuveReviewQueue extends LitElement {
         color: var(--beuve-text-muted);
       }
 
-      .dot.ok {
-        background: var(--beuve-ok-solid);
-      }
-
-      .dot.warn {
-        background: var(--beuve-warn-solid);
-      }
-
-      .dot.danger {
-        background: var(--beuve-danger-solid);
-      }
-
       .turn,
       .local {
         font: var(--beuve-font-small);
@@ -397,7 +364,6 @@ export class BeuveReviewQueue extends LitElement {
 
       .empty {
         padding: var(--beuve-space-4);
-        color: var(--beuve-text-muted);
         text-align: center;
       }
     `,
@@ -612,21 +578,21 @@ export class BeuveReviewQueue extends LitElement {
       >
       <span class="title" title=${item.title}
         >${depth > 0 ? html`<span class="stacked">${'↳ '.repeat(depth)}</span>` : nothing}${item.title}${
-          item.isDraft ? html`<span class="chip">Draft</span>` : nothing
+          item.isDraft ? html`<span class="badge">Draft</span>` : nothing
         }${
           aside === undefined
             ? nothing
-            : html`<span class="chip" title=${aside.title}>${aside.text}</span>`
+            : html`<span class="badge" title=${aside.title}>${aside.text}</span>`
         }${
           item.request === 'team'
-            ? html`<span class="chip" title="Requested of a team you are on">Team</span>`
+            ? html`<span class="badge" title="Requested of a team you are on">Team</span>`
             : nothing
         }${
           item.agentSessionUrl === undefined
             ? nothing
             : html`<button
                 type="button"
-                class="chip"
+                class="badge"
                 data-action="open-url"
                 data-url=${item.agentSessionUrl}
                 title=${`Agent session: ${item.agentSessionUrl}`}
@@ -646,7 +612,7 @@ export class BeuveReviewQueue extends LitElement {
                 <span class="removed">−${item.size.deletions}</span> · ${item.size.changedFiles}f`
         }</span
       >
-      <span class="dot ${ci.tone}" title=${ci.title}></span>
+      <span class="status-dot" data-tone=${ci.tone} title=${ci.title}></span>
       <span
         class="turn ${turn?.isYours === true ? 'yours' : 'muted'}"
         title=${turn?.title ?? item.attention.reasons.join('\n')}
@@ -774,7 +740,7 @@ export class BeuveReviewQueue extends LitElement {
         title="Filter the queue"
       >
         ${queueIcon('filter')}<span>Filter</span>${
-          active === 0 ? nothing : html`<span class="badge">${active}</span>`
+          active === 0 ? nothing : html`<span class="badge count">${active}</span>`
         }
       </button>
       <div id="filter-menu" popover role="menu" aria-label="Filters">

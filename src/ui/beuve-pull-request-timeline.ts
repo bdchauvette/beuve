@@ -13,6 +13,7 @@ import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 import type { TimelineState } from './timeline-state.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /** Only the latest events are drawn, so a very long history stays quick. */
 const maxShown = 100;
@@ -26,6 +27,7 @@ const maxShown = 100;
 @customElement('beuve-pull-request-timeline')
 export class BeuvePullRequestTimeline extends LitElement {
   static override styles = [
+    statusDotStyles,
     buttonStyles,
     markdownBodyStyles,
     css`
@@ -62,25 +64,9 @@ export class BeuvePullRequestTimeline extends LitElement {
         min-inline-size: 0;
       }
 
-      .dot {
+      .status-dot {
         align-self: start;
-        inline-size: 7px;
-        block-size: 7px;
-        margin-block-start: 5px;
-        border-radius: 50%;
-        background: var(--beuve-text-muted);
-      }
-
-      .dot.ok {
-        background: var(--beuve-ok-solid);
-      }
-
-      .dot.warn {
-        background: var(--beuve-warn-solid);
-      }
-
-      .dot.danger {
-        background: var(--beuve-danger-solid);
+        margin-block-start: 0.375rem;
       }
 
       .what {
@@ -172,7 +158,7 @@ export class BeuvePullRequestTimeline extends LitElement {
     const { verb, tone } = describeTimelineEvent(event);
     const hasBody = event.kind !== 'commit' && event.body.trim() !== '';
     return html`<li>
-      <span class="dot ${tone}"></span>
+      <span class="status-dot" data-tone=${tone}></span>
       <div class="what">
         <div class="who">
           <strong>${event.author}</strong> ${verb}
