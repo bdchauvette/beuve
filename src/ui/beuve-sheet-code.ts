@@ -4,9 +4,11 @@ import { css, html, LitElement } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { SheetMarksView, SheetNoteView } from '#contract/ipc-contract.ts';
+import type { DiagnosticItemView, SheetMarksView, SheetNoteView } from '#contract/ipc-contract.ts';
 
 import { characterOffsetAt } from './character-offset-at.ts';
+import { DiagnosticHighlights } from './diagnostic-highlights.ts';
+import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
@@ -73,6 +75,8 @@ export class BeuveSheetCode extends LitElement {
   private view: File | undefined;
   private sheet: CSSStyleSheet | undefined;
   private renderedKey = '';
+  /** This sheet's diagnostic underlines in the document's shared highlights. */
+  private readonly diagnosticHighlights = new DiagnosticHighlights();
 
   @property() accessor path = '';
   @property() accessor contents = '';
@@ -87,6 +91,8 @@ export class BeuveSheetCode extends LitElement {
   @property({ attribute: false }) accessor matchLines: readonly number[] = [];
   @property({ attribute: false }) accessor currentMatchLine: number | undefined;
   @property({ attribute: false }) accessor selected: SheetSelectDetail | undefined;
+  /** The language servers' diagnostics for this file, when the sheet is at the session head (ADR 0111). */
+  @property({ attribute: false }) accessor diagnostics: readonly DiagnosticItemView[] = [];
   /** A snippet in the chat: highlighted text only, nothing to click or select by line. */
   @property({ type: Boolean }) accessor compact = false;
 
@@ -143,8 +149,13 @@ export class BeuveSheetCode extends LitElement {
       onTokenLeave: (): void => {
         this.dispatchEvent(new CustomEvent('beuve-sheet-token-hover-end', { bubbles: true }));
       },
-      onPostRender: (): void => {
+      onPostRender: (_node, _instance, phase): void => {
+        if (phase === 'unmount') {
+          this.diagnosticHighlights.clear();
+          return;
+        }
         void this.syncGutter();
+        this.syncDiagnostics();
       },
     });
   }
@@ -169,6 +180,11 @@ export class BeuveSheetCode extends LitElement {
     if (!root.adoptedStyleSheets.includes(sheet)) {
       root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
     }
+  }
+
+  /** Underlines each diagnostic's text on the rows the sheet has rendered. */
+  private syncDiagnostics(): void {
+    this.diagnosticHighlights.set(diagnosticRangesFrom(this.diagnostics, (line) => this.row(line)));
   }
 
   private row(line: number): HTMLElement | undefined {
@@ -197,6 +213,7 @@ export class BeuveSheetCode extends LitElement {
     super.disconnectedCallback();
     this.view?.cleanUp();
     this.view = undefined;
+    this.diagnosticHighlights.clear();
     this.renderedKey = '';
   }
 
@@ -216,6 +233,9 @@ export class BeuveSheetCode extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has('diagnostics')) {
+      this.syncDiagnostics();
+    }
     const { library } = this;
     const container = this.renderRoot.querySelector<HTMLElement>('.code');
     if (library === undefined || container === null) {

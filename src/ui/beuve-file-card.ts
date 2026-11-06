@@ -35,11 +35,9 @@ import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
 import { describeDiagnostics } from './describe-diagnostics.ts';
 import { DiagnosticHighlights } from './diagnostic-highlights.ts';
-import type { DiagnosticRange } from './diagnostic-highlights.ts';
-import { diagnosticLineSpans } from './diagnostic-line-spans.ts';
+import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
 import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostics.ts';
 import { headRowSelector } from './head-row-selector.ts';
-import { textRangeIn } from './text-range-in.ts';
 import { characterOffsetAt } from './character-offset-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
@@ -1391,29 +1389,14 @@ export class BeuveFileCard extends LitElement {
       this.diagnosticHighlights.clear();
       return;
     }
-    const rows = new Map<number, HTMLElement | undefined>();
     const rowOf = (line: number): HTMLElement | undefined => {
-      if (!rows.has(line)) {
-        const found = this.findRow('additions', line) ?? this.findRow('context', line);
-        if (found instanceof HTMLElement) {
-          rows.set(line, found);
-        } else {
-          rows.set(line, undefined);
-        }
+      const found = this.findRow('additions', line) ?? this.findRow('context', line);
+      if (found instanceof HTMLElement) {
+        return found;
       }
-      return rows.get(line);
+      return undefined;
     };
-    const ranges: DiagnosticRange[] = [];
-    for (const item of diagnostics.view.diagnostics) {
-      const spans = diagnosticLineSpans(item, (line) => rowOf(line)?.textContent.length);
-      for (const span of spans) {
-        const row = rowOf(span.line);
-        const range = row && textRangeIn(row, { start: span.start, end: span.end });
-        if (range) {
-          ranges.push({ severity: item.severity, range });
-        }
-      }
-    }
+    const ranges = diagnosticRangesFrom(diagnostics.view.diagnostics, rowOf);
     this.diagnosticHighlights.set(ranges);
   }
 

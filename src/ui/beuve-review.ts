@@ -73,6 +73,7 @@ import { CodeNavigationController } from './code-navigation-controller.ts';
 import { diagnosticsAt } from './diagnostics-at.ts';
 import type { DiagnosticPosition } from './diagnostics-at.ts';
 import { DiagnosticsController } from './diagnostics-controller.ts';
+import type { DiagnosticsTarget } from './diagnostics-controller.ts';
 import type { DiagnosticsWantedDetail } from './file-diagnostics.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { dockItemOf } from './dock-item-of.ts';
@@ -565,8 +566,11 @@ export class BeuveReview extends LitElement {
   /** The language servers' diagnostics for the files on screen (ADR 0111). */
   private readonly fileDiagnostics = new DiagnosticsController(this, {
     bridge: beuveBridge,
-    review: (): ReviewView | undefined => {
-      return this.review;
+    target: (): DiagnosticsTarget | undefined => {
+      if (this.review === undefined) {
+        return undefined;
+      }
+      return { sessionId: this.review.session.id, headSha: this.review.headSha };
     },
   });
   private shownReview: ReviewView | undefined;
