@@ -9,11 +9,13 @@ const languages = ['typescript', 'go', 'rust', 'python', 'shellscript', 'markdow
 export type TestLanguage = (typeof languages)[number];
 
 /**
- * How the theme shows a token (ADR 0119): a bold name, an italic type, a muted keyword or
- * punctuation mark, plain regular text (operators, strings, constants), or a comment. Anything
- * else is its color and Shiki font-style flags, so a failure says what it got.
+ * How the theme shows a token (ADR 0119): bold (a definition or a number), italic (a type), bold
+ * italic (a type's definition), muted (a keyword or punctuation mark), plain regular text (names,
+ * operators, strings), or a comment. Anything else is its color and Shiki font-style flags, so a
+ * failure says what it got.
  */
-export type TokenStyle = 'name' | 'type' | 'muted' | 'plain' | 'comment' | `${string} ${string}`;
+export type TokenStyle =
+  'bold' | 'italic' | 'bold-italic' | 'muted' | 'plain' | 'comment' | `${string} ${string}`;
 
 /** The style of the first character of each `«…»`-marked span of `marked`, markers removed. */
 export type StylesOf = (lang: TestLanguage, marked: string) => TokenStyle[];
@@ -33,8 +35,9 @@ export async function createStylesOf(): Promise<StylesOf> {
     preferredHighlighter: 'shiki-js',
   });
   const styles = new Map<string, TokenStyle>([
-    [`${light.foreground} ${String(boldFlag)}`, 'name'],
-    [`${light.foreground} ${String(italicFlag)}`, 'type'],
+    [`${light.foreground} ${String(boldFlag)}`, 'bold'],
+    [`${light.foreground} ${String(italicFlag)}`, 'italic'],
+    [`${light.foreground} ${String(boldFlag + italicFlag)}`, 'bold-italic'],
     [`${light.muted} 0`, 'muted'],
     [`${light.foreground} 0`, 'plain'],
     [`${light.comment} 0`, 'comment'],
