@@ -21,3 +21,7 @@ A reviewer reading a pull request in the browser wants to continue in beuve with
 - The renderer gains one push channel; nothing it can invoke changes, and the CSP is untouched.
 - Registration needs a packaged app. Moving the app to `/Applications` (or a first launch) is what makes macOS register the scheme.
 - A share sheet or Services entry remains out of scope; it would reuse this scheme from a native helper.
+
+## Amendment 2026-11-06: branches
+
+A tree URL (`https://<host>/<owner>/<repo>/tree/<branch>`) is the second target of the `open` action: `githubLinkFrom` replaces `pullRequestLinkFrom`, the prompt reads "Follow branch host/owner/repo:branch?", and main pushes `link:open-branch { ref }` for the renderer's `github:open-branch` ([0112](0112-remote-branch-sessions.md)).
