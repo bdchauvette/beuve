@@ -52,7 +52,7 @@ export function createSheetWindows(options: SheetWindowsOptions): SheetWindows {
         minHeight: 320,
         show: false,
         title: titleOf(request),
-        backgroundColor: windowBackground({ dark: '#0e1415', light: '#f7f7f7' }),
+        backgroundColor: windowBackground({ dark: '#101211', light: '#f9f9fb' }),
         webPreferences: {
           preload: options.preloadPath,
           contextIsolation: true,

@@ -1,6 +1,6 @@
 # 0114. Design tokens, logical properties and diff color schemes
 
-- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
+- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), attribution by [0119](0119-radix-syntax-palettes-with-muted-keywords.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
 - Date: 2026-11-06
 
 ## Context

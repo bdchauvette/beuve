@@ -5,68 +5,82 @@ import { test } from './testing/test.ts';
 import { syntaxPalettes } from './syntax-palettes.ts';
 import { textmateThemeFrom } from './textmate-theme-from.ts';
 
-function styledScope(): RegExp {
-  return /keyword|punctuation(?!\.definition\.comment)|storage|operator/u;
-}
 function fontStyles(): RegExp {
   return /fontStyle|bold|italic/u;
 }
 
 describe('textmateThemeFrom', () => {
-  test('colors only comments, strings, constants and definitions', ({ expect }) => {
+  test('uses only the palette, and no bold or italics', ({ expect }) => {
     const light = syntaxPalettes.light;
     const theme = textmateThemeFrom('t', 'light', light);
-    expect(theme).toMatchObject({ name: 't', type: 'light', fg: '#000000', bg: '#f7f7f7' });
+    expect(theme).toMatchObject({
+      name: 't',
+      type: 'light',
+      fg: light.foreground,
+      bg: light.background,
+    });
     const colors = new Set(theme.tokenColors.map((rule) => rule.settings.foreground));
     expect(colors).toStrictEqual(
-      new Set([light.comment, light.string, light.constant, light.definition, light.foreground]),
+      new Set([
+        light.comment,
+        light.string,
+        light.constant,
+        light.definition,
+        light.muted,
+        light.foreground,
+      ]),
     );
-    const scopes = theme.tokenColors.flatMap((rule) => rule.scope);
-    expect(scopes.filter((scope) => styledScope().test(scope))).toStrictEqual([]);
     expect(JSON.stringify(theme)).not.toMatch(fontStyles());
   });
 });
 
 describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => {
-  test('leaves keywords, operators, punctuation, calls and type references plain in TypeScript', ({
+  test('mutes keywords, operators and punctuation and leaves names plain in TypeScript', ({
     expect,
     colorsOf,
   }) => {
-    const { foreground: plain, comment, string, constant, definition } = syntaxPalettes.light;
+    const {
+      foreground: plain,
+      muted,
+      comment,
+      string,
+      constant,
+      definition,
+    } = syntaxPalettes.light;
     const code = [
       '«// why»',
-      '«export» «function» «build»«(»items: readonly «Item»[]): «Widget» {',
-      "  «const» w «=» «new» «Widget»(«'x'», «42», «true», «null»);",
-      '  «return» w.«render»(`«a»${«items».length}`);',
-      '}',
+      '«export» «function» «build»«(»«items»«:» «readonly» «Item»«[]»«)»«:» «Widget» «{»',
+      "  «const» «w» «=» «new» «Widget»«(»«'x'», «42», «true», «null»«)»«;»",
+      '  «if» «(»«w»«)» «{» «return» «w».«render»«(»`«a»«${»«items».length «+» «1»«}»`«)»«;» «}»',
+      '«}»',
       'export class «Widget» {}',
       'interface «Item» { id: string }',
       'export const «handler» = (): void => {};',
     ].join('\n');
-    expect(colorsOf('typescript', code)).toStrictEqual([
-      comment,
-      plain,
-      plain,
-      definition,
-      plain,
-      plain,
-      plain,
-      plain,
-      plain,
-      plain,
-      plain,
-      string,
-      constant,
-      constant,
-      constant,
-      plain,
-      plain,
-      string,
-      plain,
-      definition,
-      definition,
-      definition,
-    ]);
+    const lines = [
+      [comment],
+      [muted, muted, definition, muted, plain, muted, muted, plain, muted, muted, muted, plain],
+      [muted],
+      [muted, plain, muted, muted, plain, muted, string, constant, constant, constant, muted],
+      [muted],
+      [muted, muted, plain, muted, muted, muted, plain, plain, muted, string, muted, plain],
+      [muted, constant, muted, muted, muted, muted],
+      [muted],
+      [definition],
+      [definition],
+      [definition],
+    ];
+    expect(colorsOf('typescript', code)).toStrictEqual(lines.flat());
+  });
+
+  test('keeps what a comment or string holds in its color', ({ expect, colorsOf }) => {
+    const { comment, string } = syntaxPalettes.light;
+    const code = "/** «@param» «{»«Item»«}» items */\nconst r = «/»a«+»«(»b«)?»/u, q = «'»a«'»;";
+    const lines = [
+      [comment, comment, comment, comment],
+      [string, string, string, string, string, string],
+    ];
+    expect(colorsOf('typescript', code)).toStrictEqual(lines.flat());
   });
 
   test('colors definitions but not calls in Go, Rust, Python and shell', ({ expect, colorsOf }) => {
@@ -88,5 +102,12 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
       plain,
       plain,
     ]);
+  });
+
+  test('leaves built-in type names plain, as in TypeScript', ({ expect, colorsOf }) => {
+    const { foreground: plain, muted } = syntaxPalettes.light;
+    expect(colorsOf('go', '«var» a «int»; var e «error»')).toStrictEqual([muted, plain, plain]);
+    expect(colorsOf('rust', '«let» a: «i32» = 1;')).toStrictEqual([muted, plain]);
+    expect(colorsOf('typescript', '«let» a: «number» = 1;')).toStrictEqual([muted, plain]);
   });
 });

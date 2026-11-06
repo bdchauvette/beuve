@@ -2,7 +2,6 @@
  * beuve's color scales copy values from these works, each under the MIT License below:
  *   Radix Colors 3.0.0 — Copyright (c) 2021 Radix (https://github.com/radix-ui/colors)
  *   Primer Primitives 11.10.0 — Copyright (c) 2018 GitHub Inc. (https://github.com/primer/primitives)
- *   Alabaster — Copyright (c) 2018 Nikita Prokopov (https://github.com/tonsky/sublime-scheme-alabaster)
  * See THIRD_PARTY_NOTICES.md for what was taken from each.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -96,10 +95,6 @@
   --beuve-scale-orange-a4: light-dark(#ff91014a, #ff590039);
   --beuve-scale-orange-a5: light-dark(#ff8b0065, #ff61004a);
   --beuve-scale-orange-a6: light-dark(#ff81007d, #fd75045c);
-
-  /* Alabaster (ADR 0025): code surfaces match the syntax palette in syntax-palettes.ts. */
-  --beuve-scale-alabaster-bg: light-dark(#f7f7f7, #0e1415);
-  --beuve-scale-alabaster-fg: light-dark(#000000, #cecece);
 
   --beuve-font-family-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --beuve-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -255,8 +250,9 @@
   --beuve-shadow-large: 0 16px 48px var(--beuve-scale-black-a3);
   --beuve-shadow-sheet: -8px 0 24px var(--beuve-scrim-soft);
 
-  --beuve-code-bg: var(--beuve-scale-alabaster-bg);
-  --beuve-code-text: var(--beuve-scale-alabaster-fg);
+  /* Code surfaces; syntax-palettes.ts repeats these steps as hex for the highlighter (ADR 0119). */
+  --beuve-code-bg: light-dark(var(--beuve-scale-gray-2), var(--beuve-scale-gray-1));
+  --beuve-code-text: var(--beuve-scale-gray-12);
 
   /* ── 3. Component: diffs ───────────────────────────────────────────────── */
 
