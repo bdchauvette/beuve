@@ -28,13 +28,10 @@ describe('createLspMultiplexer with typescript-language-server', { timeout: 60_0
     const report = okValueFrom(
       await lsp.getDiagnostics({ root: project.root, path: 'src/broken.ts' }),
     );
-    expect(report).toMatchObject({
-      path: 'src/broken.ts',
-      serverId: 'typescript',
-      freshness: 'fresh',
-    });
+    expect(report).toMatchObject({ path: 'src/broken.ts', freshness: 'fresh', skipped: [] });
     expect(report.diagnostics).toStrictEqual([
       expect.objectContaining({
+        serverId: 'typescript',
         severity: 'error',
         code: '2322',
         source: 'typescript',
@@ -427,6 +424,124 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     expect(roots.map((root) => realpathSync(root))).toStrictEqual([realpathSync(project.root)]);
   });
 
+  test('reports the diagnostics of every server that handles the file, tagged by server, in registry order', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        named(fakeServer(fakeServerScript, 'normal'), 'checker'),
+        named(fakeServer(fakeServerScript, 'normal'), 'linter'),
+      ],
+    });
+    closing(lsp);
+    const report = okValueFrom(await lsp.getDiagnostics(scriptedRequest(project.root)));
+    expect(report.diagnostics.map((diagnostic) => diagnostic.serverId)).toStrictEqual([
+      'checker',
+      'linter',
+    ]);
+    expect(report).toMatchObject({ freshness: 'fresh', skipped: [] });
+    expect(lsp.status().map((status) => status.serverId)).toStrictEqual(['checker', 'linter']);
+  });
+
+  test('uses the first server that has the capability, and starts the ones before it only to ask', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        named(fakeServer(fakeServerScript, 'bare'), 'linter'),
+        named(fakeServer(fakeServerScript, 'normal'), 'checker'),
+      ],
+    });
+    closing(lsp);
+    const [node] = okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    expect(node?.name).toBe('echo');
+    const served = lsp.status().map((status) => status.serverId);
+    expect(served).toStrictEqual(['linter', 'checker']);
+    await expect(
+      lsp.documentSymbols({ root: project.root, path: 'src/a.ts' }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'capability-missing' },
+    });
+  });
+
+  test('passes over a server that cannot start when another one can answer', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        named(fakeServer(fakeServerScript, 'fail-initialize'), 'broken'),
+        named(fakeServer(fakeServerScript, 'normal'), 'working'),
+      ],
+    });
+    closing(lsp);
+    okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    const report = okValueFrom(await lsp.getDiagnostics(scriptedRequest(project.root)));
+    expect(report.diagnostics.map((diagnostic) => diagnostic.serverId)).toStrictEqual(['working']);
+    expect(report.skipped).toMatchObject([
+      { serverId: 'broken', error: { kind: 'server-start-failed' } },
+    ]);
+  });
+
+  test('says why when no server can answer', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [
+        named(fakeServer(fakeServerScript, 'fail-initialize'), 'first'),
+        named(fakeServer(fakeServerScript, 'fail-initialize'), 'second'),
+      ],
+    });
+    closing(lsp);
+    await expect(lsp.getDiagnostics(scriptedRequest(project.root))).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'server-start-failed', serverId: 'first' },
+    });
+  });
+
+  test('runs a server in the nearest directory with one of its root markers, one server per root, and keeps paths relative to the checkout', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    project.write({ 'pkg/mod/go.mod': 'module mod\n', 'pkg/mod/x.ts': 'export const x = 1;\n' });
+    const lsp = createLspMultiplexer({
+      servers: [
+        { ...named(fakeServer(fakeServerScript, 'normal'), 'modular'), rootMarkers: ['go.mod'] },
+      ],
+    });
+    closing(lsp);
+    const [inModule] = okValueFrom(
+      await lsp.prepareCallHierarchy({
+        root: project.root,
+        path: 'pkg/mod/x.ts',
+        position: { line: 0, character: 0 },
+      }),
+    );
+    okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    expect(inModule?.file).toStrictEqual({ kind: 'workspace', path: 'pkg/mod/x.ts' });
+    const roots = lsp.status().map((status) => realpathSync(status.root));
+    expect(roots).toStrictEqual([
+      realpathSync(path.join(project.root, 'pkg/mod')),
+      realpathSync(project.root),
+    ]);
+    await lsp.restart(project.root);
+    expect(lsp.status()).toStrictEqual([]);
+  });
+
   test('does not search the workspace for server binaries unless trusted', async ({
     expect,
     closing,
@@ -461,6 +576,10 @@ function fakeServer(script: string, mode: FakeServerMode): ServerDefinition {
 /** A call hierarchy request the scripted server answers, for a test that only needs it started. */
 function scriptedRequest(root: string): PositionRequest {
   return { root, path: 'src/a.ts', position: { line: 0, character: 0 } };
+}
+
+function named(definition: ServerDefinition, id: string): ServerDefinition {
+  return { ...definition, id };
 }
 
 function errorKindOf(result: Result<unknown, LspError>): string {

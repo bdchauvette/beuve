@@ -10,7 +10,7 @@ import { LruCache } from '#x/collections/lru-cache.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
-import type { Result } from '#x/result/result.ts';
+import type { Err, Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { convertCharacter } from './convert-character.ts';
@@ -20,18 +20,22 @@ import { createServerEnvironment } from './create-server-environment.ts';
 import { createViewMapper } from './create-view-mapper.ts';
 import type { ViewMapper } from './create-view-mapper.ts';
 import { findServerCommand } from './find-server-command.ts';
+import { findServerRoot } from './find-server-root.ts';
 import { isWithinDirectory } from './is-within-directory.ts';
 import { LineIndex } from './line-index.ts';
 import type { LspError } from './lsp-error.ts';
 import type {
   CallHierarchyCall,
   CallHierarchyNode,
+  DiagnosticsFreshness,
   DiagnosticsReport,
+  DiagnosticView,
   DocumentSymbolView,
   HoverView,
   LocationView,
   Position,
   ServerStatus,
+  SkippedServer,
 } from './lsp-model.ts';
 import type { LspCallHierarchyItem } from './lsp-protocol.ts';
 import { normalizeUri } from './normalize-uri.ts';
@@ -161,6 +165,9 @@ export interface LspMultiplexer {
 
 interface ServerEntry {
   readonly key: string;
+  /** The checkout this server belongs to; trust, the environment and path mapping are of it. */
+  readonly workspace: WorkspaceRoot;
+  /** Where the server runs: the checkout, or the module root inside it a marker names. */
   readonly root: WorkspaceRoot;
   readonly definition: ServerDefinition;
   session: ServerSession | undefined;
@@ -200,28 +207,29 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const idleTimeout = options.idleTimeout ?? Temporal.Duration.from({ minutes: 5 });
   const lifecycle = { isDisposed: false };
 
-  const definitionFor = (file: WorkspaceFile): ServerDefinition | undefined => {
+  /** Every server that handles the file, in registry order (ADR 0111). */
+  const definitionsFor = (file: WorkspaceFile): ServerDefinition[] => {
     const extension = path.extname(file.absolutePath).toLowerCase();
-    return servers.find((server) => Object.hasOwn(server.languageIds, extension));
+    return servers.filter((server) => Object.hasOwn(server.languageIds, extension));
   };
 
   const startSession = async (entry: ServerEntry): Promise<Result<ServerSession, LspError>> => {
-    const { definition, root } = entry;
+    const { definition, root, workspace } = entry;
     const decision = (options.trust ?? checkServerTrust)({
       kind: 'server-program',
       serverId: definition.id,
       source: definition.source,
       origin: definition.origin ?? 'builtin',
-      root,
+      root: workspace,
     });
     if (!decision.allowed) {
       return err({ kind: 'server-untrusted', serverId: definition.id, reason: decision.reason });
     }
     const environment =
-      (await options.environmentFor?.(root)) ?? options.environment ?? process.env;
+      (await options.environmentFor?.(workspace)) ?? options.environment ?? process.env;
     const searchDirectories: string[] = [];
     if (options.trustWorkspaceBinaries === true) {
-      searchDirectories.push(path.join(root, 'node_modules', '.bin'));
+      searchDirectories.push(path.join(workspace, 'node_modules', '.bin'));
     }
     searchDirectories.push(...(options.searchDirectories ?? []));
     const command = await findServerCommand({
@@ -265,9 +273,10 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   };
 
   const acquire = async (
-    root: WorkspaceRoot,
+    location: ServerLocation,
     definition: ServerDefinition,
   ): Promise<Result<ServerSession, LspError>> => {
+    const { workspace, root } = location;
     if (lifecycle.isDisposed) {
       return err({ kind: 'disposed' });
     }
@@ -276,6 +285,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (entry === undefined) {
       entry = {
         key,
+        workspace,
         root,
         definition,
         session: undefined,
@@ -379,7 +389,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         session.close(document.uri);
         continue;
       }
-      const definition = definitionFor(resolved.value);
+      const definition = servers.find((server) => server.id === session.server.serverId);
       const content = await readDocument({
         absolutePath: document.absolutePath,
         displayPath: document.absolutePath,
@@ -397,20 +407,18 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     }
   };
 
-  const openFile = async (
-    request: FileRequest,
-    shouldRecheck = false,
-  ): Promise<Result<OpenedFile, LspError>> => {
-    const root = await resolveWorkspaceRoot(request.root);
-    if (!root.ok) {
-      return root;
+  /** Resolves and reads a file of a checkout once, to open it on each server that handles it. */
+  const prepareFile = async (request: FileRequest): Promise<Result<PreparedFile, LspError>> => {
+    const workspace = await resolveWorkspaceRoot(request.root);
+    if (!workspace.ok) {
+      return workspace;
     }
-    const file = await resolveWorkspaceFile(root.value, request.path);
+    const file = await resolveWorkspaceFile(workspace.value, request.path);
     if (!file.ok) {
       return file;
     }
-    const definition = definitionFor(file.value);
-    if (definition === undefined) {
+    const definitions = definitionsFor(file.value);
+    if (definitions.length === 0) {
       return err({ kind: 'unsupported-language', path: file.value.relativePath });
     }
     const content = await readDocument({
@@ -420,31 +428,117 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (!content.ok) {
       return content;
     }
-    const session = await acquire(root.value, definition);
+    return ok({
+      workspace: workspace.value,
+      file: file.value,
+      content: content.value,
+      definitions,
+    });
+  };
+
+  /** Starts (if need be) the server in the file's root, and syncs the file to it. */
+  const openOn = async (
+    prepared: PreparedFile,
+    target: OpenTarget,
+  ): Promise<Result<OpenedFile, LspError>> => {
+    const { workspace, file, content } = prepared;
+    const { definition, shouldRecheck } = target;
+    const root = await findServerRoot({
+      workspace,
+      file: file.absolutePath,
+      markers: definition.rootMarkers ?? [],
+    });
+    const session = await acquire({ workspace, root }, definition);
     if (!session.ok) {
       return session;
     }
-    const entry = entries.get(`${definition.id}\0${root.value}`);
+    const entry = entries.get(`${definition.id}\0${root}`);
     if (entry === undefined) {
       return err({ kind: 'disposed' });
     }
-    await refreshOpenDocuments(session.value, root.value);
+    await refreshOpenDocuments(session.value, workspace);
     const document = session.value.sync(
       {
-        uri: file.value.uri,
-        absolutePath: file.value.absolutePath,
-        languageId: languageIdOf(definition, file.value),
-        ...content.value,
+        uri: file.uri,
+        absolutePath: file.absolutePath,
+        languageId: languageIdOf(definition, file),
+        ...content,
       },
       { recheck: shouldRecheck },
     );
-    return ok({ entry, session: session.value, file: file.value, document });
+    return ok({ entry, session: session.value, file, document });
+  };
+
+  /**
+   * Opens the file on the first server that handles it and advertises `capability`, in registry
+   * order (ADR 0111). A server that cannot start, or lacks the capability, is passed over; if none
+   * serves it, the first such failure is the answer.
+   */
+  const openCapable = async (
+    request: FileRequest,
+    capability: Capability,
+  ): Promise<Result<OpenedFile, LspError>> => {
+    const prepared = await prepareFile(request);
+    if (!prepared.ok) {
+      return prepared;
+    }
+    let firstFailure: Err<LspError> | undefined;
+    for (const definition of prepared.value.definitions) {
+      const opened = await openOn(prepared.value, { definition, shouldRecheck: false });
+      if (!opened.ok) {
+        firstFailure ??= opened;
+        continue;
+      }
+      const capable = requireCapability(opened.value, capability);
+      if (capable.ok) {
+        return opened;
+      }
+      firstFailure ??= capable;
+    }
+    return (
+      firstFailure ?? err({ kind: 'unsupported-language', path: prepared.value.file.relativePath })
+    );
+  };
+
+  /** One server's diagnostics for a prepared file, as its tagged views. */
+  const diagnosticsOn = async (
+    prepared: PreparedFile,
+    target: DiagnosticsTarget,
+  ): Promise<DiagnosticsAnswer> => {
+    const { definition } = target;
+    const opened = await openOn(prepared, { definition, shouldRecheck: true });
+    if (!opened.ok) {
+      return { serverId: definition.id, result: opened };
+    }
+    const { session, entry, document } = opened.value;
+    const settled = await session.diagnostics(document, {
+      timeout:
+        target.timeout ?? options.diagnosticsTimeout ?? Temporal.Duration.from({ seconds: 20 }),
+      grace: options.diagnosticsGrace ?? Temporal.Duration.from({ milliseconds: 1500 }),
+      quiet: definition.diagnosticsQuiet,
+    });
+    if (!settled.ok) {
+      return { serverId: definition.id, result: settled };
+    }
+    const related = settled.value.diagnostics.flatMap((diagnostic) => {
+      return (diagnostic.relatedInformation ?? []).map((item) => item.location.uri);
+    });
+    const mapper = await mapperFor(session, entry.workspace, [document.uri, ...related]);
+    return {
+      serverId: definition.id,
+      result: ok({
+        freshness: settled.value.freshness,
+        diagnostics: settled.value.diagnostics.map((diagnostic) => {
+          return mapper.diagnostic(document.uri, diagnostic);
+        }),
+      }),
+    };
   };
 
   /** Lines for every URI a result mentions, read from disk inside the root when not open. */
   const mapperFor = async (
     session: ServerSession,
-    root: WorkspaceRoot,
+    workspace: WorkspaceRoot,
     uris: readonly string[],
   ): Promise<ViewMapper> => {
     const encoding = session.server.capabilities.positionEncoding;
@@ -454,7 +548,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (open !== undefined) {
         return open;
       }
-      const text = await readInsideRoot(root, uri, maxFileBytes);
+      const text = await readInsideRoot(workspace, uri, maxFileBytes);
       if (text === undefined) {
         return undefined;
       }
@@ -469,7 +563,14 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         }
       }
     }
-    return createViewMapper({ root, encoding, lines: (uri) => lines.get(uri) });
+    return createViewMapper({
+      root: workspace,
+      serverId: session.server.serverId,
+      encoding,
+      lines: (uri): LineIndex | undefined => {
+        return lines.get(uri);
+      },
+    });
   };
 
   const nodesFrom = async (
@@ -481,7 +582,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (callSiteUri !== undefined) {
       uris.push(callSiteUri);
     }
-    const mapper = await mapperFor(session, entry.root, uris);
+    const mapper = await mapperFor(session, entry.workspace, uris);
     return edges.map((edge) => {
       const id = randomUUID();
       nodes.set(id, { entry, item: edge.item });
@@ -501,7 +602,8 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (handle === undefined) {
       return err({ kind: 'unknown-node', nodeId });
     }
-    const session = await acquire(handle.entry.root, handle.entry.definition);
+    const { workspace, root, definition } = handle.entry;
+    const session = await acquire({ workspace, root }, definition);
     if (!session.ok) {
       return session;
     }
@@ -510,7 +612,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (!capable.ok) {
       return capable;
     }
-    await refreshOpenDocuments(session.value, handle.entry.root);
+    await refreshOpenDocuments(session.value, handle.entry.workspace);
     const { method, shape } = callDirections[direction];
     const result = await session.value.request(method, { item: handle.item });
     if (!result.ok) {
@@ -550,44 +652,27 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 
   return {
     getDiagnostics: async (request): Promise<Result<DiagnosticsReport, LspError>> => {
-      const opened = await openFile(request, true);
-      if (!opened.ok) {
-        return opened;
+      const prepared = await prepareFile(request);
+      if (!prepared.ok) {
+        return prepared;
       }
-      const { session, entry, document, file } = opened.value;
-      const settled = await session.diagnostics(document, {
-        timeout:
-          request.timeout ?? options.diagnosticsTimeout ?? Temporal.Duration.from({ seconds: 20 }),
-        grace: options.diagnosticsGrace ?? Temporal.Duration.from({ milliseconds: 1500 }),
-        quiet: entry.definition.diagnosticsQuiet,
-      });
-      if (!settled.ok) {
-        return settled;
-      }
-      const related = settled.value.diagnostics.flatMap((diagnostic) => {
-        return (diagnostic.relatedInformation ?? []).map((item) => item.location.uri);
-      });
-      const mapper = await mapperFor(session, entry.root, [document.uri, ...related]);
-      return ok({
-        path: file.relativePath,
-        serverId: entry.definition.id,
-        freshness: settled.value.freshness,
-        diagnostics: settled.value.diagnostics.map((diagnostic) => {
-          return mapper.diagnostic(document.uri, diagnostic);
+      const answers = await Promise.all(
+        prepared.value.definitions.map(async (definition) => {
+          return diagnosticsOn(prepared.value, {
+            definition,
+            ...(request.timeout !== undefined && { timeout: request.timeout }),
+          });
         }),
-      });
+      );
+      return combineDiagnostics(prepared.value.file.relativePath, answers);
     },
 
     prepareCallHierarchy: async (
       request,
     ): Promise<Result<readonly CallHierarchyNode[], LspError>> => {
-      const opened = await openFile(request);
+      const opened = await openCapable(request, 'callHierarchy');
       if (!opened.ok) {
         return opened;
-      }
-      const capable = requireCapability(opened.value, 'callHierarchy');
-      if (!capable.ok) {
-        return capable;
       }
       const { session, entry } = opened.value;
       const result = await session.request(
@@ -611,13 +696,9 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     },
 
     documentSymbols: async (request): Promise<Result<readonly DocumentSymbolView[], LspError>> => {
-      const opened = await openFile(request);
+      const opened = await openCapable(request, 'documentSymbol');
       if (!opened.ok) {
         return opened;
-      }
-      const capable = requireCapability(opened.value, 'documentSymbol');
-      if (!capable.ok) {
-        return capable;
       }
       const { session, entry, document } = opened.value;
       const result = await session.request('textDocument/documentSymbol', {
@@ -626,21 +707,17 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (!result.ok) {
         return result;
       }
-      const mapper = await mapperFor(session, entry.root, [document.uri]);
+      const mapper = await mapperFor(session, entry.workspace, [document.uri]);
       return ok(
         parseDocumentSymbols(result.value).map((symbol) => mapper.symbol(document.uri, symbol)),
       );
     },
 
     definition: async (request): Promise<Result<readonly LocationView[], LspError>> => {
-      const opened = await openFile(request);
+      const { capability, method } = definitionKinds[request.kind ?? 'definition'];
+      const opened = await openCapable(request, capability);
       if (!opened.ok) {
         return opened;
-      }
-      const { capability, method } = definitionKinds[request.kind ?? 'definition'];
-      const capable = requireCapability(opened.value, capability);
-      if (!capable.ok) {
-        return capable;
       }
       const { session, entry } = opened.value;
       const result = await session.request(method, positionParams(opened.value, request.position));
@@ -650,20 +727,16 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       const locations = parseLocations(result.value);
       const mapper = await mapperFor(
         session,
-        entry.root,
+        entry.workspace,
         locations.map((location) => location.uri),
       );
       return ok(locations.map((location) => mapper.location(location)));
     },
 
     hover: async (request): Promise<Result<HoverView | undefined, LspError>> => {
-      const opened = await openFile(request);
+      const opened = await openCapable(request, 'hover');
       if (!opened.ok) {
         return opened;
-      }
-      const capable = requireCapability(opened.value, 'hover');
-      if (!capable.ok) {
-        return capable;
       }
       const { session, entry } = opened.value;
       const result = await session.request(
@@ -677,7 +750,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (hover === undefined) {
         return ok(undefined);
       }
-      const mapper = await mapperFor(session, entry.root, [opened.value.document.uri]);
+      const mapper = await mapperFor(session, entry.workspace, [opened.value.document.uri]);
       if (hover.range === undefined) {
         return ok({ markdown: hover.markdown, range: undefined });
       }
@@ -712,7 +785,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       }
       const stopping: Promise<void>[] = [];
       for (const entry of entries.values()) {
-        if (entry.root !== resolved.value) {
+        if (entry.workspace !== resolved.value) {
           continue;
         }
         const { session } = entry;
@@ -756,6 +829,77 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 /** An opened file's session and the server entry it belongs to. */
 type ServedFile = Pick<OpenedFile, 'session' | 'entry'>;
 
+/** Where a server runs: the checkout it belongs to, and the root inside it. */
+interface ServerLocation {
+  readonly workspace: WorkspaceRoot;
+  readonly root: WorkspaceRoot;
+}
+
+/** A file of a checkout, resolved and read once, and every server that handles it. */
+interface PreparedFile {
+  readonly workspace: WorkspaceRoot;
+  readonly file: WorkspaceFile;
+  readonly content: Pick<DocumentContent, 'text' | 'stamp'>;
+  /** In registry order, never empty. */
+  readonly definitions: readonly ServerDefinition[];
+}
+
+/** Which server to open a file on, and whether to send its text again to make it re-check. */
+interface OpenTarget {
+  readonly definition: ServerDefinition;
+  readonly shouldRecheck: boolean;
+}
+
+interface DiagnosticsTarget {
+  readonly definition: ServerDefinition;
+  readonly timeout?: Temporal.Duration;
+}
+
+/** One server's diagnostics for a file, or why it gave none. */
+interface DiagnosticsAnswer {
+  readonly serverId: string;
+  readonly result: Result<
+    { readonly freshness: DiagnosticsFreshness; readonly diagnostics: readonly DiagnosticView[] },
+    LspError
+  >;
+}
+
+type Capability = 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition' | 'hover';
+
+const freshnessOrder: readonly DiagnosticsFreshness[] = ['fresh', 'assumed-unchanged', 'timed-out'];
+
+/**
+ * The union of what the servers answered, in registry order (ADR 0111): their diagnostics, the
+ * least certain freshness, and the servers that gave none. When none answered, the first failure.
+ */
+function combineDiagnostics(
+  filePath: string,
+  answers: readonly DiagnosticsAnswer[],
+): Result<DiagnosticsReport, LspError> {
+  const diagnostics: DiagnosticView[] = [];
+  const skipped: SkippedServer[] = [];
+  let freshness: DiagnosticsFreshness | undefined;
+  for (const answer of answers) {
+    if (!answer.result.ok) {
+      skipped.push({ serverId: answer.serverId, error: answer.result.error });
+      continue;
+    }
+    diagnostics.push(...answer.result.value.diagnostics);
+    const worse = answer.result.value.freshness;
+    if (
+      freshness === undefined ||
+      freshnessOrder.indexOf(worse) > freshnessOrder.indexOf(freshness)
+    ) {
+      freshness = worse;
+    }
+  }
+  if (freshness === undefined) {
+    const [first] = skipped;
+    return err(first?.error ?? { kind: 'unsupported-language', path: filePath });
+  }
+  return ok({ path: filePath, freshness, diagnostics, skipped });
+}
+
 /** Where to read a document from, and how errors name it. */
 interface DocumentPaths {
   readonly absolutePath: string;
@@ -774,7 +918,7 @@ const definitionKinds = {
 
 function requireCapability(
   opened: ServedFile,
-  capability: 'callHierarchy' | 'documentSymbol' | 'definition' | 'typeDefinition' | 'hover',
+  capability: Capability,
 ): Result<undefined, LspError> {
   if (opened.session.server.capabilities[capability]) {
     return ok(undefined);

@@ -7,6 +7,7 @@ import path from 'node:path';
  * - `normal`: negotiates UTF-8 positions, asks the client to apply an edit and for configuration
  *   after `initialized`, publishes diagnostics on open/change, echoes `prepareCallHierarchy` and
  *   answers `test/clientAnswers` with what the client replied.
+ * - `bare`: like `normal`, but announces no call hierarchy support.
  * - `fail-initialize`: writes to stderr and exits with code 3 on `initialize`.
  */
 export function writeFakeLanguageServer(directory: string): string {
@@ -15,8 +16,8 @@ export function writeFakeLanguageServer(directory: string): string {
   return file;
 }
 
-/** How the fake server behaves: normally, or by failing `initialize`. */
-export type FakeServerMode = 'normal' | 'fail-initialize';
+/** How the fake server behaves: normally, without call hierarchy, or by failing `initialize`. */
+export type FakeServerMode = 'normal' | 'bare' | 'fail-initialize';
 
 const source = String.raw`
 const mode = process.argv[2] ?? 'normal';
@@ -39,7 +40,7 @@ const handle = (message) => {
         process.exit(3);
       }
       send({ id: message.id, result: { capabilities: {
-        positionEncoding: 'utf-8', textDocumentSync: 1, callHierarchyProvider: true,
+        positionEncoding: 'utf-8', textDocumentSync: 1, callHierarchyProvider: mode !== 'bare',
       } } });
       return;
     case 'initialized':

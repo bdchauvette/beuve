@@ -17,6 +17,7 @@ function mapper(): ViewMapper {
   const lines = new LineIndex('const 😀 = 1;\n');
   return createViewMapper({
     root: '/w' as WorkspaceRoot,
+    serverId: 'typescript',
     encoding: positionEncodings.utf8,
     lines: (key) => {
       if (key === uri()) {
@@ -45,6 +46,7 @@ describe('createViewMapper', () => {
         ],
       }),
     ).toStrictEqual({
+      serverId: 'typescript',
       range: { start: { line: 0, character: 6 }, end: { line: 0, character: 8 } },
       severity: 'error',
       code: '2322',

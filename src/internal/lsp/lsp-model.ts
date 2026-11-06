@@ -1,3 +1,5 @@
+import type { LspError } from './lsp-error.ts';
+
 /**
  * What the LSP domain hands to `src/main`: plain, serializable data with no server-specific
  * encodings. Lines are 0-based and `character` counts UTF-16 code units in the line (JavaScript
@@ -40,6 +42,8 @@ export interface HoverView {
 export type DiagnosticSeverity = 'error' | 'warning' | 'information' | 'hint';
 
 export interface DiagnosticView {
+  /** Which of beuve's language servers reported it (ADR 0111). */
+  readonly serverId: string;
   readonly range: Range;
   /** Absent when the server didn't say; clients usually treat that as an error. */
   readonly severity: DiagnosticSeverity | undefined;
@@ -59,12 +63,24 @@ export interface DiagnosticView {
  */
 export type DiagnosticsFreshness = 'fresh' | 'assumed-unchanged' | 'timed-out';
 
+/** A server that handles the file but gave no diagnostics, and why. */
+export interface SkippedServer {
+  readonly serverId: string;
+  readonly error: LspError;
+}
+
+/**
+ * What the servers that handle a file say about it (ADR 0111): the union of their diagnostics,
+ * each tagged with its server, in registry order. `freshness` is the least certain of the
+ * servers that answered. A server that could not answer is in `skipped`; when none could, there
+ * is no report, only that failure.
+ */
 export interface DiagnosticsReport {
   /** The file, relative to the workspace root. */
   readonly path: string;
-  readonly serverId: string;
   readonly freshness: DiagnosticsFreshness;
   readonly diagnostics: readonly DiagnosticView[];
+  readonly skipped: readonly SkippedServer[];
 }
 
 /**

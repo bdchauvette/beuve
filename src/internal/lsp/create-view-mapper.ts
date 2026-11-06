@@ -24,6 +24,8 @@ import { positionEncodings } from './position-encodings.ts';
 
 export interface ViewMapperContext {
   readonly root: WorkspaceRoot;
+  /** The server these values come from, which its diagnostics are tagged with. */
+  readonly serverId: string;
   /** The server's negotiated encoding. */
   readonly encoding: PositionEncoding;
   /** Lines of a document by normalized URI, when known; needed unless the encoding is UTF-16. */
@@ -81,6 +83,7 @@ export function createViewMapper(context: ViewMapperContext): ViewMapper {
     location,
     diagnostic: (uri, value): DiagnosticView => {
       return {
+        serverId: context.serverId,
         range: range(uri, value.range),
         severity: severityOf(value),
         code: codeOf(value),
