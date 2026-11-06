@@ -291,18 +291,22 @@
    * Line, gutter number and changed-word tints step up like Primer's diffBlob tokens
    * (line < number < word), one Radix alpha step apart. Orange, yellow and grey sit lower and
    * higher on their scales so each pair reads at a similar weight. Text colors are for +/− counts
-   * and labels; bars for gutter marks.
+   * and labels; bars for gutter marks; number text for the line numbers on changed lines, which
+   * the library otherwise draws in the bar color. Yellow 9 is invisible on the yellow number cell in
+   * light (1.0:1), so removed numbers use yellow 11 (3.6:1 light, 8.9:1 dark).
    */
   --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
   --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);
   --beuve-diff-added-emphasis: var(--beuve-scale-blue-a7);
   --beuve-diff-added-bar: var(--beuve-scale-blue-9);
   --beuve-diff-added-text: var(--beuve-scale-blue-11);
+  --beuve-diff-added-number-text: var(--beuve-scale-blue-9);
   --beuve-diff-removed-bg: var(--beuve-scale-yellow-a4);
   --beuve-diff-removed-number-bg: var(--beuve-scale-yellow-a5);
   --beuve-diff-removed-emphasis: var(--beuve-scale-yellow-a6);
   --beuve-diff-removed-bar: var(--beuve-scale-yellow-9);
   --beuve-diff-removed-text: var(--beuve-scale-yellow-11);
+  --beuve-diff-removed-number-text: var(--beuve-scale-yellow-11);
   --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
   --beuve-diff-hunk-text: var(--beuve-accent);
 }

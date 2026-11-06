@@ -379,6 +379,8 @@ export class BeuveFileCard extends LitElement {
         --diffs-bg-deletion-emphasis-override: var(--beuve-diff-removed-emphasis);
         --diffs-addition-color-override: var(--beuve-diff-added-bar);
         --diffs-deletion-color-override: var(--beuve-diff-removed-bar);
+        --diffs-fg-number-addition-override: var(--beuve-diff-added-number-text);
+        --diffs-fg-number-deletion-override: var(--beuve-diff-removed-number-text);
         --diffs-bg-selection-override: var(--beuve-accent-soft);
         --diffs-bg-selection-number-override: var(--beuve-accent-soft);
         --diffs-selection-color-override: var(--beuve-accent);
