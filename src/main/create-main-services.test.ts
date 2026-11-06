@@ -546,6 +546,30 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'hides a server’s diagnostics but keeps it answering hover, when the configuration says so',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories, tempDir, logger, signal }) => {
+      const file = path.join(tempDir, 'language-servers.json');
+      await writeFile(file, '{"servers":{"typescript":{"diagnostics":false}}}', { signal });
+      const languageServers = await createLanguageServerRegistry({
+        paths: [file],
+        home: tempDir,
+        logger: logger.logger,
+      });
+      const services = createServices({ languageServers });
+      const { sessionId } = await openTypescriptSession(services, repositories);
+      const diagnostics = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(diagnostics).toMatchObject({ state: 'unavailable', diagnostics: [] });
+      const hover = okValueFrom(
+        await services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 4, character: 10 }),
+      );
+      expect(hover.hover?.markdown).toContain('validate');
+    },
+  );
+
+  test(
     'says what is wrong with the configuration beside the diagnostics, and keeps beuve’s own servers',
     { concurrent: false, timeout: 60_000 },
     async ({ expect, createServices, repositories, tempDir, logger, signal }) => {

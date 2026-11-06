@@ -143,6 +143,7 @@ function definitionFrom(id: string, parts: DefinitionParts): Result<ServerDefini
   const settingsForServer = settings?.settings ?? base?.settings;
   const env = mergedEnv(base?.env, settings?.env);
   const inheritEnv = unionOf(base?.inheritEnv, settings?.inheritEnv);
+  const diagnostics = settings?.diagnostics ?? base?.diagnostics;
   let diagnosticsQuiet = base?.diagnosticsQuiet ?? defaultQuiet;
   if (settings?.diagnosticsQuietMs !== undefined) {
     diagnosticsQuiet = Temporal.Duration.from({ milliseconds: settings.diagnosticsQuietMs });
@@ -160,6 +161,7 @@ function definitionFrom(id: string, parts: DefinitionParts): Result<ServerDefini
     ...(settingsForServer !== undefined && { settings: settingsForServer }),
     ...(env !== undefined && { env }),
     ...(inheritEnv !== undefined && { inheritEnv }),
+    ...(diagnostics !== undefined && { diagnostics }),
   });
 }
 

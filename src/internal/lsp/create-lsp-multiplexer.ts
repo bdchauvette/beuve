@@ -678,8 +678,14 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       if (!prepared.ok) {
         return prepared;
       }
+      const asked = prepared.value.definitions.filter((definition) => {
+        return definition.diagnostics !== false;
+      });
+      if (asked.length === 0) {
+        return err({ kind: 'unsupported-language', path: prepared.value.file.relativePath });
+      }
       const answers = await Promise.all(
-        prepared.value.definitions.map(async (definition) => {
+        asked.map(async (definition) => {
           return diagnosticsOn(prepared.value, {
             definition,
             ...(request.timeout !== undefined && { timeout: request.timeout }),
