@@ -3,12 +3,14 @@ import type { FileAttribution } from '#internal/git/attribute-hunks.ts';
 import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import type { StackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
+import type { GitRepository } from '#internal/git/open-repository.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { carryOverReviewMarks } from './carry-over-review-marks.ts';
 import { headPathOf } from './head-path-of.ts';
 import { loadReviewDiff } from './load-review-diff.ts';
+import { readShebangs } from './read-shebangs.ts';
 import type { ReviewDiff, ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { commitPairViewFrom } from './commit-pair-view-from.ts';
@@ -40,14 +42,17 @@ export async function loadReview(
   if (!carried.ok) {
     return carried;
   }
+  const shebangs = await shebangsOf(context, refreshed.repository, files);
   return ok({
     session: sessionSummaryFrom(refreshed.session),
     scope,
     baseSha,
     headSha: refreshed.session.headSha,
     files: files.map((file, index) => {
+      const shebang = shebangs.get(index);
       return {
         ...diffFileViewFrom(file),
+        ...(shebang !== undefined && { shebang }),
         reviewed: carried.value.states[index] ?? 'no',
       };
     }),
@@ -61,6 +66,20 @@ export async function loadReview(
     ...forkPointViewFrom(forkPoint),
     ...pairingViewsFrom(files, commitPairs, attribution),
   });
+}
+
+/** Each extensionless file's `#!` line (ADR 0120); only highlighting needs them, so a failure is logged, not returned. */
+async function shebangsOf(
+  context: SessionContext,
+  repository: GitRepository,
+  files: readonly DiffFile[],
+): Promise<ReadonlyMap<number, string>> {
+  const shebangs = await readShebangs(repository, files);
+  if (!shebangs.ok) {
+    context.logger.warn('could not read shebang lines', { error: shebangs.error });
+    return new Map();
+  }
+  return shebangs.value;
 }
 
 function forkPointViewFrom(forkPoint: StackForkPoint | undefined): Pick<ReviewView, 'forkPoint'> {

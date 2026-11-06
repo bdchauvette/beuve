@@ -11,6 +11,7 @@ import { DiagnosticHighlights } from './diagnostic-highlights.ts';
 import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
+import { languageFromShebang } from './language-from-shebang.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
@@ -194,6 +195,18 @@ export class BeuveSheetCode extends LitElement {
     );
   }
 
+  /**
+   * The grammar to force, if any: one the `#!` line names when the file's name gives none
+   * (ADR 0120), or plain text for a language beuve doesn't ship.
+   */
+  private languageOverride(library: typeof Diffs): LanguageOverride {
+    if (Object.hasOwn(highlightedLanguages, library.getFiletypeFromFileName(this.path))) {
+      return {};
+    }
+    const [firstLine] = this.contents.split('\n', 1);
+    return { lang: languageFromShebang(firstLine?.trimEnd()) ?? 'text' };
+  }
+
   override connectedCallback(): void {
     // eslint-disable-next-line wc/guard-super-call -- LitElement implements it.
     super.connectedCallback();
@@ -250,9 +263,7 @@ export class BeuveSheetCode extends LitElement {
           name: this.path,
           contents: this.contents,
           cacheKey: key,
-          ...(!Object.hasOwn(highlightedLanguages, library.getFiletypeFromFileName(this.path)) && {
-            lang: 'text',
-          }),
+          ...this.languageOverride(library),
         },
         containerWrapper: container,
       });
@@ -302,4 +313,9 @@ declare global {
   interface HTMLElementTagNameMap {
     'beuve-sheet-code': BeuveSheetCode;
   }
+}
+
+/** A file's `lang`, when the library's guess from its name is not the one to use. */
+interface LanguageOverride {
+  readonly lang?: string;
 }
