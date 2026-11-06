@@ -545,8 +545,9 @@ export interface DiagnosticItemView extends SheetRangeView {
  * - `timed-out`: it was still busy at the deadline; `diagnostics` is what it sent so far.
  * - `not-head`: `sha` is not the session head, which has no diagnostics (ADR 0111).
  * - `unavailable`: no server handles this file, or it can't give diagnostics for it.
+ * - `untrusted`: the trust check refused to start the server, and `notice` says so.
  */
-export type DiagnosticsState = 'settled' | 'timed-out' | 'not-head' | 'unavailable';
+export type DiagnosticsState = 'settled' | 'timed-out' | 'not-head' | 'unavailable' | 'untrusted';
 
 /** What the servers say about a file at `sha`, the commit the answer is for. */
 export interface DiagnosticsView {
@@ -556,6 +557,11 @@ export interface DiagnosticsView {
   readonly diagnostics: readonly DiagnosticItemView[];
   /** How many more the servers reported than `diagnostics` holds. */
   readonly omitted: number;
+  /**
+   * Plain text from beuve, not the server, for the reviewer: why a server was not started, or that
+   * the shell environment it runs in could not be read (ADR 0111).
+   */
+  readonly notice?: string;
 }
 
 /**

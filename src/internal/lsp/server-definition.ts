@@ -1,4 +1,14 @@
 /**
+ * Where a server's program comes from (ADR 0111): `builtin` is shipped with beuve, `path` is a
+ * command found on the reviewer's `PATH` (or given absolutely), `project` is a program that came
+ * with the reviewed checkout, which runs code from the branch under review.
+ */
+export type ServerSource = 'builtin' | 'path' | 'project';
+
+/** Where a definition came from: beuve's own table, or the reviewer's configuration (ADR 0111). */
+export type DefinitionOrigin = 'builtin' | 'reviewer';
+
+/**
  * How to run one language server: registry data, no behaviour. One process serves every file
  * whose extension appears in `languageIds`, per workspace root.
  */
@@ -13,11 +23,17 @@ export interface ServerDefinition {
   readonly args: readonly string[];
   /** Lowercase file extension (with the dot) → LSP language id. */
   readonly languageIds: Readonly<Record<string, string>>;
+  /** Where the program comes from; the trust check decides on it before the server starts. */
+  readonly source: ServerSource;
+  /** Where this definition came from; beuve's own when absent. */
+  readonly origin?: DefinitionOrigin;
   readonly initializationOptions?: unknown;
   /** Answers `workspace/configuration` by dotted section, and is sent once after `initialized`. */
   readonly settings?: Readonly<Record<string, unknown>>;
   /** Variables added to the minimal environment the server runs in. */
   readonly env?: Readonly<Record<string, string>>;
+  /** Names of further variables of the reviewer's environment to pass on, such as `GOPATH`. */
+  readonly inheritEnv?: readonly string[];
   /**
    * After a push-diagnostics report, how long the server must stay quiet before the report counts
    * as settled. Servers that publish syntax and semantic results separately need more.

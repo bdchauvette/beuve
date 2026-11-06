@@ -1,9 +1,11 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
 
 import { describe } from 'vitest';
 
 import type { CallHierarchyRequest, DefinitionView, ReviewView } from '#contract/ipc-contract.ts';
+import type { ServerTrustDecision } from '#internal/lsp/check-server-trust.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
@@ -11,6 +13,7 @@ import type { TestRepositories } from '#internal/git/testing/test.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import type { MainServices } from './main-services.ts';
+import type { ShellEnvironments } from './shell-environment/create-shell-environments.ts';
 import { lines } from './testing/lines.ts';
 import { test } from './testing/test.ts';
 
@@ -415,6 +418,69 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
         omitted: 0,
       });
       await expect(repo.git('status', '--porcelain')).resolves.toBe('');
+    },
+  );
+
+  test(
+    'does not start a server the trust check refuses, and says so',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories }) => {
+      const services = createServices({
+        lsp: {
+          trust: (): ServerTrustDecision => {
+            return { allowed: false, reason: 'denied for the test' };
+          },
+        },
+      });
+      const { sessionId } = await openTypescriptSession(services, repositories);
+      const answer = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(answer).toMatchObject({
+        state: 'untrusted',
+        diagnostics: [],
+        notice: 'denied for the test',
+      });
+      await expect(
+        services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 4, character: 10 }),
+      ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
+      expect(okValueFrom(services.lsp.status()).servers).toStrictEqual([]);
+    },
+  );
+
+  test(
+    'runs the servers in the checkout’s shell environment, forgets it on restart, and passes on its note',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories }) => {
+      const roots: string[] = [];
+      const forgotten: string[] = [];
+      const shellEnvironments: ShellEnvironments = {
+        forRoot: async (root) => {
+          roots.push(root);
+          await Promise.resolve();
+          return { variables: process.env };
+        },
+        forget: (root) => {
+          forgotten.push(root);
+        },
+        noticeFor: (): string => {
+          return 'The shell environment of this checkout could not be read.';
+        },
+      };
+      const services = createServices({ shellEnvironments });
+      const { sessionId, repo } = await openTypescriptSession(services, repositories);
+      const answer = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(answer.state).toBe('settled');
+      expect(answer.diagnostics).toHaveLength(1);
+      expect(answer.notice).toBe('The shell environment of this checkout could not be read.');
+      expect(roots).toHaveLength(1);
+      okValueFrom(await services.lsp.restart({ sessionId }));
+      expect(forgotten.map((root) => realpathSync(root))).toStrictEqual(
+        roots.map((root) => realpathSync(root)),
+      );
+      expect(realpathSync(roots[0] ?? '')).not.toBe(realpathSync(repo.directory));
     },
   );
 

@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -5,6 +6,7 @@ import { existsSync } from 'node:fs';
 
 import { app, BrowserWindow, safeStorage, shell } from 'electron';
 
+import { checkServerTrust } from '#internal/lsp/check-server-trust.ts';
 import { createLogger } from '#x/log/create-logger.ts';
 
 import { LinkInbox } from './links/link-inbox.ts';
@@ -14,6 +16,8 @@ import { openAppDatabase } from './database/open-app-database.ts';
 import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
 import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
+import { createShellEnvironments } from './shell-environment/create-shell-environments.ts';
+import { readShellEnvironment } from './shell-environment/read-shell-environment.ts';
 import { secureUserData } from './secure-user-data.ts';
 import { startApp } from './start-app.ts';
 
@@ -84,6 +88,23 @@ async function launch(): Promise<void> {
         message: describeNodeRuntimeError(nodeRuntime.error),
       });
     }
+    // The environment language servers run in is the one the reviewer's login shell gives, as in an
+    // IDE (ADR 0111): read once now, and per checkout. Not when a terminal started beuve (it
+    // already has that environment) and not on Windows.
+    let nodeCommand: string | undefined;
+    if (nodeRuntime.ok) {
+      nodeCommand = nodeRuntime.value.command;
+    }
+    const shellEnvironments = createShellEnvironments({
+      processEnvironment: process.env,
+      shell: process.env['SHELL'],
+      nodeCommand,
+      home: os.homedir(),
+      shouldRead: process.platform !== 'win32' && !process.stdout.isTTY,
+      read: readShellEnvironment,
+      trust: checkServerTrust,
+      logger,
+    });
     startApp(app, {
       services: createMainServices({
         db,
@@ -91,6 +112,7 @@ async function launch(): Promise<void> {
         worktreeRoot,
         reviewEditsRoot: path.join(userData, 'review-edits'),
         nodeRuntime,
+        shellEnvironments,
         editor: {
           settingsPath,
           platform: createSystemEditorPlatform({

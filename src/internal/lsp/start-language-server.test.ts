@@ -79,6 +79,7 @@ function definition(script: string, mode: FakeServerMode): ServerDefinition {
     command: process.execPath,
     args: [script, mode],
     languageIds: { '.ts': 'typescript' },
+    source: 'path',
     settings: { fake: { flag: true } },
     diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 20 }),
   };

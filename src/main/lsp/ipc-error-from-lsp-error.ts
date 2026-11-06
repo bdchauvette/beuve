@@ -23,6 +23,9 @@ export function ipcErrorFromLspError(error: LspError): IpcError {
     case 'server-not-found': {
       return { code: 'lsp-failed', message: `language server ${error.serverId} is not installed` };
     }
+    case 'server-untrusted': {
+      return { code: 'refused', message: error.reason };
+    }
     case 'server-start-failed':
     case 'server-exited': {
       return { code: 'lsp-failed', message: `language server ${error.serverId} is not running` };

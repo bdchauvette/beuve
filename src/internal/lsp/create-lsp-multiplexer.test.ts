@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import process from 'node:process';
@@ -10,7 +10,9 @@ import { okValueFrom } from '#testing/ok-value-from.ts';
 
 import type { Result } from '#x/result/result.ts';
 
+import type { ServerTrustRequest } from './check-server-trust.ts';
 import { createLspMultiplexer } from './create-lsp-multiplexer.ts';
+import type { PositionRequest } from './create-lsp-multiplexer.ts';
 import type { LspError } from './lsp-error.ts';
 import type { CallHierarchyNode } from './lsp-model.ts';
 import type { ServerDefinition } from './server-definition.ts';
@@ -359,6 +361,72 @@ describe('createLspMultiplexer with a scripted server', { timeout: 20_000 }, () 
     });
   });
 
+  test('starts nothing the trust check refuses, and says why', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const lsp = createLspMultiplexer({
+      servers: [{ ...fakeServer(fakeServerScript, 'normal'), source: 'project' }],
+    });
+    closing(lsp);
+    const result = await lsp.prepareCallHierarchy(scriptedRequest(project.root));
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'server-untrusted', serverId: 'fake' },
+    });
+    expect(lsp.status()).toStrictEqual([]);
+  });
+
+  test('starts a project server the trust check allows', async ({
+    expect,
+    closing,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const asked: ServerTrustRequest[] = [];
+    const lsp = createLspMultiplexer({
+      servers: [{ ...fakeServer(fakeServerScript, 'normal'), source: 'project' }],
+      trust: (request) => {
+        asked.push(request);
+        return { allowed: true };
+      },
+    });
+    closing(lsp);
+    okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    expect(asked).toMatchObject([{ kind: 'server-program', serverId: 'fake', source: 'project' }]);
+  });
+
+  test('finds its server through the environment given for its checkout', async ({
+    expect,
+    closing,
+    tempDir,
+    typescriptProject: project,
+    fakeServerScript,
+  }) => {
+    const bin = path.join(tempDir, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      path.join(bin, 'fake-ls'),
+      `#!/bin/sh\nexec '${process.execPath}' '${fakeServerScript}' normal\n`,
+      { mode: 0o755 },
+    );
+    const roots: string[] = [];
+    const lsp = createLspMultiplexer({
+      servers: [{ ...fakeServer(fakeServerScript, 'normal'), command: 'fake-ls', args: [] }],
+      environment: { PATH: '' },
+      environmentFor: async (root) => {
+        roots.push(root);
+        await Promise.resolve();
+        return { PATH: bin };
+      },
+    });
+    closing(lsp);
+    okValueFrom(await lsp.prepareCallHierarchy(scriptedRequest(project.root)));
+    expect(roots.map((root) => realpathSync(root))).toStrictEqual([realpathSync(project.root)]);
+  });
+
   test('does not search the workspace for server binaries unless trusted', async ({
     expect,
     closing,
@@ -385,8 +453,14 @@ function fakeServer(script: string, mode: FakeServerMode): ServerDefinition {
     command: process.execPath,
     args: [script, mode],
     languageIds: { '.ts': 'typescript' },
+    source: 'path',
     diagnosticsQuiet: Temporal.Duration.from({ milliseconds: 20 }),
   };
+}
+
+/** A call hierarchy request the scripted server answers, for a test that only needs it started. */
+function scriptedRequest(root: string): PositionRequest {
+  return { root, path: 'src/a.ts', position: { line: 0, character: 0 } };
 }
 
 function errorKindOf(result: Result<unknown, LspError>): string {

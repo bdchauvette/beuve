@@ -42,6 +42,10 @@ import type { GithubServices } from './github/create-github-services.ts';
 import { createOrderServices } from './order/create-order-services.ts';
 import { createReviewQueueServices } from './queue/create-review-queue-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
+import type {
+  ShellEnvironment,
+  ShellEnvironments,
+} from './shell-environment/create-shell-environments.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { NodeRuntime, NodeRuntimeError } from './node-runtime/resolve-node-runtime.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
@@ -95,6 +99,11 @@ export interface MainServicesOptions {
   readonly syntax?: SyntaxParserOptions;
   /** Overrides for the language server multiplexer; its servers default to beuve's TypeScript. */
   readonly lsp?: LspMultiplexerOptions;
+  /**
+   * The environments the reviewer's login shell gives, which the language servers run in
+   * (ADR 0111); without them the servers get beuve's own environment.
+   */
+  readonly shellEnvironments?: ShellEnvironments;
   /** How the chat finds and runs Claude Code (ADR 0022, 0031, 0055); tests pass the fake. */
   readonly claude?: ClaudeCodeSettings;
   /**
@@ -206,10 +215,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
   );
   const parser = createSyntaxParser(options.syntax);
+  const { shellEnvironments } = options;
   const multiplexer = createLspMultiplexer({
     servers: languageServersFor(options.nodeRuntime),
     trustWorkspaceBinaries: false,
     logger,
+    ...(shellEnvironments !== undefined && {
+      environmentFor: async (root: string): Promise<ShellEnvironment['variables']> => {
+        const environment = await shellEnvironments.forRoot(root);
+        return environment.variables;
+      },
+    }),
     ...options.lsp,
   });
   const worktrees = createSessionWorktrees({
@@ -225,7 +241,12 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       return undefined;
     },
   });
-  const lsp = createLspServices({ context, multiplexer, worktrees });
+  const lsp = createLspServices({
+    context,
+    multiplexer,
+    worktrees,
+    ...(shellEnvironments !== undefined && { environments: shellEnvironments }),
+  });
   const registry = createModelRegistryStore(options.models?.settingsPath);
   const secrets = createSecretStore({
     ...(options.models?.secretsPath !== undefined && { filePath: options.models.secretsPath }),

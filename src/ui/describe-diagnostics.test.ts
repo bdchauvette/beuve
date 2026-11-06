@@ -66,6 +66,29 @@ describe('describeDiagnostics', () => {
     expect(describeDiagnostics(hints)).toMatchObject({ text: '2 notes', tone: 'quiet' });
   });
 
+  test('says when beuve did not start the server, and why', ({ expect }) => {
+    const refused = ready({
+      state: 'untrusted',
+      diagnostics: [],
+      notice: 'The go language server from this project was not started: it is not trusted.',
+    });
+    expect(describeDiagnostics(refused)).toMatchObject({
+      text: 'server not started',
+      title: expect.stringContaining('not trusted') as string,
+      tone: 'quiet',
+    });
+  });
+
+  test('passes on a note about the environment, beside the counts or alone on a clean file', ({
+    expect,
+  }) => {
+    const notice = 'The shell environment of this checkout could not be read.';
+    const broken = ready({ diagnostics: [problem('error')], notice });
+    const clean = ready({ diagnostics: [], notice });
+    expect(describeDiagnostics(broken)?.title).toContain(notice);
+    expect(describeDiagnostics(clean)).toStrictEqual({ text: 'ⓘ', title: notice, tone: 'quiet' });
+  });
+
   test('says when the answer may be incomplete or was cut', ({ expect }) => {
     const cut = ready({ state: 'timed-out', omitted: 3, diagnostics: [problem('error')] });
     const note = describeDiagnostics(cut);

@@ -18,5 +18,6 @@ export function createTypescriptServer(runtime: NodeRuntime): ServerDefinition {
     command: runtime.command,
     leadingArgs: [unpackedPathFrom(require.resolve('typescript-language-server/lib/cli.mjs'))],
     tsserverPath: unpackedPathFrom(require.resolve('typescript/lib/tsserver.js')),
+    source: 'builtin',
   });
 }
