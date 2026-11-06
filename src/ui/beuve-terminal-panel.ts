@@ -14,6 +14,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import { ActionDelegation } from './action-delegation.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Whether a terminal of the panel has the keyboard; the window reports it to the menus. */
 export interface TerminalFocusDetail {
@@ -61,6 +62,7 @@ const fontFamily = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 @customElement('beuve-terminal-panel')
 export class BeuveTerminalPanel extends LitElement {
   static override styles = [
+    buttonStyles,
     unsafeCSS(xtermCss),
     css`
       :host {
@@ -82,7 +84,7 @@ export class BeuveTerminalPanel extends LitElement {
         font: var(--beuve-font-small);
       }
 
-      .bar button {
+      .bar [role='tab'] {
         padding: 2px var(--beuve-space-2);
         border: none;
         border-radius: var(--beuve-radius-small);
@@ -92,12 +94,12 @@ export class BeuveTerminalPanel extends LitElement {
         cursor: pointer;
       }
 
-      .bar button[aria-selected='true'] {
+      .bar [role='tab'][aria-selected='true'] {
         background: var(--beuve-accent-soft);
         color: var(--beuve-text);
       }
 
-      .bar button.ended {
+      .bar [role='tab'].ended {
         text-decoration: line-through;
       }
 
@@ -208,6 +210,7 @@ export class BeuveTerminalPanel extends LitElement {
         ${label}
       </button>
       <button
+        class="button icon"
         data-action="close"
         data-terminal-id=${tab.id}
         title="Close terminal"
@@ -457,9 +460,23 @@ export class BeuveTerminalPanel extends LitElement {
     return html`
       <div class="bar" role="tablist" aria-label="Terminals">
         ${this.tabs.map((tab) => this.renderTab(tab))}
-        <button data-action="new" title="New terminal" aria-label="New terminal">+</button>
+        <button
+          class="button icon"
+          data-action="new"
+          title="New terminal"
+          aria-label="New terminal"
+        >
+          +
+        </button>
         <span class="spacer"></span>
-        <button data-action="hide" title="Hide terminal" aria-label="Hide terminal">×</button>
+        <button
+          class="button icon"
+          data-action="hide"
+          title="Hide terminal"
+          aria-label="Hide terminal"
+        >
+          ×
+        </button>
       </div>
       <div class="hosts">
         ${this.failure === '' ? nothing : html`<div class="message">${this.failure}</div>`}

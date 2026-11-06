@@ -19,6 +19,7 @@ import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
 import { formatControlStyles } from './format-control-styles.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The Settings window (ADR 0068): the preferences that were reachable only through chat commands
@@ -45,6 +46,7 @@ interface RadioChoice {
 @customElement('beuve-settings-view')
 export class BeuveSettingsView extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -113,8 +115,7 @@ export class BeuveSettingsView extends LitElement {
         color: var(--beuve-text-muted);
       }
 
-      select,
-      button {
+      select {
         font: inherit;
         color: var(--beuve-text);
       }
@@ -534,6 +535,7 @@ export class BeuveSettingsView extends LitElement {
           <span>Configuration</span>
           <span>
             <button
+              class="button"
               type="button"
               @click=${(): void => {
                 void this.openLanguageServers();

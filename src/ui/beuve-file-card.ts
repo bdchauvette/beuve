@@ -84,6 +84,7 @@ import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -180,6 +181,7 @@ const estimatedSeparatorHeight = 32;
 @customElement('beuve-file-card')
 export class BeuveFileCard extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -352,22 +354,6 @@ export class BeuveFileCard extends LitElement {
 
       .collapsed-body .size {
         font-variant-numeric: tabular-nums;
-      }
-
-      .collapsed-body button {
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .collapsed-body button:hover,
-      .collapsed-body button:focus-visible {
-        border-color: var(--beuve-accent);
-        outline: none;
       }
 
       .collapsed-body kbd {
@@ -613,22 +599,6 @@ export class BeuveFileCard extends LitElement {
         align-items: baseline;
         gap: var(--beuve-space-2);
         color: var(--beuve-text-muted);
-      }
-
-      .insight-actions button {
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .insight-actions button:hover,
-      .insight-actions button:focus-visible {
-        border-color: var(--beuve-accent);
-        outline: none;
       }
 
       pre {
@@ -1443,6 +1413,7 @@ export class BeuveFileCard extends LitElement {
             >`
       }
       <button
+        class="button"
         type="button"
         title=${`Expand File (${shortcutOf('expand', keyPlatformOf(navigator.platform))})`}
         data-action="expand"

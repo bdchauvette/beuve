@@ -10,6 +10,7 @@ import { createMarkdownNodes } from './create-markdown-nodes.ts';
 import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.ts';
 import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The intent of a pull request session (spec Zone 1, top): its title, state, author and branches,
@@ -20,6 +21,7 @@ import { parseMarkdown } from './parse-markdown.ts';
 @customElement('beuve-pull-request-intent')
 export class BeuvePullRequestIntent extends LitElement {
   static override styles = [
+    buttonStyles,
     markdownBodyStyles,
     css`
       :host {
@@ -84,18 +86,6 @@ export class BeuvePullRequestIntent extends LitElement {
 
       a {
         color: var(--beuve-accent);
-        overflow-wrap: anywhere;
-      }
-
-      button.link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--beuve-accent);
-        font: inherit;
-        text-align: start;
-        text-decoration: underline;
-        cursor: pointer;
         overflow-wrap: anywhere;
       }
 
@@ -193,7 +183,7 @@ export class BeuvePullRequestIntent extends LitElement {
         <span class="badge ${badge.tone}">${badge.label}</span>
         <button
           type="button"
-          class="link"
+          class="button link"
           title=${pullRequest.htmlUrl}
           data-action="link"
           data-url=${pullRequest.htmlUrl}

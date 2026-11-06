@@ -39,6 +39,7 @@ import { withShortcut } from './with-shortcut.ts';
 import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-history.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Where a sheet lives: its own window, or the overlay in the main window (`/sheets inline`). */
 export type SheetMode = 'window' | 'inline';
@@ -66,6 +67,7 @@ interface FindState {
 @customElement('beuve-sheet-view')
 export class BeuveSheetView extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -107,27 +109,6 @@ export class BeuveSheetView extends LitElement {
       .stamp {
         color: var(--beuve-text-muted);
         white-space: nowrap;
-      }
-
-      button {
-        padding: 1px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      button:disabled {
-        color: var(--beuve-text-muted);
-        cursor: default;
-      }
-
-      button:not(:disabled):hover,
-      button:focus-visible {
-        border-color: var(--beuve-accent);
-        outline: none;
       }
 
       .find {
@@ -860,6 +841,7 @@ export class BeuveSheetView extends LitElement {
     return html`
       <header>
         <button
+          class="button"
           type="button"
           title=${withShortcut({ label: 'Back', shortcut: this.shortcuts.back })}
           aria-label="Back"
@@ -871,6 +853,7 @@ export class BeuveSheetView extends LitElement {
           ←
         </button>
         <button
+          class="button"
           type="button"
           title=${withShortcut({ label: 'Forward', shortcut: this.shortcuts.forward })}
           aria-label="Forward"
@@ -884,6 +867,7 @@ export class BeuveSheetView extends LitElement {
         <span class="title" title=${`${place?.path ?? ''} at ${this.sha}`}>${pathText(title)}</span>
         <span class="stamp">printed ${this.printedAt}</span>
         <button
+          class="button"
           type="button"
           title=${withShortcut({ label: 'Copy GitHub Permalink', shortcut: this.shortcuts.copyLink })}
           @click=${(): void => {
@@ -893,6 +877,7 @@ export class BeuveSheetView extends LitElement {
           Copy link
         </button>
         <button
+          class="button"
           type="button"
           title="Open these lines on GitHub"
           @click=${(): void => {
@@ -903,7 +888,9 @@ export class BeuveSheetView extends LitElement {
         </button>
         ${
           this.mode === 'inline'
-            ? html`<button type="button" title="Close (Esc)" @click=${this.close}>Close</button>`
+            ? html`<button class="button" type="button" title="Close (Esc)" @click=${this.close}>
+                Close
+              </button>`
             : nothing
         }
       </header>

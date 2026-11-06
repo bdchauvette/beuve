@@ -61,6 +61,7 @@ interface ActionButtonParts {
 function actionButton({ action, label, title }: ActionButtonParts): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = 'button';
   button.dataset['action'] = action;
   button.textContent = label;
   button.title = title;

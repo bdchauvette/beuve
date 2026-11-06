@@ -63,6 +63,7 @@ import type { PeekState } from './peek-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
 import { zoneStyles } from './zone-styles.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
@@ -159,6 +160,7 @@ export interface OpenCommitDetail {
 @customElement('beuve-diff-stream')
 export class BeuveDiffStream extends LitElement {
   static override styles = [
+    buttonStyles,
     zoneStyles,
     css`
       :host {
@@ -304,23 +306,6 @@ export class BeuveDiffStream extends LitElement {
         flex: 1;
       }
 
-      button {
-        padding: var(--beuve-space-1) var(--beuve-space-3);
-        border: 1px solid var(--beuve-accent);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-accent-solid);
-        color: var(--beuve-on-accent);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      button:disabled {
-        border-color: var(--beuve-border);
-        background: var(--beuve-surface-sunken);
-        color: var(--beuve-text-muted);
-        cursor: default;
-      }
-
       .saved {
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -350,30 +335,6 @@ export class BeuveDiffStream extends LitElement {
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
         white-space: nowrap;
-      }
-
-      .tools button,
-      .order-button {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--beuve-space-1);
-        padding: 2px var(--beuve-space-2);
-        border: 1px solid transparent;
-        border-radius: var(--beuve-radius-small);
-        background: none;
-        color: var(--beuve-text-muted);
-        font: inherit;
-        white-space: nowrap;
-      }
-
-      .tools button {
-        padding: 2px var(--beuve-space-1);
-      }
-
-      .tools button:hover,
-      .order-button:hover,
-      .order-button:has(+ [popover]:popover-open) {
-        color: var(--beuve-text);
       }
 
       .order-button {
@@ -463,12 +424,6 @@ export class BeuveDiffStream extends LitElement {
         outline-offset: -3px;
       }
 
-      .tools > button[aria-pressed='true'] {
-        border-color: var(--beuve-border);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
-      }
-
       .group {
         display: flex;
         align-items: center;
@@ -511,14 +466,6 @@ export class BeuveDiffStream extends LitElement {
 
       .pairs .filtered {
         color: var(--beuve-text);
-      }
-
-      .pairs summary button {
-        padding: 0;
-        border: none;
-        background: none;
-        color: var(--beuve-accent);
-        font: inherit;
       }
 
       .pairs beuve-commit-pairing {
@@ -1372,6 +1319,7 @@ export class BeuveDiffStream extends LitElement {
       >`;
     }
     return html`<button
+      class="button primary large"
       type="button"
       title=${`Save Progress (${this.shortcut('save-progress')}): next time, show only what changed since this point`}
       ?disabled=${this.marking || this.loading}
@@ -1502,7 +1450,7 @@ export class BeuveDiffStream extends LitElement {
     return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}">
       <button
         type="button"
-        class="order-button"
+        class="button quiet order-button"
         tabindex="-1"
         popovertarget="order-menu"
         aria-haspopup="menu"
@@ -1569,6 +1517,7 @@ export class BeuveDiffStream extends LitElement {
             ? nothing
             : html`<span class="filtered">showing “${filtered.subject}”</span>
                 <button
+                  class="button link"
                   type="button"
                   @click=${(event: Event): void => {
                     event.preventDefault();
@@ -1595,6 +1544,7 @@ export class BeuveDiffStream extends LitElement {
     return html`<span class="tools" role="group" aria-label="Diff display" title=${label.title}>
       <span class="segmented" role="radiogroup" aria-label="Diff layout">
         <button
+          class="button quiet"
           type="button"
           role="radio"
           tabindex="-1"
@@ -1607,13 +1557,13 @@ export class BeuveDiffStream extends LitElement {
           ${displayIcon('split')}
         </button>
         <button
+          class="button quiet ${isNarrow && layout === 'split' ? 'effective' : ''}"
           type="button"
           role="radio"
           tabindex="-1"
           aria-label="Inline"
           title="Inline"
           aria-checked=${layout === 'split' ? 'false' : 'true'}
-          class=${isNarrow && layout === 'split' ? 'effective' : ''}
           data-action="layout"
           data-layout="unified"
         >
@@ -1621,6 +1571,7 @@ export class BeuveDiffStream extends LitElement {
         </button>
       </span>
       <button
+        class="button quiet"
         type="button"
         tabindex="-1"
         aria-label="Hide whitespace changes"

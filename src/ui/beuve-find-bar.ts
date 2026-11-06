@@ -3,6 +3,7 @@ import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { withShortcut } from './with-shortcut.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 const stepKeys: ReadonlySet<string> = new Set(['Enter', 'F3', 'ArrowDown', 'ArrowUp']);
 
@@ -26,62 +27,50 @@ export interface FindQueryDetail {
  */
 @customElement('beuve-find-bar')
 export class BeuveFindBar extends LitElement {
-  static override styles = css`
-    :host {
-      display: flex;
-      align-items: center;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-      border-block-end: 1px solid var(--beuve-border);
-      background: var(--beuve-surface);
-      font: var(--beuve-font-small);
-    }
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+        border-block-end: 1px solid var(--beuve-border);
+        background: var(--beuve-surface);
+        font: var(--beuve-font-small);
+      }
 
-    input {
-      flex: 0 1 320px;
-      min-inline-size: 120px;
-      padding: 2px var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius-small);
-      background: var(--beuve-bg);
-      color: var(--beuve-text);
-      font: var(--beuve-font-mono);
-    }
+      input {
+        flex: 0 1 320px;
+        min-inline-size: 120px;
+        padding: 2px var(--beuve-space-2);
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
+        font: var(--beuve-font-mono);
+      }
 
-    input:focus {
-      border-color: var(--beuve-accent);
-      outline: none;
-    }
+      input:focus {
+        border-color: var(--beuve-accent);
+        outline: none;
+      }
 
-    .count {
-      min-inline-size: 7em;
-      color: var(--beuve-text-muted);
-      font-variant-numeric: tabular-nums;
-    }
+      .count {
+        min-inline-size: 7em;
+        color: var(--beuve-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
 
-    .count.none {
-      color: var(--beuve-danger);
-    }
+      .count.none {
+        color: var(--beuve-danger);
+      }
 
-    button {
-      padding: 0 var(--beuve-space-2);
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius-small);
-      background: var(--beuve-surface);
-      color: var(--beuve-text);
-      font: inherit;
-      cursor: pointer;
-    }
-
-    button[aria-pressed='true'] {
-      border-color: var(--beuve-accent);
-      color: var(--beuve-accent);
-    }
-
-    .spacer {
-      flex: 1;
-    }
-  `;
+      .spacer {
+        flex: 1;
+      }
+    `,
+  ];
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     event.stopPropagation();
@@ -165,6 +154,7 @@ export class BeuveFindBar extends LitElement {
         >${label}</span
       >
       <button
+        class="button"
         type="button"
         title=${withShortcut({ label: 'Previous', shortcut: this.shortcuts.previous })}
         aria-label="Previous match"
@@ -175,6 +165,7 @@ export class BeuveFindBar extends LitElement {
         ↑
       </button>
       <button
+        class="button"
         type="button"
         title=${withShortcut({ label: 'Next', shortcut: this.shortcuts.next })}
         aria-label="Next match"
@@ -185,6 +176,7 @@ export class BeuveFindBar extends LitElement {
         ↓
       </button>
       <button
+        class="button"
         type="button"
         title=${withShortcut({ label: 'Match Case', shortcut: this.shortcuts.matchCase })}
         aria-pressed=${this.isCaseSensitive ? 'true' : 'false'}
@@ -196,6 +188,7 @@ export class BeuveFindBar extends LitElement {
       </button>
       <span class="spacer"></span>
       <button
+        class="button icon"
         type="button"
         aria-label="Close find"
         title="Close (Esc)"

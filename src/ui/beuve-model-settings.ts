@@ -19,6 +19,7 @@ import { ActionDelegation } from './action-delegation.ts';
 import { describeModelEntry } from './describe-model-entry.ts';
 import { describeModelTest } from './describe-model-test.ts';
 import { isRemoteBaseUrl } from './is-remote-base-url.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** The form's state: an entry being added or edited, with its fields as typed. */
 interface Draft {
@@ -42,124 +43,122 @@ interface Draft {
  */
 @customElement('beuve-model-settings')
 export class BeuveModelSettings extends LitElement {
-  static override styles = css`
-    :host {
-      display: block;
-    }
+  static override styles = [
+    buttonStyles,
+    css`
+      :host {
+        display: block;
+      }
 
-    h2 {
-      margin: var(--beuve-space-4) 0 var(--beuve-space-2);
-      font: var(--beuve-font-small);
-      font-weight: var(--beuve-font-weight-semibold);
-      color: var(--beuve-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+      h2 {
+        margin: var(--beuve-space-4) 0 var(--beuve-space-2);
+        font: var(--beuve-font-small);
+        font-weight: var(--beuve-font-weight-semibold);
+        color: var(--beuve-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
 
-    .group {
-      border: 1px solid var(--beuve-border);
-      border-radius: var(--beuve-radius);
-      background: var(--beuve-surface);
-    }
+      .group {
+        border: 1px solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+      }
 
-    .row {
-      display: grid;
-      grid-template-columns: 180px minmax(0, 1fr);
-      align-items: center;
-      gap: var(--beuve-space-3);
-      min-block-size: 32px;
-      padding: var(--beuve-space-1) var(--beuve-space-3);
-    }
+      .row {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        align-items: center;
+        gap: var(--beuve-space-3);
+        min-block-size: 32px;
+        padding: var(--beuve-space-1) var(--beuve-space-3);
+      }
 
-    .row + .row,
-    .entry + .entry {
-      border-block-start: 1px solid var(--beuve-border);
-    }
+      .row + .row,
+      .entry + .entry {
+        border-block-start: 1px solid var(--beuve-border);
+      }
 
-    .entry {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-    }
+      .entry {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+      }
 
-    .entry .text {
-      flex: 1;
-      min-inline-size: 0;
-    }
+      .entry .text {
+        flex: 1;
+        min-inline-size: 0;
+      }
 
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-1);
-    }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-1);
+      }
 
-    .detail {
-      font: var(--beuve-font-small);
-      color: var(--beuve-text-muted);
-      overflow-wrap: anywhere;
-    }
+      .detail {
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+        overflow-wrap: anywhere;
+      }
 
-    .ok {
-      color: var(--beuve-ok);
-    }
+      .ok {
+        color: var(--beuve-ok);
+      }
 
-    .warn {
-      color: var(--beuve-warn);
-    }
+      .warn {
+        color: var(--beuve-warn);
+      }
 
-    input[type='text'],
-    input[type='password'],
-    input[type='number'],
-    select {
-      font: inherit;
-      color: var(--beuve-text);
-      min-inline-size: 0;
-    }
+      input[type='text'],
+      input[type='password'],
+      input[type='number'],
+      select {
+        font: inherit;
+        color: var(--beuve-text);
+        min-inline-size: 0;
+      }
 
-    input[type='text'],
-    input[type='password'] {
-      inline-size: 100%;
-      box-sizing: border-box;
-    }
+      input[type='text'],
+      input[type='password'] {
+        inline-size: 100%;
+        box-sizing: border-box;
+      }
 
-    select {
-      justify-self: start;
-      min-inline-size: 160px;
-    }
+      select {
+        justify-self: start;
+        min-inline-size: 160px;
+      }
 
-    button {
-      font: inherit;
-      color: var(--beuve-text);
-    }
+      .choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--beuve-space-3);
+      }
 
-    .choices {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--beuve-space-3);
-    }
+      .footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border-block-start: 1px solid var(--beuve-border);
+      }
 
-    .footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--beuve-space-2);
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-      border-block-start: 1px solid var(--beuve-border);
-    }
+      .add {
+        display: flex;
+        gap: var(--beuve-space-2);
+        align-items: center;
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border-block-start: 1px solid var(--beuve-border);
+      }
 
-    .add {
-      display: flex;
-      gap: var(--beuve-space-2);
-      align-items: center;
-      padding: var(--beuve-space-2) var(--beuve-space-3);
-      border-block-start: 1px solid var(--beuve-border);
-    }
-
-    .error {
-      margin: var(--beuve-space-2) 0 0;
-      color: var(--beuve-danger);
-    }
-  `;
+      .error {
+        margin: var(--beuve-space-2) 0 0;
+        color: var(--beuve-danger);
+      }
+    `,
+  ];
 
   private readonly onWindowFocus = (): void => {
     void this.load();
@@ -358,12 +357,21 @@ export class BeuveModelSettings extends LitElement {
             }
           </div>
           <span class="actions">
-            <button type="button" data-action="test" data-model=${entry.id}>Test</button>
-            <button type="button" data-action="edit" data-model=${entry.id}>Edit</button>
+            <button class="button" type="button" data-action="test" data-model=${entry.id}>
+              Test
+            </button>
+            <button class="button" type="button" data-action="edit" data-model=${entry.id}>
+              Edit
+            </button>
             ${
               entry.isDefault
                 ? nothing
-                : html`<button type="button" data-action="remove" data-model=${entry.id}>
+                : html`<button
+                    class="button"
+                    type="button"
+                    data-action="remove"
+                    data-model=${entry.id}
+                  >
                     Remove
                   </button>`
             }
@@ -386,6 +394,7 @@ export class BeuveModelSettings extends LitElement {
                 })}
               </select>
               <button
+                class="button"
                 type="button"
                 @click=${(): void => {
                   this.startAdd();
@@ -471,7 +480,11 @@ export class BeuveModelSettings extends LitElement {
                 <div class="row">
                   <span></span>
                   <span
-                    ><button type="button" @click=${(): void => void this.fetchModels()}>
+                    ><button
+                      class="button"
+                      type="button"
+                      @click=${(): void => void this.fetchModels()}
+                    >
                       Fetch Models
                     </button></span
                   >
@@ -571,6 +584,7 @@ export class BeuveModelSettings extends LitElement {
         ${draft.kind === 'claude-code-cli' ? nothing : this.renderKey(draft, entry)}
         <div class="footer">
           <button
+            class="button"
             type="button"
             @click=${(): void => {
               this.draft = undefined;
@@ -579,7 +593,7 @@ export class BeuveModelSettings extends LitElement {
           >
             Cancel
           </button>
-          <button type="button" @click=${(): void => void this.save()}>Save</button>
+          <button class="button" type="button" @click=${(): void => void this.save()}>Save</button>
         </div>
       </div>`;
   }
@@ -609,12 +623,17 @@ export class BeuveModelSettings extends LitElement {
           ${
             entry === undefined
               ? html`<span class="detail">Saved with the model.</span>`
-              : html`<button type="button" @click=${(): void => void this.setKey(entry.id)}>
+              : html`<button
+                    class="button"
+                    type="button"
+                    @click=${(): void => void this.setKey(entry.id)}
+                  >
                     ${hasKey ? 'Replace Key' : 'Save Key'}
                   </button>
                   ${
                     hasKey
                       ? html`<button
+                          class="button"
                           type="button"
                           @click=${async (): Promise<void> => {
                             this.apply(

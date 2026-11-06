@@ -30,6 +30,7 @@ import { pathText } from './path-text.ts';
 import { queueIcon } from './queue-icon.ts';
 import { sortQueueItems } from './sort-queue-items.ts';
 import { withStackContext } from './with-stack-context.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
@@ -53,6 +54,7 @@ export interface QueueOpenUrlDetail {
 @customElement('beuve-review-queue')
 export class BeuveReviewQueue extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -96,23 +98,8 @@ export class BeuveReviewQueue extends LitElement {
         display: inline-flex;
       }
 
-      header button,
-      .problems button,
-      .empty button {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--beuve-space-1);
-        padding: 2px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: none;
-        color: var(--beuve-text-muted);
-        font: var(--beuve-font-small);
-        white-space: nowrap;
-      }
-
-      header button:hover,
-      header button:has(+ [popover]:popover-open) {
+      header .button:has(+ [popover]:popover-open) {
+        background: var(--beuve-surface-hover);
         color: var(--beuve-text);
       }
 
@@ -576,7 +563,7 @@ export class BeuveReviewQueue extends LitElement {
     if (rows.length === 0) {
       return html`<div class="empty">
         All ${String(all.length)} are hidden by the filters.
-        <button type="button" data-action="clear-filters">Clear filters</button>
+        <button class="button" type="button" data-action="clear-filters">Clear filters</button>
       </div>`;
     }
     let index = 0;
@@ -695,6 +682,7 @@ export class BeuveReviewQueue extends LitElement {
     const current = sortLabels.find(([id]) => id === this.prefs.sort)?.[1] ?? '';
     return html`<span class="control">
       <button
+        class="button"
         id="sort-button"
         type="button"
         popovertarget="sort-menu"
@@ -724,6 +712,7 @@ export class BeuveReviewQueue extends LitElement {
     const current = groupLabels.find(([id]) => id === this.prefs.group)?.[1] ?? '';
     return html`<span class="control">
       <button
+        class="button"
         id="group-button"
         type="button"
         popovertarget="group-menu"
@@ -776,6 +765,7 @@ export class BeuveReviewQueue extends LitElement {
     };
     return html`<span class="control">
       <button
+        class="button"
         id="filter-button"
         type="button"
         popovertarget="filter-menu"
@@ -901,6 +891,7 @@ export class BeuveReviewQueue extends LitElement {
           >${describeUpdated(this.queue, now)}</span
         >
         <button
+          class="button"
           type="button"
           data-action="refresh"
           aria-label="Refresh"

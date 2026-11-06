@@ -41,6 +41,7 @@ import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** Questions carry at most this many mentions (ADR 0046); main refuses more. */
 const maxMentions = 8;
@@ -67,6 +68,7 @@ const maxMentions = 8;
 @customElement('beuve-chat-drawer')
 export class BeuveChatDrawer extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     zoneStyles,
     css`
@@ -323,30 +325,8 @@ export class BeuveChatDrawer extends LitElement {
         color: var(--beuve-text-muted);
       }
 
-      button.action {
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-        cursor: pointer;
-      }
-
-      button.action[aria-disabled='true'] {
-        color: var(--beuve-text-muted);
-        cursor: default;
-      }
-
-      button.cite:hover,
-      button.action:hover:not([aria-disabled='true']) {
+      button.cite:hover {
         border-color: var(--beuve-accent);
-      }
-
-      button.cite:focus-visible,
-      button.action:focus-visible {
-        outline: 2px solid var(--beuve-accent);
-        outline-offset: 1px;
       }
 
       .muted {
@@ -1087,7 +1067,7 @@ export class BeuveChatDrawer extends LitElement {
             <span>Compacting the conversation…</span>
             <button
               type="button"
-              class="action"
+              class="button action"
               data-nav
               data-action="cancel-compaction"
               title="Stop compacting; nothing is stored"
@@ -1251,7 +1231,7 @@ export class BeuveChatDrawer extends LitElement {
           <span>${activity ?? (hasText ? 'Answering…' : startedLabel(message))}</span>
           <button
             type="button"
-            class="action"
+            class="button action"
             data-nav
             data-action="cancel"
             data-message-id=${message.id}
@@ -1284,7 +1264,7 @@ export class BeuveChatDrawer extends LitElement {
     return html`<div class="status">
       <button
         type="button"
-        class="action"
+        class="button action"
         data-nav
         data-action="stage"
         data-message-id=${messageId}
@@ -1441,7 +1421,7 @@ export class BeuveChatDrawer extends LitElement {
     return html`<span class="queued muted"
       >queued<button
         type="button"
-        class="action"
+        class="button action"
         data-nav
         data-action="cancel"
         data-message-id=${answerId}
@@ -1529,7 +1509,7 @@ export class BeuveChatDrawer extends LitElement {
         ${this.renderPill(citation)}
         <button
           type="button"
-          class="action"
+          class="button action"
           data-nav
           data-action="stage-finding"
           data-message-id=${messageId}
@@ -1572,7 +1552,7 @@ export class BeuveChatDrawer extends LitElement {
       <span>${waiting === 1 ? '1 waiting' : `${String(waiting)} waiting`}</span>
       <button
         type="button"
-        class="action"
+        class="button action"
         data-nav
         data-action="clear-queue"
         title="Drop the questions still waiting; the running answer goes on (/clear queue)"

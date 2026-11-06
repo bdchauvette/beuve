@@ -10,6 +10,7 @@ import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
+import { buttonStyles } from './primitives/button-styles.ts';
 
 /** What the composer submits: a new note's severity, one-line title and Markdown body. */
 export interface UraDraft {
@@ -30,6 +31,7 @@ const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 
 @customElement('beuve-ura-composer')
 export class BeuveUraComposer extends LitElement {
   static override styles = [
+    buttonStyles,
     formatControlStyles,
     css`
       :host {
@@ -96,22 +98,6 @@ export class BeuveUraComposer extends LitElement {
       select:focus {
         border-color: var(--beuve-accent);
         outline: none;
-      }
-
-      button {
-        padding: 0 var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
-        cursor: pointer;
-      }
-
-      button.primary {
-        border-color: var(--beuve-accent);
-        background: var(--beuve-accent-solid);
-        color: var(--beuve-on-accent);
       }
 
       .suggestion {
@@ -248,10 +234,12 @@ export class BeuveUraComposer extends LitElement {
         <span class="where">${pathText(this.where)}</span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
         <span class="spacer"></span>
-        <button type="button" title="Cancel (Esc)" @click=${this.onCancel}>Cancel</button>
+        <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>
+          Cancel
+        </button>
         <button
           type="submit"
-          class="primary"
+          class="button primary"
           title="Stage (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})"
           ?disabled=${this.saving}
         >
