@@ -523,6 +523,12 @@ export interface DiagnosticsRequest {
   readonly path: string;
 }
 
+/** `language-servers:open-config`: the file that was opened, and whether it had to be created. */
+export interface OpenedConfigView {
+  readonly path: string;
+  readonly created: boolean;
+}
+
 export type DiagnosticSeverityView = 'error' | 'warning' | 'information' | 'hint';
 
 /**
@@ -2610,6 +2616,10 @@ export interface InvokeChannelMap {
     readonly response: IpcResult<RemoteModelsView>;
   };
   'models:test': { readonly request: ModelIdRequest; readonly response: IpcResult<ModelTestView> };
+  'language-servers:open-config': {
+    readonly request: undefined;
+    readonly response: IpcResult<OpenedConfigView>;
+  };
 }
 
 export type InvokeChannel = keyof InvokeChannelMap;
@@ -2687,6 +2697,7 @@ export type SettingsInvokeChannel =
  * main window or a sheet, so a compromised review page can't swap the model or test a key.
  */
 export type SettingsOnlyInvokeChannel =
+  | 'language-servers:open-config'
   | 'models:list'
   | 'models:save'
   | 'models:remove'

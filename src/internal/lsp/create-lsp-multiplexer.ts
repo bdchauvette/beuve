@@ -21,6 +21,7 @@ import { createViewMapper } from './create-view-mapper.ts';
 import type { ViewMapper } from './create-view-mapper.ts';
 import { findServerCommand } from './find-server-command.ts';
 import { findServerRoot } from './find-server-root.ts';
+import { resolveProjectCommand } from './resolve-project-command.ts';
 import { isWithinDirectory } from './is-within-directory.ts';
 import { LineIndex } from './line-index.ts';
 import type { LspError } from './lsp-error.ts';
@@ -79,6 +80,12 @@ export interface LspMultiplexerOptions {
    * `server-untrusted` error and starts nothing. Defaults to {@link checkServerTrust}.
    */
   readonly trust?: (request: ServerTrustRequest) => ServerTrustDecision;
+  /**
+   * The servers for the checkout `workspace` (real path), when they differ from `servers`: the
+   * reviewer's configuration applies per repository (ADR 0111), and main knows which repository a
+   * checkout is of. Asked on every request, so it must be cheap.
+   */
+  readonly serversFor?: (workspace: string) => readonly ServerDefinition[] | undefined;
   readonly logger?: Logger;
   /** Per request. Defaults to 15 s. */
   readonly requestTimeout?: Temporal.Duration;
@@ -208,9 +215,13 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
   const lifecycle = { isDisposed: false };
 
   /** Every server that handles the file, in registry order (ADR 0111). */
-  const definitionsFor = (file: WorkspaceFile): ServerDefinition[] => {
+  const serversIn = (workspace: WorkspaceRoot): readonly ServerDefinition[] => {
+    return options.serversFor?.(workspace) ?? servers;
+  };
+
+  const definitionsFor = (workspace: WorkspaceRoot, file: WorkspaceFile): ServerDefinition[] => {
     const extension = path.extname(file.absolutePath).toLowerCase();
-    return servers.filter((server) => Object.hasOwn(server.languageIds, extension));
+    return serversIn(workspace).filter((server) => Object.hasOwn(server.languageIds, extension));
   };
 
   const startSession = async (entry: ServerEntry): Promise<Result<ServerSession, LspError>> => {
@@ -232,12 +243,21 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       searchDirectories.push(path.join(workspace, 'node_modules', '.bin'));
     }
     searchDirectories.push(...(options.searchDirectories ?? []));
-    const command = await findServerCommand({
-      serverId: definition.id,
-      command: definition.command,
-      searchDirectories,
-      pathVariable: environment['PATH'],
-    });
+    let command: Result<string, LspError>;
+    if (definition.source === 'project') {
+      command = await resolveProjectCommand({
+        serverId: definition.id,
+        workspace,
+        command: definition.command,
+      });
+    } else {
+      command = await findServerCommand({
+        serverId: definition.id,
+        command: definition.command,
+        searchDirectories,
+        pathVariable: environment['PATH'],
+      });
+    }
     if (!command.ok) {
       return command;
     }
@@ -389,7 +409,9 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
         session.close(document.uri);
         continue;
       }
-      const definition = servers.find((server) => server.id === session.server.serverId);
+      const definition = serversIn(root).find((server) => {
+        return server.id === session.server.serverId;
+      });
       const content = await readDocument({
         absolutePath: document.absolutePath,
         displayPath: document.absolutePath,
@@ -417,7 +439,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
     if (!file.ok) {
       return file;
     }
-    const definitions = definitionsFor(file.value);
+    const definitions = definitionsFor(workspace.value, file.value);
     if (definitions.length === 0) {
       return err({ kind: 'unsupported-language', path: file.value.relativePath });
     }

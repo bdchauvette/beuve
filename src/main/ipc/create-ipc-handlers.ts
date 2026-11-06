@@ -87,6 +87,7 @@ import type {
   UraVerdictStateView,
   ModelRegistryView,
   ModelTestView,
+  OpenedConfigView,
   RemoteModelsView,
 } from '#contract/ipc-contract.ts';
 import { modelRoles } from '#contract/model-roles.ts';
@@ -1293,6 +1294,9 @@ export function createIpcHandlers(
         return services.models.test(parsed.data.id);
       }
       return invalid(parsed.error);
+    },
+    'language-servers:open-config': async (): Promise<IpcResult<OpenedConfigView>> => {
+      return services.languageServerConfig.open();
     },
     'clipboard:write-text': async (request): Promise<IpcResult<ClipboardWrittenView>> => {
       const parsed = clipboardRequest.safeParse(request);

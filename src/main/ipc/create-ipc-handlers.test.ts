@@ -1244,6 +1244,7 @@ function stubServices(
       listRemote: notWired,
       test: notWired,
     },
+    languageServerConfig: { open: notWired },
     pruneWorktrees: doNothing,
     dispose: doNothing,
   };

@@ -23,6 +23,7 @@ import type { GithubServices } from './github/create-github-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
 import type { ReviewQueueServices } from './queue/create-review-queue-services.ts';
+import type { LanguageServerConfigServices } from './language-servers/create-language-server-config-services.ts';
 import type { ModelServices } from './models/create-model-services.ts';
 import type { RemoteServices } from './remote/create-remote-services.ts';
 import type { ShellServices } from './shell/create-shell-services.ts';
@@ -85,6 +86,8 @@ export interface MainServices {
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };
   /** The model registry, its keys and Test, for the Settings window only (ADR 0070). */
   readonly models: ModelServices;
+  /** Opens the language server configuration for editing, for the Settings window (ADR 0111). */
+  readonly languageServerConfig: LanguageServerConfigServices;
   /** Removes session checkouts no stored session head needs (run once at startup). Never rejects. */
   readonly pruneWorktrees: () => Promise<void>;
   /**

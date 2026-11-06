@@ -28,6 +28,7 @@ import type { ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
 import type { LspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
 import { findEnclosingSymbol } from '#internal/lsp/find-enclosing-symbol.ts';
 import type { LspError } from '#internal/lsp/lsp-error.ts';
+import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { resolveWorkspaceRoot } from '#internal/lsp/resolve-workspace-root.ts';
 import { findModuleSpecifier } from '#internal/lsp/find-module-specifier.ts';
 import { planDefinitionProbes } from '#internal/lsp/plan-definition-probes.ts';
@@ -55,9 +56,12 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { readSheetSource } from '../sheets/read-sheet-source.ts';
 import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
 import type { SessionWorktrees, WorktreeClaim } from '../worktrees/create-session-worktrees.ts';
+import type { LanguageServerRegistry } from '../language-servers/create-language-server-registry.ts';
+import type { RepositoryIdentity } from '../language-servers/repository-identity.ts';
 import type { ShellEnvironments } from '../shell-environment/create-shell-environments.ts';
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
+import type { ServerBindings } from './create-server-bindings.ts';
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
 import { headSpansFrom } from './head-spans-from.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
@@ -135,6 +139,20 @@ export interface LspServicesOptions {
    * note about one that fell back goes with its diagnostics.
    */
   readonly environments?: Pick<ShellEnvironments, 'forget' | 'noticeFor'>;
+  /**
+   * The reviewer's language server configuration (ADR 0111): each request resolves the servers
+   * of its session's repository over `builtins` and binds them to the checkout it runs in; a
+   * restart reads the files again; what is wrong with them shows with diagnostics.
+   */
+  readonly servers?: ServerConfiguration;
+}
+
+/** What {@link LspServicesOptions.servers} needs. */
+export interface ServerConfiguration {
+  readonly registry: LanguageServerRegistry;
+  readonly bindings: Pick<ServerBindings, 'bind'>;
+  /** beuve's own definitions, which the configuration is applied over. */
+  readonly builtins: readonly ServerDefinition[];
 }
 
 interface Workspace extends Disposable {
@@ -178,6 +196,20 @@ export function createLspServices(options: LspServicesOptions): LspServices {
   const fail = (error: LspError): Err<IpcError> => {
     logger.warn('language server request failed', { error });
     return err(ipcErrorFromLspError(error));
+  };
+
+  /** Binds the servers of the session's repository to the checkout; returns what is wrong with the files. */
+  const bindServers = async (session: Session, root: string): Promise<readonly string[]> => {
+    const configuration = options.servers;
+    if (configuration === undefined) {
+      return [];
+    }
+    const resolved = configuration.registry.resolve({
+      builtins: configuration.builtins,
+      repository: repositoryIdentityOf(session.source),
+    });
+    configuration.bindings.bind(await canonicalRootOf(root), resolved.definitions);
+    return resolved.problems;
   };
 
   const expand = async (
@@ -317,6 +349,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return worktreeFailure(logger, leased.error);
     }
     using lease = leased.value;
+    await bindServers(session, lease.path);
     const text = await readSheetSource(context, commit.value, request.path);
     if (!text.ok) {
       return text;
@@ -403,6 +436,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return worktreeFailure(logger, leased.error);
     }
     using lease = leased.value;
+    await bindServers(session, lease.path);
     const text = await readSheetSource(context, commit.value, request.path);
     if (!text.ok) {
       return text;
@@ -450,6 +484,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return worktreeFailure(logger, leased.error);
     }
     using lease = leased.value;
+    const configProblems = await bindServers(session, lease.path);
     const report = await multiplexer.getDiagnostics({ root: lease.path, path: request.path });
     if (!report.ok) {
       if (report.error.kind === 'server-untrusted') {
@@ -458,7 +493,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
           state: 'untrusted',
           diagnostics: [],
           omitted: 0,
-          notice: report.error.reason,
+          notice: [report.error.reason, ...configProblems].join(' '),
         });
       }
       if (isUndiagnosable(report.error)) {
@@ -469,7 +504,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const items = report.value.diagnostics.map((diagnostic) => {
       return diagnosticItemFrom(diagnostic);
     });
-    const notices = refusedReasonsFrom(report.value.skipped);
+    const notices = [...refusedReasonsFrom(report.value.skipped), ...configProblems];
     const environmentNotice = options.environments?.noticeFor(await canonicalRootOf(lease.path));
     if (environmentNotice !== undefined) {
       notices.push(environmentNotice);
@@ -511,6 +546,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       using workspace = leased.value;
       await multiplexer.restart(workspace.root);
       options.environments?.forget(await canonicalRootOf(workspace.root));
+      await options.servers?.registry.reload();
       return ok({ sessionId: session.id, headSha: session.headSha });
     },
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
@@ -554,6 +590,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
         return checkedOut;
       }
       using workspace = checkedOut.value;
+      await bindServers(session, workspace.root);
       const file = relativeFrom(repository, request.path);
       const position = await locate(request, { workspace, file, spans });
       if (!position.ok) {
@@ -643,6 +680,17 @@ function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView[
 
 function targetViewFrom(target: LocationView): DefinitionTargetView {
   return { file: { ...target.file }, ...sheetRangeFrom(target.range) };
+}
+
+/** What an override's `match` is tried against: the reviewer's clone, and a pull request's remote. */
+function repositoryIdentityOf(source: Session['source']): RepositoryIdentity {
+  if (source.kind === 'github-pull-request') {
+    return {
+      clonePath: source.repoPath,
+      remote: `${source.host}/${source.owner}/${source.repo}`.toLowerCase(),
+    };
+  }
+  return { clonePath: source.repoPath };
 }
 
 /** The real path the multiplexer keys a checkout by, which the shell environments use too. */
