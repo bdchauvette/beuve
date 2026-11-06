@@ -1441,6 +1441,10 @@ export interface DiffDisplayView {
   readonly skipReviewed?: boolean;
   /** How definitions open (ADR 0067); `window` until chosen. Always set by main. */
   readonly sheets?: SheetModeView;
+  /** The review queue's sort, grouping and filters (ADR 0113). Always set by main. */
+  readonly reviewQueue?: ReviewQueuePrefsView;
+  /** Branch name prefixes the review queue lists agent branches for (ADR 0113). Always set by main. */
+  readonly reviewQueueBranchPrefixes?: readonly string[];
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1453,6 +1457,8 @@ export interface SetDiffDisplayRequest {
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
   readonly sheets?: SheetModeView;
+  readonly reviewQueue?: ReviewQueuePrefsView;
+  readonly reviewQueueBranchPrefixes?: readonly string[];
 }
 
 /**
@@ -1866,6 +1872,144 @@ export interface OpenUrlRequest {
 export interface AttentionView {
   readonly turn: 'you' | 'author' | 'reviewers' | 'unknown';
   readonly reasons: readonly string[];
+}
+
+/** Whose turn: the attention set's `turn` (ADR 0066). */
+export type TurnView = AttentionView['turn'];
+
+/** What a review queue item is (ADR 0113): a pull request, or a branch without one. */
+export type QueueItemKindView = 'pull-request' | 'branch';
+
+/** Why an item is in the review queue: a review request, the viewer's own, an agent branch. */
+export type QueueReasonView = 'requested' | 'authored' | 'branch';
+
+/**
+ * How far beuve's own review of an item got (ADR 0113): `none` never opened, `opened` without
+ * marks or checkpoint, `partial` files marked, `reviewed` checkpoint on the current head,
+ * `new-commits` a checkpoint and commits since.
+ */
+export type LocalReviewStateView = 'none' | 'opened' | 'partial' | 'reviewed' | 'new-commits';
+
+/** The local review of a queue item, from the matching session. */
+export interface QueueLocalReviewView {
+  readonly state: LocalReviewStateView;
+  readonly sessionId?: string;
+  /** Files marked reviewed on the session's head. */
+  readonly markedFiles?: number;
+}
+
+/** A queue item's place in a stack of pull requests within one repository. */
+export interface QueueStackView {
+  /** The bottom item's key, shared by every item of the stack. */
+  readonly id: string;
+  /** 0 for the bottom pull request, 1 for the one based on it, … */
+  readonly depth: number;
+  readonly size: number;
+}
+
+/** Lines and files a change touches. */
+export interface ChangeSizeView {
+  readonly additions: number;
+  readonly deletions: number;
+  readonly changedFiles: number;
+}
+
+/** A queue item's CI on its head: the rollup, and how many checks fail. */
+export interface QueueCiView {
+  readonly overall: CiBucketView | 'none';
+  readonly failing: number;
+}
+
+/**
+ * One thing waiting on the viewer (ADR 0113). `key` is `host/owner/repo#n` or
+ * `host/owner/repo:branch`, which is also what `github:open-pr` or `github:open-branch` takes as
+ * `ref`. Timestamps are ISO-8601; `waitingSince` approximates when it started waiting.
+ */
+export interface ReviewQueueItemView {
+  readonly key: string;
+  readonly kind: QueueItemKindView;
+  readonly forge: 'github';
+  readonly host: string;
+  readonly owner: string;
+  readonly repo: string;
+  readonly number?: number;
+  /** The head branch: the branch itself, or a pull request's once its details were read. */
+  readonly branch?: string;
+  readonly baseBranch?: string;
+  readonly title: string;
+  readonly author: string;
+  readonly isDraft: boolean;
+  readonly htmlUrl: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly waitingSince: string;
+  readonly headSha?: string;
+  readonly size?: ChangeSizeView;
+  readonly ci?: QueueCiView;
+  readonly attention: AttentionView;
+  readonly reasons: readonly QueueReasonView[];
+  /** For review requests: asked of the viewer by name, or only through a team. */
+  readonly request?: 'direct' | 'team';
+  readonly stack?: QueueStackView;
+  readonly local: QueueLocalReviewView;
+  /** The head commit's `Claude-Session` link, for branches (ADR 0112). */
+  readonly agentSessionUrl?: string;
+  /** Its source failed in the last refresh, so this is the last answer it gave. */
+  readonly isStale?: boolean;
+}
+
+/**
+ * Why the queue may be incomplete (ADR 0113): a source that failed (its items are the last ones it
+ * gave, marked stale), results cut off, organizations GitHub left out for SAML SSO, or a token
+ * that may not see team requests. `remedy` is a command or step that fixes it, when one does.
+ */
+export interface QueueProblemView {
+  readonly kind: 'failed' | 'truncated' | 'sso' | 'scopes';
+  /** What it is about: `github.com search`, `github.com/o/r branches`, `github.com/o/r#7`. */
+  readonly source: string;
+  readonly message: string;
+  readonly remedy?: string;
+}
+
+/** The review queue as main last assembled it (`queue:get`, `queue:refresh`, `queue:updated`). */
+export interface ReviewQueueView {
+  readonly items: readonly ReviewQueueItemView[];
+  readonly problems: readonly QueueProblemView[];
+  /** When the last refresh finished; absent before the first. */
+  readonly refreshedAt?: string;
+  readonly isRefreshing: boolean;
+}
+
+/** How the review queue is ordered (ADR 0113). */
+export type QueueSortView =
+  'turn' | 'waiting' | 'oldest' | 'updated' | 'smallest' | 'largest' | 'stack' | 'new-since-review';
+
+/** What the review queue is grouped by. */
+export type QueueGroupView = 'none' | 'repository' | 'stack' | 'turn' | 'kind' | 'local';
+
+/** CI states a queue filter can pick. */
+export type QueueCiFilterView = 'failure' | 'pending' | 'success';
+
+/** The review queue's filters; an empty list allows everything. */
+export interface QueueFiltersView {
+  readonly kinds: readonly QueueItemKindView[];
+  /** `host/owner/repo`, lowercase. */
+  readonly repositories: readonly string[];
+  readonly authors: readonly string[];
+  readonly request: 'any' | 'direct' | 'team';
+  readonly hideDrafts: boolean;
+  readonly ci: readonly QueueCiFilterView[];
+  readonly turns: readonly TurnView[];
+  readonly local: readonly LocalReviewStateView[];
+  /** Show the viewer's own pull requests that are someone else's turn; off by default. */
+  readonly showWaitingOnOthers: boolean;
+}
+
+/** The review queue's display preferences, kept in `settings.json`. */
+export interface ReviewQueuePrefsView {
+  readonly sort: QueueSortView;
+  readonly group: QueueGroupView;
+  readonly filters: QueueFiltersView;
 }
 
 /**
@@ -2294,6 +2438,16 @@ export interface InvokeChannelMap {
     readonly request: SetDiffDisplayRequest;
     readonly response: IpcResult<DiffDisplayView>;
   };
+  /** The review queue (ADR 0113); refreshes first when it is stale. */
+  'queue:get': {
+    readonly request: undefined;
+    readonly response: IpcResult<ReviewQueueView>;
+  };
+  /** Refreshes the review queue now, unless search was asked moments ago. */
+  'queue:refresh': {
+    readonly request: undefined;
+    readonly response: IpcResult<ReviewQueueView>;
+  };
   'github:auth-status': {
     readonly request: GithubAuthStatusRequest;
     readonly response: IpcResult<GithubAuthStatusView>;
@@ -2390,6 +2544,8 @@ export interface EventChannelMap {
   'github:ci-status': CiStatusChangedView;
   /** A followed branch changed, went away, came back or got a pull request (ADR 0112). */
   'github:branch-updated': RemoteBranchUpdatedView;
+  /** The review queue changed, or started or finished refreshing (ADR 0113). */
+  'queue:updated': ReviewQueueView;
   /** A terminal wrote output (ADR 0095). */
   'terminal:data': TerminalDataEvent;
   /** A terminal's shell ended. */

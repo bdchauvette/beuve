@@ -47,4 +47,13 @@ export interface PullRequest {
   readonly htmlUrl: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Lines and files changed; only `GET …/pulls/{n}` reports it, list endpoints don't. */
+  readonly size?: ChangeSize;
+}
+
+/** How big a change is, as GitHub counts it. */
+export interface ChangeSize {
+  readonly additions: number;
+  readonly deletions: number;
+  readonly changedFiles: number;
 }

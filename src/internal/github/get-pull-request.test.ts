@@ -59,6 +59,7 @@ describe('getPullRequest', () => {
           htmlUrl: 'https://github.com/octo-org/hello-world/pull/1347',
           createdAt: '2026-10-01T19:01:12Z',
           updatedAt: '2026-10-02T19:01:12Z',
+          size: { additions: 100, deletions: 3, changedFiles: 5 },
         },
       },
     });

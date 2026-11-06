@@ -40,6 +40,9 @@ export const pullRequestSchema = z
     head: branchSchema,
     mergeable: z.boolean().nullable().optional(),
     mergeable_state: z.string().optional(),
+    additions: z.number().int().nonnegative().optional(),
+    deletions: z.number().int().nonnegative().optional(),
+    changed_files: z.number().int().nonnegative().optional(),
   })
   .transform((raw): PullRequest => {
     const base = tipFrom(raw.base);
@@ -60,8 +63,30 @@ export const pullRequestSchema = z
       htmlUrl: raw.html_url,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
+      ...sizeFrom(raw),
     };
   });
+
+/** The size fields of a pull request object; list endpoints leave them out. */
+interface RawSize {
+  readonly additions?: number | undefined;
+  readonly deletions?: number | undefined;
+  readonly changed_files?: number | undefined;
+}
+
+/** The change's size, when the endpoint reports all of it. */
+function sizeFrom(raw: RawSize): Pick<PullRequest, 'size'> {
+  if (
+    raw.additions === undefined ||
+    raw.deletions === undefined ||
+    raw.changed_files === undefined
+  ) {
+    return {};
+  }
+  return {
+    size: { additions: raw.additions, deletions: raw.deletions, changedFiles: raw.changed_files },
+  };
+}
 
 function stateFrom(
   state: 'open' | 'closed',

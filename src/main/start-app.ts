@@ -115,9 +115,11 @@ export function startApp(app: App, options: StartAppOptions): void {
     // Poll GitHub on the interval while beuve has focus, less often otherwise (ADR 0038).
     window.on('focus', () => {
       services.github.setForeground(true);
+      services.queue.setForeground(true);
     });
     window.on('blur', () => {
       services.github.setForeground(false);
+      services.queue.setForeground(false);
     });
     return window;
   };
@@ -155,6 +157,11 @@ export function startApp(app: App, options: StartAppOptions): void {
   services.github.onBranchUpdated((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'github:branch-updated', event);
+    }
+  });
+  services.queue.onUpdated((event) => {
+    for (const contents of mainWindowContents) {
+      sendEvent(contents, 'queue:updated', event);
     }
   });
   void services.pruneWorktrees();

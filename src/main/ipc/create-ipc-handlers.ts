@@ -60,6 +60,7 @@ import type {
   OpenPullRequestResponse,
   PostGithubReviewResponse,
   PullRequestSessionView,
+  ReviewQueueView,
   OpenRemoteBranchResponse,
   RemoteBranchSessionView,
   PullRequestTimelineView,
@@ -90,6 +91,7 @@ import { modelRoles } from '#contract/model-roles.ts';
 import type { MainServices } from '../main-services.ts';
 import type { RequestOptions } from '../request-options.ts';
 import { modelEntryInputFrom } from '../models/model-entry-input-from.ts';
+import { reviewQueuePrefsSchema } from '../display/review-queue-prefs-schema.ts';
 import { modelEntrySchema } from '../models/model-entry-schema.ts';
 
 import { RequestScopes } from './request-scopes.ts';
@@ -462,6 +464,8 @@ const displayRequest = z.strictObject({
   reviewOrder: reviewOrderMode.optional(),
   skipReviewed: z.boolean().optional(),
   sheets: z.enum(['window', 'inline']).optional(),
+  reviewQueue: reviewQueuePrefsSchema.optional(),
+  reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
@@ -1056,6 +1060,8 @@ export function createIpcHandlers(
         reviewOrder,
         skipReviewed,
         sheets,
+        reviewQueue,
+        reviewQueueBranchPrefixes,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -1066,7 +1072,23 @@ export function createIpcHandlers(
         ...(reviewOrder !== undefined && { reviewOrder }),
         ...(skipReviewed !== undefined && { skipReviewed }),
         ...(sheets !== undefined && { sheets }),
+        ...(reviewQueue !== undefined && { reviewQueue }),
+        ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
       });
+    },
+    'queue:get': async (request): Promise<IpcResult<ReviewQueueView>> => {
+      const parsed = noRequest.safeParse(request);
+      if (parsed.success) {
+        return services.queue.get();
+      }
+      return invalid(parsed.error);
+    },
+    'queue:refresh': async (request): Promise<IpcResult<ReviewQueueView>> => {
+      const parsed = noRequest.safeParse(request);
+      if (parsed.success) {
+        return services.queue.refresh();
+      }
+      return invalid(parsed.error);
     },
     'github:get-pr': async (request): Promise<IpcResult<PullRequestSessionView>> => {
       const parsed = sessionRequest.safeParse(request);

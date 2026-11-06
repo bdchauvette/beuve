@@ -1185,6 +1185,15 @@ function stubServices(
       dispose: doNothingSync,
       ...github,
     },
+    queue: {
+      get: notWired,
+      refresh: notWired,
+      setForeground: doNothingSync,
+      onUpdated: (): (() => void) => {
+        return doNothingSync;
+      },
+      dispose: doNothingSync,
+    },
     claude: { status: notWired },
     models: {
       list: notWired,

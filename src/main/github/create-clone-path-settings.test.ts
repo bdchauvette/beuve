@@ -33,4 +33,26 @@ describe('createClonePathSettings', () => {
       createClonePathSettings(file).read({ host: 'github.com', owner: 'o', repo: 'r' }),
     ).resolves.toBeUndefined();
   });
+
+  test('lists the repositories with a remembered clone, skipping malformed keys', async ({
+    expect,
+    tempDir,
+  }) => {
+    const file = path.join(tempDir, 'settings.json');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        githubClonePaths: { 'github.com/o/r': '/w/r', 'ghe.example/t/tools': '/w/t', junk: '/w' },
+      }),
+    );
+    await expect(createClonePathSettings(file).list()).resolves.toStrictEqual([
+      { host: 'github.com', owner: 'o', repo: 'r' },
+      { host: 'ghe.example', owner: 't', repo: 'tools' },
+    ]);
+    const memory = createClonePathSettings();
+    await memory.write({ host: 'github.com', owner: 'O', repo: 'R' }, '/w/r');
+    await expect(memory.list()).resolves.toStrictEqual([
+      { host: 'github.com', owner: 'o', repo: 'r' },
+    ]);
+  });
 });

@@ -15,6 +15,15 @@ export interface FakePullRequest {
   isDraft: boolean;
   state: 'open' | 'closed';
   updatedAt: string;
+  /** Lines and files changed, as `GET …/pulls/{n}` reports them; none by default. */
+  size?: { readonly additions: number; readonly deletions: number; readonly changedFiles: number };
+}
+
+/** What `GET …/compare/{base}...{head}` answers for a head (ADR 0113). */
+export interface FakeComparison {
+  readonly aheadBy: number;
+  readonly commits: readonly FakePullCommit[];
+  readonly files: readonly { readonly additions: number; readonly deletions: number }[];
 }
 
 /** One check run or status for a commit, as the fake reports it. */
@@ -83,6 +92,12 @@ export interface FakeGithubApi {
   readonly pullRequests: Map<number, FakePullRequest>;
   /** Branch tips by branch name, as `GET …/branches/{branch}` reports them (ADR 0112). */
   readonly branches: Map<string, string>;
+  /** Pull request numbers each search query (`q`) finds, in this repository (ADR 0113). */
+  readonly searches: Map<string, number[]>;
+  /** Headers every search answer carries, such as `x-github-sso` or `x-oauth-scopes`. */
+  readonly searchHeaders: Record<string, string>;
+  /** Comparisons with the default branch, by head SHA (ADR 0113). */
+  readonly comparisons: Map<string, FakeComparison>;
   /** What `GET /repos/{o}/{r}` reports as the default branch. */
   defaultBranch: string;
   /** Checks by commit sha. */
@@ -134,6 +149,9 @@ export function createFakeGithubApi({
     repo,
     pullRequests: new Map(),
     branches: new Map(),
+    searches: new Map(),
+    searchHeaders: {},
+    comparisons: new Map(),
     defaultBranch: 'main',
     checks: new Map(),
     submittedReviews: new Map(),
@@ -172,6 +190,21 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
   if (token === undefined || !api.validTokens.has(token)) {
     return json(401, { message: 'Bad credentials' });
   }
+  if (url.pathname === '/search/issues' && request.method === 'GET') {
+    const numbers = api.searches.get(url.searchParams.get('q') ?? '') ?? [];
+    const answer = conditional(request, {
+      total_count: numbers.length,
+      incomplete_results: false,
+      items: numbers.flatMap((number) => {
+        const pull = api.pullRequests.get(number);
+        if (pull === undefined) {
+          return [];
+        }
+        return [searchItemFrom(api, pull)];
+      }),
+    });
+    return { ...answer, headers: { ...answer.headers, ...api.searchHeaders } };
+  }
   const prefix = `/repos/${api.owner}/${api.repo}`;
   if (url.pathname === prefix && request.method === 'GET') {
     return conditional(request, {
@@ -197,6 +230,26 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
       return json(404, { message: 'Branch not found' });
     }
     return conditional(request, { name, commit: { sha }, protected: false });
+  }
+  if (first === 'git' && second === 'matching-refs' && third === 'heads') {
+    const wanted = `${rest
+      .slice(3)
+      .map((segment) => decodeURIComponent(segment))
+      .join('/')}${trailingSlash(url.pathname)}`;
+    const refs = [...api.branches]
+      .filter(([name]) => name.startsWith(wanted))
+      .map(([name, sha]) => {
+        return { ref: `refs/heads/${name}`, object: { sha, type: 'commit' } };
+      });
+    return conditional(request, refs);
+  }
+  if (first === 'compare' && second !== undefined && request.method === 'GET') {
+    const [base = '', head = ''] = decodeURIComponent(second).split('...', 2);
+    const comparison = api.comparisons.get(head);
+    if (comparison === undefined || base !== api.defaultBranch) {
+      return json(404, { message: 'Not Found' });
+    }
+    return conditional(request, comparisonFrom(api, comparison));
   }
   if (first === 'pulls' && second === undefined && request.method === 'GET') {
     return conditional(request, listPulls(api, url.searchParams));
@@ -370,7 +423,56 @@ function githubPullFrom(api: FakeGithubApi, pull: FakePullRequest): Record<strin
     updated_at: pull.updatedAt,
     base: { ref: pull.baseRef, sha: pull.baseSha, repo: repository },
     head: { ref: pull.headRef, sha: pull.headSha, repo: repository },
+    ...(pull.size !== undefined && {
+      additions: pull.size.additions,
+      deletions: pull.size.deletions,
+      changed_files: pull.size.changedFiles,
+    }),
   };
+}
+
+function searchItemFrom(api: FakeGithubApi, pull: FakePullRequest): Record<string, unknown> {
+  return {
+    number: pull.number,
+    title: pull.title,
+    state: pull.state,
+    draft: pull.isDraft,
+    user: { login: pull.author },
+    html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(pull.number)}`,
+    created_at: '2026-10-01T00:00:00Z',
+    updated_at: pull.updatedAt,
+    repository_url: `${apiRoot}/repos/${api.owner}/${api.repo}`,
+    pull_request: { url: `${apiRoot}/repos/${api.owner}/${api.repo}/pulls/${String(pull.number)}` },
+  };
+}
+
+function comparisonFrom(api: FakeGithubApi, comparison: FakeComparison): Record<string, unknown> {
+  let status = 'ahead';
+  if (comparison.aheadBy === 0) {
+    status = 'identical';
+  }
+  return {
+    status,
+    ahead_by: comparison.aheadBy,
+    behind_by: 0,
+    total_commits: comparison.commits.length,
+    commits: comparison.commits.map((entry) => {
+      return {
+        sha: entry.sha,
+        html_url: `https://github.com/${api.owner}/${api.repo}/commit/${entry.sha}`,
+        commit: { message: entry.message, author: { name: entry.authorName, date: entry.date } },
+        author: authorOf(entry.login),
+      };
+    }),
+    files: comparison.files,
+  };
+}
+
+function trailingSlash(pathname: string): string {
+  if (pathname.endsWith('/')) {
+    return '/';
+  }
+  return '';
 }
 
 function statuses(checks: readonly FakeCheck[]): unknown[] {
