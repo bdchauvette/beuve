@@ -29,7 +29,6 @@ import './beuve-sidebar.ts';
 import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
-import { applyDiffColors } from './apply-diff-colors.ts';
 import type { StatusOpenUrlDetail, StatusPopoverDetail } from './beuve-status-bar.ts';
 import './beuve-ura-dock.ts';
 import { beuveBridge } from './beuve-bridge.ts';
@@ -581,9 +580,8 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  /** What depends on the display changing: the file order, the sidebar side, the diff and its colors. */
+  /** What depends on the display changing: the file order, the sidebar side and the diff. */
   private onDisplayApplied({ previous, next }: DisplayTransition): void {
-    applyDiffColors(next.diffColors);
     const isWhitespaceChanged = next.ignoreWhitespace !== previous.ignoreWhitespace;
     const isOrderChanged = next.reviewOrder !== previous.reviewOrder;
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {

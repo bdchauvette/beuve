@@ -1,6 +1,6 @@
 # 0115. UI primitives: shared style modules and a few behaviour elements
 
-- Status: Accepted
+- Status: Accepted (one diff color scheme since [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md)'s last amendment)
 - Date: 2026-11-06
 
 ## Context

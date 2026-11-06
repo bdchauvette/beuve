@@ -1,6 +1,6 @@
 # 0114. Design tokens, logical properties and diff color schemes
 
-- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), default diff colors amended 2026-11-06, attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
+- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), default diff colors amended 2026-11-06, diff colors fixed by amendment 2026-11-06, attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
 - Date: 2026-11-06
 
 ## Context
@@ -46,3 +46,12 @@ A fourth scheme, `blue-yellow` ("Blue and yellow", listed first in Settings › 
 - **Steps.** Added uses blue a5/a6/a7, as `blue-orange` does. Removed uses yellow a4/a5/a6, with yellow 9 bars and yellow 11 counts. Radix's yellow alpha steps are strong in light and faint in dark. a3/a4/a5 balanced with blue in light but nearly vanished in dark; a5/a6/a7 suited dark but was heavy in light. a4/a5/a6, the steps `blue-orange` uses for orange, reads at a similar weight to blue in both.
 - **Default.** The `:root` block holds the `blue-yellow` tokens, `red-green` moves to its own `[data-diff-colors]` selector like the others, and main, the IPC schema, `applyDiffColors`, the settings view and Storybook default to `blue-yellow`.
 - **Existing settings.** `display:set` writes every display field whenever one changes. So a reviewer who changed any display setting before this has `diffColors: 'red-green'` saved, chosen or not, and keeps red and green. They cannot be told apart from reviewers who chose it, so nothing is migrated. Fresh installs and untouched settings get blue and yellow.
+
+## Amendment 2026-11-06: one diff color scheme, changed by editing the source
+
+beuve is a home-cooked tool, configured the way suckless tools are: by editing the source and rebuilding, not through settings. The diff colors were the one appearance setting, so they go. Blue added and yellow removed is the only scheme.
+
+- **Removed.** Settings › Diff › Colors, the `diffColors` field of `display:get`/`display:set` and its schema, `applyDiffColors`, the `[data-diff-colors]` blocks in `index.css`, and the Storybook toolbar's scheme switch. The `--beuve-diff-*` tokens in `:root` are the scheme. The Radix steps only the other schemes used (green and red a5–a7, all of orange) are dropped, as `index.css` lists only the steps in use.
+- **Changing the colors.** Edit the `--beuve-diff-*` tokens in `src/ui/index.css`, adding the Radix steps they need, and rebuild. The removed schemes' values are in git history, and the steps above stay a reasonable guide: line < gutter number < changed word, one alpha step apart, bars step 9, counts step 11.
+- **Existing settings.** A `diffColors` key in an older `settings.json` is no longer read. It stays in the file, like any key beuve does not know, and does nothing. A reviewer who had red and green, or another scheme, now sees blue and yellow.
+- **Not a general rule yet.** This removes one setting. It does not decide that no appearance setting may ever be added. A later setting of that kind should say why editing the source is not enough.

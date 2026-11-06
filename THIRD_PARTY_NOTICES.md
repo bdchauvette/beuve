@@ -6,7 +6,7 @@ beuve's own code is under the [0BSD license](LICENSE). The works below were copi
 
 | Work                                                              | License | What beuve copies                                                                                                                                                                   | Where                                                                                                                                                     |
 | ----------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Radix Colors](https://github.com/radix-ui/colors) 3.0.0          | MIT     | Hex values of the slate, sage, indigo, violet, pink, green, red, amber, yellow, blue and orange scales and their alpha variants, light and dark, and the role each step plays       | `src/ui/index.css` (`--beuve-scale-*`), `src/ui/syntax-palettes.ts`, [ADR 0114](docs/adr/0114-design-tokens-logical-properties-and-diff-color-schemes.md) |
+| [Radix Colors](https://github.com/radix-ui/colors) 3.0.0          | MIT     | Hex values of the slate, sage, indigo, violet, pink, green, red, amber, yellow and blue scales and their alpha variants, light and dark, and the role each step plays               | `src/ui/index.css` (`--beuve-scale-*`), `src/ui/syntax-palettes.ts`, [ADR 0114](docs/adr/0114-design-tokens-logical-properties-and-diff-color-schemes.md) |
 | [Primer Primitives](https://github.com/primer/primitives) 11.10.0 | MIT     | The type scale (12, 14, 16, 20 px and the 13 px code size), line heights, the 4 px spacing scale and radii; the line, number and word structure of the `diffBlob` tokens. No colors | `src/ui/index.css`, ADR 0114                                                                                                                              |
 
 ## Drawn on, nothing copied
@@ -14,9 +14,9 @@ beuve's own code is under the [0BSD license](LICENSE). The works below were copi
 These shaped decisions in ADR 0114 and ADR 0119; no values, code or text came from them.
 
 - [Alabaster](https://github.com/tonsky/sublime-scheme-alabaster) by Nikita Prokopov: few highlighted classes and greyed punctuation. beuve copied its colors until ADR 0119 replaced them with Radix steps and font styles.
-- GitHub's colorblind themes (part of Primer): blue for additions and orange for deletions.
-- JetBrains IDEs' diff viewer: deleted lines in grey.
-- Review Board and Bitbucket: blue and yellow diffs, beuve's default scheme.
+- GitHub's colorblind themes (part of Primer): blue for additions and orange for deletions, one of the diff schemes beuve offered until ADR 0114's last amendment.
+- JetBrains IDEs' diff viewer: deleted lines in grey, likewise a former scheme.
+- Review Board and Bitbucket: blue and yellow diffs, beuve's diff colors.
 
 ## License texts
 

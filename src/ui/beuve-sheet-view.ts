@@ -15,7 +15,6 @@ import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import './beuve-definition-link.ts';
-import { applyDiffColors } from './apply-diff-colors.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
 import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
@@ -684,7 +683,6 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     this.hasDiagnosticsOn = display.value.showDiagnostics;
-    applyDiffColors(display.value.diffColors);
   }
 
   /** Whether the file on screen is the session head's: only then are there diagnostics. */
