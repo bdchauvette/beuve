@@ -57,6 +57,7 @@ import type {
 } from './shell-environment/create-shell-environments.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { NodeRuntime, NodeRuntimeError } from './node-runtime/resolve-node-runtime.ts';
+import { goServerDefinition } from '#internal/lsp/go-server-definition.ts';
 import type { MainServices, SessionServices } from './main-services.ts';
 import type { ClaudeCodeSettings } from './chat/claude-code-settings.ts';
 import { readClaudeStatus } from './chat/read-claude-status.ts';
@@ -456,10 +457,11 @@ function languageServerConfigServices(options: MainServicesOptions): LanguageSer
 function languageServersFor(
   nodeRuntime: Result<NodeRuntime, NodeRuntimeError>,
 ): ServerDefinition[] {
+  const servers = [goServerDefinition()];
   if (nodeRuntime.ok) {
-    return [createTypescriptServer(nodeRuntime.value)];
+    servers.unshift(createTypescriptServer(nodeRuntime.value));
   }
-  return [];
+  return servers;
 }
 
 function summaryOf(value: ReviewView | SessionSummary): SessionSummary {
