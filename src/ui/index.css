@@ -90,6 +90,12 @@
   --beuve-scale-blue-a6: light-dark(#0088f653, #0f89fd7f);
   --beuve-scale-blue-a7: light-dark(#0083eb71, #2a91fe98);
 
+  --beuve-scale-yellow-9: #ffe629;
+  --beuve-scale-yellow-11: light-dark(#9e6c00, #f5e147);
+  --beuve-scale-yellow-a4: light-dark(#ffe3016b, #fdb70028);
+  --beuve-scale-yellow-a5: light-dark(#ffd5008f, #febb0036);
+  --beuve-scale-yellow-a6: light-dark(#ebbc0097, #fec40046);
+
   --beuve-scale-orange-9: #f76b15;
   --beuve-scale-orange-11: light-dark(#cc4e00, #ffa057);
   --beuve-scale-orange-a4: light-dark(#ff91014a, #ff590039);
@@ -258,10 +264,33 @@
 
   /*
    * Line, gutter number and changed-word tints step up like Primer's diffBlob tokens
-   * (line < number < word), one Radix alpha step apart. Orange and grey sit lower and higher on
-   * their scales so each pair reads at a similar weight. Text colors are for +/− counts and labels;
-   * bars for gutter marks. Default scheme `red-green`.
+   * (line < number < word), one Radix alpha step apart. Orange, yellow and grey sit lower and
+   * higher on their scales so each pair reads at a similar weight. Text colors are for +/− counts
+   * and labels; bars for gutter marks. Default scheme `blue-yellow`.
    */
+  --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
+  --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);
+  --beuve-diff-added-emphasis: var(--beuve-scale-blue-a7);
+  --beuve-diff-added-bar: var(--beuve-scale-blue-9);
+  --beuve-diff-added-text: var(--beuve-scale-blue-11);
+  --beuve-diff-removed-bg: var(--beuve-scale-yellow-a4);
+  --beuve-diff-removed-number-bg: var(--beuve-scale-yellow-a5);
+  --beuve-diff-removed-emphasis: var(--beuve-scale-yellow-a6);
+  --beuve-diff-removed-bar: var(--beuve-scale-yellow-9);
+  --beuve-diff-removed-text: var(--beuve-scale-yellow-11);
+  --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
+  --beuve-diff-hunk-text: var(--beuve-accent);
+}
+
+/*
+ * Diff color schemes (ADR 0114), chosen in Settings › Diff and set on the root of every window.
+ * `blue-yellow`, the default above, is Review Board's and Bitbucket's pair: distinguishable under
+ * the common colour vision deficiencies, and neither hue reads as an error or a success.
+ * `red-green` is the convention. `blue-orange` is the pair GitHub's colorblind themes and the
+ * Okabe–Ito palette use. `neutral` reads as before and after rather than bad and good: removed
+ * lines are grey, as JetBrains IDEs show deletions, and added lines blue.
+ */
+:root[data-diff-colors='red-green'] {
   --beuve-diff-added-bg: var(--beuve-scale-green-a5);
   --beuve-diff-added-number-bg: var(--beuve-scale-green-a6);
   --beuve-diff-added-emphasis: var(--beuve-scale-green-a7);
@@ -272,16 +301,8 @@
   --beuve-diff-removed-emphasis: var(--beuve-scale-red-a7);
   --beuve-diff-removed-bar: var(--beuve-scale-red-9);
   --beuve-diff-removed-text: var(--beuve-scale-red-11);
-  --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
-  --beuve-diff-hunk-text: var(--beuve-accent);
 }
 
-/*
- * Diff color schemes (ADR 0114), chosen in Settings › Display and set on the root of every window.
- * `blue-orange` is the pair GitHub's colorblind themes and the Okabe–Ito palette use. `neutral`
- * reads as before and after rather than bad and good: removed lines are grey, as JetBrains IDEs
- * show deletions, and added lines blue.
- */
 :root[data-diff-colors='blue-orange'] {
   --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
   --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);

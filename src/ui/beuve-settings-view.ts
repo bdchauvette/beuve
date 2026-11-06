@@ -409,7 +409,7 @@ export class BeuveSettingsView extends LitElement {
   }
 
   private renderDiff(display: DiffDisplayView): TemplateResult {
-    const colors = display.diffColors ?? 'red-green';
+    const colors = display.diffColors ?? 'blue-yellow';
     return html`<h2>Diff</h2>
       <div class="group">
         <div class="row">
@@ -422,6 +422,7 @@ export class BeuveSettingsView extends LitElement {
         <div class="row">
           <span>Colors</span>
           <span class="choices">
+            ${this.renderRadio({ name: 'colors', label: 'Blue and yellow', isOn: colors === 'blue-yellow', change: { diffColors: 'blue-yellow' } })}
             ${this.renderRadio({ name: 'colors', label: 'Red and green', isOn: colors === 'red-green', change: { diffColors: 'red-green' } })}
             ${this.renderRadio({ name: 'colors', label: 'Blue and orange', isOn: colors === 'blue-orange', change: { diffColors: 'blue-orange' } })}
             ${this.renderRadio({ name: 'colors', label: 'Grey and blue', isOn: colors === 'neutral', change: { diffColors: 'neutral' } })}
