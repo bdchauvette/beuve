@@ -36,6 +36,7 @@ import type { BeuveCommandPalette } from './beuve-command-palette.ts';
 import type { BeuveOpenPanel, FolderChooser, RepositoryInspector } from './beuve-open-panel.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
 
+import { applyPreferredFonts } from './apply-preferred-fonts.ts';
 import { commandRegistry } from './command-registry.ts';
 import type { CommandDefinition } from './command-registry.ts';
 import { shortcutOf } from './shortcut-of.ts';
@@ -568,8 +569,9 @@ export class BeuveApp extends LitElement {
     }, 8000);
   }
 
-  /** What depends on the display changing: the file order, the sidebar side and the diff. */
+  /** What depends on the display changing: the fonts, the file order, the sidebar side and the diff. */
   private onDisplayApplied({ previous, next }: DisplayTransition): void {
+    applyPreferredFonts(next);
     const isWhitespaceChanged = next.ignoreWhitespace !== previous.ignoreWhitespace;
     const isOrderChanged = next.reviewOrder !== previous.reviewOrder;
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {

@@ -29,6 +29,8 @@ describe('createDisplayServices', () => {
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        fontFamilyMono: '',
+        fontFamilySans: '',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -44,6 +46,8 @@ describe('createDisplayServices', () => {
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        fontFamilyMono: '',
+        fontFamilySans: '',
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -52,6 +56,7 @@ describe('createDisplayServices', () => {
     await display.set({ showInsights: false });
     await display.set({ reviewOrder: 'imports' });
     await display.set({ skipReviewed: true });
+    await display.set({ fontFamilyMono: ' "JetBrains Mono", monospace ' });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -64,6 +69,8 @@ describe('createDisplayServices', () => {
       skipReviewed: true,
       reviewQueue: defaultReviewQueuePrefs,
       reviewQueueBranchPrefixes: ['claude/'],
+      fontFamilyMono: '"JetBrains Mono", monospace',
+      fontFamilySans: '',
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -78,6 +85,8 @@ describe('createDisplayServices', () => {
         skipReviewed: true,
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        fontFamilyMono: '"JetBrains Mono", monospace',
+        fontFamilySans: '',
       },
     });
   });
@@ -98,6 +107,8 @@ describe('createDisplayServices', () => {
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
+        fontFamilyMono: '',
+        fontFamilySans: '',
       },
     });
   });
@@ -130,6 +141,20 @@ describe('createDisplayServices', () => {
     await display.set({ reviewQueueBranchPrefixes: [] });
     await expect(display.get()).resolves.toMatchObject({
       value: { reviewQueueBranchPrefixes: [] },
+    });
+  });
+
+  test('reads a stored font that is not a font-family list as none', async ({
+    expect,
+    tempDir,
+  }) => {
+    const file = path.join(tempDir, 'settings.json');
+    writeFileSync(
+      file,
+      JSON.stringify({ fontFamilyMono: 'Menlo; color: red', fontFamilySans: 'Inter, sans-serif' }),
+    );
+    await expect(createDisplayServices(file).get()).resolves.toMatchObject({
+      value: { fontFamilyMono: '', fontFamilySans: 'Inter, sans-serif' },
     });
   });
 });

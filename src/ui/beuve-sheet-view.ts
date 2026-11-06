@@ -37,6 +37,7 @@ import { stepSheetHistory } from './step-sheet-history.ts';
 import { withShortcut } from './with-shortcut.ts';
 import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-history.ts';
 import { formatControlStyles } from './format-control-styles.ts';
+import { applyPreferredFonts } from './apply-preferred-fonts.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import './primitives/beuve-time.ts';
@@ -210,6 +211,10 @@ export class BeuveSheetView extends LitElement {
 
   private readonly onFocus = (): void => {
     void this.checkHead();
+    if (this.api !== undefined) {
+      // The Settings window may have changed the fonts meanwhile; sheets get no settings event.
+      void this.readDisplay(this.api);
+    }
   };
 
   private readonly close = (): void => {
@@ -675,6 +680,7 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     this.hasDiagnosticsOn = display.value.showDiagnostics;
+    applyPreferredFonts(display.value);
   }
 
   /** Whether the file on screen is the session head's: only then are there diagnostics. */

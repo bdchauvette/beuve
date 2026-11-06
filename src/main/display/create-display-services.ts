@@ -7,6 +7,7 @@ import type {
   SidebarSideView,
 } from '#contract/ipc-contract.ts';
 import { defaultReviewQueuePrefs } from '#contract/default-review-queue-prefs.ts';
+import { isFontFamilyList } from '#contract/is-font-family-list.ts';
 import { ok } from '#x/result/ok.ts';
 
 import { readSettingsFile } from '../settings/read-settings-file.ts';
@@ -37,13 +38,15 @@ const defaults: Required<DiffDisplayView> = {
   skipReviewed: false,
   reviewQueue: defaultReviewQueuePrefs,
   reviewQueueBranchPrefixes: branchPrefixesFrom(undefined),
+  fontFamilyMono: '',
+  fontFamilySans: '',
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), and the preferred fonts `fontFamilyMono` and `fontFamilySans` (ADR 0122), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, no preferred fonts. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -61,6 +64,8 @@ export function createDisplayServices(filePath?: string): DisplayServices {
     set: async (request): Promise<IpcResult<DiffDisplayView>> => {
       const next = { ...(await read()), ...request };
       next.reviewQueueBranchPrefixes = branchPrefixesFrom(next.reviewQueueBranchPrefixes);
+      next.fontFamilyMono = next.fontFamilyMono.trim();
+      next.fontFamilySans = next.fontFamilySans.trim();
       remembered = next;
       if (filePath !== undefined) {
         await updateSettingsFile(filePath, (current) => {
@@ -76,6 +81,8 @@ export function createDisplayServices(filePath?: string): DisplayServices {
             skipReviewed: next.skipReviewed,
             reviewQueue: next.reviewQueue,
             reviewQueueBranchPrefixes: next.reviewQueueBranchPrefixes,
+            fontFamilyMono: next.fontFamilyMono,
+            fontFamilySans: next.fontFamilySans,
           };
         });
       }
@@ -104,6 +111,16 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     skipReviewed: validOr(skipReviewed, isBoolean, defaults.skipReviewed),
     reviewQueue: reviewQueuePrefsFrom(settings['reviewQueue']),
     reviewQueueBranchPrefixes: branchPrefixesFrom(settings['reviewQueueBranchPrefixes']),
+    fontFamilyMono: validOr(
+      settings['fontFamilyMono'],
+      isFontFamily,
+      defaults.fontFamilyMono,
+    ).trim(),
+    fontFamilySans: validOr(
+      settings['fontFamilySans'],
+      isFontFamily,
+      defaults.fontFamilySans,
+    ).trim(),
   };
 }
 
@@ -117,6 +134,10 @@ function validOr<T>(
     return value;
   }
   return fallback;
+}
+
+function isFontFamily(value: unknown): value is string {
+  return typeof value === 'string' && isFontFamilyList(value);
 }
 
 function isBoolean(value: unknown): value is boolean {

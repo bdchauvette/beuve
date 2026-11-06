@@ -1,6 +1,6 @@
 # 0122. Themes are edited in the source; fonts may be settings
 
-- Status: Accepted
+- Status: Accepted (font setting built, amendment 2026-11-06)
 - Date: 2026-11-06
 
 ## Context
@@ -17,3 +17,12 @@ beuve is a home-cooked tool. Like the suckless tools, it would rather be changed
 ## Consequences
 
 A reviewer who wants other colors needs a checkout and a build, which beuve's reviewer has anyway. Theme work never touches the settings file, the IPC contract or the Settings window. A proposal for a new appearance setting has to say why it is like fonts (it depends on the machine) rather than like themes (it is taste).
+
+## Amendment 2026-11-06: the font setting
+
+Settings › Fonts has a code font and an interface font, stored as `fontFamilyMono` and `fontFamilySans` in `settings.json` and carried by `display:get`/`display:set`. Each is a CSS `font-family` list, or empty for the default.
+
+- **Fallbacks stay.** `index.css` builds `--beuve-font-family-mono` as `var(--beuve-preferred-font-family-mono, 'Commit Mono')` followed by Commit Mono and the system monospace stack, and `--beuve-font-family-sans` likewise ahead of the system font. A family the machine does not have falls through to the bundled or system font, and nothing else in the renderer changes.
+- **Applied per window.** `applyPreferredFonts` sets or clears `--beuve-preferred-font-family-*` on the root of the main, Settings and sheet windows, which every shadow root inherits. The main window applies it whenever the display preferences load or change. A sheet window reads them when it opens and when it is focused again, since sheets get no `settings:changed`. The terminal watches the root's style and gives open xterms the new family once it has loaded.
+- **Validated as a family list.** `isFontFamilyList` (`src/contract/`) accepts quoted names and runs of identifiers separated by commas, at most 200 characters, and refuses parentheses, semicolons, braces, backslashes, control characters and CSS-wide keywords. So a value cannot hold a `var()` or `url()` or end the declaration. `display:set` refuses anything else, and a stored value that fails reads as empty.
+- **No font files.** The setting names installed fonts. Loading a font file from elsewhere would need `font-src` widened, which this does not do.

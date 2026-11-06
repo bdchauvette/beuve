@@ -127,8 +127,16 @@
   --beuve-scale-orange-a5: light-dark(#ff8b0065, #ff61004a);
   --beuve-scale-orange-a6: light-dark(#ff81007d, #fd75045c);
 
-  --beuve-font-family-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --beuve-font-family-mono: 'Commit Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /*
+   * Settings › Fonts puts the reviewer's own families first (ADR 0122): each window sets
+   * `--beuve-preferred-font-family-*` on its root, and the stacks below stay as fallbacks.
+   */
+  --beuve-font-family-sans:
+    var(--beuve-preferred-font-family-sans, system-ui), system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
+  --beuve-font-family-mono:
+    var(--beuve-preferred-font-family-mono, 'Commit Mono'), 'Commit Mono', ui-monospace, 'SF Mono',
+    Menlo, Consolas, monospace;
 
   /* Primer's sizes, with 13px (Primer's code size) added for dense lists. Nothing is below 12px. */
   --beuve-font-size-caption: 0.75rem; /* 12px: timestamps, badges, counts */
