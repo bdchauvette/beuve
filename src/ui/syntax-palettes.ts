@@ -36,7 +36,7 @@ export interface SyntaxPalette {
 
 /**
  * Radix Colors 3.0.0 steps, by role (ADR 0119): the code background is the chrome's background
- * step, text gray 12, keywords and punctuation gray 11, comments amber 11. Gray is slate in light
+ * step, text gray 12, keywords and punctuation gray 11, comments pink 11. Gray is slate in light
  * and sage in dark, as in `index.css`.
  */
 export const syntaxPalettes: Readonly<Record<'light' | 'dark', SyntaxPalette>> = Object.freeze({
@@ -44,12 +44,12 @@ export const syntaxPalettes: Readonly<Record<'light' | 'dark', SyntaxPalette>> =
     background: '#f9f9fb',
     foreground: '#1c2024',
     muted: '#60646c',
-    comment: '#ab6400',
+    comment: '#c2298a',
   },
   dark: {
     background: '#101211',
     foreground: '#eceeed',
     muted: '#adb5b2',
-    comment: '#ffca16',
+    comment: '#ff8dcc',
   },
 });

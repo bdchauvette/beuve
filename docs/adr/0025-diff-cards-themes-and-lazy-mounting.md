@@ -28,3 +28,16 @@ ADR 0055 removes agent insights from the cards. Line annotations now carry stage
 ## Amendment 2026-11-06: Alabaster's license notice
 
 Alabaster is MIT (Copyright (c) 2018 Nikita Prokopov). Its notice was missing; ADR 0114 adds it to `syntax-palettes.ts` and `index.css` as legal comments the bundle keeps, and to `THIRD_PARTY_NOTICES.md`.
+
+## Amendment 2026-11-06: the JavaScript regex engine, measured against Oniguruma
+
+Highlighting stays on Shiki's JavaScript regex engine (`preferredHighlighter: 'shiki-js'`), and `shiki/wasm` stays stubbed. This was measured, not assumed. Both engines tokenized the same real files with beuve's light theme: 40 per language where the container had them (2 awk and 22 fish files; no Rust). The style of every character was compared.
+
+- **Output.** Thirteen of the fourteen grammars (TypeScript, JavaScript, JSON, HTML, Markdown, YAML, shell, Go, Python, Ruby, Perl, awk, fish) matched character for character. The only differences were three minified CSS files with 84k–106k-character lines. There Oniguruma was about 11× slower (2.2 s against 0.19 s on one line), hit Shiki's 500 ms per-line limit and left the rest of the line unstyled. With the limit off, both engines produced identical tokens. On that input the JavaScript engine is the one that finishes.
+- **Speed.** Mixed, on a first pass that includes compiling each grammar's regular expressions:
+  - Oniguruma was faster on TypeScript and shell (about 1.5×).
+  - The JavaScript engine was faster on HTML (3.3×), Markdown (2.3×), CSS (2.2×), JSON (1.5×), Ruby and Perl (1.4×).
+  - The rest were within about 15%.
+- **Cost of switching.** The renderer's CSP would need `'wasm-unsafe-eval'` in `script-src`, which ADR 0018 avoided. The inlined module adds about 0.6 MB, which each of the two highlighting workers loads and compiles separately (about 40 ms each in Node).
+
+The library creates the JavaScript engine without its `forgiving` option, so a grammar with a regular expression the engine cannot translate would fail outright rather than degrade. None of the fourteen does. Revisit if a grammar beuve adds fails to load, or if a real file is found where the two engines' output differs.
