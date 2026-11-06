@@ -26,15 +26,14 @@ export interface TextmateSettings {
 }
 
 /**
- * beuve's TextMate theme (ADR 0025, 0119). Weight and slant carry the meaning, so color stays free
- * for the diff's own tints: names are bold, types are italic, keywords and punctuation are muted,
- * and operators, strings and constants are regular. Comments are the one colored class. Bold is
- * the default for a whole `source` scope rather than a list of identifier scopes, because grammars
- * leave many names unscoped (Python's locals and arguments, Rust's fields), so every other class
- * sets its font style explicitly. Markdown prose and plain text are `text` scopes and stay regular.
- * The scope matcher prefers the longer selector, which keeps whatever a comment or string holds (a
- * JSDoc tag, a regex quantifier, a quote) in the comment's or string's style, and code inside a
- * template literal's `${…}` in code's.
+ * beuve's TextMate theme (ADR 0025, 0119). Weight, slant and contrast carry the meaning, so color
+ * stays free for the diff's own tints: definitions and numbers are bold, types are italic,
+ * keywords and punctuation are muted, and names, property keys, operators and strings are regular
+ * text. Comments are the one colored class. Grammars tag names at use sites with the same
+ * `entity.name` scopes as definitions, so a rule takes calls, tags and commands back to regular;
+ * the scope matcher prefers the longer selector. The same preference keeps whatever a comment or
+ * string holds (a JSDoc tag, a regex quantifier, a quote) in the comment's or string's style.
+ * Every rule sets its font style, because an unset one inherits the enclosing scope's.
  */
 export function textmateThemeFrom(
   name: string,
@@ -52,9 +51,14 @@ export function textmateThemeFrom(
     },
     tokenColors: [
       rule({
-        name: 'Names',
+        name: 'Names, operators and strings',
+        settings: { foreground: palette.foreground, fontStyle: regular },
+        scope: regularScopes,
+      }),
+      rule({
+        name: 'Definitions',
         settings: { foreground: palette.foreground, fontStyle: bold },
-        scope: nameScopes,
+        scope: ['entity.name'],
       }),
       rule({
         name: 'Types',
@@ -62,14 +66,19 @@ export function textmateThemeFrom(
         scope: typeScopes,
       }),
       rule({
+        name: 'Type definitions',
+        settings: { foreground: palette.foreground, fontStyle: boldItalic },
+        scope: typeDefinitionScopes,
+      }),
+      rule({
+        name: 'Numbers',
+        settings: { foreground: palette.foreground, fontStyle: bold },
+        scope: ['constant.numeric'],
+      }),
+      rule({
         name: 'Keywords and punctuation',
         settings: { foreground: palette.muted, fontStyle: regular },
         scope: mutedScopes,
-      }),
-      rule({
-        name: 'Operators, strings and constants',
-        settings: { foreground: palette.foreground, fontStyle: regular },
-        scope: regularScopes,
       }),
       rule({
         name: 'Comments',
@@ -82,6 +91,7 @@ export function textmateThemeFrom(
 
 const bold = 'bold';
 const italic = 'italic';
+const boldItalic = 'bold italic';
 const regular = '';
 
 /** A rule's name, its settings, and the scopes it applies to. */
@@ -96,18 +106,32 @@ function rule({ name, settings, scope }: RuleParts): TextmateRule {
 }
 
 /**
- * A whole `source` scope, so that names a grammar leaves unscoped are bold, and the scopes names
- * do have, so that they stay bold inside an italic Python `def` line or a string's interpolation.
+ * Code, names, operators, strings and the constants that are not numbers, and the `entity.name`
+ * scopes grammars give uses: calls, tags, commands and namespaces.
  */
-const nameScopes: readonly string[] = [
+const regularScopes: readonly string[] = [
   'source',
-  'meta.template.expression',
-  'entity.name',
-  'entity.other',
   'variable',
-  'support.function',
-  'support.variable',
-  'support.class',
+  'support',
+  'entity.other',
+  'keyword.operator',
+  'meta.template.expression keyword.operator',
+  'constant',
+  'string',
+  'punctuation.definition.string',
+  'string keyword',
+  'string punctuation',
+  'string meta.brace',
+  'string storage',
+  'markup.inline.raw',
+  'entity.name.tag',
+  'entity.name.command',
+  'entity.name.namespace',
+  'entity.name.function.call',
+  'entity.name.function.support',
+  'entity.name.function.macro',
+  'meta.function-call entity.name.function',
+  'meta.function.call entity.name.function',
 ];
 
 /**
@@ -122,6 +146,15 @@ const typeScopes: readonly string[] = [
   'source.python support.type',
   'source.python meta.function',
   'source.go storage.type',
+];
+
+const typeDefinitionScopes: readonly string[] = [
+  'entity.name.type.class',
+  'entity.name.type.interface',
+  'entity.name.type.alias',
+  'entity.name.type.enum',
+  'entity.name.type.struct',
+  'entity.name.type.trait',
 ];
 
 const mutedScopes: readonly string[] = [
@@ -142,19 +175,6 @@ const mutedScopes: readonly string[] = [
   'meta.template.expression meta.brace',
 ];
 
-const regularScopes: readonly string[] = [
-  'keyword.operator',
-  'meta.template.expression keyword.operator',
-  'constant',
-  'string',
-  'punctuation.definition.string',
-  'string keyword',
-  'string punctuation',
-  'string meta.brace',
-  'string storage',
-  'markup.inline.raw',
-];
-
 const commentScopes: readonly string[] = [
   'comment',
   'punctuation.definition.comment',
@@ -167,4 +187,5 @@ const commentScopes: readonly string[] = [
   'comment entity.name.type',
   'comment variable',
   'comment constant',
+  'comment constant.numeric',
 ];
