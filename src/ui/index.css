@@ -48,12 +48,14 @@
 
   --beuve-scale-red-9: #e5484d;
   --beuve-scale-red-11: #ce2c31;
+  --beuve-scale-red-a4: #ff000824;
   --beuve-scale-red-a5: #ff000632;
   --beuve-scale-red-a6: #f8000442;
   --beuve-scale-red-a7: #df000356;
 
   --beuve-scale-amber-9: #ffc53d;
   --beuve-scale-amber-11: #ab6400;
+  --beuve-scale-amber-a4: #ffd40063;
 
   --beuve-scale-blue-9: #0090ff;
   --beuve-scale-blue-11: #0d74ce;
@@ -145,8 +147,10 @@
   --beuve-ok-solid: var(--beuve-scale-green-9);
   --beuve-warn: var(--beuve-scale-amber-11);
   --beuve-warn-solid: var(--beuve-scale-amber-9);
+  --beuve-warn-soft: var(--beuve-scale-amber-a4);
   --beuve-danger: var(--beuve-scale-red-11);
   --beuve-danger-solid: var(--beuve-scale-red-9);
+  --beuve-danger-soft: var(--beuve-scale-red-a4);
 
   --beuve-scrim: var(--beuve-scale-black-a5);
   --beuve-scrim-soft: var(--beuve-scale-gray-a4);
@@ -210,12 +214,14 @@
 
     --beuve-scale-red-9: #e5484d;
     --beuve-scale-red-11: #ff9592;
+    --beuve-scale-red-a4: #fe0a3b44;
     --beuve-scale-red-a5: #ff204756;
     --beuve-scale-red-a6: #ff3e5668;
     --beuve-scale-red-a7: #ff536184;
 
     --beuve-scale-amber-9: #ffc53d;
     --beuve-scale-amber-11: #ffca16;
+    --beuve-scale-amber-a4: #fc820032;
 
     --beuve-scale-blue-9: #0090ff;
     --beuve-scale-blue-11: #70b8ff;
@@ -285,12 +291,18 @@ body {
   text-decoration: underline;
 }
 
-/* Language-server diagnostics (ADR 0111): a wavy underline under the exact text, in a diff's shadow root. */
+/*
+ * Language-server diagnostics (ADR 0111, 0114): a wavy underline under the exact text, in a diff's
+ * shadow root. Errors and warnings also get a translucent tint, which composites over the line and
+ * changed-word backgrounds beneath it instead of replacing them.
+ */
 ::highlight(beuve-diagnostic-error) {
+  background-color: var(--beuve-danger-soft);
   text-decoration: underline wavy var(--beuve-danger);
 }
 
 ::highlight(beuve-diagnostic-warning) {
+  background-color: var(--beuve-warn-soft);
   text-decoration: underline wavy var(--beuve-warn);
 }
 
