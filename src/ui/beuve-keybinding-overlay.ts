@@ -7,6 +7,7 @@ import { commandCatalog } from '#contract/command-catalog.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutSectionsFor } from './shortcut-sections-for.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { kbdStyles } from './primitives/kbd-styles.ts';
 
 /**
  * Help ▸ Keyboard Shortcuts (ADR 0068): every key of the catalog, grouped by menu and then by
@@ -15,6 +16,7 @@ import { buttonStyles } from './primitives/button-styles.ts';
 @customElement('beuve-keybinding-overlay')
 export class BeuveKeybindingOverlay extends LitElement {
   static override styles = [
+    kbdStyles,
     buttonStyles,
     css`
       :host {
@@ -74,21 +76,6 @@ export class BeuveKeybindingOverlay extends LitElement {
       td.keys {
         text-align: end;
         white-space: nowrap;
-      }
-
-      kbd {
-        display: inline-block;
-        min-inline-size: 1.4em;
-        margin-inline-end: var(--beuve-space-1);
-        padding: 0 var(--beuve-space-1);
-        border: 1px solid var(--beuve-border);
-        border-block-end-width: 2px;
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
-        text-align: center;
-        color: var(--beuve-text);
       }
     `,
   ];

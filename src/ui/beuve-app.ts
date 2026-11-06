@@ -87,80 +87,58 @@ import { isTextFocused } from './is-text-focused.ts';
  */
 @customElement('beuve-app')
 export class BeuveApp extends LitElement {
-  static override styles = css`
-    :host {
-      display: grid;
-      block-size: 100%;
-      grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(--beuve-statusbar-height);
-    }
+  static override styles = [
+    css`
+      :host {
+        display: grid;
+        block-size: 100%;
+        grid-template-rows: var(--beuve-titlebar-height) minmax(0, 1fr) var(
+            --beuve-statusbar-height
+          );
+      }
 
-    .main {
-      grid-area: main;
-      display: flex;
-      flex-direction: column;
-      min-inline-size: 0;
-      min-block-size: 0;
-    }
+      .main {
+        grid-area: main;
+        display: flex;
+        flex-direction: column;
+        min-inline-size: 0;
+        min-block-size: 0;
+      }
 
-    .main > beuve-terminal-panel {
-      flex: none;
-      block-size: var(--beuve-terminal-height, 300px);
-    }
+      .main > beuve-terminal-panel {
+        flex: none;
+        block-size: var(--beuve-terminal-height, 300px);
+      }
 
-    .main > beuve-diff-stream,
-    .main > .empty {
-      flex: 1;
-      min-block-size: 0;
-    }
+      .main > beuve-diff-stream {
+        flex: 1;
+        min-block-size: 0;
+      }
 
-    .empty {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      overflow: auto;
-      padding: 14vh var(--beuve-space-6) var(--beuve-space-6);
-      background: var(--beuve-bg);
-      outline: none;
-    }
+      beuve-review-queue[slot='queue'] {
+        max-block-size: 62vh;
+        margin-block-end: var(--beuve-space-6);
+      }
 
-    .empty > div {
-      inline-size: min(620px, 100%);
-    }
+      beuve-open-panel[slot='empty'] {
+        max-inline-size: 620px;
+      }
 
-    .empty h1 {
-      margin: 0 0 var(--beuve-space-1);
-      font-size: var(--beuve-font-size-title);
-      font-weight: var(--beuve-font-weight-semibold);
-    }
+      beuve-dialog beuve-review-queue {
+        block-size: 70vh;
+      }
 
-    .empty p {
-      margin: 0 0 var(--beuve-space-4);
-      color: var(--beuve-text-muted);
-    }
-
-    beuve-review-queue[slot='queue'] {
-      max-block-size: 62vh;
-      margin-block-end: var(--beuve-space-6);
-    }
-
-    beuve-open-panel[slot='empty'] {
-      max-inline-size: 620px;
-    }
-
-    beuve-dialog beuve-review-queue {
-      block-size: 70vh;
-    }
-
-    .sheet-overlay {
-      position: fixed;
-      inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
-      inset-inline: auto 0;
-      z-index: 15;
-      inline-size: min(760px, 62vw);
-      border-inline-start: 1px solid var(--beuve-border);
-      box-shadow: -8px 0 24px var(--beuve-scrim-soft);
-    }
-  `;
+      .sheet-overlay {
+        position: fixed;
+        inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
+        inset-inline: auto 0;
+        z-index: 15;
+        inline-size: min(760px, 62vw);
+        border-inline-start: 1px solid var(--beuve-border);
+        box-shadow: -8px 0 24px var(--beuve-scrim-soft);
+      }
+    `,
+  ];
 
   private unsubscribes: (() => void)[] = [];
 

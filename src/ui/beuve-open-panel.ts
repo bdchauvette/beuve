@@ -269,8 +269,7 @@ export class BeuveOpenPanel extends LitElement {
         overflow-wrap: anywhere;
       }
 
-      code,
-      kbd {
+      code {
         font: var(--beuve-font-mono);
         font-size: var(--beuve-font-size-caption);
       }

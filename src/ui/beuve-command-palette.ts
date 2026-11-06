@@ -12,6 +12,8 @@ import type { PaletteEntry, PaletteSources } from './plan-palette.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { kbdStyles } from './primitives/kbd-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 const leadingPrefix = /^\s*[>@#!]/u;
 
@@ -40,6 +42,8 @@ const placeholders: Readonly<Record<string, string>> = {
 @customElement('beuve-command-palette')
 export class BeuveCommandPalette extends LitElement {
   static override styles = [
+    emptyStateStyles,
+    kbdStyles,
     buttonStyles,
     formatControlStyles,
     css`
@@ -140,20 +144,8 @@ export class BeuveCommandPalette extends LitElement {
         gap: var(--beuve-space-1);
       }
 
-      kbd {
-        padding: 0 5px;
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
-        font-size: var(--beuve-font-size-caption);
-        color: var(--beuve-text-muted);
-      }
-
       .empty {
-        margin: 0;
         padding: var(--beuve-space-4);
-        color: var(--beuve-text-muted);
       }
 
       footer {

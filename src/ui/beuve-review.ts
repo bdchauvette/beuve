@@ -129,6 +129,7 @@ import { signInHintOf } from './sign-in-hint-of.ts';
 import { sheetActionFrom } from './sheet-action-from.ts';
 import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
 import { isEditableElement } from './is-editable-element.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /**
  * The open review (ADR 0104): the diff, the sidebar and the terminal, rendered from the shared
@@ -139,67 +140,49 @@ import { isEditableElement } from './is-editable-element.ts';
  */
 @customElement('beuve-review')
 export class BeuveReview extends LitElement {
-  static override styles = css`
-    :host {
-      display: grid;
-      min-block-size: 0;
-      grid-template-rows: minmax(0, 1fr);
-    }
+  static override styles = [
+    emptyStateStyles,
+    css`
+      :host {
+        display: grid;
+        min-block-size: 0;
+        grid-template-rows: minmax(0, 1fr);
+      }
 
-    .main {
-      grid-area: main;
-      display: flex;
-      flex-direction: column;
-      min-inline-size: 0;
-      min-block-size: 0;
-    }
+      .main {
+        grid-area: main;
+        display: flex;
+        flex-direction: column;
+        min-inline-size: 0;
+        min-block-size: 0;
+      }
 
-    .main > beuve-terminal-panel {
-      flex: none;
-      block-size: var(--beuve-terminal-height, 300px);
-    }
+      .main > beuve-terminal-panel {
+        flex: none;
+        block-size: var(--beuve-terminal-height, 300px);
+      }
+      .empty-screen {
+        padding-block-start: 6vh;
+        --empty-screen-width: 1100px;
+      }
 
-    .main > beuve-diff-stream,
-    .main > .empty {
-      flex: 1;
-      min-block-size: 0;
-    }
+      .main > beuve-diff-stream,
+      .main > .empty-screen {
+        flex: 1;
+        min-block-size: 0;
+      }
 
-    .empty {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      overflow: auto;
-      padding: 6vh var(--beuve-space-6) var(--beuve-space-6);
-      background: var(--beuve-bg);
-      outline: none;
-    }
-
-    .empty > div {
-      inline-size: min(1100px, 100%);
-    }
-
-    .empty h1 {
-      margin: 0 0 var(--beuve-space-1);
-      font-size: var(--beuve-font-size-title);
-      font-weight: var(--beuve-font-weight-semibold);
-    }
-
-    .empty p {
-      margin: 0 0 var(--beuve-space-4);
-      color: var(--beuve-text-muted);
-    }
-
-    .sheet-overlay {
-      position: fixed;
-      inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
-      inset-inline: auto 0;
-      z-index: 15;
-      inline-size: min(760px, 62vw);
-      border-inline-start: 1px solid var(--beuve-border);
-      box-shadow: -8px 0 24px var(--beuve-scrim-soft);
-    }
-  `;
+      .sheet-overlay {
+        position: fixed;
+        inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
+        inset-inline: auto 0;
+        z-index: 15;
+        inline-size: min(760px, 62vw);
+        border-inline-start: 1px solid var(--beuve-border);
+        box-shadow: -8px 0 24px var(--beuve-scrim-soft);
+      }
+    `,
+  ];
 
   /** The file the diff stream's cursor is on, sent as the question's focus. */
   private activePath: string | undefined;
@@ -1004,7 +987,7 @@ export class BeuveReview extends LitElement {
 
   private renderDiff(): TemplateResult {
     if (this.review === undefined && !this.session.isLoading && this.session.error === '') {
-      return html`<div class="empty">
+      return html`<div class="empty-screen">
         <div>
           ${html`<slot name="queue"></slot>`}
           <h1>Open a review</h1>

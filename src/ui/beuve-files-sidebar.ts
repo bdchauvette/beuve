@@ -11,6 +11,7 @@ import type {
 import './beuve-radar-tree.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import { zoneStyles } from './zone-styles.ts';
+import { segmentedStyles } from './primitives/segmented-styles.ts';
 
 /**
  * The Files tab: the radar tree of the open review's files under a header row whose All · Changed
@@ -27,6 +28,7 @@ interface ButtonText {
 @customElement('beuve-files-sidebar')
 export class BeuveFilesSidebar extends LitElement {
   static override styles = [
+    segmentedStyles,
     zoneStyles,
     css`
       .body {
@@ -50,31 +52,6 @@ export class BeuveFilesSidebar extends LitElement {
         margin-block-end: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
-      }
-
-      .segments {
-        display: inline-flex;
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        overflow: hidden;
-      }
-
-      .segments button {
-        padding: 1px var(--beuve-space-2);
-        border: none;
-        background: none;
-        color: var(--beuve-text-muted);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .segments button + button {
-        border-inline-start: 1px solid var(--beuve-border);
-      }
-
-      .segments button[aria-pressed='true'] {
-        background: var(--beuve-surface-sunken);
-        color: var(--beuve-text);
       }
 
       beuve-radar-tree {
@@ -109,7 +86,7 @@ export class BeuveFilesSidebar extends LitElement {
     return html`<section class="files">
       <div class="files-header">
         <span>Files</span>
-        <span class="segments" role="group" aria-label="Files shown">
+        <span class="segmented" role="group" aria-label="Files shown">
           ${this.renderMode('neighborhood', {
             label: 'All',
             title: 'Show the changed files with their neighbours',

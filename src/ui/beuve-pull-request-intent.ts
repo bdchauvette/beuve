@@ -11,6 +11,8 @@ import { createPlainMarkdownRenderers } from './create-plain-markdown-renderers.
 import { markdownBodyStyles } from './markdown-body-styles.ts';
 import { parseMarkdown } from './parse-markdown.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { badgeStyles } from './primitives/badge-styles.ts';
+import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /**
  * The intent of a pull request session (spec Zone 1, top): its title, state, author and branches,
@@ -21,6 +23,8 @@ import { buttonStyles } from './primitives/button-styles.ts';
 @customElement('beuve-pull-request-intent')
 export class BeuvePullRequestIntent extends LitElement {
   static override styles = [
+    emptyStateStyles,
+    badgeStyles,
     buttonStyles,
     markdownBodyStyles,
     css`
@@ -51,25 +55,6 @@ export class BeuvePullRequestIntent extends LitElement {
         overflow-wrap: anywhere;
       }
 
-      .badge {
-        padding: 0 6px;
-        border: 1px solid currentColor;
-        border-radius: var(--beuve-radius-full);
-        font-weight: var(--beuve-font-weight-semibold);
-      }
-
-      .badge.ok {
-        color: var(--beuve-ok);
-      }
-
-      .badge.merged {
-        color: var(--beuve-violet);
-      }
-
-      .badge.danger {
-        color: var(--beuve-danger);
-      }
-
       .body {
         max-block-size: 240px;
         overflow: auto;
@@ -79,9 +64,7 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .empty {
-        margin: 0;
         font: var(--beuve-font-small);
-        color: var(--beuve-text-muted);
       }
 
       a {
@@ -95,22 +78,11 @@ export class BeuvePullRequestIntent extends LitElement {
         gap: var(--beuve-space-1);
       }
 
-      .chip {
+      .stack .badge {
+        display: inline-block;
         max-inline-size: 100%;
         overflow: hidden;
-        padding: 1px var(--beuve-space-2);
-        border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-full);
-        background: var(--beuve-surface-sunken);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
         text-overflow: ellipsis;
-        white-space: nowrap;
-        cursor: pointer;
-      }
-
-      .chip:hover {
-        border-color: var(--beuve-accent);
       }
     `,
   ];
@@ -154,7 +126,7 @@ export class BeuvePullRequestIntent extends LitElement {
     const label = `${direction} #${String(entry.number)} ${entry.title}`;
     return html`<button
       type="button"
-      class="chip"
+      class="badge"
       title="${direction === '↑' ? 'Base' : 'Stacked on this'}: ${entry.title}${
         entry.isDraft ? ' (draft)' : ''
       }"
@@ -180,7 +152,7 @@ export class BeuvePullRequestIntent extends LitElement {
     return html`
       <h3>${pullRequest.title}</h3>
       <div class="meta">
-        <span class="badge ${badge.tone}">${badge.label}</span>
+        <span class="badge" data-tone=${badge.tone}>${badge.label}</span>
         <button
           type="button"
           class="button link"

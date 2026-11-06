@@ -7,6 +7,7 @@ import type { CiBucketView, CiCheckView, CiStatusView } from '#contract/ipc-cont
 import { ActionDelegation } from './action-delegation.ts';
 import { describeCiStatus } from './describe-ci-status.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { statusDotStyles } from './primitives/status-dot-styles.ts';
 
 /** Worst first, so a failing check is at the top of the list. */
 const bucketRank: Readonly<Record<CiBucketView, number>> = {
@@ -30,6 +31,7 @@ const bucketTone: Readonly<Record<CiBucketView, string>> = {
 @customElement('beuve-pull-request-checks')
 export class BeuvePullRequestChecks extends LitElement {
   static override styles = [
+    statusDotStyles,
     buttonStyles,
     css`
       :host {
@@ -63,26 +65,6 @@ export class BeuvePullRequestChecks extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         min-inline-size: 0;
-      }
-
-      .dot {
-        flex: none;
-        inline-size: 7px;
-        block-size: 7px;
-        border-radius: 50%;
-        background: var(--beuve-text-muted);
-      }
-
-      .dot.ok {
-        background: var(--beuve-ok-solid);
-      }
-
-      .dot.warn {
-        background: var(--beuve-warn-solid);
-      }
-
-      .dot.danger {
-        background: var(--beuve-danger-solid);
       }
 
       .name {
@@ -125,7 +107,7 @@ export class BeuvePullRequestChecks extends LitElement {
 
   private renderCheck(check: CiCheckView): TemplateResult {
     return html`<li>
-      <span class="dot ${bucketTone[check.bucket]}"></span>
+      <span class="status-dot" data-tone=${bucketTone[check.bucket]}></span>
       ${
         check.url === undefined
           ? html`<span class="name" title=${check.name}>${check.name}</span>`
