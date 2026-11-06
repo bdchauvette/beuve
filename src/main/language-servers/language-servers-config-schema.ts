@@ -50,11 +50,36 @@ const serverSettings = z.strictObject({
 
 const servers = z.record(serverId, serverSettings);
 
+/** A server's name, `!name` to leave it out, or `...` for the servers the list does not name. */
+const languageServerEntry = z
+  .string()
+  .regex(
+    /^(?:!?[a-z][a-z0-9-]{0,39}|\.\.\.)$/u,
+    'a server id, "!" and a server id to leave it out, or "..."',
+  );
+
+/**
+ * What serves one language, by LSP language id (ADR 0111): `servers` names them in the order they
+ * are tried, and `enabled: false` turns off all of them for the language.
+ */
+const languageSettings = z.strictObject({
+  enabled: z.boolean().optional(),
+  servers: z.array(languageServerEntry).max(50).optional(),
+});
+
+const languages = z.record(plainText(64), languageSettings);
+
 /** An override applies to a repository the match names: a path glob of the clone, or a remote. */
 const match = z.union([
   z.strictObject({ path: plainText(4096) }),
   z.strictObject({ remote: plainText(512) }),
 ]);
+
+const override = z.strictObject({
+  match,
+  servers: servers.optional(),
+  languages: languages.optional(),
+});
 
 /**
  * The shape of `language-servers.json` (ADR 0111), validated strictly: unknown keys and wrong
@@ -63,9 +88,11 @@ const match = z.union([
 export const languageServersConfigSchema = z.strictObject({
   $schema: z.string().max(2048).optional(),
   servers: servers.optional(),
-  overrides: z.array(z.strictObject({ match, servers })).max(200).optional(),
+  languages: languages.optional(),
+  overrides: z.array(override).max(200).optional(),
 });
 
 export type LanguageServersConfig = z.infer<typeof languageServersConfigSchema>;
 export type ServerSettings = z.infer<typeof serverSettings>;
+export type LanguageSettings = z.infer<typeof languageSettings>;
 export type OverrideMatch = z.infer<typeof match>;

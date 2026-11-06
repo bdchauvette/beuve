@@ -241,4 +241,23 @@ describe('resolveServerDefinitions', () => {
     ]);
     expect(definitions[1]).toMatchObject({ id: 'eslint', source: 'project', origin: 'reviewer' });
   });
+
+  test('narrows a language by the merged layers and overrides, the later winning', ({ expect }) => {
+    const result = resolve([
+      { languages: { typescript: { enabled: false } } },
+      {
+        overrides: [
+          { match: { path: '/home/me/work/**' }, languages: { typescript: { enabled: true } } },
+        ],
+      },
+    ]);
+    expect(result.definitions.map((definition) => definition.id)).toStrictEqual(['typescript']);
+    expect(result.definitions[0]?.languageIds).toStrictEqual(typescript().languageIds);
+  });
+
+  test("turns a language off without making the server the reviewer's own", ({ expect }) => {
+    const result = resolve([{ languages: { javascript: { enabled: false } } }]);
+    expect(result.definitions[0]?.languageIds).toStrictEqual({ '.ts': 'typescript' });
+    expect(result.definitions[0]?.origin).toBeUndefined();
+  });
 });

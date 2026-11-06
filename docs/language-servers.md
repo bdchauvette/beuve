@@ -24,11 +24,28 @@ Every field is optional for a server beuve already has, because the entry only c
 - `source`: `path` (the default) or `project`, a program from the checked-out repository, written as a path relative to it. See below.
 - `diagnosticsQuietMs`: how long a server must be quiet before its answer counts as final. Raise it for a server that sends its checks in stages.
 
+## Choosing servers for a language
+
+`languages` says which servers serve a language, by LSP language id (`python`, `go`, `typescript`), as Zed's per-language `language_servers` does. Each entry has `servers`, a list in the order the servers are tried, and `enabled`.
+
+```json
+{
+  "languages": { "python": { "servers": ["ruff", "!pyright", "..."] }, "go": { "enabled": false } }
+}
+```
+
+- A name keeps that server for the language, and the listed servers come first, in the list's order.
+- `!name` leaves a server out for the language only. It keeps serving its other languages.
+- `...` stands for the servers the list does not name, and goes where it is written. A list without `...` keeps only the servers it names; a list of only `!name` entries keeps the rest.
+- `enabled: false` turns the language off for every server. A server left with no language is not started.
+
+This is for a language you want handled differently without removing a server (`enabled: false` on a server removes it for all its languages). A name that does not serve the language is reported beside the diagnostics, and the rest of the list still applies. Order is among the places the servers already hold, so one language's list does not reorder another's. A server's origin does not change, so `languages` never makes a built-in server count as your own.
+
 ## Merging and per-repository overrides
 
 The `servers` of both files merge by server and by field; a later field replaces an earlier one. Two fields combine instead, because beuve's own definitions keep safety settings in them: `env` merges variable by variable and `inheritEnv` adds names, so setting one variable on `gopls` does not drop the others. A variable can still be given a new value.
 
-`overrides` is a list of `{ "match", "servers" }` applied in order over `servers`. A match is either `{ "path": ... }`, a glob against your own clone (a leading `~` is your home directory), or `{ "remote": ... }`, a glob against `host/owner/repo` of a pull request. In a glob `*` stays inside one directory and `**` crosses them.
+`overrides` is a list of `{ "match", "servers", "languages" }` (each of the last two optional) applied in order over `servers` and `languages`; `languages` merges per language id and per field. A match is either `{ "path": ... }`, a glob against your own clone (a leading `~` is your home directory), or `{ "remote": ... }`, a glob against `host/owner/repo` of a pull request. In a glob `*` stays inside one directory and `**` crosses them.
 
 ## Trust
 

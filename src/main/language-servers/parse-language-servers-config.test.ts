@@ -36,6 +36,19 @@ describe('parseLanguageServersConfig', () => {
     });
   });
 
+  test('takes a per-language list, in a file and in an override', ({ expect }) => {
+    const text = JSON.stringify({
+      languages: { python: { servers: ['ruff', '!pyright', '...'] }, go: { enabled: false } },
+      overrides: [{ match: { path: '~/work/**' }, languages: { python: { enabled: false } } }],
+    });
+    expect(parseLanguageServersConfig(text)).toMatchObject({ ok: true });
+  });
+
+  test('refuses a language list entry that is not a server id', ({ expect }) => {
+    const text = '{"languages":{"python":{"servers":["Not A Server"]}}}';
+    expect(parseLanguageServersConfig(text)).toMatchObject({ ok: false });
+  });
+
   test('says when it is not JSON', ({ expect }) => {
     expect(parseLanguageServersConfig('{ servers: ')).toStrictEqual({
       ok: false,
