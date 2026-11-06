@@ -28,6 +28,7 @@ import type { ChangedLines } from '#internal/lsp/badge-call-hierarchy-node.ts';
 import type { LspMultiplexer } from '#internal/lsp/create-lsp-multiplexer.ts';
 import { findEnclosingSymbol } from '#internal/lsp/find-enclosing-symbol.ts';
 import type { LspError } from '#internal/lsp/lsp-error.ts';
+import { resolveWorkspaceRoot } from '#internal/lsp/resolve-workspace-root.ts';
 import { findModuleSpecifier } from '#internal/lsp/find-module-specifier.ts';
 import { planDefinitionProbes } from '#internal/lsp/plan-definition-probes.ts';
 import type { ProbeToken } from '#internal/lsp/plan-definition-probes.ts';
@@ -53,6 +54,7 @@ import type { SessionContext } from '../sessions/session-context.ts';
 import { readSheetSource } from '../sheets/read-sheet-source.ts';
 import { resolveSheetCommit } from '../sheets/resolve-sheet-commit.ts';
 import type { SessionWorktrees, WorktreeClaim } from '../worktrees/create-session-worktrees.ts';
+import type { ShellEnvironments } from '../shell-environment/create-shell-environments.ts';
 import { worktreeFailure } from '../worktrees/worktree-failure.ts';
 
 import { ipcErrorFromLspError } from './ipc-error-from-lsp-error.ts';
@@ -127,6 +129,11 @@ export interface LspServicesOptions {
   readonly context: SessionContext;
   readonly multiplexer: LspMultiplexer;
   readonly worktrees: SessionWorktrees;
+  /**
+   * The shell environments the servers run in (ADR 0111): a restart forgets a checkout's, and a
+   * note about one that fell back goes with its diagnostics.
+   */
+  readonly environments?: Pick<ShellEnvironments, 'forget' | 'noticeFor'>;
 }
 
 interface Workspace extends Disposable {
@@ -444,6 +451,15 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     using lease = leased.value;
     const report = await multiplexer.getDiagnostics({ root: lease.path, path: request.path });
     if (!report.ok) {
+      if (report.error.kind === 'server-untrusted') {
+        return ok({
+          sha,
+          state: 'untrusted',
+          diagnostics: [],
+          omitted: 0,
+          notice: report.error.reason,
+        });
+      }
       if (isUndiagnosable(report.error)) {
         return ok({ sha, state: 'unavailable', diagnostics: [], omitted: 0 });
       }
@@ -452,11 +468,13 @@ export function createLspServices(options: LspServicesOptions): LspServices {
     const items = report.value.diagnostics.map((diagnostic) => {
       return diagnosticItemFrom(diagnostic, report.value.serverId);
     });
+    const notice = options.environments?.noticeFor(await canonicalRootOf(lease.path));
     return ok({
       sha,
       state: stateOf(report.value.freshness),
       diagnostics: items.slice(0, maxDiagnosticsPerFile),
       omitted: Math.max(0, items.length - maxDiagnosticsPerFile),
+      ...(notice !== undefined && { notice }),
     });
   };
 
@@ -487,6 +505,7 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       }
       using workspace = leased.value;
       await multiplexer.restart(workspace.root);
+      options.environments?.forget(await canonicalRootOf(workspace.root));
       return ok({ sessionId: session.id, headSha: session.headSha });
     },
     callHierarchy: async (request): Promise<IpcResult<CallHierarchyView>> => {
@@ -619,6 +638,15 @@ function tokenView(line: number, token: ProbeToken): NonNullable<DefinitionView[
 
 function targetViewFrom(target: LocationView): DefinitionTargetView {
   return { file: { ...target.file }, ...sheetRangeFrom(target.range) };
+}
+
+/** The real path the multiplexer keys a checkout by, which the shell environments use too. */
+async function canonicalRootOf(root: string): Promise<string> {
+  const resolved = await resolveWorkspaceRoot(root);
+  if (resolved.ok) {
+    return resolved.value;
+  }
+  return root;
 }
 
 /** How many diagnostics of one file reach the renderer. */

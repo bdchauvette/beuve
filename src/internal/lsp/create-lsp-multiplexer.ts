@@ -14,6 +14,8 @@ import type { Result } from '#x/result/result.ts';
 import { Stopwatch } from '#x/time/stopwatch.ts';
 
 import { convertCharacter } from './convert-character.ts';
+import { checkServerTrust } from './check-server-trust.ts';
+import type { ServerTrustDecision, ServerTrustRequest } from './check-server-trust.ts';
 import { createServerEnvironment } from './create-server-environment.ts';
 import { createViewMapper } from './create-view-mapper.ts';
 import type { ViewMapper } from './create-view-mapper.ts';
@@ -62,6 +64,17 @@ export interface LspMultiplexerOptions {
   readonly trustWorkspaceBinaries?: boolean;
   /** Source of the inherited allow-listed variables (`createServerEnvironment`). Defaults to `process.env`. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The environment the servers of one checkout run in and find their programs through, such as
+   * the one the reviewer's login shell gives there (ADR 0111). Asked each time a server starts;
+   * the caller caches. When absent, every server gets `environment`.
+   */
+  readonly environmentFor?: (root: string) => Promise<Readonly<Record<string, string | undefined>>>;
+  /**
+   * Decides whether a server may start in a checkout (ADR 0111). A refusal is an
+   * `server-untrusted` error and starts nothing. Defaults to {@link checkServerTrust}.
+   */
+  readonly trust?: (request: ServerTrustRequest) => ServerTrustDecision;
   readonly logger?: Logger;
   /** Per request. Defaults to 15 s. */
   readonly requestTimeout?: Temporal.Duration;
@@ -194,7 +207,18 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
 
   const startSession = async (entry: ServerEntry): Promise<Result<ServerSession, LspError>> => {
     const { definition, root } = entry;
-    const environment = options.environment ?? process.env;
+    const decision = (options.trust ?? checkServerTrust)({
+      kind: 'server-program',
+      serverId: definition.id,
+      source: definition.source,
+      origin: definition.origin ?? 'builtin',
+      root,
+    });
+    if (!decision.allowed) {
+      return err({ kind: 'server-untrusted', serverId: definition.id, reason: decision.reason });
+    }
+    const environment =
+      (await options.environmentFor?.(root)) ?? options.environment ?? process.env;
     const searchDirectories: string[] = [];
     if (options.trustWorkspaceBinaries === true) {
       searchDirectories.push(path.join(root, 'node_modules', '.bin'));
@@ -213,7 +237,7 @@ export function createLspMultiplexer(options: LspMultiplexerOptions = {}): LspMu
       definition,
       root,
       commandPath: command.value,
-      env: createServerEnvironment(environment, definition.env),
+      env: createServerEnvironment(environment, definition.env, definition.inheritEnv),
       ...(logger !== undefined && { logger }),
       ...(options.requestTimeout !== undefined && { requestTimeout: options.requestTimeout }),
     });

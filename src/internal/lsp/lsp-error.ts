@@ -17,6 +17,8 @@ export type LspError =
       readonly searched: readonly string[];
     }
   | { readonly kind: 'server-start-failed'; readonly serverId: string; readonly message: string }
+  /** The trust check (ADR 0111) refused to start the server; `reason` is for the reviewer. */
+  | { readonly kind: 'server-untrusted'; readonly serverId: string; readonly reason: string }
   | {
       readonly kind: 'server-exited';
       readonly serverId: string;

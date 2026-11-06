@@ -16,7 +16,9 @@ type Counts = Readonly<Record<DiagnosticSeverityView, number>>;
  * What a card's header says about its file's diagnostics (ADR 0111): "checking…" while the servers
  * work, then errors and warnings counted over the whole file, including lines the diff doesn't
  * show. A clean file, a file no server handles and a failed question say nothing, as an editor's
- * problems badge does. A timed-out answer says it may be incomplete.
+ * problems badge does, except that a note from beuve (the shell environment could not be read) shows
+ * as a quiet "ⓘ" and a server beuve did not start says so. A timed-out answer says it may be
+ * incomplete.
  */
 export function describeDiagnostics(
   file: FileDiagnostics | undefined,
@@ -31,9 +33,19 @@ export function describeDiagnostics(
   if (file?.kind !== 'ready') {
     return undefined;
   }
-  const { diagnostics, state, omitted } = file.view;
-  if (state === 'not-head' || state === 'unavailable' || diagnostics.length === 0) {
+  const { diagnostics, state, omitted, notice } = file.view;
+  if (state === 'untrusted') {
+    return {
+      text: 'server not started',
+      title: notice ?? 'The language server was not started.',
+      tone: 'quiet',
+    };
+  }
+  if (state === 'not-head' || state === 'unavailable') {
     return undefined;
+  }
+  if (diagnostics.length === 0) {
+    return noticeOnly(notice);
   }
   const counts = countBySeverity(diagnostics);
   const parts: string[] = [];
@@ -62,7 +74,19 @@ export function describeDiagnostics(
   if (state === 'timed-out') {
     text += ' (incomplete)';
   }
-  return { text, title: `Language server: ${detail.join(', ')}`, tone: toneOf(counts) };
+  let title = `Language server: ${detail.join(', ')}`;
+  if (notice !== undefined) {
+    title += `. ${notice}`;
+  }
+  return { text, title, tone: toneOf(counts) };
+}
+
+/** A clean file whose servers ran in a fallback environment still says so, as a quiet "ⓘ". */
+function noticeOnly(notice: string | undefined): DiagnosticsNote | undefined {
+  if (notice === undefined) {
+    return undefined;
+  }
+  return { text: 'ⓘ', title: notice, tone: 'quiet' };
 }
 
 function countBySeverity(items: readonly DiagnosticItemView[]): Counts {

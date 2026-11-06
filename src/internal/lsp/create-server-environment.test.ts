@@ -25,4 +25,13 @@ describe('createServerEnvironment', () => {
       TSS_LOG: '',
     });
   });
+
+  test('passes on the further variables a definition names, and no others', ({ expect }) => {
+    const environment = createServerEnvironment(
+      { PATH: '/usr/bin', GOPATH: '/home/me/go', GOFLAGS: '-mod=mod', GITHUB_TOKEN: 'secret' },
+      {},
+      ['GOPATH', 'MISSING'],
+    );
+    expect(environment).toStrictEqual({ PATH: '/usr/bin', GOPATH: '/home/me/go' });
+  });
 });

@@ -1,4 +1,4 @@
-import type { ServerDefinition } from './server-definition.ts';
+import type { ServerDefinition, ServerSource } from './server-definition.ts';
 
 export interface TypescriptServerOptions {
   /** Absolute path of the `typescript-language-server` executable; otherwise it is discovered. */
@@ -11,6 +11,8 @@ export interface TypescriptServerOptions {
    */
   readonly tsserverPath?: string;
   readonly env?: Readonly<Record<string, string>>;
+  /** Where the program comes from; `path` unless the caller ships it, as beuve does for its own. */
+  readonly source?: ServerSource;
 }
 
 /**
@@ -29,6 +31,7 @@ export function typescriptServerDefinition(
     id: 'typescript',
     command: options.command ?? 'typescript-language-server',
     args: [...(options.leadingArgs ?? []), '--stdio'],
+    source: options.source ?? 'path',
     languageIds: {
       '.ts': 'typescript',
       '.mts': 'typescript',
