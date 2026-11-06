@@ -106,11 +106,15 @@ export function createGithubClient<E>(
     if (body === invalidJson) {
       return err({ kind: 'unexpected-shape', reason: 'the response is not JSON' });
     }
+    const sso = headers.get('x-github-sso') ?? undefined;
+    const oauthScopes = headers.get('x-oauth-scopes') ?? undefined;
     return ok({
       status,
       body,
       etag: headers.get('etag') ?? undefined,
       link: headers.get('link') ?? undefined,
+      ...(sso !== undefined && { sso }),
+      ...(oauthScopes !== undefined && { oauthScopes }),
     });
   };
 

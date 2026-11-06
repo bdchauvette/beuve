@@ -43,6 +43,10 @@ export interface GithubResponse {
   readonly body: unknown;
   readonly etag: string | undefined;
   readonly link: string | undefined;
+  /** `X-GitHub-SSO` on a success: `partial-results; organizations=…` when SAML hid some. */
+  readonly sso?: string;
+  /** `X-OAuth-Scopes`: a classic token's scopes; absent for fine-grained and app tokens. */
+  readonly oauthScopes?: string;
 }
 
 /** A REST client bound to one GitHub host (ADR 0035). `send` never rejects. */

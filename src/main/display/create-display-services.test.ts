@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import { describe } from 'vitest';
 
+import { defaultReviewQueuePrefs } from '#contract/default-review-queue-prefs.ts';
+
 import { createDisplayServices } from './create-display-services.ts';
 import { test } from '../testing/test.ts';
 
@@ -25,6 +27,8 @@ describe('createDisplayServices', () => {
         reviewOrder: 'path',
         skipReviewed: false,
         sheets: 'window',
+        reviewQueue: defaultReviewQueuePrefs,
+        reviewQueueBranchPrefixes: ['claude/'],
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -38,6 +42,8 @@ describe('createDisplayServices', () => {
         reviewOrder: 'path',
         skipReviewed: false,
         sheets: 'window',
+        reviewQueue: defaultReviewQueuePrefs,
+        reviewQueueBranchPrefixes: ['claude/'],
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -57,6 +63,8 @@ describe('createDisplayServices', () => {
       reviewOrder: 'imports',
       skipReviewed: true,
       sheets: 'inline',
+      reviewQueue: defaultReviewQueuePrefs,
+      reviewQueueBranchPrefixes: ['claude/'],
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -69,6 +77,8 @@ describe('createDisplayServices', () => {
         reviewOrder: 'imports',
         skipReviewed: true,
         sheets: 'inline',
+        reviewQueue: defaultReviewQueuePrefs,
+        reviewQueueBranchPrefixes: ['claude/'],
       },
     });
   });
@@ -87,7 +97,40 @@ describe('createDisplayServices', () => {
         reviewOrder: 'path',
         skipReviewed: false,
         sheets: 'window',
+        reviewQueue: defaultReviewQueuePrefs,
+        reviewQueueBranchPrefixes: ['claude/'],
       },
+    });
+  });
+
+  test('keeps the review queue preferences and branch prefixes, dropping malformed ones', async ({
+    expect,
+    tempDir,
+  }) => {
+    const file = path.join(tempDir, 'settings.json');
+    writeFileSync(
+      file,
+      JSON.stringify({ reviewQueue: { sort: 'sideways' }, reviewQueueBranchPrefixes: 'claude/' }),
+    );
+    const display = createDisplayServices(file);
+    await expect(display.get()).resolves.toMatchObject({
+      value: { reviewQueue: defaultReviewQueuePrefs, reviewQueueBranchPrefixes: ['claude/'] },
+    });
+    const reviewQueue = {
+      ...defaultReviewQueuePrefs,
+      sort: 'largest',
+      group: 'repository',
+    } as const;
+    await display.set({
+      reviewQueue,
+      reviewQueueBranchPrefixes: [' agent/ ', 'agent/', '../x', 'codex/'],
+    });
+    await expect(createDisplayServices(file).get()).resolves.toMatchObject({
+      value: { reviewQueue, reviewQueueBranchPrefixes: ['agent/', 'codex/'] },
+    });
+    await display.set({ reviewQueueBranchPrefixes: [] });
+    await expect(display.get()).resolves.toMatchObject({
+      value: { reviewQueueBranchPrefixes: [] },
     });
   });
 });

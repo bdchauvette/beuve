@@ -14,6 +14,8 @@ export interface RepositoryKey {
 export interface ClonePathSettings {
   readonly read: (repository: RepositoryKey) => Promise<string | undefined>;
   readonly write: (repository: RepositoryKey, repoPath: string) => Promise<void>;
+  /** Every repository with a remembered clone, lowercase (ADR 0113's branch listing). */
+  readonly list: () => Promise<readonly RepositoryKey[]>;
 }
 
 const settingsKey = 'githubClonePaths';
@@ -47,7 +49,25 @@ export function createClonePathSettings(filePath?: string): ClonePathSettings {
         return { ...current, [settingsKey]: { ...previous, [keyOf(repository)]: repoPath } };
       });
     },
+    list: async (): Promise<readonly RepositoryKey[]> => {
+      let keys = remembered.keys().toArray();
+      if (filePath !== undefined) {
+        const settings = await readSettingsFile(filePath);
+        keys = Object.keys(clonePathsOf(settings[settingsKey]));
+      }
+      return keys.map((key) => repositoryKeyFrom(key)).filter((key) => key !== undefined);
+    },
   };
+}
+
+/** `host/owner/repo` back into its parts; `undefined` for anything else. */
+function repositoryKeyFrom(key: string): RepositoryKey | undefined {
+  const parts = key.split('/');
+  const [host = '', owner = '', repo = ''] = parts;
+  if (host === '' || owner === '' || repo === '' || parts.length !== 3) {
+    return undefined;
+  }
+  return { host, owner, repo };
 }
 
 function keyOf(repository: RepositoryKey): string {

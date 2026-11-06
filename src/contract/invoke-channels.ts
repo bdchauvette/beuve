@@ -58,6 +58,8 @@ export const invokeChannels = Object.freeze([
   'review-edits:discard',
   'display:get',
   'display:set',
+  'queue:get',
+  'queue:refresh',
   'github:auth-status',
   'github:open-pr',
   'github:get-pr',

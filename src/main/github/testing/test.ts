@@ -133,6 +133,7 @@ export const test = baseTest
               return world.api.fetch(url, init);
             },
             polling: { scheduled: false },
+            queuePolling: { scheduled: false, searchFloor: new Temporal.Duration() },
           },
         });
         next.github.onPullRequestUpdated((event) => {
@@ -162,6 +163,7 @@ export const test = baseTest
           fetch: world.api.fetch,
           settingsPath: path.join(tempDir, 'settings.json'),
           polling: { scheduled: false },
+          queuePolling: { scheduled: false, searchFloor: new Temporal.Duration() },
         },
       });
       services.github.onPullRequestUpdated((event) => {

@@ -40,6 +40,7 @@ import { createGithubClients } from './github/create-github-clients.ts';
 import { createGithubServices } from './github/create-github-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import { createOrderServices } from './order/create-order-services.ts';
+import { createReviewQueueServices } from './queue/create-review-queue-services.ts';
 import { createLspServices } from './lsp/create-lsp-services.ts';
 import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { NodeRuntime, NodeRuntimeError } from './node-runtime/resolve-node-runtime.ts';
@@ -147,6 +148,12 @@ export interface MainServicesOptions {
     readonly settingsPath?: string;
     readonly openExternal?: (url: string) => Promise<void>;
     readonly polling?: { readonly interval?: Temporal.Duration; readonly scheduled?: boolean };
+    /** The review queue's pace (ADR 0113); tests turn scheduling off and the search floor down. */
+    readonly queuePolling?: {
+      readonly interval?: Temporal.Duration;
+      readonly searchFloor?: Temporal.Duration;
+      readonly scheduled?: boolean;
+    };
   };
 }
 
@@ -260,15 +267,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   const credentials = createCachedCredentialProvider(
     options.github?.credentials ?? createGhCliCredentialProvider({ logger }),
   );
+  const githubClients = createGithubClients({
+    credentials,
+    ...(options.github?.fetch !== undefined && { fetch: options.github.fetch }),
+    ...(options.github?.apiBase !== undefined && { apiBase: options.github.apiBase }),
+    logger,
+  });
+  const clonePaths = createClonePathSettings(options.github?.settingsPath);
   const github = createGithubServices({
     context,
-    clients: createGithubClients({
-      credentials,
-      ...(options.github?.fetch !== undefined && { fetch: options.github.fetch }),
-      ...(options.github?.apiBase !== undefined && { apiBase: options.github.apiBase }),
-      logger,
-    }),
-    clonePaths: createClonePathSettings(options.github?.settingsPath),
+    clients: githubClients,
+    clonePaths,
     ura,
     ...(options.github?.openExternal !== undefined && {
       openExternal: options.github.openExternal,
@@ -281,6 +290,17 @@ export function createMainServices(options: MainServicesOptions): MainServices {
   gh.services = github;
   const files = createFileServices({ context });
   const display = createDisplayServices(options.display?.settingsPath);
+  const queue = createReviewQueueServices({
+    context: { session: context, clients: githubClients, clonePaths },
+    branchPrefixes: async () => {
+      const shown = await display.get();
+      if (shown.ok) {
+        return shown.value.reviewQueueBranchPrefixes ?? [];
+      }
+      return [];
+    },
+    ...(options.github?.queuePolling !== undefined && { polling: options.github.queuePolling }),
+  });
   const editorSettings = createEditorSettings(options.editor?.settingsPath);
   const editor = createEditorServices({
     context,
@@ -331,6 +351,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ura,
     terminal,
     github,
+    queue,
     claude: {
       status: async (): Promise<IpcResult<ClaudeStatusView>> => {
         return ok(await readClaudeStatus(options.claude ?? {}));
@@ -355,6 +376,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     },
     dispose: async (): Promise<void> => {
       github.dispose();
+      queue.dispose();
       terminal.dispose();
       await chat.dispose();
       await multiplexer.dispose();

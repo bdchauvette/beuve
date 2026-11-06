@@ -22,6 +22,7 @@ import type { FlowServices } from './flow/create-flow-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
+import type { ReviewQueueServices } from './queue/create-review-queue-services.ts';
 import type { ModelServices } from './models/create-model-services.ts';
 import type { RemoteServices } from './remote/create-remote-services.ts';
 import type { ShellServices } from './shell/create-shell-services.ts';
@@ -75,6 +76,8 @@ export interface MainServices {
   /** Shells in beuve's checkouts (ADR 0095). */
   readonly terminal: TerminalServices;
   readonly github: Omit<GithubServices, 'badgeFor' | 'branchBadgeFor' | 'intentFor' | 'watch'>;
+  /** Everything waiting on the signed-in GitHub user (ADR 0113). */
+  readonly queue: ReviewQueueServices;
   /** The Claude Code CLI the chat would run, for the Settings window (ADR 0068). */
   readonly claude: { readonly status: () => Promise<IpcResult<ClaudeStatusView>> };
   /** The model registry, its keys and Test, for the Settings window only (ADR 0070). */
