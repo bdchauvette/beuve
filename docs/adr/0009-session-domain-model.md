@@ -23,3 +23,7 @@ ADR 0006 gives `src/internal/session/` the `sessions` and `checkpoints` tables. 
 ## Consequences
 
 The persisted review state can't drift from checkpoint history, and illegal source shapes are rejected by both the types and SQL. Checkpoint order depends on the injected clock, with insertion order breaking ties. Main composes `sessionMigrations` from `#internal/session/session-migrations.ts` before any domain whose tables reference `sessions`.
+
+## Amendment 2026-11-06: remote branches
+
+A third kind, `remote-branch` (forge, host, owner, repo, branch), with its own partial unique index, and `promoteSession` turning one into a `github-pull-request` row in place ([0112](0112-remote-branch-sessions.md)).
