@@ -37,7 +37,7 @@ const italicFlag = 1;
 const boldFlag = 2;
 
 /**
- * Loads the library as the app does (beuve's themes and grammar injections registered) and
+ * Loads the library as the app does (beuve's themes registered) and
  * returns {@link StylesOf} over the light theme.
  */
 export async function createStylesOf(): Promise<StylesOf> {

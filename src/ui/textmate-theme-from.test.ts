@@ -63,7 +63,7 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
     expect(stylesOf('typescript', code)).toStrictEqual(lines.flat());
   });
 
-  test('styles definitions, parameters and types alike in Python, Go, Rust and shell', ({
+  test('styles definitions and types alike in Python, Go, Rust and shell', ({
     expect,
     stylesOf,
   }) => {
@@ -95,7 +95,7 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
       'fn g() { «f»(«S»::«new»()) }',
     ].join('\n');
     const rustLines = [
-      ['muted', 'bold', 'muted', 'bold', 'muted', 'italic', 'muted', 'muted', 'plain', 'muted'],
+      ['muted', 'bold', 'muted', 'plain', 'muted', 'italic', 'muted', 'muted', 'plain', 'muted'],
       ['plain', 'plain', 'bold', 'muted'],
       ['muted', 'bold-italic'],
       ['plain', 'plain', 'plain'],
@@ -115,7 +115,7 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
   });
 });
 
-describe("textmateThemeFrom with beuve's grammar injections, across languages", () => {
+describe('textmateThemeFrom across languages, with the grammars as Shiki ships them', () => {
   test('bolds declarations and parameters but not reassignments in TypeScript', ({
     expect,
     stylesOf,
@@ -131,7 +131,7 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
     expect(stylesOf('typescript', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds assignment, for and as targets in Python, but not keyword arguments', ({
+  test('leaves Python assignment targets regular, which its grammar does not mark', ({
     expect,
     stylesOf,
   }) => {
@@ -148,16 +148,16 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       'import «os» as «o»',
     ].join('\n');
     const lines = [
-      ['bold', 'bold'],
-      ['bold', 'bold', 'plain'],
       ['plain', 'bold'],
-      ['bold', 'plain', 'muted'],
+      ['plain', 'plain', 'plain'],
       ['plain', 'bold'],
-      ['bold', 'plain', 'bold'],
+      ['plain', 'plain', 'muted'],
+      ['plain', 'plain'],
+      ['plain', 'plain', 'bold'],
       ['plain', 'plain', 'bold'],
       ['plain', 'plain'],
       ['plain', 'plain', 'bold'],
-      ['plain', 'bold'],
+      ['plain', 'plain'],
     ];
     expect(stylesOf('python', code)).toStrictEqual(lines.flat());
   });
@@ -173,7 +173,7 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
     expect(stylesOf('go', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds Rust let, const, static, for and parameters, not reassignments', ({
+  test('leaves Rust bindings and parameters regular, which its grammar does not mark', ({
     expect,
     stylesOf,
   }) => {
@@ -184,19 +184,19 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       'fn «g»<«T»: «Clone»>(«t»: «T») {}',
     ].join('\n');
     const lines = [
-      ['muted', 'bold', 'bold', 'muted', 'bold', 'plain', 'muted', 'bold', 'bold'],
-      ['bold', 'plain'],
+      ['muted', 'plain', 'bold', 'muted', 'plain', 'plain', 'muted', 'plain', 'italic'],
+      ['plain', 'plain'],
       [
         'muted',
         'muted',
         'bold',
         'muted',
-        'bold',
+        'plain',
         'muted',
         'italic',
         'muted',
         'muted',
-        'bold',
+        'plain',
         'muted',
         'plain',
         'italic',
@@ -205,7 +205,7 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
         'italic',
         'plain',
       ],
-      ['bold', 'italic', 'italic', 'bold', 'italic'],
+      ['bold', 'italic', 'italic', 'plain', 'italic'],
     ];
     expect(stylesOf('rust', code)).toStrictEqual(lines.flat());
   });
@@ -224,7 +224,7 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
     expect(stylesOf('shellscript', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds fish set, for and function names and argument names, and numbers', ({
+  test('styles only fish keywords and expansions, as its grammar marks no names or numbers', ({
     expect,
     stylesOf,
   }) => {
@@ -237,17 +237,17 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       '«set» «x» «1.5»',
     ].join('\n');
     const lines = [
-      ['plain', 'plain', 'bold', 'muted'],
-      ['muted', 'bold', 'plain', 'bold', 'bold'],
-      ['plain', 'plain', 'muted', 'bold', 'plain', 'plain', 'muted'],
-      ['bold', 'plain'],
+      ['plain', 'plain', 'plain', 'muted'],
+      ['muted', 'plain', 'plain', 'plain', 'plain'],
+      ['plain', 'plain', 'muted', 'plain', 'plain', 'plain', 'plain'],
+      ['plain', 'plain'],
       [],
-      ['plain', 'bold', 'bold'],
+      ['plain', 'plain', 'plain'],
     ];
     expect(stylesOf('fish', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds Ruby assignments, instance variables, constants and block parameters', ({
+  test('bolds Ruby locals, parameters and block parameters, not instance variables or constants', ({
     expect,
     stylesOf,
   }) => {
@@ -269,10 +269,10 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       ['muted', 'bold-italic', 'italic'],
       ['muted', 'bold', 'bold', 'bold', 'bold'],
       ['bold', 'plain', 'muted', 'plain'],
-      ['bold', 'bold'],
+      ['plain', 'bold'],
       ['plain'],
-      ['bold', 'plain'],
-      ['bold'],
+      ['plain', 'plain'],
+      ['plain'],
       ['plain', 'plain', 'bold', 'plain', 'plain', 'plain'],
       ['muted', 'plain'],
       [],
@@ -282,7 +282,7 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
     expect(stylesOf('ruby', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds Perl my, our and sub, and numbers, and mutes its punctuation', ({
+  test('bolds Perl subs; its grammar marks no declarations, numbers or most punctuation', ({
     expect,
     stylesOf,
   }) => {
@@ -295,31 +295,31 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       'sub «g» { «return» 1 }',
     ].join('\n');
     const lines = [
-      ['muted', 'bold-italic', 'muted'],
-      ['muted', 'muted', 'bold', 'plain', 'bold', 'muted'],
-      ['muted', 'bold', 'muted', 'bold', 'muted', 'plain'],
-      ['plain', 'bold', 'plain', 'bold'],
+      ['muted', 'bold-italic', 'plain'],
+      ['muted', 'muted', 'plain', 'plain', 'plain', 'plain'],
+      ['plain', 'plain', 'plain', 'plain', 'plain', 'plain'],
+      ['plain', 'plain', 'plain', 'plain'],
       [
         'bold',
-        'muted',
-        'muted',
-        'plain',
-        'plain',
-        'muted',
         'plain',
         'muted',
         'plain',
         'plain',
-        'bold',
-        'muted',
-        'muted',
+        'plain',
+        'plain',
+        'plain',
+        'plain',
+        'plain',
+        'plain',
+        'plain',
+        'plain',
       ],
       ['bold', 'muted'],
     ];
     expect(stylesOf('perl', code)).toStrictEqual(lines.flat());
   });
 
-  test('bolds awk assignment targets, for variables and functions, and mutes its punctuation', ({
+  test('bolds awk functions, parameters and numbers; its grammar leaves names unscoped', ({
     expect,
     stylesOf,
   }) => {
@@ -330,10 +330,10 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       'END { for «(»«k» in «names») «print» «k»«,» «total» «*» «1.5» }',
     ].join('\n');
     const lines = [
-      ['plain', 'muted', 'bold', 'plain', 'muted', 'bold', 'plain', 'bold', 'muted'],
-      ['plain', 'plain', 'bold', 'muted', 'plain', 'muted', 'plain'],
+      ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'bold', 'plain'],
+      ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'],
       ['bold', 'bold', 'bold', 'plain', 'plain'],
-      ['muted', 'bold', 'plain', 'muted', 'plain', 'muted', 'plain', 'plain', 'bold'],
+      ['muted', 'plain', 'plain', 'muted', 'plain', 'muted', 'plain', 'plain', 'bold'],
     ];
     expect(stylesOf('awk', code)).toStrictEqual(lines.flat());
   });
@@ -397,63 +397,5 @@ describe("textmateThemeFrom with beuve's grammar injections, across languages", 
       ['plain', 'muted', 'bold', 'bold'],
     ];
     expect(stylesOf('html', code)).toStrictEqual(lines.flat());
-  });
-
-  test('bolds declarations on indented lines too, inside a body', ({ expect, stylesOf }) => {
-    const fish = [
-      'function build --argument-names dir',
-      '    «set» -l «count» 0',
-      '    «for» «f» in $dir',
-      '        «set» «count» 1',
-      '    end',
-      'end',
-      'test x; «set» «y» 2',
-    ].join('\n');
-    expect(stylesOf('fish', fish)).toStrictEqual([
-      'plain',
-      'bold',
-      'muted',
-      'bold',
-      'plain',
-      'bold',
-      'plain',
-      'bold',
-    ]);
-    const rust =
-      'fn f() {\n    «let» «w» = 1;\n    for «i» in xs {\n        «let» «mut» «m» = «i»;\n    }\n}';
-    expect(stylesOf('rust', rust)).toStrictEqual([
-      'muted',
-      'bold',
-      'bold',
-      'muted',
-      'muted',
-      'bold',
-      'plain',
-    ]);
-    const perl =
-      'sub f {\n    «my» $«x» = 1;\n    for «my» $«i» (@l) { «my» ($«a», $«b») = @_; }\n}';
-    expect(stylesOf('perl', perl)).toStrictEqual([
-      'muted',
-      'bold',
-      'muted',
-      'bold',
-      'muted',
-      'bold',
-      'bold',
-    ]);
-    const awk = '{\n    «x» = 1\n    for («k» in a) { «y» = «k» }\n}';
-    expect(stylesOf('awk', awk)).toStrictEqual(['bold', 'bold', 'bold', 'plain']);
-    const python =
-      'def f():\n    «w» = 1\n    for «k» in «ks»:\n        «a», «b» = «k»\n    with «g»() as «h»: pass';
-    expect(stylesOf('python', python)).toStrictEqual([
-      'bold',
-      'bold',
-      'plain',
-      'bold',
-      'bold',
-      'plain',
-      'plain',
-      'bold',
-    ]);
   });
 });

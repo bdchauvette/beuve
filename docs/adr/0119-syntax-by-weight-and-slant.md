@@ -1,6 +1,6 @@
 # 0119. Syntax by weight and slant, with Radix colors
 
-- Status: Accepted (declarations extended by [0120](0120-grammar-injections-and-more-languages.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (themes) and [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md) (attribution)
+- Status: Accepted (declarations extended by [0120](0120-more-languages-from-the-grammars-as-shipped.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (themes) and [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md) (attribution)
 - Date: 2026-11-06
 
 ## Context
@@ -10,7 +10,7 @@ ADR 0025 copied Alabaster's palette: four colored classes (comments, strings, co
 ## Decision
 
 - **Weight, slant and contrast carry the meaning; colour is nearly gone.**
-  - _Definitions and declarations_ are **bold**: functions, methods, classes, types, shell functions, Markdown headings, and every name a declaration introduces, meaning variables, constants and parameters (`const w`, `let mut m`, `my $x`, `w = …` in Python, `set -l name` in fish). This takes the grammars' `entity.name` scopes, minus the use-site ones (calls, tags, commands, namespaces), and their declaration and parameter scopes, minus `variable.parameter` uses (shell's `$1`, Python's keyword arguments at a call). Where a grammar marks no declaration, [ADR 0120](0120-grammar-injections-and-more-languages.md)'s injections add one. A reassignment (`w = 2`, `w += 2`) is a use. In Go and shell, which have no separate assignment syntax, every assignment target is bold.
+  - _Definitions and declarations_ are **bold**: functions, methods, classes, types, shell functions, Markdown headings, and the names a declaration introduces where the language's grammar marks them (TypeScript's `meta.definition.variable`, parameters, Go and shell assignment targets, Ruby locals and block parameters, CSS custom properties). This takes the grammars' `entity.name` scopes, minus the use-site ones (calls, tags, commands, namespaces), and their declaration and parameter scopes, minus `variable.parameter` uses (shell's `$1`, Python's keyword arguments at a call). A reassignment is a use. In Go and shell, which have no separate assignment syntax, every assignment target is bold. Grammars that do not mark declarations (Python's assignments, Rust's `let`, Perl's `my`, awk, fish) leave them regular; [ADR 0120](0120-more-languages-from-the-grammars-as-shipped.md) records why beuve does not add the scopes itself.
   - _Types_ (references, builtin types, inherited classes) are _italic_, which separates the type level from runtime code. A type's definition is **_bold italic_**.
   - _Numeric literals_ are **bold**, so magic numbers stand out. `true`, `null` and other constants are not.
   - _Names_ (variables, parameters, properties, property keys, calls), _operators_ and _strings_ are regular, in the full-strength text colour (Radix gray 12).
