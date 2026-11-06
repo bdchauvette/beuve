@@ -41,6 +41,7 @@ import type {
   LocationView,
   Position,
   Range,
+  SkippedServer,
 } from '#internal/lsp/lsp-model.ts';
 import { LruCache } from '#x/collections/lru-cache.ts';
 import { err } from '#x/result/err.ts';
@@ -466,15 +467,19 @@ export function createLspServices(options: LspServicesOptions): LspServices {
       return fail(report.error);
     }
     const items = report.value.diagnostics.map((diagnostic) => {
-      return diagnosticItemFrom(diagnostic, report.value.serverId);
+      return diagnosticItemFrom(diagnostic);
     });
-    const notice = options.environments?.noticeFor(await canonicalRootOf(lease.path));
+    const notices = refusedReasonsFrom(report.value.skipped);
+    const environmentNotice = options.environments?.noticeFor(await canonicalRootOf(lease.path));
+    if (environmentNotice !== undefined) {
+      notices.push(environmentNotice);
+    }
     return ok({
       sha,
       state: stateOf(report.value.freshness),
       diagnostics: items.slice(0, maxDiagnosticsPerFile),
       omitted: Math.max(0, items.length - maxDiagnosticsPerFile),
-      ...(notice !== undefined && { notice }),
+      ...(notices.length > 0 && { notice: notices.join(' ') }),
     });
   };
 
@@ -666,14 +671,25 @@ function stateOf(freshness: DiagnosticsFreshness): DiagnosticsView['state'] {
   return 'settled';
 }
 
-function diagnosticItemFrom(diagnostic: DiagnosticView, serverId: string): DiagnosticItemView {
+/** Why servers that handle the file were not started, when the trust check refused them. */
+function refusedReasonsFrom(skipped: readonly SkippedServer[]): string[] {
+  const reasons: string[] = [];
+  for (const { error } of skipped) {
+    if (error.kind === 'server-untrusted') {
+      reasons.push(error.reason);
+    }
+  }
+  return reasons;
+}
+
+function diagnosticItemFrom(diagnostic: DiagnosticView): DiagnosticItemView {
   return {
     ...sheetRangeFrom(diagnostic.range),
     severity: diagnostic.severity ?? 'error',
     message: diagnostic.message.slice(0, maxMessageLength),
     ...(diagnostic.code !== undefined && { code: diagnostic.code }),
     ...(diagnostic.source !== undefined && { source: diagnostic.source }),
-    serverId,
+    serverId: diagnostic.serverId,
   };
 }
 

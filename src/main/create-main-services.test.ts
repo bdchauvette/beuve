@@ -6,12 +6,14 @@ import { describe } from 'vitest';
 
 import type { CallHierarchyRequest, DefinitionView, ReviewView } from '#contract/ipc-contract.ts';
 import type { ServerTrustDecision } from '#internal/lsp/check-server-trust.ts';
+import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
 import { setLine } from '#internal/git/testing/set-line.ts';
 import type { RepositoryTemplate, TestRepository } from '#internal/git/testing/test-repository.ts';
 import type { TestRepositories } from '#internal/git/testing/test.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
+import { createTypescriptServer } from './lsp/create-typescript-server.ts';
 import type { MainServices } from './main-services.ts';
 import type { ShellEnvironments } from './shell-environment/create-shell-environments.ts';
 import { lines } from './testing/lines.ts';
@@ -445,6 +447,28 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
         services.lsp.hover({ sessionId, path: 'src/handler.ts', line: 4, character: 10 }),
       ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
       expect(okValueFrom(services.lsp.status()).servers).toStrictEqual([]);
+    },
+  );
+
+  test(
+    'shows the diagnostics of the servers it started, and says which it did not',
+    { concurrent: false, timeout: 60_000 },
+    async ({ expect, createServices, repositories, nodeRuntime }) => {
+      const typescript = createTypescriptServer(okValueFrom(nodeRuntime));
+      const fromProject: ServerDefinition = {
+        ...typescript,
+        id: 'project-typescript',
+        source: 'project',
+      };
+      const services = createServices({ lsp: { servers: [typescript, fromProject] } });
+      const { sessionId } = await openTypescriptSession(services, repositories);
+      const answer = okValueFrom(
+        await services.lsp.diagnostics({ sessionId, path: 'src/broken.ts' }),
+      );
+      expect(answer.state).toBe('settled');
+      expect(answer.diagnostics.map((item) => item.serverId)).toStrictEqual(['typescript']);
+      expect(answer.notice).toContain('project-typescript language server');
+      expect(answer.notice).toContain('not trusted');
     },
   );
 

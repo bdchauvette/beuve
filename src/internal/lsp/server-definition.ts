@@ -23,6 +23,11 @@ export interface ServerDefinition {
   readonly args: readonly string[];
   /** Lowercase file extension (with the dot) → LSP language id. */
   readonly languageIds: Readonly<Record<string, string>>;
+  /**
+   * Names of files or directories that mark the root a server runs in, such as `go.mod`: the
+   * nearest directory from the file up to the checkout that holds one, else the checkout (ADR 0111).
+   */
+  readonly rootMarkers?: readonly string[];
   /** Where the program comes from; the trust check decides on it before the server starts. */
   readonly source: ServerSource;
   /** Where this definition came from; beuve's own when absent. */
