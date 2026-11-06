@@ -7,7 +7,7 @@ import { focusRingStyles } from './focus-ring-styles.ts';
  * none (bordered, on a surface), `primary` (the one action that moves things forward), `quiet` (no
  * chrome until hovered: toolbars, headers), `link` (text only, accent) and `icon` (square and
  * quiet: ×, toolbar icons), plus the size `large` for dialogs and empty screens. Every variant changes its background on hover; a disabled button has
- * faint text and no pointer, never opacity. `aria-pressed='true'` marks a toggle that is on.
+ * faint text and no pointer, never opacity. `aria-pressed='true'` marks a toggle that is on, and `aria-expanded='true'` a menu trigger whose menu is open.
  */
 export const buttonStyles = css`
   ${focusRingStyles}
@@ -39,6 +39,7 @@ export const buttonStyles = css`
     background: var(--beuve-surface-hover);
   }
 
+  .button[aria-expanded='true'],
   .button:active:not(:disabled, [aria-disabled='true']) {
     background: var(--beuve-surface-pressed);
   }
@@ -68,6 +69,7 @@ export const buttonStyles = css`
     color: var(--beuve-text-muted);
   }
 
+  .button.quiet[aria-expanded='true'],
   .button.quiet:hover:not(:disabled, [aria-disabled='true']),
   .button.icon:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--beuve-surface-hover);
