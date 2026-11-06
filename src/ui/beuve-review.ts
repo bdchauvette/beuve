@@ -21,7 +21,7 @@ import './beuve-chat-drawer.ts';
 import './beuve-definition-link.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
-import type { BeuveHoverCard, HoverAsk } from './beuve-hover-card.ts';
+import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
 import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
 import './beuve-open-panel.ts';
@@ -70,6 +70,10 @@ import { fileOfMention } from './file-of-mention.ts';
 import { mentionTargetFromItem } from './mention-target-from-item.ts';
 import { mentionTargetFromPalette } from './mention-target-from-palette.ts';
 import { CodeNavigationController } from './code-navigation-controller.ts';
+import { diagnosticsAt } from './diagnostics-at.ts';
+import type { DiagnosticPosition } from './diagnostics-at.ts';
+import { DiagnosticsController } from './diagnostics-controller.ts';
+import type { DiagnosticsWantedDetail } from './file-diagnostics.ts';
 import { cycleZone } from './cycle-zone.ts';
 import { dockItemOf } from './dock-item-of.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
@@ -333,6 +337,20 @@ export class BeuveReview extends LitElement {
     return bridge.invoke('lsp:definition', request);
   };
 
+  /** A file card shows its file: ask the language servers about it (ADR 0111). */
+  private readonly onDiagnosticsWanted = (event: CustomEvent<DiagnosticsWantedDetail>): void => {
+    this.fileDiagnostics.want(event.detail.path);
+  };
+
+  /** The diagnostics under a place in a file of the diff on screen, for the hover card. */
+  private readonly diagnosticsFor: DiagnosticsFor = (path, position: DiagnosticPosition) => {
+    const file = this.fileDiagnostics.byPath.get(path);
+    if (file?.kind !== 'ready') {
+      return [];
+    }
+    return diagnosticsAt(file.view.diagnostics, position);
+  };
+
   /** The language server's hover for a token of the diff on screen. */
   private readonly askHover: HoverAsk = async (request) => {
     const bridge = beuveBridge();
@@ -544,6 +562,13 @@ export class BeuveReview extends LitElement {
       return this.settings.display.sheets ?? 'window';
     },
   });
+  /** The language servers' diagnostics for the files on screen (ADR 0111). */
+  private readonly fileDiagnostics = new DiagnosticsController(this, {
+    bridge: beuveBridge,
+    review: (): ReviewView | undefined => {
+      return this.review;
+    },
+  });
   private shownReview: ReviewView | undefined;
 
   private shownDisplaySide: SidebarSideView | undefined;
@@ -674,6 +699,7 @@ export class BeuveReview extends LitElement {
     }
     const restarted = await bridge.invoke('lsp:restart', { sessionId: review.session.id });
     if (restarted.ok) {
+      this.fileDiagnostics.reset();
       this.showNotice({ tone: 'info', text: 'Language servers restarted for this head.' });
       void this.requireActions().refreshLspStatus();
     } else if (restarted.error.code !== 'cancelled') {
@@ -999,6 +1025,7 @@ export class BeuveReview extends LitElement {
       .loadFilePair=${this.loadFilePair}
       .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
+      .diagnostics=${this.fileDiagnostics.byPath}
       .display=${this.settings.display}
       .suggestionJump=${this.suggestionJump}
       .deferrals=${this.reviewDeferrals().deferrals}
@@ -1023,6 +1050,7 @@ export class BeuveReview extends LitElement {
       @beuve-token-hover=${this.onTokenHover}
       @beuve-token-hover-end=${this.onTokenHoverEnd}
       @beuve-token-jump=${this.onTokenJump}
+      @beuve-diagnostics-wanted=${this.onDiagnosticsWanted}
     ></beuve-diff-stream>`;
   }
 
@@ -1578,6 +1606,7 @@ export class BeuveReview extends LitElement {
           ? nothing
           : html`<beuve-hover-card
               .ask=${this.askHover}
+              .diagnosticsFor=${this.diagnosticsFor}
               .sessionId=${this.review.session.id}
               .sha=${this.review.headSha}
             ></beuve-hover-card>`

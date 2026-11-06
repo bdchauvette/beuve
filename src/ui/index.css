@@ -95,3 +95,20 @@ body {
   color: var(--beuve-accent);
   text-decoration: underline;
 }
+
+/* Language-server diagnostics (ADR 0111): a wavy underline under the exact text, in a diff's shadow root. */
+::highlight(beuve-diagnostic-error) {
+  text-decoration: underline wavy var(--beuve-danger);
+}
+
+::highlight(beuve-diagnostic-warning) {
+  text-decoration: underline wavy var(--beuve-warn);
+}
+
+::highlight(beuve-diagnostic-information) {
+  text-decoration: underline dotted var(--beuve-accent);
+}
+
+::highlight(beuve-diagnostic-hint) {
+  text-decoration: underline dotted var(--beuve-text-muted);
+}

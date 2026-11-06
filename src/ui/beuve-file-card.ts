@@ -33,7 +33,13 @@ import type { BeuveUraComposer } from './beuve-ura-composer.ts';
 import { applySuggestedPatch } from './apply-suggested-patch.ts';
 import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
+import { describeDiagnostics } from './describe-diagnostics.ts';
+import { DiagnosticHighlights } from './diagnostic-highlights.ts';
+import type { DiagnosticRange } from './diagnostic-highlights.ts';
+import { diagnosticLineSpans } from './diagnostic-line-spans.ts';
+import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostics.ts';
 import { headRowSelector } from './head-row-selector.ts';
+import { textRangeIn } from './text-range-in.ts';
 import { characterOffsetAt } from './character-offset-at.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
@@ -470,6 +476,14 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-text-muted);
       }
 
+      .diagnostics-note.error {
+        color: var(--beuve-danger);
+      }
+
+      .diagnostics-note.warning {
+        color: var(--beuve-warn);
+      }
+
       .insight {
         --insight-color: var(--beuve-text-muted);
         margin: 2px var(--beuve-space-3);
@@ -684,6 +698,8 @@ export class BeuveFileCard extends LitElement {
   private isGutterLabelled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
   private codeGeneration = 0;
+  /** This card's diagnostic underlines in the document's shared highlights. */
+  private readonly diagnosticHighlights = new DiagnosticHighlights();
   /**
    * While editing, ⌘/Ctrl+Enter saves and Escape cancels before the editor sees them; every
    * other key stays with the editor and never reaches the stream's shortcuts.
@@ -849,6 +865,8 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings on this file's lines, not yet staged (ADR 0061); empty when hidden. */
   @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
+  /** The language servers' diagnostics for this file at the head (ADR 0111); absent until asked. */
+  @property({ attribute: false }) accessor diagnostics: FileDiagnostics | undefined;
   /** The Add Note composer, when it is open on this file. */
   @property({ attribute: false }) accessor composer: ComposerState | undefined;
   /** How the diff is laid out ({@link planDiffLayout} in the stream, ADR 0042). */
@@ -887,6 +905,7 @@ export class BeuveFileCard extends LitElement {
         this.requestUpdate();
       },
       hostDisconnected: (): void => {
+        this.diagnosticHighlights.clear();
         this.endEdit();
         this.diff?.cleanUp();
         this.diff = undefined;
@@ -1069,10 +1088,14 @@ export class BeuveFileCard extends LitElement {
           return this.noteElement(annotation.metadata);
         },
         onPostRender: (_node, _instance, phase): void => {
-          if (phase !== 'mount') {
+          if (phase === 'unmount') {
+            this.diagnosticHighlights.clear();
             return;
           }
-          this.syncInsightMarks();
+          if (phase === 'mount') {
+            this.syncInsightMarks();
+          }
+          this.syncDiagnosticHighlights();
         },
       },
       shared.pool,
@@ -1345,6 +1368,72 @@ export class BeuveFileCard extends LitElement {
       >`;
     }
     return nothing;
+  }
+
+  /** The count of the file's errors and warnings, or "checking…" (ADR 0111). */
+  private renderDiagnosticsNote(): TemplateResult | typeof nothing {
+    const note = describeDiagnostics(this.diagnostics);
+    if (note === undefined) {
+      return nothing;
+    }
+    return html`<span class="tag diagnostics-note ${note.tone}" title=${note.title}
+      >${note.text}</span
+    >`;
+  }
+
+  /**
+   * Underlines each diagnostic's text on the head lines the diff shows. A line the diff doesn't
+   * show (collapsed between hunks) gets no underline, but still counts in the header.
+   */
+  private syncDiagnosticHighlights(): void {
+    const { diagnostics } = this;
+    if (diagnostics?.kind !== 'ready') {
+      this.diagnosticHighlights.clear();
+      return;
+    }
+    const rows = new Map<number, HTMLElement | undefined>();
+    const rowOf = (line: number): HTMLElement | undefined => {
+      if (!rows.has(line)) {
+        const found = this.findRow('additions', line) ?? this.findRow('context', line);
+        if (found instanceof HTMLElement) {
+          rows.set(line, found);
+        } else {
+          rows.set(line, undefined);
+        }
+      }
+      return rows.get(line);
+    };
+    const ranges: DiagnosticRange[] = [];
+    for (const item of diagnostics.view.diagnostics) {
+      const spans = diagnosticLineSpans(item, (line) => rowOf(line)?.textContent.length);
+      for (const span of spans) {
+        const row = rowOf(span.line);
+        const range = row && textRangeIn(row, { start: span.start, end: span.end });
+        if (range) {
+          ranges.push({ severity: item.severity, range });
+        }
+      }
+    }
+    this.diagnosticHighlights.set(ranges);
+  }
+
+  /** Tells the window this card shows its file, so it asks the language servers about it. */
+  private wantDiagnostics(): void {
+    const { file } = this;
+    if (
+      file === undefined ||
+      this.diagnostics !== undefined ||
+      !this.mounted ||
+      this.collapsed ||
+      file.status === 'deleted' ||
+      file.binary
+    ) {
+      return;
+    }
+    const detail: DiagnosticsWantedDetail = { path: file.path };
+    this.dispatchEvent(
+      new CustomEvent('beuve-diagnostics-wanted', { detail, bubbles: true, composed: true }),
+    );
   }
 
   private expand(event: Event): void {
@@ -1686,6 +1775,10 @@ ${splitPatch(file.patch).map((line) => {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    this.wantDiagnostics();
+    if (changed.has('diagnostics')) {
+      this.syncDiagnosticHighlights();
+    }
     this.syncCrossingDelegation();
     const { library, metadata } = this;
     if (
@@ -1735,6 +1828,7 @@ ${splitPatch(file.patch).map((line) => {
             }${pathText(file.path)}
           </span>
           ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
+          ${this.renderDiagnosticsNote()}
           <span class="counts"
             ><span class="additions">+${file.additions}</span>
             <span class="deletions">−${file.deletions}</span></span
