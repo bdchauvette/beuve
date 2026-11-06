@@ -23,7 +23,7 @@ export class BeuvePeekPortal extends LitElement {
     css`
       :host {
         display: block;
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-bg);
         font: var(--beuve-font-small);
       }
@@ -39,7 +39,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .close {
-        font-size: 15px;
+        font-size: var(--beuve-font-size-large);
         line-height: 1;
       }
 
@@ -62,26 +62,28 @@ export class BeuvePeekPortal extends LitElement {
 
       ul {
         margin: 0;
-        padding: 0 0 0 var(--beuve-space-4);
+        padding-block: 0;
+        padding-inline: var(--beuve-space-4) 0;
         list-style: none;
       }
 
       .tree {
-        padding: 0 var(--beuve-space-3) var(--beuve-space-2) 0;
+        padding-block: 0 var(--beuve-space-2);
+        padding-inline: 0 var(--beuve-space-3);
       }
 
       .row {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        width: 100%;
+        inline-size: 100%;
         padding: 2px var(--beuve-space-1);
         border: 0;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: var(--beuve-text);
         font: var(--beuve-font-small);
-        text-align: left;
+        text-align: start;
         cursor: pointer;
       }
 
@@ -92,7 +94,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .twisty {
-        width: 1em;
+        inline-size: 1em;
         color: var(--beuve-text-muted);
       }
 
@@ -112,16 +114,16 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       li > .row {
-        padding-right: 52px;
+        padding-inline-end: 52px;
       }
 
       .open {
         position: absolute;
-        top: 2px;
-        right: 0;
+        inset-block-start: 2px;
+        inset-inline-end: 0;
         padding: 0 var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
@@ -135,10 +137,10 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .badge {
-        margin-left: auto;
+        margin-inline-start: auto;
         padding: 0 var(--beuve-space-1);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         color: var(--beuve-text-muted);
       }
 
@@ -152,7 +154,8 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .note {
-        padding: 2px var(--beuve-space-1) 2px var(--beuve-space-6);
+        padding-block: 2px;
+        padding-inline: var(--beuve-space-6) var(--beuve-space-1);
         color: var(--beuve-text-muted);
       }
 
@@ -163,11 +166,11 @@ export class BeuvePeekPortal extends LitElement {
       kbd {
         padding: 0 var(--beuve-space-1);
         border: 1px solid var(--beuve-border);
-        border-bottom-width: 2px;
-        border-radius: 4px;
+        border-block-end-width: 2px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-mono);
-        font-size: 10px;
+        font-size: var(--beuve-font-size-caption);
       }
     `,
   ];

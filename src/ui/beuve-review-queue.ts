@@ -58,7 +58,7 @@ export class BeuveReviewQueue extends LitElement {
       :host {
         display: flex;
         flex-direction: column;
-        min-height: 0;
+        min-block-size: 0;
         gap: var(--beuve-space-2);
         font: var(--beuve-font-body);
         color: var(--beuve-text);
@@ -72,15 +72,16 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       h2 {
-        margin: 0 auto 0 0;
-        font-size: 17px;
-        font-weight: 600;
+        margin-block: 0;
+        margin-inline: 0 auto;
+        font-size: var(--beuve-font-size-title);
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       h2 .count {
-        margin-left: var(--beuve-space-2);
+        margin-inline-start: var(--beuve-space-2);
         font: var(--beuve-font-small);
-        font-weight: normal;
+        font-weight: var(--beuve-font-weight-normal);
         color: var(--beuve-text-muted);
       }
 
@@ -103,7 +104,7 @@ export class BeuveReviewQueue extends LitElement {
         gap: var(--beuve-space-1);
         padding: 2px var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
@@ -126,12 +127,12 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       .badge {
-        min-width: 14px;
+        min-inline-size: 14px;
         padding: 0 3px;
         border-radius: 7px;
         background: var(--beuve-accent);
         color: var(--beuve-bg);
-        font-size: 10px;
+        font-size: var(--beuve-font-size-caption);
         text-align: center;
       }
 
@@ -150,17 +151,17 @@ export class BeuveReviewQueue extends LitElement {
       [popover] {
         position: fixed;
         inset: auto;
-        top: anchor(bottom);
-        right: anchor(right);
+        inset-block-start: anchor(bottom);
+        inset-inline-end: anchor(right);
         margin: var(--beuve-space-1) 0 0;
-        min-width: 180px;
-        max-height: 60vh;
+        min-inline-size: 180px;
+        max-block-size: 60vh;
         overflow: auto;
         padding: var(--beuve-space-1);
         border: 1px solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
-        box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+        box-shadow: var(--beuve-shadow-small);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
       }
@@ -187,14 +188,14 @@ export class BeuveReviewQueue extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        width: 100%;
+        inline-size: 100%;
         padding: 2px var(--beuve-space-2);
         border: 0;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: inherit;
         font: inherit;
-        text-align: left;
+        text-align: start;
       }
 
       [popover] button:hover {
@@ -211,10 +212,10 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       input[type='search'] {
-        width: 14em;
+        inline-size: 14em;
         padding: 2px var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
@@ -244,7 +245,7 @@ export class BeuveReviewQueue extends LitElement {
 
       .list {
         flex: 1;
-        min-height: 0;
+        min-block-size: 0;
         overflow: auto;
         border: 1px solid var(--beuve-border);
         border-radius: var(--beuve-radius);
@@ -258,13 +259,13 @@ export class BeuveReviewQueue extends LitElement {
 
       .heading {
         position: sticky;
-        top: 0;
+        inset-block-start: 0;
         z-index: 1;
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-small);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
         color: var(--beuve-text-muted);
       }
 
@@ -276,12 +277,12 @@ export class BeuveReviewQueue extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         padding: 3px var(--beuve-space-3);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         cursor: default;
       }
 
       .row:last-child {
-        border-bottom: 0;
+        border-block-end: 0;
       }
 
       .row:hover {
@@ -325,10 +326,10 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       .chip {
-        margin-left: var(--beuve-space-1);
+        margin-inline-start: var(--beuve-space-1);
         padding: 0 4px;
         border: 1px solid var(--beuve-border);
-        border-radius: 3px;
+        border-radius: var(--beuve-radius-small);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -355,12 +356,12 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       .age {
-        text-align: right;
+        text-align: end;
       }
 
       .dot {
-        width: 8px;
-        height: 8px;
+        inline-size: 8px;
+        block-size: 8px;
         border-radius: 50%;
         background: var(--beuve-border);
       }
@@ -386,15 +387,15 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       .dot.ok {
-        background: var(--beuve-ok);
+        background: var(--beuve-ok-solid);
       }
 
       .dot.warn {
-        background: var(--beuve-warn);
+        background: var(--beuve-warn-solid);
       }
 
       .dot.danger {
-        background: var(--beuve-danger);
+        background: var(--beuve-danger-solid);
       }
 
       .turn,
@@ -404,7 +405,7 @@ export class BeuveReviewQueue extends LitElement {
 
       .turn.yours {
         color: var(--beuve-accent);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .empty {

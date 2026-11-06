@@ -167,19 +167,19 @@ export class BeuveDiffStream extends LitElement {
 
       .welcome {
         display: grid;
-        height: 100%;
+        block-size: 100%;
         place-items: center;
       }
 
       .welcome > div {
-        max-width: 420px;
+        max-inline-size: 420px;
         text-align: center;
       }
 
       .welcome h1 {
         margin: 0 0 var(--beuve-space-2);
-        font-size: 20px;
-        font-weight: 600;
+        font-size: var(--beuve-font-size-title);
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .welcome p {
@@ -209,15 +209,15 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .opening-label {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--beuve-font-size-large);
+        font-weight: var(--beuve-font-weight-semibold);
         overflow-wrap: anywhere;
       }
 
       .opening-bar {
         position: relative;
-        width: 160px;
-        height: 3px;
+        inline-size: 160px;
+        block-size: 3px;
         overflow: hidden;
         border-radius: 2px;
         background: var(--beuve-accent-soft);
@@ -225,8 +225,9 @@ export class BeuveDiffStream extends LitElement {
 
       .opening-bar::after {
         position: absolute;
-        inset: 0 auto 0 0;
-        width: 40%;
+        inset-block: 0;
+        inset-inline: 0 auto;
+        inline-size: 40%;
         border-radius: inherit;
         background: var(--beuve-accent);
         content: '';
@@ -255,7 +256,7 @@ export class BeuveDiffStream extends LitElement {
         }
 
         .opening-bar::after {
-          width: 100%;
+          inline-size: 100%;
           animation: none;
           opacity: 0.6;
         }
@@ -267,12 +268,12 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-3);
         flex: none;
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-surface);
       }
 
       .scope {
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .scope.interdiff {
@@ -307,8 +308,8 @@ export class BeuveDiffStream extends LitElement {
         padding: var(--beuve-space-1) var(--beuve-space-3);
         border: 1px solid var(--beuve-accent);
         border-radius: var(--beuve-radius);
-        background: var(--beuve-accent);
-        color: #fff;
+        background: var(--beuve-accent-solid);
+        color: var(--beuve-on-accent);
         font: inherit;
         cursor: pointer;
       }
@@ -358,7 +359,7 @@ export class BeuveDiffStream extends LitElement {
         gap: var(--beuve-space-1);
         padding: 2px var(--beuve-space-2);
         border: 1px solid transparent;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: var(--beuve-text-muted);
         font: inherit;
@@ -382,25 +383,25 @@ export class BeuveDiffStream extends LitElement {
 
       .order.fell-back .order-button::after {
         content: '';
-        width: 5px;
-        height: 5px;
+        inline-size: 5px;
+        block-size: 5px;
         border-radius: 50%;
-        background: var(--beuve-warn);
+        background: var(--beuve-warn-solid);
       }
 
       .order [popover] {
         position: fixed;
         position-anchor: --order-button;
         inset: auto;
-        top: anchor(bottom);
-        right: anchor(right);
+        inset-block-start: anchor(bottom);
+        inset-inline-end: anchor(right);
         margin: var(--beuve-space-1) 0 0;
-        min-width: 140px;
+        min-inline-size: 140px;
         padding: var(--beuve-space-1);
         border: 1px solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
-        box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+        box-shadow: var(--beuve-shadow-small);
         color: var(--beuve-text);
       }
 
@@ -408,14 +409,14 @@ export class BeuveDiffStream extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        width: 100%;
+        inline-size: 100%;
         padding: 2px var(--beuve-space-2);
         border: 0;
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: none;
         color: inherit;
         font: inherit;
-        text-align: left;
+        text-align: start;
       }
 
       .order [popover] button:hover {
@@ -440,7 +441,7 @@ export class BeuveDiffStream extends LitElement {
       .segmented {
         display: inline-flex;
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         overflow: hidden;
       }
 
@@ -449,7 +450,7 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .segmented button + button {
-        border-left: 1px solid var(--beuve-border);
+        border-inline-start: 1px solid var(--beuve-border);
       }
 
       .segmented button[aria-checked='true'] {
@@ -472,7 +473,7 @@ export class BeuveDiffStream extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
-        margin-top: var(--beuve-space-3);
+        margin-block-start: var(--beuve-space-3);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -480,12 +481,12 @@ export class BeuveDiffStream extends LitElement {
       .group::after {
         content: '';
         flex: 1;
-        height: 1px;
+        block-size: 1px;
         background: var(--beuve-border);
       }
 
       .pairs {
-        margin-bottom: var(--beuve-space-3);
+        margin-block-end: var(--beuve-space-3);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -501,7 +502,7 @@ export class BeuveDiffStream extends LitElement {
 
       .pairs summary::before {
         content: '▸';
-        font-size: 10px;
+        font-size: var(--beuve-font-size-caption);
       }
 
       .pairs[open] summary::before {
@@ -521,10 +522,10 @@ export class BeuveDiffStream extends LitElement {
       }
 
       .pairs beuve-commit-pairing {
-        margin-top: var(--beuve-space-1);
+        margin-block-start: var(--beuve-space-1);
         padding: var(--beuve-space-2) 0;
-        border-top: 1px solid var(--beuve-border);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
       }
     `,
   ];

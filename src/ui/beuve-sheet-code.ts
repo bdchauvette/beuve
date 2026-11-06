@@ -50,9 +50,9 @@ export class BeuveSheetCode extends LitElement {
     }
 
     diffs-container {
-      --diffs-font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-      --diffs-font-size: 12.5px;
-      --diffs-line-height: 21px;
+      --diffs-font-family: var(--beuve-font-family-mono);
+      --diffs-font-size: var(--beuve-font-size-code);
+      --diffs-line-height: var(--beuve-line-height-code);
       --diffs-bg-context-override: var(--beuve-code-bg);
       --diffs-bg-buffer-override: var(--beuve-code-bg);
       --diffs-bg-context-gutter-override: var(--beuve-code-bg);

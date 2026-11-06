@@ -68,7 +68,7 @@ export class BeuveCommitPairing extends LitElement {
       align-items: baseline;
       gap: var(--beuve-space-2);
       padding: 3px var(--beuve-space-2);
-      border-radius: 4px;
+      border-radius: var(--beuve-radius-small);
       cursor: pointer;
     }
 
@@ -96,7 +96,7 @@ export class BeuveCommitPairing extends LitElement {
     .commits,
     .stats {
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
       color: var(--beuve-text-muted);
       white-space: nowrap;
     }
@@ -104,7 +104,7 @@ export class BeuveCommitPairing extends LitElement {
     .chip {
       padding: 0 6px;
       border: 1px solid var(--beuve-border);
-      border-radius: 999px;
+      border-radius: var(--beuve-radius-full);
       font: var(--beuve-font-small);
       color: var(--beuve-text-muted);
     }

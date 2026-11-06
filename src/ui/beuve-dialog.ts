@@ -17,22 +17,22 @@ export class BeuveDialog extends LitElement {
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      padding-top: 12vh;
+      padding-block-start: 12vh;
       background: var(--beuve-scrim-soft);
     }
 
     .dialog {
-      width: min(640px, calc(100vw - 48px));
+      inline-size: min(640px, calc(100vw - 48px));
       box-sizing: border-box;
       padding: var(--beuve-space-4);
       border: 1px solid var(--beuve-border);
       border-radius: 10px;
       background: var(--beuve-surface);
-      box-shadow: 0 16px 48px #00000040;
+      box-shadow: var(--beuve-shadow-large);
     }
 
     :host([wide]) .dialog {
-      width: min(1100px, calc(100vw - 48px));
+      inline-size: min(1100px, calc(100vw - 48px));
     }
   `;
 

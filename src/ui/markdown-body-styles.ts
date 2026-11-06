@@ -12,16 +12,16 @@ export const markdownBodyStyles = css`
 
   .body :is(h1, h2, h3, h4, h5, h6) {
     font: inherit;
-    font-weight: 600;
+    font-weight: var(--beuve-font-weight-semibold);
   }
 
   .body :is(ul, ol) {
-    padding-left: var(--beuve-space-4);
+    padding-inline-start: var(--beuve-space-4);
   }
 
   .body blockquote {
-    padding-left: var(--beuve-space-2);
-    border-left: 2px solid var(--beuve-border);
+    padding-inline-start: var(--beuve-space-2);
+    border-inline-start: 2px solid var(--beuve-border);
     color: var(--beuve-text-muted);
   }
 
@@ -44,7 +44,7 @@ export const markdownBodyStyles = css`
 
   .body th {
     background: var(--beuve-surface-sunken);
-    font-weight: 600;
+    font-weight: var(--beuve-font-weight-semibold);
   }
 
   .body .align-center {
@@ -62,11 +62,11 @@ export const markdownBodyStyles = css`
     border-radius: var(--beuve-radius);
     background: var(--beuve-surface-sunken);
     font: var(--beuve-font-mono);
-    font-size: 11px;
+    font-size: var(--beuve-font-size-caption);
   }
 
   code {
     font: var(--beuve-font-mono);
-    font-size: 11px;
+    font-size: var(--beuve-font-size-caption);
   }
 `;

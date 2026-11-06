@@ -16,7 +16,7 @@ export class BeuveFlowPortal extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      border-bottom: 1px solid var(--beuve-border);
+      border-block-end: 1px solid var(--beuve-border);
       background: var(--beuve-bg);
       font: var(--beuve-font-small);
     }
@@ -32,7 +32,7 @@ export class BeuveFlowPortal extends LitElement {
     }
 
     .close {
-      font-size: 15px;
+      font-size: var(--beuve-font-size-large);
       line-height: 1;
     }
 
@@ -54,7 +54,7 @@ export class BeuveFlowPortal extends LitElement {
     }
 
     beuve-flow-graph {
-      max-height: 60vh;
+      max-block-size: 60vh;
       padding: 0 var(--beuve-space-3) var(--beuve-space-2);
     }
 
@@ -71,11 +71,11 @@ export class BeuveFlowPortal extends LitElement {
     kbd {
       padding: 0 var(--beuve-space-1);
       border: 1px solid var(--beuve-border);
-      border-bottom-width: 2px;
-      border-radius: 4px;
+      border-block-end-width: 2px;
+      border-radius: var(--beuve-radius-small);
       background: var(--beuve-surface-sunken);
       font: var(--beuve-font-mono);
-      font-size: 10px;
+      font-size: var(--beuve-font-size-caption);
     }
   `;
 

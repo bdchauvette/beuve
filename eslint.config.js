@@ -313,6 +313,16 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/ui-css',
+    // ADR 0114: styles use the design tokens and logical properties.
+    files: uiFiles,
+    rules: {
+      'local/css-design-tokens': 'error',
+      'local/css-logical-properties': 'error',
+    },
+  },
+
+  {
     name: 'beuve/ui-event-delegation',
     // ADR 0074: repeated templates delegate their events to the component root.
     files: uiFiles,

@@ -30,7 +30,7 @@ export class BeuvePullRequestIntent extends LitElement {
       h3 {
         margin: 0;
         font: var(--beuve-font-body);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
         overflow-wrap: anywhere;
       }
 
@@ -45,15 +45,15 @@ export class BeuvePullRequestIntent extends LitElement {
 
       .branches {
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         overflow-wrap: anywhere;
       }
 
       .badge {
         padding: 0 6px;
         border: 1px solid currentColor;
-        border-radius: 999px;
-        font-weight: 600;
+        border-radius: var(--beuve-radius-full);
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .badge.ok {
@@ -69,7 +69,7 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .body {
-        max-height: 240px;
+        max-block-size: 240px;
         overflow: auto;
         font: var(--beuve-font-small);
         color: var(--beuve-text);
@@ -93,7 +93,7 @@ export class BeuvePullRequestIntent extends LitElement {
         background: none;
         color: var(--beuve-accent);
         font: inherit;
-        text-align: left;
+        text-align: start;
         text-decoration: underline;
         cursor: pointer;
         overflow-wrap: anywhere;
@@ -106,11 +106,11 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .chip {
-        max-width: 100%;
+        max-inline-size: 100%;
         overflow: hidden;
         padding: 1px var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 999px;
+        border-radius: var(--beuve-radius-full);
         background: var(--beuve-surface-sunken);
         color: var(--beuve-text);
         font: var(--beuve-font-small);

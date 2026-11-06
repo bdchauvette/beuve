@@ -142,7 +142,7 @@ export class BeuveReview extends LitElement {
   static override styles = css`
     :host {
       display: grid;
-      min-height: 0;
+      min-block-size: 0;
       grid-template-rows: minmax(0, 1fr);
     }
 
@@ -150,19 +150,19 @@ export class BeuveReview extends LitElement {
       grid-area: main;
       display: flex;
       flex-direction: column;
-      min-width: 0;
-      min-height: 0;
+      min-inline-size: 0;
+      min-block-size: 0;
     }
 
     .main > beuve-terminal-panel {
       flex: none;
-      height: var(--beuve-terminal-height, 300px);
+      block-size: var(--beuve-terminal-height, 300px);
     }
 
     .main > beuve-diff-stream,
     .main > .empty {
       flex: 1;
-      min-height: 0;
+      min-block-size: 0;
     }
 
     .empty {
@@ -176,13 +176,13 @@ export class BeuveReview extends LitElement {
     }
 
     .empty > div {
-      width: min(1100px, 100%);
+      inline-size: min(1100px, 100%);
     }
 
     .empty h1 {
       margin: 0 0 var(--beuve-space-1);
-      font-size: 17px;
-      font-weight: 600;
+      font-size: var(--beuve-font-size-title);
+      font-weight: var(--beuve-font-weight-semibold);
     }
 
     .empty p {
@@ -192,10 +192,11 @@ export class BeuveReview extends LitElement {
 
     .sheet-overlay {
       position: fixed;
-      inset: var(--beuve-titlebar-height) 0 var(--beuve-statusbar-height) auto;
+      inset-block: var(--beuve-titlebar-height) var(--beuve-statusbar-height);
+      inset-inline: auto 0;
       z-index: 15;
-      width: min(760px, 62vw);
-      border-left: 1px solid var(--beuve-border);
+      inline-size: min(760px, 62vw);
+      border-inline-start: 1px solid var(--beuve-border);
       box-shadow: -8px 0 24px var(--beuve-scrim-soft);
     }
   `;

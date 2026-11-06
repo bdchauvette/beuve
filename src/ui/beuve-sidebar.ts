@@ -22,20 +22,20 @@ export class BeuveSidebar extends LitElement {
       grid-area: side;
       display: flex;
       flex-direction: column;
-      min-width: 0;
-      min-height: 0;
-      border-left: 1px solid var(--beuve-border);
+      min-inline-size: 0;
+      min-block-size: 0;
+      border-inline-start: 1px solid var(--beuve-border);
       background: var(--beuve-surface);
     }
 
     :host([side='left']) {
-      border-right: 1px solid var(--beuve-border);
-      border-left: none;
+      border-inline-end: 1px solid var(--beuve-border);
+      border-inline-start: none;
     }
 
     ::slotted(*) {
       flex: 1;
-      min-height: 0;
+      min-block-size: 0;
       border: none;
     }
 

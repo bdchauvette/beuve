@@ -66,7 +66,7 @@ export class BeuveStatusBar extends LitElement {
         align-items: center;
         gap: var(--beuve-space-4);
         padding: 0 var(--beuve-space-3);
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
@@ -80,7 +80,7 @@ export class BeuveStatusBar extends LitElement {
         align-items: center;
         padding: 0 var(--beuve-space-1);
         border: 0;
-        border-radius: var(--beuve-radius-small, 3px);
+        border-radius: var(--beuve-radius-small);
         background: transparent;
         color: inherit;
         font: inherit;
@@ -96,33 +96,33 @@ export class BeuveStatusBar extends LitElement {
       [popover] {
         position: fixed;
         inset: auto;
-        bottom: calc(var(--beuve-statusbar-height) + var(--beuve-space-1));
-        min-width: 260px;
-        max-width: min(560px, calc(100vw - 2 * var(--beuve-space-3)));
-        max-height: 50vh;
+        inset-block-end: calc(var(--beuve-statusbar-height) + var(--beuve-space-1));
+        min-inline-size: 260px;
+        max-inline-size: min(560px, calc(100vw - 2 * var(--beuve-space-3)));
+        max-block-size: 50vh;
         margin: 0;
         padding: var(--beuve-space-2) var(--beuve-space-3);
         overflow: auto;
         border: 1px solid var(--beuve-border);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
-        box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+        box-shadow: var(--beuve-shadow-small);
         color: var(--beuve-text);
         white-space: normal;
       }
 
       [popover].start {
-        left: var(--beuve-space-3);
+        inset-inline-start: var(--beuve-space-3);
       }
 
       [popover].end {
-        right: var(--beuve-space-3);
+        inset-inline-end: var(--beuve-space-3);
       }
 
       .popover-title {
         margin: 0 0 var(--beuve-space-2);
         color: var(--beuve-text-muted);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
 
       .popover-note {
@@ -146,14 +146,14 @@ export class BeuveStatusBar extends LitElement {
       }
 
       .row .detail {
-        margin-left: auto;
-        padding-left: var(--beuve-space-3);
+        margin-inline-start: auto;
+        padding-inline-start: var(--beuve-space-3);
         color: var(--beuve-text-muted);
         white-space: nowrap;
       }
 
       .row .grow {
-        min-width: 0;
+        min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
       }
@@ -164,7 +164,7 @@ export class BeuveStatusBar extends LitElement {
         background: none;
         color: var(--beuve-accent);
         font: inherit;
-        text-align: left;
+        text-align: start;
         cursor: pointer;
       }
 
@@ -175,7 +175,7 @@ export class BeuveStatusBar extends LitElement {
       .popover-actions {
         display: flex;
         justify-content: flex-end;
-        margin-top: var(--beuve-space-2);
+        margin-block-start: var(--beuve-space-2);
       }
 
       .notice {
@@ -189,33 +189,33 @@ export class BeuveStatusBar extends LitElement {
 
       .dot {
         display: inline-block;
-        width: 7px;
-        height: 7px;
-        margin-right: var(--beuve-space-1);
+        inline-size: 7px;
+        block-size: 7px;
+        margin-inline-end: var(--beuve-space-1);
         border-radius: 50%;
         background: var(--beuve-text-muted);
       }
 
       .dot.running {
-        background: var(--beuve-ok);
+        background: var(--beuve-ok-solid);
       }
 
       .dot.starting,
       .dot.stopping {
-        background: var(--beuve-warn);
+        background: var(--beuve-warn-solid);
       }
 
       .dot.failed,
       .dot.danger {
-        background: var(--beuve-danger);
+        background: var(--beuve-danger-solid);
       }
 
       .dot.ok {
-        background: var(--beuve-ok);
+        background: var(--beuve-ok-solid);
       }
 
       .dot.warn {
-        background: var(--beuve-warn);
+        background: var(--beuve-warn-solid);
       }
 
       .dot.busy {
@@ -240,7 +240,7 @@ export class BeuveStatusBar extends LitElement {
         flex: none;
         padding: 0 var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small, 3px);
+        border-radius: var(--beuve-radius-small);
         background: transparent;
         color: var(--beuve-text);
         font: inherit;
@@ -253,7 +253,7 @@ export class BeuveStatusBar extends LitElement {
 
       .attention.yours {
         color: var(--beuve-accent);
-        font-weight: 600;
+        font-weight: var(--beuve-font-weight-semibold);
       }
     `,
   ];

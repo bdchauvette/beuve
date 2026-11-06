@@ -70,14 +70,14 @@ export class BeuveOpenPanel extends LitElement {
 
     .query {
       box-sizing: border-box;
-      width: 100%;
+      inline-size: 100%;
       padding: var(--beuve-space-2) var(--beuve-space-3);
       border: 1px solid var(--beuve-border);
       border-radius: var(--beuve-radius);
       background: var(--beuve-bg);
       color: var(--beuve-text);
       font: inherit;
-      font-size: 14px;
+      font-size: var(--beuve-font-size-body);
     }
 
     input:focus {
@@ -146,17 +146,17 @@ export class BeuveOpenPanel extends LitElement {
     }
 
     li.separated {
-      margin-top: var(--beuve-space-2);
-      border-top: 1px solid var(--beuve-border);
+      margin-block-start: var(--beuve-space-2);
+      border-block-start: 1px solid var(--beuve-border);
       border-radius: 0 0 var(--beuve-radius) var(--beuve-radius);
-      padding-top: var(--beuve-space-2);
+      padding-block-start: var(--beuve-space-2);
     }
 
     .glyph {
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
       color: var(--beuve-text-muted);
-      text-align: right;
+      text-align: end;
       white-space: nowrap;
     }
 
@@ -216,19 +216,19 @@ export class BeuveOpenPanel extends LitElement {
     form label {
       font: var(--beuve-font-small);
       color: var(--beuve-text-muted);
-      text-align: right;
+      text-align: end;
     }
 
     .field {
       display: flex;
       gap: var(--beuve-space-2);
-      min-width: 0;
+      min-inline-size: 0;
     }
 
     .field input,
     .refs input {
       flex: 1;
-      min-width: 0;
+      min-inline-size: 0;
       padding: var(--beuve-space-1) var(--beuve-space-2);
       border: 1px solid var(--beuve-border);
       border-radius: var(--beuve-radius);
@@ -276,8 +276,8 @@ export class BeuveOpenPanel extends LitElement {
 
     button.primary {
       border-color: var(--beuve-accent);
-      background: var(--beuve-accent);
-      color: #fff;
+      background: var(--beuve-accent-solid);
+      color: var(--beuve-on-accent);
     }
 
     button:disabled {
@@ -286,7 +286,7 @@ export class BeuveOpenPanel extends LitElement {
     }
 
     .back {
-      margin-bottom: var(--beuve-space-3);
+      margin-block-end: var(--beuve-space-3);
       padding: 0;
       border: none;
       background: none;
@@ -305,7 +305,7 @@ export class BeuveOpenPanel extends LitElement {
     code,
     kbd {
       font: var(--beuve-font-mono);
-      font-size: 11px;
+      font-size: var(--beuve-font-size-caption);
     }
   `;
 

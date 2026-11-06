@@ -14,7 +14,7 @@ export class BeuveWorkspace extends LitElement {
   static override styles = css`
     :host {
       display: grid;
-      min-height: 0;
+      min-block-size: 0;
       grid-template-columns: minmax(0, 1fr) var(--beuve-sidebar-width);
       grid-template-areas: 'main side';
     }

@@ -29,9 +29,9 @@ export class BeuveSidebarTabs extends LitElement {
     nav {
       display: flex;
       gap: var(--beuve-space-4);
-      height: 30px;
+      block-size: 30px;
       padding: 0 var(--beuve-space-3);
-      border-bottom: 1px solid var(--beuve-border);
+      border-block-end: 1px solid var(--beuve-border);
     }
 
     button {
@@ -50,7 +50,7 @@ export class BeuveSidebarTabs extends LitElement {
     }
 
     .count {
-      margin-left: 3px;
+      margin-inline-start: 3px;
       color: var(--beuve-text-muted);
     }
   `;

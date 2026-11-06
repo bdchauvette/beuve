@@ -50,7 +50,7 @@ export class BeuveModelSettings extends LitElement {
     h2 {
       margin: var(--beuve-space-4) 0 var(--beuve-space-2);
       font: var(--beuve-font-small);
-      font-weight: 600;
+      font-weight: var(--beuve-font-weight-semibold);
       color: var(--beuve-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -67,13 +67,13 @@ export class BeuveModelSettings extends LitElement {
       grid-template-columns: 180px minmax(0, 1fr);
       align-items: center;
       gap: var(--beuve-space-3);
-      min-height: 32px;
+      min-block-size: 32px;
       padding: var(--beuve-space-1) var(--beuve-space-3);
     }
 
     .row + .row,
     .entry + .entry {
-      border-top: 1px solid var(--beuve-border);
+      border-block-start: 1px solid var(--beuve-border);
     }
 
     .entry {
@@ -85,7 +85,7 @@ export class BeuveModelSettings extends LitElement {
 
     .entry .text {
       flex: 1;
-      min-width: 0;
+      min-inline-size: 0;
     }
 
     .actions {
@@ -114,18 +114,18 @@ export class BeuveModelSettings extends LitElement {
     select {
       font: inherit;
       color: var(--beuve-text);
-      min-width: 0;
+      min-inline-size: 0;
     }
 
     input[type='text'],
     input[type='password'] {
-      width: 100%;
+      inline-size: 100%;
       box-sizing: border-box;
     }
 
     select {
       justify-self: start;
-      min-width: 160px;
+      min-inline-size: 160px;
     }
 
     button {
@@ -144,7 +144,7 @@ export class BeuveModelSettings extends LitElement {
       justify-content: flex-end;
       gap: var(--beuve-space-2);
       padding: var(--beuve-space-2) var(--beuve-space-3);
-      border-top: 1px solid var(--beuve-border);
+      border-block-start: 1px solid var(--beuve-border);
     }
 
     .add {
@@ -152,7 +152,7 @@ export class BeuveModelSettings extends LitElement {
       gap: var(--beuve-space-2);
       align-items: center;
       padding: var(--beuve-space-2) var(--beuve-space-3);
-      border-top: 1px solid var(--beuve-border);
+      border-block-start: 1px solid var(--beuve-border);
     }
 
     .error {

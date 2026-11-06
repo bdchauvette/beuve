@@ -15,6 +15,7 @@ import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import './beuve-definition-link.ts';
+import { applyDiffColors } from './apply-diff-colors.ts';
 import type { BeuveDefinitionLink, DefinitionAsk } from './beuve-definition-link.ts';
 import './beuve-hover-card.ts';
 import type { BeuveHoverCard, DiagnosticsFor, HoverAsk } from './beuve-hover-card.ts';
@@ -70,8 +71,8 @@ export class BeuveSheetView extends LitElement {
       :host {
         display: flex;
         flex-direction: column;
-        height: 100%;
-        min-height: 0;
+        block-size: 100%;
+        min-block-size: 0;
         background: var(--beuve-code-bg);
         color: var(--beuve-code-text);
         outline: none;
@@ -82,7 +83,7 @@ export class BeuveSheetView extends LitElement {
         align-items: center;
         gap: var(--beuve-space-2);
         padding: var(--beuve-space-2) var(--beuve-space-3);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
@@ -95,7 +96,7 @@ export class BeuveSheetView extends LitElement {
 
       .title {
         flex: 1;
-        min-width: 0;
+        min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -111,7 +112,7 @@ export class BeuveSheetView extends LitElement {
       button {
         padding: 1px var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: inherit;
@@ -134,7 +135,7 @@ export class BeuveSheetView extends LitElement {
         gap: var(--beuve-space-2);
         align-items: center;
         padding: var(--beuve-space-1) var(--beuve-space-3);
-        border-bottom: 1px solid var(--beuve-border);
+        border-block-end: 1px solid var(--beuve-border);
         background: var(--beuve-surface-sunken);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
@@ -142,10 +143,10 @@ export class BeuveSheetView extends LitElement {
 
       .find input {
         flex: 1;
-        max-width: 320px;
+        max-inline-size: 320px;
         padding: 2px var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: var(--beuve-font-mono);
@@ -153,7 +154,7 @@ export class BeuveSheetView extends LitElement {
 
       .body {
         flex: 1;
-        min-height: 0;
+        min-block-size: 0;
         overflow: auto;
       }
 
@@ -168,7 +169,7 @@ export class BeuveSheetView extends LitElement {
         display: flex;
         gap: var(--beuve-space-3);
         padding: 3px var(--beuve-space-3);
-        border-top: 1px solid var(--beuve-border);
+        border-block-start: 1px solid var(--beuve-border);
         background: var(--beuve-surface);
         color: var(--beuve-text-muted);
         font: var(--beuve-font-small);
@@ -176,7 +177,7 @@ export class BeuveSheetView extends LitElement {
 
       footer .notice {
         flex: 1;
-        min-width: 0;
+        min-inline-size: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -195,7 +196,7 @@ export class BeuveSheetView extends LitElement {
 
       kbd {
         font: var(--beuve-font-mono);
-        font-size: 10.5px;
+        font-size: var(--beuve-font-size-caption);
       }
     `,
   ];
@@ -563,7 +564,7 @@ export class BeuveSheetView extends LitElement {
       this.loaded = { status: 'error', message: 'This sheet has no connection to beuve.' };
       return;
     }
-    void this.readDiagnosticsSwitch(bridge);
+    void this.readDisplay(bridge);
     const isSameFile = this.loaded.status === 'ready' && place.path === this.loaded.file.path;
     if (!isSameFile) {
       this.loaded = { status: 'loading' };
@@ -700,11 +701,13 @@ export class BeuveSheetView extends LitElement {
     this.notice = { text, isError };
   }
 
-  private async readDiagnosticsSwitch(bridge: SheetApi): Promise<void> {
+  private async readDisplay(bridge: SheetApi): Promise<void> {
     const display = await bridge.invoke('display:get');
-    if (display.ok) {
-      this.hasDiagnosticsOn = display.value.showDiagnostics;
+    if (!display.ok) {
+      return;
     }
+    this.hasDiagnosticsOn = display.value.showDiagnostics;
+    applyDiffColors(display.value.diffColors);
   }
 
   /** Whether the file on screen is the session head's: only then are there diagnostics. */

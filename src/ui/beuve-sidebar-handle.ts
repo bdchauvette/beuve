@@ -24,17 +24,17 @@ export class BeuveSidebarHandle extends LitElement {
     :host {
       position: absolute;
       z-index: 2;
-      top: 0;
-      bottom: 0;
-      left: -3px;
-      width: 6px;
+      inset-block-start: 0;
+      inset-block-end: 0;
+      inset-inline-start: -3px;
+      inline-size: 6px;
       cursor: col-resize;
       touch-action: none;
     }
 
     :host([side='left']) {
-      right: -3px;
-      left: auto;
+      inset-inline-end: -3px;
+      inset-inline-start: auto;
     }
 
     :host(:hover),

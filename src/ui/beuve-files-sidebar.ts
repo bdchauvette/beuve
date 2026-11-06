@@ -39,15 +39,15 @@ export class BeuveFilesSidebar extends LitElement {
         display: flex;
         flex: 1 0 240px;
         flex-direction: column;
-        min-height: 240px;
+        min-block-size: 240px;
       }
 
       .files-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        min-height: 22px;
-        margin-bottom: var(--beuve-space-1);
+        min-block-size: 22px;
+        margin-block-end: var(--beuve-space-1);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
@@ -69,7 +69,7 @@ export class BeuveFilesSidebar extends LitElement {
       }
 
       .segments button + button {
-        border-left: 1px solid var(--beuve-border);
+        border-inline-start: 1px solid var(--beuve-border);
       }
 
       .segments button[aria-pressed='true'] {

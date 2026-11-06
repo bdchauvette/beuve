@@ -46,7 +46,7 @@ export class BeuveUraComposer extends LitElement {
         gap: var(--beuve-space-1);
         padding: var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-left: 3px solid var(--beuve-accent);
+        border-inline-start: 3px solid var(--beuve-accent);
         border-radius: var(--beuve-radius);
         background: var(--beuve-surface);
       }
@@ -59,7 +59,7 @@ export class BeuveUraComposer extends LitElement {
 
       .where {
         font: var(--beuve-font-mono);
-        font-size: 11px;
+        font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
       }
 
@@ -71,10 +71,10 @@ export class BeuveUraComposer extends LitElement {
       textarea,
       select {
         box-sizing: border-box;
-        min-width: 0;
+        min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
         font: inherit;
@@ -85,9 +85,9 @@ export class BeuveUraComposer extends LitElement {
       }
 
       textarea {
-        width: 100%;
-        min-height: 48px;
-        resize: vertical;
+        inline-size: 100%;
+        min-block-size: 48px;
+        resize: block;
         font: var(--beuve-font-mono);
       }
 
@@ -101,7 +101,7 @@ export class BeuveUraComposer extends LitElement {
       button {
         padding: 0 var(--beuve-space-2);
         border: 1px solid var(--beuve-border);
-        border-radius: 4px;
+        border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
         font: var(--beuve-font-small);
@@ -110,8 +110,8 @@ export class BeuveUraComposer extends LitElement {
 
       button.primary {
         border-color: var(--beuve-accent);
-        background: var(--beuve-accent);
-        color: #fff;
+        background: var(--beuve-accent-solid);
+        color: var(--beuve-on-accent);
       }
 
       .suggestion {
