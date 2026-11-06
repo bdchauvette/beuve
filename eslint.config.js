@@ -1,4 +1,5 @@
 import e18e from '@e18e/eslint-plugin';
+import css from '@eslint/css';
 import js from '@eslint/js';
 import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
@@ -16,6 +17,7 @@ import { localRulesPlugin } from './eslint-local-rules/local-rules-plugin.ts';
 
 const uiFiles = ['src/ui/**/*.ts'];
 const nodeFiles = ['**/*.{js,ts}'];
+const codeFiles = ['**/*.{js,mjs,cjs,ts,mts,cts}'];
 const testFiles = ['**/*.test.ts'];
 const entrypointFiles = [
   'src/*/index.ts',
@@ -112,7 +114,7 @@ const htmlSinkImports = ['lit', 'lit-html'].flatMap((root) => {
   });
 });
 
-export default defineConfig(
+const config = defineConfig(
   globalIgnores([
     'dist/',
     'dist-test/',
@@ -327,6 +329,38 @@ export default defineConfig(
   },
 
   {
+    name: 'beuve/ui-css-blocks',
+    // ADR 0118: each Lit `css` template is also linted as CSS, by the block below.
+    files: ['src/ui/**/*.ts'],
+    ignores: testFiles,
+    processor: 'local/lit-css',
+  },
+
+  {
+    name: 'beuve/css',
+    // ADR 0118: index.css and the `css` templates' virtual blocks, through @eslint/css.
+    files: ['**/*.css'],
+    plugins: { css },
+    language: 'css/css',
+    languageOptions: {
+      customSyntax: {
+        // Electron's window dragging (ADR 0044), which no CSS specification lists.
+        properties: { '-webkit-app-region': 'drag | no-drag' },
+      },
+    },
+    rules: {
+      ...css.configs.recommended.rules,
+      // The tokens live in index.css, which a template's block cannot see.
+      'css/no-invalid-properties': ['error', { allowUnknownVariables: true }],
+      // beuve runs on one Chromium, Electron's; cross-browser availability does not apply.
+      'css/use-baseline': 'off',
+      // It cannot see a fallback through `font: var(--beuve-font-body)`.
+      'css/font-family-fallbacks': 'off',
+      'css/prefer-logical-properties': 'error',
+    },
+  },
+
+  {
     name: 'beuve/ui-css',
     // ADR 0114: styles use the design tokens and logical properties.
     files: uiFiles,
@@ -507,3 +541,20 @@ export default defineConfig(
 
   prettier,
 );
+
+/**
+ * The JavaScript and TypeScript presets name no files, and since `@eslint/css` (ADR 0118) a `.css`
+ * file reaches the config too, where their rules cannot run: every block with rules, a language
+ * or plugins and no `files` applies to code only. Ignores and linter options stay global.
+ */
+export default config.map((block) => {
+  const isCodeOnly =
+    block.files === undefined &&
+    (block.rules !== undefined ||
+      block.languageOptions !== undefined ||
+      block.plugins !== undefined);
+  if (!isCodeOnly) {
+    return block;
+  }
+  return { ...block, files: codeFiles };
+});

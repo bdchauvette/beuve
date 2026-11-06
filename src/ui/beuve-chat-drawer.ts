@@ -193,7 +193,7 @@ export class BeuveChatDrawer extends LitElement {
 
       .text pre,
       .text .code-block {
-        overflow-x: auto;
+        overflow-inline: auto;
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-code-bg, var(--beuve-surface-sunken));
       }
@@ -209,7 +209,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .text .table {
-        overflow-x: auto;
+        overflow-inline: auto;
       }
 
       .text table {
@@ -451,7 +451,7 @@ export class BeuveChatDrawer extends LitElement {
         flex: 1;
         min-inline-size: 0;
         max-block-size: var(--beuve-size-editor-max);
-        overflow-y: auto;
+        overflow-block: auto;
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: var(--beuve-border-width) solid var(--beuve-border);
         border-radius: var(--beuve-radius);

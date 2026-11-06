@@ -26,7 +26,7 @@ export const markdownBodyStyles = css`
   }
 
   .body .table {
-    overflow-x: auto;
+    overflow-inline: auto;
   }
 
   .body table {

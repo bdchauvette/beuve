@@ -319,6 +319,7 @@ body {
   overflow: hidden;
   background: var(--beuve-bg);
   color: var(--beuve-text);
+  /* eslint-disable-next-line css/no-invalid-properties -- a shorthand held in a token, which the validator cannot expand */
   font: var(--beuve-font-body);
 }
 

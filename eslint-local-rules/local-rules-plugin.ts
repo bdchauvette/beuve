@@ -1,4 +1,5 @@
 import { arrowBodyBraces } from './arrow-body-braces.ts';
+import { litCssProcessor } from './lit-css-processor.ts';
 import { cssDesignTokens } from './css-design-tokens.ts';
 import { cssLogicalProperties } from './css-logical-properties.ts';
 import { enforceInternalUtils } from './enforce-internal-utils.ts';
@@ -37,6 +38,7 @@ interface CompatiblePlugin {
 
 const plugin = {
   meta: { name: 'local' },
+  processors: { 'lit-css': litCssProcessor },
   rules: {
     'arrow-body-braces': arrowBodyBraces,
     'css-design-tokens': cssDesignTokens,

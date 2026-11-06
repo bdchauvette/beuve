@@ -107,7 +107,7 @@ export class BeuveTerminalPanel extends LitElement {
       .bar .tabs {
         gap: var(--beuve-space-1);
         min-inline-size: 0;
-        overflow-x: auto;
+        overflow-inline: auto;
       }
 
       .bar .tab {

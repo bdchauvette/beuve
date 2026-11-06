@@ -7,7 +7,7 @@ createRuleTester().run('css-logical-properties', cssLogicalProperties, {
     'const s = css`.a { inset-block-start: 0; inset-inline-end: ${gap}; text-align: start; }`;',
     'const s = css`.a { margin: 0 0 8px; padding: 4px 8px; inset: 0 0 auto; }`;',
     'const s = css`.a { padding: 2px 8px 2px 8px; border-radius: 0 0 6px 6px; }`;',
-    'const s = css`.a { overflow-x: auto; resize: block; float: inline-start; }`;',
+    'const s = css`.a { overflow-inline: auto; resize: block; float: inline-start; }`;',
     'const s = css`.row > label:first-child { color: red; }`;',
     'const s = `margin-left: 4px; width: 10px`;',
     'const s = html`<div style="width: 10px"></div>`;',
@@ -49,6 +49,15 @@ createRuleTester().run('css-logical-properties', cssLogicalProperties, {
         {
           messageId: 'physicalProperty',
           data: { found: 'border-top-left-radius', logical: 'border-start-start-radius' },
+        },
+      ],
+    },
+    {
+      code: 'const s = css`.a { overflow-x: auto; }`;',
+      errors: [
+        {
+          messageId: 'physicalProperty',
+          data: { found: 'overflow-x', logical: 'overflow-inline' },
         },
       ],
     },

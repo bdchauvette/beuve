@@ -107,7 +107,7 @@ export class BeuveHoverCard extends LitElement {
 
     .card pre {
       padding: var(--beuve-space-1) var(--beuve-space-2);
-      overflow-x: auto;
+      overflow-inline: auto;
       border-radius: var(--beuve-radius);
       background: var(--beuve-surface-sunken);
       font: var(--beuve-font-mono);
