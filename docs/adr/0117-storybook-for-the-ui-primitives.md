@@ -1,6 +1,6 @@
 # 0117. Storybook for the UI primitives
 
-- Status: Accepted; extends [0115](0115-ui-primitives.md)
+- Status: Accepted (diff scheme switch removed by [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md)'s last amendment); extends [0115](0115-ui-primitives.md)
 - Date: 2026-11-06
 
 ## Context

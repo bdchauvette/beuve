@@ -477,7 +477,6 @@ const displayRequest = z.strictObject({
   sheets: z.enum(['window', 'inline']).optional(),
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
-  diffColors: z.enum(['blue-yellow', 'red-green', 'blue-orange', 'neutral']).optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
@@ -1091,7 +1090,6 @@ export function createIpcHandlers(
         sheets,
         reviewQueue,
         reviewQueueBranchPrefixes,
-        diffColors,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -1105,7 +1103,6 @@ export function createIpcHandlers(
         ...(sheets !== undefined && { sheets }),
         ...(reviewQueue !== undefined && { reviewQueue }),
         ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
-        ...(diffColors !== undefined && { diffColors }),
       });
     },
     'queue:get': async (request): Promise<IpcResult<ReviewQueueView>> => {

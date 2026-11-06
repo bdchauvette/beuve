@@ -14,7 +14,6 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import './beuve-model-settings.ts';
-import { applyDiffColors } from './apply-diff-colors.ts';
 import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
 import { describeGithubAuth } from './describe-github-auth.ts';
@@ -139,43 +138,6 @@ export class BeuveSettingsView extends LitElement {
         gap: var(--beuve-space-3);
       }
 
-      .diff-preview {
-        grid-column: 2;
-        margin: 0;
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        overflow: hidden;
-        background: var(--beuve-code-bg);
-        color: var(--beuve-code-text);
-        font: var(--beuve-font-mono);
-      }
-
-      .diff-preview > span {
-        display: block;
-        padding-inline: var(--beuve-space-2);
-        border-inline-start: var(--beuve-border-width-heavy) solid transparent;
-      }
-
-      .diff-preview .removed {
-        border-inline-start-color: var(--beuve-diff-removed-bar);
-        background: var(--beuve-diff-removed-bg);
-      }
-
-      .diff-preview .added {
-        border-inline-start-color: var(--beuve-diff-added-bar);
-        background: var(--beuve-diff-added-bg);
-      }
-
-      .diff-preview .removed mark {
-        background: var(--beuve-diff-removed-emphasis);
-        color: inherit;
-      }
-
-      .diff-preview .added mark {
-        background: var(--beuve-diff-added-emphasis);
-        color: inherit;
-      }
-
       .empty {
         padding: var(--beuve-space-2) var(--beuve-space-3);
       }
@@ -223,7 +185,6 @@ export class BeuveSettingsView extends LitElement {
     ]);
     if (display.ok) {
       this.display = display.value;
-      applyDiffColors(display.value.diffColors);
     }
     if (editors.ok) {
       this.editors = editors.value;
@@ -259,7 +220,6 @@ export class BeuveSettingsView extends LitElement {
     const saved = await bridge.invoke('display:set', change);
     if (saved.ok) {
       this.display = saved.value;
-      applyDiffColors(saved.value.diffColors);
       this.error = '';
     } else {
       this.error = saved.error.message;
@@ -409,7 +369,6 @@ export class BeuveSettingsView extends LitElement {
   }
 
   private renderDiff(display: DiffDisplayView): TemplateResult {
-    const colors = display.diffColors ?? 'blue-yellow';
     return html`<h2>Diff</h2>
       <div class="group">
         <div class="row">
@@ -418,19 +377,6 @@ export class BeuveSettingsView extends LitElement {
             ${this.renderRadio({ name: 'layout', label: 'Side by side', isOn: display.layout === 'split', change: { layout: 'split' } })}
             ${this.renderRadio({ name: 'layout', label: 'Inline', isOn: display.layout === 'unified', change: { layout: 'unified' } })}
           </span>
-        </div>
-        <div class="row">
-          <span>Colors</span>
-          <span class="choices">
-            ${this.renderRadio({ name: 'colors', label: 'Blue and yellow', isOn: colors === 'blue-yellow', change: { diffColors: 'blue-yellow' } })}
-            ${this.renderRadio({ name: 'colors', label: 'Red and green', isOn: colors === 'red-green', change: { diffColors: 'red-green' } })}
-            ${this.renderRadio({ name: 'colors', label: 'Blue and orange', isOn: colors === 'blue-orange', change: { diffColors: 'blue-orange' } })}
-            ${this.renderRadio({ name: 'colors', label: 'Grey and blue', isOn: colors === 'neutral', change: { diffColors: 'neutral' } })}
-          </span>
-          <pre
-            class="diff-preview"
-            aria-hidden="true"
-          ><span class="removed">const total = <mark>sum(items)</mark>;</span><span class="added">const total = <mark>items.reduce(add, 0)</mark>;</span></pre>
         </div>
         ${this.renderCheck({
           label: 'Hide whitespace changes',
