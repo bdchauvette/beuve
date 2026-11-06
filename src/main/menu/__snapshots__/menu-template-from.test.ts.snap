@@ -11,6 +11,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Open Pull Request or Branch…",
       },
       {
+        "accelerator": "Ctrl+Shift+R",
+        "id": "review-queue",
+        "label": "&Review Queue",
+      },
+      {
         "type": "separator",
       },
       {
@@ -766,6 +771,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+O",
         "id": "open",
         "label": "Open Pull Request or Branch…",
+      },
+      {
+        "accelerator": "Shift+Cmd+R",
+        "id": "review-queue",
+        "label": "Review Queue",
       },
       {
         "type": "separator",

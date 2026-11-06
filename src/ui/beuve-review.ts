@@ -165,13 +165,13 @@ export class BeuveReview extends LitElement {
       display: flex;
       justify-content: center;
       overflow: auto;
-      padding: 14vh var(--beuve-space-6) var(--beuve-space-6);
+      padding: 6vh var(--beuve-space-6) var(--beuve-space-6);
       background: var(--beuve-bg);
       outline: none;
     }
 
     .empty > div {
-      width: min(620px, 100%);
+      width: min(1100px, 100%);
     }
 
     .empty h1 {
@@ -967,6 +967,7 @@ export class BeuveReview extends LitElement {
     if (this.review === undefined && !this.session.isLoading && this.session.error === '') {
       return html`<div class="empty">
         <div>
+          ${html`<slot name="queue"></slot>`}
           <h1>Open a review</h1>
           <p>Pick up where you left off, or paste the pull request you were asked to look at.</p>
           ${html`<slot name="empty"></slot>`}

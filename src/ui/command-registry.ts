@@ -55,6 +55,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     about: main,
     settings: main,
     open: app,
+    'review-queue': app,
     'export-agent-xml': app,
     'export-agent-json': app,
     'export-github': app,
