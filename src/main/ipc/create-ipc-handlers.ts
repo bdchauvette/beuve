@@ -477,7 +477,7 @@ const displayRequest = z.strictObject({
   sheets: z.enum(['window', 'inline']).optional(),
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
-  diffColors: z.enum(['red-green', 'blue-orange', 'neutral']).optional(),
+  diffColors: z.enum(['blue-yellow', 'red-green', 'blue-orange', 'neutral']).optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));

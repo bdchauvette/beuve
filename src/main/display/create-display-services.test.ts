@@ -30,7 +30,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
-        diffColors: 'red-green',
+        diffColors: 'blue-yellow',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -47,7 +47,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
-        diffColors: 'red-green',
+        diffColors: 'blue-yellow',
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -109,7 +109,7 @@ describe('createDisplayServices', () => {
         sheets: 'window',
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
-        diffColors: 'red-green',
+        diffColors: 'blue-yellow',
       },
     });
   });
@@ -145,11 +145,11 @@ describe('createDisplayServices', () => {
     });
   });
 
-  test('reads an unknown diff color scheme as red and green', async ({ expect, tempDir }) => {
+  test('reads an unknown diff color scheme as blue and yellow', async ({ expect, tempDir }) => {
     const file = path.join(tempDir, 'settings.json');
     writeFileSync(file, JSON.stringify({ diffColors: 'sepia' }));
     await expect(createDisplayServices(file).get()).resolves.toMatchObject({
-      value: { diffColors: 'red-green' },
+      value: { diffColors: 'blue-yellow' },
     });
   });
 });

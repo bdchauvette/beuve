@@ -1,6 +1,6 @@
 # 0114. Design tokens, logical properties and diff color schemes
 
-- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
+- Status: Accepted (overflow amended by [0118](0118-css-linting-with-eslint-css.md), default diff colors amended 2026-11-06, attribution by [0119](0119-syntax-by-weight-and-slant.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (chrome and diff colors)
 - Date: 2026-11-06
 
 ## Context
@@ -38,3 +38,11 @@ Every length in the renderer is a token now, not only font sizes. `index.css` ad
 ## Amendment 2026-11-06: themes through `light-dark()`
 
 Each colour token that differs by theme is now one `light-dark(light, dark)` pair, not a value in `:root` that a `prefers-color-scheme: dark` block overrides. `:root { color-scheme: light dark }` still follows the system, so the app is unchanged, but anything that sets `color-scheme` picks the theme: Storybook's toolbar does (ADR 0117), and a theme preference could later. Script that needs a resolved colour reads it back from a probe element's computed `color`, as the terminal panel does for xterm; `getPropertyValue` would return the `light-dark()` text.
+
+## Amendment 2026-11-06: blue and yellow, the default scheme
+
+A fourth scheme, `blue-yellow` ("Blue and yellow", listed first in Settings › Diff › Colors), is now the default: added lines blue, removed lines yellow. This is the pair this ADR named as a candidate, from Review Board and Bitbucket. Like `blue-orange`, it is distinguishable under the common colour vision deficiencies, and neither hue reads as an error or a success. Unlike `blue-orange`, its removed side is far from both the error red and the pink of comments (ADR 0119).
+
+- **Steps.** Added uses blue a5/a6/a7, as `blue-orange` does. Removed uses yellow a4/a5/a6, with yellow 9 bars and yellow 11 counts. Radix's yellow alpha steps are strong in light and faint in dark. a3/a4/a5 balanced with blue in light but nearly vanished in dark; a5/a6/a7 suited dark but was heavy in light. a4/a5/a6, the steps `blue-orange` uses for orange, reads at a similar weight to blue in both.
+- **Default.** The `:root` block holds the `blue-yellow` tokens, `red-green` moves to its own `[data-diff-colors]` selector like the others, and main, the IPC schema, `applyDiffColors`, the settings view and Storybook default to `blue-yellow`.
+- **Existing settings.** `display:set` writes every display field whenever one changes. So a reviewer who changed any display setting before this has `diffColors: 'red-green'` saved, chosen or not, and keeps red and green. They cannot be told apart from reviewers who chose it, so nothing is migrated. Fresh installs and untouched settings get blue and yellow.

@@ -1510,10 +1510,10 @@ export interface ReviewEditsDiscardedView {
 export type DiffLayoutView = 'split' | 'unified';
 
 /**
- * The hues added and removed lines take (ADR 0114): `red-green`, `blue-orange` (the colorblind
- * pair), or `neutral` (removed grey, added blue).
+ * The hues added and removed lines take (ADR 0114): `blue-yellow` (the default), `red-green`,
+ * `blue-orange` (the colorblind pair), or `neutral` (removed grey, added blue).
  */
-export type DiffColorsView = 'red-green' | 'blue-orange' | 'neutral';
+export type DiffColorsView = 'blue-yellow' | 'red-green' | 'blue-orange' | 'neutral';
 
 /** The reviewer's display preferences, kept in `settings.json` (ADR 0042, 0044). */
 export interface DiffDisplayView {
@@ -1536,7 +1536,7 @@ export interface DiffDisplayView {
   readonly reviewQueue?: ReviewQueuePrefsView;
   /** Branch name prefixes the review queue lists agent branches for (ADR 0113). Always set by main. */
   readonly reviewQueueBranchPrefixes?: readonly string[];
-  /** The diff color scheme (ADR 0114); `red-green` until chosen. Always set by main. */
+  /** The diff color scheme (ADR 0114); `blue-yellow` until chosen. Always set by main. */
   readonly diffColors?: DiffColorsView;
 }
 

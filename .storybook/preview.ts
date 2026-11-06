@@ -18,12 +18,12 @@ const preview: Preview = {
       toolbar: {
         title: 'Diff colors',
         icon: 'paintbrush',
-        items: ['red-green', 'blue-orange', 'neutral'],
+        items: ['blue-yellow', 'red-green', 'blue-orange', 'neutral'],
         dynamicTitle: true,
       },
     },
   },
-  initialGlobals: { theme: 'light', diffColors: 'red-green' },
+  initialGlobals: { theme: 'light', diffColors: 'blue-yellow' },
   decorators: [withThemeAndScheme],
 };
 
@@ -35,7 +35,7 @@ function withThemeAndScheme(
 ): ReturnType<Decorator> {
   const root = document.documentElement;
   root.style.setProperty('color-scheme', String(context.globals['theme'] ?? 'light'));
-  root.dataset['diffColors'] = String(context.globals['diffColors'] ?? 'red-green');
+  root.dataset['diffColors'] = String(context.globals['diffColors'] ?? 'blue-yellow');
   // index.css fits the app's window and clips; a story page scrolls.
   document.body.style.setProperty('overflow', 'auto');
   return story();
