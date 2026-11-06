@@ -8,12 +8,13 @@ import type {
 import { listRemoteUrls } from '#internal/git/list-remote-urls.ts';
 import type { RemoteUrl } from '#internal/git/parse-remote-urls.ts';
 import type { BranchRef, RemoteBranchTip } from '#internal/github/branch-ref.ts';
-import { findBranchPullRequest } from '#internal/github/find-branch-pull-request.ts';
 import { findStoredBranch } from '#internal/github/find-stored-branch.ts';
 import { getBranch } from '#internal/github/get-branch.ts';
 import { getRepository } from '#internal/github/get-repository.ts';
+import type { RepositoryName } from '#internal/github/get-repository.ts';
 import { parseBranchRef } from '#internal/github/parse-branch-ref.ts';
 import { saveStoredBranch } from '#internal/github/save-stored-branch.ts';
+import type { BranchPullRequestRef } from '#internal/github/stored-branch.ts';
 import { findSessionBySource } from '#internal/session/find-session-by-source.ts';
 import type { Session } from '#internal/session/session.ts';
 import { err } from '#x/result/err.ts';
@@ -27,6 +28,7 @@ import { failureFromGithubError } from './failure-from-github-error.ts';
 import { findMatchingRemote } from './find-matching-remote.ts';
 import type { GithubContext } from './github-context.ts';
 import { githubFailure } from './github-failure.ts';
+import { lookUpBranchPullRequest } from './look-up-branch-pull-request.ts';
 import { openGithubClone } from './open-github-clone.ts';
 import { readRemoteBranchView } from './read-remote-branch-view.ts';
 import { syncRemoteBranch } from './sync-remote-branch.ts';
@@ -48,7 +50,9 @@ export interface OpenRemoteBranchOptions {
  * the branch tip on GitHub, finds the local clone and its remote as `github:open-pr` does (never
  * cloning), fetches and verifies the branch and the default branch into `refs/beuve/branch/…`,
  * then creates or resumes the remote-branch session and stores the branch. A branch that already
- * has an open pull request, and no branch session in that clone, opens the pull request instead.
+ * has an open pull request, and no branch session in that clone, opens the pull request instead,
+ * also when the branch is in a fork and the pull request into an upstream the clone has a remote
+ * for; without that remote the branch is followed and the pull request recorded.
  */
 export async function openRemoteBranch(
   context: GithubContext,
@@ -63,7 +67,7 @@ export async function openRemoteBranch(
   if (!resolved.ok) {
     return resolved.error;
   }
-  const { ref, defaultBranch, htmlUrl, tip } = resolved.value;
+  const { ref, defaultBranch, htmlUrl, tip, parent, source: upstream } = resolved.value;
   const repository = await openGithubClone(context, {
     repository: ref,
     repoPath: request.repoPath,
@@ -95,21 +99,32 @@ export async function openRemoteBranch(
   if (before.ok) {
     observedFrom = before.value;
   }
+  let foundPullRequest: BranchPullRequestRef | undefined;
   if (observedFrom === undefined) {
-    const pullRequest = await findOpenPullRequest(context, ref, signal);
-    if (pullRequest !== undefined) {
-      const opened = await openPullRequest(
-        {
-          ref: `${ref.host}/${ref.owner}/${ref.repo}#${String(pullRequest)}`,
-          repoPath: repository.value.root,
-        },
-        { signal },
-      );
-      if (opened.kind === 'failed') {
-        return opened;
-      }
-      return { kind: 'opened', session: opened.session, repoPath: opened.repoPath };
+    foundPullRequest = await findOpenPullRequest(context, {
+      ref,
+      parent,
+      source: upstream,
+      signal,
+    });
+  }
+  if (
+    foundPullRequest !== undefined &&
+    remotes.ok &&
+    findMatchingRemote(remotes.value, { ...foundPullRequest, host: ref.host }) !== undefined
+  ) {
+    const { owner, repo, number } = foundPullRequest;
+    const opened = await openPullRequest(
+      {
+        ref: `${ref.host}/${owner}/${repo}#${String(number)}`,
+        repoPath: repository.value.root,
+      },
+      { signal },
+    );
+    if (opened.kind === 'failed') {
+      return opened;
     }
+    return { kind: 'opened', session: opened.session, repoPath: opened.repoPath };
   }
   const synced = await syncRemoteBranch({
     repository: repository.value,
@@ -135,17 +150,19 @@ export async function openRemoteBranch(
     return githubFailure('github-failed', session.error.message);
   }
   const stored = findStoredBranch(db, ref);
-  let pullNumber: number | undefined;
+  let pullRequest = foundPullRequest;
   if (stored.ok) {
-    pullNumber = stored.value?.pullNumber;
+    pullRequest ??= stored.value?.pullRequest;
   }
   saveStoredBranch(db, {
     ref,
     defaultBranch,
     htmlUrl,
+    parent,
+    source: upstream,
     headSha: session.value.headSha,
     state: 'present',
-    pullNumber,
+    pullRequest,
   });
   await context.clonePaths.write(ref, repository.value.root);
   onOpened(session.value);
@@ -161,12 +178,17 @@ export async function openRemoteBranch(
   };
 }
 
-/** A branch as GitHub names it now, its repository's default branch and its tip. */
+/**
+ * A branch as GitHub names it now, its repository's default branch and its tip, and the
+ * repositories its repository was forked from when it is a fork.
+ */
 interface ResolvedBranch {
   readonly ref: BranchRef;
   readonly defaultBranch: string;
   readonly htmlUrl: string;
   readonly tip: RemoteBranchTip;
+  readonly parent: RepositoryName | undefined;
+  readonly source: RepositoryName | undefined;
 }
 
 async function resolveBranch(
@@ -195,7 +217,16 @@ async function resolveBranch(
     defaultBranch: details.value.defaultBranch,
     htmlUrl: `${details.value.htmlUrl}/tree/${ref.branch}`,
     tip: tip.value,
+    parent: nameOf(details.value.parent),
+    source: nameOf(details.value.source),
   });
+}
+
+function nameOf(repository: RepositoryName | undefined): RepositoryName | undefined {
+  if (repository === undefined) {
+    return undefined;
+  }
+  return { owner: repository.owner, repo: repository.repo };
 }
 
 /** The branch's tip as GitHub reports it now (unconditionally), or why it couldn't be read. */
@@ -216,17 +247,23 @@ async function fetchTip(
   return err(githubFailure('github-failed', 'GitHub answered 304 to an unconditional request'));
 }
 
-/** The number of the branch's open pull request, if GitHub lists one. */
+/** The branch, the repositories its fork came from, and the request's signal. */
+interface OpenPullRequestSearch {
+  readonly ref: BranchRef;
+  readonly parent: RepositoryName | undefined;
+  readonly source: RepositoryName | undefined;
+  readonly signal: AbortSignal | undefined;
+}
+
+/** The branch's open pull request, in its repository or an upstream, if GitHub lists one. */
 async function findOpenPullRequest(
   context: GithubContext,
-  ref: BranchRef,
-  signal: AbortSignal | undefined,
-): Promise<number | undefined> {
-  const listed = await context.clients.withClient(ref.host, async (client) => {
-    return findBranchPullRequest(client, ref, { signal });
-  });
-  if (listed.ok && listed.value.kind === 'modified') {
-    return listed.value.value?.number;
+  search: OpenPullRequestSearch,
+): Promise<BranchPullRequestRef | undefined> {
+  const lookup = await lookUpBranchPullRequest(context, search);
+  if (lookup.kind === 'unknown' || lookup.found === undefined) {
+    return undefined;
   }
-  return undefined;
+  const { base, pullRequest } = lookup.found;
+  return { owner: base.owner, repo: base.repo, number: pullRequest.number };
 }

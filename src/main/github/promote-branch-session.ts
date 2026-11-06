@@ -1,3 +1,4 @@
+import type { RepositoryName } from '#internal/github/get-repository.ts';
 import type { PullRequest, PullRequestRef } from '#internal/github/pull-request.ts';
 import { savePullRequest } from '#internal/github/save-pull-request.ts';
 import { findSessionBySource } from '#internal/session/find-session-by-source.ts';
@@ -21,19 +22,22 @@ export type BranchPromotion =
 export interface PromotionInput {
   readonly session: Session;
   readonly pullRequest: PullRequest;
+  /** The pull request's base repository: the branch's own, or an upstream of its fork. */
+  readonly base: RepositoryName;
+  /** The clone's remote for `base`. */
   readonly remote: SessionRemote;
 }
 
 /**
  * Promotes a remote-branch session to its pull request's session in place (ADR 0112): fetches
  * and verifies the pull request as `github:open-pr` does, stores its metadata, rewrites the
- * session row with `promoteSession` (same id, so the review carries over) and moves the head to
- * the fetched one. A pull request session already reviewing it in the same clone wins: the branch
+ * session row with `promoteSession` (same id, so the review carries over; a fork's branch becomes
+ * the session of the upstream's pull request) and moves the head to the fetched one. A pull request session already reviewing it in the same clone wins: the branch
  * session stays as it is and the answer names the other session.
  */
 export async function promoteBranchSession(
   context: GithubContext,
-  { session, pullRequest, remote }: PromotionInput,
+  { session, pullRequest, base, remote }: PromotionInput,
   signal: AbortSignal,
 ): Promise<BranchPromotion> {
   const { db, logger } = context.session;
@@ -43,8 +47,8 @@ export async function promoteBranchSession(
   }
   const ref: PullRequestRef = {
     host: source.host,
-    owner: source.owner,
-    repo: source.repo,
+    owner: base.owner,
+    repo: base.repo,
     number: pullRequest.number,
   };
   const existing = findSessionBySource(db, {
@@ -73,6 +77,8 @@ export async function promoteBranchSession(
   savePullRequest(db, ref, synced.value.pullRequest);
   const promoted = promoteSession(db, {
     session,
+    owner: ref.owner,
+    repo: ref.repo,
     number: ref.number,
     baseRef: synced.value.baseRef,
   });

@@ -1,7 +1,7 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * The github domain's schema (ADR 0006, 0037, 0112): the last pull request and followed-branch
+ * The github domain's schema (ADR 0006, 0037, 0112 and its fork amendment): the last pull request and followed-branch
  * metadata GitHub reported, keyed by the pull request or branch itself rather than a session, so
  * two clones reviewing one change share it and nothing here depends on the session domain's
  * tables. No tokens, ETags or CI results are stored.
@@ -38,11 +38,21 @@ export const githubMigrations: readonly Migration[] = [
         branch TEXT NOT NULL CHECK (branch <> ''),
         default_branch TEXT NOT NULL CHECK (default_branch <> ''),
         html_url TEXT NOT NULL CHECK (html_url GLOB 'https://*'),
+        parent_owner TEXT CHECK (parent_owner <> ''),
+        parent_repo TEXT CHECK (parent_repo <> ''),
+        source_owner TEXT CHECK (source_owner <> ''),
+        source_repo TEXT CHECK (source_repo <> ''),
         head_sha TEXT NOT NULL CHECK (${sha('head_sha')}),
         state TEXT NOT NULL CHECK (state IN ('present', 'gone')),
+        pull_owner TEXT CHECK (pull_owner <> ''),
+        pull_repo TEXT CHECK (pull_repo <> ''),
         pull_number INTEGER CHECK (pull_number IS NULL OR pull_number > 0),
         fetched_at TEXT NOT NULL,
-        PRIMARY KEY (host, owner, repo, branch)
+        PRIMARY KEY (host, owner, repo, branch),
+        CHECK ((parent_owner IS NULL) = (parent_repo IS NULL)),
+        CHECK ((source_owner IS NULL) = (source_repo IS NULL)),
+        CHECK ((pull_owner IS NULL) = (pull_number IS NULL)
+          AND (pull_repo IS NULL) = (pull_number IS NULL))
       ) STRICT;
     `,
   },

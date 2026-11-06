@@ -1672,8 +1672,11 @@ export interface OpenRemoteBranchRequest {
 
 /**
  * A followed branch as main last saw it (ADR 0112). `pullRequest` is the open pull request for
- * the branch while another session already reviews it (`sessionId`); otherwise the session was
- * promoted to it. `agentSessionUrl` is the head commit's `Claude-Session` trailer, an https URL.
+ * the branch, in the branch's repository or, for a fork, an upstream (`owner/repo`), while the
+ * session can't become its session: another session already reviews it (`sessionId`), or the
+ * clone has no remote for `owner/repo` (`needsRemote`; adding one promotes it on a later poll).
+ * Otherwise the session was promoted to it. `agentSessionUrl` is the head commit's
+ * `Claude-Session` trailer, an https URL.
  */
 export interface RemoteBranchView {
   readonly host: string;
@@ -1685,9 +1688,12 @@ export interface RemoteBranchView {
   readonly state: 'present' | 'gone';
   readonly htmlUrl: string;
   readonly pullRequest?: {
+    readonly owner: string;
+    readonly repo: string;
     readonly number: number;
     readonly htmlUrl: string;
     readonly sessionId?: string;
+    readonly needsRemote?: boolean;
   };
   readonly agentSessionUrl?: string;
 }
