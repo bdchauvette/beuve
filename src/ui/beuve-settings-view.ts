@@ -11,6 +11,7 @@ import type {
   SettingsApi,
 } from '#contract/ipc-contract.ts';
 
+import { applyPreferredFonts } from './apply-preferred-fonts.ts';
 import './beuve-model-settings.ts';
 import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
@@ -21,7 +22,7 @@ import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /**
  * The Settings window (ADR 0068): only what no menu item sets (the review-edits and review-queue
- * branch prefixes, the language server configuration, the models), and the accounts beuve uses
+ * branch prefixes, the preferred fonts, the language server configuration, the models), and the accounts beuve uses
  * (read-only). Every toggle the menus have lives only there. Every change is saved at once through the
  * settings channels, which also tell the main window; the window is read again when it regains
  * focus.
@@ -156,6 +157,7 @@ export class BeuveSettingsView extends LitElement {
     ]);
     if (display.ok) {
       this.display = display.value;
+      applyPreferredFonts(display.value);
     }
     if (editors.ok) {
       this.editors = editors.value;
@@ -191,6 +193,7 @@ export class BeuveSettingsView extends LitElement {
     const saved = await bridge.invoke('display:set', change);
     if (saved.ok) {
       this.display = saved.value;
+      applyPreferredFonts(saved.value);
       this.error = '';
     } else {
       this.error = saved.error.message;
@@ -262,6 +265,49 @@ export class BeuveSettingsView extends LitElement {
               void this.setDisplay({
                 reviewQueueBranchPrefixes: prefixesFrom((event.target as HTMLInputElement).value),
               });
+            }}
+          />
+        </div>
+      </div>`;
+  }
+
+  /** The preferred code and interface fonts (ADR 0122): `font-family` lists, empty for the defaults. */
+  private renderFonts(display: DiffDisplayView): TemplateResult {
+    return html`<h2>Fonts</h2>
+      <div class="group">
+        <div class="row">
+          <label
+            for="font-mono"
+            title='A font-family list, such as "JetBrains Mono", monospace. Commit Mono and the system fonts stay as fallbacks.'
+          >
+            Code font
+          </label>
+          <input
+            id="font-mono"
+            type="text"
+            spellcheck="false"
+            placeholder="Commit Mono"
+            .value=${display.fontFamilyMono ?? ''}
+            @change=${(event: Event): void => {
+              void this.setDisplay({ fontFamilyMono: (event.target as HTMLInputElement).value });
+            }}
+          />
+        </div>
+        <div class="row">
+          <label
+            for="font-sans"
+            title="A font-family list, such as Inter, sans-serif. The system font stays as the fallback."
+          >
+            Interface font
+          </label>
+          <input
+            id="font-sans"
+            type="text"
+            spellcheck="false"
+            placeholder="System font"
+            .value=${display.fontFamilySans ?? ''}
+            @change=${(event: Event): void => {
+              void this.setDisplay({ fontFamilySans: (event.target as HTMLInputElement).value });
             }}
           />
         </div>
@@ -350,8 +396,8 @@ export class BeuveSettingsView extends LitElement {
   override render(): TemplateResult {
     const { display } = this;
     return html`
-      ${display === undefined ? nothing : this.renderBranches(display)} ${this.renderAccounts()}
-      ${this.renderLanguageServers()}
+      ${display === undefined ? nothing : html`${this.renderBranches(display)} ${this.renderFonts(display)}`}
+      ${this.renderAccounts()} ${this.renderLanguageServers()}
       <beuve-model-settings .api=${this.api}></beuve-model-settings>
       ${this.error === '' ? nothing : html`<p class="error" role="alert">${this.error}</p>`}
     `;

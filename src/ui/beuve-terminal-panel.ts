@@ -151,6 +151,8 @@ export class BeuveTerminalPanel extends LitElement {
   private readonly early = new Map<string, TerminalDataEvent[]>();
   private unsubscribe: (() => void)[] = [];
   private resizeObserver: ResizeObserver | undefined;
+  /** Watches the root's style, where Settings › Fonts sets the preferred code font (ADR 0122). */
+  private fontObserver: MutationObserver | undefined;
   private colorScheme: MediaQueryList | undefined;
 
   private readonly colorSchemeListener = (): void => {
@@ -398,7 +400,20 @@ export class BeuveTerminalPanel extends LitElement {
     return { cols: proposed?.cols ?? 100, rows: proposed?.rows ?? 24 };
   }
 
-  /** The window's monospace family (`--beuve-font-family-mono`, ADR 0121). */
+  /** Gives every open xterm the window's monospace family, once it has loaded, and refits it. */
+  private async refreshFont(): Promise<void> {
+    const fontFamily = this.fontFamily();
+    await document.fonts.load(`${String(fontSize)}px ${fontFamily}`);
+    for (const pane of this.panes.values()) {
+      if (pane.xterm.options.fontFamily === fontFamily) {
+        continue;
+      }
+      pane.xterm.options.fontFamily = fontFamily;
+      pane.fit.fit();
+    }
+  }
+
+  /** The window's monospace family (`--beuve-font-family-mono`, ADR 0121, 0122). */
   private fontFamily(): string {
     const family = getComputedStyle(this).getPropertyValue('--beuve-font-family-mono').trim();
     if (family === '') {
@@ -439,6 +454,10 @@ export class BeuveTerminalPanel extends LitElement {
       this.activePane()?.fit.fit();
     });
     this.resizeObserver.observe(this);
+    this.fontObserver = new MutationObserver(() => {
+      void this.refreshFont();
+    });
+    this.fontObserver.observe(document.documentElement, { attributeFilter: ['style'] });
     this.subscribe();
   }
 
@@ -449,6 +468,7 @@ export class BeuveTerminalPanel extends LitElement {
     this.removeEventListener('focusout', this.onFocusChange);
     this.colorScheme?.removeEventListener('change', this.colorSchemeListener);
     this.resizeObserver?.disconnect();
+    this.fontObserver?.disconnect();
     for (const stop of this.unsubscribe) {
       stop();
     }

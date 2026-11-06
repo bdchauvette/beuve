@@ -8,6 +8,7 @@ import { hasControlCharacters } from '#x/text/has-control-characters.ts';
 import { commandCatalog } from '#contract/command-catalog.ts';
 import type { CommandId } from '#contract/command-catalog.ts';
 import { menuConditions } from '#contract/menu-conditions.ts';
+import { isFontFamilyList } from '#contract/is-font-family-list.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 import type {
   AppInfo,
@@ -465,6 +466,11 @@ const openReviewEditsRequest = z.strictObject({
 const digestRequest = z.strictObject({ sessionId, digest: z.string().regex(/^[\da-f]{64}$/u) });
 const reviewOrderMode = z.enum(['path', 'imports', 'calls']);
 const reviewOrderRequest = z.strictObject({ sessionId, mode: reviewOrderMode.optional() });
+/** A preferred font, a CSS `font-family` list or empty (ADR 0122). */
+const fontFamily = z.string().max(400).refine(isFontFamilyList, {
+  message: 'expected a font-family list, such as "JetBrains Mono", monospace',
+});
+
 const displayRequest = z.strictObject({
   layout: z.enum(['split', 'unified']).optional(),
   ignoreWhitespace: z.boolean().optional(),
@@ -476,6 +482,8 @@ const displayRequest = z.strictObject({
   skipReviewed: z.boolean().optional(),
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
+  fontFamilyMono: fontFamily.optional(),
+  fontFamilySans: fontFamily.optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
@@ -1088,6 +1096,8 @@ export function createIpcHandlers(
         skipReviewed,
         reviewQueue,
         reviewQueueBranchPrefixes,
+        fontFamilyMono,
+        fontFamilySans,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -1100,6 +1110,8 @@ export function createIpcHandlers(
         ...(skipReviewed !== undefined && { skipReviewed }),
         ...(reviewQueue !== undefined && { reviewQueue }),
         ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
+        ...(fontFamilyMono !== undefined && { fontFamilyMono }),
+        ...(fontFamilySans !== undefined && { fontFamilySans }),
       });
     },
     'queue:get': async (request): Promise<IpcResult<ReviewQueueView>> => {
