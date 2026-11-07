@@ -11,7 +11,7 @@ export const kbdStyles = css`
     border-radius: var(--beuve-radius-small);
     background: var(--beuve-surface-sunken);
     color: var(--beuve-text);
-    font: var(--beuve-font-mono);
+    font: var(--beuve-font-code);
     font-size: var(--beuve-font-size-caption);
     text-align: center;
   }

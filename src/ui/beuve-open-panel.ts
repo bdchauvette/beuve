@@ -156,7 +156,7 @@ export class BeuveOpenPanel extends LitElement {
       }
 
       .glyph {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
         text-align: end;
@@ -228,7 +228,7 @@ export class BeuveOpenPanel extends LitElement {
         border-radius: var(--beuve-radius);
         background: var(--beuve-bg);
         color: var(--beuve-text);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .refs {
@@ -270,7 +270,7 @@ export class BeuveOpenPanel extends LitElement {
       }
 
       code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
       }
     `,

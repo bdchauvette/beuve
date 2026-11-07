@@ -57,7 +57,7 @@ export class BeuveCommit extends LitElement {
         background: none;
         color: inherit;
         font: inherit;
-        font-family: var(--beuve-font-family-mono);
+        font-family: var(--beuve-font-family-code);
         text-decoration: underline dotted var(--beuve-text-faint);
         text-underline-offset: var(--beuve-space-0-5);
         cursor: pointer;
@@ -124,7 +124,7 @@ export class BeuveCommit extends LitElement {
       }
 
       .sha code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         overflow-wrap: anywhere;
       }

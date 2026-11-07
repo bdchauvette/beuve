@@ -293,7 +293,7 @@ export class BeuveDiffStream extends LitElement {
 
       .range,
       .counts {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-text-muted);
       }
 

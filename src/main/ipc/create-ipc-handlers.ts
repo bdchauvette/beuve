@@ -466,7 +466,7 @@ const openReviewEditsRequest = z.strictObject({
 const digestRequest = z.strictObject({ sessionId, digest: z.string().regex(/^[\da-f]{64}$/u) });
 const reviewOrderMode = z.enum(['path', 'imports', 'calls']);
 const reviewOrderRequest = z.strictObject({ sessionId, mode: reviewOrderMode.optional() });
-/** A preferred font, a CSS `font-family` list or empty (ADR 0122). */
+/** The preferred code font, a CSS `font-family` list or empty (ADR 0122). */
 const fontFamily = z.string().max(400).refine(isFontFamilyList, {
   message: 'expected a font-family list, such as "JetBrains Mono", monospace',
 });
@@ -482,8 +482,7 @@ const displayRequest = z.strictObject({
   skipReviewed: z.boolean().optional(),
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
-  fontFamilyMono: fontFamily.optional(),
-  fontFamilySans: fontFamily.optional(),
+  codeFont: fontFamily.optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
@@ -1096,8 +1095,7 @@ export function createIpcHandlers(
         skipReviewed,
         reviewQueue,
         reviewQueueBranchPrefixes,
-        fontFamilyMono,
-        fontFamilySans,
+        codeFont,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -1110,8 +1108,7 @@ export function createIpcHandlers(
         ...(skipReviewed !== undefined && { skipReviewed }),
         ...(reviewQueue !== undefined && { reviewQueue }),
         ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
-        ...(fontFamilyMono !== undefined && { fontFamilyMono }),
-        ...(fontFamilySans !== undefined && { fontFamilySans }),
+        ...(codeFont !== undefined && { codeFont }),
       });
     },
     'queue:get': async (request): Promise<IpcResult<ReviewQueueView>> => {

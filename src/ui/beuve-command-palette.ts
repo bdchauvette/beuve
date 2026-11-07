@@ -123,7 +123,7 @@ export class BeuveCommandPalette extends LitElement {
       }
 
       .title.path {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       b {
@@ -163,7 +163,7 @@ export class BeuveCommandPalette extends LitElement {
       }
 
       footer code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text);
       }

@@ -145,7 +145,7 @@ export class BeuveReviewQueue extends LitElement {
       }
 
       .problems code {
-        font-family: var(--beuve-font-mono);
+        font-family: var(--beuve-font-code);
         color: var(--beuve-text-muted);
       }
 

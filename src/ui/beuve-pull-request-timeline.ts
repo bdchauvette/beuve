@@ -98,7 +98,7 @@ export class BeuvePullRequestTimeline extends LitElement {
       }
 
       .sha {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
       }
 

@@ -88,7 +88,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       .input-echo {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-text-muted);
       }
 
@@ -107,7 +107,7 @@ export class BeuveChatDrawer extends LitElement {
 
       .you {
         margin: 0;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-text-muted);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
@@ -182,7 +182,7 @@ export class BeuveChatDrawer extends LitElement {
 
       .text code,
       .text pre {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .text code {
@@ -267,7 +267,7 @@ export class BeuveChatDrawer extends LitElement {
 
       .step-name {
         overflow: hidden;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -315,7 +315,7 @@ export class BeuveChatDrawer extends LitElement {
         border-radius: var(--beuve-radius-full);
         background: var(--beuve-accent-soft);
         color: var(--beuve-accent);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         cursor: pointer;
       }
@@ -457,7 +457,7 @@ export class BeuveChatDrawer extends LitElement {
         border-radius: var(--beuve-radius);
         background: var(--beuve-bg);
         color: var(--beuve-text);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         cursor: text;
@@ -485,7 +485,7 @@ export class BeuveChatDrawer extends LitElement {
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-accent-soft);
         color: var(--beuve-accent);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         line-height: var(--beuve-line-height-compact);
         text-overflow: ellipsis;
@@ -509,7 +509,7 @@ export class BeuveChatDrawer extends LitElement {
       }
 
       button.chip {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         line-height: var(--beuve-line-height-compact);
       }

@@ -13,7 +13,7 @@ export const formatControlStyles = css`
     border: var(--beuve-border-width) solid var(--beuve-warn);
     border-radius: var(--beuve-radius-small);
     color: var(--beuve-warn);
-    font-family: var(--beuve-font-family-mono);
+    font-family: var(--beuve-font-family-code);
     font-size: var(--beuve-font-size-mark);
     font-weight: var(--beuve-font-weight-normal);
     line-height: 1.1;

@@ -61,12 +61,12 @@ export const markdownBodyStyles = css`
     overflow: auto;
     border-radius: var(--beuve-radius);
     background: var(--beuve-surface-sunken);
-    font: var(--beuve-font-mono);
+    font: var(--beuve-font-code);
     font-size: var(--beuve-font-size-caption);
   }
 
   code {
-    font: var(--beuve-font-mono);
+    font: var(--beuve-font-code);
     font-size: var(--beuve-font-size-caption);
   }
 `;
