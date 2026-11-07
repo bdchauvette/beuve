@@ -166,7 +166,7 @@ export class FlowGraphView extends LitElement {
 
       .label {
         fill: var(--beuve-code-text, var(--beuve-text));
-        font-family: var(--beuve-font-family-mono);
+        font-family: var(--beuve-font-family-code);
         font-size: var(--beuve-font-size-caption);
         dominant-baseline: central;
         pointer-events: none;

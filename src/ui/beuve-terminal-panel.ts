@@ -413,9 +413,9 @@ export class BeuveTerminalPanel extends LitElement {
     }
   }
 
-  /** The window's monospace family (`--beuve-font-family-mono`, ADR 0121, 0122). */
+  /** The window's monospace family (`--beuve-font-family-code`, ADR 0121, 0122). */
   private fontFamily(): string {
-    const family = getComputedStyle(this).getPropertyValue('--beuve-font-family-mono').trim();
+    const family = getComputedStyle(this).getPropertyValue('--beuve-font-family-code').trim();
     if (family === '') {
       return fallbackFontFamily;
     }

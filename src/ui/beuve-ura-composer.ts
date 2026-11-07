@@ -60,7 +60,7 @@ export class BeuveUraComposer extends LitElement {
       }
 
       .where {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
       }
@@ -90,7 +90,7 @@ export class BeuveUraComposer extends LitElement {
         inline-size: 100%;
         min-block-size: var(--beuve-size-editor-small);
         resize: block;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       input:focus,

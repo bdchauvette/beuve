@@ -33,7 +33,7 @@ export class BeuveFlowPortal extends LitElement {
       }
 
       .heading code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-text);
       }
 

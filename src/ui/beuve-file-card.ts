@@ -221,7 +221,7 @@ export class BeuveFileCard extends LitElement {
         flex: 1;
         min-inline-size: 0;
         overflow: hidden;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -244,12 +244,12 @@ export class BeuveFileCard extends LitElement {
       }
 
       .additions {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-diff-added-text);
       }
 
       .deletions {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-diff-removed-text);
       }
 
@@ -362,7 +362,7 @@ export class BeuveFileCard extends LitElement {
       }
 
       diffs-container {
-        --diffs-font-family: var(--beuve-font-family-mono);
+        --diffs-font-family: var(--beuve-font-family-code);
         --diffs-font-size: var(--beuve-font-size-code);
         --diffs-line-height: var(--beuve-line-height-code);
         --diffs-header-font-family: var(--beuve-font-family-sans);
@@ -448,7 +448,7 @@ export class BeuveFileCard extends LitElement {
         padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .insight-badge {
@@ -530,7 +530,7 @@ export class BeuveFileCard extends LitElement {
         padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .insight-body {
@@ -600,7 +600,7 @@ export class BeuveFileCard extends LitElement {
         margin: 0;
         padding: var(--beuve-space-1) 0;
         overflow-inline: auto;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .line {

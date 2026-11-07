@@ -38,15 +38,14 @@ const defaults: Required<DiffDisplayView> = {
   skipReviewed: false,
   reviewQueue: defaultReviewQueuePrefs,
   reviewQueueBranchPrefixes: branchPrefixesFrom(undefined),
-  fontFamilyMono: '',
-  fontFamilySans: '',
+  codeFont: '',
 };
 
 /**
  * Keeps the display preferences (ADR 0042, 0044, 0052) in the JSON file at `filePath`
  * (`<userData>/settings.json`) as `diffLayout`, `ignoreWhitespace`, `sidebarSide` and
- * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), and the preferred fonts `fontFamilyMono` and `fontFamilySans` (ADR 0122), next to any other keys. A missing or malformed value reads as the default:
- * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, no preferred fonts. Without a path, in
+ * `showGenerated`, `showInsights` (ADR 0061), `showDiagnostics` (ADR 0111), `reviewOrder` (ADR 0065), `skipReviewed` (ADR 0064), the review queue's `reviewQueue` and `reviewQueueBranchPrefixes` (ADR 0113), and the preferred `codeFont` (ADR 0122), next to any other keys. A missing or malformed value reads as the default:
+ * split, whitespace shown, sidebar on the right, generated files collapsed, insights shown, files in path order, reviewed files not skipped, no preferred code font. Without a path, in
  * memory.
  */
 export function createDisplayServices(filePath?: string): DisplayServices {
@@ -64,8 +63,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
     set: async (request): Promise<IpcResult<DiffDisplayView>> => {
       const next = { ...(await read()), ...request };
       next.reviewQueueBranchPrefixes = branchPrefixesFrom(next.reviewQueueBranchPrefixes);
-      next.fontFamilyMono = next.fontFamilyMono.trim();
-      next.fontFamilySans = next.fontFamilySans.trim();
+      next.codeFont = next.codeFont.trim();
       remembered = next;
       if (filePath !== undefined) {
         await updateSettingsFile(filePath, (current) => {
@@ -81,8 +79,7 @@ export function createDisplayServices(filePath?: string): DisplayServices {
             skipReviewed: next.skipReviewed,
             reviewQueue: next.reviewQueue,
             reviewQueueBranchPrefixes: next.reviewQueueBranchPrefixes,
-            fontFamilyMono: next.fontFamilyMono,
-            fontFamilySans: next.fontFamilySans,
+            codeFont: next.codeFont,
           };
         });
       }
@@ -111,16 +108,7 @@ function displayFrom(settings: Readonly<Record<string, unknown>>): Required<Diff
     skipReviewed: validOr(skipReviewed, isBoolean, defaults.skipReviewed),
     reviewQueue: reviewQueuePrefsFrom(settings['reviewQueue']),
     reviewQueueBranchPrefixes: branchPrefixesFrom(settings['reviewQueueBranchPrefixes']),
-    fontFamilyMono: validOr(
-      settings['fontFamilyMono'],
-      isFontFamily,
-      defaults.fontFamilyMono,
-    ).trim(),
-    fontFamilySans: validOr(
-      settings['fontFamilySans'],
-      isFontFamily,
-      defaults.fontFamilySans,
-    ).trim(),
+    codeFont: validOr(settings['codeFont'], isFontFamily, defaults.codeFont).trim(),
   };
 }
 

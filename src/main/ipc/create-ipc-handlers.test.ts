@@ -1041,20 +1041,21 @@ describe('createIpcHandlers for the editor', () => {
     await expectInvalid(expect, handlers['display:set']({ ignoreWhitespace: 'yes' }));
     await expectInvalid(expect, handlers['display:set']({ showGenerated: 1 }));
     await expectInvalid(expect, handlers['display:set']({ showInsights: 'no' }));
-    await expectInvalid(expect, handlers['display:set']({ fontFamilyMono: 'var(--x)' }));
-    await expectInvalid(expect, handlers['display:set']({ fontFamilySans: 'Inter; color: red' }));
+    await expectInvalid(expect, handlers['display:set']({ codeFont: 'var(--x)' }));
+    await expectInvalid(expect, handlers['display:set']({ codeFont: 'Menlo; color: red' }));
+    await expectInvalid(expect, handlers['display:set']({ fontFamilySans: 'Inter' }));
     await expectInvalid(expect, handlers['display:get']({ x: 1 }));
     await handlers['display:set']({ layout: 'unified' });
     await handlers['display:set']({ ignoreWhitespace: false });
     await handlers['display:set']({ showGenerated: true });
     await handlers['display:set']({ showInsights: false });
-    await handlers['display:set']({ fontFamilyMono: '"Iosevka Term", monospace' });
+    await handlers['display:set']({ codeFont: '"Iosevka Term", monospace' });
     expect(calls).toStrictEqual([
       { layout: 'unified' },
       { ignoreWhitespace: false },
       { showGenerated: true },
       { showInsights: false },
-      { fontFamilyMono: '"Iosevka Term", monospace' },
+      { codeFont: '"Iosevka Term", monospace' },
     ]);
   });
 });

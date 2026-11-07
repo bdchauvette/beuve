@@ -1531,9 +1531,7 @@ export interface DiffDisplayView {
   /** Branch name prefixes the review queue lists agent branches for (ADR 0113). Always set by main. */
   readonly reviewQueueBranchPrefixes?: readonly string[];
   /** The preferred code font, a `font-family` list, before Commit Mono (ADR 0122); empty for none. Always set by main. */
-  readonly fontFamilyMono?: string;
-  /** The preferred interface font, a `font-family` list, before the system font (ADR 0122); empty for none. Always set by main. */
-  readonly fontFamilySans?: string;
+  readonly codeFont?: string;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1548,8 +1546,7 @@ export interface SetDiffDisplayRequest {
   readonly skipReviewed?: boolean;
   readonly reviewQueue?: ReviewQueuePrefsView;
   readonly reviewQueueBranchPrefixes?: readonly string[];
-  readonly fontFamilyMono?: string;
-  readonly fontFamilySans?: string;
+  readonly codeFont?: string;
 }
 
 /**

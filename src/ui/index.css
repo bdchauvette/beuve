@@ -128,15 +128,14 @@
   --beuve-scale-orange-a6: light-dark(#ff81007d, #fd75045c);
 
   /*
-   * Settings › Fonts puts the reviewer's own families first (ADR 0122): each window sets
-   * `--beuve-preferred-font-family-*` on its root, and the stacks below stay as fallbacks.
+   * The interface font is the system's, deliberately not a setting (ADR 0122). Settings › Fonts
+   * puts the reviewer's code font first: each window sets `--beuve-preferred-code-font` on its
+   * root, and Commit Mono and the system monospace stack stay as fallbacks.
    */
-  --beuve-font-family-sans:
-    var(--beuve-preferred-font-family-sans, system-ui), system-ui, -apple-system, 'Segoe UI',
-    sans-serif;
-  --beuve-font-family-mono:
-    var(--beuve-preferred-font-family-mono, 'Commit Mono'), 'Commit Mono', ui-monospace, 'SF Mono',
-    Menlo, Consolas, monospace;
+  --beuve-font-family-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --beuve-font-family-code:
+    var(--beuve-preferred-code-font, 'Commit Mono'), 'Commit Mono', ui-monospace, 'SF Mono', Menlo,
+    Consolas, monospace;
 
   /* Primer's sizes, with 13px (Primer's code size) added for dense lists. Nothing is below 12px. */
   --beuve-font-size-caption: 0.75rem; /* 12px: timestamps, badges, counts */
@@ -245,8 +244,8 @@
     var(--beuve-line-height-normal) var(--beuve-font-family-sans);
   --beuve-font-title: var(--beuve-font-weight-semibold) var(--beuve-font-size-title) /
     var(--beuve-line-height-tight) var(--beuve-font-family-sans);
-  --beuve-font-mono: var(--beuve-font-weight-normal) var(--beuve-font-size-code) /
-    var(--beuve-line-height-normal) var(--beuve-font-family-mono);
+  --beuve-font-code: var(--beuve-font-weight-normal) var(--beuve-font-size-code) /
+    var(--beuve-line-height-normal) var(--beuve-font-family-code);
 
   --beuve-titlebar-height: 2.5rem;
   --beuve-statusbar-height: 1.75rem;

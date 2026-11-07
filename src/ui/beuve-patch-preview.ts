@@ -27,7 +27,7 @@ export class BeuvePatchPreview extends LitElement {
       margin: 0;
       padding: var(--beuve-space-0-5) 0;
       overflow: auto;
-      font: var(--beuve-font-mono);
+      font: var(--beuve-font-code);
       font-size: var(--beuve-font-size-caption);
       line-height: var(--beuve-line-height-compact);
     }

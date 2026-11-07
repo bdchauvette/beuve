@@ -51,7 +51,7 @@ export class BeuveSheetCode extends LitElement {
     }
 
     diffs-container {
-      --diffs-font-family: var(--beuve-font-family-mono);
+      --diffs-font-family: var(--beuve-font-family-code);
       --diffs-font-size: var(--beuve-font-size-code);
       --diffs-line-height: var(--beuve-line-height-code);
       --diffs-bg-context-override: var(--beuve-code-bg);
@@ -67,7 +67,7 @@ export class BeuveSheetCode extends LitElement {
     .plain {
       margin: 0;
       padding: var(--beuve-space-3);
-      font: var(--beuve-font-mono);
+      font: var(--beuve-font-code);
       white-space: pre;
       color: var(--beuve-code-text);
     }

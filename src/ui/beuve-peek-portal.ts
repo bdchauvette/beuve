@@ -41,7 +41,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .heading code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         color: var(--beuve-text);
       }
 
@@ -92,7 +92,7 @@ export class BeuvePeekPortal extends LitElement {
       }
 
       .name {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .where {

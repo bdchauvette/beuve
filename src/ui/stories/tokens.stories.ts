@@ -80,7 +80,7 @@ class BeuveTokenSheet extends LitElement {
       border-radius: var(--beuve-radius-small);
       background: var(--beuve-code-bg);
       color: var(--beuve-code-text);
-      font: var(--beuve-font-mono);
+      font: var(--beuve-font-code);
       line-height: var(--beuve-line-height-code);
     }
 

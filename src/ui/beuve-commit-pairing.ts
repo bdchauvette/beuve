@@ -101,7 +101,7 @@ export class BeuveCommitPairing extends LitElement {
 
       .commits,
       .stats {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
         white-space: nowrap;

@@ -48,7 +48,7 @@ export class BeuveFindBar extends LitElement {
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-bg);
         color: var(--beuve-text);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       input:focus {

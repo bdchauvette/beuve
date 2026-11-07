@@ -148,7 +148,7 @@ export class BeuveUraDock extends LitElement {
         flex: 1;
         min-inline-size: 0;
         overflow: hidden;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -202,7 +202,7 @@ export class BeuveUraDock extends LitElement {
         padding: 0 var(--beuve-space-0-5);
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface-sunken);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .suggestion {
@@ -243,7 +243,7 @@ export class BeuveUraDock extends LitElement {
       textarea {
         min-block-size: var(--beuve-size-editor);
         resize: block;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       input:focus,
@@ -312,7 +312,7 @@ export class BeuveUraDock extends LitElement {
       }
 
       .review-edits code {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
       }
 

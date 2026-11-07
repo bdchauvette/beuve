@@ -50,7 +50,7 @@ export class BeuvePullRequestIntent extends LitElement {
       }
 
       .branches {
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         overflow-wrap: anywhere;
       }

@@ -37,7 +37,7 @@ import { stepSheetHistory } from './step-sheet-history.ts';
 import { withShortcut } from './with-shortcut.ts';
 import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-history.ts';
 import { formatControlStyles } from './format-control-styles.ts';
-import { applyPreferredFonts } from './apply-preferred-fonts.ts';
+import { applyCodeFont } from './apply-code-font.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import './primitives/beuve-time.ts';
@@ -100,7 +100,7 @@ export class BeuveSheetView extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
         -webkit-app-region: drag;
       }
 
@@ -128,7 +128,7 @@ export class BeuveSheetView extends LitElement {
         border-radius: var(--beuve-radius-small);
         background: var(--beuve-surface);
         color: var(--beuve-text);
-        font: var(--beuve-font-mono);
+        font: var(--beuve-font-code);
       }
 
       .body {
@@ -680,7 +680,7 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     this.hasDiagnosticsOn = display.value.showDiagnostics;
-    applyPreferredFonts(display.value);
+    applyCodeFont(display.value);
   }
 
   /** Whether the file on screen is the session head's: only then are there diagnostics. */
