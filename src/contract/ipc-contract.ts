@@ -627,6 +627,25 @@ export interface SheetFileView {
   readonly notes: readonly SheetNoteView[];
 }
 
+/**
+ * An image of the repository at a commit (ADR 0123), for a rich view: `sha` is a full commit of
+ * the session's repository (the head, the review base, or a sheet's own), `path` its
+ * repository-relative path there.
+ */
+export interface ImageFileRequest {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+}
+
+/** The image as a `data:` URI of the type its bytes say: PNG, JPEG, GIF, WebP or SVG. */
+export interface ImageFileView {
+  readonly sessionId: string;
+  readonly sha: string;
+  readonly path: string;
+  readonly uri: string;
+}
+
 export interface SheetHeadView {
   readonly sessionId: string;
   readonly headSha: string;
@@ -2414,6 +2433,10 @@ export interface InvokeChannelMap {
     readonly request: SheetHeadRequest;
     readonly response: IpcResult<SheetHeadView>;
   };
+  'media:get-image': {
+    readonly request: ImageFileRequest;
+    readonly response: IpcResult<ImageFileView>;
+  };
   'remote:permalink': {
     readonly request: PermalinkRequest;
     readonly response: IpcResult<PermalinkView>;
@@ -2699,6 +2722,7 @@ export type SheetInvokeChannel =
   | 'sheet:open'
   | 'sheet:get-file'
   | 'sheet:get-head'
+  | 'media:get-image'
   | 'remote:permalink'
   | 'remote:open-permalink'
   | 'clipboard:write-text'

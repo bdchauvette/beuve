@@ -430,6 +430,7 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
         sheets: {
           getFile: notWired,
           getHead: notWired,
+          getImage: notWired,
           checkOpen: async (request): Promise<IpcResult<OpenedView>> => {
             if (request.path === 'src/a.ts') {
               return sheetChecked();
@@ -1164,7 +1165,7 @@ function stubServices(
       restart: notWired,
       status: notWiredError,
     },
-    sheets: { getFile: notWired, getHead: notWired, checkOpen: notWired },
+    sheets: { getFile: notWired, getHead: notWired, getImage: notWired, checkOpen: notWired },
     remote: { permalink: notWired, openPermalink: notWired, openCommit: notWired },
     commits: { getCommit: notWired },
     shell: { openUrl: notWired },

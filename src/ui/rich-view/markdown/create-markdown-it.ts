@@ -3,6 +3,8 @@ import type { StateBlock, StateCore, Token } from 'markdown-it';
 import { full as emoji } from 'markdown-it-emoji';
 import footnote from 'markdown-it-footnote';
 
+import { withoutHandlers } from './without-handlers.ts';
+
 /** What `render(text, env)` may be given: a nonce that marks the source lines beuve wrote. */
 export interface MarkdownEnv {
   readonly sourceNonce?: string;
@@ -27,6 +29,7 @@ const taskMarker = /^\[([ Xx])\](?:[\t ]+|$)/u;
 const alertMarker = /^\[!(note|tip|important|warning|caution)\][\t ]*(?:\n|$)/iu;
 const textAlign = /^text-align:(left|center|right)$/u;
 const frontMatterEnd = new Set(['---', '...']);
+
 const taskStates: Readonly<Record<string, string>> = { ' ': 'open', x: 'done', X: 'done' };
 
 /**
@@ -50,6 +53,9 @@ export function createMarkdownIt(): MarkdownIt {
   md.core.ruler.push('beuve_source_lines', sourceLines);
   md.renderer.rules.html_block = (tokens, index, ...[, env]: unknown[]): string => {
     return htmlBlockFrom({ token: tokens[index], env });
+  };
+  md.renderer.rules.html_inline = (tokens, index): string => {
+    return withoutHandlers(tokens[index]?.content ?? '');
   };
   return md;
 }
@@ -193,9 +199,9 @@ interface HtmlBlockInput {
 /** A raw HTML block as written, after a marker with its source lines. */
 function htmlBlockFrom({ token, env }: HtmlBlockInput): string {
   if (token?.map === undefined || token.map === null) {
-    return token?.content ?? '';
+    return withoutHandlers(token?.content ?? '');
   }
   const [start, end] = token.map;
   const lines = linesValue({ env, start: start + 1, end });
-  return `<span data-html-lines="${lines}"></span>${token.content}`;
+  return `<span data-html-lines="${lines}"></span>${withoutHandlers(token.content)}`;
 }

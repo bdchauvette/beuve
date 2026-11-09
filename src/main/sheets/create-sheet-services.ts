@@ -1,4 +1,6 @@
 import type {
+  ImageFileRequest,
+  ImageFileView,
   IpcResult,
   OpenedView,
   OpenSheetRequest,
@@ -20,6 +22,7 @@ import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { UraServices } from '../ura/create-ura-services.ts';
 
+import { readRepositoryImage } from './read-repository-image.ts';
 import { readSheetSource } from './read-sheet-source.ts';
 import { resolveSheetCommit } from './resolve-sheet-commit.ts';
 import { sheetMarksFrom } from './sheet-marks-from.ts';
@@ -34,6 +37,11 @@ export interface SheetServices {
     request: SheetHeadRequest,
     options?: RequestOptions,
   ) => Promise<IpcResult<SheetHeadView>>;
+  /** An image of the repository at one commit, for a rich view (ADR 0123). */
+  readonly getImage: (
+    request: ImageFileRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<ImageFileView>>;
   /** Checks that the sheet's commit and file exist before main opens a window for it. */
   readonly checkOpen: (request: OpenSheetRequest) => Promise<IpcResult<OpenedView>>;
 }
@@ -98,6 +106,22 @@ export function createSheetServices(options: SheetServicesOptions): SheetService
         contents: contents.value,
         marks: sheetMarksFrom(files.value[0]?.hunks ?? [], lineCount),
         notes,
+      });
+    },
+    getImage: async ({ sessionId, sha, path }, call = {}): Promise<IpcResult<ImageFileView>> => {
+      const commit = await resolveSheetCommit(context, { sessionId, sha }, call);
+      if (!commit.ok) {
+        return commit;
+      }
+      const uri = await readRepositoryImage(context, { commit: commit.value, path }, call);
+      if (!uri.ok) {
+        return uri;
+      }
+      return ok({
+        sessionId: commit.value.refreshed.session.id,
+        sha: commit.value.sha,
+        path,
+        uri: uri.value,
       });
     },
     getHead: async ({ sessionId }, call = {}): Promise<IpcResult<SheetHeadView>> => {

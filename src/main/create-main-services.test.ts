@@ -5,7 +5,13 @@ import process from 'node:process';
 
 import { describe } from 'vitest';
 
-import type { CallHierarchyRequest, DefinitionView, ReviewView } from '#contract/ipc-contract.ts';
+import type {
+  CallHierarchyRequest,
+  DefinitionView,
+  ImageFileView,
+  IpcResult,
+  ReviewView,
+} from '#contract/ipc-contract.ts';
 import type { ServerTrustDecision } from '#internal/lsp/check-server-trust.ts';
 import type { ServerDefinition } from '#internal/lsp/server-definition.ts';
 import { pullRequestStackTemplate } from '#internal/git/testing/pull-request-stack-template.ts';
@@ -788,6 +794,42 @@ describe('createMainServices (integration: worktrees and typescript-language-ser
   );
 
   test(
+    'reads repository images at a commit as data URIs, by their bytes',
+    { timeout: 30_000 },
+    async ({ expect, services, repositories, signal }) => {
+      const { repo } = await repositories.fromTemplate(imageBranchTemplate());
+      const { id: sessionId, headSha: head } = okValueFrom(
+        await services.sessions.createLocal({
+          repoPath: repo.directory,
+          baseRef: 'main',
+          headRef: 'feature',
+        }),
+      );
+      const base = await repo.git('rev-parse', 'main');
+      const image = async ({ sha, path }: ImageAt): Promise<IpcResult<ImageFileView>> => {
+        return services.sheets.getImage({ sessionId, sha, path }, { signal });
+      };
+      const png = okValueFrom(await image({ sha: head, path: 'docs/shot.png' }));
+      expect(png).toMatchObject({ sha: head, path: 'docs/shot.png' });
+      expect(png.uri).toBe(`data:image/png;base64,${pngBytes().toBase64()}`);
+      const svg = okValueFrom(await image({ sha: head, path: 'logo.svg' }));
+      expect(svg.uri.startsWith('data:image/svg+xml;base64,')).toBe(true);
+      await expect(image({ sha: head, path: 'fake.png' })).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'unsupported' },
+      });
+      await expect(image({ sha: base, path: 'docs/shot.png' })).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'not-found' },
+      });
+      await expect(image({ sha: head.slice(0, 7), path: 'logo.svg' })).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'invalid-request' },
+      });
+    },
+  );
+
+  test(
     'reads a commit of the session for its card, and not a commit the clone lacks',
     { timeout: 30_000 },
     async ({ expect, services, repositories, signal }) => {
@@ -983,6 +1025,34 @@ function typescriptBranchTemplate(): RepositoryTemplate<undefined> {
       await typescriptBranch(repo);
     },
   };
+}
+
+/** An image's commit and path, for the image test. */
+interface ImageAt {
+  readonly sha: string;
+  readonly path: string;
+}
+
+/** main: a README. feature: a PNG, an SVG and a text file named `.png`. */
+function imageBranchTemplate(): RepositoryTemplate<undefined> {
+  return {
+    name: 'main: image branch',
+    build: async (repo): Promise<undefined> => {
+      repo.write('README.md', lines(['# Images']));
+      await repo.commit('base');
+      await repo.git('switch', '--quiet', '--create', 'feature');
+      repo.write('docs/shot.png', pngBytes());
+      repo.write('logo.svg', '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>\n');
+      repo.write('fake.png', 'not an image\n');
+      await repo.commit('add images');
+      await repo.git('switch', '--quiet', 'main');
+    },
+  };
+}
+
+/** The PNG signature and a little more: enough for the type to be read from the bytes. */
+function pngBytes(): Uint8Array {
+  return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]);
 }
 
 /** main: a Go module with `main.go`. feature: changes `main.go`. */

@@ -37,6 +37,11 @@ describe('createMarkdownIt', () => {
       '<span data-html-lines="1-2"></span><details>\n<summary>More</summary>\n<p data-source-lines="4-4">Hidden</p>\n<span data-html-lines="6-6"></span></details>\n',
     ],
     [
+      'raw HTML handlers renamed for the sanitizer to drop',
+      '<div onclick="a()" title="on=1">x <img/onerror=b()></div>\n\nText <span onmouseover="c">i</span>\n',
+      '<span data-html-lines="1-1"></span><div data-dropped-onclick="a()" title="on=1">x <img/data-dropped-onerror=b()></div>\n<p data-source-lines="3-3">Text <span data-dropped-onmouseover="c">i</span></p>\n',
+    ],
+    [
       'GitHub emoji shortcodes, not emoticons',
       'Ship :tada: :) :shipit:\n',
       '<p data-source-lines="1-1">Ship 🎉 :) :shipit:</p>\n',

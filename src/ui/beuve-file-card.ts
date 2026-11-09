@@ -88,6 +88,20 @@ import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
+import { segmentedStyles } from './primitives/segmented-styles.ts';
+import './rich-view/beuve-rich-view.ts';
+import type {
+  ImageLoader,
+  RichAnnotation,
+  RichLinkDetail,
+  RichSelectDetail,
+} from './rich-view/beuve-rich-view.ts';
+import type { ChangeRun } from './rich-view/change-run.ts';
+import { changeRunsFrom } from './rich-view/change-runs-from.ts';
+import { hunkTargetFrom } from './rich-view/hunk-target-from.ts';
+import type { RegionTarget } from './rich-view/region-target.ts';
+import type { BeuveRichView } from './rich-view/beuve-rich-view.ts';
+import { richViewKindFrom } from './rich-view/rich-view-kind-from.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -187,6 +201,7 @@ export class BeuveFileCard extends LitElement {
     emptyStateStyles,
     badgeStyles,
     buttonStyles,
+    segmentedStyles,
     formatControlStyles,
     css`
       :host {
@@ -232,6 +247,15 @@ export class BeuveFileCard extends LitElement {
 
       .status {
         text-transform: uppercase;
+      }
+
+      .view-toggle {
+        flex: none;
+        font: var(--beuve-font-small);
+      }
+
+      beuve-rich-view {
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .counts {
@@ -755,6 +779,39 @@ export class BeuveFileCard extends LitElement {
     this.focusedLine = undefined;
   };
 
+  private readonly onRichSelect = (event: CustomEvent<RichSelectDetail>): void => {
+    this.selectRegion(event.detail.target);
+  };
+
+  /** The rendered view's margin button: a note on the region, as the gutter button does. */
+  private readonly onRichNote = (event: CustomEvent<RichSelectDetail>): void => {
+    this.addNote(this.selectRegion(event.detail.target));
+  };
+
+  /** A rendered file's link: the web through main, a repository file in a sheet at the head. */
+  private readonly onRichLink = (event: CustomEvent<RichLinkDetail>): void => {
+    const { target } = event.detail;
+    if (target.kind === 'external') {
+      this.dispatchEvent(
+        new CustomEvent('beuve-open-url', {
+          detail: { url: target.href },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
+    const line = target.line ?? 1;
+    const range = { startLine: line, startCharacter: 0, endLine: line, endCharacter: 0 };
+    this.dispatchEvent(
+      new CustomEvent('beuve-sheet-request', {
+        detail: { path: target.path, range },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
   /**
    * The card's actions (ADR 0074), which the diff stream's listeners run through {@link runAction}:
    * a card adds no click or key listener of its own. Focus and hover moves inside a card never
@@ -770,6 +827,12 @@ export class BeuveFileCard extends LitElement {
       },
       unmark: (_data, event): void => {
         this.unmark(event);
+      },
+      view: ({ view }, event): void => {
+        event.stopPropagation();
+        if (view === 'rendered' || view === 'source') {
+          this.view = view;
+        }
       },
       expand: (_data, event): void => {
         this.expand(event);
@@ -811,6 +874,10 @@ export class BeuveFileCard extends LitElement {
   private editKeys: AbortController | undefined;
   /** The ⌘/Ctrl tracking that shows the pointer on tokens, while the card is in the document. */
   /** Context the reviewer revealed for notes outside the hunks, until the file changes. */
+  /** The change runs of the file's patch, for the rendered view's statuses. */
+  private runs: readonly ChangeRun[] = [];
+  private richPairFile: DiffFileView | undefined;
+
   @state() private accessor revealed: readonly RevealedRange[] = [];
 
   @property({ attribute: false }) accessor file: DiffFileView | undefined;
@@ -824,6 +891,8 @@ export class BeuveFileCard extends LitElement {
   @property({ type: Number }) accessor activeHunk = -1;
   /** Enables hunk expansion; absent outside Electron. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
+  /** Reads a repository image for a rendered file (ADR 0123). */
+  @property({ attribute: false }) accessor loadImage: ImageLoader | undefined;
   /** The session's URA items; staged ones placed on this file get markers. */
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings on this file's lines, not yet staged (ADR 0061); empty when hidden. */
@@ -855,6 +924,12 @@ export class BeuveFileCard extends LitElement {
   @state() accessor isFallback = false;
   /** `@pierre/diffs`, loaded with the first card that mounts (ADR 0025). */
   @state() accessor library: typeof Diffs | undefined;
+  /** A file with a rich view (ADR 0123) shows rendered unless the reviewer chose its source. */
+  @state() accessor view: 'rendered' | 'source' = 'source';
+  /** Both sides of a rendered file, read through `loadFilePair`. */
+  @state() accessor richPair: FilePairView | undefined;
+  /** The region the rendered view outlines: the selection, a jump's line or the focused hunk. */
+  @state() accessor richSelected: RegionTarget | undefined;
 
   constructor() {
     super();
@@ -1258,6 +1333,159 @@ export class BeuveFileCard extends LitElement {
     composerElement.error = composer.error;
   }
 
+  /**
+   * A new file: a different path opens rendered when it has a rich view (ADR 0123), the same
+   * path keeps the reviewer's choice; either way its runs and sides are read again.
+   */
+  private syncRichFile(previous: DiffFileView | undefined): void {
+    const { file } = this;
+    if (file?.path !== previous?.path) {
+      this.view = 'source';
+      if (file !== undefined && richViewKindFrom(file.path) !== undefined) {
+        this.view = 'rendered';
+      }
+      this.richSelected = undefined;
+    }
+    this.runs = changeRunsFrom(file?.patch ?? '');
+    this.richPair = undefined;
+    this.richPairFile = undefined;
+  }
+
+  /** Whether this card shows its file rendered (ADR 0123) rather than as a diff. */
+  private isRendered(): boolean {
+    const { file } = this;
+    return (
+      file !== undefined &&
+      this.view === 'rendered' &&
+      this.edit === undefined &&
+      !file.binary &&
+      richViewKindFrom(file.path) !== undefined
+    );
+  }
+
+  /** Selects a rendered region's lines as the card's target, and outlines it. */
+  private selectRegion(target: RegionTarget): SelectedLines {
+    const side = librarySides[target.side];
+    const range: SelectedLines = {
+      start: target.lines.start,
+      end: target.lines.end,
+      side,
+      endSide: side,
+    };
+    this.lineSelection = range;
+    this.focusedLine = undefined;
+    this.clickedToken = undefined;
+    this.richSelected = target;
+    return range;
+  }
+
+  private async loadRichPair(file: DiffFileView): Promise<void> {
+    this.richPairFile = file;
+    const pair = await this.loadFilePair?.(file.path);
+    if (this.file !== file) {
+      return;
+    }
+    if (pair === undefined) {
+      this.view = 'source';
+      return;
+    }
+    this.richPair = pair;
+  }
+
+  /** The rendered file, with the card's notes slotted under their regions. */
+  private renderRich(file: DiffFileView): TemplateResult {
+    const pair = this.richPair;
+    if (pair === undefined) {
+      return html`<p class="empty">Rendering ${pathText(file.path)}…</p>`;
+    }
+    const slots = this.notes();
+    const annotations = slots.map((slot, index): RichAnnotation => {
+      return { slot: `note-${String(index)}`, line: slot.lineEnd };
+    });
+    return html`<beuve-rich-view
+      .path=${file.path}
+      .basePath=${file.oldPath ?? file.path}
+      .head=${pair.newContents}
+      .base=${pair.oldContents}
+      .runs=${this.runs}
+      .annotations=${annotations}
+      .selected=${this.active ? this.richSelected : undefined}
+      .loadImage=${this.loadImage}
+      showsRemoved
+      canNote
+      @beuve-rich-select=${this.onRichSelect}
+      @beuve-rich-note=${this.onRichNote}
+      @beuve-rich-link=${this.onRichLink}
+      >${slots.map((slot, index) => {
+        return html`<div slot=${`note-${String(index)}`}>${this.richNoteElement(slot.note)}</div>`;
+      })}</beuve-rich-view
+    >`;
+  }
+
+  private richNoteElement(note: CardNote): HTMLElement {
+    switch (note.kind) {
+      case 'ura': {
+        return uraMarkerElement(note.item, undefined);
+      }
+      case 'insight': {
+        return this.insightNode(note.insight);
+      }
+      case 'composer': {
+        return this.composerNode();
+      }
+    }
+  }
+
+  /** Rendered and Source, for a file with a rich view. */
+  private renderViewToggle(file: DiffFileView): TemplateResult | typeof nothing {
+    if (file.binary || richViewKindFrom(file.path) === undefined || this.collapsed) {
+      return nothing;
+    }
+    const isRendered = this.view === 'rendered';
+    return html`<span class="segmented view-toggle" role="radiogroup" aria-label="Show the file">
+      <button
+        type="button"
+        role="radio"
+        aria-checked=${isRendered ? 'true' : 'false'}
+        data-action="view"
+        data-view="rendered"
+      >
+        Rendered
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked=${isRendered ? 'false' : 'true'}
+        data-action="view"
+        data-view="source"
+      >
+        Source
+      </button>
+    </span>`;
+  }
+
+  private rich(): BeuveRichView | undefined {
+    return this.renderRoot.querySelector('beuve-rich-view') ?? undefined;
+  }
+
+  /** Scrolls `target` into view in the rendered view (the card's header without one), mounting it. */
+  private async revealRegion(target: RegionTarget | undefined): Promise<RegionTarget | undefined> {
+    this.mounted = true;
+    await this.updateComplete;
+    if (target === undefined) {
+      this.scrollIntoView({ block: 'start' });
+      return undefined;
+    }
+    const rich = await waitForValue(() => this.rich());
+    return rich?.reveal(target);
+  }
+
+  /** Reveals `target` and outlines its region: a jump, a find hit or a hunk step. */
+  private async focusRegion(target: RegionTarget | undefined): Promise<void> {
+    const region = await this.revealRegion(target);
+    this.richSelected = region ?? target;
+  }
+
   private renderCode(file: DiffFileView): TemplateResult | typeof nothing {
     if (this.collapsed && this.reviewed === 'yes' && this.deferral === undefined) {
       return nothing;
@@ -1270,6 +1498,9 @@ export class BeuveFileCard extends LitElement {
     }
     if (file.hunks.length === 0) {
       return html`<p class="empty">${file.binary ? 'Binary file' : 'No textual changes'}</p>`;
+    }
+    if (this.mounted && this.isRendered()) {
+      return this.renderRich(file);
     }
     if (this.mounted) {
       return html`${keyed(this.codeGeneration, html`<div class="code"></div>`)}`;
@@ -1530,6 +1761,19 @@ ${splitPatch(file.patch).map((line) => {
     });
   }
 
+  /** Toggle Rendered View (ADR 0123): rendered or source, for a file with a rich view. */
+  toggleView(): void {
+    const { file } = this;
+    if (file === undefined || file.binary || richViewKindFrom(file.path) === undefined) {
+      return;
+    }
+    if (this.view === 'rendered') {
+      this.view = 'source';
+    } else {
+      this.view = 'rendered';
+    }
+  }
+
   /** The head-side token the reviewer last clicked, until they select or step elsewhere. */
   tokenClicked(): ClickedToken | undefined {
     return this.clickedToken;
@@ -1540,6 +1784,13 @@ ${splitPatch(file.patch).map((line) => {
    * Open in Editor and citations find them, base lines by their own numbers on the deleted side.
    */
   async revealRange({ start, end, side }: SideLines): Promise<void> {
+    if (this.isRendered()) {
+      const librarySide = librarySides[side];
+      await this.focusRegion({ side, lines: { start, end } });
+      this.lineSelection = { start, end, side: librarySide, endSide: librarySide };
+      this.focusedLine = undefined;
+      return;
+    }
     this.mounted = true;
     await this.updateComplete;
     const row = await waitFor(() => {
@@ -1589,6 +1840,8 @@ ${splitPatch(file.patch).map((line) => {
     if (file === undefined || loader === undefined || this.edit !== undefined) {
       return;
     }
+    // Suggest Edit edits the source (ADR 0123): a rendered file shows its diff for it.
+    this.view = 'source';
     this.edit = { target, phase: 'loading', error: '' };
     this.mounted = true;
     try {
@@ -1631,6 +1884,13 @@ ${splitPatch(file.patch).map((line) => {
 
   /** Scrolls to head line `line` and makes it the card's target (a citation or flow jump). */
   async focusLine(line: number): Promise<void> {
+    if (this.isRendered()) {
+      await this.focusRegion({ side: 'head', lines: { start: line, end: line } });
+      this.lineSelection = undefined;
+      this.clickedToken = undefined;
+      this.focusedLine = line;
+      return;
+    }
     await this.revealLine(line);
     // eslint-disable-next-line unicorn/no-null -- the library clears the selection with null.
     this.diff?.setSelectedLines(null);
@@ -1641,6 +1901,14 @@ ${splitPatch(file.patch).map((line) => {
 
   /** Scrolls head line `line` into view (or the card's header without one), mounting the diff. */
   async revealLine(line: number | undefined): Promise<void> {
+    if (this.isRendered()) {
+      let target: RegionTarget | undefined;
+      if (line !== undefined) {
+        target = { side: 'head', lines: { start: line, end: line } };
+      }
+      await this.revealRegion(target);
+      return;
+    }
     this.mounted = true;
     await this.updateComplete;
     if (line === undefined) {
@@ -1655,6 +1923,16 @@ ${splitPatch(file.patch).map((line) => {
 
   /** Selects hunk `index` and scrolls its first change into view, mounting the diff if needed. */
   async revealHunk(index: number): Promise<void> {
+    if (this.isRendered()) {
+      this.activeHunk = index;
+      const hunk = this.file?.hunks[index];
+      let target: RegionTarget | undefined;
+      if (hunk !== undefined) {
+        target = hunkTargetFrom(hunk, this.runs);
+      }
+      await this.focusRegion(target);
+      return;
+    }
     this.mounted = true;
     this.activeHunk = index;
     await this.updateComplete;
@@ -1711,6 +1989,20 @@ ${splitPatch(file.patch).map((line) => {
     if (changed.has('file')) {
       this.measuredHeight = undefined;
       this.revealed = [];
+      this.syncRichFile(changed.get('file'));
+    }
+    if (changed.has('view') && this.view === 'rendered' && this.diff !== undefined) {
+      this.unobserveCode();
+      this.diff.cleanUp();
+      this.diff = undefined;
+    }
+    if (
+      this.mounted &&
+      this.file !== undefined &&
+      this.richPairFile !== this.file &&
+      this.isRendered()
+    ) {
+      void this.loadRichPair(this.file);
     }
     if (!changed.has('file') && !changed.has('library')) {
       return;
@@ -1733,6 +2025,7 @@ ${splitPatch(file.patch).map((line) => {
     if (
       library === undefined ||
       metadata === undefined ||
+      this.isRendered() ||
       !this.mounted ||
       this.collapsed ||
       this.isFallback ||
@@ -1777,7 +2070,7 @@ ${splitPatch(file.patch).map((line) => {
             }${pathText(file.path)}
           </span>
           ${this.renderChangedSince()} ${this.renderTag()} ${this.renderInsightBadge()}
-          ${this.renderDiagnosticsNote()}
+          ${this.renderDiagnosticsNote()} ${this.renderViewToggle(file)}
           <span class="counts"
             ><span class="additions">+${file.additions}</span>
             <span class="deletions">−${file.deletions}</span></span

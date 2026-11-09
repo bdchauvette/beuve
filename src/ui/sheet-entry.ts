@@ -19,6 +19,7 @@ sheet.shortcuts = {
   back: shortcut('back'),
   forward: shortcut('forward'),
   copyLink: shortcut('copy-permalink'),
+  toggleRendered: shortcut('toggle-rendered'),
 };
 // The window's menu bar (and on macOS the app menu while this window is focused) runs these.
 api?.onMenuRun?.(({ id }) => {

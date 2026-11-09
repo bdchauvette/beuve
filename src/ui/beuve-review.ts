@@ -42,6 +42,7 @@ import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { beuveBridge } from './beuve-bridge.ts';
 import type { BeuveChatDrawer } from './beuve-chat-drawer.ts';
 import type { BeuveDiffStream } from './beuve-diff-stream.ts';
+import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
 import type { BeuveFilesSidebar } from './beuve-files-sidebar.ts';
 import type { BeuveUraDock } from './beuve-ura-dock.ts';
 import type { MentionTarget } from './chat-draft.ts';
@@ -459,6 +460,9 @@ export class BeuveReview extends LitElement {
     readonly generated: ReadonlySet<string>;
   } = { files: undefined, attributes: undefined, deferrals: new Map(), generated: new Set() };
 
+  /** Rendered files' images by commit and path (ADR 0123). */
+  private readonly images = new Map<string, Promise<string | undefined>>();
+
   /** Hunk expansion reads whole files through `session:get-file-pair`. */
   private readonly loadFilePair: FilePairLoader = async (
     path: string,
@@ -476,6 +480,34 @@ export class BeuveReview extends LitElement {
       return pair.value;
     }
     return undefined;
+  };
+
+  /**
+   * A rendered file's images (ADR 0123), read at the head or the review base through
+   * `media:get-image`, once per commit and path.
+   */
+  private readonly loadImage: ImageLoader = async ({ path, side }): Promise<string | undefined> => {
+    const bridge = beuveBridge();
+    const { review } = this;
+    if (bridge === undefined || review === undefined) {
+      return undefined;
+    }
+    let sha = review.headSha;
+    if (side === 'base') {
+      sha = review.baseSha;
+    }
+    const key = `${sha}\0${path}`;
+    return this.images.getOrInsertComputed(key, async (): Promise<string | undefined> => {
+      const image = await bridge.invoke('media:get-image', {
+        sessionId: review.session.id,
+        sha,
+        path,
+      });
+      if (image.ok) {
+        return image.value.uri;
+      }
+      return undefined;
+    });
   };
 
   private readonly onUraCreate = (event: CustomEvent<UraCreateRequest>): void => {
@@ -1020,6 +1052,7 @@ export class BeuveReview extends LitElement {
       .flow=${this.navigation.flow}
       .fileJump=${this.fileJump}
       .loadFilePair=${this.loadFilePair}
+      .loadImage=${this.loadImage}
       .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
       .diagnostics=${this.shownDiagnostics()}
@@ -1035,6 +1068,7 @@ export class BeuveReview extends LitElement {
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
       @beuve-sheet-request=${this.onSheetRequest}
+      @beuve-open-url=${this.onOpenUrl}
       @beuve-flow-request=${this.onFlowRequest}
       @beuve-flow-close=${this.onFlowClose}
       @beuve-ura-create=${this.onUraCreate}
