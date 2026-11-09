@@ -14,11 +14,16 @@ export interface PermalinkTarget {
   readonly endLine?: number;
 }
 
+/** Files GitHub shows rendered, whose line anchors work only in the plain view (ADR 0123). */
+const renderedName =
+  /\.(?:md|markdown|mdown|mkdn|mkd|mdwn|rst|adoc|asciidoc|org|textile|rdoc|ipynb)$/iu;
+
 /**
  * `https://<host>/<owner>/<repo>/blob/<sha>/<path>#L<a>-L<b>`: each path segment, the owner and
  * the repository percent-encoded on their own (so `#`, `?` and spaces in names stay in the path),
- * `#L<a>` for one line and no anchor for the whole file. GitHub Enterprise Server serves the same
- * paths on its own host. Pure.
+ * `#L<a>` for one line and no anchor for the whole file. Lines of a file GitHub renders (Markdown
+ * and the other markups) add `?plain=1`, which shows its source, as GitHub's own links do. GitHub
+ * Enterprise Server serves the same paths on its own host. Pure.
  */
 export function permalinkFrom(target: PermalinkTarget): string {
   const path = target.path
@@ -26,10 +31,14 @@ export function permalinkFrom(target: PermalinkTarget): string {
     .map((segment) => encodeURIComponent(segment))
     .join('/');
   const repository = [target.owner, target.repo].map((part) => encodeURIComponent(part)).join('/');
-  const url = `https://${target.host.toLowerCase()}/${repository}/blob/${target.sha}/${path}`;
+  const file = `https://${target.host.toLowerCase()}/${repository}/blob/${target.sha}/${path}`;
   const { startLine, endLine } = target;
   if (startLine === undefined) {
-    return url;
+    return file;
+  }
+  let url = file;
+  if (renderedName.test(target.path)) {
+    url = `${file}?plain=1`;
   }
   if (endLine === undefined || endLine <= startLine) {
     return `${url}#L${String(startLine)}`;

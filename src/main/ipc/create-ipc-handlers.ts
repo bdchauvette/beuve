@@ -81,6 +81,7 @@ import type {
   SetFileReviewedResponse,
   SheetFileView,
   SheetHeadView,
+  ImageFileView,
   SheetRangeView,
   TerminalAckView,
   TerminalListView,
@@ -732,6 +733,13 @@ export function createIpcHandlers(
         return scoped({ sender, kind: 'sheet-file' }, async (options) => {
           return services.sheets.getFile(parsed.data, options);
         });
+      }
+      return invalid(parsed.error);
+    },
+    'media:get-image': async (request): Promise<IpcResult<ImageFileView>> => {
+      const parsed = sheetFileRequest.safeParse(request);
+      if (parsed.success) {
+        return services.sheets.getImage(parsed.data);
       }
       return invalid(parsed.error);
     },

@@ -23,6 +23,7 @@ import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
 import type { FileDiagnostics } from './file-diagnostics.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
+import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
 import type { BeuveFindBar, FindQueryDetail, FindStepDetail } from './beuve-find-bar.ts';
 import type { DiffToggleDetail, SideLines, SuggestionCancelDetail } from './beuve-file-card.ts';
 import type {
@@ -625,6 +626,8 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor fileJump: FileJump | undefined;
   /** Backs hunk expansion in the cards. */
   @property({ attribute: false }) accessor loadFilePair: FilePairLoader | undefined;
+  /** Reads repository images for the rendered files (ADR 0123). */
+  @property({ attribute: false }) accessor loadImage: ImageLoader | undefined;
   /** The session's URA items, which the cards mark under their lines. */
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings to show as notes under their lines, not yet staged (ADR 0061). */
@@ -1324,6 +1327,7 @@ export class BeuveDiffStream extends LitElement {
                           .file=${file}
                           .diffStyle=${planDiffLayout(file.status, this.display.layout, this.streamWidth).style}
                           .loadFilePair=${this.loadFilePair}
+                          .loadImage=${this.loadImage}
                           .activeHunk=${index === this.activeIndex ? this.activeHunk : -1}
                           .peek=${this.peek?.path === file.path ? this.peek : undefined}
                           .flow=${this.flow?.path === file.path ? this.flow : undefined}
@@ -1610,6 +1614,10 @@ export class BeuveDiffStream extends LitElement {
       }
       case 'toggle-reviewed': {
         this.toggleReviewed();
+        return true;
+      }
+      case 'toggle-rendered': {
+        this.cards()[this.activeIndex]?.toggleView();
         return true;
       }
       case 'find-next': {

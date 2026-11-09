@@ -258,6 +258,14 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "Show &Diagnostics",
             "type": "checkbox",
           },
+          {
+            "type": "separator",
+          },
+          {
+            "accelerator": "Ctrl+Shift+M",
+            "id": "toggle-rendered",
+            "label": "Rendered &or Source",
+          },
         ],
       },
       {
@@ -996,6 +1004,14 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "id": "toggle-diagnostics",
             "label": "Show Diagnostics",
             "type": "checkbox",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "accelerator": "Shift+Cmd+M",
+            "id": "toggle-rendered",
+            "label": "Rendered or Source",
           },
         ],
       },

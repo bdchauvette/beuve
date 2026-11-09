@@ -345,6 +345,18 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'toggle-rendered',
+    title: 'Toggle Rendered View',
+    label: 'Rendered or Source',
+    menu: { menu: 'view', group: 2, submenu: 'Diff', subgroup: 2 },
+    keys: { mac: 'Shift+Cmd+M', linux: 'Ctrl+Shift+M' },
+    context: ['file', 'sheet'],
+    when: ['file'],
+    textConflict: true,
+    windows: ['main', 'sheet'],
+    handler: 'window',
+  },
+  {
     id: 'toggle-generated',
     title: 'Show Generated Files',
     menu: { menu: 'view', group: 2, submenu: 'Diff', subgroup: 1 },

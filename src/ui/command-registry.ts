@@ -122,6 +122,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     collapse: diff,
     back: none,
     forward: none,
+    'toggle-rendered': diff,
     'next-hunk': diff,
     'previous-hunk': diff,
     'next-file': diff,

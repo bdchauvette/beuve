@@ -40,7 +40,18 @@ import { formatControlStyles } from './format-control-styles.ts';
 import { applyCodeFont } from './apply-code-font.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { segmentedStyles } from './primitives/segmented-styles.ts';
 import './primitives/beuve-time.ts';
+import './rich-view/beuve-rich-view.ts';
+import type {
+  BeuveRichView,
+  ImageLoader,
+  RichAnnotation,
+  RichLinkDetail,
+  RichSelectDetail,
+} from './rich-view/beuve-rich-view.ts';
+import { changeRunsFromMarks } from './rich-view/change-runs-from-marks.ts';
+import { richViewKindFrom } from './rich-view/rich-view-kind-from.ts';
 
 type Loaded =
   | { readonly status: 'loading' }
@@ -66,6 +77,7 @@ interface FindState {
 export class BeuveSheetView extends LitElement {
   static override styles = [
     buttonStyles,
+    segmentedStyles,
     formatControlStyles,
     css`
       :host {
@@ -135,6 +147,21 @@ export class BeuveSheetView extends LitElement {
         flex: 1;
         min-block-size: 0;
         overflow: auto;
+      }
+
+      .sheet-note {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-1);
+        color: var(--beuve-text-muted);
+        font: var(--beuve-font-small);
+      }
+
+      .sheet-note .dot {
+        inline-size: var(--beuve-size-dot-small);
+        block-size: var(--beuve-size-dot-small);
+        border-radius: var(--beuve-radius-full);
+        background: var(--beuve-violet);
       }
 
       .note {
@@ -258,6 +285,50 @@ export class BeuveSheetView extends LitElement {
     return bridge.invoke('lsp:hover', request);
   };
 
+  /** A rendered file's images, read at this sheet's commit (ADR 0123). */
+  private readonly loadImage: ImageLoader = async ({ path }): Promise<string | undefined> => {
+    const image = await this.api?.invoke('media:get-image', {
+      sessionId: this.sessionId,
+      sha: this.sha,
+      path,
+    });
+    if (image?.ok === true) {
+      return image.value.uri;
+    }
+    return undefined;
+  };
+
+  private readonly onRichSelect = (event: CustomEvent<RichSelectDetail>): void => {
+    const { side, lines } = event.detail.target;
+    if (side === 'head') {
+      this.cursor = { start: lines.start, end: lines.end };
+    }
+  };
+
+  /**
+   * A rendered file's link: another file of the repository shows in this sheet, at this commit,
+   * and joins its history; a web link is copied, since a sheet opens nothing else (ADR 0067).
+   */
+  private readonly onRichLink = (event: CustomEvent<RichLinkDetail>): void => {
+    const { target } = event.detail;
+    if (target.kind === 'external') {
+      void this.copyLink(target.href);
+      return;
+    }
+    const place = this.current();
+    const line = target.line ?? 1;
+    const next: SheetPlace = { path: target.path, range: lineRange({ start: line, end: line }) };
+    let history = this.history;
+    if (place !== undefined && this.cursor !== undefined) {
+      history = stepSheetHistory(history, {
+        kind: 'visit',
+        place: { path: place.path, range: lineRange(this.cursor) },
+      });
+    }
+    this.history = stepSheetHistory(history, { kind: 'visit', place: next });
+    void this.show(this.current() ?? next);
+  };
+
   @property({ attribute: false }) accessor api: SheetApi | undefined;
   @property() accessor sessionId = '';
   /** The commit the sheet is pinned to. */
@@ -268,7 +339,8 @@ export class BeuveSheetView extends LitElement {
     readonly back: string;
     readonly forward: string;
     readonly copyLink: string;
-  } = { back: '', forward: '', copyLink: '' };
+    readonly toggleRendered: string;
+  } = { back: '', forward: '', copyLink: '', toggleRendered: '' };
 
   @state() accessor history: SheetHistory = { places: [], index: 0 };
   @state() accessor loaded: Loaded = { status: 'loading' };
@@ -281,6 +353,8 @@ export class BeuveSheetView extends LitElement {
   @state() accessor movedHead: string | undefined;
   /** The reviewer's View, Diff, Show Diagnostics, read each time a file is shown. */
   @state() accessor hasDiagnosticsOn = true;
+  /** A Markdown file (ADR 0123) shows rendered unless the reviewer chose its source. */
+  @state() accessor view: 'rendered' | 'source' = 'source';
 
   private renderFind(find: FindState): TemplateResult {
     return html`<div class="find">
@@ -323,6 +397,9 @@ export class BeuveSheetView extends LitElement {
         return html`<p class="note">${loaded.message}</p>`;
       }
       case 'ready': {
+        if (this.isRendered()) {
+          return this.renderRich(loaded.file);
+        }
         const { find } = this;
         return html`<beuve-sheet-code
           .path=${loaded.file.path}
@@ -477,11 +554,100 @@ export class BeuveSheetView extends LitElement {
   private moveCursorTo(line: number): void {
     const clamped = Math.min(Math.max(line, 1), this.lineCount());
     this.cursor = { start: clamped, end: clamped };
-    void this.code()?.reveal(clamped);
+    this.revealLine(clamped);
   }
 
   private code(): BeuveSheetCode | undefined {
     return this.renderRoot.querySelector('beuve-sheet-code') ?? undefined;
+  }
+
+  private rich(): BeuveRichView | undefined {
+    return this.renderRoot.querySelector('beuve-rich-view') ?? undefined;
+  }
+
+  /** Scrolls line `line` into view: its region when rendered, the line in the source. */
+  private revealLine(line: number): void {
+    if (this.isRendered()) {
+      void this.rich()?.reveal({ side: 'head', lines: { start: line, end: line } });
+      return;
+    }
+    void this.code()?.reveal(line);
+  }
+
+  private isRendered(): boolean {
+    return (
+      this.view === 'rendered' &&
+      this.loaded.status === 'ready' &&
+      richViewKindFrom(this.loaded.file.path) !== undefined
+    );
+  }
+
+  private async copyLink(url: string): Promise<void> {
+    const copied = await this.api?.invoke('clipboard:write-text', { text: url });
+    if (copied?.ok === true) {
+      this.note(`Copied ${url}: a sheet opens no web pages.`, false);
+      return;
+    }
+    this.note('The link could not be copied.', true);
+  }
+
+  /** Rendered and Source, for a Markdown file (ADR 0123). */
+  private renderViewToggle(): TemplateResult | typeof nothing {
+    if (this.loaded.status !== 'ready' || richViewKindFrom(this.loaded.file.path) === undefined) {
+      return nothing;
+    }
+    const isRendered = this.view === 'rendered';
+    return html`<span class="segmented" role="radiogroup" aria-label="Show the file">
+      <button
+        type="button"
+        role="radio"
+        aria-checked=${isRendered ? 'true' : 'false'}
+        title=${withShortcut({ label: 'Rendered', shortcut: this.shortcuts.toggleRendered })}
+        @click=${(): void => {
+          this.view = 'rendered';
+        }}
+      >
+        Rendered
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked=${isRendered ? 'false' : 'true'}
+        title=${withShortcut({ label: 'Source', shortcut: this.shortcuts.toggleRendered })}
+        @click=${(): void => {
+          this.view = 'source';
+        }}
+      >
+        Source
+      </button>
+    </span>`;
+  }
+
+  /** The file rendered (ADR 0123): marks as region tints, the cursor and find hit outlined. */
+  private renderRich(file: SheetFileView): TemplateResult {
+    const match = this.find?.matches[this.find.index];
+    let line = this.cursor;
+    if (match !== undefined) {
+      line = { start: match.line, end: match.line };
+    }
+    const annotations = file.notes.map((note, index): RichAnnotation => {
+      return { slot: `note-${String(index)}`, line: note.endLine };
+    });
+    return html`<beuve-rich-view
+      .path=${file.path}
+      .head=${file.contents}
+      .runs=${changeRunsFromMarks(file.marks)}
+      .annotations=${annotations}
+      .selected=${line === undefined ? undefined : ({ side: 'head', lines: line } as const)}
+      .loadImage=${this.loadImage}
+      @beuve-rich-select=${this.onRichSelect}
+      @beuve-rich-link=${this.onRichLink}
+      >${file.notes.map((note, index) => {
+        return html`<div slot=${`note-${String(index)}`} class="sheet-note">
+          <span class="dot"></span>${note.severity} · ${note.title}
+        </div>`;
+      })}</beuve-rich-view
+    >`;
   }
 
   private search(query: string): void {
@@ -497,7 +663,7 @@ export class BeuveSheetView extends LitElement {
     this.find = { query, matches, index };
     const match = matches[index];
     if (match !== undefined) {
-      void this.code()?.reveal(match.line);
+      this.revealLine(match.line);
     }
   }
 
@@ -515,7 +681,7 @@ export class BeuveSheetView extends LitElement {
 
     this.cursor = { start: match.line, end: match.line };
     this.column = { line: match.line, character: match.start };
-    void this.code()?.reveal(match.line);
+    this.revealLine(match.line);
   }
 
   private step(direction: 'back' | 'forward'): void {
@@ -541,6 +707,10 @@ export class BeuveSheetView extends LitElement {
     const isSameFile = this.loaded.status === 'ready' && place.path === this.loaded.file.path;
     if (!isSameFile) {
       this.loaded = { status: 'loading' };
+      this.view = 'source';
+      if (richViewKindFrom(place.path) !== undefined) {
+        this.view = 'rendered';
+      }
     }
     let pending = this.files.get(place.path);
     if (pending === undefined) {
@@ -579,7 +749,7 @@ export class BeuveSheetView extends LitElement {
     }
     await this.updateComplete;
     await this.code()?.updateComplete;
-    void this.code()?.reveal(range?.startLine ?? 1);
+    this.revealLine(range?.startLine ?? 1);
   }
 
   /** Follows the definition (or type) of the token at the cursor, at this sheet's commit. */
@@ -762,6 +932,14 @@ export class BeuveSheetView extends LitElement {
         void this.jump('type-definition');
         return true;
       }
+      case 'toggle-rendered': {
+        if (this.view === 'rendered') {
+          this.view = 'source';
+        } else {
+          this.view = 'rendered';
+        }
+        return true;
+      }
       case 'copy-permalink':
       case 'open-permalink': {
         void this.permalink(id === 'open-permalink');
@@ -857,6 +1035,7 @@ export class BeuveSheetView extends LitElement {
           →
         </button>
         <span class="title" title=${`${place?.path ?? ''} at ${this.sha}`}>${pathText(title)}</span>
+        ${this.renderViewToggle()}
         <span class="stamp"
           >printed <beuve-time datetime=${this.printedAt} time-style="short"></beuve-time
         ></span>

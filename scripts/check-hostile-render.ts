@@ -168,6 +168,8 @@ async function checkHostileRender(): Promise<void> {
     await checkDiffStream(run, main, repository);
     console.log('hostile render: names with bidi and invisible characters');
     await checkPathDisplay(run, main, repository);
+    console.log('hostile render: a rendered Markdown file');
+    await checkRenderedMarkdown(run, main, repository);
     console.log('hostile render: peek');
     await checkPeek(run, main, repository);
     console.log('hostile render: sheet windows');
@@ -504,6 +506,79 @@ function cardOf(filePath: string): string {
 }
 
 /** Peeks at the hostile lines. */
+/**
+ * The hostile Markdown file rendered in its card (ADR 0123): its regions are built, the page
+ * holds nothing that runs script or loads from elsewhere, no link keeps an `href`, every image is
+ * a `data:` URI or none, no document markup sets an id, a style or a class beuve styles, and the
+ * Mermaid diagram is an image (or Mermaid's error) and never markup.
+ */
+async function checkRenderedMarkdown(
+  run: Run,
+  main: SessionId,
+  repository: HostileRepository,
+): Promise<void> {
+  const { devtools, findings, shoot } = run;
+  const { markdown } = repository;
+  const card = cardOf(markdown.path);
+  await devtools.evaluate(
+    main,
+    `(() => { const card = ${card}; card.collapsed = false; card.scrollIntoView(); })()`,
+  );
+  const view = `(${card})?.renderRoot.querySelector('beuve-rich-view')?.shadowRoot`;
+  const built = await eventually(
+    devtools,
+    main,
+    `${view}?.querySelector('.document [data-source-lines]') && (${view}.querySelector('.document img.diagram, .document .diagram-error') !== null)`,
+  );
+  if (built === undefined) {
+    findings.failures.push(`${markdown.path}: the rendered view was not built`);
+    return;
+  }
+  await shoot(main, 'rendered-markdown');
+  const found = (await devtools.evaluate(
+    main,
+    `(() => {
+      const root = ${view};
+      const document_ = root.querySelector('.document');
+      return {
+        unsafe: __hostileProbe.unsafe(root),
+        text: __hostileProbe.text(root),
+        hrefs: [...document_.querySelectorAll('[href]')].map((element) => element.outerHTML.slice(0, 120)),
+        images: [...document_.querySelectorAll('img[src]')].map((image) => image.getAttribute('src')).filter((src) => !src.startsWith('data:image/')),
+        ids: [...document_.querySelectorAll('[id], [name], [style], [class]:not(.image-placeholder, .previous-toggle, .previous, .annotation, .highlighted, .diagram, .diagram-frame, .diagram-error)')].map((element) => element.outerHTML.slice(0, 120)),
+        forbidden: [...document_.querySelectorAll('style, link, base, meta, iframe, object, embed, form, input, button, svg, script')].map((element) => element.tagName),
+        forged: [...document_.querySelectorAll('[data-source-lines="1-999"]')].length,
+        diagram: document_.querySelector('img.diagram')?.getAttribute('src')?.slice(0, 26) ?? 'error',
+      };
+    })()`,
+  )) as {
+    readonly unsafe: readonly string[];
+    readonly text: string;
+    readonly hrefs: readonly string[];
+    readonly images: readonly string[];
+    readonly ids: readonly string[];
+    readonly forbidden: readonly string[];
+    readonly forged: number;
+    readonly diagram: string;
+  };
+  expectNone(findings, `${markdown.path}: unsafe markup`, found.unsafe);
+  expectNone(findings, `${markdown.path}: a link with an href`, found.hrefs);
+  expectNone(findings, `${markdown.path}: an image from elsewhere`, found.images);
+  expectNone(
+    findings,
+    `${markdown.path}: document markup with an id, name, style or class`,
+    found.ids,
+  );
+  expectNone(findings, `${markdown.path}: a forbidden element`, found.forbidden);
+  if (found.forged > 0) {
+    findings.failures.push(`${markdown.path}: the document set its own source lines`);
+  }
+  if (found.diagram !== 'error' && found.diagram !== 'data:image/svg+xml;charset') {
+    findings.failures.push(`${markdown.path}: the diagram is not an SVG image: ${found.diagram}`);
+  }
+  expectVisible(findings, { where: markdown.path, text: found.text, expected: markdown.visible });
+}
+
 async function checkPeek(run: Run, main: SessionId, repository: HostileRepository): Promise<void> {
   const { devtools, findings, shoot } = run;
   const app = "document.querySelector('beuve-app')";

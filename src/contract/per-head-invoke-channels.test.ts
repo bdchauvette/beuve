@@ -61,6 +61,7 @@ function headFreeSessionChannels(): Readonly<
     'sheet:open': 'opens a window pinned to its own `sha`',
     'sheet:get-file': 'a read pinned to its own `sha`',
     'sheet:get-head': read,
+    'media:get-image': 'a read pinned to its own `sha`',
     'remote:permalink': 'a link pinned to its own `sha`',
     'remote:open-permalink': 'a link pinned to its own `sha`',
     'remote:open-commit': 'a link pinned to its own `sha`',

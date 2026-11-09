@@ -32,6 +32,11 @@ export interface HostileRepository {
   readonly sheet: string;
   /** Names with bidi, control or invisible characters, which must show as escapes (ADR 0082). */
   readonly spoofing: readonly string[];
+  /**
+   * A Markdown file the card shows rendered (ADR 0123): raw HTML, links, images and a Mermaid
+   * diagram that try to run script, load from the network or navigate, and the text it shows.
+   */
+  readonly markdown: { readonly path: string; readonly visible: readonly string[] };
 }
 
 /** Names beyond the corpus for what only the app shows: invisible characters, a hostile extension. */
@@ -40,6 +45,7 @@ const appOnlyNames: ReadonlySet<string> = new Set([
   'x.<img src=x onerror=alert(1)>',
 ]);
 const benignName = 'benign.ts';
+const markdownPath = 'docs/hostile.md';
 const renamedDirectory = 'renamed';
 const contentsPath = 'contents.ts';
 const benignContentsPath = 'benign-contents.ts';
@@ -168,6 +174,7 @@ export async function createHostileRepository(
   await put(peekPath, `${peekFunctions.join('\n')}\n`);
   files.push({ path: peekPath, lines: peekFunctions });
   await put('binary-with-nul.bin', new Uint8Array([0x3c, 0x62, 0x3e, 0, 0x3c, 0x2f, 0x62, 0x3e]));
+  await put(markdownPath, hostileMarkdown(lines.map((input) => input.text)));
   await git('add', '--all');
   await git('commit', '--quiet', '--message', 'feature <img src=x onerror=alert(1)>');
   return {
@@ -181,6 +188,7 @@ export async function createHostileRepository(
     contents: { path: contentsPath, line: firstChangedLine() },
     peek: { path: peekPath, line: 1 },
     sheet: "'><svg onload=alert(1)>.ts",
+    markdown: { path: markdownPath, visible: ['rendered raw block', 'clobber', 'Inside'] },
     spoofing: [
       'invoice\u{202E}gpj.ts\u{202C}\u{2066}x\u{2069}.ts',
       'line\nbreak\there.ts',
@@ -254,4 +262,47 @@ function changedLines(line: string, side: 'base' | 'feature'): readonly string[]
 /** The 1-based line of the first section's first changed line in `feature`. */
 function firstChangedLine(): number {
   return fillerLines + 4;
+}
+
+/**
+ * Markdown whose raw HTML, links, images, footnotes and Mermaid diagram try every way out of the
+ * rendered view (ADR 0123), then each hostile line of the corpus as a paragraph.
+ */
+function hostileMarkdown(lines: readonly string[]): string {
+  return [
+    '# Hostile <img src=x onerror=alert(1)>',
+    '',
+    '<div onclick="alert(1)" data-source-lines="1-999" style="background:url(https://example.com/x)" class="badge">rendered raw block</div>',
+    '',
+    '<a href="javascript:alert(1)">js</a> [md js](javascript:alert(1)) [data](data:text/html,<script>alert(1)</script>) [proto](//example.com/x)',
+    '',
+    '<img src="https://example.com/track.png" onerror="alert(1)"> ![remote](https://example.com/a.png) ![up](../../../etc/passwd) <img src=x onerror=alert(1)//>',
+    '',
+    '<svg onload="alert(1)"><script>alert(1)</script><a href="javascript:alert(1)"><text>svg</text></a></svg>',
+    '',
+    '<iframe src="https://example.com"></iframe><object data="x"></object><embed src="x"><form action="https://example.com"><input name=a><button formaction="javascript:alert(1)">b</button></form>',
+    '',
+    '<style>body{display:none}</style><link rel=stylesheet href=https://example.com/x.css><base href="https://example.com/"><meta http-equiv="refresh" content="0;url=https://example.com">',
+    '',
+    '<a id="__proto__" name="location">clobber</a> <img name="cookie" id="body" src="data:image/svg+xml,<svg onload=alert(1)>">',
+    '',
+    '<details open ontoggle="alert(1)"><summary onclick="alert(1)">s</summary>',
+    '',
+    'Inside[^x].',
+    '',
+    '</details>',
+    '',
+    '```mermaid',
+    '%%{init: {"securityLevel": "loose", "htmlLabels": true}}%%',
+    'graph TD',
+    '  A["<img src=x onerror=alert(1)>"] --> B["<a href=javascript:alert(1)>b</a>"]',
+    '  click A "javascript:alert(1)"',
+    '```',
+    '',
+    '[^x]: footnote body <img src=x onerror=alert(1)>',
+    '',
+    ...lines.flatMap((line) => {
+      return [line, ''];
+    }),
+  ].join('\n');
 }
