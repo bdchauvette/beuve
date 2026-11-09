@@ -1,6 +1,6 @@
 # 0077. Trusted Types in the renderer, and no HTML string sinks in our code
 
-- Status: Accepted. The owner approved the CSP and policy on 2026-10-30, after the findings below; they shipped with the hostile-input tests under Consequences.
+- Status: Accepted; amended by [0123](0123-rich-views-starting-with-rendered-markdown.md). The owner approved the CSP and policy on 2026-10-30, after the findings below; they shipped with the hostile-input tests under Consequences.
 - Date: 2026-10-30
 
 ## Context
@@ -101,3 +101,7 @@ The owner asked for the corpus to run through the real renderer, not only throug
   - **It fails on** any `securitypolicyviolation` (except the `script-src-attr` reports the sanitizer's own parse makes for the spliced strings, and the refused `createPolicy` calls), any uncaught exception, any console error (the theme double registration it found is fixed), any `on*` attribute, `javascript:` URL in an attribute that takes a URL, `script` outside `<head>`, frame, plugin or `<base>`, any `<use>` that is not a `#id` reference, and hostile text that is not visible.
   - **Cost**: the check step took 46 s on Ubuntu and 63 s on macOS in its first CI run (run 41157239513), plus about 2 s to build; the harness's 252 cases take about 30 s of either.
   - **The negative control**, run locally, not in CI: `node scripts/build.ts --hostile-harness --pass-through-policy` builds the harness with a pass-through `default` policy (`src/ui/testing/install-pass-through-policy.ts`), and the check then fails (23 failures: the spliced scripts, handlers, `<use>` and `javascript:` link survive, every sanitizer case differs, and the pass-through name and any script URL are allowed).
+
+## Amendment 2026-11-09: repository Markdown (ADR 0123)
+
+Rendered Markdown files are the first HTML strings beuve itself turns into markup. They take the sanctioned path's inert form: `Document.parseHTML(html, { sanitizer })` with an allow-list (`markdownSanitizerConfig`), rewritten (links, images, ids) before the nodes are adopted. No sink, policy name or CSP source is added. `on…=` attributes in a file's raw HTML are renamed before the parse only so that Chromium's parser raises no `script-src-attr` reports. Mermaid is imported with `globalThis.trustedTypes` hidden, so the DOMPurify inside it creates no `dompurify` policy (which the CSP refuses) and its markup goes through the `default` policy. `check-hostile-render` renders a hostile Markdown file in the app and fails on any violation it raises.

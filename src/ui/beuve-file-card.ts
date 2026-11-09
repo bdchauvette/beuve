@@ -102,6 +102,7 @@ import { hunkTargetFrom } from './rich-view/hunk-target-from.ts';
 import type { RegionTarget } from './rich-view/region-target.ts';
 import type { BeuveRichView } from './rich-view/beuve-rich-view.ts';
 import { richViewKindFrom } from './rich-view/rich-view-kind-from.ts';
+import { isOutsideHunks } from './is-outside-hunks.ts';
 
 /** Reads both sides of a reviewed file for hunk expansion; `undefined` when it can't. */
 export type FilePairLoader = (path: string) => Promise<FilePairView | undefined>;
@@ -1328,6 +1329,9 @@ export class BeuveFileCard extends LitElement {
       return;
     }
     composerElement.where = composer.where;
+    if (isOutsideHunks(composer.anchor, this.file.hunks)) {
+      composerElement.where = `${composer.where} · outside the diff: on GitHub it goes in the review body`;
+    }
     composerElement.patch = composer.suggestedPatch ?? '';
     composerElement.saving = composer.saving;
     composerElement.error = composer.error;
