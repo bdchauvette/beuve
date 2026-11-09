@@ -1,6 +1,6 @@
 # 0067. Sheets: whole files pinned to a commit, definition jumps and permalinks
 
-- Status: Accepted (inline sheets removed 2026-11-06); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md)
+- Status: Accepted (inline sheets removed 2026-11-06); amended by [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) and [0123](0123-rich-views-starting-with-rendered-markdown.md)
 - Date: 2026-10-30
 
 ## Context
@@ -27,3 +27,7 @@ The sheet keys are menu commands now: Go to Definition ⌘B / Ctrl+B, Type Defin
 ## Amendment 2026-11-06: sheets are windows only
 
 Definitions open in a sheet window, always. The other mode, one sheet over the diff in the main window (`/sheets inline`, View › Open Definitions In › Over the Diff), is gone, with the `sheets` display preference, the `/sheets` chat command, the two menu radios and the Settings row. Keeping both meant two homes for one view: the overlay needed its own close event, focus routing for Back, Forward and Find, menu conditions from its history and a `'sheet'` context kind in the main window, and it bypassed `sheet:open`'s validation (the hostile-render check had been opening it at line 0, which `sheet:open` refuses). Back and Forward are now sheet-window commands only (`windows: ['sheet']`); the main window has no history of its own. `beuve-sheet-view` has no `mode` and closes its window on Esc. A `sheets` key in an older `settings.json` is no longer read.
+
+## Amendment 2026-11-09: rendered Markdown and repository images (ADR 0123)
+
+A sheet of a Markdown file shows it rendered, with a Rendered/Source toggle and Toggle Rendered View (⇧⌘M / Ctrl+Shift+M); the change's marks become region tints and the line cursor outlines its region. A relative link shows its file in the same sheet and joins its history; a web link is copied to the clipboard, since a sheet opens nothing else. `sheetInvokeChannels` adds `media:get-image`, which reads an image at the sheet's own commit as a `data:` URI typed by its bytes. Sheets still cannot stage notes.
