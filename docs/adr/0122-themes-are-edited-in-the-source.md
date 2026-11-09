@@ -1,6 +1,6 @@
 # 0122. Themes are edited in the source; the code font is a setting
 
-- Status: Accepted (code font setting built, amendment 2026-11-06)
+- Status: Accepted (code font setting built, amendment 2026-11-06); amended by [0124](0124-ibm-plex-sans-for-rendered-files.md)
 - Date: 2026-11-06
 
 ## Context
@@ -23,6 +23,10 @@ A reviewer who wants other colors needs a checkout and a build, which beuve's re
 Settings › Fonts › Code font, stored as `codeFont` in `settings.json` and carried by `display:get`/`display:set`, is a CSS `font-family` list, or empty for Commit Mono. "Code font" is the name throughout (the setting, the IPC field, the `--beuve-font-family-code` and `--beuve-font-code` tokens), not "monospace": it is the font code is read in.
 
 - **Fallbacks stay.** `index.css` builds `--beuve-font-family-code` as `var(--beuve-preferred-code-font, 'Commit Mono')` followed by Commit Mono and the system monospace stack. A family the machine does not have falls through to the bundled or system font, and nothing else in the renderer changes.
-- **Applied per window.** `applyCodeFont` sets or clears `--beuve-preferred-code-font` on the root of the main, Settings and sheet windows, which every shadow root inherits. The main window applies it whenever the display preferences load or change. A sheet window reads them when it opens and when it is focused again, since sheets get no `settings:changed`. The terminal watches the root's style and gives open xterms the new family once it has loaded.
+- **Applied per window.** `applyCodeFont` (since ADR 0124, `applyFonts`, which also sets the prose font) sets or clears `--beuve-preferred-code-font` on the root of the main, Settings and sheet windows, which every shadow root inherits. The main window applies it whenever the display preferences load or change. A sheet window reads them when it opens and when it is focused again, since sheets get no `settings:changed`. The terminal watches the root's style and gives open xterms the new family once it has loaded.
 - **Validated as a family list.** `isFontFamilyList` (`src/contract/`) accepts quoted names and runs of identifiers separated by commas, at most 200 characters, and refuses parentheses, semicolons, braces, backslashes, control characters and CSS-wide keywords. So a value cannot hold a `var()` or `url()` or end the declaration. `display:set` refuses anything else, and a stored value that fails reads as empty.
 - **No font files.** The setting names installed fonts. Loading a font file from elsewhere would need `font-src` widened, which this does not do.
+
+## Amendment 2026-11-09: a prose font (ADR 0124)
+
+Rendered files (ADR 0123) are documents, not interface, and use a bundled prose font, IBM Plex Sans, with a Prose font setting beside the code font, stored as `proseFont`. The interface font stays `system-ui` and is still not a setting.

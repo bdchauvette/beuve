@@ -1551,6 +1551,8 @@ export interface DiffDisplayView {
   readonly reviewQueueBranchPrefixes?: readonly string[];
   /** The preferred code font, a `font-family` list, before Commit Mono (ADR 0122); empty for none. Always set by main. */
   readonly codeFont?: string;
+  /** The preferred prose font for rendered files, before IBM Plex Sans (ADR 0124); empty for none. Always set by main. */
+  readonly proseFont?: string;
 }
 
 /** Changes some preferences; what is left out stays as it was. */
@@ -1566,6 +1568,7 @@ export interface SetDiffDisplayRequest {
   readonly reviewQueue?: ReviewQueuePrefsView;
   readonly reviewQueueBranchPrefixes?: readonly string[];
   readonly codeFont?: string;
+  readonly proseFont?: string;
 }
 
 /**

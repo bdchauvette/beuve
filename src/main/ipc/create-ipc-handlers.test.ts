@@ -1044,6 +1044,10 @@ describe('createIpcHandlers for the editor', () => {
     await expectInvalid(expect, handlers['display:set']({ showInsights: 'no' }));
     await expectInvalid(expect, handlers['display:set']({ codeFont: 'var(--x)' }));
     await expectInvalid(expect, handlers['display:set']({ codeFont: 'Menlo; color: red' }));
+    await expectInvalid(
+      expect,
+      handlers['display:set']({ proseFont: 'url(https://example.com/x)' }),
+    );
     await expectInvalid(expect, handlers['display:set']({ fontFamilySans: 'Inter' }));
     await expectInvalid(expect, handlers['display:get']({ x: 1 }));
     await handlers['display:set']({ layout: 'unified' });
@@ -1051,12 +1055,14 @@ describe('createIpcHandlers for the editor', () => {
     await handlers['display:set']({ showGenerated: true });
     await handlers['display:set']({ showInsights: false });
     await handlers['display:set']({ codeFont: '"Iosevka Term", monospace' });
+    await handlers['display:set']({ proseFont: '"Source Serif 4", serif' });
     expect(calls).toStrictEqual([
       { layout: 'unified' },
       { ignoreWhitespace: false },
       { showGenerated: true },
       { showInsights: false },
       { codeFont: '"Iosevka Term", monospace' },
+      { proseFont: '"Source Serif 4", serif' },
     ]);
   });
 });

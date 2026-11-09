@@ -37,7 +37,7 @@ import { stepSheetHistory } from './step-sheet-history.ts';
 import { withShortcut } from './with-shortcut.ts';
 import type { SheetHistory, SheetHistoryState, SheetPlace } from './step-sheet-history.ts';
 import { formatControlStyles } from './format-control-styles.ts';
-import { applyCodeFont } from './apply-code-font.ts';
+import { applyFonts } from './apply-fonts.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
@@ -850,7 +850,7 @@ export class BeuveSheetView extends LitElement {
       return;
     }
     this.hasDiagnosticsOn = display.value.showDiagnostics;
-    applyCodeFont(display.value);
+    applyFonts(display.value);
   }
 
   /** Whether the file on screen is the session head's: only then are there diagnostics. */
