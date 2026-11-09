@@ -3,7 +3,7 @@ import { css } from 'lit';
 import { buttonStyles } from '../primitives/button-styles.ts';
 
 /**
- * How a rich view looks (ADR 0123): a document in the interface font at reading size, a margin
+ * How a rich view looks (ADR 0123): a document in the prose font (ADR 0124) at reading size, a margin
  * on the start side for the note button, and regions tinted by status: added and removed in
  * the diff colors, modified in the accent, the selected regions outlined.
  */
@@ -22,8 +22,7 @@ export const richViewStyles = [
 
     .document {
       max-inline-size: var(--beuve-size-reading);
-      font: var(--beuve-font-body);
-      line-height: var(--beuve-line-height-relaxed);
+      font: var(--beuve-font-prose);
       color: var(--beuve-text);
       overflow-wrap: anywhere;
     }
@@ -34,6 +33,11 @@ export const richViewStyles = [
 
     .document :is(p, ul, ol, dl, blockquote, table, pre, details, hr, figure) {
       margin-block: 0 var(--beuve-space-3);
+    }
+
+    /* IBM Plex Sans is bundled at 400 and 600 (ADR 0124): bold text takes the semibold face. */
+    .document :is(strong, b, dt) {
+      font-weight: var(--beuve-font-weight-semibold);
     }
 
     .document :is(h1, h2, h3, h4, h5, h6) {
@@ -298,8 +302,10 @@ export const richViewStyles = [
       color: var(--beuve-accent);
     }
 
+    /* Notes are the interface's, not the document's (ADR 0124). */
     .document .annotation {
       margin-block-end: var(--beuve-space-3);
+      font: var(--beuve-font-body);
     }
 
     .note-button {

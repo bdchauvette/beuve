@@ -11,7 +11,7 @@ import type {
   SettingsApi,
 } from '#contract/ipc-contract.ts';
 
-import { applyCodeFont } from './apply-code-font.ts';
+import { applyFonts } from './apply-fonts.ts';
 import './beuve-model-settings.ts';
 import { describeOpenedConfig } from './describe-opened-config.ts';
 import { describeClaudeStatus } from './describe-claude-status.ts';
@@ -157,7 +157,7 @@ export class BeuveSettingsView extends LitElement {
     ]);
     if (display.ok) {
       this.display = display.value;
-      applyCodeFont(display.value);
+      applyFonts(display.value);
     }
     if (editors.ok) {
       this.editors = editors.value;
@@ -193,7 +193,7 @@ export class BeuveSettingsView extends LitElement {
     const saved = await bridge.invoke('display:set', change);
     if (saved.ok) {
       this.display = saved.value;
-      applyCodeFont(saved.value);
+      applyFonts(saved.value);
       this.error = '';
     } else {
       this.error = saved.error.message;
@@ -271,7 +271,10 @@ export class BeuveSettingsView extends LitElement {
       </div>`;
   }
 
-  /** The preferred code font (ADR 0122): a `font-family` list, empty for Commit Mono. The interface uses the system font. */
+  /**
+   * The preferred code font (ADR 0122) and prose font for rendered files (ADR 0124): `font-family`
+   * lists, empty for Commit Mono and IBM Plex Sans. The interface uses the system font.
+   */
   private renderFonts(display: DiffDisplayView): TemplateResult {
     return html`<h2>Fonts</h2>
       <div class="group">
@@ -290,6 +293,24 @@ export class BeuveSettingsView extends LitElement {
             .value=${display.codeFont ?? ''}
             @change=${(event: Event): void => {
               void this.setDisplay({ codeFont: (event.target as HTMLInputElement).value });
+            }}
+          />
+        </div>
+        <div class="row">
+          <label
+            for="prose-font"
+            title="The font rendered Markdown files are read in: a font-family list, such as Charter, serif. IBM Plex Sans and the system font stay as fallbacks."
+          >
+            Prose font
+          </label>
+          <input
+            id="prose-font"
+            type="text"
+            spellcheck="false"
+            placeholder="IBM Plex Sans"
+            .value=${display.proseFont ?? ''}
+            @change=${(event: Event): void => {
+              void this.setDisplay({ proseFont: (event.target as HTMLInputElement).value });
             }}
           />
         </div>

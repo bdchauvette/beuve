@@ -47,6 +47,46 @@
   font-display: block;
 }
 
+/*!
+ * IBM Plex Sans 1.1.0 — Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+ * (https://github.com/IBM/plex). The font files in fonts/ibm-plex-sans*.woff2 are licensed under
+ * the SIL Open Font License, Version 1.1 (https://openfontlicense.org), unmodified. See
+ * THIRD_PARTY_NOTICES.md.
+ */
+
+/* IBM Plex Sans (ADR 0124), for rendered files: regular and semibold, upright and italic. */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-semibold-italic.woff2') format('woff2');
+  font-weight: 600;
+  font-style: italic;
+  font-display: block;
+}
+
 /*
  * Design tokens (ADR 0114), in three tiers. Components use only the semantic and component tiers;
  * `local/css-design-tokens` rejects color literals, raw font sizes and `--beuve-scale-*` in them.
@@ -136,6 +176,13 @@
   --beuve-font-family-code:
     var(--beuve-preferred-code-font, 'Commit Mono'), 'Commit Mono', ui-monospace, 'SF Mono', Menlo,
     Consolas, monospace;
+  /*
+   * Rendered files are documents, not interface (ADR 0124): IBM Plex Sans, or the reviewer's
+   * prose font first, with the interface font as the last fallback.
+   */
+  --beuve-font-family-prose:
+    var(--beuve-preferred-prose-font, 'IBM Plex Sans'), 'IBM Plex Sans',
+    var(--beuve-font-family-sans);
 
   /* Primer's sizes, with 13px (Primer's code size) added for dense lists. Nothing is below 12px. */
   --beuve-font-size-caption: 0.75rem; /* 12px: timestamps, badges, counts */
@@ -246,6 +293,8 @@
     var(--beuve-line-height-tight) var(--beuve-font-family-sans);
   --beuve-font-code: var(--beuve-font-weight-normal) var(--beuve-font-size-code) /
     var(--beuve-line-height-normal) var(--beuve-font-family-code);
+  --beuve-font-prose: var(--beuve-font-weight-normal) var(--beuve-font-size-body) /
+    var(--beuve-line-height-relaxed) var(--beuve-font-family-prose);
 
   --beuve-titlebar-height: 2.5rem;
   --beuve-statusbar-height: 1.75rem;

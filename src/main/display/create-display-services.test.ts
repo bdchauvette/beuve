@@ -30,6 +30,7 @@ describe('createDisplayServices', () => {
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
         codeFont: '',
+        proseFont: '',
       },
     });
     await expect(display.set({ layout: 'unified' })).resolves.toStrictEqual({
@@ -46,6 +47,7 @@ describe('createDisplayServices', () => {
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
         codeFont: '',
+        proseFont: '',
       },
     });
     await display.set({ ignoreWhitespace: true });
@@ -55,6 +57,7 @@ describe('createDisplayServices', () => {
     await display.set({ reviewOrder: 'imports' });
     await display.set({ skipReviewed: true });
     await display.set({ codeFont: ' "JetBrains Mono", monospace ' });
+    await display.set({ proseFont: ' Charter, serif ' });
     expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
       preferredEditor: 'zed',
       diffLayout: 'unified',
@@ -68,6 +71,7 @@ describe('createDisplayServices', () => {
       reviewQueue: defaultReviewQueuePrefs,
       reviewQueueBranchPrefixes: ['claude/'],
       codeFont: '"JetBrains Mono", monospace',
+      proseFont: 'Charter, serif',
     });
     await expect(createDisplayServices(file).get()).resolves.toStrictEqual({
       ok: true,
@@ -83,6 +87,7 @@ describe('createDisplayServices', () => {
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
         codeFont: '"JetBrains Mono", monospace',
+        proseFont: 'Charter, serif',
       },
     });
   });
@@ -104,6 +109,7 @@ describe('createDisplayServices', () => {
         reviewQueue: defaultReviewQueuePrefs,
         reviewQueueBranchPrefixes: ['claude/'],
         codeFont: '',
+        proseFont: '',
       },
     });
   });
@@ -139,14 +145,17 @@ describe('createDisplayServices', () => {
     });
   });
 
-  test('reads a stored code font that is not a font-family list as none', async ({
+  test('reads a stored code or prose font that is not a font-family list as none', async ({
     expect,
     tempDir,
   }) => {
     const file = path.join(tempDir, 'settings.json');
-    writeFileSync(file, JSON.stringify({ codeFont: 'Menlo; color: red' }));
+    writeFileSync(
+      file,
+      JSON.stringify({ codeFont: 'Menlo; color: red', proseFont: 'url(https://example.com/x)' }),
+    );
     await expect(createDisplayServices(file).get()).resolves.toMatchObject({
-      value: { codeFont: '' },
+      value: { codeFont: '', proseFont: '' },
     });
   });
 });

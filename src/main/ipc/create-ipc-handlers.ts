@@ -484,6 +484,7 @@ const displayRequest = z.strictObject({
   reviewQueue: reviewQueuePrefsSchema.optional(),
   reviewQueueBranchPrefixes: z.array(z.string().max(100)).max(8).optional(),
   codeFont: fontFamily.optional(),
+  proseFont: fontFamily.optional(),
 });
 
 const catalogIds: ReadonlySet<string> = new Set(commandCatalog.map((command) => command.id));
@@ -1104,6 +1105,7 @@ export function createIpcHandlers(
         reviewQueue,
         reviewQueueBranchPrefixes,
         codeFont,
+        proseFont,
       } = parsed.data;
       return services.display.set({
         ...(layout !== undefined && { layout }),
@@ -1117,6 +1119,7 @@ export function createIpcHandlers(
         ...(reviewQueue !== undefined && { reviewQueue }),
         ...(reviewQueueBranchPrefixes !== undefined && { reviewQueueBranchPrefixes }),
         ...(codeFont !== undefined && { codeFont }),
+        ...(proseFont !== undefined && { proseFont }),
       });
     },
     'queue:get': async (request): Promise<IpcResult<ReviewQueueView>> => {
