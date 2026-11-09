@@ -20,8 +20,8 @@ interface Findings {
   readonly reported: string[];
 }
 
-/** The main window, as the steps address it. */
-interface MainWindow {
+/** A window's page (the main window or a sheet window), as the steps address it. */
+interface AppPage {
   readonly devtools: DevtoolsConnection;
   readonly page: SessionId;
 }
@@ -36,6 +36,9 @@ const stream = `${review}.renderRoot.querySelector('beuve-diff-stream')`;
 const card = `[...${stream}.renderRoot.querySelectorAll('beuve-file-card')].find((card) => card.file?.path === 'src/a.ts')`;
 const errorRanges = "CSS.highlights.get('beuve-diagnostic-error')";
 const hoverCard = `${review}.renderRoot.querySelector('beuve-hover-card')`;
+const sheetView = "document.querySelector('beuve-sheet-view')";
+const sheetCode = `${sheetView}?.renderRoot.querySelector('beuve-sheet-code')`;
+const recordViolations = `window.__violations = []; document.addEventListener('securitypolicyviolation', (event) => window.__violations.push(event.effectiveDirective + ' ' + event.blockedURI + ' ' + event.sample), true);`;
 
 await checkDiagnostics();
 
@@ -45,9 +48,9 @@ await checkDiagnostics();
  * has one type error and one clean changed file, and checks that the card of the broken file counts
  * the error in its header, underlines exactly the text the server named, shows the message in the
  * hover card when the pointer rests on it, and that the clean file's card says nothing. Restart
- * Language Servers must bring the diagnostics back. A sheet at the head underlines the error too;
- * a sheet at an older commit has none and shows a quiet heads-up. The page must report no violation, uncaught
- * exception or console error.
+ * Language Servers must bring the diagnostics back. A sheet window at the head underlines the error
+ * too; a sheet window at an older commit has none and shows a quiet heads-up. No page may report a
+ * violation, uncaught exception or console error.
  *
  * Build first (`node scripts/build.ts`). On Linux run it under a display, for example
  * `xvfb-run -a -s '-screen 0 1600x1000x24' node scripts/check-diagnostics.ts`; on macOS run it
@@ -86,17 +89,16 @@ async function checkDiagnostics(): Promise<void> {
   const page = await devtools.waitForPage((url) => {
     return url.endsWith('/index.html');
   }, wait());
-  const main: MainWindow = { devtools, page };
+  const main: AppPage = { devtools, page };
   try {
     await devtools.waitFor(page, `!!${app}?.renderRoot`, wait());
     await devtools.send('Emulation.setFocusEmulationEnabled', { enabled: true }, page);
-    await devtools.evaluate(
-      page,
-      `window.__violations = []; document.addEventListener('securitypolicyviolation', (event) => window.__violations.push(event.effectiveDirective + ' ' + event.blockedURI + ' ' + event.sample), true);`,
-    );
-    await runSteps(main, repository);
-    const violations = (await devtools.evaluate(page, 'window.__violations')) as string[];
-    findings.reported.push(...violations);
+    await devtools.evaluate(page, recordViolations);
+    const sheets = await runSteps(main, repository);
+    for (const window of [main, ...sheets]) {
+      const violations = (await devtools.evaluate(window.page, 'window.__violations')) as string[];
+      findings.reported.push(...violations);
+    }
     if (values.screenshots !== undefined) {
       await shoot(main, path.resolve(values.screenshots));
     }
@@ -108,7 +110,8 @@ async function checkDiagnostics(): Promise<void> {
   report(findings, launched.output());
 }
 
-async function runSteps(main: MainWindow, repository: string): Promise<void> {
+/** Runs every step; resolves the sheet windows it opened, whose violations count too. */
+async function runSteps(main: AppPage, repository: string): Promise<readonly AppPage[]> {
   const { devtools, page } = main;
   const request = { repoPath: repository, baseRef: 'main', headRef: 'feature' };
   console.log('diagnostics: open a review of a head with a type error');
@@ -172,53 +175,55 @@ async function runSteps(main: MainWindow, repository: string): Promise<void> {
     what: 'the diagnostics to come back after the restart',
   });
 
-  console.log('diagnostics: a sheet at the head underlines the error and shows no heads-up');
-  await showSheet(main, { id: 'head-sheet', sha: `${app}.review.headSha` });
-  await until(main, {
-    expression: `${sheetCode('head-sheet')}?.diagnostics?.length === 1 && ${errorRanges}?.size === 2`,
-    what: 'the head sheet to underline the error beside the card',
+  console.log('diagnostics: a sheet window at the head underlines the error and shows no heads-up');
+  const headSheet = await openSheet(main, `${app}.review.headSha`);
+  await until(headSheet, {
+    expression: `${sheetCode}?.diagnostics?.length === 1 && ${errorRanges}?.size === 1`,
+    what: 'the head sheet to underline the error',
   });
   await expectValue(
-    main,
-    `${sheet('head-sheet')}.renderRoot.querySelector('footer .info') === null`,
+    headSheet,
+    `${sheetView}.renderRoot.querySelector('footer .info') === null`,
     true,
   );
 
-  console.log('diagnostics: a sheet at an older commit has none, and says so quietly');
-  await devtools.evaluate(page, `${sheet('head-sheet')}.remove()`);
-  await showSheet(main, { id: 'old-sheet', sha: `${app}.review.baseSha` });
-  await until(main, {
-    expression: `${sheet('old-sheet')}.renderRoot.querySelector('footer .info')?.title.includes('only shown at the session head')`,
+  console.log('diagnostics: a sheet window at an older commit has none, and says so quietly');
+  const oldSheet = await openSheet(main, `${app}.review.baseSha`);
+  await until(oldSheet, {
+    expression: `${sheetView}?.renderRoot.querySelector('footer .info')?.title.includes('only shown at the session head')`,
     what: 'the older sheet to show its heads-up',
   });
-  await expectValue(main, `${sheetCode('old-sheet')}.diagnostics.length`, 0);
+  await expectValue(oldSheet, `${sheetCode}.diagnostics.length`, 0);
+  await expectValue(oldSheet, `${errorRanges}?.size ?? 0`, 0);
   await expectValue(main, `${errorRanges}.size`, 1);
+  return [headSheet, oldSheet];
 }
 
-/** The element id of a sheet, and the page expression for the commit it is pinned to. */
-interface SheetOptions {
-  readonly id: string;
-  readonly sha: string;
-}
-
-/** Opens a sheet of `src/a.ts` at `sha` (a page expression) in the main window, as the inline sheet is. */
-async function showSheet(main: MainWindow, options: SheetOptions): Promise<void> {
-  await main.devtools.evaluate(
+/**
+ * Opens `src/a.ts` at `sha` (a page expression) in a sheet window through `sheet:open`, as Go to
+ * Definition does, and returns that window's page, found by the commit in its query string, with
+ * the violation recorder installed.
+ */
+async function openSheet(main: AppPage, sha: string): Promise<AppPage> {
+  const { devtools } = main;
+  const commit = String(await devtools.evaluate(main.page, sha));
+  const opened = await devtools.evaluate(
     main.page,
-    `(() => { const sheet = document.createElement('beuve-sheet-view'); sheet.id = ${JSON.stringify(options.id)}; sheet.mode = 'inline'; sheet.api = window.beuve; sheet.sessionId = ${app}.review.session.id; sheet.sha = ${options.sha}; sheet.place = { path: 'src/a.ts' }; document.body.append(sheet); })()`,
+    `window.beuve.invoke('sheet:open', { sessionId: ${app}.review.session.id, sha: ${JSON.stringify(commit)}, path: 'src/a.ts' }).then((result) => result.ok)`,
   );
-}
-
-function sheet(id: string): string {
-  return `document.getElementById(${JSON.stringify(id)})`;
-}
-
-function sheetCode(id: string): string {
-  return `${sheet(id)}?.renderRoot.querySelector('beuve-sheet-code')`;
+  if (opened !== true) {
+    throw new Error(`sheet:open refused src/a.ts at ${commit}`);
+  }
+  const page = await devtools.waitForPage((url) => {
+    return url.includes('/sheet.html') && URL.parse(url)?.searchParams.get('sha') === commit;
+  }, wait());
+  await devtools.waitFor(page, `!!${sheetView}?.renderRoot`, wait());
+  await devtools.evaluate(page, recordViolations);
+  return { devtools, page };
 }
 
 /** Waits until `expression` holds in the page, or fails saying what it was waiting for. */
-async function until(main: MainWindow, wanted: Wanted): Promise<void> {
+async function until(main: AppPage, wanted: Wanted): Promise<void> {
   try {
     await main.devtools.waitFor(main.page, wanted.expression, wait());
   } catch {
@@ -238,14 +243,14 @@ interface Wanted {
   readonly what: string;
 }
 
-async function expectValue(main: MainWindow, expression: string, expected: unknown): Promise<void> {
+async function expectValue(main: AppPage, expression: string, expected: unknown): Promise<void> {
   const actual = await main.devtools.evaluate(main.page, expression);
   if (actual !== expected) {
     throw new Error(`${expression} is ${JSON.stringify(actual)}, not ${JSON.stringify(expected)}`);
   }
 }
 
-async function shoot(main: MainWindow, directory: string): Promise<void> {
+async function shoot(main: AppPage, directory: string): Promise<void> {
   await mkdir(directory, { recursive: true });
   const { data } = (await main.devtools.send(
     'Page.captureScreenshot',
