@@ -168,6 +168,7 @@ function notesOn(path: string, items: readonly UraItemView[]): SheetNoteView[] {
         startLine: placement.anchor.startLine,
         endLine: placement.anchor.endLine,
         severity: item.severity,
+        blocking: item.blocking,
         title: item.title,
       },
     ];

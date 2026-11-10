@@ -215,6 +215,7 @@ export class UraController implements ReactiveController {
       headSha: request.headSha,
       anchor: request.anchor,
       severity: request.draft.severity,
+      blocking: request.draft.blocking,
       title: request.draft.title,
       body: request.draft.body,
       ...(request.suggestedPatch !== undefined && { suggestedPatch: request.suggestedPatch }),

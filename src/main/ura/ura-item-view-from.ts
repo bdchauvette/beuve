@@ -18,6 +18,7 @@ export function uraItemViewFrom(
     anchor: item.anchor,
     placement,
     severity: item.severity,
+    blocking: item.blocking,
     origin: item.origin,
     title: item.title,
     body: item.body,

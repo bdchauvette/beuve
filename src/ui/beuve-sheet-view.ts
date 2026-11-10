@@ -8,6 +8,7 @@ import type {
   PermalinkView,
   SheetApi,
   SheetFileView,
+  SheetNoteView,
   SheetRangeView,
 } from '#contract/ipc-contract.ts';
 
@@ -53,6 +54,8 @@ import type {
 } from './rich-view/beuve-rich-view.ts';
 import { changeRunsFromMarks } from './rich-view/change-runs-from-marks.ts';
 import { richViewKindFrom } from './rich-view/rich-view-kind-from.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
 type Loaded =
   | { readonly status: 'loading' }
@@ -659,7 +662,7 @@ export class BeuveSheetView extends LitElement {
       @beuve-rich-link=${this.onRichLink}
       >${file.notes.map((note, index) => {
         return html`<div slot=${`note-${String(index)}`} class="sheet-note">
-          <span class="dot"></span>${note.severity} · ${note.title}
+          <span class="dot"></span>${noteLabel(note)} · ${note.title}
         </div>`;
       })}</beuve-rich-view
     >`;
@@ -1096,6 +1099,15 @@ export class BeuveSheetView extends LitElement {
       ></beuve-definition-link>
     `;
   }
+}
+
+/** `⚠️ issue`, after 🛑 and with `(blocking)` when the note blocks (ADR 0131). */
+function noteLabel(note: SheetNoteView): string {
+  const label = `${uraSeverityEmoji(note.severity)} ${note.severity}`;
+  if (note.blocking) {
+    return `${uraBlockingEmoji} ${label} (blocking)`;
+  }
+  return label;
 }
 
 function lineRange(lines: SheetSelectDetail): SheetRangeView {

@@ -15,6 +15,7 @@ export function createTestUraItem(overrides: Partial<UraItemCandidate> = {}): Ur
     headSha: testUraIds.headSha,
     anchor: { kind: 'lines', path: 'src/app.ts', startLine: 10, endLine: 12 },
     severity: 'issue',
+    blocking: false,
     origin: { kind: 'human' },
     title: 'Handle the empty list',
     body: 'An empty `items` array makes `first` undefined.',

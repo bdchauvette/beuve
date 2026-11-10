@@ -15,6 +15,7 @@ export function createUraItemView(overrides: Partial<UraItemView> = {}): UraItem
     anchor,
     placement: { kind: 'current', anchor },
     severity: 'issue',
+    blocking: false,
     origin: { kind: 'human' },
     title: 'Handle the empty list',
     body: '',

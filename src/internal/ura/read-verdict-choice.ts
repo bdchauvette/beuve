@@ -16,6 +16,6 @@ export function readVerdictChoice(db: DatabaseSync, sessionId: string): UraVerdi
   const isVerdict = verdict === 'approve' || verdict === 'request-changes' || verdict === 'comment';
   return {
     ...(isVerdict && typeof headSha === 'string' && { chosen: verdict, headSha }),
-    ...((reason === 'blocker-staged' || reason === 'head-moved') && { cleared: reason }),
+    ...((reason === 'blocking-staged' || reason === 'head-moved') && { cleared: reason }),
   };
 }

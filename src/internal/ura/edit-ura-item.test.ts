@@ -5,18 +5,19 @@ import { createTestUraItem } from './testing/create-test-ura-item.ts';
 import { test } from './testing/test.ts';
 
 describe('editUraItem', () => {
-  test('changes severity, title and body and bumps updatedAt', ({ expect }) => {
+  test('changes the label, blocking, title and body and bumps updatedAt', ({ expect }) => {
     const item = createTestUraItem();
     const result = editUraItem(
       item,
-      { severity: 'blocker', title: ' New ', body: 'More.' },
+      { severity: 'smell', blocking: true, title: ' New ', body: 'More.' },
       later(),
     );
     expect(result).toStrictEqual({
       ok: true,
       value: {
         ...item,
-        severity: 'blocker',
+        severity: 'smell',
+        blocking: true,
         title: 'New',
         body: 'More.',
         updatedAt: later().toString({ fractionalSecondDigits: 3 }),

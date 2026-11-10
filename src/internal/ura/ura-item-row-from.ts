@@ -14,6 +14,7 @@ export function uraItemRowFrom(item: UraItem): Record<string, SQLInputValue> {
     head_sha: item.headSha,
     ...anchorColumns(item.anchor),
     severity: item.severity,
+    blocking: Number(item.blocking),
     ...originColumns(item.origin),
     title: item.title,
     body: item.body,

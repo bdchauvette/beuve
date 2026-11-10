@@ -3,7 +3,7 @@ import type { Migration } from '#sqlite/run-migrations.ts';
 import { uraSeverities } from './ura-severities.ts';
 
 /**
- * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102; squashed until the first
+ * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102, 0131; squashed until the first
  * release).
  * `ura_items` references `sessions`, so main runs the session domain's migrations first. Table
  * CHECKs mirror the anchor, origin and status unions. `chat_message_id` deliberately has no foreign
@@ -23,6 +23,7 @@ export const uraMigrations: readonly Migration[] = [
         line_start INTEGER,
         line_end INTEGER,
         severity TEXT NOT NULL CHECK (severity IN (${list(uraSeverities)})),
+        blocking INTEGER NOT NULL CHECK (blocking IN (0, 1)),
         origin_kind TEXT NOT NULL
           CHECK (origin_kind IN ('human', 'chat-answer')),
         chat_message_id TEXT,
@@ -67,7 +68,7 @@ export const uraMigrations: readonly Migration[] = [
         session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
         verdict TEXT CHECK (verdict IS NULL OR verdict IN ('approve', 'request-changes', 'comment')),
         cleared_reason TEXT
-          CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocker-staged', 'head-moved')),
+          CHECK (cleared_reason IS NULL OR cleared_reason IN ('blocking-staged', 'head-moved')),
         head_sha TEXT CHECK (head_sha IS NULL OR (${sha('head_sha')})),
         updated_at TEXT NOT NULL CHECK (${timestamp('updated_at')}),
         CHECK (verdict IS NULL OR cleared_reason IS NULL),

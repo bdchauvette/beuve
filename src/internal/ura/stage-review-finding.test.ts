@@ -33,10 +33,11 @@ describe('stageReviewFinding', () => {
     expect([severity('risk'), severity('warning'), severity('info')]).toStrictEqual([
       'issue',
       'issue',
-      'nit',
+      'nitpick',
     ]);
-    const chosen = stageReviewFinding(finding(), source(), { deps, severity: 'blocker' });
-    expect(chosen.ok && chosen.value.severity).toBe('blocker');
+    const chosen = stageReviewFinding(finding(), source(), { deps, severity: 'smell' });
+    expect(chosen.ok && chosen.value.severity).toBe('smell');
+    expect(chosen.ok && chosen.value.blocking).toBe(false);
   });
 });
 

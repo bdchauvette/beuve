@@ -609,6 +609,7 @@ export interface SheetNoteView {
   readonly startLine: number;
   readonly endLine: number;
   readonly severity: UraSeverityView;
+  readonly blocking: boolean;
   readonly title: string;
 }
 
@@ -1223,8 +1224,24 @@ export type ChatCompactedView =
       readonly errorMessage: string;
     };
 
-/** How much a URA item matters, most urgent first (ADR 0023). */
-export type UraSeverityView = 'blocker' | 'issue' | 'question' | 'nit' | 'praise';
+/**
+ * A URA item's Conventional Comments label, or beuve's `smell` (ADR 0131); whether it blocks is
+ * the separate `blocking` flag.
+ */
+export type UraSeverityView =
+  | 'issue'
+  | 'suggestion'
+  | 'question'
+  | 'nitpick'
+  | 'thought'
+  | 'smell'
+  | 'praise'
+  | 'note'
+  | 'todo'
+  | 'chore'
+  | 'typo'
+  | 'polish'
+  | 'quibble';
 
 /** Where a URA item points on a head: lines are 1-based and inclusive. */
 export type UraAnchorView =
@@ -1272,6 +1289,8 @@ export interface UraItemView {
   readonly anchor: UraAnchorView;
   readonly placement: UraPlacementView;
   readonly severity: UraSeverityView;
+  /** The `(blocking)` decoration: approving is refused while it is staged (ADR 0131). */
+  readonly blocking: boolean;
   readonly origin: UraOriginView;
   readonly title: string;
   readonly body: string;
@@ -1313,7 +1332,7 @@ export interface UraListView {
 /**
  * Stores the verdict the reviewer picks for the session (ADR 0029); exports and
  * `beuve_read_human_review` use it. Omitting `verdict` (or passing the derived one) goes back to
- * following the derived verdict. Approving while a blocker is staged is `refused`. The choice
+ * following the derived verdict. Approving while a blocking note is staged is `refused`. The choice
  * belongs to `expectedHeadSha`, the head the reviewer was shown (ADR 0045, 0078); if the head
  * moved since, nothing is stored and the call fails with `stale-review`.
  */
@@ -1340,6 +1359,8 @@ export interface CreateUraItemRequest {
   readonly headSha?: string;
   readonly anchor: UraAnchorView;
   readonly severity: UraSeverityView;
+  /** Defaults to not blocking. */
+  readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
   readonly suggestedPatch?: string;
@@ -1347,10 +1368,11 @@ export interface CreateUraItemRequest {
   readonly origin?: { readonly kind: 'chat-answer'; readonly messageId: string };
 }
 
-/** Edits an item's text, severity or patch; an empty `suggestedPatch` removes the patch. */
+/** Edits an item's text, label, blocking or patch; an empty `suggestedPatch` removes the patch. */
 export interface UpdateUraItemRequest {
   readonly itemId: string;
   readonly severity?: UraSeverityView;
+  readonly blocking?: boolean;
   readonly title?: string;
   readonly body?: string;
   readonly suggestedPatch?: string;
@@ -2243,7 +2265,7 @@ export interface CiStatusChangedView {
  * yet; `stale-review` that the head moved after the reviewer last saw it; `unsupported` that no
  * language server handles the file, or that a side of a file pair is binary or too large;
  * `lsp-failed` that the language server could not answer; `refused` that a valid request
- * contradicts the current state (approving over a blocker, an impossible status change).
+ * contradicts the current state (approving over a blocking note, an impossible status change).
  */
 export type IpcErrorCode =
   | 'invalid-request'

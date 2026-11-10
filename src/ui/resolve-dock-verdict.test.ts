@@ -24,14 +24,16 @@ describe('resolveDockVerdict', () => {
     });
   });
 
-  test('refuses to approve over staged blockers, keeping the derived verdict', ({ expect }) => {
+  test('refuses to approve over staged blocking notes, keeping the derived verdict', ({
+    expect,
+  }) => {
     expect(resolveDockVerdict('approve', 'request-changes', 1)).toStrictEqual({
       value: 'request-changes',
       source: 'derived',
-      refusal: "Can't approve while a blocker is staged: withdraw it or lower the severity.",
+      refusal: "Can't approve while a blocking note is staged: withdraw it or turn off Blocking.",
     });
     expect(resolveDockVerdict('approve', 'request-changes', 2).refusal).toContain(
-      '2 blockers are staged',
+      '2 blocking notes are staged',
     );
     expect(resolveDockVerdict('comment', 'request-changes', 2)).toStrictEqual({
       value: 'comment',

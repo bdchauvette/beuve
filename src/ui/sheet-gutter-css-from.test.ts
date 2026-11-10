@@ -32,7 +32,7 @@ describe('sheetGutterCssFrom', () => {
   test('marks notes and find matches, the current match strongest', ({ expect }) => {
     const css = sheetGutterCssFrom({
       marks: noMarks(),
-      notes: [{ startLine: 4, endLine: 4, severity: 'issue', title: 'Check' }],
+      notes: [{ startLine: 4, endLine: 4, severity: 'issue', blocking: false, title: 'Check' }],
       matchLines: [5, 5, 6],
       currentMatchLine: 6,
     });

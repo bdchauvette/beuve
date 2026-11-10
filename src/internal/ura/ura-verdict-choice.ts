@@ -1,7 +1,7 @@
 import type { UraVerdict } from './ura-artifact.ts';
 
 /** Why a stored choice was dropped: it became impossible to honour. */
-export type VerdictClearReason = 'blocker-staged' | 'head-moved';
+export type VerdictClearReason = 'blocking-staged' | 'head-moved';
 
 /**
  * The verdict the reviewer picked for a session (ADR 0029, 0045). `chosen` is absent when they

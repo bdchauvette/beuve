@@ -81,7 +81,7 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
     const item = createTestUraItem({ suggestion: '@@ -11 +11 @@\n-a\n+b\n' });
     insertUraItem(db, item);
     const edited = okValueFrom(
-      editUraItem(item, { severity: 'blocker', body: 'Now urgent.', suggestion: '' }, later()),
+      editUraItem(item, { blocking: true, body: 'Now urgent.', suggestion: '' }, later()),
     );
     expect(updateUraItem(db, edited)).toStrictEqual({ ok: true, value: undefined });
     expect(findUraItem(db, item.id)).toStrictEqual({ ok: true, value: edited });

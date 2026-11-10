@@ -1,14 +1,22 @@
 import type { UraSeverity } from './ura-severities.ts';
 
 const emoji: Readonly<Record<UraSeverity, string>> = {
-  blocker: '🛑',
   issue: '⚠️',
+  suggestion: '💡',
   question: '❓',
-  nit: '⛏️',
+  nitpick: '⛏️',
+  thought: '💭',
+  smell: '👃',
   praise: '✨',
+  note: 'ℹ️',
+  todo: '☑️',
+  chore: '🧹',
+  typo: '🔤',
+  polish: '💅',
+  quibble: '🤏',
 };
 
-/** The emoji that marks a severity at a glance, in the dock, the diff and posted reviews. */
+/** The emoji that marks a label at a glance, in the dock, the diff and posted reviews (ADR 0131). */
 export function uraSeverityEmoji(severity: UraSeverity): string {
   return emoji[severity];
 }

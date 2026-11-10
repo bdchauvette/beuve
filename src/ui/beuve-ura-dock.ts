@@ -8,7 +8,6 @@ import type {
   UraAnchorView,
   UraExportTarget,
   UraItemView,
-  UraSeverityView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -30,7 +29,9 @@ import { moveUraItem } from './move-ura-item.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
+import { uraSeverityViews } from './ura-severity-views.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -43,8 +44,6 @@ export interface DockNotice {
   readonly tone: 'info' | 'error';
   readonly text: string;
 }
-
-const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 'nit', 'praise'];
 
 const verdictLabels: Readonly<Record<UraVerdictView, string>> = {
   approve: 'Approve',
@@ -69,13 +68,13 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * Zone 3: the Universal Review Artifact staging dock (ADR 0023, 0027). Lists the session's staged
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
- * Return jumps the diff stream to the item, Space opens its editor (title, body, severity), Delete
- * withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
+ * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
+ * Delete withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
  * too (ADR 0129); Review ▸ Note and the
  * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
  * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
- * approving over a staged blocker; export buttons copy the compiled review. Items carrying a
- * suggested patch say `suggestion` and preview it under the cursor; the editor can re-edit the
+ * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
+ * a suggested patch say `patch` and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
  * `beuve-ura-edit-suggestion`,
  * `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-transition`, `beuve-ura-reorder` and
@@ -164,25 +163,33 @@ export class BeuveUraDock extends LitElement {
         border-radius: var(--beuve-radius-small);
       }
 
-      .severity.blocker {
-        color: var(--beuve-danger);
-      }
-
-      .severity.issue {
+      .severity.issue,
+      .severity.todo,
+      .severity.chore,
+      .severity.typo {
         color: var(--beuve-warn);
       }
 
+      .severity.suggestion,
       .severity.question {
         color: var(--beuve-accent);
       }
 
-      .severity.nit,
-      .severity.praise {
+      .severity.nitpick,
+      .severity.thought,
+      .severity.smell,
+      .severity.note,
+      .severity.polish,
+      .severity.quibble {
         color: var(--beuve-text-muted);
       }
 
       .severity.praise {
         color: var(--beuve-ok);
+      }
+
+      .severity.blocking {
+        color: var(--beuve-danger);
       }
 
       .origin {
@@ -368,7 +375,7 @@ export class BeuveUraDock extends LitElement {
     if (event.ctrlKey || event.metaKey || event.defaultPrevented) {
       return;
     }
-    if (isTextEntry(event)) {
+    if (isTextEntry(event) || isInEditor(event)) {
       this.editorKey(event);
       return;
     }
@@ -409,6 +416,8 @@ export class BeuveUraDock extends LitElement {
 
   @state() accessor cursor = 0;
   @state() accessor editingId: string | undefined;
+  /** The open editor's Blocking toggle, which starts from the note's own (ADR 0131). */
+  @state() accessor editingBlocking = false;
   @state() accessor verdictRefusal = '';
 
   /** `process.platform`, for the Save button's tooltip. */
@@ -438,6 +447,10 @@ export class BeuveUraDock extends LitElement {
           ),
           editor: (_data, event): void => {
             event.stopPropagation();
+          },
+          'toggle-blocking': (_data, event): void => {
+            event.stopPropagation();
+            this.editingBlocking = !this.editingBlocking;
           },
           'cancel-edit': (_data, event): void => {
             event.stopPropagation();
@@ -576,6 +589,7 @@ export class BeuveUraDock extends LitElement {
 
   private openEditor(item: UraItemView): void {
     this.editingId = item.id;
+    this.editingBlocking = item.blocking;
     void this.focusEditor();
   }
 
@@ -627,6 +641,7 @@ export class BeuveUraDock extends LitElement {
       title,
       body: field('body'),
       severity: field('severity') || item.severity,
+      blocking: this.editingBlocking,
     });
     this.closeEditor();
   }
@@ -641,16 +656,15 @@ export class BeuveUraDock extends LitElement {
     if (value !== '') {
       chosen = value as UraVerdictView;
     }
-    const resolved = resolveDockVerdict(chosen, this.derivedVerdict, this.blockers());
+    const resolved = resolveDockVerdict(chosen, this.derivedVerdict, this.blockingCount());
     this.verdictRefusal = resolved.refusal ?? '';
     if (resolved.refusal === undefined) {
       this.emit('beuve-ura-set-verdict', { verdict: chosen });
     }
   }
 
-  private blockers(): number {
-    return this.items.filter((item) => item.status.kind === 'staged' && item.severity === 'blocker')
-      .length;
+  private blockingCount(): number {
+    return this.items.filter((item) => item.status.kind === 'staged' && item.blocking).length;
   }
 
   private exportTo(target: UraExportTarget): void {
@@ -668,7 +682,9 @@ export class BeuveUraDock extends LitElement {
     >
       <div class="meta">
         ${createUraNoteIcon()}
-        <span class="severity ${item.severity}">${labels.emoji} ${labels.severity}</span>
+        <span class="severity ${item.severity} ${item.blocking ? 'blocking' : ''}"
+          >${labels.emoji} ${labels.severity}</span
+        >
         <span class="anchor" title=${labels.anchor}><bdi>${pathText(labels.anchor)}</bdi></span>
         ${
           labels.outdated === undefined
@@ -691,7 +707,7 @@ export class BeuveUraDock extends LitElement {
         ${
           item.suggestedPatch === undefined
             ? nothing
-            : html`<span class="suggestion" title="Carries a suggested change">suggestion</span>`
+            : html`<span class="suggestion" title="Carries a suggested change">patch</span>`
         }
         <span class="origin ${item.origin.kind}">${status === '' ? labels.origin : status}</span>
       </div>
@@ -710,13 +726,22 @@ export class BeuveUraDock extends LitElement {
   private renderEditor(item: UraItemView): TemplateResult {
     return html`<form class="editor" data-action="editor" data-item-id=${item.id}>
       <div class="row">
-        <select name="severity" aria-label="Severity">
-          ${severities.map((severity) => {
+        <select name="severity" aria-label="Label">
+          ${uraSeverityViews.map((severity) => {
             return html`<option value=${severity} ?selected=${severity === item.severity}>
               ${uraSeverityEmoji(severity)} ${severity}
             </option>`;
           })}
         </select>
+        <button
+          class="button"
+          type="button"
+          data-action="toggle-blocking"
+          aria-pressed=${String(this.editingBlocking)}
+          title="Blocking: must be resolved before merging"
+        >
+          ${uraBlockingEmoji} Blocking
+        </button>
         <input
           name="title"
           aria-label="Title"
@@ -785,7 +810,11 @@ export class BeuveUraDock extends LitElement {
   }
 
   private renderExport(stagedCount: number): TemplateResult {
-    const verdict = resolveDockVerdict(this.chosenVerdict, this.derivedVerdict, this.blockers());
+    const verdict = resolveDockVerdict(
+      this.chosenVerdict,
+      this.derivedVerdict,
+      this.blockingCount(),
+    );
     return html`<section>
       <h2>Export</h2>
       <label class="verdict">
@@ -1257,6 +1286,12 @@ function isTextEntry(event: KeyboardEvent): boolean {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
+}
+
+/** A key on the open editor's buttons (the Blocking toggle) is theirs, not the dock's. */
+function isInEditor(event: KeyboardEvent): boolean {
+  const [target] = event.composedPath();
+  return target instanceof Element && target.closest('.editor') !== null;
 }
 
 const saveAccelerators: Readonly<Record<KeyPlatform, string>> = {

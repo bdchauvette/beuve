@@ -28,11 +28,13 @@ describe('describeUraItem', () => {
         kind: 'current',
         anchor: { kind: 'lines', path: 'a.ts', startLine: 2, endLine: 2 },
       },
-      severity: 'blocker',
+      severity: 'smell',
+      blocking: true,
       origin: { kind: 'chat-answer', messageId: 'm', finding: 0 },
     });
     expect(describeUraItem(single)).toMatchObject({
-      severity: 'Blocker',
+      severity: 'Smell (blocking)',
+      emoji: '🛑 👃',
       anchor: 'a.ts:2',
       origin: 'review finding',
     });

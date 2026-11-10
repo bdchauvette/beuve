@@ -1,14 +1,22 @@
 import type { UraSeverityView } from '#contract/ipc-contract.ts';
 
 const emoji: Readonly<Record<UraSeverityView, string>> = {
-  blocker: '🛑',
   issue: '⚠️',
+  suggestion: '💡',
   question: '❓',
-  nit: '⛏️',
+  nitpick: '⛏️',
+  thought: '💭',
+  smell: '👃',
   praise: '✨',
+  note: 'ℹ️',
+  todo: '☑️',
+  chore: '🧹',
+  typo: '🔤',
+  polish: '💅',
+  quibble: '🤏',
 };
 
-/** The emoji that marks a note's severity at a glance. */
+/** The emoji that marks a note's label at a glance (ADR 0131). */
 export function uraSeverityEmoji(severity: UraSeverityView): string {
   return emoji[severity];
 }

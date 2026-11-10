@@ -151,7 +151,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
 
   /**
    * The session's verdict choice, dropped first if the head moved since it was made or staged
-   * blockers have made it impossible.
+   * blocking notes have made it impossible.
    */
   const settledChoice = (
     sessionId: string,
@@ -160,9 +160,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   ): UraVerdictChoice => {
     return settleVerdictChoice(db, sessionId as SessionId, {
       headSha,
-      stagedSeverities: items
-        .filter((item) => item.status.kind === 'staged')
-        .map((item) => item.severity),
+      isBlockingStaged: items.some((item) => item.status.kind === 'staged' && item.blocking),
     });
   };
 
@@ -319,8 +317,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   ): UraVerdictView | undefined => {
     const { chosen, headSha: chosenAt } = readVerdictChoice(db, sessionId);
     const isBlocked =
-      chosen === 'approve' &&
-      items.some((item) => item.status.kind === 'staged' && item.severity === 'blocker');
+      chosen === 'approve' && items.some((item) => item.status.kind === 'staged' && item.blocking);
     if (chosenAt === headSha && !isBlocked) {
       return chosen;
     }
@@ -440,6 +437,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
           headSha: headSha,
           anchor: request.anchor,
           severity: request.severity,
+          blocking: request.blocking ?? false,
           origin: request.origin ?? { kind: 'human' },
           title: request.title,
           body: request.body,
@@ -559,11 +557,11 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       if (!items.ok) {
         return uraFailure(logger, items.error);
       }
-      const blockers = items.value
-        .filter((item) => item.status.kind === 'staged' && item.severity === 'blocker')
+      const blocking = items.value
+        .filter((item) => item.status.kind === 'staged' && item.blocking)
         .map((item) => item.id);
-      if (verdict === 'approve' && blockers.length > 0) {
-        return uraFailure(logger, { kind: 'approve-with-blockers', itemIds: blockers });
+      if (verdict === 'approve' && blocking.length > 0) {
+        return uraFailure(logger, { kind: 'approve-over-blocking', itemIds: blocking });
       }
       const derived = deriveStagedVerdict(items.value);
       let choice: UraVerdictChoice = {};
@@ -614,9 +612,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
 }
 
 function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {
-  return deriveUraVerdict(
-    items.filter((item) => item.status.kind === 'staged').map((item) => item.severity),
-  );
+  return deriveUraVerdict(items.filter((item) => item.status.kind === 'staged'));
 }
 
 /** An empty suggestion clears it; anything else is kept as typed. */

@@ -17,7 +17,7 @@ describe('compileUraArtifact', () => {
     const current = createTestUraItem({
       id: testUraIds.itemId(1),
       headSha: testUraIds.laterHeadSha,
-      severity: 'nit',
+      severity: 'nitpick',
     });
     const older = createTestUraItem({ id: testUraIds.itemId(2), severity: 'issue' });
     const withdrawn = createTestUraItem({
@@ -77,7 +77,7 @@ describe('compileUraArtifact', () => {
   });
 
   test('takes a chosen verdict and keeps the derived one', ({ expect }) => {
-    const items = [createTestUraItem({ severity: 'nit' })];
+    const items = [createTestUraItem({ severity: 'nitpick' })];
     const chosen = compileUraArtifact(input({ items, verdict: 'comment' }));
     expect(chosen.ok && chosen.value.verdict).toStrictEqual({
       value: 'comment',
@@ -88,13 +88,13 @@ describe('compileUraArtifact', () => {
     expect(same.ok && same.value.verdict).toStrictEqual({ value: 'approve', source: 'derived' });
   });
 
-  test('refuses to approve over a staged blocker, but not a withdrawn one', ({ expect }) => {
-    const blocker = createTestUraItem({ id: testUraIds.itemId(7), severity: 'blocker' });
-    expect(compileUraArtifact(input({ items: [blocker], verdict: 'approve' }))).toStrictEqual({
+  test('refuses to approve over a staged blocking note, but not a withdrawn one', ({ expect }) => {
+    const blocking = createTestUraItem({ id: testUraIds.itemId(7), blocking: true });
+    expect(compileUraArtifact(input({ items: [blocking], verdict: 'approve' }))).toStrictEqual({
       ok: false,
-      error: { kind: 'approve-with-blockers', itemIds: [testUraIds.itemId(7)] },
+      error: { kind: 'approve-over-blocking', itemIds: [testUraIds.itemId(7)] },
     });
-    const withdrawn = createTestUraItem({ severity: 'blocker', status: { kind: 'withdrawn' } });
+    const withdrawn = createTestUraItem({ blocking: true, status: { kind: 'withdrawn' } });
     expect(compileUraArtifact(input({ items: [withdrawn], verdict: 'approve' })).ok).toBe(true);
   });
 

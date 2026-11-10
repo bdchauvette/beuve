@@ -60,17 +60,18 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       await services.ura.create({
         sessionId,
         anchor: { kind: 'change' },
-        severity: 'blocker',
+        severity: 'todo',
+        blocking: true,
         title: '  Missing tests  ',
         body: '',
       }),
     );
-    expect(second.title).toBe('Missing tests');
+    expect(second).toMatchObject({ title: 'Missing tests', severity: 'todo', blocking: true });
     await expect(
       services.ura.create({
         sessionId,
         anchor: { kind: 'change' },
-        severity: 'nit',
+        severity: 'nitpick',
         title: 'Patch on the whole change',
         body: '',
         suggestedPatch: '@@ -1 +1 @@\n-a\n+b\n',
@@ -83,9 +84,13 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
 
     const patch = '@@ -2 +2 @@\n-const answer = 1;\n+const answer = 2;\n';
     const edited = okValueFrom(
-      await services.ura.update({ itemId: first.id, severity: 'nit', suggestedPatch: patch }),
+      await services.ura.update({ itemId: first.id, severity: 'nitpick', suggestedPatch: patch }),
     );
-    expect(edited).toMatchObject({ severity: 'nit', title: 'Name the constant' });
+    expect(edited).toMatchObject({
+      severity: 'nitpick',
+      blocking: false,
+      title: 'Name the constant',
+    });
     expect(edited.suggestedPatch).toBe(`--- a/src/app.ts\n+++ b/src/app.ts\n${patch}`);
     await expect(
       services.ura.update({ itemId: first.id, suggestedPatch: '@@ -9 +9 @@\n-x\n+y\n' }),
@@ -232,12 +237,12 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       await services.ura.stageReviewFinding({
         messageId: reviewMessageId(),
         finding: 0,
-        severity: 'blocker',
+        severity: 'smell',
       }),
     );
     expect(restaged).toMatchObject({
       created: false,
-      item: { id: staged.item.id, status: { kind: 'staged' }, severity: 'issue' },
+      item: { id: staged.item.id, status: { kind: 'staged' }, severity: 'issue', blocking: false },
     });
 
     await expect(
@@ -261,7 +266,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(okValueFrom(await services.ura.list({ sessionId })).items).toHaveLength(1);
   });
 
-  test('exports every target and refuses to approve over a blocker', async ({
+  test('exports every target and refuses to approve over a blocking note', async ({
     expect,
     services,
     repo,
@@ -270,11 +275,12 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
   }) => {
     const head = await repo.git('rev-parse', 'feature');
     await note({ startLine: 2, endLine: 2, title: 'Prefer <const>' });
-    const blocker = okValueFrom(
+    const blocking = okValueFrom(
       await services.ura.create({
         sessionId,
         anchor: { kind: 'file', path: 'src/app.ts' },
-        severity: 'blocker',
+        severity: 'issue',
+        blocking: true,
         title: 'Not wired',
         body: 'Nothing calls `answer`.',
       }),
@@ -290,7 +296,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(JSON.parse(json.text)).toMatchObject({
       schema: 'beuve.ura/1',
       change: { scope: 'full', headSha: head, repository: { kind: 'local', headRef: 'feature' } },
-      items: [{ title: 'Prefer <const>' }, { severity: 'blocker' }],
+      items: [{ title: 'Prefer <const>' }, { severity: 'issue', blocking: true }],
     });
     const xml = okValueFrom(await services.ura.export({ sessionId, target: 'agent-xml' }));
     expect(xml.mediaType).toBe('application/xml');
@@ -308,7 +314,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       services.ura.export({ sessionId, target: 'github', verdict: 'approve' }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
 
-    okValueFrom(await services.ura.transition({ itemId: blocker.id, to: 'withdrawn' }));
+    okValueFrom(await services.ura.transition({ itemId: blocking.id, to: 'withdrawn' }));
     expect(
       okValueFrom(await services.ura.export({ sessionId, target: 'github', verdict: 'approve' })),
     ).toMatchObject({ verdict: 'approve', itemCount: 1 });
@@ -488,7 +494,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     });
   });
 
-  test('clears an approval when a blocker is staged, says so, and refuses a new one', async ({
+  test('clears an approval when a blocking note is staged, says so, and refuses a new one', async ({
     expect,
     services,
     repo,
@@ -503,11 +509,12 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
         expectedHeadSha: await featureHead(repo),
       }),
     );
-    const blocker = okValueFrom(
+    const blocking = okValueFrom(
       await services.ura.create({
         sessionId,
         anchor: { kind: 'file', path: 'src/app.ts' },
-        severity: 'blocker',
+        severity: 'question',
+        blocking: true,
         title: 'Not wired',
         body: '',
       }),
@@ -530,7 +537,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
       error: { code: 'refused' },
     });
 
-    okValueFrom(await services.ura.transition({ itemId: blocker.id, to: 'withdrawn' }));
+    okValueFrom(await services.ura.transition({ itemId: blocking.id, to: 'withdrawn' }));
     expect(okValueFrom(await services.ura.list({ sessionId })).verdictNotice).toContain('cleared');
     okValueFrom(
       services.ura.setVerdict({

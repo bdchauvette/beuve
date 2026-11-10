@@ -85,6 +85,8 @@ export interface UraItem {
   readonly headSha: CommitSha;
   readonly anchor: UraAnchor;
   readonly severity: UraSeverity;
+  /** The Conventional Comments `(blocking)` decoration: the note must be resolved before merging. */
+  readonly blocking: boolean;
   readonly origin: UraOrigin;
   /** One line, at most 200 characters. */
   readonly title: string;
@@ -95,6 +97,9 @@ export interface UraItem {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+/** What a note is (its label) and whether it blocks; the verdict is derived from these. */
+export type UraItemLabel = Pick<UraItem, 'severity' | 'blocking'>;
 
 /** Effects the constructors need, injected for determinism. Time is not injected (ADR 0059). */
 export interface UraDeps {
