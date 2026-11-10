@@ -10,6 +10,7 @@ export const eventChannels = Object.freeze([
   'queue:updated',
   'terminal:data',
   'terminal:exit',
+  'setup:finished',
   'menu:run',
   'link:open-pr',
   'link:open-branch',

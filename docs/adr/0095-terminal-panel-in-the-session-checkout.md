@@ -64,3 +64,7 @@ Deferred: output flow control, search in the terminal, links, split panes, a Win
 ## Amendment (2026-11-01): the macOS spawn-helper is made executable on install
 
 node-pty 1.1.0 publishes its prebuilt `darwin-*/spawn-helper` without the exec bit, and its own `postinstall` does not set it, so `pty.fork` fails with `posix_spawnp failed` on macOS. CI on macOS failed on `spawn-node-pty.test.ts` from the terminal panel's first commit. `scripts/fix-node-pty-permissions.ts` runs as this package's `postinstall` and sets the helper to 0755, so the unpacked copy in the packaged app keeps that mode. An install with `--ignore-scripts` skips it, and the macOS terminal then fails to spawn.
+
+## Amendment (2026-11-10): Run Setup
+
+ADR 0130 amends "beuve installs nothing itself": Review › Run Setup types the reviewer's own setup command, stored per repository in beuve's database, into a new terminal at the head when the reviewer asks. beuve still runs nothing on its own.

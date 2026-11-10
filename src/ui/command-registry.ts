@@ -164,6 +164,8 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'dock-move-up': dock,
     'dock-move-down': dock,
     'dock-move': none,
+    'run-setup': app,
+    'edit-setup-command': app,
     'restart-language-servers': app,
     chat: app,
     'add-to-chat': app,

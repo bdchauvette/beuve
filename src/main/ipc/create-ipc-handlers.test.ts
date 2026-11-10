@@ -50,6 +50,8 @@ function perHeadRequestWithoutHead(channel: PerHeadInvokeChannel): object {
     'github:post-review': { sessionId: 's1' },
     'lsp:call-hierarchy': { sessionId: 's1', path: 'a.ts', line: 1, direction: 'incoming' },
     'terminal:open': { sessionId: 's1', cols: 80, rows: 24 },
+    'setup:status': { sessionId: 's1' },
+    'setup:run': { sessionId: 's1', cols: 80, rows: 24 },
   };
   return requests[channel];
 }
@@ -1217,6 +1219,7 @@ function stubServices(
     },
     terminal: {
       open: notWired,
+      openScripted: notWired,
       list: notWiredError,
       write: notWiredError,
       resize: notWiredError,
@@ -1228,6 +1231,15 @@ function stubServices(
         return doNothingSync;
       },
       dispose: doNothingSync,
+    },
+    setup: {
+      status: notWired,
+      setCommand: notWired,
+      run: notWired,
+      onFinished: (): (() => void) => {
+        return doNothingSync;
+      },
+      forgetCheckout: doNothingSync,
     },
     github: {
       authStatus: notWired,

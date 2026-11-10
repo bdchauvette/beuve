@@ -86,6 +86,8 @@ import type {
   TerminalAckView,
   TerminalListView,
   TerminalView,
+  SetupCommandView,
+  SetupStatusView,
   UraExportView,
   UraItemView,
   UraListView,
@@ -315,6 +317,8 @@ const terminalResizeRequest = z.strictObject({
   rows: terminalCells,
 });
 const terminalCloseRequest = z.strictObject({ terminalId });
+const setupStatusRequest = z.strictObject({ sessionId, expectedHeadSha });
+const setupSetCommandRequest = z.strictObject({ sessionId, command: z.string().max(10_000) });
 
 const pathPrefix = z
   .string()
@@ -834,6 +838,27 @@ export function createIpcHandlers(
       const parsed = terminalCloseRequest.safeParse(request);
       if (parsed.success) {
         return services.terminal.close(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'setup:status': async (request): Promise<IpcResult<SetupStatusView>> => {
+      const parsed = setupStatusRequest.safeParse(request);
+      if (parsed.success) {
+        return services.setup.status(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'setup:set-command': async (request): Promise<IpcResult<SetupCommandView>> => {
+      const parsed = setupSetCommandRequest.safeParse(request);
+      if (parsed.success) {
+        return services.setup.setCommand(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'setup:run': async (request): Promise<IpcResult<TerminalView>> => {
+      const parsed = terminalOpenRequest.safeParse(request);
+      if (parsed.success) {
+        return services.setup.run(parsed.data);
       }
       return invalid(parsed.error);
     },

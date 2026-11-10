@@ -30,6 +30,7 @@ import type { CommitServices } from './commits/create-commit-services.ts';
 import type { ShellServices } from './shell/create-shell-services.ts';
 import type { SheetServices } from './sheets/create-sheet-services.ts';
 import type { TerminalServices } from './terminal/create-terminal-services.ts';
+import type { SetupServices } from './setup/create-setup-services.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
 
 /** Session operations the renderer can reach. Adapters in `src/main` map domain types to the contract. */
@@ -82,6 +83,8 @@ export interface MainServices {
   >;
   /** Shells in beuve's checkouts (ADR 0095). */
   readonly terminal: TerminalServices;
+  /** Run Setup: the reviewer's setup command, typed into a terminal (ADR 0130). */
+  readonly setup: SetupServices;
   readonly github: Omit<GithubServices, 'badgeFor' | 'branchBadgeFor' | 'intentFor' | 'watch'>;
   /** Everything waiting on the signed-in GitHub user (ADR 0113). */
   readonly queue: ReviewQueueServices;

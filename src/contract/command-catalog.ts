@@ -824,6 +824,22 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'run-setup',
+    title: 'Run Setup',
+    menu: { menu: 'review', group: 7 },
+    when: ['session'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'edit-setup-command',
+    title: 'Edit Setup Command…',
+    menu: { menu: 'review', group: 7 },
+    when: ['session'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'restart-language-servers',
     title: 'Restart Language Servers',
     menu: { menu: 'review', group: 7 },

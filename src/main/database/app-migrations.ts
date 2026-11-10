@@ -2,6 +2,7 @@ import { chatMigrations } from '#internal/chat/chat-migrations.ts';
 import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
+import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
@@ -12,8 +13,8 @@ import { retiredMigrations } from './retired-migrations.ts';
  * reference another's comes after it: `session` first, then `ura` (its items cascade from
  * `sessions`, ADR 0023), then `chat` (its messages cascade from `sessions`, ADR 0031), then
  * `github` (pull request metadata, which references nothing, ADR 0037), then `review-edits`
- * (its rows cascade from `sessions` and `ura_items`, ADR 0088), then `retired` (drops of
- * tables whose domains are gone, ADR 0096).
+ * (its rows cascade from `sessions` and `ura_items`, ADR 0088), then `setup` (its runs cascade
+ * from `sessions`, ADR 0130), then `retired` (drops of tables whose domains are gone, ADR 0096).
  */
 export const appMigrations: readonly Migration[] = Object.freeze([
   ...sessionMigrations,
@@ -21,5 +22,6 @@ export const appMigrations: readonly Migration[] = Object.freeze([
   ...chatMigrations,
   ...githubMigrations,
   ...reviewEditsMigrations,
+  ...setupMigrations,
   ...retiredMigrations,
 ]);

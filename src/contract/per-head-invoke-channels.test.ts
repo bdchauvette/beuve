@@ -68,6 +68,7 @@ function headFreeSessionChannels(): Readonly<
     'session:get-commit': 'a read pinned to its own `sha`',
     'flow:get-graph': read,
     'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
+    'setup:set-command': 'the command belongs to the repository, not a head (ADR 0130)',
     'ura:list': read,
     'ura:create': 'the item records the head its anchor refers to and is re-anchored on every read',
     'ura:reorder': 'dock order belongs to the session, not a head',

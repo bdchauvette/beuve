@@ -15,6 +15,8 @@ export const perHeadInvokeChannels = Object.freeze([
   'github:post-review',
   'lsp:call-hierarchy',
   'terminal:open',
+  'setup:status',
+  'setup:run',
 ] as const satisfies readonly InvokeChannel[]);
 
 export type PerHeadInvokeChannel = (typeof perHeadInvokeChannels)[number];

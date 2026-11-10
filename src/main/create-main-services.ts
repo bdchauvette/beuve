@@ -76,6 +76,8 @@ import { createGitCaches } from './sessions/create-git-caches.ts';
 import type { SessionContext } from './sessions/session-context.ts';
 import { createUraServices } from './ura/create-ura-services.ts';
 import { createTerminalServices } from './terminal/create-terminal-services.ts';
+import { createSetupServices } from './setup/create-setup-services.ts';
+import { forgetSetupRuns } from '#internal/setup/forget-setup-runs.ts';
 import { spawnNodePty } from './terminal/spawn-node-pty.ts';
 import type { PtySpawner } from '#internal/terminal/pty-process.ts';
 import type { UraServices } from './ura/create-ura-services.ts';
@@ -256,6 +258,9 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ...(options.reviewEditsRoot !== undefined && { editsRoot: options.reviewEditsRoot }),
     logger,
     git: context.git,
+    onCheckoutReset: (path): void => {
+      forgetSetupRuns(options.db, path);
+    },
     storedHead: (sessionId): CommitSha | undefined => {
       const stored = loadSession(context, sessionId);
       if (stored.ok) {
@@ -315,6 +320,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       outputDelay: options.terminal.outputDelay,
     }),
   });
+  const setup = createSetupServices({ context, terminal });
   const credentials = createCachedCredentialProvider(
     options.github?.credentials ?? createGhCliCredentialProvider({ logger }),
   );
@@ -402,6 +408,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     chat,
     ura,
     terminal,
+    setup,
     github,
     queue,
     claude: {
