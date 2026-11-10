@@ -10,6 +10,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import type { UraCreateRequest } from './beuve-diff-stream.ts';
+import type { NoteExpandDraft, NoteExpandOutcome } from './beuve-note-expand.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
 import type { ChatStagePlan } from './plan-chat-stage.ts';
@@ -255,6 +256,49 @@ export class UraController implements ReactiveController {
     await this.call(async (bridge) => {
       return bridge.invoke('ura:reorder', { sessionId: review.sessionId, itemIds });
     });
+  }
+
+  /**
+   * "Expand on this" (ADR 0125): the draft through `ura:expand-note`, at its own head or the open
+   * review's. Aborting `signal` cancels it in main, which then answers `cancelled`.
+   */
+  async expandNote(draft: NoteExpandDraft, signal: AbortSignal): Promise<NoteExpandOutcome> {
+    const bridge = this.environment.bridge();
+    const review = this.environment.review();
+    if (bridge === undefined || review === undefined) {
+      return { kind: 'failed', message: 'No review session is open.' };
+    }
+    if (signal.aborted) {
+      return { kind: 'cancelled' };
+    }
+    const requestId = `expand-note:${draft.noteKey}`;
+    using listening = new DisposableStack();
+    const cancel = (): void => {
+      void bridge.invoke('request:cancel', { requestId });
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    listening.defer(() => {
+      signal.removeEventListener('abort', cancel);
+    });
+    const expanded = await bridge.invoke('ura:expand-note', {
+      sessionId: review.sessionId,
+      headSha: draft.headSha ?? review.headSha,
+      anchor: draft.anchor,
+      severity: draft.severity,
+      title: draft.title,
+      body: draft.body,
+      requestId,
+    });
+    if (!expanded.ok) {
+      if (expanded.error.code === 'cancelled') {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'failed', message: expanded.error.message };
+    }
+    if (expanded.value.outcome === 'failed') {
+      return { kind: 'failed', message: expanded.value.message };
+    }
+    return { kind: 'expanded', body: expanded.value.body };
   }
 
   /** The reviewer's verdict; `undefined` goes back to the derived one. */

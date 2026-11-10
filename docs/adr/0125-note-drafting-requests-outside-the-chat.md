@@ -25,3 +25,9 @@ That is the wrong home for drafting. A note is written for the author of the cha
 - A draft costs a model call that leaves no trace in the transcript, so the reviewer can't scroll back to it; the text lives only in the note.
 - Without repository access the model can misread code it only sees in a hunk; the reviewer reads the result before staging, as with anything beuve writes for them.
 - A second request path to the model means a second place to keep the adapter's failures readable; it reuses the chat's `describeModelError`.
+
+## Amendment (2026-11-10): as built
+
+- The diff is the whole change at the note's head (fork point to `headSha`), not the review's interdiff, so a note on an older head or a reviewed-up-to-date session still sees its hunks. A line note gets its file's hunks within 20 lines of the anchor (the nearest one when none is), nearest first while they fit half the chat's prompt budget; the prompt builder and the selection are in `src/internal/chat` (`build-note-draft-prompt.ts`, `select-note-hunks.ts`) because they share the chat's fencing and budgets; nothing there touches the chat's queue or tables. Main's side is `src/main/drafting/`.
+- The renderer names a note's requests `expand-note:<note>` (the composer's is `new`), and main supersedes a `note-draft` scope only by the same `requestId`, so the composer and an edit form can expand at once.
+- The forms' Expand is `beuve-note-expand`, which asks with a composed `beuve-note-expand-request` that `beuve-review` answers; it replaces the body by selecting it and inserting the text (`execCommand('insertText')`), which keeps Chromium's undo stack. Review ▸ Note ▸ Expand Draft (`expand-note`, no chord) runs the Expand of the note form last focused.

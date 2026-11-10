@@ -141,6 +141,7 @@ import { subscribeChatStreamOf } from './subscribe-chat-stream-of.ts';
 import { isEditableElement } from './is-editable-element.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 import type { CommitInfoRequestDetail, CopyTextDetail } from './primitives/beuve-commit.ts';
+import type { BeuveNoteExpand, NoteExpandRequestDetail } from './beuve-note-expand.ts';
 
 /**
  * The open review (ADR 0104): the diff, the sidebar and the terminal, rendered from the shared
@@ -197,8 +198,16 @@ export class BeuveReview extends LitElement {
     if (zone instanceof HTMLElement) {
       this.focusedZone = zone.dataset['zone'] as ZoneId;
     }
+    const form = event.composedPath().find((target) => target instanceof HTMLFormElement);
+    const expander = form?.querySelector('beuve-note-expand');
+    if (expander !== null && expander !== undefined) {
+      this.noteExpander = expander;
+    }
     this.scheduleMenuSync();
   };
+
+  /** The Expand of the note form the reviewer last typed in, for Expand Note Draft (ADR 0125). */
+  private noteExpander: BeuveNoteExpand | undefined;
 
   /** Commits read for commit hashes' cards (ADR 0116), per session and hash. */
   private readonly commitInfos = new Map<string, Promise<CommitInfoView | undefined>>();
@@ -220,6 +229,13 @@ export class BeuveReview extends LitElement {
       return read.value;
     });
     event.detail.respond(answer);
+  };
+
+  /** `beuve-note-expand-request`: a note form's Expand (ADR 0125), through the dock's controller. */
+  private readonly onNoteExpand = (event: CustomEvent<NoteExpandRequestDetail>): void => {
+    event.stopPropagation();
+    const { draft, signal } = event.detail;
+    event.detail.respond(this.ura.expandNote(draft, signal));
   };
 
   /** `beuve-copy-text`: a commit card's Copy, through main's clipboard. */
@@ -1404,6 +1420,20 @@ export class BeuveReview extends LitElement {
     return this.session.review;
   }
 
+  /** Expand Note Draft: the Expand of the open note form the reviewer last focused. */
+  private expandNoteDraft(): void {
+    const expander = this.noteExpander;
+    if (expander?.isConnected !== true) {
+      this.noteExpander = undefined;
+      this.showNotice({
+        tone: 'info',
+        text: 'Open a note’s composer or editor to expand its draft.',
+      });
+      return;
+    }
+    void expander.expand();
+  }
+
   private showNotice(notice: StatusNotice): void {
     this.requireActions().notify(notice);
   }
@@ -1540,6 +1570,7 @@ export class BeuveReview extends LitElement {
     this.addEventListener('focusin', this.onFocusIn);
     this.addEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.addEventListener('beuve-copy-text', this.onCopyText as EventListener);
+    this.addEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
   }
 
   override disconnectedCallback(): void {
@@ -1548,6 +1579,7 @@ export class BeuveReview extends LitElement {
     this.removeEventListener('focusin', this.onFocusIn);
     this.removeEventListener('beuve-commit-info', this.onCommitInfo as EventListener);
     this.removeEventListener('beuve-copy-text', this.onCopyText as EventListener);
+    this.removeEventListener('beuve-note-expand-request', this.onNoteExpand as EventListener);
   }
 
   /** Runs a catalog command this container handles; `false` when it is not one of its own. */
@@ -1565,6 +1597,10 @@ export class BeuveReview extends LitElement {
       }
       case 'chat': {
         this.toggleChat();
+        return true;
+      }
+      case 'expand-note': {
+        this.expandNoteDraft();
         return true;
       }
       case 'tree-mode': {

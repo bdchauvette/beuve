@@ -14,6 +14,7 @@ import type {
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
 
+import './beuve-note-expand.ts';
 import './beuve-patch-preview.ts';
 import { ActionDelegation } from './action-delegation.ts';
 import { withPayload } from './with-payload.ts';
@@ -728,6 +729,11 @@ export class BeuveUraDock extends LitElement {
       ${this.renderSuggestionActions(item)}
       <div class="row">
         <span class="spacer"></span>
+        <beuve-note-expand
+          .anchor=${item.anchor}
+          .headSha=${item.headSha}
+          .noteKey=${item.id}
+        ></beuve-note-expand>
         <button class="button" type="button" title="Cancel (Esc)" data-action="cancel-edit">
           Cancel
         </button>

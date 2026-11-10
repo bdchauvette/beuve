@@ -593,6 +593,13 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "id": "dock-move-down",
             "label": "Move &Down",
           },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "expand-note",
+            "label": "E&xpand Draft",
+          },
         ],
       },
       {
@@ -1371,6 +1378,13 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "dock-move-down",
             "label": "Move Down",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "expand-note",
+            "label": "Expand Draft",
           },
         ],
       },

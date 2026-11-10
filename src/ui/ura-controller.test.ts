@@ -284,4 +284,82 @@ describe('UraController', () => {
     expect(invoked).toStrictEqual([]);
     expect(ura.isExporting).toBe(false);
   });
+
+  test('expands a draft at the review’s head, or its own, through ura:expand-note', async ({
+    expect,
+    signal,
+  }) => {
+    const { ura, invoked } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:expand-note': ok({ outcome: 'expanded', body: 'Longer.', model: 'm' }) },
+    });
+    const draft = {
+      anchor: { kind: 'file', path: 'a.ts' },
+      noteKey: 'new',
+      severity: 'nit',
+      title: 'naming',
+      body: '',
+    } as const;
+    await expect(ura.expandNote(draft, signal)).resolves.toStrictEqual({
+      kind: 'expanded',
+      body: 'Longer.',
+    });
+    await ura.expandNote({ ...draft, headSha: 'b'.repeat(40), noteKey: 'item-1' }, signal);
+    expect(invoked).toStrictEqual([
+      [
+        'ura:expand-note',
+        {
+          sessionId: 's1',
+          headSha: 'a'.repeat(40),
+          anchor: draft.anchor,
+          severity: 'nit',
+          title: 'naming',
+          body: '',
+          requestId: 'expand-note:new',
+        },
+      ],
+      [
+        'ura:expand-note',
+        expect.objectContaining({ headSha: 'b'.repeat(40), requestId: 'expand-note:item-1' }),
+      ],
+    ]);
+  });
+
+  test.for([
+    [
+      ok({ outcome: 'failed', errorKind: 'timeout', message: 'No answer within 2 minutes.' }),
+      { kind: 'failed', message: 'No answer within 2 minutes.' },
+    ],
+    [failed({ code: 'not-found', message: 'gone' }), { kind: 'failed', message: 'gone' }],
+    [failed({ code: 'cancelled', message: 'cancelled' }), { kind: 'cancelled' }],
+  ] as const)('an expansion answered %j ends %j', async ([reply, outcome], { expect, signal }) => {
+    const { ura } = createUraHarness({ review: reviewOf(), replies: { 'ura:expand-note': reply } });
+    const draft = {
+      anchor: { kind: 'change' },
+      noteKey: 'new',
+      severity: 'issue',
+      title: 't',
+      body: '',
+    } as const;
+    await expect(ura.expandNote(draft, signal)).resolves.toStrictEqual(outcome);
+  });
+
+  test('cancelling an expansion cancels its request in main', async ({ expect }) => {
+    const { ura, invoked } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:expand-note': failed({ code: 'cancelled', message: 'cancelled' }) },
+    });
+    const controller = new AbortController();
+    const draft = {
+      anchor: { kind: 'change' },
+      noteKey: 'item-2',
+      severity: 'issue',
+      title: 't',
+      body: '',
+    } as const;
+    const pending = ura.expandNote(draft, controller.signal);
+    controller.abort();
+    await expect(pending).resolves.toStrictEqual({ kind: 'cancelled' });
+    expect(invoked[1]).toStrictEqual(['request:cancel', { requestId: 'expand-note:item-2' }]);
+  });
 });

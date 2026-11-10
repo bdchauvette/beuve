@@ -2,8 +2,9 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { UraSeverityView } from '#contract/ipc-contract.ts';
+import type { UraAnchorView, UraSeverityView } from '#contract/ipc-contract.ts';
 
+import './beuve-note-expand.ts';
 import './beuve-patch-preview.ts';
 
 import { keyPlatformOf } from './key-platform-of.ts';
@@ -170,6 +171,8 @@ export class BeuveUraComposer extends LitElement {
   @property() accessor patch = '';
   /** The staged note being edited, whose text the fields start from; `undefined` for a new note. */
   @property({ attribute: false }) accessor draft: UraDraft | undefined;
+  /** What the note is on, for Expand (ADR 0125). */
+  @property({ attribute: false }) accessor anchor: UraAnchorView | undefined;
 
   @state() accessor severity: UraSeverityView = 'issue';
 
@@ -243,6 +246,7 @@ export class BeuveUraComposer extends LitElement {
       <div class="row">
         <span class="where">${pathText(this.where)}</span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
+        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
         <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>
           Cancel
         </button>
