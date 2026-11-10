@@ -38,8 +38,19 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
     ].join('\n');
     const lines = [
       ['comment'],
-      ['muted', 'muted', 'bold', 'muted', 'bold', 'muted', 'muted', 'italic', 'muted', 'muted'],
-      ['muted', 'italic', 'muted', 'italic', 'muted', 'italic', 'muted', 'muted'],
+      [
+        'muted',
+        'muted',
+        'bold',
+        'muted',
+        'bold',
+        'muted',
+        'muted',
+        'italic',
+        'muted-italic',
+        'muted',
+      ],
+      ['muted', 'italic', 'muted-italic', 'italic', 'muted', 'italic', 'muted-italic', 'muted'],
       ['muted', 'bold', 'plain', 'muted', 'plain', 'muted', 'muted', 'plain', 'muted', 'plain'],
       ['plain', 'muted', 'bold', 'plain', 'muted', 'plain', 'muted', 'muted', 'muted'],
       ['muted', 'muted', 'plain', 'plain', 'plain', 'plain', 'muted', 'muted', 'muted', 'plain'],
@@ -52,6 +63,71 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
       ['bold', 'muted', 'muted', 'muted', 'muted', 'italic', 'muted'],
     ];
     expect(stylesOf('typescript', code)).toStrictEqual(lines.flat());
+  });
+
+  test('slants the brackets of TypeScript types, not of indexing, comparisons or JSX tags', ({
+    expect,
+    stylesOf,
+  }) => {
+    const code = [
+      'function f«<»T«>»(a: T«[]», m: Map«<»K, V«>»): «[»A, B«]» { return g«<»T«>»(a«[»0«]» «<» «b»); }',
+      'class C«<»T«>» { «[»k: string«]»: T; } type P = { «[»K in keyof T«]»: T«[»K«]» };',
+      'const s = «<»string«>»v, n = new Set«<»T«>»(), x = «[»1«]», y = `${h«<»T«>»()}`;',
+    ].join('\n');
+    const lines = [
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic', 'muted-italic'],
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic', 'muted'],
+      ['muted', 'plain', 'plain'],
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic'],
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic'],
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic', 'muted', 'muted'],
+      ['muted-italic', 'muted-italic'],
+    ];
+    expect(stylesOf('typescript', code)).toStrictEqual(lines.flat());
+    const tsx =
+      'const q = «<»T,«>»(x: T): T«[]» => «<»«div» «a»«=»«{»«b» «>» «c»«}»«>»{x}«</»div«>»;';
+    const tsxLines = [
+      ['muted-italic', 'muted-italic', 'muted-italic'],
+      ['muted', 'plain', 'plain', 'plain', 'muted', 'plain', 'plain', 'plain', 'muted', 'muted'],
+      ['muted', 'muted'],
+    ];
+    expect(stylesOf('tsx', tsx)).toStrictEqual(tsxLines.flat());
+  });
+
+  test('slants Rust angle brackets, but not square ones, which its grammar scopes like an index', ({
+    expect,
+    stylesOf,
+  }) => {
+    const code = [
+      'fn g«<»T: Into«<»u8«>»«>»(b: &«[»u8«]») -> Vec«<»T«>» { «v»«[»0«]» «<» 3; Vec::«<»u8«>»::new(); }',
+      'impl«<»T«>» Tr for S«<»T«>» {}',
+    ].join('\n');
+    const lines = [
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic', 'muted', 'muted'],
+      ['muted-italic', 'muted-italic', 'plain', 'muted', 'muted', 'plain'],
+      ['muted-italic', 'muted-italic'],
+      ['muted-italic', 'muted-italic', 'muted-italic', 'muted-italic'],
+    ];
+    expect(stylesOf('rust', code)).toStrictEqual(lines.flat());
+  });
+
+  test('leaves Go brackets upright, as its grammar scopes a slice type like an index', ({
+    expect,
+    stylesOf,
+  }) => {
+    const code = [
+      'var «s» «[»«]»«int»',
+      'var m «map»«[»«string»«]»«int»',
+      'type L«[»T any«]» struct{}',
+      'func f() { «_» = s«[»0«]» «<» 1 }',
+    ].join('\n');
+    const lines = [
+      ['bold', 'muted', 'muted', 'italic'],
+      ['muted', 'muted', 'italic', 'muted', 'italic'],
+      ['muted', 'muted'],
+      ['bold', 'muted', 'muted', 'plain'],
+    ];
+    expect(stylesOf('go', code)).toStrictEqual(lines.flat());
   });
 
   test('keeps what a comment or string holds in its style', ({ expect, stylesOf }) => {
