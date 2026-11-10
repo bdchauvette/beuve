@@ -101,6 +101,14 @@ export class MarkdownView {
     }
   }
 
+  /**
+   * Forgets the rendered blocks, so the next {@link show} builds every one anew: for renderers
+   * that now render the same source differently (the files an answer may name have loaded).
+   */
+  forgetBlocks(): void {
+    this.blocks = [];
+  }
+
   /** Renders a whole text at once, reusing the nodes of unchanged blocks without citations. */
   show(source: string, renderers: MarkdownRenderers): void {
     const kept = new Map(

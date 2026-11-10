@@ -500,7 +500,7 @@ const menuStateRequest = z.strictObject({
   checked: z.array(commandId).max(commandCatalog.length),
 });
 const menuContextRequest = z.strictObject({
-  kind: z.enum(['line', 'file', 'tree', 'note', 'answer', 'sheet', 'text']),
+  kind: z.enum(['line', 'file', 'tree', 'note', 'answer', 'reference', 'sheet', 'text']),
   x: z.number().min(0).max(100_000).optional(),
   y: z.number().min(0).max(100_000).optional(),
 });

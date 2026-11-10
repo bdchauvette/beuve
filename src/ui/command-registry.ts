@@ -66,6 +66,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'post-review': app,
     'close-all-sheets': main,
     'copy-permalink': app,
+    'copy-path': app,
     'copy-relative-line': app,
     find: app,
     'find-next': app,
@@ -142,6 +143,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     flow: diff,
     stop: app,
     'open-in-editor': app,
+    'open-in-sheet': app,
     'editor-zed': {
       ...app,
       slash: '/editor zed|vscode|cursor',
