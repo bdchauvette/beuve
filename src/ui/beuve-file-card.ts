@@ -86,6 +86,7 @@ import { insightMarkCssFrom } from './insight-mark-css-from.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
+import { diffSelectionCss } from './diff-selection-css.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
@@ -1336,9 +1337,9 @@ export class BeuveFileCard extends LitElement {
   /**
    * The diff library blends a changed line's colour into the background (12% light, 20% dark) but
    * paints a changed word's colour as given, so the tokens' line < number < word steps came out as
-   * a near-invisible line under a strong word; a selection blends in at 18% (25% dark) too.
-   * Turning both blends off makes the line, gutter, word and selection colours the
-   * `--beuve-diff-*` tokens themselves (ADR 0114 amendments).
+   * a near-invisible line under a strong word. Turning that blend off makes the line, gutter and
+   * word colours the `--beuve-diff-*` tokens themselves; a selection layers over them
+   * ({@link diffSelectionCss}, ADR 0114 amendments).
    */
   private adoptDiffTints(): void {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
@@ -1348,7 +1349,7 @@ export class BeuveFileCard extends LitElement {
     if (this.tintSheet === undefined) {
       this.tintSheet = new CSSStyleSheet();
       this.tintSheet.replaceSync(
-        '[data-line], [data-no-newline], [data-gutter-buffer], [data-column-number] { --mix-light: 0%; --mix-dark: 0%; } [data-selected-line] { --mix-selection-light: 0%; --mix-selection-dark: 0%; }',
+        `[data-line], [data-no-newline], [data-gutter-buffer], [data-column-number] { --mix-light: 0%; --mix-dark: 0%; }\n${diffSelectionCss}`,
       );
     }
     if (!root.adoptedStyleSheets.includes(this.tintSheet)) {
