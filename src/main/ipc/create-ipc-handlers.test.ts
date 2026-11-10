@@ -886,7 +886,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
     await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
-    await handlers['ura:stage-note-proposal']({ messageId: id, proposal: 1, severity: 'nit' });
+    await handlers['ura:stage-note-proposal']({ messageId: id, proposal: 1, severity: 'nitpick' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
     await expectInvalid(
       expect,
@@ -905,7 +905,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
       { messageId: id, finding: 2 },
-      { messageId: id, proposal: 1, severity: 'nit' },
+      { messageId: id, proposal: 1, severity: 'nitpick' },
       { sessionId: 's1', target: 'agent-xml' },
       { sessionId: 's1', expectedHeadSha: sha(), verdict: 'comment' },
       { sessionId: 's1', expectedHeadSha: sha() },

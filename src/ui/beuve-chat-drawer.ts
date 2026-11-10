@@ -45,6 +45,7 @@ import { snippetPathFrom } from './snippet-path-from.ts';
 import type { LineRange } from './target-from.ts';
 import { textPartStream } from './text-part-stream.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
@@ -481,6 +482,10 @@ export class BeuveChatDrawer extends LitElement {
 
       .proposal .status {
         margin-block-start: var(--beuve-space-1);
+      }
+
+      .proposal .severity.blocking {
+        color: var(--beuve-danger);
       }
 
       .dropped-proposal {
@@ -1807,7 +1812,10 @@ export class BeuveChatDrawer extends LitElement {
     const citation = { path: note.path, startLine: note.startLine, endLine: note.endLine };
     return html`<div class="proposal" role="group" aria-label="Proposed review note">
       <div class="finding-head">
-        <span class="severity">${uraSeverityEmoji(note.label)} ${note.label}</span>
+        <span class="severity ${note.blocking ? 'blocking' : ''}"
+          >${note.blocking ? `${uraBlockingEmoji} ` : ''}${uraSeverityEmoji(note.label)}
+          ${note.label}${note.blocking ? ' (blocking)' : ''}</span
+        >
         <span title="Claude proposed it; nothing is staged until you stage it">Proposed note</span>
       </div>
       ${

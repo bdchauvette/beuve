@@ -707,13 +707,15 @@ function proposalRules(proposals: ProposalRules | undefined): string[] {
     '  propose inline notes they can stage on the diff with one click. You never stage anything',
     '  yourself: the reviewer decides. Write each note as its own block, outside code blocks:',
     '',
-    '  :::note <label> [[path:start-end]] <optional one-line title>',
+    '  :::note <label> [(blocking)] [[path:start-end]] <optional one-line title>',
     "  <the note's body: concise Markdown addressed to the change's author>",
     '  :::',
     '',
     '  Both ::: lines start at the beginning of a line. The label is one of',
-    `  ${proposals.labels.join(', ')} (most urgent first); pick the mildest that fits. The lines are`,
-    '  head-side lines inside a hunk of the diff; a note anywhere else is dropped. No citations',
+    `  ${proposals.labels.join(', ')}; pick the one that fits. Write (blocking) after the label`,
+    '  only when the reviewer asked for blocking notes or the problem clearly must be fixed before',
+    '  merging; without it a note does not block. The lines are head-side lines inside a hunk of',
+    '  the diff; a note anywhere else is dropped. No citations',
     `  inside a note. At most ${String(proposals.maxProposals)} notes per answer; prose around them is fine.`,
   ];
 }

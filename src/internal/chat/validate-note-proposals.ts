@@ -53,7 +53,15 @@ export function validateNoteProposals(
     const { path, startLine, endLine } = anchor;
     return {
       kind: 'proposal',
-      proposal: { path, startLine, endLine, label: segment.label, title, body: segment.body },
+      proposal: {
+        path,
+        startLine,
+        endLine,
+        label: segment.label,
+        blocking: segment.blocking,
+        title,
+        body: segment.body,
+      },
     };
   });
 }

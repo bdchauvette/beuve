@@ -13,7 +13,7 @@ describe('parseNoteProposals', () => {
       '',
       ':::',
       'And:',
-      ':::note\tnit [[./src/b.ts:2]]',
+      ':::note\tnitpick (non-blocking) [[./src/b.ts:2]]',
       'Name it `one`.',
       ':::  ',
       'Done.',
@@ -23,6 +23,7 @@ describe('parseNoteProposals', () => {
       {
         kind: 'block',
         label: 'issue',
+        blocking: false,
         lines: { path: 'src/a.ts', startLine: 12, endLine: 13 },
         title: 'Empty input is not handled',
         body: 'An empty string yields `undefined`.',
@@ -30,7 +31,8 @@ describe('parseNoteProposals', () => {
       { kind: 'text', text: 'And:\n' },
       {
         kind: 'block',
-        label: 'nit',
+        label: 'nitpick',
+        blocking: false,
         lines: { path: 'src/b.ts', startLine: 2, endLine: 2 },
         title: '',
         body: 'Name it `one`.',
@@ -68,6 +70,9 @@ describe('parseNoteProposals', () => {
     ['an uppercase label', ':::note Issue [[src/a.ts:12]]\nbody\n:::'],
     ['text glued to the anchor', ':::note issue [[src/a.ts:12]]x\nbody\n:::'],
     ['a bare keyword', ':::note\nbody\n:::'],
+    ['an unknown decoration', ':::note issue (if-minor) [[src/a.ts:12]]\nbody\n:::'],
+    ['a glued decoration', ':::note issue (blocking)[[src/a.ts:12]]\nbody\n:::'],
+    ['a decoration after the anchor', ':::note issue [[src/a.ts:12]](blocking)\nbody\n:::'],
   ])('drops a block with %s as malformed', ([, answer], { expect }) => {
     expect(parseNoteProposals(`Before.\n${answer}\nAfter.`)).toStrictEqual([
       { kind: 'text', text: 'Before.\n' },
@@ -84,11 +89,14 @@ describe('parseNoteProposals', () => {
     ]);
   });
 
-  test('reads CRLF line endings', ({ expect }) => {
-    expect(parseNoteProposals(':::note nit [[src/a.ts:12]] T\r\nB\r\n:::\r\n')).toStrictEqual([
+  test('reads the blocking decoration and CRLF line endings', ({ expect }) => {
+    expect(
+      parseNoteProposals(':::note todo (blocking)\t[[src/a.ts:12]] T\r\nB\r\n:::\r\n'),
+    ).toStrictEqual([
       {
         kind: 'block',
-        label: 'nit',
+        label: 'todo',
+        blocking: true,
         lines: { path: 'src/a.ts', startLine: 12, endLine: 12 },
         title: 'T',
         body: 'B',

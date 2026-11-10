@@ -32,7 +32,15 @@ describe('answerPartsFrom', () => {
   test('puts proposed notes in their places, numbered, the first text keeping its id', ({
     expect,
   }) => {
-    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: 'T', body: 'B' };
+    const note = {
+      path: 'a.ts',
+      startLine: 2,
+      endLine: 3,
+      label: 'nitpick',
+      blocking: false,
+      title: 'T',
+      body: 'B',
+    };
     expect(
       answerPartsFrom(streamed(), {
         kind: 'answer',

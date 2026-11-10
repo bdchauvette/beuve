@@ -31,7 +31,8 @@ describe('chatTextFrom', () => {
       path: 'a.ts',
       startLine: 1,
       endLine: 1,
-      label: 'nit' as const,
+      label: 'nitpick' as const,
+      blocking: false,
       title: 'T',
       body: 'B',
     };

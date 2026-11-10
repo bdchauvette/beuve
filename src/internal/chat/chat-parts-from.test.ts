@@ -51,7 +51,15 @@ describe('chatTextFrom and chatMentionsFrom', () => {
   });
 
   test('write a proposed note back as its block, between the text around it', ({ expect }) => {
-    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: 'T', body: 'B' };
+    const note = {
+      path: 'a.ts',
+      startLine: 2,
+      endLine: 3,
+      label: 'issue',
+      blocking: true,
+      title: 'T',
+      body: 'B',
+    };
     expect(
       chatTextFrom([
         { kind: 'text', id: 'p1', text: 'Before.' },
@@ -59,15 +67,20 @@ describe('chatTextFrom and chatMentionsFrom', () => {
         { kind: 'text', id: 'p3', text: 'Between.' },
         { kind: 'dropped-proposal', id: 'p4', reason: 'duplicate' },
         { kind: 'text', id: 'p5', text: 'After.' },
-        { kind: 'proposal', id: 'p6', proposal: 1, note: { ...note, title: '', body: '' } },
+        {
+          kind: 'proposal',
+          id: 'p6',
+          proposal: 1,
+          note: { ...note, blocking: false, title: '', body: '' },
+        },
       ]),
     ).toBe(
       [
         'Before.',
-        ':::note nit [[a.ts:2-3]] T\nB\n:::',
+        ':::note issue (blocking) [[a.ts:2-3]] T\nB\n:::',
         'Between.',
         'After.',
-        ':::note nit [[a.ts:2-3]]\n:::',
+        ':::note issue [[a.ts:2-3]]\n:::',
       ].join('\n\n'),
     );
   });

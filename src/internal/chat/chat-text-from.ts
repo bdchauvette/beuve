@@ -53,8 +53,13 @@ export function chatTextFrom(parts: readonly ChatPart[]): string {
   return blocks.join('\n\n');
 }
 
-function proposalBlockFrom({ label, path, startLine, endLine, title, body }: NoteProposal): string {
-  const opening = [':::note', label, `[[${path}:${String(startLine)}-${String(endLine)}]]`];
+function proposalBlockFrom(note: NoteProposal): string {
+  const { label, path, startLine, endLine, title, body } = note;
+  const opening = [':::note', label];
+  if (note.blocking) {
+    opening.push('(blocking)');
+  }
+  opening.push(`[[${path}:${String(startLine)}-${String(endLine)}]]`);
   if (title !== '') {
     opening.push(title);
   }

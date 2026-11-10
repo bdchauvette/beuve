@@ -1107,6 +1107,8 @@ export interface ChatNoteProposalView {
   readonly startLine: number;
   readonly endLine: number;
   readonly label: UraSeverityView;
+  /** The `(blocking)` decoration (ADR 0131): staged, the note blocks approving. */
+  readonly blocking: boolean;
   readonly title: string;
   readonly body: string;
 }
