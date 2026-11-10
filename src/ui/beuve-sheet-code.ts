@@ -12,6 +12,7 @@ import { diagnosticRangesFrom } from './diagnostic-ranges-from.ts';
 import type { HoverPoint } from './hover-point.ts';
 import { highlightedLanguages } from './highlighted-languages.ts';
 import { languageFromShebang } from './language-from-shebang.ts';
+import { diffSelectionCss } from './diff-selection-css.ts';
 import { sheetGutterCssFrom } from './sheet-gutter-css-from.ts';
 import { diffsThemeNames } from './diffs-theme-names.ts';
 import { loadDiffsLibrary } from './load-diffs-library.ts';
@@ -170,16 +171,13 @@ export class BeuveSheetCode extends LitElement {
     }
     const sheet = this.sheet ?? new CSSStyleSheet();
     this.sheet = sheet;
-    // The library blends a selection into the line at 18% (25% dark); the tokens are the colours shown (ADR 0114).
-    const unblendedSelection =
-      '[data-selected-line] { --mix-selection-light: 0%; --mix-selection-dark: 0%; }';
     const gutter = sheetGutterCssFrom({
       marks: this.marks,
       notes: this.notes,
       matchLines: this.matchLines,
       currentMatchLine: this.currentMatchLine,
     });
-    sheet.replaceSync(`${unblendedSelection}\n${gutter}`);
+    sheet.replaceSync(`${diffSelectionCss}\n${gutter}`);
     if (!root.adoptedStyleSheets.includes(sheet)) {
       root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
     }
