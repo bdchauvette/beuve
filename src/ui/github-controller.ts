@@ -52,6 +52,14 @@ interface GithubSnapshot {
   readonly post: GithubPostState;
   readonly isOpening: boolean;
   readonly failure: OpenFailure | undefined;
+  /** The open session, when polling found new commits the review doesn't show yet. */
+  readonly newCommitsIn: string | undefined;
+}
+
+/** Where polling found new commits: the session, and the pull request or branch it names. */
+interface NewCommits {
+  readonly sessionId: string;
+  readonly name: string;
 }
 
 const initial: GithubSnapshot = {
@@ -63,6 +71,7 @@ const initial: GithubSnapshot = {
   post: { kind: 'idle' },
   isOpening: false,
   failure: undefined,
+  newCommitsIn: undefined,
 };
 
 /**
@@ -88,7 +97,11 @@ export class GithubController implements ReactiveController {
     host.addController(this);
   }
 
-  /** Polling found a change; a new head reloads the review, which then offers the interdiff. */
+  /**
+   * Polling found a change. A new head is only announced: reloading under the reviewer would
+   * throw away a note being written and the place they were reading, so the review reloads when
+   * they choose Show New Commits ({@link showNewCommits}).
+   */
   private applyUpdate(event: PullRequestUpdatedView): void {
     void this.environment.refreshSessions();
     if (event.sessionId !== this.environment.review()?.sessionId) {
@@ -110,16 +123,15 @@ export class GithubController implements ReactiveController {
       return;
     }
     this.invalidatePost();
-    this.environment.notify({
-      tone: 'info',
-      text: `New commits on #${String(event.pullRequest.number)}; the review now shows what changed.`,
+    this.announceNewCommits({
+      sessionId: event.sessionId,
+      name: `#${String(event.pullRequest.number)}`,
     });
-    void this.environment.selectSession(event.sessionId);
   }
 
   /**
    * Polling found a followed branch changed (ADR 0112). A promotion reloads the session, which
-   * now opens as its pull request; a new head reloads the review, which offers the interdiff.
+   * now opens as its pull request; a new head is announced, as for a pull request.
    */
   private applyBranchUpdate(event: RemoteBranchUpdatedView): void {
     void this.environment.refreshSessions();
@@ -148,11 +160,16 @@ export class GithubController implements ReactiveController {
     if (!event.headMoved) {
       return;
     }
+    this.announceNewCommits({ sessionId: event.sessionId, name });
+  }
+
+  private announceNewCommits({ sessionId, name }: NewCommits): void {
+    this.patch({ newCommitsIn: sessionId });
     this.environment.notify({
       tone: 'info',
-      text: `New commits on ${name}; the review now shows what changed.`,
+      text: `New commits on ${name}.`,
+      action: { label: 'Show', command: 'show-new-commits' },
     });
-    void this.environment.selectSession(event.sessionId);
   }
 
   /** Main refused because the head moved: say so quietly and show the new commits. */
@@ -225,6 +242,21 @@ export class GithubController implements ReactiveController {
     return this.snapshot.post;
   }
 
+  /** Whether polling found new commits that the open review doesn't show yet. */
+  get hasNewCommits(): boolean {
+    return this.snapshot.newCommitsIn !== undefined;
+  }
+
+  /** Review ▸ Show New Commits: reloads the review, which then offers the interdiff. */
+  showNewCommits(): void {
+    const sessionId = this.snapshot.newCommitsIn;
+    if (sessionId === undefined) {
+      return;
+    }
+    this.patch({ newCommitsIn: undefined });
+    void this.environment.selectSession(sessionId);
+  }
+
   /** Whether a pull request is being fetched to open. */
   get isOpening(): boolean {
     return this.snapshot.isOpening;
@@ -244,6 +276,7 @@ export class GithubController implements ReactiveController {
       ci: undefined,
       timeline: undefined,
       post: { kind: 'idle' },
+      newCommitsIn: undefined,
     });
   }
 

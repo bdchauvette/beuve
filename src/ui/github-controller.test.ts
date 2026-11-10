@@ -82,7 +82,9 @@ describe('GithubController', () => {
     expect(selected).toStrictEqual([]);
   });
 
-  test('a moved head voids a confirmation, says so and reloads the review', async ({ expect }) => {
+  test('a moved head voids a confirmation and says so, but leaves the review alone', async ({
+    expect,
+  }) => {
     const { github, emit, notices, selected } = createGithubHarness({
       review: reviewOf(),
       replies: {
@@ -95,8 +97,41 @@ describe('GithubController', () => {
     expect(github.post.kind).toBe('confirm');
     emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
-    expect(notices.map(({ tone }) => tone)).toStrictEqual(['info']);
+    expect(notices).toStrictEqual([
+      {
+        tone: 'info',
+        text: 'New commits on #7.',
+        action: { label: 'Show', command: 'show-new-commits' },
+      },
+    ]);
+    expect(github.hasNewCommits).toBe(true);
+    expect(selected).toStrictEqual([]);
+  });
+
+  test('shows new commits only when asked, once', async ({ expect }) => {
+    const { github, emit, selected } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': emptyTimelineReply() },
+    });
+    github.hostConnected();
+    github.showNewCommits();
+    expect(selected).toStrictEqual([]);
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    github.showNewCommits();
+    github.showNewCommits();
     await expect.poll(() => selected).toStrictEqual(['s1']);
+    expect(github.hasNewCommits).toBe(false);
+  });
+
+  test('forgets new commits when another session opens', ({ expect }) => {
+    const { github, emit } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': emptyTimelineReply() },
+    });
+    github.hostConnected();
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    github.reset();
+    expect(github.hasNewCommits).toBe(false);
   });
 
   test('reads the open session’s timeline and shows its events', async ({ expect }) => {
@@ -346,7 +381,7 @@ describe('GithubController', () => {
     [
       'a new head',
       { headMoved: true, promoted: false, state: 'present', pullOwner: 'o' },
-      ['s1'],
+      [],
       'New commits',
     ],
     [
