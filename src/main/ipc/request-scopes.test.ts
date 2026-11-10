@@ -30,6 +30,20 @@ describe('RequestScopes', () => {
     expect(opening.signal.aborted).toBe(true);
   });
 
+  test('a note draft is superseded only by a draft for the same note', ({ expect }) => {
+    const scopes = new RequestScopes();
+    using first = scopes.begin(1, 'note-draft', 'note-a');
+    using other = scopes.begin(1, 'note-draft', 'note-b');
+    using again = scopes.begin(1, 'note-draft', 'note-a');
+    expect([first, other, again].map(({ signal }) => signal.aborted)).toStrictEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(scopes.cancel(1, 'note-a')).toBe(true);
+    expect([other, again].map(({ signal }) => signal.aborted)).toStrictEqual([false, true]);
+  });
+
   test('closing a window aborts everything it has outstanding', ({ expect }) => {
     const scopes = new RequestScopes();
     using review = scopes.begin(1, 'review');

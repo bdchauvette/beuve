@@ -84,6 +84,7 @@ describe('createModelRegistryStore', () => {
       verify: 'claude-code',
       summarize: 'claude-code',
       compact: 'claude-code',
+      draft: 'claude-code',
     });
   });
 });

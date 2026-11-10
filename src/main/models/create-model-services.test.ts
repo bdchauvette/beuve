@@ -64,6 +64,7 @@ describe('createModelServices', () => {
         verify: 'claude-code',
         summarize: 'claude-code',
         compact: 'claude-code',
+        draft: 'claude-code',
       },
       keyStorage: 'os',
       hasBundledClaudeCode: true,

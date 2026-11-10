@@ -10,6 +10,7 @@ import type {
 import { expandMentionTokens } from './expand-mention-tokens.ts';
 import { fenceUntrusted } from './fence-untrusted.ts';
 import { formatMention } from './format-mention.ts';
+import { splitPatchHunks } from './split-patch-hunks.ts';
 import type { MentionPlace } from './format-mention.ts';
 
 /** Size limits, in UTF-16 characters (string length). */
@@ -181,7 +182,6 @@ export function buildChatPrompt(
 
 const omissionLineChars = 40;
 const omissionHeaderChars = 300;
-const afterNewline = /(?<=\n)/u;
 
 /** A rendered part of the prompt, and whether its content was cut to fit. */
 interface RenderedSection {
@@ -555,7 +555,7 @@ function renderFile(file: ChatFile, limit: number, hasTools: boolean): FileSecti
   if (file.previousPath !== undefined) {
     heading = `### ${file.status} ${file.path} (from ${file.previousPath})\n\n`;
   }
-  const { preamble, hunks } = splitHunks(file.patch);
+  const { preamble, hunks } = splitPatchHunks(file.patch);
   const whole = heading + fenceUntrusted(file.patch, 'diff') + '\n';
   if (whole.length <= limit) {
     return { text: whole, includedHunks: hunks.length, totalHunks: hunks.length };
@@ -588,34 +588,6 @@ function renderFile(file: ChatFile, limit: number, hasTools: boolean): FileSecti
     includedHunks: included,
     totalHunks: hunks.length,
   };
-}
-
-/** A file's patch: the lines before its first hunk, and each hunk. */
-interface SplitPatch {
-  readonly preamble: string;
-  readonly hunks: string[];
-}
-
-function splitHunks(patch: string): SplitPatch {
-  let preamble = '';
-  const hunks: string[] = [];
-  let current: string | undefined;
-  for (const line of patch.split(afterNewline)) {
-    if (line.startsWith('@@ -')) {
-      if (current !== undefined) {
-        hunks.push(current);
-      }
-      current = line;
-    } else if (current === undefined) {
-      preamble += line;
-    } else {
-      current += line;
-    }
-  }
-  if (current !== undefined) {
-    hunks.push(current);
-  }
-  return { preamble, hunks };
 }
 
 function renderOmissions(

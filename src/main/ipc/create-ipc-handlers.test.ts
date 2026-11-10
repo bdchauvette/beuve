@@ -3,6 +3,7 @@ import type { ExpectStatic } from 'vitest';
 
 import type {
   AppInfo,
+  ExpandedNoteView,
   IpcError,
   IpcResult,
   OpenedView,
@@ -18,6 +19,7 @@ import type { MainServices, SessionServices } from '../main-services.ts';
 
 import { test } from '../testing/test.ts';
 import { createIpcHandlers } from './create-ipc-handlers.ts';
+import { RequestScopes } from './request-scopes.ts';
 
 function appInfo(): AppInfo {
   return {
@@ -1125,6 +1127,59 @@ describe('github channels', () => {
   });
 });
 
+describe('ura:expand-note', () => {
+  test('validates the draft and passes it on, scoped by its requestId (ADR 0125)', async ({
+    expect,
+  }) => {
+    const calls: unknown[] = [];
+    const scopes = new RequestScopes();
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        drafting: {
+          expandNote: async (request, options): Promise<IpcResult<ExpandedNoteView>> => {
+            calls.push(request);
+            const aborted = Promise.withResolvers<undefined>();
+            options?.signal?.addEventListener('abort', () => {
+              aborted.resolve(undefined);
+            });
+            await aborted.promise;
+            return ok({ outcome: 'expanded', body: 'late', model: undefined });
+          },
+        },
+      },
+      appInfo(),
+      { scopes },
+    );
+    const draft = {
+      sessionId: 's1',
+      headSha: sha(),
+      anchor: { kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 4 },
+      severity: 'nit',
+      title: '',
+      body: 'rename',
+    };
+    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, headSha: 'abc' }));
+    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, severity: 'major' }));
+    await expectInvalid(expect, handlers['ura:expand-note']({ ...draft, chat: 'history' }));
+    const sender = { webContentsId: 1 };
+    const first = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
+    const other = handlers['ura:expand-note']({ ...draft, requestId: 'note-b' }, sender);
+    const again = handlers['ura:expand-note']({ ...draft, requestId: 'note-a' }, sender);
+    const cancelled = { ok: false, error: { code: 'cancelled', message: 'cancelled' } };
+    await expect(first).resolves.toStrictEqual(cancelled);
+    expect(handlers['request:cancel']({ requestId: 'note-a' }, sender)).toStrictEqual(
+      ok({ cancelled: true }),
+    );
+    await expect(again).resolves.toStrictEqual(cancelled);
+    expect(handlers['request:cancel']({ requestId: 'note-b' }, sender)).toStrictEqual(
+      ok({ cancelled: true }),
+    );
+    await expect(other).resolves.toStrictEqual(cancelled);
+    expect(calls).toStrictEqual([draft, draft, draft]);
+  });
+});
+
 describe('session:get-commit', () => {
   test('takes a full commit sha of a session, and nothing else', async ({ expect }) => {
     const handlers = createIpcHandlers(stubServices({}), appInfo());
@@ -1217,6 +1272,7 @@ function stubServices(
         return doNothingSync;
       },
     },
+    drafting: { expandNote: notWired },
     terminal: {
       open: notWired,
       openScripted: notWired,

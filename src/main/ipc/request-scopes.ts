@@ -1,7 +1,8 @@
 /**
  * The kinds of request a newer one of the same kind, from the same window, supersedes (ADR 0079).
  * A window shows one review and one sheet file at a time, so only its latest load of each is
- * wanted, whichever session it is for.
+ * wanted, whichever session it is for. A `note-draft` is superseded only by one with the same
+ * `requestId`: the renderer names a note's drafting requests by the note (ADR 0125).
  */
 export type SupersededKind =
   | 'review'
@@ -10,7 +11,8 @@ export type SupersededKind =
   | 'file-attributes'
   | 'sheet-file'
   | 'sheet-head'
-  | 'open-pull-request';
+  | 'open-pull-request'
+  | 'note-draft';
 
 /** One request's cancellation. Disposing it when the request ends forgets it. */
 export interface RequestScope extends Disposable {
@@ -36,7 +38,10 @@ export class RequestScopes {
 
   /** Starts a request of `kind` from `window`, aborting the window's previous one of that kind. */
   begin(window: number, kind: SupersededKind, requestId?: string): RequestScope {
-    const key = `${String(window)}\0${kind}`;
+    let key = `${String(window)}\0${kind}`;
+    if (kind === 'note-draft') {
+      key += `\0${requestId ?? ''}`;
+    }
     this.#latest.get(key)?.controller.abort(new DOMException('superseded', 'AbortError'));
     const entry: Entry = { controller: new AbortController(), window, key, requestId };
     this.#latest.set(key, entry);
@@ -52,15 +57,17 @@ export class RequestScopes {
     };
   }
 
-  /** Cancels `window`'s request with `requestId`; false when none is outstanding. */
+  /** Cancels `window`'s requests with `requestId`; false when none is outstanding. */
   cancel(window: number, requestId: string): boolean {
+    let isCancelled = false;
     for (const entry of this.#entries) {
-      if (entry.window === window && entry.requestId === requestId) {
-        entry.controller.abort(new DOMException('cancelled', 'AbortError'));
-        return true;
+      if (entry.window !== window || entry.requestId !== requestId) {
+        continue;
       }
+      entry.controller.abort(new DOMException('cancelled', 'AbortError'));
+      isCancelled = true;
     }
-    return false;
+    return isCancelled;
   }
 
   /** Aborts everything `window` still has outstanding; its answers would go nowhere. */

@@ -727,6 +727,7 @@ const roleLabels: Readonly<Record<ModelRole, string>> = {
   verify: '/review verification',
   summarize: '/summarize',
   compact: '/compact',
+  draft: 'Expand note',
 };
 
 /** What `models:save` gets from the form: empty fields left out, the number parsed. */

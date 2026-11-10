@@ -1357,6 +1357,32 @@ export interface UpdateUraItemRequest {
 }
 
 /**
+ * `ura:expand-note` (ADR 0125): "Expand on this" for a note being written or edited. One model
+ * request outside the chat, on the `draft` role, whose context is only this draft and the diff
+ * hunks near `anchor` at `headSha` (the head the anchor refers to). Nothing is stored. A newer
+ * request with the same `requestId` from the same window replaces one in flight, and
+ * `request:cancel` stops it (ADR 0079).
+ */
+export interface ExpandNoteRequest {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly anchor: UraAnchorView;
+  readonly severity: UraSeverityView;
+  readonly title: string;
+  readonly body: string;
+  readonly requestId?: string;
+}
+
+/**
+ * The expanded note body (Markdown) for the reviewer to keep, edit or undo, or why the model gave
+ * none: `errorKind` is the model port's error kind (`timeout`, `not-authenticated`, …) or
+ * `refused` for a draft that can't be expanded, and `message` says what to do.
+ */
+export type ExpandedNoteView =
+  | { readonly outcome: 'expanded'; readonly body: string; readonly model: string | undefined }
+  | { readonly outcome: 'failed'; readonly errorKind: string; readonly message: string };
+
+/**
  * Withdraws an item, marks it addressed (by the reviewer, at the session's current head), or
  * restages it.
  */
@@ -2296,7 +2322,7 @@ export type ClaudeStatusView =
   | { readonly kind: 'missing'; readonly message: string };
 
 /** What a configured model is used for (ADR 0070); each role names one registry entry. */
-export type ModelRole = 'chat' | 'review' | 'verify' | 'summarize' | 'compact';
+export type ModelRole = 'chat' | 'review' | 'verify' | 'summarize' | 'compact' | 'draft';
 
 /** The adapters a registry entry can configure (ADR 0069, 0070, 0071). */
 export type ModelKind = 'claude-code-cli' | 'claude-agent-sdk' | 'openai-compatible';
@@ -2574,6 +2600,10 @@ export interface InvokeChannelMap {
   'ura:export': {
     readonly request: ExportUraRequest;
     readonly response: IpcResult<UraExportView>;
+  };
+  'ura:expand-note': {
+    readonly request: ExpandNoteRequest;
+    readonly response: IpcResult<ExpandedNoteView>;
   };
   'chat:ask': { readonly request: ChatAskRequest; readonly response: IpcResult<ChatAskedView> };
   'chat:list': { readonly request: ChatListRequest; readonly response: IpcResult<ChatListView> };

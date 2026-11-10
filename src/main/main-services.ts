@@ -14,6 +14,7 @@ import type {
 import type { RequestOptions } from './request-options.ts';
 
 import type { ChatServices } from './chat/create-chat-services.ts';
+import type { DraftingServices } from './drafting/create-drafting-services.ts';
 import type { DisplayServices } from './display/create-display-services.ts';
 import type { EditorServices } from './editor/create-editor-services.ts';
 import type { ReviewEditsServices } from './review-edits/create-review-edits-services.ts';
@@ -77,6 +78,8 @@ export interface MainServices {
   readonly reviewEdits: ReviewEditsServices;
   readonly display: DisplayServices;
   readonly chat: Omit<ChatServices, 'observeHead' | 'testModel'>;
+  /** Note drafting, outside the chat (ADR 0125). */
+  readonly drafting: Omit<DraftingServices, 'dispose'>;
   readonly ura: Omit<
     UraServices,
     'observeHead' | 'compileArtifact' | 'listPostings' | 'recordPostings'

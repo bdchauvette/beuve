@@ -7,4 +7,5 @@ export const modelRoles = Object.freeze([
   'verify',
   'summarize',
   'compact',
+  'draft',
 ] as const satisfies readonly ModelRole[]);
