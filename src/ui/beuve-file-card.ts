@@ -415,8 +415,8 @@ export class BeuveFileCard extends LitElement {
         --diffs-deletion-color-override: var(--beuve-diff-removed-bar);
         --diffs-fg-number-addition-override: var(--beuve-diff-added-number-text);
         --diffs-fg-number-deletion-override: var(--beuve-diff-removed-number-text);
-        --diffs-bg-selection-override: var(--beuve-accent-soft);
-        --diffs-bg-selection-number-override: var(--beuve-accent-soft);
+        --diffs-bg-selection-override: var(--beuve-diff-selection-bg);
+        --diffs-bg-selection-number-override: var(--beuve-diff-selection-number-bg);
         --diffs-selection-color-override: var(--beuve-accent);
         --diffs-bg-hover-override: var(--beuve-surface-sunken);
       }
@@ -1336,8 +1336,9 @@ export class BeuveFileCard extends LitElement {
   /**
    * The diff library blends a changed line's colour into the background (12% light, 20% dark) but
    * paints a changed word's colour as given, so the tokens' line < number < word steps came out as
-   * a near-invisible line under a strong word. Turning the blend off makes the line, gutter and
-   * word colours the `--beuve-diff-*` tokens themselves (ADR 0114 amendment).
+   * a near-invisible line under a strong word; a selection blends in at 18% (25% dark) too.
+   * Turning both blends off makes the line, gutter, word and selection colours the
+   * `--beuve-diff-*` tokens themselves (ADR 0114 amendments).
    */
   private adoptDiffTints(): void {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
@@ -1347,7 +1348,7 @@ export class BeuveFileCard extends LitElement {
     if (this.tintSheet === undefined) {
       this.tintSheet = new CSSStyleSheet();
       this.tintSheet.replaceSync(
-        '[data-line], [data-no-newline], [data-gutter-buffer], [data-column-number] { --mix-light: 0%; --mix-dark: 0%; }',
+        '[data-line], [data-no-newline], [data-gutter-buffer], [data-column-number] { --mix-light: 0%; --mix-dark: 0%; } [data-selected-line] { --mix-selection-light: 0%; --mix-selection-dark: 0%; }',
       );
     }
     if (!root.adoptedStyleSheets.includes(this.tintSheet)) {
