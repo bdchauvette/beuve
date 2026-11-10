@@ -31,6 +31,7 @@ import type {
 } from './beuve-sheet-code.ts';
 import { findSheetMatches } from './find-sheet-matches.ts';
 import type { SheetMatch } from './find-sheet-matches.ts';
+import { SelectionMatches } from './selection-matches.ts';
 import { sheetRequestFrom } from './sheet-request-from.ts';
 import { sheetTitleFrom } from './sheet-title-from.ts';
 import { stepSheetHistory } from './step-sheet-history.ts';
@@ -355,6 +356,20 @@ export class BeuveSheetView extends LitElement {
   @state() accessor hasDiagnosticsOn = true;
   /** A Markdown file (ADR 0123) shows rendered unless the reviewer chose its source. */
   @state() accessor view: 'rendered' | 'source' = 'source';
+
+  constructor() {
+    super();
+    // ADR 0126: other occurrences of the text selected in the code.
+    this.addController(
+      new SelectionMatches(() => {
+        const root = this.code()?.codeRoot();
+        if (root === undefined) {
+          return [];
+        }
+        return [root];
+      }),
+    );
+  }
 
   private renderFind(find: FindState): TemplateResult {
     return html`<div class="find">

@@ -1765,6 +1765,11 @@ ${splitPatch(file.patch).map((line) => {
     });
   }
 
+  /** The library's shadow root, which holds the code rows, once the diff has rendered. */
+  codeRoot(): ShadowRoot | undefined {
+    return this.renderRoot.querySelector('diffs-container')?.shadowRoot ?? undefined;
+  }
+
   /** Toggle Rendered View (ADR 0123): rendered or source, for a file with a rich view. */
   toggleView(): void {
     const { file } = this;
