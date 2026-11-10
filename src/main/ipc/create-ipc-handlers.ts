@@ -422,6 +422,12 @@ const stageReviewFindingRequest = z.strictObject({
   severity: uraSeverity.optional(),
 });
 
+const stageNoteProposalRequest = z.strictObject({
+  messageId: uuid,
+  proposal: z.number().int().min(0).max(1000),
+  severity: uraSeverity.optional(),
+});
+
 const uraExportRequest = z.strictObject({
   sessionId,
   target: z.enum(['agent-json', 'agent-xml', 'github']),
@@ -947,6 +953,17 @@ export function createIpcHandlers(
       }
       const { severity, ...required } = parsed.data;
       return services.ura.stageReviewFinding({
+        ...required,
+        ...(severity !== undefined && { severity }),
+      });
+    },
+    'ura:stage-note-proposal': async (request): Promise<IpcResult<UraStagedView>> => {
+      const parsed = stageNoteProposalRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { severity, ...required } = parsed.data;
+      return services.ura.stageNoteProposal({
         ...required,
         ...(severity !== undefined && { severity }),
       });

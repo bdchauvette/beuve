@@ -820,6 +820,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           update: record,
           transition: record,
           stageReviewFinding: record,
+          stageNoteProposal: record,
           export: record,
           setVerdict: (request) => {
             calls.push(request);
@@ -867,6 +868,14 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       expect,
       handlers['ura:stage-review-finding']({ messageId: id, finding: 0, severity: 'meh' }),
     );
+    await expectInvalid(
+      expect,
+      handlers['ura:stage-note-proposal']({ messageId: id, proposal: -1 }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:stage-note-proposal']({ messageId: id, proposal: 0, title: 'x' }),
+    );
     await expectInvalid(expect, handlers['ura:export']({ sessionId: 's1', target: 'pdf' }));
     await expectInvalid(expect, handlers['ura:set-verdict']({ sessionId: 's1', verdict: 'ship' }));
     await expectInvalid(expect, handlers['ura:list']({}));
@@ -877,6 +886,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
     await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
+    await handlers['ura:stage-note-proposal']({ messageId: id, proposal: 1, severity: 'nit' });
     await handlers['ura:export']({ sessionId: 's1', target: 'agent-xml' });
     await expectInvalid(
       expect,
@@ -895,6 +905,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
       { messageId: id, finding: 2 },
+      { messageId: id, proposal: 1, severity: 'nit' },
       { sessionId: 's1', target: 'agent-xml' },
       { sessionId: 's1', expectedHeadSha: sha(), verdict: 'comment' },
       { sessionId: 's1', expectedHeadSha: sha() },
@@ -1266,6 +1277,7 @@ function stubServices(
       transition: notWired,
       reorder: notWiredError,
       stageReviewFinding: notWired,
+      stageNoteProposal: notWired,
       setVerdict: notWiredError,
       export: notWired,
       onChanged: (): (() => void) => {

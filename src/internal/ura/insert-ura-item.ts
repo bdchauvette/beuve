@@ -13,8 +13,9 @@ const primaryKeyViolation = 1555;
 const uniqueViolation = 2067;
 
 /**
- * Appends an item to the end of its session's dock. A `/review` finding can be staged once; a
- * repeat is `duplicate-item`, so main can find and restore the existing item instead.
+ * Appends an item to the end of its session's dock. A `/review` finding or a proposed note can be
+ * staged once; a repeat is `duplicate-item`, so main can find and restore the existing item
+ * instead.
  */
 export function insertUraItem(
   db: DatabaseSync,
@@ -23,14 +24,15 @@ export function insertUraItem(
   try {
     db.prepare(
       `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
-                              line_end, severity, blocking, origin_kind, chat_message_id, chat_finding,
+                              line_end, severity, blocking, origin_kind, chat_message_id,
+                              chat_finding, chat_proposal,
                               title, body, patch, status, addressed_sha, addressed_by,
                               created_at, updated_at)
        VALUES (:id, :session_id,
                (SELECT coalesce(max(position) + 1, 0) FROM ura_items WHERE session_id = :session_id),
                :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :blocking,
-               :origin_kind,
-               :chat_message_id, :chat_finding, :title, :body, :patch, :status,
+               :origin_kind, :chat_message_id, :chat_finding, :chat_proposal, :title, :body,
+               :patch, :status,
                :addressed_sha, :addressed_by, :created_at, :updated_at);`,
     ).run(uraItemRowFrom(item));
   } catch (error: unknown) {
@@ -45,7 +47,7 @@ export function insertUraItem(
         return err({
           kind: 'duplicate-item',
           id: item.id,
-          reason: 'review-finding-already-staged',
+          reason: 'origin-already-staged',
         });
       }
       default: {

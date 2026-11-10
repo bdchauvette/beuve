@@ -106,7 +106,7 @@ function anchorFrom(row: Row): UraAnchor | string {
 }
 
 function originFrom(row: Row): UraOrigin | string {
-  const { origin_kind, chat_message_id, chat_finding } = row;
+  const { origin_kind, chat_message_id, chat_finding, chat_proposal } = row;
   switch (origin_kind) {
     case 'human': {
       return { kind: 'human' };
@@ -115,13 +115,23 @@ function originFrom(row: Row): UraOrigin | string {
       if (typeof chat_message_id !== 'string') {
         return 'chat_message_id is not text';
       }
-      if (chat_finding === null) {
-        return { kind: 'chat-answer', messageId: chat_message_id };
+      if (chat_finding !== null && chat_proposal !== null) {
+        return 'chat_finding and chat_proposal are both set';
       }
-      if (Number.isSafeInteger(chat_finding) && Number(chat_finding) >= 0) {
-        return { kind: 'chat-answer', messageId: chat_message_id, finding: Number(chat_finding) };
+      const answer = { kind: 'chat-answer', messageId: chat_message_id } as const;
+      if (chat_finding !== null) {
+        if (isIndex(chat_finding)) {
+          return { ...answer, finding: Number(chat_finding) };
+        }
+        return 'chat_finding is not a finding index';
       }
-      return 'chat_finding is not a finding index';
+      if (chat_proposal !== null) {
+        if (isIndex(chat_proposal)) {
+          return { ...answer, proposal: Number(chat_proposal) };
+        }
+        return 'chat_proposal is not a proposal index';
+      }
+      return answer;
     }
     default: {
       return 'origin_kind is unknown';
@@ -150,4 +160,8 @@ function statusFrom(row: Row): UraStatus | string {
 
 function isInteger(value: unknown): value is number | bigint {
   return typeof value === 'bigint' || (typeof value === 'number' && Number.isSafeInteger(value));
+}
+
+function isIndex(value: unknown): boolean {
+  return isInteger(value) && Number(value) >= 0;
 }

@@ -124,6 +124,7 @@ import type {
   LineRequestDetail,
   MessageIdDetail,
   PeekExpandDetail,
+  ProposalRefDetail,
   StackRefDetail,
   TreeModeDetail,
   TreeSelectDetail,
@@ -430,6 +431,10 @@ export class BeuveReview extends LitElement {
 
   private readonly onChatStageFinding = (event: CustomEvent<FindingRefDetail>): void => {
     void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
+  };
+
+  private readonly onChatStageProposal = (event: CustomEvent<ProposalRefDetail>): void => {
+    void this.ura.stageNoteProposal(event.detail.messageId, event.detail.proposal);
   };
 
   private readonly onInsightStage = (event: CustomEvent<FindingRefDetail>): void => {
@@ -1267,6 +1272,7 @@ export class BeuveReview extends LitElement {
       .references=${this.fileReferences()}
       .stagedMessageIds=${this.ura.stagedMessageIds()}
       .stagedFindings=${this.ura.stagedFindings()}
+      .stagedProposals=${this.ura.stagedProposals()}
       .subscribeChatStream=${this.subscribeChatStream}
       ?hasSession=${this.review !== undefined}
       @beuve-open-link=${this.onOpenChatLink}
@@ -1275,6 +1281,7 @@ export class BeuveReview extends LitElement {
       @beuve-chat-cancel=${this.onChatCancel}
       @beuve-chat-stage=${this.onChatStage}
       @beuve-chat-stage-finding=${this.onChatStageFinding}
+      @beuve-chat-stage-proposal=${this.onChatStageProposal}
       @beuve-chat-clear-queue=${this.onChatClearQueue}
       @beuve-chat-cite=${this.onChatCite}
       @beuve-chat-mention=${this.onChatMention}

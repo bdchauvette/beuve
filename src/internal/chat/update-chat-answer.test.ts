@@ -3,7 +3,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { describe } from 'vitest';
 
 import { appendChatMessage } from './append-chat-message.ts';
-import type { ChatMessage, ChatMessageId, CommitSha, SessionId } from './chat-message.ts';
+import type { ChatMessage, ChatMessageId, ChatPart, CommitSha, SessionId } from './chat-message.ts';
+import type { NoteProposal } from './note-proposal.ts';
 import { chatPartsFrom } from './chat-parts-from.ts';
 import { listChatMessages } from './list-chat-messages.ts';
 import { updateChatAnswer } from './update-chat-answer.ts';
@@ -24,6 +25,10 @@ function seed(db: DatabaseSync): void {
     status: 'submitted',
     parts: [],
   });
+}
+
+function storedNote(): NoteProposal {
+  return { path: 'a.ts', startLine: 2, endLine: 3, label: 'issue', title: 'T', body: '' };
 }
 
 function answer(db: DatabaseSync): ChatMessage | undefined {
@@ -69,6 +74,40 @@ describe('updateChatAnswer', () => {
       status: 'done',
       parts,
       citations,
+    });
+  });
+
+  test('stores proposed notes, kept and dropped, and reads them back', ({ expect, db }) => {
+    seed(db);
+    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: '', body: 'B' };
+    const parts = [
+      { kind: 'text', id: 'p1', text: 'See below.' },
+      { kind: 'proposal', id: 'p2', proposal: 0, note },
+      { kind: 'dropped-proposal', id: 'p3', reason: 'outside-diff' },
+      { kind: 'proposal', id: 'p4', proposal: 1, note: { ...note, title: 'T' } },
+    ] as const;
+    updateChatAnswer(db, answerId(), { status: 'done', parts });
+    expect(answer(db)).toMatchObject({ status: 'done', parts });
+  });
+
+  test.for<[string, readonly ChatPart[]]>([
+    [
+      'numbered out of order',
+      [
+        { kind: 'proposal', id: 'p1', proposal: 1, note: storedNote() },
+        { kind: 'proposal', id: 'p2', proposal: 0, note: storedNote() },
+      ],
+    ],
+    [
+      'on lines that are not lines',
+      [{ kind: 'proposal', id: 'p1', proposal: 0, note: { ...storedNote(), startLine: 0 } }],
+    ],
+  ])('reads proposals %s as a corrupt row', ([, parts], { expect, db }) => {
+    seed(db);
+    updateChatAnswer(db, answerId(), { status: 'done', parts });
+    expect(listChatMessages(db, sessionId())).toMatchObject({
+      ok: false,
+      error: { kind: 'corrupt-row', id: answerId() },
     });
   });
 

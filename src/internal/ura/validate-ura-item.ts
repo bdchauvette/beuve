@@ -99,16 +99,20 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
       if (origin.messageId.trim() === '') {
         return 'the chat message id is empty';
       }
-      if (origin.finding === undefined) {
+      if (origin.finding !== undefined && origin.proposal !== undefined) {
+        return 'an item comes from a finding or a proposed note, not both';
+      }
+      const index = origin.finding ?? origin.proposal;
+      if (index === undefined) {
         return undefined;
       }
-      if (!Number.isSafeInteger(origin.finding) || origin.finding < 0) {
-        return 'the finding index is not a non-negative integer';
+      if (!Number.isSafeInteger(index) || index < 0) {
+        return 'the finding or proposal index is not a non-negative integer';
       }
       if (anchor.kind === 'lines') {
         return undefined;
       }
-      return 'a review finding is anchored to lines';
+      return 'a review finding or proposed note is anchored to lines';
     }
   }
 }

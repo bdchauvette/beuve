@@ -6,6 +6,7 @@ import type {
   UraExportTarget,
   UraItemView,
   UraSeverityView,
+  UraStagedView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -155,6 +156,7 @@ export class UraController implements ReactiveController {
         if (
           item.origin.kind === 'chat-answer' &&
           item.origin.finding === undefined &&
+          item.origin.proposal === undefined &&
           item.status.kind === 'staged'
         ) {
           return item.origin.messageId;
@@ -174,6 +176,22 @@ export class UraController implements ReactiveController {
           item.status.kind === 'staged'
         ) {
           return `${item.origin.messageId}:${String(item.origin.finding)}`;
+        }
+        return [];
+      }),
+    );
+  }
+
+  /** Notes answers proposed, staged and still staged, as `messageId:index` (ADR 0132). */
+  stagedProposals(): ReadonlySet<string> {
+    return new Set(
+      this.snapshot.items.flatMap((item) => {
+        if (
+          item.origin.kind === 'chat-answer' &&
+          item.origin.proposal !== undefined &&
+          item.status.kind === 'staged'
+        ) {
+          return `${item.origin.messageId}:${String(item.origin.proposal)}`;
         }
         return [];
       }),
@@ -349,12 +367,21 @@ export class UraController implements ReactiveController {
     await this.call(async (bridge) => {
       const staged = await bridge.invoke('ura:stage-review-finding', { messageId, finding });
       if (staged.ok) {
-        const { title } = staged.value.item;
-        let text = `“${title}” is already staged.`;
-        if (staged.value.created) {
-          text = `Staged “${title}”.`;
-        }
-        this.patch({ notice: { tone: 'info', text } });
+        this.patch({ notice: { tone: 'info', text: stagedNotice(staged.value) } });
+      }
+      return staged;
+    });
+  }
+
+  /** Stages one note an answer proposed on its lines; main reads it from the stored answer. */
+  async stageNoteProposal(messageId: string, proposal: number): Promise<void> {
+    if (this.stagedProposals().has(`${messageId}:${String(proposal)}`)) {
+      return;
+    }
+    await this.call(async (bridge) => {
+      const staged = await bridge.invoke('ura:stage-note-proposal', { messageId, proposal });
+      if (staged.ok) {
+        this.patch({ notice: { tone: 'info', text: stagedNotice(staged.value) } });
       }
       return staged;
     });
@@ -402,6 +429,18 @@ const exportLabels: Readonly<Record<UraExportTarget, string>> = {
   'agent-json': 'the review for agents as JSON',
   github: 'the GitHub review JSON',
 };
+
+/** "Staged “Title”.", or that it already was; a note without a title is "the note". */
+function stagedNotice({ item, created }: UraStagedView): string {
+  let name = 'the note';
+  if (item.title !== '') {
+    name = `“${item.title}”`;
+  }
+  if (created) {
+    return `Staged ${name}.`;
+  }
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} is already staged.`;
+}
 
 function sizeText(characters: number): string {
   if (characters < 1024) {

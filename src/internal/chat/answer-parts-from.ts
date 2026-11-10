@@ -1,11 +1,16 @@
 import { applyModelEvent } from './apply-model-event.ts';
 import type { StreamedParts } from './apply-model-event.ts';
 import type { ChatPart } from './chat-message.ts';
+import type { AnswerPiece } from './note-proposal.ts';
 
 /** How an answer's request ended, as far as its parts are concerned. */
 export type AnswerEnding =
-  /** A validated answer: it replaces the streamed text. Empty text makes no part. */
-  | { readonly kind: 'text'; readonly text: string }
+  /**
+   * A validated answer, with its proposed notes in place (ADR 0132): its pieces replace the
+   * streamed text, the first text piece keeping the streamed text's part id. Empty text makes no
+   * part.
+   */
+  | { readonly kind: 'answer'; readonly pieces: readonly AnswerPiece[] }
   /** A `/review`: one `finding` part per finding of its result, in order. */
   | { readonly kind: 'findings'; readonly count: number }
   /** Failed with main's error code: what streamed stays, then an `error` part. */
@@ -28,13 +33,36 @@ export function answerPartsFrom(streamed: StreamedParts, ending: AnswerEnding): 
     return id;
   };
   switch (ending.kind) {
-    case 'text': {
-      const id = state.parts.findLast((part) => part.kind === 'text')?.id ?? newId();
+    case 'answer': {
+      let streamedId = state.parts.findLast((part) => part.kind === 'text')?.id;
+      const textId = (): string => {
+        const id = streamedId ?? newId();
+        streamedId = undefined;
+        return id;
+      };
+      let proposals = 0;
       const kept = state.parts.filter((part) => part.kind !== 'text');
-      if (ending.text === '') {
-        return kept;
-      }
-      return [...kept, { kind: 'text', id, text: ending.text }];
+      return [
+        ...kept,
+        ...ending.pieces.flatMap((piece): ChatPart[] => {
+          switch (piece.kind) {
+            case 'text': {
+              if (piece.text === '') {
+                return [];
+              }
+              return [{ kind: 'text', id: textId(), text: piece.text }];
+            }
+            case 'proposal': {
+              const proposal = proposals;
+              proposals += 1;
+              return [{ kind: 'proposal', id: newId(), proposal, note: piece.proposal }];
+            }
+            case 'dropped-proposal': {
+              return [{ kind: 'dropped-proposal', id: newId(), reason: piece.reason }];
+            }
+          }
+        }),
+      ];
     }
     case 'findings': {
       const kept = state.parts.filter((part) => part.kind !== 'text');

@@ -1,6 +1,7 @@
 import type { Brand } from '#x/brand/brand.ts';
 
 import type { ChatReview } from './chat-review.ts';
+import type { NoteProposal, ProposalDropReason } from './note-proposal.ts';
 
 /** A chat message's id (a UUID). */
 export type ChatMessageId = Brand<string, 'ChatMessageId'>;
@@ -115,6 +116,9 @@ export type ChatStoreError =
  *   never what it found.
  * - `mention`: lines the reviewer attached to a question, where the question names them.
  * - `finding`: the n-th (0-based) finding of the message's `/review` result.
+ * - `proposal`: a review note the answer proposed (ADR 0132), the n-th (0-based) of the message,
+ *   checked against the diff when the answer completed; the reviewer may stage it.
+ * - `dropped-proposal`: where the answer proposed a note that failed those checks, and why.
  * - `error`: why the request failed; main's error code (`timeout`, …).
  */
 export type ChatPart =
@@ -134,6 +138,13 @@ export type ChatPart =
     }
   | { readonly kind: 'mention'; readonly id: string; readonly mention: ChatMention }
   | { readonly kind: 'finding'; readonly id: string; readonly finding: number }
+  | {
+      readonly kind: 'proposal';
+      readonly id: string;
+      readonly proposal: number;
+      readonly note: NoteProposal;
+    }
+  | { readonly kind: 'dropped-proposal'; readonly id: string; readonly reason: ProposalDropReason }
   | { readonly kind: 'error'; readonly id: string; readonly code: string };
 
 /** `stopped`: the request ended (cancelled or failed) before the tool answered. */

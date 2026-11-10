@@ -52,6 +52,13 @@ describe('validateUraItem', () => {
       },
     ],
     ['empty chat message id', { kind: 'chat-answer', messageId: ' ' }],
+    ['negative proposal index', { kind: 'chat-answer', messageId: 'm1', proposal: -1 }],
+    ['finding and proposal', { kind: 'chat-answer', messageId: 'm1', finding: 0, proposal: 0 }],
+    [
+      'proposed note on the whole change',
+      { kind: 'chat-answer', messageId: 'm1', proposal: 0 },
+      { kind: 'change' },
+    ],
   ])('rejects an origin with a %s', ([, origin, anchor], { expect }) => {
     expect(errorOf({ origin, ...(anchor && { anchor }) })?.kind).toBe('invalid-origin');
   });
@@ -61,6 +68,9 @@ describe('validateUraItem', () => {
       errorOf({ origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 3 } }),
     ).toBeUndefined();
     expect(errorOf({ origin: { kind: 'chat-answer', messageId: 'm1' } })).toBeUndefined();
+    expect(
+      errorOf({ origin: { kind: 'chat-answer', messageId: 'm1', proposal: 0 } }),
+    ).toBeUndefined();
   });
 
   test.for([' padded ', 'two\nlines', 'x'.repeat(201)])(

@@ -5,6 +5,7 @@ import type {
   ListUraItemsRequest,
   ReorderUraItemsRequest,
   SetUraVerdictRequest,
+  StageNoteProposalRequest,
   StageReviewFindingRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
@@ -19,7 +20,7 @@ import type {
 } from '#contract/ipc-contract.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
-import type { ChatMessageId } from '#internal/chat/chat-message.ts';
+import type { ChatMessage, ChatMessageId } from '#internal/chat/chat-message.ts';
 import type { ChatFinding } from '#internal/chat/chat-review.ts';
 import { findChatMessage } from '#internal/chat/find-chat-message.ts';
 import { compileUraArtifact } from '#internal/ura/compile-ura-artifact.ts';
@@ -37,6 +38,7 @@ import { recordUraPostings } from '#internal/ura/record-ura-postings.ts';
 import { readVerdictChoice } from '#internal/ura/read-verdict-choice.ts';
 import { reorderUraItems } from '#internal/ura/reorder-ura-items.ts';
 import { settleVerdictChoice } from '#internal/ura/settle-verdict-choice.ts';
+import { stageNoteProposal } from '#internal/ura/stage-note-proposal.ts';
 import { stageReviewFinding } from '#internal/ura/stage-review-finding.ts';
 import { transitionUraItem } from '#internal/ura/transition-ura-item.ts';
 import { updateUraItem } from '#internal/ura/update-ura-item.ts';
@@ -64,6 +66,8 @@ import { loadSession } from '../sessions/load-session.ts';
 import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 
+import { noteLabelFrom } from '../chat/note-label-from.ts';
+
 import { buildLineMapping } from './build-line-mapping.ts';
 import { renderUraExport } from './render-ura-export.ts';
 import { uraItemViewFrom } from './ura-item-view-from.ts';
@@ -81,6 +85,10 @@ export interface UraServices {
   /** Stages a `/review` finding from its stored answer (ADR 0055); again returns its item. */
   readonly stageReviewFinding: (
     request: StageReviewFindingRequest,
+  ) => Promise<IpcResult<UraStagedView>>;
+  /** Stages a note an answer proposed, from its stored answer (ADR 0132); again returns its item. */
+  readonly stageNoteProposal: (
+    request: StageNoteProposalRequest,
   ) => Promise<IpcResult<UraStagedView>>;
   readonly setVerdict: (request: SetUraVerdictRequest) => IpcResult<UraVerdictStateView>;
   readonly export: (request: ExportUraRequest) => Promise<IpcResult<UraExportView>>;
@@ -374,6 +382,18 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     return choiceAt(summary.sessionId, pinnedHeadSha, items);
   };
 
+  /** A stored chat message to stage from, or why there is none. */
+  const storedAnswer = (messageId: string): IpcResult<ChatMessage> => {
+    const message = findChatMessage(db, messageId as ChatMessageId);
+    if (message.ok) {
+      return message;
+    }
+    if (message.error.kind === 'message-not-found') {
+      return err({ code: 'not-found', message: 'no such answer' });
+    }
+    return err({ code: 'internal', message: 'stored chat data is corrupt' });
+  };
+
   const stagedOrFailure = (item: Result<UraItem, UraItemError>): IpcResult<StagedItem> => {
     if (item.ok) {
       return stored(stageOnce(item.value));
@@ -519,12 +539,9 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       finding,
       severity,
     }): Promise<IpcResult<UraStagedView>> => {
-      const message = findChatMessage(db, messageId as ChatMessageId);
+      const message = storedAnswer(messageId);
       if (!message.ok) {
-        if (message.error.kind === 'message-not-found') {
-          return err({ code: 'not-found', message: 'no such answer' });
-        }
-        return err({ code: 'internal', message: 'stored chat data is corrupt' });
+        return message;
       }
       const answer = message.value;
       let found: ChatFinding | undefined;
@@ -537,6 +554,34 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       const item = stageReviewFinding(
         found,
         { sessionId: answer.sessionId, headSha: answer.headSha, messageId, finding },
+        { deps, severity },
+      );
+      return staged(stagedOrFailure(item));
+    },
+
+    stageNoteProposal: async ({
+      messageId,
+      proposal,
+      severity,
+    }): Promise<IpcResult<UraStagedView>> => {
+      const message = storedAnswer(messageId);
+      if (!message.ok) {
+        return message;
+      }
+      const answer = message.value;
+      const part = answer.parts.find((candidate) => {
+        return candidate.kind === 'proposal' && candidate.proposal === proposal;
+      });
+      if (answer.role !== 'assistant' || part?.kind !== 'proposal') {
+        return err({ code: 'not-found', message: 'that answer proposed no such note' });
+      }
+      const label = noteLabelFrom(part.note.label);
+      if (label === undefined) {
+        return err({ code: 'unsupported', message: 'that note’s label is no longer a note label' });
+      }
+      const item = stageNoteProposal(
+        { ...part.note, label },
+        { sessionId: answer.sessionId, headSha: answer.headSha, messageId, proposal },
         { deps, severity },
       );
       return staged(stagedOrFailure(item));

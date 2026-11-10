@@ -30,11 +30,17 @@ export type UraAnchor =
 
 /**
  * Who or what raised an item. A `chat-answer` item stages a chat answer, or with `finding` the
- * n-th (0-based) finding of a `/review` answer (ADR 0055).
+ * n-th (0-based) finding of a `/review` answer (ADR 0055), or with `proposal` the n-th (0-based)
+ * note an answer proposed (ADR 0132); never both.
  */
 export type UraOrigin =
   | { readonly kind: 'human' }
-  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
+  | {
+      readonly kind: 'chat-answer';
+      readonly messageId: string;
+      readonly finding?: number;
+      readonly proposal?: number;
+    };
 
 /**
  * `staged` items are exported. `addressed` records the later head at which a reviewer or an agent
@@ -126,7 +132,7 @@ export type UraStoreError =
   | {
       readonly kind: 'duplicate-item';
       readonly id: UraItemId;
-      readonly reason: 'id-taken' | 'review-finding-already-staged';
+      readonly reason: 'id-taken' | 'origin-already-staged';
     }
   | { readonly kind: 'order-mismatch'; readonly sessionId: SessionId }
   | {

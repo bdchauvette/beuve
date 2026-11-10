@@ -25,6 +25,7 @@ import type { DelegatedActions } from './delegate-actions.ts';
 import type { CodeBlock, MarkdownRenderers } from './create-markdown-nodes.ts';
 import { draftLength } from './draft-length.ts';
 import { describeCitation } from './describe-citation.ts';
+import { describeDroppedProposal } from './describe-dropped-proposal.ts';
 import { describeMention } from './describe-mention.ts';
 import { FileReferenceIndex } from './file-reference-index.ts';
 import type { FileReference } from './file-reference-index.ts';
@@ -44,6 +45,7 @@ import { snippetPathFrom } from './snippet-path-from.ts';
 import type { LineRange } from './target-from.ts';
 import { textPartStream } from './text-part-stream.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
@@ -75,11 +77,13 @@ const messageSelector = ':is(.transcript, .compacted) > :is(.you, .answer, .abst
  * `textContent` only, never `innerHTML`. The transcript shows the questions with their chips, the
  * answers (Markdown rendered as it streams, ADR 0073, with a pill for each validated citation),
  * `/review` answers as a list of findings (severity, category, confidence, whether a second pass
- * confirmed it, a pill and a Stage button each), `/summarize` answers as a calm block, `/compact`
+ * confirmed it, a pill and a Stage button each), the review notes an answer proposed as cards
+ * with a pill and a Stage button (ADR 0132), `/summarize` answers as a calm block, `/compact`
  * summaries with everything before the latest folded under a divider, and the commands' results. Nothing typed here can change the worktree. Presentational: emits
  * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`,
  * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-clear-queue`,
- * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-cite`, `beuve-chat-mention` (a chip)
+ * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-stage-proposal`, `beuve-chat-cite`,
+ * `beuve-chat-mention` (a chip),
  * `beuve-open-editor` (Open in Editor on a pill) and `beuve-sheet-request` (a file an answer names,
  * ADR 0128); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
  * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
@@ -462,6 +466,28 @@ export class BeuveChatDrawer extends LitElement {
         margin-block-start: var(--beuve-space-1);
       }
 
+      .proposal {
+        margin-block: var(--beuve-space-2);
+        padding: var(--beuve-space-2) var(--beuve-space-3);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius);
+        background: var(--beuve-surface);
+        overflow-wrap: anywhere;
+      }
+
+      .proposal .text :is(p, ul, ol) {
+        margin: var(--beuve-space-0-5) 0 0;
+      }
+
+      .proposal .status {
+        margin-block-start: var(--beuve-space-1);
+      }
+
+      .dropped-proposal {
+        margin-block: var(--beuve-space-1);
+        font: var(--beuve-font-small);
+      }
+
       .abstract {
         padding: var(--beuve-space-2) var(--beuve-space-3);
         border: var(--beuve-border-width) solid var(--beuve-border);
@@ -763,6 +789,9 @@ export class BeuveChatDrawer extends LitElement {
       'stage-finding': ({ messageId = '', finding }): void => {
         this.emit('beuve-chat-stage-finding', { messageId, finding: Number(finding) });
       },
+      'stage-proposal': ({ messageId = '', proposal }): void => {
+        this.emit('beuve-chat-stage-proposal', { messageId, proposal: Number(proposal) });
+      },
       reference: ({ path = '', start, end }): void => {
         const lines = linesOf(start, end);
         this.emit('beuve-sheet-request', {
@@ -820,6 +849,8 @@ export class BeuveChatDrawer extends LitElement {
   @property({ attribute: false }) accessor stagedMessageIds: ReadonlySet<string> = new Set();
   /** `/review` findings already staged, as `messageId:index`. */
   @property({ attribute: false }) accessor stagedFindings: ReadonlySet<string> = new Set();
+  /** Notes answers proposed that are already staged, as `messageId:index` (ADR 0132). */
+  @property({ attribute: false }) accessor stagedProposals: ReadonlySet<string> = new Set();
 
   @state() accessor isDraftEmpty = true;
   /** The chat commands the input could complete to (ADR 0127); empty while the list is closed. */
@@ -1337,7 +1368,10 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
-  /** One block of an answer: a run of steps, text as safe Markdown, a finding or an error. */
+  /**
+   * One block of an answer: a run of steps, text as safe Markdown, a proposed note (or where one
+   * was dropped), a finding or an error.
+   */
   private renderBlockOf(message: ChatMessageView, block: MessageBlock): TemplateResult {
     if (block.kind === 'steps') {
       return this.renderSteps(block, isActiveRequest(message));
@@ -1355,6 +1389,12 @@ export class BeuveChatDrawer extends LitElement {
       }
       case 'error': {
         return html`<div class="status error" role="alert">${part.message}</div>`;
+      }
+      case 'proposal': {
+        return this.renderProposal(message.id, part);
+      }
+      case 'dropped-proposal': {
+        return html`<p class="dropped-proposal muted">${describeDroppedProposal(part.reason)}</p>`;
       }
       case 'finding':
       case 'mention': {
@@ -1756,6 +1796,50 @@ export class BeuveChatDrawer extends LitElement {
     </li>`;
   }
 
+  /**
+   * A note the answer proposed (ADR 0132): its label, title and body as safe Markdown, a pill for
+   * its lines and a Stage button; main reads the note from the stored answer when it is staged.
+   */
+  private renderProposal(messageId: string, part: ProposalPart): TemplateResult {
+    const { note, proposal } = part;
+    const key = `${messageId}:${String(proposal)}`;
+    const isStaged = this.stagedProposals.has(key);
+    const citation = { path: note.path, startLine: note.startLine, endLine: note.endLine };
+    return html`<div class="proposal" role="group" aria-label="Proposed review note">
+      <div class="finding-head">
+        <span class="severity">${uraSeverityEmoji(note.label)} ${note.label}</span>
+        <span title="Claude proposed it; nothing is staged until you stage it">Proposed note</span>
+      </div>
+      ${
+        note.title === ''
+          ? nothing
+          : html`<div class="finding-title">
+              ${this.markdownFor(`${key}:proposal-title`, { source: note.title, citations: [] })}
+            </div>`
+      }
+      ${
+        note.body === ''
+          ? nothing
+          : this.markdownFor(`${key}:proposal-body`, { source: note.body, citations: [] })
+      }
+      <div class="status">
+        ${this.renderPill(citation)}
+        <button
+          type="button"
+          class="button action"
+          data-nav
+          data-action="stage-proposal"
+          data-message-id=${messageId}
+          data-proposal=${proposal}
+          aria-disabled=${isStaged ? 'true' : 'false'}
+          title="Stage this note on its lines in the review dock"
+        >
+          ${isStaged ? 'Staged' : 'Stage'}
+        </button>
+      </div>
+    </div>`;
+  }
+
   /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
   private renderAbstract(message: ChatMessageView): TemplateResult {
     const text = this.markdownFor(`${message.id}:abstract`, {
@@ -2071,6 +2155,7 @@ function startedLabel(message: ChatMessageView): string {
 
 /** A rendered Markdown text of the transcript. */
 type MentionPart = Extract<ChatPartView, { kind: 'mention' }>;
+type ProposalPart = Extract<ChatPartView, { kind: 'proposal' }>;
 type StepsBlock = Extract<MessageBlock, { kind: 'steps' }>;
 
 /** The text part of a running request, whose deltas stream in. */
