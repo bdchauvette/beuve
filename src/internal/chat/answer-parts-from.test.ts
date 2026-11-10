@@ -1,6 +1,7 @@
 import { describe } from 'vitest';
 
 import { answerPartsFrom } from './answer-parts-from.ts';
+import type { AnswerEnding } from './answer-parts-from.ts';
 import type { StreamedParts } from './apply-model-event.ts';
 import { test } from './testing/test.ts';
 
@@ -18,14 +19,39 @@ function streamed(): StreamedParts {
 
 describe('answerPartsFrom', () => {
   test('replaces the streamed text with the validated answer, keeping its id', ({ expect }) => {
-    expect(answerPartsFrom(streamed(), { kind: 'text', text: 'Because.' })).toStrictEqual([
+    expect(answerPartsFrom(streamed(), answerOf('Because.'))).toStrictEqual([
       { kind: 'tool-call', id: 'p1', tool: 'Read', description: 'read a.ts', state: 'stopped' },
       { kind: 'text', id: 'p2', text: 'Because.' },
     ]);
+    expect(answerPartsFrom({ parts: [], nextId: 1, tools: {} }, answerOf('Hi'))).toStrictEqual([
+      { kind: 'text', id: 'p1', text: 'Hi' },
+    ]);
+    expect(answerPartsFrom(streamed(), answerOf(''))).toHaveLength(1);
+  });
+
+  test('puts proposed notes in their places, numbered, the first text keeping its id', ({
+    expect,
+  }) => {
+    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: 'T', body: 'B' };
     expect(
-      answerPartsFrom({ parts: [], nextId: 1, tools: {} }, { kind: 'text', text: 'Hi' }),
-    ).toStrictEqual([{ kind: 'text', id: 'p1', text: 'Hi' }]);
-    expect(answerPartsFrom(streamed(), { kind: 'text', text: '' })).toHaveLength(1);
+      answerPartsFrom(streamed(), {
+        kind: 'answer',
+        pieces: [
+          { kind: 'proposal', proposal: note },
+          { kind: 'text', text: 'Between.' },
+          { kind: 'dropped-proposal', reason: 'outside-diff' },
+          { kind: 'proposal', proposal: { ...note, title: 'U' } },
+          { kind: 'text', text: 'After.' },
+        ],
+      }),
+    ).toStrictEqual([
+      { kind: 'tool-call', id: 'p1', tool: 'Read', description: 'read a.ts', state: 'stopped' },
+      { kind: 'proposal', id: 'p3', proposal: 0, note },
+      { kind: 'text', id: 'p2', text: 'Between.' },
+      { kind: 'dropped-proposal', id: 'p4', reason: 'outside-diff' },
+      { kind: 'proposal', id: 'p5', proposal: 1, note: { ...note, title: 'U' } },
+      { kind: 'text', id: 'p6', text: 'After.' },
+    ]);
   });
 
   test('ends a review with its findings, a failure with an error part', ({ expect }) => {
@@ -42,3 +68,7 @@ describe('answerPartsFrom', () => {
     expect(answerPartsFrom(streamed(), { kind: 'cancelled' })).toHaveLength(2);
   });
 });
+
+function answerOf(text: string): AnswerEnding {
+  return { kind: 'answer', pieces: [{ kind: 'text', text }] };
+}

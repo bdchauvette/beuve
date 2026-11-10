@@ -27,6 +27,7 @@ describe('uraMigrations', () => {
       { ...valid(), anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
+      { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m2'", chat_proposal: '0' },
       { ...valid(), status: "'withdrawn'" },
       { ...valid(), blocking: '1' },
       { ...valid(), status: "'addressed'", addressed_sha: `'${later()}'`, addressed_by: "'agent'" },
@@ -92,6 +93,32 @@ describe('uraMigrations', () => {
         line_end: 'NULL',
       },
     ],
+    ['a human note with a proposal index', { chat_proposal: '0' }],
+    [
+      'a negative proposal index',
+      { origin_kind: "'chat-answer'", chat_message_id: "'m'", chat_proposal: '-1' },
+    ],
+    [
+      'both a finding and a proposal index',
+      {
+        origin_kind: "'chat-answer'",
+        chat_message_id: "'m'",
+        chat_finding: '0',
+        chat_proposal: '0',
+      },
+    ],
+    [
+      'a proposed note on the whole change',
+      {
+        origin_kind: "'chat-answer'",
+        chat_message_id: "'m'",
+        chat_proposal: '0',
+        anchor_kind: "'change'",
+        path: 'NULL',
+        line_start: 'NULL',
+        line_end: 'NULL',
+      },
+    ],
     ['a line anchor without lines', { line_start: 'NULL', line_end: 'NULL' }],
     ['a chat answer without its message id', { origin_kind: "'chat-answer'" }],
     ['an unknown origin', { origin_kind: "'impact-finding'" }],
@@ -128,6 +155,16 @@ describe('uraMigrations', () => {
     insertRow(db, { ...answer, chat_finding: '1' }, 7);
     insertRow(db, answer, 8);
     insertRow(db, answer, 9);
+  });
+
+  test('stages a proposed note once, apart from the findings', ({ expect, db }) => {
+    const answer = { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" };
+    insertRow(db, { ...answer, chat_proposal: '0' }, 1);
+    expect(() => {
+      insertRow(db, { ...answer, chat_proposal: '0' }, 2);
+    }).toThrow(/UNIQUE/u);
+    insertRow(db, { ...answer, chat_proposal: '1' }, 3);
+    insertRow(db, { ...answer, chat_finding: '0' }, 4);
   });
 
   test('records at most one verdict choice per session', ({ expect, db }) => {

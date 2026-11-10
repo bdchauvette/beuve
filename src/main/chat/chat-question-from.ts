@@ -7,6 +7,7 @@ import type {
   ChatTask,
   ChatTurn,
 } from '#internal/chat/chat-question.ts';
+import type { ProposalRules } from '#internal/chat/note-proposal.ts';
 
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
 import { chatFileFrom } from './chat-file-from.ts';
@@ -28,6 +29,8 @@ export interface ChatQuestionParts {
   readonly intent?: string | undefined;
   /** Paths tracked at the head, so answers may cite files outside the diff. */
   readonly worktreePaths: ReadonlySet<string> | undefined;
+  /** Whether the answer may propose review notes, with which labels (ADR 0132). */
+  readonly proposals?: ProposalRules;
 }
 
 /**
@@ -59,6 +62,7 @@ export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
     ...(parts.intent !== undefined && parts.intent.trim() !== '' && { intent: parts.intent }),
     ...(parts.focus !== undefined && { focus: focusFrom(parts.focus) }),
     ...(parts.worktreePaths !== undefined && { worktreePaths: parts.worktreePaths }),
+    ...(parts.proposals !== undefined && { proposals: parts.proposals }),
   };
 }
 

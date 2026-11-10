@@ -117,6 +117,32 @@ describe('UraController', () => {
     expect([...ura.stagedFindings()]).toStrictEqual(['m1:2']);
   });
 
+  test('knows which proposed notes are staged, apart from the answers', async ({ expect }) => {
+    const proposed = createUraItemView({
+      origin: { kind: 'chat-answer', messageId: 'm2', proposal: 1 },
+    });
+    const { ura } = createUraHarness({
+      review: reviewOf(),
+      replies: { 'ura:list': ok({ items: [chatItem(), proposed], derivedVerdict: 'approve' }) },
+    });
+    await ura.refresh('s1');
+    expect([...ura.stagedMessageIds()]).toStrictEqual(['m1']);
+    expect([...ura.stagedProposals()]).toStrictEqual(['m2:1']);
+    expect([...ura.stagedFindings()]).toStrictEqual([]);
+  });
+
+  test('stages a proposed note once and names an untitled one', async ({ expect }) => {
+    const { ura, invoked } = createUraHarness({
+      review: reviewOf(),
+      replies: {
+        'ura:stage-note-proposal': ok({ item: createUraItemView({ title: '' }), created: true }),
+      },
+    });
+    await ura.stageNoteProposal('m2', 1);
+    expect(invoked).toStrictEqual([['ura:stage-note-proposal', { messageId: 'm2', proposal: 1 }]]);
+    expect(ura.notice).toStrictEqual({ tone: 'info', text: 'Staged the note.' });
+  });
+
   test('tells the composer there is no session', async ({ expect }) => {
     const { ura, invoked } = createUraHarness();
     const settled: (string | undefined)[] = [];

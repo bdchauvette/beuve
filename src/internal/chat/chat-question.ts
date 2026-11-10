@@ -1,4 +1,5 @@
 import type { ChatMention, CommitSha, SessionId } from './chat-message.ts';
+import type { ProposalRules } from './note-proposal.ts';
 
 /**
  * One question about a reviewed change, in the chat domain's own terms. Main maps the session,
@@ -44,6 +45,11 @@ export interface ChatQuestion {
    * files outside the diff. The diff's head-side paths are always citable.
    */
   readonly worktreePaths?: ReadonlySet<string>;
+  /**
+   * Whether the answer may propose review notes, and with which labels (ADR 0132): the prompt
+   * says how, and the answer's `:::note` blocks become proposals. Absent, they stay text.
+   */
+  readonly proposals?: ProposalRules;
 }
 
 /** What a chat command asks the model to do instead of answering a question. */

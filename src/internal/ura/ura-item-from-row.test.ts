@@ -10,7 +10,14 @@ import { test } from './testing/test.ts';
 
 /** The row SQLite would return for the fixture item, with NULLs for unset columns. */
 function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQLOutputValue> {
-  const nullable = ['chat_message_id', 'chat_finding', 'patch', 'addressed_sha', 'addressed_by'];
+  const nullable = [
+    'chat_message_id',
+    'chat_finding',
+    'chat_proposal',
+    'patch',
+    'addressed_sha',
+    'addressed_by',
+  ];
   const nulls = Object.fromEntries(
     nullable.map((column) => {
       // eslint-disable-next-line unicorn/no-null -- SQLite returns NULL columns as null
@@ -42,6 +49,18 @@ describe('uraItemFromRow', () => {
     });
   });
 
+  test('maps a proposed note’s origin both ways', ({ expect }) => {
+    const proposed = createTestUraItem({
+      origin: { kind: 'chat-answer', messageId: 'm1', proposal: 2 },
+    });
+    expect(
+      uraItemFromRow({
+        ...row(),
+        ...(uraItemRowFrom(proposed) as Record<string, SQLOutputValue>),
+      }),
+    ).toStrictEqual({ ok: true, value: proposed });
+  });
+
   test.for<[string, SQLOutputValue, string]>([
     ['id', 'x', 'id or session_id is not a UUID'],
     ['head_sha', 'ABC', 'head_sha is not a commit id'],
@@ -66,6 +85,17 @@ describe('uraItemFromRow', () => {
     expect(reasonOf({ origin_kind: 'chat-answer', chat_message_id: 'm', chat_finding: -1 })).toBe(
       'chat_finding is not a finding index',
     );
+    expect(reasonOf({ origin_kind: 'chat-answer', chat_message_id: 'm', chat_proposal: -1 })).toBe(
+      'chat_proposal is not a proposal index',
+    );
+    expect(
+      reasonOf({
+        origin_kind: 'chat-answer',
+        chat_message_id: 'm',
+        chat_finding: 0,
+        chat_proposal: 0,
+      }),
+    ).toBe('chat_finding and chat_proposal are both set');
     expect(reasonOf({ origin_kind: 'impact-finding' })).toBe('origin_kind is unknown');
     expect(reasonOf({ status: 'addressed', addressed_sha: 'b'.repeat(40) })).toBe(
       'addressed_sha or addressed_by is invalid',

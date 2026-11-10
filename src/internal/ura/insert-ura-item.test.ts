@@ -72,7 +72,7 @@ describe('insertUraItem, listUraItems, findUraItem and updateUraItem', () => {
       error: {
         kind: 'duplicate-item',
         id: testUraIds.itemId(8),
-        reason: 'review-finding-already-staged',
+        reason: 'origin-already-staged',
       },
     });
   });

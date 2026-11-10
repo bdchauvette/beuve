@@ -20,7 +20,12 @@ export type AgentReviewAnchor =
 
 export type AgentReviewOrigin =
   | { readonly kind: 'human' }
-  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
+  | {
+      readonly kind: 'chat-answer';
+      readonly messageId: string;
+      readonly finding?: number;
+      readonly proposal?: number;
+    };
 
 export interface AgentReviewItem {
   readonly id: string;
@@ -197,6 +202,7 @@ function originFrom(origin: UraOrigin): AgentReviewOrigin {
         kind: 'chat-answer',
         messageId: origin.messageId,
         ...(origin.finding !== undefined && { finding: origin.finding }),
+        ...(origin.proposal !== undefined && { proposal: origin.proposal }),
       };
     }
   }

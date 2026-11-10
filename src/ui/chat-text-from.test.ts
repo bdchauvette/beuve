@@ -25,4 +25,22 @@ describe('chatTextFrom', () => {
       ]),
     ).toBe('Why a.ts:2-3?');
   });
+
+  test('leaves proposed notes out, keeping the text around them apart', ({ expect }) => {
+    const note = {
+      path: 'a.ts',
+      startLine: 1,
+      endLine: 1,
+      label: 'nit' as const,
+      title: 'T',
+      body: 'B',
+    };
+    expect(
+      chatTextFrom([
+        { kind: 'text', id: 'p1', text: 'Before.' },
+        { kind: 'proposal', id: 'p2', proposal: 0, note },
+        { kind: 'text', id: 'p3', text: 'After.' },
+      ]).trim(),
+    ).toBe('Before.\n\nAfter.');
+  });
 });

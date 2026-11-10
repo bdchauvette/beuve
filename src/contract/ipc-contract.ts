@@ -1057,7 +1057,9 @@ export type ChatStatusView = 'queued' | 'submitted' | 'streaming' | 'done' | 'er
  * thought, with a short content-free `summary` when the backend gives one; a `tool-call` names
  * what a read-only tool looked at (`read src/auth.ts:1-40`), never what it found; a `mention` is
  * lines attached to a question, where the question names them; a `finding` is the n-th (0-based)
- * of the message's `review.findings`; an `error` says why the request failed and what to do.
+ * of the message's `review.findings`; a `proposal` is a review note the answer proposed, the
+ * n-th (0-based) of the message, for the reviewer to stage (ADR 0132), and a `dropped-proposal`
+ * one that failed main's checks; an `error` says why the request failed and what to do.
  */
 export type ChatPartView =
   | { readonly kind: 'text'; readonly id: string; readonly text: string }
@@ -1078,11 +1080,44 @@ export type ChatPartView =
   | { readonly kind: 'mention'; readonly id: string; readonly mention: ChatMentionView }
   | { readonly kind: 'finding'; readonly id: string; readonly finding: number }
   | {
+      readonly kind: 'proposal';
+      readonly id: string;
+      readonly proposal: number;
+      readonly note: ChatNoteProposalView;
+    }
+  | {
+      readonly kind: 'dropped-proposal';
+      readonly id: string;
+      readonly reason: ProposalDropReasonView;
+    }
+  | {
       readonly kind: 'error';
       readonly id: string;
       readonly code: ChatErrorCode;
       readonly message: string;
     };
+
+/**
+ * A review note an answer proposed (ADR 0132). Lines are 1-based and inclusive on the head side,
+ * and touch a hunk of the reviewed diff. `title` (possibly empty) and `body` are untrusted
+ * Markdown from the model: render them as text.
+ */
+export interface ChatNoteProposalView {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly label: UraSeverityView;
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * Why main dropped a proposed note: its block did not parse or said nothing, its label is not a
+ * note label, its lines are not in a head-side text file of the diff or outside every hunk, it
+ * repeats an earlier one, or the answer proposed too many.
+ */
+export type ProposalDropReasonView =
+  'malformed' | 'unknown-label' | 'unknown-file' | 'outside-diff' | 'duplicate' | 'over-limit';
 
 /**
  * Lines the reviewer attached to a question (ADR 0046): one side of a file at a commit, 1-based
@@ -1257,8 +1292,16 @@ export type UraAnchorView =
 /** Who or what raised a URA item. */
 export type UraOriginView =
   | { readonly kind: 'human' }
-  /** A chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer. */
-  | { readonly kind: 'chat-answer'; readonly messageId: string; readonly finding?: number };
+  /**
+   * A chat answer, or with `finding` the n-th (0-based) finding of a `/review` answer, or with
+   * `proposal` the n-th (0-based) note an answer proposed (ADR 0132); never both.
+   */
+  | {
+      readonly kind: 'chat-answer';
+      readonly messageId: string;
+      readonly finding?: number;
+      readonly proposal?: number;
+    };
 
 /** `staged` items are exported; `addressed` records the head at which the issue was fixed. */
 export type UraStatusView =
@@ -1434,6 +1477,17 @@ export interface UraOrderView {
 export interface StageReviewFindingRequest {
   readonly messageId: string;
   readonly finding: number;
+  readonly severity?: UraSeverityView;
+}
+
+/**
+ * Stages the n-th (0-based) note a completed answer proposed (ADR 0132) on its lines; main reads
+ * the note from the stored answer. Staging it again returns the item it already has, restaged if
+ * it was withdrawn. `severity` replaces the proposed label.
+ */
+export interface StageNoteProposalRequest {
+  readonly messageId: string;
+  readonly proposal: number;
   readonly severity?: UraSeverityView;
 }
 
@@ -2615,6 +2669,10 @@ export interface InvokeChannelMap {
   };
   'ura:stage-review-finding': {
     readonly request: StageReviewFindingRequest;
+    readonly response: IpcResult<UraStagedView>;
+  };
+  'ura:stage-note-proposal': {
+    readonly request: StageNoteProposalRequest;
     readonly response: IpcResult<UraStagedView>;
   };
   'ura:set-verdict': {

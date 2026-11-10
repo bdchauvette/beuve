@@ -22,6 +22,7 @@ import type {
 import type { ChatReview } from './chat-review.ts';
 import { findingCategories } from './finding-categories.ts';
 import { findingSeverities } from './finding-severities.ts';
+import type { ProposalDropReason } from './note-proposal.ts';
 
 type CorruptRow = Extract<ChatStoreError, { kind: 'corrupt-row' }>;
 
@@ -95,6 +96,18 @@ export function chatMessageFromRow(
   const findings = parsedReview?.findings.length ?? 0;
   if (parsedParts.some((part) => part.kind === 'finding' && part.finding >= findings)) {
     return corrupt('a finding part names no finding of the review');
+  }
+  const proposals = parsedParts.flatMap((part) => {
+    if (part.kind === 'proposal') {
+      return part.proposal;
+    }
+    return [];
+  });
+  if (proposals.some((proposal, index) => proposal !== index)) {
+    return corrupt('the proposal parts are not numbered 0, 1, 2, … in order');
+  }
+  if (proposals.length > 0 && (kind !== 'answer' || status !== 'done')) {
+    return corrupt('a proposal part outside a done answer');
   }
   return ok({
     ...base,
@@ -170,6 +183,24 @@ const storedMention = z.object({
   sha: z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u),
 });
 
+const storedNote = z.object({
+  path: text,
+  startLine: line,
+  endLine: line,
+  label: text,
+  title: z.string().max(200),
+  body: z.string(),
+});
+
+const dropReason = z.enum([
+  'malformed',
+  'unknown-label',
+  'unknown-file',
+  'outside-diff',
+  'duplicate',
+  'over-limit',
+] satisfies ProposalDropReason[]);
+
 const storedPart = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), id: partId, text: z.string() }),
   z.object({
@@ -187,6 +218,8 @@ const storedPart = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('mention'), id: partId, mention: storedMention }),
   z.object({ kind: z.literal('finding'), id: partId, finding: count }),
+  z.object({ kind: z.literal('proposal'), id: partId, proposal: count, note: storedNote }),
+  z.object({ kind: z.literal('dropped-proposal'), id: partId, reason: dropReason }),
   z.object({ kind: z.literal('error'), id: partId, code: text }),
 ]);
 

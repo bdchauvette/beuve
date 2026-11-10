@@ -58,6 +58,7 @@ function originColumns(origin: UraItem['origin']): Record<string, SQLInputValue>
         origin_kind: origin.kind,
         chat_message_id: origin.messageId,
         ...(origin.finding !== undefined && { chat_finding: origin.finding }),
+        ...(origin.proposal !== undefined && { chat_proposal: origin.proposal }),
       };
     }
   }

@@ -52,7 +52,9 @@ import { streamedPartsFrom } from '#internal/chat/streamed-parts-from.ts';
 import { chatHistoryFrom } from '#internal/chat/chat-history-from.ts';
 import { updateChatAnswer } from '#internal/chat/update-chat-answer.ts';
 import type { ChatAnswerUpdate } from '#internal/chat/update-chat-answer.ts';
+import type { ProposalRules } from '#internal/chat/note-proposal.ts';
 import { listTreePaths } from '#internal/git/list-tree-paths.ts';
+import { uraSeverities } from '#internal/ura/ura-severities.ts';
 import type { LanguageModel, ModelError } from '#internal/llm/language-model.ts';
 import { KeyedQueue } from '#x/collections/keyed-queue.ts';
 import { err } from '#x/result/err.ts';
@@ -170,8 +172,8 @@ interface CompactJob {
 type Outcome =
   | {
       readonly status: 'done';
-      /** The validated text, or a `/review`'s findings. */
-      readonly ending: Extract<AnswerEnding, { kind: 'text' | 'findings' }>;
+      /** The validated text with its proposed notes (ADR 0132), or a `/review`'s findings. */
+      readonly ending: Extract<AnswerEnding, { kind: 'answer' | 'findings' }>;
       readonly citations: readonly Citation[];
       readonly review?: ChatReview;
       /** Earlier turns the prompt dropped for size. */
@@ -450,6 +452,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       focus: job.request.focus,
       intent: options.intentFor?.(job.sessionId),
       worktreePaths: prepared.value.worktreePaths,
+      proposals: noteProposalRules,
     });
     return await askModel(job, {
       input,
@@ -513,9 +516,17 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
       ...(claude.timeout !== undefined && { timeout: claude.timeout }),
     });
     if (asked.ok) {
+      const { pieces } = asked.value;
+      const dropped = pieces.filter((piece) => piece.kind === 'dropped-proposal').length;
+      if (dropped > 0) {
+        logger.info('chat answer dropped proposed notes', {
+          kept: pieces.filter((piece) => piece.kind === 'proposal').length,
+          dropped,
+        });
+      }
       return {
         status: 'done',
-        ending: { kind: 'text', text: asked.value.answer },
+        ending: { kind: 'answer', pieces },
         citations: asked.value.citations,
         droppedTurns: asked.value.prompt.omittedTurns,
       };
@@ -1119,6 +1130,12 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 }
 
 /** Statuses of an answer whose request has not ended. */
+/**
+ * What an ordinary answer may propose (ADR 0132): notes labelled with the URA's severities, which
+ * the reviewer stages one by one. Ten is enough for an answer that is mostly notes.
+ */
+const noteProposalRules: ProposalRules = { labels: uraSeverities, maxProposals: 10 };
+
 const unfinished: ReadonlySet<string> = new Set(['queued', 'submitted', 'streaming']);
 
 /** A part event of `job`'s answer, as `chat:stream` carries it. */

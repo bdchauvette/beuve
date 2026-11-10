@@ -8,6 +8,9 @@ import { uraSeverities } from './ura-severities.ts';
  * `ura_items` references `sessions`, so main runs the session domain's migrations first. Table
  * CHECKs mirror the anchor, origin and status unions. `chat_message_id` deliberately has no foreign
  * key: the chat domain owns that table, and `/clear` must not delete staged items.
+ * `ura-0003-proposed-notes` (ADR 0132) adds `chat_proposal`, the index of a note an answer
+ * proposed, staged at most once per answer like a finding; it is a migration of its own, not an
+ * edit of the initial one, so databases that already have `ura_items` gain the column.
  */
 export const uraMigrations: readonly Migration[] = [
   {
@@ -89,6 +92,18 @@ export const uraMigrations: readonly Migration[] = [
       ) STRICT;
 
       CREATE INDEX ura_item_postings_by_session ON ura_item_postings (session_id, posted_at);
+    `,
+  },
+  {
+    id: 'ura-0003-proposed-notes',
+    up: `
+      ALTER TABLE ura_items ADD COLUMN chat_proposal INTEGER CHECK (
+        chat_proposal IS NULL
+        OR (chat_proposal >= 0 AND origin_kind = 'chat-answer' AND chat_finding IS NULL
+          AND anchor_kind = 'lines')
+      );
+      CREATE UNIQUE INDEX ura_items_by_chat_proposal ON ura_items (chat_message_id, chat_proposal)
+        WHERE chat_proposal IS NOT NULL;
     `,
   },
 ];

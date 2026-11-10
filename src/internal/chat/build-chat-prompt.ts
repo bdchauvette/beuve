@@ -12,6 +12,7 @@ import { fenceUntrusted } from './fence-untrusted.ts';
 import { formatMention } from './format-mention.ts';
 import { splitPatchHunks } from './split-patch-hunks.ts';
 import type { MentionPlace } from './format-mention.ts';
+import type { ProposalRules } from './note-proposal.ts';
 
 /** Size limits, in UTF-16 characters (string length). */
 export interface ChatPromptBudget {
@@ -161,7 +162,7 @@ export function buildChatPrompt(
   ];
   const prompt = `${change}\n${request}`;
   return {
-    system: systemFor(question.task, hasTools),
+    system: systemFor(question, hasTools),
     messages,
     prompt,
     report: {
@@ -391,10 +392,13 @@ function renderTask(task: ChatTask): string {
   }
 }
 
-function systemFor(task: ChatTask | undefined, hasTools: boolean): string {
+function systemFor(
+  { task, proposals }: Pick<ChatQuestion, 'task' | 'proposals'>,
+  hasTools: boolean,
+): string {
   switch (task?.kind) {
     case undefined: {
-      return questionSystemPrompt(hasTools);
+      return questionSystemPrompt(hasTools, proposals);
     }
     case 'review': {
       return reviewSystemPrompt(task.maxFindings, hasTools);
@@ -664,7 +668,7 @@ function readOnlyRule(hasTools: boolean, purpose: string): string[] {
   ];
 }
 
-function questionSystemPrompt(hasTools: boolean): string {
+function questionSystemPrompt(hasTools: boolean, proposals: ProposalRules | undefined): string {
   return [
     "You are beuve's review assistant. A human is reviewing the change in the prompt and asks you",
     'about it. You explain, query and audit code; you never author it.',
@@ -689,7 +693,29 @@ function questionSystemPrompt(hasTools: boolean): string {
     '  lines: answer about them first and cite them, then widen out only as far as needed.',
     '- Answer in concise Markdown. Say when you are unsure or the context is not enough, and what',
     '  you would check.',
+    ...proposalRules(proposals),
   ].join('\n');
+}
+
+/** How to propose review notes (ADR 0132), when main offers it. */
+function proposalRules(proposals: ProposalRules | undefined): string[] {
+  if (proposals === undefined || proposals.labels.length === 0) {
+    return [];
+  }
+  return [
+    '- When the reviewer asks for review notes or comments, or one would clearly help them, you may',
+    '  propose inline notes they can stage on the diff with one click. You never stage anything',
+    '  yourself: the reviewer decides. Write each note as its own block, outside code blocks:',
+    '',
+    '  :::note <label> [[path:start-end]] <optional one-line title>',
+    "  <the note's body: concise Markdown addressed to the change's author>",
+    '  :::',
+    '',
+    '  Both ::: lines start at the beginning of a line. The label is one of',
+    `  ${proposals.labels.join(', ')} (most urgent first); pick the mildest that fits. The lines are`,
+    '  head-side lines inside a hunk of the diff; a note anywhere else is dropped. No citations',
+    `  inside a note. At most ${String(proposals.maxProposals)} notes per answer; prose around them is fine.`,
+  ];
 }
 
 function reviewSystemPrompt(maxFindings: number, hasTools: boolean): string {

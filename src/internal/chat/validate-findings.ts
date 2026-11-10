@@ -1,11 +1,8 @@
-import path from 'node:path';
-
 import type { ChatQuestion } from './chat-question.ts';
 import type { ChatReview } from './chat-review.ts';
+import { DiffHunkIndex } from './diff-hunk-index.ts';
 import type { ModelFinding } from './finding-output-schema.ts';
 import type { FindingSeverity } from './finding-severities.ts';
-import { parseHunkRanges } from './parse-hunk-ranges.ts';
-import type { HeadRange } from './parse-hunk-ranges.ts';
 
 export interface FindingLimits {
   readonly maxFindings: number;
@@ -37,30 +34,19 @@ export function validateFindings(
   input: Pick<ChatQuestion, 'files' | 'worktreePath'>,
   limits: FindingLimits,
 ): ValidatedFindings {
-  const hunksByPath = new Map<string, { order: number; ranges: HeadRange[] }>();
-  for (const [order, file] of input.files.entries()) {
-    if (file.status !== 'deleted' && !file.binary) {
-      hunksByPath.set(file.path, { order, ranges: parseHunkRanges(file.patch) });
-    }
-  }
+  const hunks = new DiffHunkIndex(input);
 
   const drops = { unknownFile: 0, outsideDiff: 0, lowConfidence: 0, duplicate: 0, overLimit: 0 };
   let clamped = 0;
   const seen = new Set<string>();
   const candidates: { finding: ModelFinding; order: number; index: number }[] = [];
   for (const [index, finding] of raw.entries()) {
-    const filePath = normalizePath(finding.path, input.worktreePath);
-    if (filePath === undefined) {
+    const range = hunks.anchor(finding);
+    if (range.kind === 'unknown-file') {
       drops.unknownFile += 1;
       continue;
     }
-    const file = hunksByPath.get(filePath);
-    if (file === undefined) {
-      drops.unknownFile += 1;
-      continue;
-    }
-    const range = clampToHunks(finding, file.ranges);
-    if (range === undefined) {
+    if (range.kind === 'outside-diff') {
       drops.outsideDiff += 1;
       continue;
     }
@@ -70,7 +56,7 @@ export function validateFindings(
       continue;
     }
     const title = finding.title.replaceAll(whitespace, ' ').trim().slice(0, 200);
-    const key = `${filePath}\0${String(range.start)}\0${String(range.end)}\0${title.toLowerCase()}`;
+    const key = `${range.path}\0${String(range.startLine)}\0${String(range.endLine)}\0${title.toLowerCase()}`;
     if (seen.has(key)) {
       drops.duplicate += 1;
       continue;
@@ -82,14 +68,14 @@ export function validateFindings(
     candidates.push({
       finding: {
         ...finding,
-        path: filePath,
-        startLine: range.start,
-        endLine: range.end,
+        path: range.path,
+        startLine: range.startLine,
+        endLine: range.endLine,
         title,
         body: finding.body.trim(),
         confidence,
       },
-      order: file.order,
+      order: range.order,
       index,
     });
   }
@@ -117,48 +103,6 @@ export function validateFindings(
 }
 
 const whitespace = /\s+/gu;
-const leadingDotSlashes = /^(?:\.\/)+/u;
-
-function normalizePath(raw: string, worktreePath: string | undefined): string | undefined {
-  const trimmed = raw.trim();
-  if (trimmed === '') {
-    return undefined;
-  }
-  if (path.isAbsolute(trimmed)) {
-    if (worktreePath === undefined) {
-      return undefined;
-    }
-    const relative = path.relative(worktreePath, trimmed);
-    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
-      return undefined;
-    }
-    return relative.split(path.sep).join('/');
-  }
-  return trimmed.replace(leadingDotSlashes, '');
-}
-
-/** A finding's lines inside the hunks, and whether that cut them. */
-interface ClampedRange extends HeadRange {
-  readonly isClamped: boolean;
-}
-
-function clampToHunks(
-  { startLine, endLine }: Pick<ModelFinding, 'startLine' | 'endLine'>,
-  ranges: readonly HeadRange[],
-): ClampedRange | undefined {
-  const low = Math.min(startLine, endLine);
-  const high = Math.max(startLine, endLine);
-  const touched = ranges.filter((range) => range.start <= high && range.end >= low);
-  const first = touched[0];
-  const last = touched.at(-1);
-  if (first === undefined || last === undefined) {
-    return undefined;
-  }
-  const start = Math.max(low, first.start);
-  const end = Math.min(high, last.end);
-  return { start, end, isClamped: start !== low || end !== high };
-}
-
 function severityRank(severity: FindingSeverity): number {
   switch (severity) {
     case 'info': {

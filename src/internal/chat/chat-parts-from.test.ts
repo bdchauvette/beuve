@@ -49,6 +49,28 @@ describe('chatTextFrom and chatMentionsFrom', () => {
       ]),
     ).toBe('Answer');
   });
+
+  test('write a proposed note back as its block, between the text around it', ({ expect }) => {
+    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: 'T', body: 'B' };
+    expect(
+      chatTextFrom([
+        { kind: 'text', id: 'p1', text: 'Before.' },
+        { kind: 'proposal', id: 'p2', proposal: 0, note },
+        { kind: 'text', id: 'p3', text: 'Between.' },
+        { kind: 'dropped-proposal', id: 'p4', reason: 'duplicate' },
+        { kind: 'text', id: 'p5', text: 'After.' },
+        { kind: 'proposal', id: 'p6', proposal: 1, note: { ...note, title: '', body: '' } },
+      ]),
+    ).toBe(
+      [
+        'Before.',
+        ':::note nit [[a.ts:2-3]] T\nB\n:::',
+        'Between.',
+        'After.',
+        ':::note nit [[a.ts:2-3]]\n:::',
+      ].join('\n\n'),
+    );
+  });
 });
 
 function first(): ChatMention {

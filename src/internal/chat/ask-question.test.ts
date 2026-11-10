@@ -130,6 +130,64 @@ describe('askQuestion', () => {
     ).resolves.toStrictEqual({ ok: false, error: { kind: 'model', error: { kind: 'cancelled' } } });
   });
 
+  test('offers notes when asked to, and splits the answer at the ones it proposed', async ({
+    expect,
+    signal,
+  }) => {
+    const seen: ChatModelRequest[] = [];
+    const answer = [
+      'Two notes, see [[src/a.ts:12]].',
+      ':::note issue [[src/a.ts:12]] Empty input',
+      'Returns `undefined` for [[src/a.ts:12]].',
+      ':::',
+      ':::note nit [[src/c.ts:1]] Elsewhere',
+      'Not in the diff.',
+      ':::',
+      'Also [[src/b.ts:2]] and [[src/a.ts:12]].',
+    ].join('\n');
+    const proposals = { labels: ['issue', 'nit'], maxProposals: 5 };
+    const result = await askQuestion(createChatQuestion({ proposals }), {
+      model: fakeModel(ok(answer), seen),
+      signal,
+    });
+    expect(seen[0]?.system).toContain(':::note <label> [[path:start-end]]');
+    expect(seen[0]?.system).toContain('issue, nit (most urgent first)');
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        answer:
+          'Two notes, see [[src/a.ts:12-12]].\n\nAlso [[src/b.ts:2-2]] and [[src/a.ts:12-12]].',
+        pieces: [
+          { kind: 'text', text: 'Two notes, see [[src/a.ts:12-12]].' },
+          {
+            kind: 'proposal',
+            proposal: {
+              path: 'src/a.ts',
+              startLine: 12,
+              endLine: 12,
+              label: 'issue',
+              title: 'Empty input',
+              body: 'Returns `undefined` for [[src/a.ts:12]].',
+            },
+          },
+          { kind: 'dropped-proposal', reason: 'unknown-file' },
+          { kind: 'text', text: 'Also [[src/b.ts:2-2]] and [[src/a.ts:12-12]].' },
+        ],
+        citations: [
+          { path: 'src/a.ts', startLine: 12, endLine: 12, side: 'head' },
+          { path: 'src/b.ts', startLine: 2, endLine: 2, side: 'head' },
+        ],
+      },
+    });
+
+    const plain = await askQuestion(createChatQuestion(), {
+      model: fakeModel(ok(answer), seen),
+      signal,
+    });
+    expect(seen[1]?.system).not.toContain(':::note');
+    expect(plain.ok && plain.value.pieces).toMatchObject([{ kind: 'text' }]);
+  });
+
   test('refuses empty and oversized questions without calling the model', async ({
     expect,
     signal,

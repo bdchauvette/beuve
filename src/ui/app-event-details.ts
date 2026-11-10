@@ -56,6 +56,12 @@ export interface FindingRefDetail {
   readonly finding: number;
 }
 
+/** One note an answer proposed (ADR 0132): its message and its index. */
+export interface ProposalRefDetail {
+  readonly messageId: string;
+  readonly proposal: number;
+}
+
 /** A button of the dock's review-edits section (ADR 0088). */
 export interface ReviewEditsDetail {
   readonly op: string;
