@@ -30,6 +30,7 @@ function files(): ChatFile[] {
 function draft(overrides: Partial<NoteDraft> = {}): NoteDraft {
   return {
     severity: 'issue',
+    blocking: false,
     title: 'skip bypasses check',
     body: 'token path skips validation?',
     anchor: { kind: 'lines', path: 'src/auth.ts', startLine: 11, endLine: 11 },
@@ -50,7 +51,8 @@ describe('buildNoteDraftPrompt', () => {
     const [message] = prompt.messages;
     expect(message?.role).toBe('user');
     const content = message?.content ?? '';
-    expect(content).toContain('Severity: issue (should be fixed)');
+    expect(content).toContain('Label: issue (something is wrong and should be fixed)');
+    expect(content).not.toContain('Blocking:');
     expect(content).toContain("Anchor: line 11 of src/auth.ts, on the change's new side");
     expect(content).toContain('Title:\n\n```text\nskip bypasses check\n```');
     expect(content).toContain('Body:\n\n```markdown\ntoken path skips validation?\n```');
@@ -64,7 +66,7 @@ describe('buildNoteDraftPrompt', () => {
   test('the instructions keep the note the reviewer’s and the answer a bare body', ({ expect }) => {
     const { system } = okValueFrom(buildNoteDraftPrompt(input(), undefined));
     expect(system).toContain("in the reviewer's voice and in the language the draft");
-    expect(system).toContain("Keep the reviewer's point and the note's severity");
+    expect(system).toContain("Keep the reviewer's point, the note's label and whether it blocks");
     expect(system).toContain('Add only what the diff shown supports');
     expect(system).toContain('Never invent a problem');
     expect(system).toContain('Never mention a tool, a model, an assistant, a chat');
@@ -109,5 +111,12 @@ describe('buildNoteDraftPrompt', () => {
       ok: false,
       error: { kind: 'too-long', maxChars: 8000 },
     });
+  });
+
+  test('says when the note blocks the merge', ({ expect }) => {
+    const content =
+      okValueFrom(buildNoteDraftPrompt(input({ blocking: true }), undefined)).messages[0]
+        ?.content ?? '';
+    expect(content).toContain('Blocking: yes, it must be resolved before the change merges');
   });
 });

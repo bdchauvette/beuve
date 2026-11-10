@@ -543,6 +543,7 @@ const expandNoteRequest = z.strictObject({
   headSha: commitSha,
   anchor: uraAnchor,
   severity: uraSeverity,
+  blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
   requestId: requestId.optional(),
@@ -975,9 +976,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { requestId: id, ...draft } = parsed.data;
+      const { requestId: id, blocking, ...draft } = parsed.data;
       return scoped({ sender, kind: 'note-draft', id }, async (options) => {
-        return services.drafting.expandNote(draft, options);
+        return services.drafting.expandNote(
+          { ...draft, ...(blocking !== undefined && { blocking }) },
+          options,
+        );
       });
     },
     'chat:ask': async (request): Promise<IpcResult<ChatAskedView>> => {

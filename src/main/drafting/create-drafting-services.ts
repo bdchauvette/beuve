@@ -79,6 +79,7 @@ export function createDraftingServices(options: DraftingServicesOptions): Drafti
       {
         draft: {
           severity: request.severity,
+          blocking: request.blocking ?? false,
           title: request.title,
           body: request.body,
           anchor: request.anchor,

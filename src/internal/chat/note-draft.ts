@@ -4,6 +4,8 @@
  */
 export interface NoteDraft {
   readonly severity: NoteSeverity;
+  /** Whether the note blocks the merge (ADR 0131's decoration). */
+  readonly blocking: boolean;
   /** The one-line title; empty when the reviewer left it out. */
   readonly title: string;
   /** The Markdown body as written so far; may be empty. */
@@ -11,8 +13,21 @@ export interface NoteDraft {
   readonly anchor: NoteAnchor;
 }
 
-/** How much a note matters, most urgent first (ADR 0023). */
-export type NoteSeverity = 'blocker' | 'issue' | 'question' | 'nit' | 'praise';
+/** The note's Conventional Comments label, or beuve's `smell` (ADR 0131). */
+export type NoteSeverity =
+  | 'issue'
+  | 'suggestion'
+  | 'question'
+  | 'nitpick'
+  | 'thought'
+  | 'smell'
+  | 'praise'
+  | 'note'
+  | 'todo'
+  | 'chore'
+  | 'typo'
+  | 'polish'
+  | 'quibble';
 
 /** Where a note points on its head: lines are 1-based and inclusive, on the head side. */
 export type NoteAnchor =

@@ -297,7 +297,8 @@ describe('UraController', () => {
     const draft = {
       anchor: { kind: 'file', path: 'a.ts' },
       noteKey: 'new',
-      severity: 'nit',
+      severity: 'nitpick',
+      blocking: true,
       title: 'naming',
       body: '',
     } as const;
@@ -313,7 +314,8 @@ describe('UraController', () => {
           sessionId: 's1',
           headSha: 'a'.repeat(40),
           anchor: draft.anchor,
-          severity: 'nit',
+          severity: 'nitpick',
+          blocking: true,
           title: 'naming',
           body: '',
           requestId: 'expand-note:new',
@@ -339,6 +341,7 @@ describe('UraController', () => {
       anchor: { kind: 'change' },
       noteKey: 'new',
       severity: 'issue',
+      blocking: false,
       title: 't',
       body: '',
     } as const;
@@ -355,6 +358,7 @@ describe('UraController', () => {
       anchor: { kind: 'change' },
       noteKey: 'item-2',
       severity: 'issue',
+      blocking: false,
       title: 't',
       body: '',
     } as const;

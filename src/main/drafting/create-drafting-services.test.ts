@@ -66,7 +66,7 @@ describe(
       const calls = claude.calls();
       expect(calls).toHaveLength(2);
       const draft = calls[1];
-      expect(draft?.stdin).toContain('Severity: question');
+      expect(draft?.stdin).toContain('Label: question');
       expect(draft?.stdin).toContain('line 2 of feature.rs');
       expect(draft?.stdin).toContain('```text\nwhy 1\n```');
       expect(draft?.stdin).toContain('```markdown\nmagic number?\n```');
@@ -97,7 +97,7 @@ describe(
         sessionId,
         headSha,
         anchor: featureLine(),
-        severity: 'nit',
+        severity: 'nitpick',
         title: '',
         body: 'rename',
       } as const;

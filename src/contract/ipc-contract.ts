@@ -1390,6 +1390,8 @@ export interface ExpandNoteRequest {
   readonly headSha: string;
   readonly anchor: UraAnchorView;
   readonly severity: UraSeverityView;
+  /** Whether the note blocks the merge (ADR 0131); not blocking when absent. */
+  readonly blocking?: boolean;
   readonly title: string;
   readonly body: string;
   readonly requestId?: string;

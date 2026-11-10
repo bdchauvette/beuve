@@ -14,6 +14,7 @@ export interface NoteExpandDraft {
   /** Names the note, so a newer expansion of it replaces one in flight. */
   readonly noteKey: string;
   readonly severity: UraSeverityView;
+  readonly blocking: boolean;
   readonly title: string;
   readonly body: string;
 }
@@ -36,7 +37,7 @@ export interface NoteExpandRequestDetail {
 
 /**
  * The Expand button of a note form (ADR 0125), placed inside the `<form>` whose Title input, Body
- * textarea and Severity select it reads (by their `aria-label`). Enabled while the title or body
+ * textarea and Label select it reads (by their `aria-label`), and its Blocking toggle (`name`). Enabled while the title or body
  * has text. It asks with a composed `beuve-note-expand-request` ({@link NoteExpandRequestDetail})
  * and never calls the bridge; while it waits it shows Expanding… and a Cancel. The answer replaces
  * the body's text as one edit the reviewer can undo (⌘/Ctrl+Z); a failure shows beside the button.
@@ -91,11 +92,12 @@ export class BeuveNoteExpand extends LitElement {
   @state() accessor error = '';
   @state() accessor isExpanding = false;
 
-  private field(name: 'title' | 'body' | 'severity'): HTMLElement | undefined {
+  private field(name: 'title' | 'body' | 'severity' | 'blocking'): HTMLElement | undefined {
     const selectors = {
       title: 'input[aria-label="Title"]',
       body: 'textarea[aria-label="Body"]',
-      severity: 'select[aria-label="Severity"]',
+      severity: 'select[aria-label="Label"]',
+      blocking: 'button[name="blocking"]',
     } as const;
     return this.form?.querySelector<HTMLElement>(selectors[name]) ?? undefined;
   }
@@ -106,6 +108,10 @@ export class BeuveNoteExpand extends LitElement {
       return element.value;
     }
     return '';
+  }
+
+  private isBlocking(): boolean {
+    return this.field('blocking')?.getAttribute('aria-pressed') === 'true';
   }
 
   private severity(): UraSeverityView {
@@ -171,6 +177,7 @@ export class BeuveNoteExpand extends LitElement {
         ...(this.headSha !== '' && { headSha: this.headSha }),
         noteKey: this.noteKey,
         severity: this.severity(),
+        blocking: this.isBlocking(),
         title,
         body,
       },
