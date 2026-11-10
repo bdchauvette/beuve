@@ -212,6 +212,8 @@ export class BeuveStatusBar extends LitElement {
   /** The language servers beuve has started; absent until the first answer. */
   @property({ attribute: false }) accessor lspServers: readonly LspServerView[] | undefined;
   @property({ attribute: false }) accessor notice: StatusNotice | undefined;
+  /** Polling found commits the open review doesn't show yet; stays until the reviewer shows them. */
+  @property({ type: Boolean }) accessor hasNewCommits = false;
   @property({ attribute: false }) accessor appInfo: AppInfo | undefined;
   /** CI for the open pull request session's head; absent for local sessions. */
   @property({ attribute: false }) accessor ci: CiStatusView | undefined;
@@ -425,6 +427,19 @@ export class BeuveStatusBar extends LitElement {
     return html`
       ${this.renderLsp()} ${this.notice === undefined ? nothing : this.renderNotice(this.notice)}
       <span class="spacer"></span>
+      ${
+        this.hasNewCommits
+          ? html`<button
+              type="button"
+              class="button notice-action"
+              data-action="notice-action"
+              data-command="show-new-commits"
+              title="Reload the review with the new commits"
+            >
+              New commits
+            </button>`
+          : nothing
+      }
       ${this.remoteBranch === undefined ? nothing : this.renderRemoteBranch(this.remoteBranch)}
       ${this.renderAttention()} ${this.ci === undefined ? nothing : this.renderCi(this.ci)}
       ${this.githubAuth === undefined ? nothing : this.renderGithub(this.githubAuth)}

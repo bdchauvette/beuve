@@ -761,6 +761,10 @@ export class BeuveApp extends LitElement {
         void this.session.markReviewed();
         return;
       }
+      case 'show-new-commits': {
+        this.github.showNewCommits();
+        return;
+      }
       case 'stop': {
         this.chat.cancelRunning();
         return;
@@ -1036,6 +1040,7 @@ export class BeuveApp extends LitElement {
         .lspServers=${this.lspServers}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
+        .hasNewCommits=${this.github.hasNewCommits}
         .ci=${this.github.ci}
         .attention=${this.github.pullRequest?.attention}
         .remoteBranch=${this.github.branch}

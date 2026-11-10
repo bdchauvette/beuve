@@ -590,6 +590,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
+        "id": "show-new-commits",
+        "label": "Show New Co&mmits",
+      },
+      {
         "id": "restart-language-servers",
         "label": "Restart &Language Servers",
       },
@@ -1336,6 +1340,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "type": "separator",
+      },
+      {
+        "id": "show-new-commits",
+        "label": "Show New Commits",
       },
       {
         "id": "restart-language-servers",
