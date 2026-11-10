@@ -230,6 +230,11 @@ export class BeuveSheetCode extends LitElement {
     this.renderedKey = '';
   }
 
+  /** The library's shadow root, which holds the code rows, once it has rendered. */
+  codeRoot(): ShadowRoot | undefined {
+    return this.renderRoot.querySelector('diffs-container')?.shadowRoot ?? undefined;
+  }
+
   /** Scrolls line `line` (1-based) into view, centred unless it is already visible, keeping the horizontal scroll. */
   async reveal(line: number): Promise<void> {
     const row = await waitFor(() => this.row(line));

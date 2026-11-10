@@ -340,6 +340,8 @@
   /* Code surfaces; syntax-palettes.ts repeats these steps as hex for the highlighter (ADR 0119). */
   --beuve-code-bg: light-dark(var(--beuve-scale-gray-2), var(--beuve-scale-gray-1));
   --beuve-code-text: var(--beuve-scale-gray-12);
+  /* Other occurrences of the selected text (ADR 0126): a neutral tint, fainter than the selection. */
+  --beuve-code-selection-match: var(--beuve-scale-gray-a6);
 
   /* ── 3. Component: diffs ───────────────────────────────────────────────── */
 
@@ -382,6 +384,11 @@ body {
 ::highlight(beuve-definition-link) {
   color: var(--beuve-accent);
   text-decoration: underline;
+}
+
+/* Other occurrences of the text selected in a code view (ADR 0126); the ranges sit in a diff's shadow root. */
+::highlight(beuve-selection-match) {
+  background-color: var(--beuve-code-selection-match);
 }
 
 /*

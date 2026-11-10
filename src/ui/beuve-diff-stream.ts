@@ -37,6 +37,7 @@ import { ActionDelegation } from './action-delegation.ts';
 import { withPayload } from './with-payload.ts';
 import type { MentionTarget } from './chat-draft.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
+import { SelectionMatches } from './selection-matches.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { describeOrderFallback } from './describe-order-fallback.ts';
@@ -738,6 +739,14 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-find-query', this.onFindQuery as EventListener);
     this.addEventListener('beuve-find-step', this.onFindStep as EventListener);
     this.addEventListener('beuve-find-close', this.onFindClose);
+    // ADR 0126: other occurrences of the text selected in a card's code, across the cards shown.
+    this.addController(
+      new SelectionMatches(() => {
+        return [...this.cards()].flatMap((card) => {
+          return card.codeRoot() ?? [];
+        });
+      }),
+    );
     this.addController({
       hostConnected: (): void => {
         this.resizeObserver.observe(this);
