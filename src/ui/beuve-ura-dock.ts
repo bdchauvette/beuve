@@ -69,7 +69,8 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (title, body, severity), Delete
- * withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; Review ▸ Note and the
+ * withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
+ * too (ADR 0129); Review ▸ Note and the
  * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
  * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocker; export buttons copy the compiled review. Items carrying a
@@ -240,7 +241,11 @@ export class BeuveUraDock extends LitElement {
       }
 
       textarea {
+        field-sizing: content;
+        inline-size: 100%;
+        max-inline-size: var(--beuve-size-note-measure);
         min-block-size: var(--beuve-size-editor);
+        max-block-size: var(--beuve-size-note-editor-max);
         resize: block;
         font: var(--beuve-font-code);
       }
@@ -465,13 +470,18 @@ export class BeuveUraDock extends LitElement {
             },
           ),
         },
+        // ADR 0129: a double-click edits the note; one in its open editor stays there.
         dblclick: {
+          editor: (_data, event): void => {
+            event.stopPropagation();
+          },
           item: withPayload(
             ({ itemId }) => {
               return this.itemOf(itemId);
             },
             (found): void => {
-              this.emit('beuve-ura-jump', { item: found });
+              this.cursor = this.ordered().indexOf(found);
+              this.openEditor(found);
             },
           ),
         },
@@ -560,6 +570,10 @@ export class BeuveUraDock extends LitElement {
       this.editingId = undefined;
       return;
     }
+    this.openEditor(item);
+  }
+
+  private openEditor(item: UraItemView): void {
     this.editingId = item.id;
     void this.focusEditor();
   }

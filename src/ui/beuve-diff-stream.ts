@@ -11,6 +11,7 @@ import type {
   ReviewOrderMode,
   ReviewOrderView,
   ReviewView,
+  UpdateUraItemRequest,
   UraAnchorView,
   UraItemView,
 } from '#contract/ipc-contract.ts';
@@ -30,9 +31,12 @@ import type {
   BeuveFileCard,
   ComposerState,
   FilePairLoader,
+  NoteEditDetail,
   SuggestionSaveDetail,
 } from './beuve-file-card.ts';
 import type { UraDraft } from './beuve-ura-composer.ts';
+import { noteEditFrom } from './note-edit-from.ts';
+import type { NoteEdit } from './note-edit-from.ts';
 import { ActionDelegation } from './action-delegation.ts';
 import { withPayload } from './with-payload.ts';
 import type { MentionTarget } from './chat-draft.ts';
@@ -99,6 +103,12 @@ export interface UraCreateRequest {
   readonly settle: (error: string | undefined) => void;
 }
 
+/** What a composer opens with besides its lines: a new note's suggestion, or the note it edits. */
+interface ComposerOptions {
+  readonly suggestedPatch?: string;
+  readonly edit?: NoteEdit;
+}
+
 /** A request from the dock to (re-)edit an item's suggestion; `nonce` repeats it. */
 export interface SuggestionJump {
   readonly itemId: string;
@@ -154,7 +164,8 @@ export interface OpenCommitDetail {
  * mount their diffs as they near the viewport (ADR 0025). While the zone has focus, Next/Previous Change step
  * through every hunk of every file, Show Callers toggles the active card's call-stack peek (Escape closes
  * it), and Add Note opens a composer
- * that stages the target into the review dock (ADR 0027). Every line-taking action reads one
+ * that stages the target into the review dock (ADR 0027); a staged note's marker (double-click or
+ * Edit) opens it in the same composer, which saves it through `beuve-ura-update` (ADR 0129). Every line-taking action reads one
  * target: the selection, a jump's line, the focused hunk or the file (ADR 0063). View ▸ Diff switches side-by-side/inline diffs and hiding
  * whitespace (ADR 0042), and Suggest Edit edits the
  * hunk or selected lines into a suggested patch for a new or the underlying note (ADR 0043).
@@ -453,6 +464,10 @@ export class BeuveDiffStream extends LitElement {
     if (composer === undefined || review === undefined || composer.saving) {
       return;
     }
+    if (composer.edit !== undefined) {
+      this.saveEdit(composer.edit, event.detail);
+      return;
+    }
     this.composer = { ...composer, saving: true, error: '' };
     const request: UraCreateRequest = {
       anchor: composer.anchor,
@@ -481,6 +496,12 @@ export class BeuveDiffStream extends LitElement {
     this.openComposer(event.detail.anchor);
   };
 
+  /** A staged note's marker, double-clicked or its Edit button: the composer edits it there. */
+  private readonly onNoteEdit = (event: CustomEvent<NoteEditDetail>): void => {
+    event.stopPropagation();
+    this.editNote(event.detail.itemId);
+  };
+
   private readonly onComposeCancel = (): void => {
     this.closeComposer();
   };
@@ -491,7 +512,7 @@ export class BeuveDiffStream extends LitElement {
     if (target.itemId === undefined) {
       this.openComposer(
         { kind: 'lines', path: target.path, startLine: target.startLine, endLine: target.endLine },
-        patch,
+        { suggestedPatch: patch },
       );
       return;
     }
@@ -708,6 +729,7 @@ export class BeuveDiffStream extends LitElement {
             }
           },
         },
+        dblclick: { card: forwardToCard },
         keydown: { card: forwardToCard },
         pointermove: {
           card: (_data, _event, card): void => {
@@ -734,6 +756,7 @@ export class BeuveDiffStream extends LitElement {
     this.addEventListener('beuve-ura-compose-cancel', this.onComposeCancel);
     this.addEventListener('beuve-suggestion-save', this.onSuggestionSave as EventListener);
     this.addEventListener('beuve-note-add', this.onNoteAdd as EventListener);
+    this.addEventListener('beuve-note-edit', this.onNoteEdit as EventListener);
     this.addEventListener('beuve-suggestion-cancel', this.onSuggestionCancel as EventListener);
     this.addEventListener('beuve-diff-toggle', this.onDiffToggle as EventListener);
     this.addEventListener('beuve-find-query', this.onFindQuery as EventListener);
@@ -1066,9 +1089,10 @@ export class BeuveDiffStream extends LitElement {
 
   /**
    * Add Note: a composer on the active card, staging the target's head lines (ADR 0063), or `anchor`
-   * with the suggestion an Suggest Edit edit produced.
+   * with the suggestion an Suggest Edit edit produced, or the staged note it edits.
    */
-  private openComposer(given?: UraAnchorView, suggestedPatch?: string): void {
+  private openComposer(given?: UraAnchorView, options: ComposerOptions = {}): void {
+    const { suggestedPatch, edit } = options;
     const { review } = this;
     const files = this.shownFiles();
     if (given !== undefined && given.kind !== 'change') {
@@ -1103,8 +1127,51 @@ export class BeuveDiffStream extends LitElement {
       saving: false,
       error: '',
       ...(suggestedPatch !== undefined && { suggestedPatch }),
+      ...(edit !== undefined && { edit }),
     };
     void this.revealComposer(anchor);
+  }
+
+  /** Edits staged note `itemId` in a composer that takes its marker's place (ADR 0129). */
+  private editNote(itemId: string): void {
+    const item = this.uraItems.find((candidate) => candidate.id === itemId);
+    if (item === undefined) {
+      return;
+    }
+    const edit = noteEditFrom(item);
+    if (edit === undefined) {
+      return;
+    }
+    this.openComposer(edit.anchor, {
+      edit,
+      ...(edit.suggestedPatch !== undefined && { suggestedPatch: edit.suggestedPatch }),
+    });
+  }
+
+  /** Saves the edited note through `ura:update`, as the dock's editor does, and closes the composer. */
+  private saveEdit(edit: NoteEdit, draft: UraDraft): void {
+    const detail: UpdateUraItemRequest = {
+      itemId: edit.itemId,
+      severity: draft.severity,
+      title: draft.title,
+      body: draft.body,
+    };
+    this.dispatchEvent(
+      new CustomEvent('beuve-ura-update', { detail, bubbles: true, composed: true }),
+    );
+    this.closeComposer();
+  }
+
+  /** A note withdrawn, addressed or outdated while its composer is open closes the composer. */
+  private keepEditedNote(): void {
+    const itemId = this.composer?.edit?.itemId;
+    if (itemId === undefined) {
+      return;
+    }
+    const item = this.uraItems.find((candidate) => candidate.id === itemId);
+    if (item === undefined || noteEditFrom(item) === undefined) {
+      this.composer = undefined;
+    }
   }
 
   private async revealComposer(anchor: UraAnchorView): Promise<void> {
@@ -1702,6 +1769,9 @@ export class BeuveDiffStream extends LitElement {
     const previousMarks = changed.get('reviewMarks');
     if (previousMarks !== undefined) {
       this.applyMarkChanges(previousMarks);
+    }
+    if (changed.has('uraItems')) {
+      this.keepEditedNote();
     }
     if (!isReviewChanged) {
       return;

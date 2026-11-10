@@ -1,6 +1,6 @@
 # 0027. The URA dock: wiring, keyboard grammar, clipboard path and outdated items
 
-- Status: Accepted; GitHub posting amended by [0039](0039-posting-reviews-and-posted-items.md); insight promotion replaced by finding staging in [0055](0055-review-folded-into-chat-with-verification.md); the MCP tool superseded by [0106](0106-drop-the-embedded-mcp-server.md)
+- Status: Accepted; GitHub posting amended by [0039](0039-posting-reviews-and-posted-items.md); insight promotion replaced by finding staging in [0055](0055-review-folded-into-chat-with-verification.md); the MCP tool superseded by [0106](0106-drop-the-embedded-mcp-server.md); editing from the diff and double-click to edit amended by [0129](0129-staged-notes-edit-where-they-are-shown.md)
 - Date: 2026-10-28
 
 ## Context
