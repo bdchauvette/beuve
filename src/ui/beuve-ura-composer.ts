@@ -1,5 +1,5 @@
 import { css, html, LitElement, nothing } from 'lit';
-import type { TemplateResult } from 'lit';
+import type { PropertyValues, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import type { UraSeverityView } from '#contract/ipc-contract.ts';
@@ -25,7 +25,8 @@ const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 
  * The compact note composer Add Note opens under the staged lines (ADR 0027): severity (`issue` by
  * default), an optional title and a body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
  * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
- * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Emits
+ * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
+ * note's {@link draft}, it opens with that note's text and saves it instead (ADR 0129). Emits
  * `beuve-ura-compose-submit` with a {@link UraDraft} and `beuve-ura-compose-cancel`.
  */
 @customElement('beuve-ura-composer')
@@ -86,8 +87,11 @@ export class BeuveUraComposer extends LitElement {
       }
 
       textarea {
+        field-sizing: content;
         inline-size: 100%;
+        max-inline-size: var(--beuve-size-note-measure);
         min-block-size: var(--beuve-size-editor-small);
+        max-block-size: var(--beuve-size-note-editor-max);
         resize: block;
         font: var(--beuve-font-code);
       }
@@ -164,6 +168,8 @@ export class BeuveUraComposer extends LitElement {
   @property() accessor error = '';
   /** The suggested patch staged with the note; empty for none. */
   @property() accessor patch = '';
+  /** The staged note being edited, whose text the fields start from; `undefined` for a new note. */
+  @property({ attribute: false }) accessor draft: UraDraft | undefined;
 
   @state() accessor severity: UraSeverityView = 'issue';
 
@@ -202,7 +208,8 @@ export class BeuveUraComposer extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`<form @submit=${this.onSubmit} aria-label="Stage a review note">
+    const labels = submitLabels(this.draft !== undefined);
+    return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
       <div class="row">
         <select
           aria-label="Severity"
@@ -242,18 +249,64 @@ export class BeuveUraComposer extends LitElement {
         <button
           type="submit"
           class="button primary"
-          title="Stage (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})"
+          title="${labels.idle} (${keyPlatformOf(navigator.platform) === 'mac' ? '⌘↩' : 'Ctrl+Enter'})"
           ?disabled=${this.saving}
         >
-          ${this.saving ? 'Staging…' : 'Stage'}
+          ${this.saving ? labels.saving : labels.idle}
         </button>
       </div>
     </form>`;
   }
 
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has('draft') && this.draft !== undefined) {
+      this.severity = this.draft.severity;
+    }
+  }
+
   protected override firstUpdated(): void {
     this.titleInput()?.focus({ preventScroll: true });
   }
+
+  /** A draft fills the uncontrolled fields once, so typing survives later renders. */
+  protected override updated(changed: PropertyValues<this>): void {
+    const { draft } = this;
+    if (draft === undefined || !changed.has('draft')) {
+      return;
+    }
+    const title = this.titleInput();
+    if (title !== undefined) {
+      title.value = draft.title;
+    }
+    const body = this.renderRoot.querySelector('textarea');
+    if (body !== null) {
+      body.value = draft.body;
+    }
+  }
+}
+
+interface SubmitLabels {
+  readonly form: string;
+  readonly idle: string;
+  readonly saving: string;
+}
+
+const stageLabels: SubmitLabels = {
+  form: 'Stage a review note',
+  idle: 'Stage',
+  saving: 'Staging…',
+};
+const editLabels: SubmitLabels = {
+  form: 'Edit a staged review note',
+  idle: 'Save',
+  saving: 'Saving…',
+};
+
+function submitLabels(isEdit: boolean): SubmitLabels {
+  if (isEdit) {
+    return editLabels;
+  }
+  return stageLabels;
 }
 
 declare global {

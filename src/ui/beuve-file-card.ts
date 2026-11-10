@@ -30,6 +30,7 @@ import type { FlowNodeActivateDetail } from './flow-graph-view.ts';
 import './beuve-peek-portal.ts';
 import './beuve-ura-composer.ts';
 import type { BeuveUraComposer } from './beuve-ura-composer.ts';
+import type { NoteEdit } from './note-edit-from.ts';
 import { applySuggestedPatch } from './apply-suggested-patch.ts';
 import { buildSuggestedPatch } from './build-suggested-patch.ts';
 import { describeUraItem } from './describe-ura-item.ts';
@@ -70,6 +71,7 @@ import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { uraMarkersFrom } from './ura-markers-from.ts';
+import type { UraMarker } from './ura-markers-from.ts';
 import { createInlineNode } from './create-inline-node.ts';
 import { createInsightElement } from './create-insight-element.ts';
 import { delegateActions } from './delegate-actions.ts';
@@ -116,6 +118,13 @@ export interface ComposerState {
   readonly error: string;
   /** The suggestion an Suggest Edit edit produced, staged with the note (ADR 0043). */
   readonly suggestedPatch?: string;
+  /** The staged note this composer edits in place of its marker (ADR 0129); absent for a new one. */
+  readonly edit?: NoteEdit;
+}
+
+/** `beuve-note-edit`: the reviewer asked to edit staged note `itemId` from its marker. */
+export interface NoteEditDetail {
+  readonly itemId: string;
 }
 
 /**
@@ -448,7 +457,8 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-text);
       }
 
-      .ura-marker .ura-outside {
+      .ura-marker .ura-outside,
+      .ura-marker .ura-edit {
         flex: none;
         margin-inline-start: auto;
         padding: 0 var(--beuve-space-1);
@@ -460,11 +470,17 @@ export class BeuveFileCard extends LitElement {
         cursor: pointer;
       }
 
-      .ura-marker .ura-outside:hover {
+      .ura-marker .ura-outside + .ura-edit {
+        margin-inline-start: 0;
+      }
+
+      .ura-marker .ura-outside:hover,
+      .ura-marker .ura-edit:hover {
         text-decoration: underline;
       }
 
-      .ura-marker .ura-outside:focus-visible {
+      .ura-marker .ura-outside:focus-visible,
+      .ura-marker .ura-edit:focus-visible {
         outline: var(--beuve-border-width) solid var(--beuve-accent);
         outline-offset: var(--beuve-focus-ring-offset);
       }
@@ -842,6 +858,9 @@ export class BeuveFileCard extends LitElement {
         event.stopPropagation();
         this.revealNote(uraItemId);
       },
+      'edit-note': ({ uraItemId = '' }): void => {
+        this.emitNoteEdit(uraItemId);
+      },
       'insight-line': (_data, _event, line): void => {
         this.toggleInsight(line, undefined);
       },
@@ -850,6 +869,11 @@ export class BeuveFileCard extends LitElement {
       },
       'insight-show': (_data, _event, button): void => {
         this.emitInsight(button, 'beuve-insight-show-in-chat');
+      },
+    },
+    dblclick: {
+      note: ({ uraItemId = '' }): void => {
+        this.emitNoteEdit(uraItemId);
       },
     },
     keydown: {
@@ -1064,11 +1088,28 @@ export class BeuveFileCard extends LitElement {
     this.revealed = [...this.revealed, { range, expansion }];
   }
 
+  /** Double-click on a staged note's marker, or its Edit button: the stream opens it in the composer. */
+  private emitNoteEdit(itemId: string): void {
+    if (itemId === '') {
+      return;
+    }
+    const detail: NoteEditDetail = { itemId };
+    this.dispatchEvent(
+      new CustomEvent('beuve-note-edit', { detail, bubbles: true, composed: true }),
+    );
+  }
+
+  /** The markers this card shows: all but the note its composer is editing, which takes its place. */
+  private shownMarkers(path: string): UraMarker[] {
+    const editedId = this.composer?.edit?.itemId;
+    return uraMarkersFrom(path, this.uraItems).filter(({ item }) => item.id !== editedId);
+  }
+
   /** Staged URA markers first, then the composer, each under its last line. */
   private notes(): CardSlot[] {
     const path = this.file?.path ?? '';
     const slots: CardSlot[] = [
-      ...uraMarkersFrom(path, this.uraItems).map(({ lineStart, lineEnd, item }): CardSlot => {
+      ...this.shownMarkers(path).map(({ lineStart, lineEnd, item }): CardSlot => {
         return {
           lineStart,
           lineEnd,
@@ -1311,10 +1352,17 @@ export class BeuveFileCard extends LitElement {
     }
   }
 
-  /** One composer element per card, kept while it is open so typing survives re-renders. */
+  /**
+   * One composer element per card, kept while it is open so typing survives re-renders; editing
+   * another staged note, or a new one, starts a fresh element from that note's text.
+   */
   private composerNode(): BeuveUraComposer {
-    const element = this.composerElement ?? document.createElement('beuve-ura-composer');
-    this.composerElement = element;
+    let element = this.composerElement;
+    if (element === undefined) {
+      element = document.createElement('beuve-ura-composer');
+      element.draft = this.composer?.edit?.draft;
+      this.composerElement = element;
+    }
     this.syncComposer();
     return element;
   }
@@ -1324,7 +1372,11 @@ export class BeuveFileCard extends LitElement {
     if (composerElement === undefined) {
       return;
     }
-    if (composer === undefined || composer.path !== this.file?.path) {
+    if (
+      composer === undefined ||
+      composer.path !== this.file?.path ||
+      composerElement.draft !== composer.edit?.draft
+    ) {
       this.composerElement = undefined;
       return;
     }
@@ -1655,7 +1707,7 @@ export class BeuveFileCard extends LitElement {
 
   private renderFallback(file: DiffFileView): TemplateResult {
     const path = file.path;
-    return html`${uraMarkersFrom(path, this.uraItems).map((marker) => uraMarkerElement(marker.item, undefined))}
+    return html`${this.shownMarkers(path).map((marker) => uraMarkerElement(marker.item, undefined))}
       ${this.insights.map((insight) => this.insightNode(insight))}
       ${this.composer?.path === path ? this.composerNode() : nothing}
       <pre>
@@ -1823,11 +1875,12 @@ ${splitPatch(file.patch).map((line) => {
   }
 
   /**
-   * Runs the card's action for a click or key event that the diff stream's delegated listener
-   * caught on this card (ADR 0074).
+   * Runs the card's action for a click, double-click or key event that the diff stream's
+   * delegated listener caught on this card (ADR 0074).
    */
   runAction(event: Event): void {
-    const handlers = (this.actions as DelegatedActions)[event.type as 'click' | 'keydown'];
+    const type = event.type as 'click' | 'dblclick' | 'keydown';
+    const handlers = (this.actions as DelegatedActions)[type];
     dispatchAction(event, this.renderRoot, handlers as ActionHandlers<Event> | undefined);
   }
 
@@ -2114,14 +2167,16 @@ function outsideLabel(range: HeadSideRange, placement: NotePlacement): string | 
 
 /**
  * A staged item's marker: its severity and title on one quiet line, built as text nodes, and for
- * lines the diff doesn't show, a button that reveals them (delegated as `reveal-note`).
+ * lines the diff doesn't show, a button that reveals them (delegated as `reveal-note`). Its Edit
+ * button (`edit-note`) and a double-click on it (`note`) edit the note in the diff (ADR 0129).
  */
 function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLElement {
   const labels = describeUraItem(item);
   const marker = document.createElement('div');
   marker.className = `ura-marker ${item.severity}`;
+  marker.dataset['action'] = 'note';
   marker.dataset['uraItemId'] = item.id;
-  marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}`;
+  marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}. Double-click to edit.`;
   const kind = document.createElement('span');
   kind.className = 'ura-kind';
   kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
@@ -2143,6 +2198,14 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
     reveal.textContent = outside;
     marker.append(reveal);
   }
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'ura-edit';
+  edit.dataset['action'] = 'edit-note';
+  edit.dataset['uraItemId'] = item.id;
+  edit.title = 'Edit this note here';
+  edit.textContent = 'Edit';
+  marker.append(edit);
   return marker;
 }
 

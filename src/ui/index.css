@@ -250,6 +250,8 @@
   --beuve-size-editor-small: 3rem;
   --beuve-size-editor: 4.5rem;
   --beuve-size-editor-max: 8.5em;
+  --beuve-size-note-editor-max: 20em; /* a note body grows with its text up to this */
+  --beuve-size-note-measure: calc(48 * var(--beuve-measure-em)); /* about 80 code columns */
   --beuve-size-scroll-short: 10rem;
   --beuve-size-scroll: 15rem;
 

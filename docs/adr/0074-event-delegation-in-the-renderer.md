@@ -1,6 +1,6 @@
 # 0074. Event delegation in the renderer: `data-action` and one listener per type
 
-- Status: Accepted
+- Status: Accepted; the stream also forwards `dblclick` (amended by [0129](0129-staged-notes-edit-where-they-are-shown.md))
 - Date: 2026-10-30
 
 ## Context
