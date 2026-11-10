@@ -10,6 +10,7 @@ import type {
   ChatPartView,
   ChatReviewView,
 } from '#contract/ipc-contract.ts';
+import type { CommandId } from '#contract/command-catalog.ts';
 
 import './beuve-sheet-code.ts';
 import type { DraftPart, DraftState } from './chat-draft.ts';
@@ -42,9 +43,21 @@ import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { adjacentMessageTop } from './adjacent-message-top.ts';
+import { chatCompletionStyles } from './chat-completion-styles.ts';
+import { matchChatCommands } from './match-chat-commands.ts';
+import type { ChatCommandSuggestion } from './match-chat-commands.ts';
+import { parseChatCommand } from './parse-chat-command.ts';
+import { planChatCompletion } from './plan-chat-completion.ts';
 
 /** Questions carry at most this many mentions (ADR 0046); main refuses more. */
 const maxMentions = 8;
+
+/** Scrolled this close to the end, the transcript follows a streaming answer (ADR 0127). */
+const followDistance = 32;
+
+/** The questions, answers and summaries Previous and Next Message step between (ADR 0127). */
+const messageSelector = ':is(.transcript, .compacted) > :is(.you, .answer, .abstract, .summary)';
 
 /**
  * Zone 4: the read-only chat drawer. Plain text is a question about the change (ADR 0031); the
@@ -64,6 +77,9 @@ const maxMentions = 8;
  * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-cite`, `beuve-chat-mention` (a chip)
  * and `beuve-open-editor` (Open in Editor on a pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
  * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
+ * A `/` at the start of the input lists the chat commands it could complete to (ADR 0127);
+ * Previous and Next Message scroll the transcript one message at a time, and the transcript
+ * follows a streaming answer only while it is scrolled to the end.
  */
 @customElement('beuve-chat-drawer')
 export class BeuveChatDrawer extends LitElement {
@@ -71,6 +87,7 @@ export class BeuveChatDrawer extends LitElement {
     buttonStyles,
     formatControlStyles,
     zoneStyles,
+    chatCompletionStyles,
     css`
       :host {
         border-block-start: var(--beuve-border-width) solid var(--beuve-border);
@@ -107,14 +124,18 @@ export class BeuveChatDrawer extends LitElement {
 
       .you {
         margin: 0;
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-accent);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface-sunken);
+        color: var(--beuve-text);
         font: var(--beuve-font-code);
-        color: var(--beuve-text-muted);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
 
-      .you::before {
-        content: '› ';
+      .transcript > .you:not(:first-child) {
+        margin-block-start: var(--beuve-space-2);
       }
 
       .answer {
@@ -567,6 +588,9 @@ export class BeuveChatDrawer extends LitElement {
     if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
       return;
     }
+    if (!event.shiftKey && this.runCompletionKey(event)) {
+      return;
+    }
     const chip = this.selectedChip;
     if (chip !== undefined && !chipKeys.has(event.key)) {
       this.selectChip(undefined);
@@ -653,6 +677,20 @@ export class BeuveChatDrawer extends LitElement {
     }
     this.rememberCaret();
     this.syncEmpty();
+    this.syncCompletions();
+  };
+
+  /** Scrolling away from the end stops the transcript following a streaming answer. */
+  private readonly onBodyScroll = (event: Event): void => {
+    const body = event.currentTarget;
+    if (body instanceof HTMLElement) {
+      this.followsEnd = body.scrollHeight - body.scrollTop - body.clientHeight <= followDistance;
+    }
+  };
+
+  /** Keeps the input's focus while a command in its list is clicked. */
+  private readonly onCompletionsPointerDown = (event: PointerEvent): void => {
+    event.preventDefault();
   };
 
   private readonly onEditorClick = (event: MouseEvent): void => {
@@ -713,6 +751,9 @@ export class BeuveChatDrawer extends LitElement {
           this.emit('beuve-chat-mention', { mention });
         }
       },
+      'choose-command': ({ index }): void => {
+        this.chooseCompletion(Number(index));
+      },
     },
   } satisfies DelegatedActions;
 
@@ -729,6 +770,10 @@ export class BeuveChatDrawer extends LitElement {
    */
   private readonly markdownViews = new Map<string, MarkdownEntry>();
   private renderedMarkdown = new Set<string>();
+  /** Whether the transcript was scrolled to its end, so that new text keeps it there. */
+  private followsEnd = true;
+  /** Escape closed the command list; it stays closed until the input no longer starts with `/`. */
+  private isCompletionDismissed = false;
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
   @property({ attribute: false }) accessor transcript: readonly ChatEntry[] = [];
@@ -744,6 +789,10 @@ export class BeuveChatDrawer extends LitElement {
   @property({ attribute: false }) accessor stagedFindings: ReadonlySet<string> = new Set();
 
   @state() accessor isDraftEmpty = true;
+  /** The chat commands the input could complete to (ADR 0127); empty while the list is closed. */
+  @state() accessor completions: readonly ChatCommandSuggestion[] = [];
+  /** The highlighted command of the list, which Enter chooses; `undefined` when Enter sends. */
+  @state() accessor completionIndex: number | undefined;
   /** Whether the messages a summary replaced are unfolded. */
   @state() accessor showsCompacted = false;
 
@@ -802,6 +851,7 @@ export class BeuveChatDrawer extends LitElement {
       }),
     );
     this.syncEmpty();
+    this.syncCompletions();
     if (this.shadowRoot?.activeElement === editor) {
       this.placeCaret(draft.caret);
     }
@@ -997,7 +1047,100 @@ export class BeuveChatDrawer extends LitElement {
     const { text, mentions } = serializeChatDraft(this.readParts());
     this.renderDraft({ parts: [], caret: 0 });
     this.savedCaret = undefined;
+    this.followsEnd = true;
     this.emit('beuve-chat-submit', { text, mentions });
+  }
+
+  /**
+   * Lists the commands a draft of only text starting with `/` could complete to. With none
+   * chosen, Enter chooses the first while the text is not yet a command, and sends it once it is.
+   */
+  private syncCompletions(): void {
+    const parts = this.readParts();
+    const [first] = parts;
+    let text = '';
+    if (parts.length === 1 && first?.kind === 'text') {
+      text = first.text;
+    }
+    if (!text.startsWith('/')) {
+      this.isCompletionDismissed = false;
+    }
+    if (this.isCompletionDismissed) {
+      this.completions = [];
+    } else {
+      this.completions = matchChatCommands(text);
+    }
+    this.completionIndex = undefined;
+    if (this.completions.length > 0 && parseChatCommand(text).kind === 'invalid') {
+      this.completionIndex = 0;
+    }
+  }
+
+  /** ↑ ↓ Tab Enter and Escape on the open command list; `false` leaves the key to the input. */
+  private runCompletionKey(event: KeyboardEvent): boolean {
+    const step = planChatCompletion({
+      key: event.key,
+      count: this.completions.length,
+      highlighted: this.completionIndex,
+    });
+    if (step === undefined) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    switch (step.kind) {
+      case 'highlight': {
+        this.completionIndex = step.index;
+        void this.updateComplete.then(() => {
+          this.renderRoot
+            .querySelector(`#${completionId(step.index)}`)
+            ?.scrollIntoView({ block: 'nearest' });
+        });
+        return true;
+      }
+      case 'choose': {
+        this.chooseCompletion(step.index);
+        return true;
+      }
+      case 'dismiss': {
+        this.isCompletionDismissed = true;
+        this.completions = [];
+        this.completionIndex = undefined;
+        return true;
+      }
+    }
+  }
+
+  /** Types the command into the input; one that still wants an argument waits for it. */
+  private chooseCompletion(index: number): void {
+    const suggestion = this.completions[index];
+    if (suggestion === undefined) {
+      return;
+    }
+    this.renderDraft({
+      parts: [{ kind: 'text', text: suggestion.text }],
+      caret: suggestion.text.length,
+    });
+    this.focus();
+  }
+
+  /** Scrolls the transcript so the previous (`-1`) or next (`1`) message starts at its top. */
+  private stepMessage(step: -1 | 1): void {
+    const body = this.renderRoot.querySelector<HTMLElement>('.body');
+    const transcript = body?.querySelector('.transcript');
+    if (body === null || transcript === null || transcript === undefined) {
+      return;
+    }
+    // The transcript starts at the body's padding edge, so a message's offset in it is the
+    // scroll offset that puts the message there.
+    const origin = transcript.getBoundingClientRect().top;
+    const tops = Array.from(transcript.querySelectorAll(messageSelector), (element) => {
+      return element.getBoundingClientRect().top - origin;
+    });
+    const top = adjacentMessageTop({ tops, scrollTop: body.scrollTop, step });
+    if (top !== undefined) {
+      body.scrollTo({ top });
+    }
   }
 
   private navButtons(): HTMLButtonElement[] {
@@ -1394,6 +1537,9 @@ export class BeuveChatDrawer extends LitElement {
   }
 
   private scrollToEnd(): void {
+    if (!this.followsEnd) {
+      return;
+    }
     const body = this.renderRoot.querySelector('.body');
     if (body !== null) {
       body.scrollTop = body.scrollHeight;
@@ -1564,6 +1710,35 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
+  /** The commands the input could complete to, above it (ADR 0127). */
+  private renderCompletions(): TemplateResult | typeof nothing {
+    if (this.completions.length === 0) {
+      return nothing;
+    }
+    return html`<div
+      class="completions"
+      id="chat-commands"
+      role="listbox"
+      aria-label="Chat commands"
+      @pointerdown=${this.onCompletionsPointerDown}
+    >
+      ${this.completions.map((suggestion, index) => {
+        return html`<div
+          class="completion"
+          id=${completionId(index)}
+          role="option"
+          aria-selected=${index === this.completionIndex ? 'true' : 'false'}
+          title=${suggestion.description}
+          data-action="choose-command"
+          data-index=${index}
+        >
+          <span class="completion-usage">${suggestion.label}</span>
+          <span class="completion-help">${suggestion.description}</span>
+        </div>`;
+      })}
+    </div>`;
+  }
+
   /** Scrolls to a `/review` finding of the transcript and marks it for a moment (ADR 0061). */
   async revealFinding(messageId: string, finding: number): Promise<void> {
     await this.updateComplete;
@@ -1581,6 +1756,23 @@ export class BeuveChatDrawer extends LitElement {
     setTimeout(() => {
       item.classList.remove('revealed');
     }, 1800);
+  }
+
+  /** Previous and Next Message (ADR 0127), from the menu or the palette. */
+  runCommand(id: CommandId): boolean {
+    switch (id) {
+      case 'previous-message': {
+        this.stepMessage(-1);
+        return true;
+      }
+      case 'next-message': {
+        this.stepMessage(1);
+        return true;
+      }
+      default: {
+        return false;
+      }
+    }
   }
 
   /** Types `text` into the input for the reviewer to finish (the palette's commands with arguments). */
@@ -1651,7 +1843,7 @@ export class BeuveChatDrawer extends LitElement {
   override render(): TemplateResult {
     this.renderedMarkdown = new Set();
     return html`
-      <div class="body" @keydown=${this.onBodyKeyDown}>
+      <div class="body" @keydown=${this.onBodyKeyDown} @scroll=${this.onBodyScroll}>
         ${
           this.transcript.length === 0
             ? html`<p class="empty">
@@ -1669,12 +1861,18 @@ export class BeuveChatDrawer extends LitElement {
         }
       </div>
       <form @submit=${this.onSubmit}>
+        ${this.renderCompletions()}
         <div
           class="editor"
           contenteditable="plaintext-only"
           role="textbox"
           aria-label="Ask a question or run a command"
           aria-multiline="false"
+          aria-autocomplete="list"
+          aria-controls="chat-commands"
+          aria-activedescendant=${
+            this.completionIndex === undefined ? nothing : completionId(this.completionIndex)
+          }
           spellcheck="false"
           data-placeholder=${describeChatPlaceholder(this.isAnswering())}
           ?data-empty=${this.isDraftEmpty}
@@ -1691,6 +1889,9 @@ export class BeuveChatDrawer extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (!changed.has('transcript')) {
       return;
+    }
+    if (changed.get('transcript')?.[0]?.id !== this.transcript[0]?.id) {
+      this.followsEnd = true;
     }
     this.queued = this.queuedQuestions();
     if (summaryOf(changed.get('transcript')) !== summaryOf(this.transcript)) {
@@ -1754,6 +1955,11 @@ function textOf(part: ChatPartView): string {
     return part.text;
   }
   return '';
+}
+
+/** The element id of the command list's row `index`, for the input's `aria-activedescendant`. */
+function completionId(index: number): string {
+  return `chat-command-${String(index)}`;
 }
 
 /** The id of the summary the transcript folds at, to unfold afresh when it changes. */

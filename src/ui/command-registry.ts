@@ -54,6 +54,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
   const none: CommandBehaviour = { run: { kind: 'none' } };
   const diff: CommandBehaviour = { run: { kind: 'zone', zone: 'diff' } };
   const dock: CommandBehaviour = { run: { kind: 'zone', zone: 'ura' } };
+  const chatZone: CommandBehaviour = { run: { kind: 'zone', zone: 'chat' } };
   return {
     about: main,
     settings: main,
@@ -165,6 +166,8 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     chat: app,
     'add-to-chat': app,
     'stage-answer': app,
+    'previous-message': chatZone,
+    'next-message': chatZone,
     summarize: {
       run: { kind: 'slash', text: '/summarize', isPrefill: false },
       slash: '/summarize',
@@ -230,6 +233,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'chat-back': none,
     'chat-pills': none,
     'chat-chips': none,
+    'chat-complete': none,
     'close-portal': none,
     'portal-walk': none,
     'sheet-cursor': none,

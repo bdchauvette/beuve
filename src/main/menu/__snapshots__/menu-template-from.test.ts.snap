@@ -613,6 +613,16 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Add to Chat",
       },
       {
+        "accelerator": "Alt+Shift+Up",
+        "id": "previous-message",
+        "label": "&Previous Message",
+      },
+      {
+        "accelerator": "Alt+Shift+Down",
+        "id": "next-message",
+        "label": "&Next Message",
+      },
+      {
         "type": "separator",
       },
       {
@@ -1363,6 +1373,16 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+>",
         "id": "add-to-chat",
         "label": "Add to Chat",
+      },
+      {
+        "accelerator": "Ctrl+Cmd+Up",
+        "id": "previous-message",
+        "label": "Previous Message",
+      },
+      {
+        "accelerator": "Ctrl+Cmd+Down",
+        "id": "next-message",
+        "label": "Next Message",
       },
       {
         "type": "separator",
