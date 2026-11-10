@@ -13,8 +13,9 @@ export interface ChatCommandSuggestion {
 }
 
 /**
- * The chat commands `input` could be the start of, in `/help` order, for the input's completion
- * list (ADR 0127). Read from the command registry's usages, as `/help` is: an alternative
+ * The chat commands `input` could be the start of, for the input's completion list (ADR 0127):
+ * the Chat menu's commands (`/summarize`, `/review`, …) first, then the display ones, each group
+ * in `/help` order. Read from the command registry's usages, as `/help` is: an alternative
  * (`split|inline`, `--effort=low|medium|high`) is offered once per choice, and a placeholder
  * (`<path-prefix>…`) is left for the reviewer to type. Empty unless `input` starts with `/`, and
  * when the only match is what is already typed. Case-insensitive. Pure.
@@ -38,7 +39,10 @@ const suggestions: readonly ChatCommandSuggestion[] = Object.freeze(registeredSu
 
 function registeredSuggestions(): ChatCommandSuggestion[] {
   const seen = new Set<string>();
-  return commandRegistry.flatMap(({ slash, help, title }) => {
+  const chatFirst = commandRegistry.toSorted((a, b) => {
+    return Number(b.menu?.menu === 'chat') - Number(a.menu?.menu === 'chat');
+  });
+  return chatFirst.flatMap(({ slash, help, title }) => {
     if (slash === undefined) {
       return [];
     }

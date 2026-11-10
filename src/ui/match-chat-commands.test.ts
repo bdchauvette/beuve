@@ -74,4 +74,10 @@ describe('matchChatCommands', () => {
       .filter((suggestion) => parseChatCommand(suggestion.text).kind === 'invalid');
     expect(refused).toStrictEqual([]);
   });
+
+  test('lists the chat commands before the display ones', ({ expect }) => {
+    const texts = matchChatCommands('/').map((suggestion) => suggestion.text);
+    expect(texts[0]).toBe('/summarize');
+    expect(texts.indexOf('/review')).toBeLessThan(texts.indexOf('/sidebar left'));
+  });
 });
