@@ -67,4 +67,4 @@ export interface UraArtifact {
 /** Why an artifact couldn't be compiled. */
 export type UraArtifactError =
   | { readonly kind: 'foreign-item'; readonly itemId: string }
-  | { readonly kind: 'approve-with-blockers'; readonly itemIds: readonly string[] };
+  | { readonly kind: 'approve-over-blocking'; readonly itemIds: readonly string[] };

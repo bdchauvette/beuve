@@ -31,11 +31,20 @@ describe('buildAgentReview', () => {
           "scope": "interdiff",
         },
         "counts": {
-          "blocker": 1,
-          "issue": 1,
-          "nit": 1,
+          "blocking": 1,
+          "chore": 0,
+          "issue": 2,
+          "nitpick": 1,
+          "note": 0,
+          "polish": 0,
           "praise": 1,
           "question": 1,
+          "quibble": 0,
+          "smell": 0,
+          "suggestion": 0,
+          "thought": 0,
+          "todo": 0,
+          "typo": 0,
         },
         "items": [
           {
@@ -45,12 +54,13 @@ describe('buildAgentReview', () => {
               "path": "src/app.ts",
               "startLine": 10,
             },
+            "blocking": true,
             "body": "Calling \`first()\` on \`[]\` throws.",
             "id": "00000000-0000-4000-8000-000000000001",
             "origin": {
               "kind": "human",
             },
-            "severity": "blocker",
+            "severity": "issue",
             "suggestedPatch": "--- a/src/app.ts
       +++ b/src/app.ts
       @@ -10,3 +10,4 @@
@@ -69,6 +79,7 @@ describe('buildAgentReview', () => {
               "path": "src/parse.ts",
               "startLine": 30,
             },
+            "blocking": false,
             "body": "",
             "id": "00000000-0000-4000-8000-000000000002",
             "origin": {
@@ -84,6 +95,7 @@ describe('buildAgentReview', () => {
               "kind": "file",
               "path": "docs/notes.md",
             },
+            "blocking": false,
             "body": "It reads like scratch notes.",
             "id": "00000000-0000-4000-8000-000000000003",
             "origin": {
@@ -102,6 +114,7 @@ describe('buildAgentReview', () => {
             "anchor": {
               "kind": "change",
             },
+            "blocking": false,
             "body": "",
             "id": "00000000-0000-4000-8000-000000000004",
             "origin": {
@@ -111,6 +124,7 @@ describe('buildAgentReview', () => {
             "title": "Clear commit history",
           },
           {
+            "blocking": false,
             "body": "Use \`as const\` here.
       A CDATA terminator: ]]> stays text.",
             "id": "00000000-0000-4000-8000-000000000005",
@@ -129,7 +143,7 @@ describe('buildAgentReview', () => {
               "reason": "lines-changed",
               "writtenAgainstSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             },
-            "severity": "nit",
+            "severity": "nitpick",
             "title": "Prefer <const> & "readonly"",
           },
         ],
@@ -162,7 +176,7 @@ describe('buildAgentReview', () => {
       },
       verdict: 'comment',
       verdictSource: 'chosen',
-      counts: { blocker: 0, issue: 0, question: 0, nit: 0, praise: 0 },
+      counts: { issue: 0, nitpick: 0, praise: 0, blocking: 0 },
       items: [],
     });
     expect('fromHeadSha' in buildAgentReview(local).change).toBe(false);

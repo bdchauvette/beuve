@@ -11,24 +11,24 @@ export interface DockVerdict {
 
 /**
  * The reviewer's chosen verdict over the derived default (ADR 0023): choosing the derived value
- * is no choice at all, and approving while blockers are staged is refused, falling back to the
+ * is no choice at all, and approving while blocking notes are staged is refused, falling back to the
  * derived verdict with a message saying why.
  */
 export function resolveDockVerdict(
   chosen: UraVerdictView | undefined,
   derived: UraVerdictView,
-  blockers: number,
+  blocking: number,
 ): DockVerdict {
-  if (chosen === 'approve' && blockers > 0) {
-    const staged = nounFor(blockers, {
-      one: 'a blocker is',
-      other: `${String(blockers)} blockers are`,
+  if (chosen === 'approve' && blocking > 0) {
+    const staged = nounFor(blocking, {
+      one: 'a blocking note is',
+      other: `${String(blocking)} blocking notes are`,
     });
-    const them = nounFor(blockers, { one: 'it', other: 'them' });
+    const them = nounFor(blocking, { one: 'it', other: 'them' });
     return {
       value: derived,
       source: 'derived',
-      refusal: `Can't approve while ${staged} staged: withdraw ${them} or lower the severity.`,
+      refusal: `Can't approve while ${staged} staged: withdraw ${them} or turn off Blocking.`,
     };
   }
   if (chosen === undefined || chosen === derived) {

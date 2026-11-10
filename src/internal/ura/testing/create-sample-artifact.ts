@@ -34,15 +34,15 @@ export function createSampleArtifact(verdict?: UraArtifactVerdict): UraArtifact 
 }
 
 /**
- * One entry of each interesting shape: a multi-line blocker with a pure-replacement patch, a
+ * One entry of each interesting shape: a multi-line blocking issue with a pure-replacement patch, a
  * single-line review finding, a file-level question with a non-replacement patch, a
  * whole-change praise, and an outdated review finding with text that needs escaping.
  */
 function sampleEntries(): UraEntry[] {
-  const blocker = createTestUraItem({
+  const blocking = createTestUraItem({
     id: id(1),
     headSha: laterHeadSha,
-    severity: 'blocker',
+    blocking: true,
     title: 'Guard against an empty list',
     body: 'Calling `first()` on `[]` throws.',
     suggestion: [
@@ -82,13 +82,13 @@ function sampleEntries(): UraEntry[] {
   });
   const outdated = createTestUraItem({
     id: id(5),
-    severity: 'nit',
+    severity: 'nitpick',
     origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 0 },
     title: 'Prefer <const> & "readonly"',
     body: 'Use `as const` here.\nA CDATA terminator: ]]> stays text.',
   });
   return [
-    { item: blocker, placement: { kind: 'current', anchor: blocker.anchor } },
+    { item: blocking, placement: { kind: 'current', anchor: blocking.anchor } },
     { item: finding, placement: { kind: 'current', anchor: finding.anchor } },
     { item: question, placement: { kind: 'current', anchor: question.anchor } },
     { item: praise, placement: { kind: 'current', anchor: praise.anchor } },

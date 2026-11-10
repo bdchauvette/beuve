@@ -10,21 +10,23 @@ import './beuve-patch-preview.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
+import { uraSeverityViews } from './ura-severity-views.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 
-/** What the composer submits: a new note's severity, one-line title and Markdown body. */
+/** What the composer submits: a note's label, whether it blocks, one-line title and Markdown body. */
 export interface UraDraft {
   readonly severity: UraSeverityView;
+  readonly blocking: boolean;
   readonly title: string;
   readonly body: string;
 }
 
-const severities: readonly UraSeverityView[] = ['blocker', 'issue', 'question', 'nit', 'praise'];
-
 /**
- * The compact note composer Add Note opens under the staged lines (ADR 0027): severity (`issue` by
- * default), an optional title and a body. Enter in the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
+ * The compact note composer Add Note opens under the staged lines (ADR 0027): a label (`issue` by
+ * default), a Blocking toggle (off by default, ADR 0131), an optional title and a body. Enter in
+ * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
  * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
  * note's {@link draft}, it opens with that note's text and saves it instead (ADR 0129). Emits
@@ -175,6 +177,7 @@ export class BeuveUraComposer extends LitElement {
   @property({ attribute: false }) accessor anchor: UraAnchorView | undefined;
 
   @state() accessor severity: UraSeverityView = 'issue';
+  @state() accessor blocking = false;
 
   constructor() {
     super();
@@ -199,7 +202,7 @@ export class BeuveUraComposer extends LitElement {
       this.titleInput()?.focus();
       return;
     }
-    const draft: UraDraft = { severity: this.severity, title, body };
+    const draft: UraDraft = { severity: this.severity, blocking: this.blocking, title, body };
     this.dispatchEvent(
       new CustomEvent('beuve-ura-compose-submit', { detail: draft, bubbles: true, composed: true }),
     );
@@ -215,18 +218,29 @@ export class BeuveUraComposer extends LitElement {
     return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
       <div class="row">
         <select
-          aria-label="Severity"
+          aria-label="Label"
           .value=${this.severity}
           @change=${(event: Event): void => {
             this.severity = (event.target as HTMLSelectElement).value as UraSeverityView;
           }}
         >
-          ${severities.map((severity) => {
+          ${uraSeverityViews.map((severity) => {
             return html`<option value=${severity} ?selected=${severity === this.severity}>
               ${uraSeverityEmoji(severity)} ${severity}
             </option>`;
           })}
         </select>
+        <button
+          class="button"
+          type="button"
+          aria-pressed=${String(this.blocking)}
+          title="Blocking: must be resolved before merging"
+          @click=${(): void => {
+            this.blocking = !this.blocking;
+          }}
+        >
+          ${uraBlockingEmoji} Blocking
+        </button>
         <input
           aria-label="Title"
           placeholder="Title (optional)"
@@ -263,9 +277,11 @@ export class BeuveUraComposer extends LitElement {
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('draft') && this.draft !== undefined) {
-      this.severity = this.draft.severity;
+    if (!changed.has('draft') || this.draft === undefined) {
+      return;
     }
+    this.severity = this.draft.severity;
+    this.blocking = this.draft.blocking;
   }
 
   protected override firstUpdated(): void {

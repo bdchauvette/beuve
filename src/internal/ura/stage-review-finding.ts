@@ -26,20 +26,21 @@ export interface ReviewFindingSource {
 
 export interface ReviewFindingStaging {
   readonly deps: UraDeps;
-  /** The severity the reviewer picked, instead of the one the finding's own severity maps to. */
+  /** The label the reviewer picked, instead of the one the finding's own severity maps to. */
   readonly severity?: UraSeverity | undefined;
 }
 
 const defaultSeverity: Readonly<Record<StageableReviewFinding['severity'], UraSeverity>> = {
   risk: 'issue',
   warning: 'issue',
-  info: 'nit',
+  info: 'nitpick',
 };
 
 /**
  * Turns a `/review` finding the reviewer staged into an item on its lines, with a `chat-answer`
- * origin naming the answer and the finding. An agent never blocks on its own: `risk` and
- * `warning` become `issue`, `info` becomes `nit`, unless the reviewer picked a severity.
+ * origin naming the answer and the finding. An agent never blocks on its own: the item is not
+ * blocking, `risk` and `warning` become `issue` and `info` becomes `nitpick`, unless the reviewer
+ * picked a label.
  */
 export function stageReviewFinding(
   finding: StageableReviewFinding,
@@ -57,6 +58,7 @@ export function stageReviewFinding(
         endLine: finding.endLine,
       },
       severity,
+      blocking: false,
       origin: { kind: 'chat-answer', messageId: source.messageId, finding: source.finding },
       title: finding.title,
       body: finding.body,

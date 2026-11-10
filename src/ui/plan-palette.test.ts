@@ -44,6 +44,7 @@ function item(): UraItemView {
     id: 'u1',
     title: 'Round once, after summing',
     severity: 'issue',
+    blocking: true,
     status: { kind: 'staged' },
   } as unknown as UraItemView;
 }
@@ -111,10 +112,9 @@ describe('planPalette', () => {
   });
 
   test('finds staged items by title after !', ({ expect }) => {
-    expect(planPalette('!round', sources())[0]?.action).toStrictEqual({
-      kind: 'ura-item',
-      itemId: 'u1',
-    });
+    const [entry] = planPalette('!round', sources());
+    expect(entry?.action).toStrictEqual({ kind: 'ura-item', itemId: 'u1' });
+    expect(entry?.detail).toBe('staged 🛑 ⚠️ issue (blocking)');
   });
 
   test('mixes a few of each group without a prefix, in group order', ({ expect }) => {

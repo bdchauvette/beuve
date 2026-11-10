@@ -12,8 +12,8 @@ export interface NoteEdit {
 }
 
 /**
- * What editing `item` in the diff starts from: its current lines or file and its severity, title
- * and body. Only a note the diff marks has one: staged, current on the head, on a file.
+ * What editing `item` in the diff starts from: its current lines or file and its label, blocking,
+ * title and body. Only a note the diff marks has one: staged, current on the head, on a file.
  */
 export function noteEditFrom(item: UraItemView): NoteEdit | undefined {
   const { placement } = item;
@@ -27,7 +27,7 @@ export function noteEditFrom(item: UraItemView): NoteEdit | undefined {
   return {
     itemId: item.id,
     anchor,
-    draft: { severity: item.severity, title: item.title, body: item.body },
+    draft: { severity: item.severity, blocking: item.blocking, title: item.title, body: item.body },
     ...(item.suggestedPatch !== undefined && { suggestedPatch: item.suggestedPatch }),
   };
 }

@@ -172,7 +172,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
         sessionId: id,
         headSha: shown.headSha,
         anchor: { kind: 'lines', path: 'app.py', startLine: 5, endLine: 5 },
-        severity: 'nit',
+        severity: 'nitpick',
         title: 'Guard the call',
         body: '',
       }),

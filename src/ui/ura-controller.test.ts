@@ -123,7 +123,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
       settle: (error): void => {
         settled.push(error);
       },
@@ -141,7 +141,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', title: 't', body: '' },
+      draft: { severity: 'issue', blocking: false, title: 't', body: '' },
       settle: (error): void => {
         settled.push(error);
       },
@@ -159,7 +159,7 @@ describe('UraController', () => {
     await ura.create({
       anchor: { kind: 'change' },
       headSha: 'a'.repeat(40),
-      draft: { severity: 'issue', title: 'Handle it', body: 'b' },
+      draft: { severity: 'issue', blocking: true, title: 'Handle it', body: 'b' },
       suggestedPatch: 'patch',
       settle: (error): void => {
         settled.push(error);
@@ -170,6 +170,7 @@ describe('UraController', () => {
     expect(invoked[0]?.[0]).toBe('ura:create');
     expect(invoked[0]?.[1]).toMatchObject({
       sessionId: 's1',
+      blocking: true,
       title: 'Handle it',
       suggestedPatch: 'patch',
     });

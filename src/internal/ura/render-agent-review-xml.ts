@@ -18,8 +18,8 @@ export function renderAgentReviewXml(artifact: UraArtifact): string {
     ...changeElement(review).map((line) => indent + line),
     `${indent}<counts${attributes(
       Object.fromEntries(
-        uraSeverities.map((severity) => {
-          return [severity, review.counts[severity]];
+        [...uraSeverities, 'blocking' as const].map((key) => {
+          return [key, review.counts[key]];
         }),
       ),
     )}/>`,
@@ -104,7 +104,7 @@ function itemElement(item: AgentReviewItem): string[] {
     );
   }
   return [
-    `<item${attributes({ id: item.id, severity: item.severity, origin: origin.kind, ...provenanceOf(origin) })}>`,
+    `<item${attributes({ id: item.id, severity: item.severity, blocking: String(item.blocking), origin: origin.kind, ...provenanceOf(origin) })}>`,
     ...children.map((line) => indent + line),
     '</item>',
   ];

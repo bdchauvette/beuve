@@ -31,7 +31,8 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
   const corrupt = (reason: string): Result<UraItem, CorruptRow> => {
     return err({ kind: 'corrupt-row', table: 'ura_items', id: String(row['id']), reason });
   };
-  const { id, session_id, head_sha, severity, title, body, patch, created_at, updated_at } = row;
+  const { id, session_id, head_sha, severity, blocking, title, body, patch } = row;
+  const { created_at, updated_at } = row;
   if (!isUuid(id) || !isUuid(session_id)) {
     return corrupt('id or session_id is not a UUID');
   }
@@ -40,6 +41,9 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
   }
   if (typeof severity !== 'string' || !(uraSeverities as readonly string[]).includes(severity)) {
     return corrupt('severity is unknown');
+  }
+  if (blocking !== 0 && blocking !== 1) {
+    return corrupt('blocking is not 0 or 1');
   }
   if (typeof title !== 'string' || typeof body !== 'string') {
     return corrupt('title or body is not text');
@@ -62,6 +66,7 @@ export function uraItemFromRow(row: Row): Result<UraItem, CorruptRow> {
     headSha: head_sha,
     anchor,
     severity: severity as UraSeverity,
+    blocking: blocking === 1,
     origin,
     title,
     body,

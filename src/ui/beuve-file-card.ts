@@ -442,11 +442,11 @@ export class BeuveFileCard extends LitElement {
         color: var(--beuve-accent);
       }
 
-      .ura-marker.blocker {
+      .ura-marker.blocking {
         border-inline-start-color: var(--beuve-danger);
       }
 
-      .ura-marker.blocker .ura-kind {
+      .ura-marker.blocking .ura-kind {
         color: var(--beuve-danger);
       }
 
@@ -2175,6 +2175,7 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
   const labels = describeUraItem(item);
   const marker = document.createElement('div');
   marker.className = `ura-marker ${item.severity}`;
+  marker.classList.toggle('blocking', item.blocking);
   marker.dataset['action'] = 'note';
   marker.dataset['uraItemId'] = item.id;
   marker.title = `Staged in the review dock: ${revealFormatControls(labels.anchor)}, from ${labels.origin}. Double-click to edit.`;
@@ -2182,7 +2183,7 @@ function uraMarkerElement(item: UraItemView, outside: string | undefined): HTMLE
   kind.className = 'ura-kind';
   kind.textContent = `${labels.emoji} Staged · ${labels.severity}`;
   if (item.suggestedPatch !== undefined) {
-    kind.textContent += ' · suggestion';
+    kind.textContent += ' · patch';
   }
   kind.prepend(createUraNoteIcon());
   const title = document.createElement('span');

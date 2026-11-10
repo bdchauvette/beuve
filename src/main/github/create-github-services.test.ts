@@ -388,7 +388,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       await ura.create({
         sessionId,
         anchor: { kind: 'lines', path: 'app.ts', startLine: 1, endLine: 1 },
-        severity: 'nit',
+        severity: 'nitpick',
         title: 'Trailing comment',
         body: 'Off the diff, says GitHub.',
       }),

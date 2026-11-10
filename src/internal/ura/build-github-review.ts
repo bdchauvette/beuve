@@ -3,7 +3,6 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 import { escapeMarkdownHtml } from './escape-markdown-html.ts';
 import { fenceCodeBlock } from './fence-code-block.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
-import { formatUraSeverity } from './format-ura-severity.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
 import type { PatchHunk, UraAnchor, UraItem } from './ura-item.ts';
@@ -124,9 +123,15 @@ function commentFrom(
   return { path, start_line: startLine, start_side: 'RIGHT', line: endLine, side: 'RIGHT', body };
 }
 
-/** The emoji and severity, then the title when there is one: `✨ **Praise:** Nice.` */
+/**
+ * The emoji and the Conventional Comments label with its decoration, then the title when there is
+ * one: `✨ **praise:** Nice.`, `⚠️ **issue (blocking):** Guard it.` (ADR 0131).
+ */
 function headline(item: UraItem, style: 'comment' | 'section'): string {
-  const label = formatUraSeverity(item.severity);
+  let label: string = item.severity;
+  if (item.blocking) {
+    label += ' (blocking)';
+  }
   const emoji = uraSeverityEmoji(item.severity);
   const title = escapeMarkdownHtml(item.title);
   if (style === 'section') {

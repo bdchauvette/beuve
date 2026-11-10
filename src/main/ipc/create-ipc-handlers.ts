@@ -93,6 +93,7 @@ import type {
   UraItemView,
   UraListView,
   UraOrderView,
+  UraSeverityView,
   UraStagedView,
   UraVerdictStateView,
 } from '#contract/ipc-contract.ts';
@@ -349,7 +350,21 @@ const commitSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
 
 const repositoryPath = z.string().min(1).max(4096);
 const line = z.number().int().min(1).max(10_000_000);
-const uraSeverity = z.enum(['blocker', 'issue', 'question', 'nit', 'praise']);
+const uraSeverity = z.enum([
+  'issue',
+  'suggestion',
+  'question',
+  'nitpick',
+  'thought',
+  'smell',
+  'praise',
+  'note',
+  'todo',
+  'chore',
+  'typo',
+  'polish',
+  'quibble',
+] satisfies readonly UraSeverityView[]);
 const uraVerdict = z.enum(['approve', 'request-changes', 'comment']);
 const uraTitle = z.string().max(1000);
 const uraBody = z.string().max(100_000);
@@ -375,6 +390,7 @@ const uraCreateRequest = z.strictObject({
   headSha: commitSha.optional(),
   anchor: uraAnchor,
   severity: uraSeverity,
+  blocking: z.boolean().optional(),
   title: uraTitle,
   body: uraBody,
   suggestedPatch: uraPatch.optional(),
@@ -384,6 +400,7 @@ const uraCreateRequest = z.strictObject({
 const uraUpdateRequest = z.strictObject({
   itemId: uuid,
   severity: uraSeverity.optional(),
+  blocking: z.boolean().optional(),
   title: uraTitle.optional(),
   body: uraBody.optional(),
   suggestedPatch: uraPatch.optional(),
@@ -884,10 +901,11 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { headSha, suggestedPatch, origin, ...required } = parsed.data;
+      const { headSha, blocking, suggestedPatch, origin, ...required } = parsed.data;
       return services.ura.create({
         ...required,
         ...(headSha !== undefined && { headSha }),
+        ...(blocking !== undefined && { blocking }),
         ...(origin !== undefined && { origin }),
         ...(suggestedPatch !== undefined && { suggestedPatch }),
       });
@@ -897,10 +915,11 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { itemId, severity, title, body, suggestedPatch } = parsed.data;
+      const { itemId, severity, blocking, title, body, suggestedPatch } = parsed.data;
       return services.ura.update({
         itemId,
         ...(severity !== undefined && { severity }),
+        ...(blocking !== undefined && { blocking }),
         ...(title !== undefined && { title }),
         ...(body !== undefined && { body }),
         ...(suggestedPatch !== undefined && { suggestedPatch }),

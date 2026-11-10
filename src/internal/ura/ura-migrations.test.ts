@@ -28,6 +28,7 @@ describe('uraMigrations', () => {
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
       { ...valid(), status: "'withdrawn'" },
+      { ...valid(), blocking: '1' },
       { ...valid(), status: "'addressed'", addressed_sha: `'${later()}'`, addressed_by: "'agent'" },
     ];
     for (const [index, row] of rows.entries()) {
@@ -40,6 +41,9 @@ describe('uraMigrations', () => {
     ['position', '-1'],
     ['head_sha', "'ABC'"],
     ['severity', "'major'"],
+    ['severity', "'blocker'"],
+    ['severity', "'nit'"],
+    ['blocking', '2'],
     ['anchor_kind', "'hunk'"],
     ['line_start', '0'],
     ['line_end', '0'],
@@ -166,6 +170,7 @@ function valid(): Readonly<Record<string, string>> {
     line_start: '1',
     line_end: '2',
     severity: "'issue'",
+    blocking: '0',
     origin_kind: "'human'",
     title: "'t'",
     body: "''",

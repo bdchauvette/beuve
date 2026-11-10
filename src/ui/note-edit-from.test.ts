@@ -9,14 +9,20 @@ describe('noteEditFrom', () => {
   test('starts from the note’s current lines and its text', ({ expect }) => {
     const moved = { kind: 'lines', path: 'src/b.ts', startLine: 9, endLine: 11 } as const;
     const item = createUraItemView({
-      severity: 'nit',
+      severity: 'nitpick',
+      blocking: true,
       body: 'Use `at(-1)`.',
       placement: { kind: 'current', anchor: moved },
     });
     expect(noteEditFrom(item)).toStrictEqual({
       itemId: item.id,
       anchor: moved,
-      draft: { severity: 'nit', title: 'Handle the empty list', body: 'Use `at(-1)`.' },
+      draft: {
+        severity: 'nitpick',
+        blocking: true,
+        title: 'Handle the empty list',
+        body: 'Use `at(-1)`.',
+      },
     });
   });
 

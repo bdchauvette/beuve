@@ -31,7 +31,7 @@ export interface UraArtifactInput {
 /**
  * Compiles the staged items into the artifact every exporter reads: each item is placed on the
  * summary's head (re-anchored if it was written against an older one) and the verdict is derived
- * from the severities unless the reviewer chose one. Approving over a staged blocker is refused.
+ * from the labels unless the reviewer chose one. Approving over a staged blocking note is refused.
  */
 export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact, UraArtifactError> {
   const { summary } = input;
@@ -57,10 +57,10 @@ export function compileUraArtifact(input: UraArtifactInput): Result<UraArtifact,
     }
     return reanchorUraAnchor(item.anchor, mapping.files);
   };
-  const derived = deriveUraVerdict(staged.map((item) => item.severity));
-  const blockers = staged.filter((item) => item.severity === 'blocker').map((item) => item.id);
-  if (input.verdict === 'approve' && blockers.length > 0) {
-    return err({ kind: 'approve-with-blockers', itemIds: blockers });
+  const derived = deriveUraVerdict(staged);
+  const blocking = staged.filter((item) => item.blocking).map((item) => item.id);
+  if (input.verdict === 'approve' && blocking.length > 0) {
+    return err({ kind: 'approve-over-blocking', itemIds: blocking });
   }
   let verdict: UraArtifactVerdict = { value: derived, source: 'derived' };
   if (input.verdict !== undefined && input.verdict !== derived) {

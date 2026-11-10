@@ -14,9 +14,9 @@ describe('renderAgentReviewXml', () => {
         <change scope="interdiff" base-sha="cccccccccccccccccccccccccccccccccccccccc" head-sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" from-head-sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
           <repository kind="github-pull-request" path="/work/beuve" base-ref="main" owner="acme" repo="widgets" number="42"/>
         </change>
-        <counts blocker="1" issue="1" question="1" nit="1" praise="1"/>
+        <counts issue="2" suggestion="0" question="1" nitpick="1" thought="0" smell="0" praise="1" note="0" todo="0" chore="0" typo="0" polish="0" quibble="0" blocking="1"/>
         <items>
-          <item id="00000000-0000-4000-8000-000000000001" severity="blocker" origin="human">
+          <item id="00000000-0000-4000-8000-000000000001" severity="issue" blocking="true" origin="human">
             <anchor kind="lines" path="src/app.ts" start-line="10" end-line="12"/>
             <title>Guard against an empty list</title>
             <body><![CDATA[Calling \`first()\` on \`[]\` throws.]]></body>
@@ -30,12 +30,12 @@ describe('renderAgentReviewXml', () => {
        use(first);
       ]]></suggested-patch>
           </item>
-          <item id="00000000-0000-4000-8000-000000000002" severity="issue" origin="chat-answer" message-id="msg-1" finding="0">
+          <item id="00000000-0000-4000-8000-000000000002" severity="issue" blocking="false" origin="chat-answer" message-id="msg-1" finding="0">
             <anchor kind="lines" path="src/parse.ts" start-line="30" end-line="30"/>
             <title>parseAll never checks for an empty list</title>
             <body/>
           </item>
-          <item id="00000000-0000-4000-8000-000000000003" severity="question" origin="human">
+          <item id="00000000-0000-4000-8000-000000000003" severity="question" blocking="false" origin="human">
             <anchor kind="file" path="docs/notes.md"/>
             <title>Is this file meant to ship?</title>
             <body><![CDATA[It reads like scratch notes.]]></body>
@@ -46,12 +46,12 @@ describe('renderAgentReviewXml', () => {
        Notes
       ]]></suggested-patch>
           </item>
-          <item id="00000000-0000-4000-8000-000000000004" severity="praise" origin="human">
+          <item id="00000000-0000-4000-8000-000000000004" severity="praise" blocking="false" origin="human">
             <anchor kind="change"/>
             <title>Clear commit history</title>
             <body/>
           </item>
-          <item id="00000000-0000-4000-8000-000000000005" severity="nit" origin="chat-answer" message-id="33333333-3333-4333-8333-333333333333" finding="0">
+          <item id="00000000-0000-4000-8000-000000000005" severity="nitpick" blocking="false" origin="chat-answer" message-id="33333333-3333-4333-8333-333333333333" finding="0">
             <outdated reason="lines-changed" written-against-sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
               <original-anchor kind="lines" path="src/app.ts" start-line="10" end-line="12"/>
             </outdated>

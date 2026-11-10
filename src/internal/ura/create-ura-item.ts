@@ -19,6 +19,7 @@ export interface UraItemDraft {
   readonly headSha: CommitSha;
   readonly anchor: UraAnchor;
   readonly severity: UraSeverity;
+  readonly blocking: boolean;
   readonly origin: UraOrigin;
   readonly title: string;
   readonly body: string;
@@ -35,6 +36,7 @@ export function createUraItem(draft: UraItemDraft, deps: UraDeps): Result<UraIte
     headSha: draft.headSha,
     anchor: draft.anchor,
     severity: draft.severity,
+    blocking: draft.blocking,
     origin: draft.origin,
     title: draft.title.trim(),
     body: draft.body,

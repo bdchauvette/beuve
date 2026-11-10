@@ -8,7 +8,7 @@ import { uraItemRowFrom } from './ura-item-row-from.ts';
 import type { UraItem, UraStoreError } from './ura-item.ts';
 
 /**
- * Persists an item that `editUraItem` or `transitionUraItem` produced: its severity, text,
+ * Persists an item that `editUraItem` or `transitionUraItem` produced: its label, blocking, text,
  * patch, status and `updatedAt`. Its identity, head, anchor, origin and position are not touched.
  */
 export function updateUraItem(
@@ -17,7 +17,7 @@ export function updateUraItem(
 ): Result<void, Extract<UraStoreError, { kind: 'item-not-found' }>> {
   const statement = db.prepare(
     `UPDATE ura_items
-        SET severity = :severity, title = :title, body = :body, patch = :patch,
+        SET severity = :severity, blocking = :blocking, title = :title, body = :body, patch = :patch,
             status = :status, addressed_sha = :addressed_sha, addressed_by = :addressed_by,
             updated_at = :updated_at
       WHERE id = :id AND session_id = :session_id;`,

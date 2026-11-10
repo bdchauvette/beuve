@@ -26,7 +26,7 @@ describe('buildGithubReview', () => {
       {
         "body": "### Not attached to a line
 
-      #### ❓ Question: Is this file meant to ship?
+      #### ❓ question: Is this file meant to ship?
 
       On \`docs/notes.md\`.
 
@@ -40,11 +40,11 @@ describe('buildGithubReview', () => {
        Notes
       \`\`\`
 
-      #### ✨ Praise: Clear commit history
+      #### ✨ praise: Clear commit history
 
       On the whole change.
 
-      #### ⛏️ Nit: Prefer &lt;const> & "readonly"
+      #### ⛏️ nitpick: Prefer &lt;const> & "readonly"
 
       \`src/app.ts:10-12\` (outdated: the lines changed since aaaaaaaaaaaa)
 
@@ -52,7 +52,7 @@ describe('buildGithubReview', () => {
       A CDATA terminator: ]]> stays text.",
         "comments": [
           {
-            "body": "🛑 **Blocker:** Guard against an empty list
+            "body": "⚠️ **issue (blocking):** Guard against an empty list
 
       Calling \`first()\` on \`[]\` throws.
 
@@ -69,7 +69,7 @@ describe('buildGithubReview', () => {
             "start_side": "RIGHT",
           },
           {
-            "body": "⚠️ **Issue:** parseAll never checks for an empty list",
+            "body": "⚠️ **issue:** parseAll never checks for an empty list",
             "line": 30,
             "path": "src/parse.ts",
             "side": "RIGHT",
@@ -184,11 +184,17 @@ describe('buildGithubReview', () => {
     expect(buildGithubReview(artifact).body).toBe('Comments');
   });
 
-  test('leads with the severity emoji and leaves out a missing title', ({ expect }) => {
+  test('leads with the emoji and the Conventional Comments label, leaving out a missing title', ({
+    expect,
+  }) => {
     const { comments } = buildGithubReview(withItem({ severity: 'praise', title: '' }));
-    expect(comments[0]?.body.startsWith('✨ **Praise**\n\n')).toBe(true);
-    const titled = buildGithubReview(withItem({ severity: 'blocker' }));
-    expect(titled.comments[0]?.body.startsWith('🛑 **Blocker:** Handle the empty list')).toBe(true);
+    expect(comments[0]?.body.startsWith('✨ **praise**\n\n')).toBe(true);
+    const titled = buildGithubReview(withItem({ severity: 'suggestion', blocking: true }));
+    expect(
+      titled.comments[0]?.body.startsWith('💡 **suggestion (blocking):** Handle the empty list'),
+    ).toBe(true);
+    const untitled = buildGithubReview(withItem({ severity: 'typo', blocking: true, title: '' }));
+    expect(untitled.comments[0]?.body.startsWith('🔤 **typo (blocking)**\n\n')).toBe(true);
   });
 
   test("puts the reviewer's own summary above the items", ({ expect }) => {

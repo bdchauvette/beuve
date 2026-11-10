@@ -1,6 +1,6 @@
 # 0100. Review notes: optional titles, a severity emoji and a note icon
 
-- Status: Accepted
+- Status: Accepted; the severities and their emoji are superseded by [0131](0131-conventional-comments-labels-and-a-blocking-decoration.md)
 - Date: 2026-11-02
 
 ## Context

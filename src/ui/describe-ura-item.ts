@@ -5,12 +5,14 @@ import type {
   UraOutdatedReasonView,
   UraSeverityView,
 } from '#contract/ipc-contract.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
 /** How the dock and the diff markers label one URA item. */
 export interface UraItemLabels {
+  /** The label, with ` (blocking)` when the note blocks: `Issue (blocking)`. */
   readonly severity: string;
-  /** The severity's emoji, shown beside its name. */
+  /** The label's emoji, shown beside its name, after 🛑 when the note blocks. */
   readonly emoji: string;
   /** `src/a.ts:12-14`, where the item sits on the current head (or sat, when outdated). */
   readonly anchor: string;
@@ -20,11 +22,19 @@ export interface UraItemLabels {
 }
 
 const severities: Readonly<Record<UraSeverityView, string>> = {
-  blocker: 'Blocker',
   issue: 'Issue',
+  suggestion: 'Suggestion',
   question: 'Question',
-  nit: 'Nit',
+  nitpick: 'Nitpick',
+  thought: 'Thought',
+  smell: 'Smell',
   praise: 'Praise',
+  note: 'Note',
+  todo: 'Todo',
+  chore: 'Chore',
+  typo: 'Typo',
+  polish: 'Polish',
+  quibble: 'Quibble',
 };
 
 const origins: Readonly<Record<UraOriginView['kind'], string>> = {
@@ -38,12 +48,18 @@ const outdatedReasons: Readonly<Record<UraOutdatedReasonView, string>> = {
   'no-line-mapping': 'outdated: its head is gone',
 };
 
-/** Labels for an item: severity, anchor on the current head, origin and outdated reason. */
+/** Labels for an item: label and blocking, anchor on the current head, origin and outdated reason. */
 export function describeUraItem(item: UraItemView): UraItemLabels {
   const { placement } = item;
+  let severity = severities[item.severity];
+  let emoji = uraSeverityEmoji(item.severity);
+  if (item.blocking) {
+    severity += ' (blocking)';
+    emoji = `${uraBlockingEmoji} ${emoji}`;
+  }
   return {
-    severity: severities[item.severity],
-    emoji: uraSeverityEmoji(item.severity),
+    severity,
+    emoji,
     anchor: formatAnchor(currentAnchor(item)),
     origin: originOf(item),
     ...(placement.kind === 'outdated' && { outdated: outdatedReasons[placement.reason] }),

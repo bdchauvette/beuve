@@ -23,12 +23,13 @@ export function insertUraItem(
   try {
     db.prepare(
       `INSERT INTO ura_items (id, session_id, position, head_sha, anchor_kind, path, line_start,
-                              line_end, severity, origin_kind, chat_message_id, chat_finding,
+                              line_end, severity, blocking, origin_kind, chat_message_id, chat_finding,
                               title, body, patch, status, addressed_sha, addressed_by,
                               created_at, updated_at)
        VALUES (:id, :session_id,
                (SELECT coalesce(max(position) + 1, 0) FROM ura_items WHERE session_id = :session_id),
-               :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :origin_kind,
+               :head_sha, :anchor_kind, :path, :line_start, :line_end, :severity, :blocking,
+               :origin_kind,
                :chat_message_id, :chat_finding, :title, :body, :patch, :status,
                :addressed_sha, :addressed_by, :created_at, :updated_at);`,
     ).run(uraItemRowFrom(item));

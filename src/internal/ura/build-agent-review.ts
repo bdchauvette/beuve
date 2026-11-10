@@ -1,4 +1,5 @@
 import { countUraSeverities } from './count-ura-severities.ts';
+import type { UraCounts } from './count-ura-severities.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
 import type { UraAnchor, UraOrigin } from './ura-item.ts';
 import type { UraSeverity } from './ura-severities.ts';
@@ -23,7 +24,10 @@ export type AgentReviewOrigin =
 
 export interface AgentReviewItem {
   readonly id: string;
+  /** The Conventional Comments label (ADR 0131). */
   readonly severity: UraSeverity;
+  /** The `(blocking)` decoration: the author must resolve the item before merging. */
+  readonly blocking: boolean;
   readonly origin: AgentReviewOrigin;
   /** Where the item applies on `change.headSha`; absent when it is outdated. */
   readonly anchor?: AgentReviewAnchor;
@@ -81,7 +85,8 @@ export interface AgentReview {
   };
   readonly verdict: UraVerdict;
   readonly verdictSource: 'derived' | 'chosen';
-  readonly counts: Readonly<Record<UraSeverity, number>>;
+  /** Items per label, and how many of them are blocking. */
+  readonly counts: Readonly<UraCounts>;
   readonly items: readonly AgentReviewItem[];
 }
 
@@ -109,6 +114,7 @@ function itemFrom({ item, placement }: UraEntry): AgentReviewItem {
   return {
     id: item.id,
     severity: item.severity,
+    blocking: item.blocking,
     origin: originFrom(item.origin),
     ...placementFrom({ item, placement }),
     title: item.title,

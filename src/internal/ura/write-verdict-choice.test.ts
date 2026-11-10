@@ -12,8 +12,8 @@ describe('writeVerdictChoice', () => {
     expect(readVerdictChoice(db, session())).toStrictEqual({ chosen: 'comment', headSha: head() });
     writeVerdictChoice(db, session(), { chosen: 'approve', headSha: head() });
     expect(readVerdictChoice(db, session())).toStrictEqual({ chosen: 'approve', headSha: head() });
-    writeVerdictChoice(db, session(), { cleared: 'blocker-staged' });
-    expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'blocker-staged' });
+    writeVerdictChoice(db, session(), { cleared: 'blocking-staged' });
+    expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'blocking-staged' });
     writeVerdictChoice(db, session(), { cleared: 'head-moved' });
     expect(readVerdictChoice(db, session())).toStrictEqual({ cleared: 'head-moved' });
     writeVerdictChoice(db, session(), {});
@@ -39,7 +39,7 @@ describe('writeVerdictChoice', () => {
       db.exec(insertChoice({ verdict: "'ship-it'", cleared: 'NULL' }));
     }).toThrow(/CHECK/u);
     expect(() => {
-      db.exec(insertChoice({ verdict: "'approve'", cleared: "'blocker-staged'" }));
+      db.exec(insertChoice({ verdict: "'approve'", cleared: "'blocking-staged'" }));
     }).toThrow(/CHECK/u);
     expect(() => {
       db.exec(insertChoice({ verdict: "'approve'", cleared: 'NULL', headSha: 'NULL' }));

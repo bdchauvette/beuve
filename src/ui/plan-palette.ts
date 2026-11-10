@@ -13,6 +13,8 @@ import type { PaletteGroup } from './palette-prefixes.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
 import type { OpenQuery } from './parse-open-query.ts';
 import { shortenPath } from './shorten-path.ts';
+import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
+import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 
 /** The palette's sources, as `beuve-app` holds them. */
 export interface PaletteSources {
@@ -359,11 +361,20 @@ function reviewCandidates(items: readonly UraItemView[]): Candidate[] {
           id: `ura:${item.id}`,
           group: 'review',
           title: noteTitle(item),
-          detail: `staged ${item.severity}`,
+          detail: stagedDetail(item),
           action: { kind: 'ura-item', itemId: item.id },
         },
       };
     });
+}
+
+/** `staged ⚠️ issue`, after 🛑 and with `(blocking)` when the note blocks. */
+function stagedDetail(item: UraItemView): string {
+  const emoji = uraSeverityEmoji(item.severity);
+  if (item.blocking) {
+    return `staged ${uraBlockingEmoji} ${emoji} ${item.severity} (blocking)`;
+  }
+  return `staged ${emoji} ${item.severity}`;
 }
 
 function noteTitle(item: UraItemView): string {

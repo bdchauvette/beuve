@@ -1113,6 +1113,7 @@ export class BeuveDiffStream extends LitElement {
       anchor,
       placement: { kind: 'current', anchor },
       severity: 'issue',
+      blocking: false,
       origin: { kind: 'human' },
       title: '',
       body: '',
@@ -1153,6 +1154,7 @@ export class BeuveDiffStream extends LitElement {
     const detail: UpdateUraItemRequest = {
       itemId: edit.itemId,
       severity: draft.severity,
+      blocking: draft.blocking,
       title: draft.title,
       body: draft.body,
     };

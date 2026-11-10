@@ -36,11 +36,11 @@ export function uraFailure(
         message: 'the dock is out of date: the order must name every item once',
       });
     }
-    case 'approve-with-blockers': {
+    case 'approve-over-blocking': {
       const count = error.itemIds.length;
       return err({
         code: 'refused',
-        message: `Approving is refused while ${blockersAre(count)} staged.`,
+        message: `Approving is refused while ${blockingNotesAre(count)} staged.`,
       });
     }
     case 'duplicate-item':
@@ -52,9 +52,9 @@ export function uraFailure(
   }
 }
 
-function blockersAre(count: number): string {
+function blockingNotesAre(count: number): string {
   if (count === 1) {
-    return '1 blocker is';
+    return '1 blocking note is';
   }
-  return `${String(count)} blockers are`;
+  return `${String(count)} blocking notes are`;
 }
