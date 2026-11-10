@@ -17,6 +17,7 @@ describe('stageNoteProposal', () => {
         headSha: source().headSha,
         anchor: { kind: 'lines', path: 'src/a.ts', startLine: 4, endLine: 6 },
         severity: 'question',
+        blocking: true,
         origin: { kind: 'chat-answer', messageId: testUraIds.messageId, proposal: 1 },
         title: '',
         body: proposal().body,
@@ -25,9 +26,9 @@ describe('stageNoteProposal', () => {
     });
   });
 
-  test('takes the severity the reviewer picked over the proposed label', ({ expect, deps }) => {
-    const chosen = stageNoteProposal(proposal(), source(), { deps, severity: 'nit' });
-    expect(chosen.ok && chosen.value.severity).toBe('nit');
+  test('takes the label the reviewer picked over the proposed one', ({ expect, deps }) => {
+    const chosen = stageNoteProposal(proposal(), source(), { deps, severity: 'nitpick' });
+    expect(chosen.ok && chosen.value.severity).toBe('nitpick');
   });
 });
 
@@ -37,6 +38,7 @@ function proposal(): StageableNoteProposal {
     startLine: 4,
     endLine: 6,
     label: 'question',
+    blocking: true,
     title: '',
     body: 'Why does this retry forever?',
   };

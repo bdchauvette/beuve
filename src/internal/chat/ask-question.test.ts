@@ -137,21 +137,21 @@ describe('askQuestion', () => {
     const seen: ChatModelRequest[] = [];
     const answer = [
       'Two notes, see [[src/a.ts:12]].',
-      ':::note issue [[src/a.ts:12]] Empty input',
+      ':::note issue (blocking) [[src/a.ts:12]] Empty input',
       'Returns `undefined` for [[src/a.ts:12]].',
       ':::',
-      ':::note nit [[src/c.ts:1]] Elsewhere',
+      ':::note nitpick [[src/c.ts:1]] Elsewhere',
       'Not in the diff.',
       ':::',
       'Also [[src/b.ts:2]] and [[src/a.ts:12]].',
     ].join('\n');
-    const proposals = { labels: ['issue', 'nit'], maxProposals: 5 };
+    const proposals = { labels: ['issue', 'nitpick'], maxProposals: 5 };
     const result = await askQuestion(createChatQuestion({ proposals }), {
       model: fakeModel(ok(answer), seen),
       signal,
     });
-    expect(seen[0]?.system).toContain(':::note <label> [[path:start-end]]');
-    expect(seen[0]?.system).toContain('issue, nit (most urgent first)');
+    expect(seen[0]?.system).toContain(':::note <label> [(blocking)] [[path:start-end]]');
+    expect(seen[0]?.system).toContain('issue, nitpick; pick the one that fits');
     expect(result).toMatchObject({
       ok: true,
       value: {
@@ -166,6 +166,7 @@ describe('askQuestion', () => {
               startLine: 12,
               endLine: 12,
               label: 'issue',
+              blocking: true,
               title: 'Empty input',
               body: 'Returns `undefined` for [[src/a.ts:12]].',
             },

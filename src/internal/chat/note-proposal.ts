@@ -9,6 +9,8 @@ export interface NoteProposal {
   readonly startLine: number;
   readonly endLine: number;
   readonly label: string;
+  /** The Conventional Comments `(blocking)` decoration (ADR 0131): the merge waits on it. */
+  readonly blocking: boolean;
   /** One line, at most 200 characters; may be empty when the body says it all. */
   readonly title: string;
   /** Markdown from the model; untrusted. */
@@ -25,7 +27,7 @@ export type ProposalDropReason =
 
 /** What main offers the model for proposing notes (ADR 0132). */
 export interface ProposalRules {
-  /** The labels a note may carry, most urgent first: the URA's, which main passes in. */
+  /** The labels a note may carry, in the order to offer them: the URA's, which main passes in. */
   readonly labels: readonly string[];
   /** Proposals beyond this many in one answer are dropped. */
   readonly maxProposals: number;

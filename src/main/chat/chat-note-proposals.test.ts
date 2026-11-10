@@ -29,10 +29,10 @@ describe(
       );
       const done = await settled(asked.answer.id);
       expect(claude.calls()[0]?.args.join('\n')).toContain(
-        ':::note <label> [[path:start-end]] <optional one-line title>',
+        ':::note <label> [(blocking)] [[path:start-end]] <optional one-line title>',
       );
       expect(claude.calls()[0]?.args.join('\n')).toContain(
-        `${uraSeverities.join(', ')} (most urgent first)`,
+        `${uraSeverities.join(', ')}; pick the one that fits`,
       );
       expect(done).toMatchObject({
         status: 'done',
@@ -48,6 +48,7 @@ describe(
             startLine: 2,
             endLine: 2,
             label: 'question',
+            blocking: true,
             title: 'Why a constant?',
             body: 'Should this be computed?',
           },
@@ -64,6 +65,7 @@ describe(
         created: true,
         item: {
           severity: 'question',
+          blocking: true,
           origin: { kind: 'chat-answer', messageId: asked.answer.id, proposal: 0 },
           anchor: { kind: 'lines', path: 'feature.rs', startLine: 2, endLine: 2 },
           headSha,
@@ -82,7 +84,7 @@ describe(
         await services.ura.stageNoteProposal({
           messageId: asked.answer.id,
           proposal: 0,
-          severity: 'nit',
+          severity: 'nitpick',
         }),
       );
       expect(restaged).toMatchObject({
@@ -106,9 +108,9 @@ describe(
 function answerChunks(): string[] {
   return [
     'Two notes on [[feature.rs:1-2]].\n\n',
-    ':::note question [[feature.rs:2]] Why a constant?\n',
+    ':::note question (blocking) [[feature.rs:2]] Why a constant?\n',
     'Should this be computed?\n:::\n',
-    ':::note nit [[app.rs:2]] Not in the diff\nIt is unchanged.\n:::\n',
+    ':::note nitpick [[app.rs:2]] Not in the diff\nIt is unchanged.\n:::\n',
     'That is all.',
   ];
 }

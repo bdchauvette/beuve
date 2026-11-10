@@ -28,7 +28,15 @@ function seed(db: DatabaseSync): void {
 }
 
 function storedNote(): NoteProposal {
-  return { path: 'a.ts', startLine: 2, endLine: 3, label: 'issue', title: 'T', body: '' };
+  return {
+    path: 'a.ts',
+    startLine: 2,
+    endLine: 3,
+    label: 'issue',
+    blocking: false,
+    title: 'T',
+    body: '',
+  };
 }
 
 function answer(db: DatabaseSync): ChatMessage | undefined {
@@ -79,7 +87,15 @@ describe('updateChatAnswer', () => {
 
   test('stores proposed notes, kept and dropped, and reads them back', ({ expect, db }) => {
     seed(db);
-    const note = { path: 'a.ts', startLine: 2, endLine: 3, label: 'nit', title: '', body: 'B' };
+    const note = {
+      path: 'a.ts',
+      startLine: 2,
+      endLine: 3,
+      label: 'nitpick',
+      blocking: true,
+      title: '',
+      body: 'B',
+    };
     const parts = [
       { kind: 'text', id: 'p1', text: 'See below.' },
       { kind: 'proposal', id: 'p2', proposal: 0, note },

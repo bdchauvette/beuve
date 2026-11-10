@@ -11,6 +11,7 @@ function block(overrides: Partial<Extract<ProposalSegment, { kind: 'block' }>>):
   return {
     kind: 'block',
     label: 'issue',
+    blocking: false,
     lines: { path: 'src/a.ts', startLine: 12, endLine: 12 },
     title: 'Empty input',
     body: 'An empty string yields `undefined`.',
@@ -19,7 +20,7 @@ function block(overrides: Partial<Extract<ProposalSegment, { kind: 'block' }>>):
 }
 
 function rules(maxProposals = 10): ProposalRules {
-  return { labels: ['blocker', 'issue', 'nit'], maxProposals };
+  return { labels: ['issue', 'nitpick'], maxProposals };
 }
 
 describe('validateNoteProposals', () => {
@@ -32,7 +33,7 @@ describe('validateNoteProposals', () => {
         block({ lines: { path: '/work/repo/src/a.ts', startLine: 8, endLine: 11 } }),
         block({ lines: { path: 'src/a.ts', startLine: 1, endLine: 3 } }),
         block({ lines: { path: 'src/elsewhere.ts', startLine: 1, endLine: 1 } }),
-        block({ label: 'praise' }),
+        block({ label: 'praise', blocking: true }),
         block({ title: '', body: '' }),
         { kind: 'malformed' },
         block({
@@ -52,6 +53,7 @@ describe('validateNoteProposals', () => {
           startLine: 10,
           endLine: 11,
           label: 'issue',
+          blocking: false,
           title: 'Empty input',
           body: 'An empty string yields `undefined`.',
         },
@@ -68,6 +70,7 @@ describe('validateNoteProposals', () => {
           startLine: 2,
           endLine: 2,
           label: 'issue',
+          blocking: false,
           title: 'Second line',
           body: 'An empty string yields `undefined`.',
         },

@@ -10,6 +10,8 @@ export interface StageableNoteProposal {
   readonly startLine: number;
   readonly endLine: number;
   readonly label: UraSeverity;
+  /** The `(blocking)` decoration the answer wrote (ADR 0131). */
+  readonly blocking: boolean;
   readonly title: string;
   readonly body: string;
 }
@@ -32,8 +34,9 @@ export interface NoteProposalStaging {
 
 /**
  * Turns a note an answer proposed, which the reviewer staged, into an item on its lines with a
- * `chat-answer` origin naming the answer and the proposal. The proposed label is the severity
- * unless the reviewer picked another; the model stages nothing itself.
+ * `chat-answer` origin naming the answer and the proposal. The proposed label is the label unless
+ * the reviewer picked another, and the note blocks when the answer wrote `(blocking)`, which its
+ * card showed before the click; the model stages nothing itself.
  */
 export function stageNoteProposal(
   proposal: StageableNoteProposal,
@@ -51,6 +54,7 @@ export function stageNoteProposal(
         endLine: proposal.endLine,
       },
       severity,
+      blocking: proposal.blocking,
       origin: { kind: 'chat-answer', messageId: source.messageId, proposal: source.proposal },
       title: proposal.title,
       body: proposal.body,

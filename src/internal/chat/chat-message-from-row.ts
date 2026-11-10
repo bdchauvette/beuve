@@ -188,6 +188,7 @@ const storedNote = z.object({
   startLine: line,
   endLine: line,
   label: text,
+  blocking: z.boolean(),
   title: z.string().max(200),
   body: z.string(),
 });

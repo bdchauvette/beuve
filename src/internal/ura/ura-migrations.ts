@@ -3,14 +3,13 @@ import type { Migration } from '#sqlite/run-migrations.ts';
 import { uraSeverities } from './ura-severities.ts';
 
 /**
- * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102, 0131; squashed until the first
+ * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102, 0131, 0132; squashed until the first
  * release).
  * `ura_items` references `sessions`, so main runs the session domain's migrations first. Table
  * CHECKs mirror the anchor, origin and status unions. `chat_message_id` deliberately has no foreign
  * key: the chat domain owns that table, and `/clear` must not delete staged items.
- * `ura-0003-proposed-notes` (ADR 0132) adds `chat_proposal`, the index of a note an answer
- * proposed, staged at most once per answer like a finding; it is a migration of its own, not an
- * edit of the initial one, so databases that already have `ura_items` gain the column.
+ * `chat_proposal` is the index of a note an answer proposed (ADR 0132), staged at most once per
+ * answer like a finding.
  */
 export const uraMigrations: readonly Migration[] = [
   {
@@ -31,6 +30,7 @@ export const uraMigrations: readonly Migration[] = [
           CHECK (origin_kind IN ('human', 'chat-answer')),
         chat_message_id TEXT,
         chat_finding INTEGER CHECK (chat_finding IS NULL OR chat_finding >= 0),
+        chat_proposal INTEGER CHECK (chat_proposal IS NULL OR chat_proposal >= 0),
         title TEXT NOT NULL CHECK (title = trim(title) AND length(title) <= 200),
         body TEXT NOT NULL,
         patch TEXT CHECK (patch IS NULL OR (patch <> '' AND anchor_kind <> 'change')),
@@ -51,10 +51,12 @@ export const uraMigrations: readonly Migration[] = [
           OR (anchor_kind = 'change' AND path IS NULL AND line_start IS NULL AND line_end IS NULL)
         ),
         CHECK (
-          (origin_kind = 'human' AND chat_message_id IS NULL AND chat_finding IS NULL)
+          (origin_kind = 'human' AND chat_message_id IS NULL AND chat_finding IS NULL
+            AND chat_proposal IS NULL)
           OR (origin_kind = 'chat-answer' AND chat_message_id IS NOT NULL
             AND trim(chat_message_id) <> ''
-            AND (chat_finding IS NULL OR anchor_kind = 'lines'))
+            AND (chat_finding IS NULL OR chat_proposal IS NULL)
+            AND ((chat_finding IS NULL AND chat_proposal IS NULL) OR anchor_kind = 'lines'))
         ),
         CHECK (
           (status = 'addressed') = (addressed_sha IS NOT NULL)
@@ -66,6 +68,8 @@ export const uraMigrations: readonly Migration[] = [
       CREATE INDEX ura_items_by_session ON ura_items (session_id, position);
       CREATE UNIQUE INDEX ura_items_by_chat_finding ON ura_items (chat_message_id, chat_finding)
         WHERE chat_finding IS NOT NULL;
+      CREATE UNIQUE INDEX ura_items_by_chat_proposal ON ura_items (chat_message_id, chat_proposal)
+        WHERE chat_proposal IS NOT NULL;
 
       CREATE TABLE ura_verdict_choices (
         session_id TEXT PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
@@ -92,18 +96,6 @@ export const uraMigrations: readonly Migration[] = [
       ) STRICT;
 
       CREATE INDEX ura_item_postings_by_session ON ura_item_postings (session_id, posted_at);
-    `,
-  },
-  {
-    id: 'ura-0003-proposed-notes',
-    up: `
-      ALTER TABLE ura_items ADD COLUMN chat_proposal INTEGER CHECK (
-        chat_proposal IS NULL
-        OR (chat_proposal >= 0 AND origin_kind = 'chat-answer' AND chat_finding IS NULL
-          AND anchor_kind = 'lines')
-      );
-      CREATE UNIQUE INDEX ura_items_by_chat_proposal ON ura_items (chat_message_id, chat_proposal)
-        WHERE chat_proposal IS NOT NULL;
     `,
   },
 ];

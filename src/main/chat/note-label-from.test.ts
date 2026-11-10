@@ -13,13 +13,21 @@ describe('noteLabelFrom', () => {
   });
 
   test('makes a stored proposal with a retired label read as dropped', ({ expect }) => {
-    const note = { path: 'a.rs', startLine: 1, endLine: 1, label: 'major', title: '', body: 'B' };
+    const note = {
+      path: 'a.rs',
+      startLine: 1,
+      endLine: 1,
+      label: 'major',
+      blocking: false,
+      title: '',
+      body: 'B',
+    };
     expect(chatPartViewFrom({ kind: 'proposal', id: 'p2', proposal: 0, note })).toStrictEqual({
       kind: 'dropped-proposal',
       id: 'p2',
       reason: 'unknown-label',
     });
-    const nit = { ...note, label: 'nit' };
+    const nit = { ...note, label: 'nitpick' };
     expect(chatPartViewFrom({ kind: 'proposal', id: 'p2', proposal: 0, note: nit })).toStrictEqual({
       kind: 'proposal',
       id: 'p2',
