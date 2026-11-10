@@ -60,13 +60,12 @@ export class BeuveUraComposer extends LitElement {
       }
 
       .where {
+        flex: 1;
+        min-inline-size: 0;
+        overflow-wrap: anywhere;
         font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
-      }
-
-      .spacer {
-        flex: 1;
       }
 
       input,
@@ -118,6 +117,10 @@ export class BeuveUraComposer extends LitElement {
 
       .error {
         color: var(--beuve-danger);
+      }
+
+      .row > .button {
+        flex: none;
       }
     `,
   ];
@@ -233,7 +236,6 @@ export class BeuveUraComposer extends LitElement {
       <div class="row">
         <span class="where">${pathText(this.where)}</span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
-        <span class="spacer"></span>
         <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>
           Cancel
         </button>

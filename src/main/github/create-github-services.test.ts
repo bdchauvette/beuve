@@ -334,7 +334,6 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       sessionId,
       headSha: firstHead,
       verdict: 'comment',
-      summary: '1 issue, 1 question.',
       inlineCount: 1,
       bodyCount: 1,
       alreadyPostedCount: 0,
@@ -372,7 +371,7 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
       comments: [{ path: 'app.ts', line: 1 }],
     });
     expect(api.reviews[0]?.token).toBe(token);
-    expect(api.reviews[0]?.body.body.startsWith('1 issue, 1 question.\n\n')).toBe(true);
+    expect(api.reviews[0]?.body.body.startsWith('### Not attached to a line\n\n')).toBe(true);
     expect(api.reviews[0]?.body.body).not.toContain('beuve');
     const listed = okValueFrom(await ura.list({ sessionId }));
     expect(listed.items.map((item) => item.posted?.placement)).toStrictEqual(['inline', 'body']);

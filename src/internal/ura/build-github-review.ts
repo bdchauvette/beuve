@@ -5,7 +5,6 @@ import { fenceCodeBlock } from './fence-code-block.ts';
 import { formatUraAnchor } from './format-ura-anchor.ts';
 import { formatUraSeverity } from './format-ura-severity.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
-import { reviewSummaryFrom } from './review-summary-from.ts';
 import type { OutdatedReason, UraArtifact, UraEntry, UraVerdict } from './ura-artifact.ts';
 import type { PatchHunk, UraAnchor, UraItem } from './ura-item.ts';
 
@@ -41,7 +40,7 @@ export interface GithubReviewOptions {
    * review when a comment falls outside them, so with this map such items go into the body.
    */
   readonly commentableRanges?: ReadonlyMap<string, readonly LineSpan[]>;
-  /** The reviewer's own text for the top of the body, in place of `reviewSummaryFrom`'s. */
+  /** The reviewer's own text for the top of the body; none by default (the reviewer writes it). */
   readonly summary?: string;
 }
 
@@ -49,6 +48,12 @@ const events: Readonly<Record<UraVerdict, GithubReviewPayload['event']>> = {
   approve: 'APPROVE',
   'request-changes': 'REQUEST_CHANGES',
   comment: 'COMMENT',
+};
+
+const verdictLabels: Readonly<Record<UraVerdict, string>> = {
+  approve: 'Approved',
+  'request-changes': 'Changes requested',
+  comment: 'Comments',
 };
 
 const outdatedLabels: Readonly<Record<OutdatedReason, string>> = {
@@ -63,8 +68,9 @@ const shortSha = 12;
  * The GitHub pull request review for an artifact. Line items become inline comments on the
  * head (`side: 'RIGHT'`); a patch that replaces exactly the anchored lines becomes a
  * ```` ```suggestion ```` block, any other patch a ```` ```diff ```` block. Whole-file,
- * whole-change and outdated items, and lines outside `commentableRanges`, go into the body.
- * Pure: posting it is the caller's job.
+ * whole-change and outdated items, and lines outside `commentableRanges`, go into the body,
+ * under the reviewer's summary when there is one. GitHub refuses a comment or a change request
+ * that says nothing, so such a review's body falls back to the verdict's name. Pure: posting it is the caller's job.
  */
 export function buildGithubReview(
   artifact: UraArtifact,
@@ -80,13 +86,21 @@ export function buildGithubReview(
       inline.push(comment);
     }
   }
-  const sections = [options.summary ?? reviewSummaryFrom(artifact)];
+  const sections: string[] = [];
+  const summary = options.summary?.trim() ?? '';
+  if (summary !== '') {
+    sections.push(summary);
+  }
   if (general.length > 0) {
     sections.push('### Not attached to a line', ...general);
   }
+  const verdict = artifact.verdict.value;
+  if (verdict !== 'approve' && sections.length === 0 && inline.length === 0) {
+    sections.push(verdictLabels[verdict]);
+  }
   return {
     commit_id: artifact.summary.headSha,
-    event: events[artifact.verdict.value],
+    event: events[verdict],
     body: sections.join('\n\n'),
     comments: inline,
   };

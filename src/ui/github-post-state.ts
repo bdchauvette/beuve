@@ -13,7 +13,7 @@ export type GithubPostState =
   | {
       readonly kind: 'own-pull-request';
       readonly message: string;
-      /** The reviewer's rewritten summary, kept for posting as a comment; absent if unedited. */
+      /** The reviewer's summary, kept for posting as a comment; absent if they wrote none. */
       readonly summary: string | undefined;
     }
   | { readonly kind: 'posted'; readonly url: string; readonly text: string }

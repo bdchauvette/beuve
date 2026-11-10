@@ -4,7 +4,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 import type {
-  GithubReviewPreviewView,
   ReviewEditPreviewView,
   UraAnchorView,
   UraExportTarget,
@@ -980,8 +979,8 @@ export class BeuveUraDock extends LitElement {
           <textarea
             name="summary"
             aria-label="Review summary"
+            placeholder="Summary (Markdown, optional)"
             title="The text at the top of the review, above the items that aren't attached to a line"
-            .value=${post.preview.summary}
           ></textarea>
           <div class="actions">
             <button
@@ -997,7 +996,7 @@ export class BeuveUraDock extends LitElement {
               type="button"
               class="button primary"
               @click=${(): void => {
-                this.emit('beuve-github-post', { summary: this.editedSummary(post.preview) });
+                this.emit('beuve-github-post', { summary: this.writtenSummary() });
               }}
             >
               Post
@@ -1059,13 +1058,10 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  /**
-   * The summary textarea's text, or `undefined` while it is still the generated one, so a post
-   * that falls back to another verdict regenerates it instead of repeating a stale label.
-   */
-  private editedSummary(preview: GithubReviewPreviewView): string | undefined {
+  /** The summary the reviewer wrote, or `undefined` when they left it blank. */
+  private writtenSummary(): string | undefined {
     const field = this.renderRoot.querySelector<HTMLTextAreaElement>('textarea[name="summary"]');
-    if (field === null || field.value === preview.summary) {
+    if (field === null || field.value.trim() === '') {
       return undefined;
     }
     return field.value;

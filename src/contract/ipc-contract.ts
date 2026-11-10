@@ -1912,7 +1912,7 @@ export interface PostGithubReviewRequest {
   readonly sessionId: string;
   readonly verdict?: UraVerdictView;
   readonly expectedHeadSha: string;
-  /** The reviewer's text for the top of the review body, in place of the generated summary. */
+  /** The reviewer's text for the top of the review body; none by default. */
   readonly summary?: string;
 }
 
@@ -1925,8 +1925,6 @@ export interface GithubReviewPreviewView {
   readonly sessionId: string;
   readonly headSha: string;
   readonly verdict: UraVerdictView;
-  /** The generated top of the review body, which the reviewer may rewrite before posting. */
-  readonly summary: string;
   readonly inlineCount: number;
   readonly bodyCount: number;
   readonly alreadyPostedCount: number;
