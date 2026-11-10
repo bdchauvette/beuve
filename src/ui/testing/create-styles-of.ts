@@ -4,6 +4,7 @@ import { syntaxPalettes } from '../syntax-palettes.ts';
 
 const languages = [
   'typescript',
+  'tsx',
   'go',
   'rust',
   'python',
@@ -22,12 +23,20 @@ export type TestLanguage = (typeof languages)[number];
 
 /**
  * How the theme shows a token (ADR 0119): bold (a definition or a number), italic (a type), bold
- * italic (a type's definition), muted (a keyword or punctuation mark), plain regular text (names,
+ * italic (a type's definition), muted (a keyword or punctuation mark), muted italic (type
+ * syntax's punctuation), plain regular text (names,
  * operators, strings), or a comment. Anything else is its color and Shiki font-style flags, so a
  * failure says what it got.
  */
 export type TokenStyle =
-  'bold' | 'italic' | 'bold-italic' | 'muted' | 'plain' | 'comment' | `${string} ${string}`;
+  | 'bold'
+  | 'italic'
+  | 'bold-italic'
+  | 'muted'
+  | 'muted-italic'
+  | 'plain'
+  | 'comment'
+  | `${string} ${string}`;
 
 /** The style of the first character of each `«…»`-marked span of `marked`, markers removed. */
 export type StylesOf = (lang: TestLanguage, marked: string) => TokenStyle[];
@@ -53,6 +62,7 @@ export async function createStylesOf(): Promise<StylesOf> {
     [`${light.foreground} ${String(italicFlag)}`, 'italic'],
     [`${light.foreground} ${String(boldFlag + italicFlag)}`, 'bold-italic'],
     [`${light.muted} 0`, 'muted'],
+    [`${light.muted} ${String(italicFlag)}`, 'muted-italic'],
     [`${light.foreground} 0`, 'plain'],
     [`${light.comment} 0`, 'comment'],
   ]);

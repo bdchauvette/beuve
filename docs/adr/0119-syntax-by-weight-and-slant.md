@@ -1,6 +1,6 @@
 # 0119. Syntax by weight and slant, with Radix colors
 
-- Status: Accepted (declarations extended by [0120](0120-more-languages-from-the-grammars-as-shipped.md)); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (themes) and [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md) (attribution)
+- Status: Accepted (declarations extended by [0120](0120-more-languages-from-the-grammars-as-shipped.md); type punctuation amended 2026-11-10); amends [0025](0025-diff-cards-themes-and-lazy-mounting.md) (themes) and [0114](0114-design-tokens-logical-properties-and-diff-color-schemes.md) (attribution)
 - Date: 2026-11-06
 
 ## Context
@@ -27,4 +27,13 @@ ADR 0025 copied Alabaster's palette: four colored classes (comments, strings, co
 
 ## Consequences
 
-Syntax no longer competes with diff tints, in any scheme. Strings are told from names by their delimiters, not hue. Definitions keep Alabaster's main idea, standing out from uses, through weight instead of colour. If a class needs more, a colour can come back for it alone. Bold assumes a monospace font with a real bold of the same advance width; the system monospace fonts all have one. The tests in `textmate-theme-from.test.ts` pin the styles for TypeScript, Go, Rust, Python, shell and Markdown through Shiki, by style (`bold`, `italic`, `bold-italic`, `muted`, `plain`, `comment`).
+Syntax no longer competes with diff tints, in any scheme. Strings are told from names by their delimiters, not hue. Definitions keep Alabaster's main idea, standing out from uses, through weight instead of colour. If a class needs more, a colour can come back for it alone. Bold assumes a monospace font with a real bold of the same advance width; the system monospace fonts all have one. The tests in `textmate-theme-from.test.ts` pin the styles for TypeScript, Go, Rust, Python, shell and Markdown through Shiki, by style (`bold`, `italic`, `bold-italic`, `muted`, `muted-italic`, `plain`, `comment`).
+
+## Amendment 2026-11-10: type punctuation
+
+The brackets of type syntax are italic too, still muted, so a whole type reads as one slanted run: `Map<string, Item[]>`, not an italic `Map` and `Item` among upright `<`, `[]` and `>`. The theme can only slant what a grammar scopes apart from runtime brackets, so this covers:
+
+- **TypeScript and TSX**: type parameters and arguments (`<T>` on a declaration, a call, `new` or a JSX tag), array and tuple types (`T[]`, `[A, B]`, an indexed access `T[K]`, which the grammar scopes as a tuple), index signatures, mapped types and `<T>v` casts. Indexing, array literals, computed keys, `<`/`>` comparisons and JSX tag brackets stay upright.
+- **Rust**: angle brackets, which its grammar uses only for generics, turbofish and qualified paths; comparisons are operators.
+
+Left upright, because the grammar scopes them like runtime brackets with no enclosing type scope: Go's `[]` everywhere (`[]int`, `map[string]int`, `[N]T`, type parameters and arguments look exactly like `xs[0]`), Rust's square brackets (`[u8; 4]` and `v[0]` alike), and Python's subscripts (`list[int]` and `xs[0]` are both item access). As in [ADR 0120](0120-more-languages-from-the-grammars-as-shipped.md), beuve adds no scopes to fix them.

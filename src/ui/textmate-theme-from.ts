@@ -28,8 +28,8 @@ export interface TextmateSettings {
 /**
  * beuve's TextMate theme (ADR 0025, 0119). Weight, slant and contrast carry the meaning, so color
  * stays free for the diff's own tints: definitions and numbers are bold, types are italic,
- * keywords and punctuation are muted, and names, property keys, operators and strings are regular
- * text. Comments are the one colored class. A declaration (a variable, constant or parameter) is a
+ * keywords and punctuation are muted (and italic where the grammar marks them as type syntax), and
+ * names, property keys, operators and strings are regular text. Comments are the one colored class. A declaration (a variable, constant or parameter) is a
  * definition too, where the language's grammar marks it as one. Grammars tag names at use sites with the same
  * `entity.name` scopes as definitions, so a rule takes calls, tags and commands back to regular;
  * the scope matcher prefers the longer selector. The same preference keeps whatever a comment or
@@ -80,6 +80,11 @@ export function textmateThemeFrom(
         name: 'Keywords and punctuation',
         settings: { foreground: palette.muted, fontStyle: regular },
         scope: mutedScopes,
+      }),
+      rule({
+        name: 'Type punctuation',
+        settings: { foreground: palette.muted, fontStyle: italic },
+        scope: typePunctuationScopes,
       }),
       rule({
         name: 'Comments',
@@ -193,6 +198,22 @@ const mutedScopes: readonly string[] = [
   'meta.template.expression storage',
   'meta.template.expression punctuation',
   'meta.template.expression meta.brace',
+];
+
+/**
+ * The brackets of type syntax, where the grammar gives them scopes of their own: TypeScript's type
+ * parameters and arguments, array and tuple types, index signatures, mapped types and `<T>`
+ * casts, and Rust's angle brackets, which are only ever generics. Go's grammar scopes a slice
+ * type's `[]` like an index, and Python's and Rust's square brackets are the same in a type and an
+ * expression, so those stay upright.
+ */
+const typePunctuationScopes: readonly string[] = [
+  'punctuation.definition.typeparameters',
+  'meta.type.tuple meta.brace.square',
+  'meta.indexer.declaration meta.brace.square',
+  'meta.indexer.mappedtype.declaration meta.brace.square',
+  'cast.expr meta.brace.angle',
+  'source.rust punctuation.brackets.angle',
 ];
 
 const commentScopes: readonly string[] = [
