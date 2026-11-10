@@ -29,7 +29,7 @@ import { moveUraItem } from './move-ura-item.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
-import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
+import { displayIcon } from './display-icon.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { uraSeverityViews } from './ura-severity-views.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
@@ -734,14 +734,15 @@ export class BeuveUraDock extends LitElement {
           })}
         </select>
         <button
-          class="button"
+          class="button quiet"
           type="button"
           name="blocking"
           data-action="toggle-blocking"
+          aria-label="Blocking"
           aria-pressed=${String(this.editingBlocking)}
-          title="Blocking: must be resolved before merging"
+          title=${this.editingBlocking ? 'Blocking: must be resolved before merging' : 'Not blocking; press to block the merge'}
         >
-          ${uraBlockingEmoji} Blocking
+          ${displayIcon('blocking')}
         </button>
         <input
           name="title"

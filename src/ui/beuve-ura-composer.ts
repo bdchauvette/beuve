@@ -10,7 +10,7 @@ import './beuve-patch-preview.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
-import { uraBlockingEmoji } from './ura-blocking-emoji.ts';
+import { displayIcon } from './display-icon.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { uraSeverityViews } from './ura-severity-views.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
@@ -231,16 +231,17 @@ export class BeuveUraComposer extends LitElement {
           })}
         </select>
         <button
-          class="button"
+          class="button quiet"
           type="button"
           name="blocking"
+          aria-label="Blocking"
           aria-pressed=${String(this.blocking)}
-          title="Blocking: must be resolved before merging"
+          title=${this.blocking ? 'Blocking: must be resolved before merging' : 'Not blocking; press to block the merge'}
           @click=${(): void => {
             this.blocking = !this.blocking;
           }}
         >
-          ${uraBlockingEmoji} Blocking
+          ${displayIcon('blocking')}
         </button>
         <input
           aria-label="Title"

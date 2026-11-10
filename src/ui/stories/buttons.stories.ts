@@ -75,6 +75,7 @@ export const States: StoryObj<ButtonArgs> = {
       <button class="button" type="button" disabled>Disabled</button>
       <button class="button primary" type="button" disabled>Disabled primary</button>
       <button class="button" type="button" aria-pressed="true">Pressed</button>
+      <button class="button quiet" type="button" aria-pressed="true">Quiet pressed</button>
       <button class="button quiet" type="button" aria-expanded="true">Menu open</button>
     `);
   },
