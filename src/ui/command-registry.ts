@@ -163,6 +163,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'dock-addressed': dock,
     'dock-move-up': dock,
     'dock-move-down': dock,
+    'expand-note': app,
     'dock-move': none,
     'run-setup': app,
     'edit-setup-command': app,

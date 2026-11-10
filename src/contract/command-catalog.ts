@@ -809,6 +809,15 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'expand-note',
+    title: 'Expand Note Draft',
+    label: 'Expand Draft',
+    menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 2 },
+    when: ['session'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'dock-move',
     title: 'Next or Previous Note',
     inPlace: { area: 'Review notes', keys: ['Up', 'Down'] },
