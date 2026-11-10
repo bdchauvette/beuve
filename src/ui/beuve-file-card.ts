@@ -698,6 +698,7 @@ export class BeuveFileCard extends LitElement {
   private readonly openInsights = new Set<string>();
   /** The gutter marks' style sheet in this diff's shadow root. */
   private markSheet: CSSStyleSheet | undefined;
+  private tintSheet: CSSStyleSheet | undefined;
   /** Whether this diff's gutter button already shows the chat icon. */
   private isGutterLabelled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
@@ -1174,6 +1175,7 @@ export class BeuveFileCard extends LitElement {
           }
           if (phase === 'mount') {
             this.syncInsightMarks();
+            this.adoptDiffTints();
           }
           this.syncDiagnosticHighlights();
         },
@@ -1329,6 +1331,28 @@ export class BeuveFileCard extends LitElement {
     }
     const detail = { messageId: insight.messageId, finding: insight.index };
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+  }
+
+  /**
+   * The diff library blends a changed line's colour into the background (12% light, 20% dark) but
+   * paints a changed word's colour as given, so the tokens' line < number < word steps came out as
+   * a near-invisible line under a strong word. Turning the blend off makes the line, gutter and
+   * word colours the `--beuve-diff-*` tokens themselves (ADR 0114 amendment).
+   */
+  private adoptDiffTints(): void {
+    const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
+    if (root === undefined || root === null) {
+      return;
+    }
+    if (this.tintSheet === undefined) {
+      this.tintSheet = new CSSStyleSheet();
+      this.tintSheet.replaceSync(
+        '[data-line], [data-no-newline], [data-gutter-buffer], [data-column-number] { --mix-light: 0%; --mix-dark: 0%; }',
+      );
+    }
+    if (!root.adoptedStyleSheets.includes(this.tintSheet)) {
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, this.tintSheet];
+    }
   }
 
   /** Gutter marks for the insights: one adopted style sheet in the diff's shadow root (ADR 0061). */
@@ -2104,6 +2128,7 @@ ${splitPatch(file.patch).map((line) => {
     try {
       this.syncDiff(changed, { library, container, metadata });
       this.syncInsightMarks();
+      this.adoptDiffTints();
     } catch {
       this.diff?.cleanUp();
       this.diff = undefined;

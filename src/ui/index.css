@@ -349,21 +349,24 @@
 
   /*
    * Line, gutter number and changed-word tints step up like Primer's diffBlob tokens
-   * (line < number < word), one Radix alpha step apart. Orange, yellow and grey sit lower and
+   * (line < number < word). The line and number tints are a fraction of a Radix alpha step, so a
+   * changed line reads clearly against unchanged ones while a changed word, painted over its line,
+   * stays light; the diff's own blending is turned off so these are the colours shown (ADR 0114
+   * amendment). Orange, yellow and grey sit lower and
    * higher on their scales so each pair reads at a similar weight. Text colors are for +/− counts
    * and labels; bars for gutter marks; number text for the line numbers on changed lines, which
    * the library otherwise draws in the bar color. Yellow 9 is invisible on the yellow number cell in
    * light (1.0:1), so removed numbers use yellow 11 (3.6:1 light, 8.9:1 dark).
    */
-  --beuve-diff-added-bg: var(--beuve-scale-blue-a5);
-  --beuve-diff-added-number-bg: var(--beuve-scale-blue-a6);
-  --beuve-diff-added-emphasis: var(--beuve-scale-blue-a7);
+  --beuve-diff-added-bg: rgb(from var(--beuve-scale-blue-a5) r g b / calc(alpha * 0.3));
+  --beuve-diff-added-number-bg: rgb(from var(--beuve-scale-blue-a6) r g b / calc(alpha * 0.45));
+  --beuve-diff-added-emphasis: var(--beuve-scale-blue-a5);
   --beuve-diff-added-bar: var(--beuve-scale-blue-9);
   --beuve-diff-added-text: var(--beuve-scale-blue-11);
   --beuve-diff-added-number-text: var(--beuve-scale-blue-9);
-  --beuve-diff-removed-bg: var(--beuve-scale-yellow-a4);
-  --beuve-diff-removed-number-bg: var(--beuve-scale-yellow-a5);
-  --beuve-diff-removed-emphasis: var(--beuve-scale-yellow-a6);
+  --beuve-diff-removed-bg: rgb(from var(--beuve-scale-yellow-a4) r g b / calc(alpha * 0.3));
+  --beuve-diff-removed-number-bg: rgb(from var(--beuve-scale-yellow-a5) r g b / calc(alpha * 0.45));
+  --beuve-diff-removed-emphasis: var(--beuve-scale-yellow-a4);
   --beuve-diff-removed-bar: var(--beuve-scale-yellow-9);
   --beuve-diff-removed-text: var(--beuve-scale-yellow-11);
   --beuve-diff-removed-number-text: var(--beuve-scale-yellow-11);
