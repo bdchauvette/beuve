@@ -24,9 +24,7 @@ describe('buildGithubReview', () => {
   test('matches the snapshot', ({ expect }) => {
     expect(buildGithubReview(createSampleArtifact())).toMatchInlineSnapshot(`
       {
-        "body": "1 blocker, 1 issue, 1 question, 1 nit, 1 praise.
-
-      ### Not attached to a line
+        "body": "### Not attached to a line
 
       #### ❓ Question: Is this file meant to ship?
 
@@ -193,12 +191,22 @@ describe('buildGithubReview', () => {
     expect(titled.comments[0]?.body.startsWith('🛑 **Blocker:** Handle the empty list')).toBe(true);
   });
 
-  test("puts the reviewer's own summary above the items instead of the generated one", ({
-    expect,
-  }) => {
-    const { body } = buildGithubReview(withItem({}), { summary: 'Mostly fine, one thing to fix.' });
-    expect(body).toBe('Mostly fine, one thing to fix.');
-    expect(body).not.toContain('beuve');
+  test("puts the reviewer's own summary above the items", ({ expect }) => {
+    const { body } = buildGithubReview(createSampleArtifact(), { summary: 'Mostly fine.\n' });
+    expect(body.startsWith('Mostly fine.\n\n### Not attached to a line')).toBe(true);
+  });
+
+  test('writes no summary of its own when every item is inline', ({ expect }) => {
+    expect(buildGithubReview(withItem({})).body).toBe('');
+    expect(buildGithubReview(withItem({}), { summary: '  ' }).body).toBe('');
+  });
+
+  test('leaves an approval with nothing to say empty', ({ expect }) => {
+    const artifact = {
+      ...createSampleArtifact({ value: 'approve', source: 'derived' }),
+      entries: [],
+    };
+    expect(buildGithubReview(artifact).body).toBe('');
   });
 });
 

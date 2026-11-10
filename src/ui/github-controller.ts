@@ -24,7 +24,7 @@ import type { TimelineState } from './timeline-state.ts';
 /** Post the staged review to GitHub, with this verdict over the derived one. */
 export interface GithubPostDetail {
   readonly verdict?: UraVerdictView | undefined;
-  /** The reviewer's rewritten summary; absent while the generated one is unchanged. */
+  /** The summary the reviewer wrote; absent when they left it blank. */
   readonly summary?: string | undefined;
 }
 

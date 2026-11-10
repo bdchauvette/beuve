@@ -11,7 +11,6 @@ export function createGithubPreview(options: GithubPreviewOptions): GithubReview
   return {
     ...options,
     verdict: 'approve',
-    summary: 'Looks good.',
     inlineCount: 1,
     bodyCount: 0,
     alreadyPostedCount: 0,
