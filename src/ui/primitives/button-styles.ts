@@ -76,6 +76,13 @@ export const buttonStyles = css`
     color: var(--beuve-text);
   }
 
+  /* After the quiet and icon looks, which would otherwise hide a pressed toggle's state. */
+  .button:is(.quiet, .icon)[aria-pressed='true'] {
+    border-color: var(--beuve-accent);
+    background: var(--beuve-accent-soft);
+    color: var(--beuve-accent);
+  }
+
   .button.icon {
     inline-size: var(--beuve-size-control);
     block-size: var(--beuve-size-control);
