@@ -2,8 +2,11 @@
 export type TopMenu =
   'app' | 'file' | 'edit' | 'view' | 'go' | 'review' | 'chat' | 'window' | 'help';
 
-/** What a right-click lands on: a diff line or selection, a file header, a tree row, … */
-export type ContextKind = 'line' | 'file' | 'tree' | 'note' | 'answer' | 'sheet';
+/**
+ * What a right-click lands on: a diff line or selection, a file header, a tree row, a file a chat
+ * answer names (`reference`, ADR 0128), …
+ */
+export type ContextKind = 'line' | 'file' | 'tree' | 'note' | 'answer' | 'reference' | 'sheet';
 
 /** The windows beuve opens; a command runs only in the kinds it lists. */
 export type WindowKind = 'main' | 'sheet' | 'settings';
@@ -176,6 +179,15 @@ const entries = Object.freeze([
     context: ['line', 'file', 'sheet'],
     when: ['file'],
     windows: ['main', 'sheet'],
+    handler: 'window',
+  },
+  {
+    id: 'copy-path',
+    title: 'Copy Relative Path',
+    menu: { menu: 'edit', group: 2 },
+    context: ['file', 'tree', 'reference'],
+    when: ['session'],
+    windows: ['main'],
     handler: 'window',
   },
   {
@@ -645,6 +657,17 @@ const entries = Object.freeze([
     keys: { mac: 'Alt+Cmd+O', linux: 'Ctrl+Shift+O' },
     context: ['line', 'file', 'tree', 'note'],
     when: ['file'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'open-in-sheet',
+    title: 'Open in Sheet',
+    menu: { menu: 'review', group: 3 },
+    keys: { mac: 'Cmd+Return', linux: 'Ctrl+Return' },
+    context: ['line', 'file', 'tree', 'reference'],
+    when: ['session'],
+    textConflict: true,
     windows: ['main'],
     handler: 'window',
   },

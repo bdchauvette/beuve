@@ -26,10 +26,14 @@ import type { CodeBlock, MarkdownRenderers } from './create-markdown-nodes.ts';
 import { draftLength } from './draft-length.ts';
 import { describeCitation } from './describe-citation.ts';
 import { describeMention } from './describe-mention.ts';
+import { FileReferenceIndex } from './file-reference-index.ts';
+import type { FileReference } from './file-reference-index.ts';
+import { fileReferencePartsFrom } from './file-reference-parts-from.ts';
 import { insertDraftMention } from './insert-draft-mention.ts';
 import { planTranscriptCompaction } from './plan-transcript-compaction.ts';
 import { removeDraftMention } from './remove-draft-mention.ts';
 import { serializeChatDraft } from './serialize-chat-draft.ts';
+import { sheetRangeFrom } from './sheet-range-from.ts';
 import { chatTextFrom } from './chat-text-from.ts';
 import { draftPartsFrom } from './draft-parts-from.ts';
 import { isActiveRequest } from './is-active-request.ts';
@@ -37,6 +41,7 @@ import { MarkdownView } from './markdown-view.ts';
 import { planMessageParts } from './plan-message-parts.ts';
 import type { MessageBlock, StepPart } from './plan-message-parts.ts';
 import { snippetPathFrom } from './snippet-path-from.ts';
+import type { LineRange } from './target-from.ts';
 import { textPartStream } from './text-part-stream.ts';
 import type { ChatStreamSubscribe } from './text-part-stream.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -75,7 +80,8 @@ const messageSelector = ':is(.transcript, .compacted) > :is(.you, .answer, .abst
  * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`,
  * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-clear-queue`,
  * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-cite`, `beuve-chat-mention` (a chip)
- * and `beuve-open-editor` (Open in Editor on a pill); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
+ * `beuve-open-editor` (Open in Editor on a pill) and `beuve-sheet-request` (a file an answer names,
+ * ADR 0128); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
  * arrow keys move between the transcript's buttons (pills, chips, Cancel, Stage) and the input.
  * A `/` at the start of the input lists the chat commands it could complete to (ADR 0127);
  * Previous and Next Message scroll the transcript one message at a time, and the transcript
@@ -349,6 +355,22 @@ export class BeuveChatDrawer extends LitElement {
 
       button.cite:hover {
         border-color: var(--beuve-accent);
+      }
+
+      button.reference {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--beuve-accent);
+        font: inherit;
+        text-align: start;
+        text-decoration: underline dotted;
+        text-underline-offset: var(--beuve-space-0-5);
+        cursor: pointer;
+      }
+
+      button.reference:hover {
+        text-decoration-style: solid;
       }
 
       .muted {
@@ -741,6 +763,13 @@ export class BeuveChatDrawer extends LitElement {
       'stage-finding': ({ messageId = '', finding }): void => {
         this.emit('beuve-chat-stage-finding', { messageId, finding: Number(finding) });
       },
+      reference: ({ path = '', start, end }): void => {
+        const lines = linesOf(start, end);
+        this.emit('beuve-sheet-request', {
+          path,
+          ...(lines !== undefined && { range: sheetRangeFrom(lines) }),
+        });
+      },
       cite: ({ path = '', start, end }): void => {
         const citation = { path, startLine: Number(start), endLine: Number(end) };
         this.emit('beuve-chat-cite', { citation });
@@ -781,6 +810,10 @@ export class BeuveChatDrawer extends LitElement {
   @property({ type: Boolean }) accessor hasSession = false;
   /** Head-side paths of the reviewed diff; a citation to any other file is marked as outside it. */
   @property({ attribute: false }) accessor diffPaths: ReadonlySet<string> = new Set();
+  /** The files an answer may name (ADR 0128): each one it names opens in a sheet. */
+  @property({ attribute: false }) accessor references: FileReferenceIndex = new FileReferenceIndex(
+    [],
+  );
   /** `chat:stream` (ADR 0072), from which a running answer's text parts stream; absent, they re-render. */
   @property({ attribute: false }) accessor subscribeChatStream: ChatStreamSubscribe | undefined;
   /** Ids of answers already staged in the review dock. */
@@ -1485,10 +1518,14 @@ export class BeuveChatDrawer extends LitElement {
     if (
       shown?.source !== source ||
       shown.citations !== citations ||
-      shown.diffPaths !== this.diffPaths
+      shown.diffPaths !== this.diffPaths ||
+      shown.references !== this.references
     ) {
+      if (shown !== undefined && shown.references !== this.references) {
+        entry.view.forgetBlocks();
+      }
       entry.view.show(source, this.markdownRenderers(citations, renderModeOf(live)));
-      entry.shown = { source, citations, diffPaths: this.diffPaths };
+      entry.shown = { source, citations, diffPaths: this.diffPaths, references: this.references };
     }
     return entry.view.element;
   }
@@ -1533,7 +1570,55 @@ export class BeuveChatDrawer extends LitElement {
         return pill;
       },
       code: codeBlockNode,
+      text: (text): Node => {
+        const parts = fileReferencePartsFrom(text, this.references);
+        const nodes = document.createDocumentFragment();
+        for (const part of parts) {
+          if (part.kind === 'text') {
+            nodes.append(part.text);
+          } else {
+            render(this.renderReference({ ...part, isCode: false }), nodes);
+          }
+        }
+        return nodes;
+      },
+      codeSpan: (text): Node | undefined => {
+        const reference = this.references.resolve(text);
+        if (reference === undefined) {
+          return undefined;
+        }
+        const node = document.createDocumentFragment();
+        render(this.renderReference({ text, reference, isCode: true }), node);
+        return node;
+      },
     };
+  }
+
+  /**
+   * A file an answer names (ADR 0128), as written: a click opens it in a sheet at the head, on the
+   * lines it names; its context menu also copies the path. The title holds the real path.
+   */
+  private renderReference({ text, reference, isCode }: ShownReference): TemplateResult {
+    const { path, lines } = reference;
+    let place = path;
+    if (lines !== undefined) {
+      place = `${path}:${String(lines.start)}`;
+      if (lines.end !== lines.start) {
+        place += `-${String(lines.end)}`;
+      }
+    }
+    return html`<button
+      type="button"
+      class="reference"
+      data-nav
+      data-action="reference"
+      data-path=${path}
+      data-start=${lines?.start ?? nothing}
+      data-end=${lines?.end ?? nothing}
+      title=${`${place} (open in a sheet)`}
+    >
+      ${isCode ? html`<code>${pathText(text)}</code>` : pathText(text)}
+    </button>`;
   }
 
   private scrollToEnd(): void {
@@ -2001,6 +2086,13 @@ interface MarkdownSource {
   readonly live?: LivePart;
 }
 
+/** A file reference of an answer, its text as written, and whether it was a code span. */
+interface ShownReference {
+  readonly text: string;
+  readonly reference: FileReference;
+  readonly isCode: boolean;
+}
+
 /** One finding of a `/review` answer, its place in the answer, and its labels. */
 interface ShownFinding {
   readonly index: number;
@@ -2013,6 +2105,14 @@ function renderModeOf(live: LivePart | undefined): 'final' | 'streaming' {
     return 'final';
   }
   return 'streaming';
+}
+
+/** A reference's lines from its `data-start` and `data-end`; absent when it names a file alone. */
+function linesOf(start: string | undefined, end: string | undefined): LineRange | undefined {
+  if (start === undefined) {
+    return undefined;
+  }
+  return { start: Number(start), end: Number(end ?? start) };
 }
 
 /** The caret's offset inside `child`: within a text node, else before (0) or after (1) it. */
@@ -2036,6 +2136,7 @@ interface MarkdownEntry {
         readonly source: string;
         readonly citations: readonly ChatCitationView[];
         readonly diffPaths: ReadonlySet<string>;
+        readonly references: FileReferenceIndex;
       }
     | undefined;
 }

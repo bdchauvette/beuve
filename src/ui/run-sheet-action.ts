@@ -8,10 +8,13 @@ import { sheetRequestFrom } from './sheet-request-from.ts';
 import type { SheetPlace } from './step-sheet-history.ts';
 import type { ReviewTarget } from './target-from.ts';
 
-/** `beuve-sheet-request`: a peek node's declaration to open at the head. */
+/**
+ * `beuve-sheet-request`: a file to open at the head (a peek node's declaration, a rendered file's
+ * link, a file a chat answer names), on `range` when there is one.
+ */
 export interface SheetOpenDetail {
   readonly path: string;
-  readonly range: SheetRangeView;
+  readonly range?: SheetRangeView | undefined;
 }
 
 /** A token the reviewer clicked in the diff: 1-based head line, 0-based UTF-16 column. */
@@ -29,7 +32,7 @@ export type SheetAction =
       readonly token?: ClickedToken | undefined;
     }
   | { readonly kind: 'copy-link' | 'open-link'; readonly target: ReviewTarget }
-  /** A call-hierarchy node: open its declaration at the head. */
+  /** A file at the head: a call-hierarchy node's declaration, or Open in Sheet. */
   | ({ readonly kind: 'open' } & SheetOpenDetail);
 
 export interface SheetActionContext {

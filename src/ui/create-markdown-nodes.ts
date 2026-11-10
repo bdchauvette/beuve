@@ -6,6 +6,10 @@ export interface MarkdownRenderers {
   readonly marker: (text: string) => Node;
   /** A fenced code block; `closed` is false while its closing fence is still to come. */
   readonly code: (block: CodeBlock) => Element;
+  /** Prose outside links, which may name files (ADR 0128); plain text without it. */
+  readonly text?: (text: string) => Node;
+  /** An inline code span, which may name a file (ADR 0128); a `<code>` without it or for `undefined`. */
+  readonly codeSpan?: (text: string) => Node | undefined;
 }
 
 /** A fenced code block of a parsed answer. */
@@ -113,12 +117,10 @@ function withInlines(
 function inlineNode(inline: MarkdownInline, renderers: MarkdownRenderers): Node {
   switch (inline.kind) {
     case 'text': {
-      return document.createTextNode(inline.text);
+      return renderers.text?.(inline.text) ?? document.createTextNode(inline.text);
     }
     case 'code': {
-      const code = document.createElement('code');
-      code.textContent = inline.text;
-      return code;
+      return renderers.codeSpan?.(inline.text) ?? codeNode(inline.text);
     }
     case 'strong': {
       return withInlines(document.createElement('strong'), inline.children, renderers);
@@ -127,7 +129,10 @@ function inlineNode(inline: MarkdownInline, renderers: MarkdownRenderers): Node 
       return withInlines(document.createElement('em'), inline.children, renderers);
     }
     case 'link': {
-      const link = withInlines(document.createElement('a'), inline.children, renderers);
+      const link = withInlines(document.createElement('a'), inline.children, {
+        marker: renderers.marker,
+        code: renderers.code,
+      });
       link.setAttribute('href', inline.href);
       link.setAttribute('title', inline.href);
       link.setAttribute('rel', 'noreferrer');
@@ -139,4 +144,10 @@ function inlineNode(inline: MarkdownInline, renderers: MarkdownRenderers): Node 
       return renderers.marker(inline.text);
     }
   }
+}
+
+function codeNode(text: string): Element {
+  const code = document.createElement('code');
+  code.textContent = text;
+  return code;
 }

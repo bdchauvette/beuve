@@ -12,6 +12,7 @@ import type {
   DiffFileView,
   FileAttributesView,
   FilePairView,
+  RepositoryTreeView,
   ReviewView,
   SetDiffDisplayRequest,
   SidebarSideView,
@@ -97,6 +98,11 @@ import { withoutStagedInsights } from './without-staged-insights.ts';
 import type { GithubDockState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import { relativeLineTextFrom } from './relative-line-text-from.ts';
+import { FileReferenceIndex } from './file-reference-index.ts';
+import type { FileReference } from './file-reference-index.ts';
+import { sheetPlaceFrom } from './sheet-place-from.ts';
+import { sheetRangeFrom } from './sheet-range-from.ts';
+import type { SheetPlace } from './step-sheet-history.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import type { SheetAction, SheetOpenDetail } from './run-sheet-action.ts';
 import type { ZoneId } from './zones.ts';
@@ -579,6 +585,20 @@ export class BeuveReview extends LitElement {
 
   /** The chat answer a context menu was opened on, for Stage Answer as a Note. */
   private contextAnswerId: string | undefined;
+  /**
+   * The file a chat answer names that the last context menu was opened on (ADR 0128), for Open in
+   * Sheet and Copy Relative Path; taken by the first of them that runs, and dropped by any other
+   * right-click.
+   */
+  private contextReference: FileReference | undefined;
+  /** The files chat answers may name, rebuilt when the review or the head's tree changes. */
+  private referenceCache:
+    | {
+        readonly review: ReviewView | undefined;
+        readonly tree: RepositoryTreeView | undefined;
+        readonly index: FileReferenceIndex;
+      }
+    | undefined;
 
   private readonly navigation = new CodeNavigationController(this, {
     bridge: beuveBridge,
@@ -759,6 +779,61 @@ export class BeuveReview extends LitElement {
     await this.copyText(text);
   }
 
+  /** Copy Relative Path: the named file's, the tree's focused file's or the diff's file's path. */
+  private async copyPath(): Promise<void> {
+    const reference = this.takeContextReference();
+    let path = reference?.path ?? this.treePath();
+    if (path === undefined) {
+      const target = this.stream()?.target();
+      if (target !== undefined && target.kind !== 'change') {
+        path = target.file.path;
+      }
+    }
+    if (path === undefined) {
+      this.showNotice({ tone: 'info', text: 'Pick a file to copy the path of.' });
+      return;
+    }
+    await this.copyText(path);
+  }
+
+  /**
+   * Open in Sheet (ADR 0128): a file a chat answer names on its lines, the tree's focused file, or
+   * the diff's file on the head lines of its target, in a sheet window at the head.
+   */
+  private openInSheet(): void {
+    const reference = this.takeContextReference();
+    if (reference !== undefined) {
+      const { path, lines } = reference;
+      void this.sheetAction({
+        kind: 'open',
+        path,
+        ...(lines !== undefined && { range: sheetRangeFrom(lines) }),
+      });
+      return;
+    }
+    const treePath = this.treePath();
+    if (treePath !== undefined) {
+      void this.sheetAction({ kind: 'open', path: treePath });
+      return;
+    }
+    const target = this.stream()?.target();
+    let place: SheetPlace | undefined;
+    if (target !== undefined) {
+      place = sheetPlaceFrom(target);
+    }
+    if (place === undefined) {
+      this.showNotice({ tone: 'info', text: 'Pick a file on the head side to open in a sheet.' });
+      return;
+    }
+    void this.sheetAction({ kind: 'open', ...place });
+  }
+
+  private takeContextReference(): FileReference | undefined {
+    const reference = this.contextReference;
+    this.contextReference = undefined;
+    return reference;
+  }
+
   /** Puts `text` on the clipboard and says so. */
   private async copyText(text: string): Promise<void> {
     const bridge = beuveBridge();
@@ -875,6 +950,29 @@ export class BeuveReview extends LitElement {
 
   private diffPaths(): ReadonlySet<string> {
     return new Set(this.review?.files.map((file) => file.path));
+  }
+
+  /**
+   * The files a chat answer may name (ADR 0128): the head's tree, and the diff's files the head
+   * has (the tree loads after the diff). Kept while neither changes, so answers aren't rebuilt.
+   */
+  private fileReferences(): FileReferenceIndex {
+    const { review } = this;
+    const { tree } = this.reviewData;
+    const cache = this.referenceCache;
+    if (cache !== undefined && cache.review === review && cache.tree === tree) {
+      return cache.index;
+    }
+    const changed = (review?.files ?? [])
+      .filter((file) => file.status !== 'deleted')
+      .map((file) => file.path);
+    let treePaths: readonly string[] = [];
+    if (review !== undefined && tree?.sessionId === review.session.id) {
+      treePaths = tree.paths;
+    }
+    const index = new FileReferenceIndex([...treePaths, ...changed]);
+    this.referenceCache = { review, tree, index };
+    return index;
   }
 
   /**
@@ -1125,6 +1223,7 @@ export class BeuveReview extends LitElement {
       ?focused=${this.focusedZone === 'chat'}
       .transcript=${this.chat.entries}
       .diffPaths=${this.diffPaths()}
+      .references=${this.fileReferences()}
       .stagedMessageIds=${this.ura.stagedMessageIds()}
       .stagedFindings=${this.ura.stagedFindings()}
       .subscribeChatStream=${this.subscribeChatStream}
@@ -1140,6 +1239,7 @@ export class BeuveReview extends LitElement {
       @beuve-chat-mention=${this.onChatMention}
       @beuve-chat-cancel-compaction=${this.onChatCancelCompaction}
       @beuve-open-editor=${this.onOpenEditor}
+      @beuve-sheet-request=${this.onSheetRequest}
     ></beuve-chat-drawer>`;
   }
 
@@ -1305,13 +1405,19 @@ export class BeuveReview extends LitElement {
     await this.addToChat(target);
   }
 
-  /** What a right-click landed on, recording the answer, note or tree row it chose. */
+  /** What a right-click landed on, recording the reference, answer, note or tree row it chose. */
   contextKindAt(
     event: MouseEvent,
-  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'text' | undefined {
+  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'reference' | 'text' | undefined {
     const path = event.composedPath().filter((target) => target instanceof HTMLElement);
+    this.contextReference = undefined;
     if (path.some((element) => isEditableElement(element))) {
       return 'text';
+    }
+    const reference = path.find((element) => element.dataset['action'] === 'reference');
+    if (reference !== undefined) {
+      this.contextReference = referenceFrom(reference.dataset);
+      return 'reference';
     }
     const answer = path.find((element) => element.dataset['messageId'] !== undefined);
     if (answer !== undefined) {
@@ -1486,6 +1592,14 @@ export class BeuveReview extends LitElement {
       }
       case 'copy-relative-line': {
         void this.copyRelativeLine();
+        return true;
+      }
+      case 'copy-path': {
+        void this.copyPath();
+        return true;
+      }
+      case 'open-in-sheet': {
+        this.openInSheet();
         return true;
       }
       case 'open-definition':
@@ -1717,6 +1831,15 @@ export type ReviewMenuFacts = Pick<
 /** What the open command palette points at, when Add to Chat runs from it. */
 export interface PaletteSelection {
   readonly action: PaletteAction | undefined;
+}
+
+/** The file a reference button names, from its `data-path`, `data-start` and `data-end`. */
+function referenceFrom(data: DOMStringMap): FileReference {
+  const { path = '', start, end } = data;
+  if (start === undefined) {
+    return { path, lines: undefined };
+  }
+  return { path, lines: { start: Number(start), end: Number(end ?? start) } };
 }
 
 declare global {

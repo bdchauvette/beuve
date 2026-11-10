@@ -106,6 +106,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Copy &GitHub Permalink",
       },
       {
+        "id": "copy-path",
+        "label": "Cop&y Relative Path",
+      },
+      {
         "accelerator": "Ctrl+Alt+Shift+C",
         "id": "copy-relative-line",
         "label": "Copy Relative &Line Number",
@@ -500,6 +504,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Open in Editor",
       },
       {
+        "accelerator": "Ctrl+Return",
+        "id": "open-in-sheet",
+        "label": "Open &in Sheet",
+      },
+      {
         "label": "Open &With",
         "submenu": [
           {
@@ -871,6 +880,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Shift+Cmd+C",
         "id": "copy-permalink",
         "label": "Copy GitHub Permalink",
+      },
+      {
+        "id": "copy-path",
+        "label": "Copy Relative Path",
       },
       {
         "accelerator": "Alt+Shift+Cmd+C",
@@ -1260,6 +1273,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Alt+Cmd+O",
         "id": "open-in-editor",
         "label": "Open in Editor",
+      },
+      {
+        "accelerator": "Cmd+Return",
+        "id": "open-in-sheet",
+        "label": "Open in Sheet",
       },
       {
         "label": "Open With",

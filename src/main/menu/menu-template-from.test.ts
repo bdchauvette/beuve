@@ -207,6 +207,14 @@ describe('contextMenuTemplateFrom', () => {
     ).toStrictEqual(['undo', 'redo', 'separator', 'cut', 'copy', 'paste', 'selectAll']);
   });
 
+  test('opens a file a chat answer names in a sheet, or copies its path', ({ expect }) => {
+    expect(
+      contextMenuTemplateFrom(commandCatalog, 'reference', 'mac').map((item) => {
+        return item.id ?? item.type;
+      }),
+    ).toStrictEqual(['copy-path', 'separator', 'open-in-sheet']);
+  });
+
   test('puts commands without a menu item last', ({ expect }) => {
     expect(contextMenuTemplateFrom(commandCatalog, 'answer', 'linux')).toStrictEqual([
       { id: 'stage-answer', label: 'Stage Answer as a Note' },
