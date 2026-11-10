@@ -115,6 +115,23 @@ export class BeuveHoverCard extends LitElement {
       white-space: pre-wrap;
     }
 
+    /* Code runs to the card's edges, so a card that is only code shows no frame around it. */
+    .card > pre {
+      margin-inline: calc(-1 * var(--beuve-space-3));
+      padding-inline: var(--beuve-space-3);
+      border-radius: 0;
+    }
+
+    .card > pre:first-child {
+      margin-block-start: calc(-1 * var(--beuve-space-2));
+      padding-block-start: var(--beuve-space-2);
+    }
+
+    .card > pre:last-child {
+      margin-block-end: calc(-1 * var(--beuve-space-2));
+      padding-block-end: var(--beuve-space-2);
+    }
+
     .card code {
       font: var(--beuve-font-code);
       font-size: var(--beuve-font-size-caption);
