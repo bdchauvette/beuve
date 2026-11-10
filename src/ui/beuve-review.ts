@@ -1555,7 +1555,7 @@ export class BeuveReview extends LitElement {
   /** A zone's own command, from a menu or the palette: focus the zone first, then run it there. */
   async runZoneCommand(zone: ZoneId, id: CommandId, isFromPalette: boolean): Promise<void> {
     if (isFromPalette || this.focusedZone !== zone) {
-      if (zone === 'diff' || zone === 'chat' || this.review === undefined) {
+      if (zone === 'diff' || this.review === undefined) {
         this.focusedZone = zone;
       } else {
         this.focusSidebar(zone);
