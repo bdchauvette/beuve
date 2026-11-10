@@ -33,6 +33,7 @@ import type {
   DiffDisplayView,
   EditorOpenResponse,
   EditorSettingsView,
+  ExpandedNoteView,
   FileAttributesView,
   FilePairView,
   FlowGraphResponse,
@@ -520,6 +521,15 @@ const openPullRequestRequest = z.strictObject({
   requestId: requestId.optional(),
 });
 const cancelRequestRequest = z.strictObject({ requestId });
+const expandNoteRequest = z.strictObject({
+  sessionId,
+  headSha: commitSha,
+  anchor: uraAnchor,
+  severity: uraSeverity,
+  title: uraTitle,
+  body: uraBody,
+  requestId: requestId.optional(),
+});
 const githubReviewRequest = z.strictObject({
   sessionId,
   verdict: uraVerdict.optional(),
@@ -940,6 +950,16 @@ export function createIpcHandlers(
       }
       const { verdict, ...required } = parsed.data;
       return services.ura.export({ ...required, ...(verdict !== undefined && { verdict }) });
+    },
+    'ura:expand-note': async (request, sender): Promise<IpcResult<ExpandedNoteView>> => {
+      const parsed = expandNoteRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      const { requestId: id, ...draft } = parsed.data;
+      return scoped({ sender, kind: 'note-draft', id }, async (options) => {
+        return services.drafting.expandNote(draft, options);
+      });
     },
     'chat:ask': async (request): Promise<IpcResult<ChatAskedView>> => {
       const parsed = chatAskRequest.safeParse(request);

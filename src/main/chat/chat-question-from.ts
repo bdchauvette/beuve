@@ -1,5 +1,4 @@
 import type { ChatFocusRequest } from '#contract/ipc-contract.ts';
-import type { DiffFile } from '#internal/git/diff-model.ts';
 import type {
   ChatFile,
   ChatFocus,
@@ -10,6 +9,7 @@ import type {
 } from '#internal/chat/chat-question.ts';
 
 import type { ReviewDiff } from '../sessions/load-review-diff.ts';
+import { chatFileFrom } from './chat-file-from.ts';
 
 export interface ChatQuestionParts {
   /** The diff `session:get-review` shows. */
@@ -60,21 +60,6 @@ export function chatQuestionFrom(parts: ChatQuestionParts): ChatQuestion {
     ...(parts.focus !== undefined && { focus: focusFrom(parts.focus) }),
     ...(parts.worktreePaths !== undefined && { worktreePaths: parts.worktreePaths }),
   };
-}
-
-function chatFileFrom(file: DiffFile): ChatFile {
-  const common = { binary: file.binary, patch: file.patch };
-  switch (file.status) {
-    case 'added':
-    case 'deleted':
-    case 'modified': {
-      return { path: file.path, status: file.status, ...common };
-    }
-    case 'renamed':
-    case 'copied': {
-      return { path: file.newPath, previousPath: file.oldPath, status: file.status, ...common };
-    }
-  }
 }
 
 function isSelected(file: ChatFile, prefixes: readonly string[]): boolean {

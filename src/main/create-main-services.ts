@@ -28,6 +28,7 @@ import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
 import { createChatServices } from './chat/create-chat-services.ts';
+import { createDraftingServices } from './drafting/create-drafting-services.ts';
 import type { ChatServices } from './chat/create-chat-services.ts';
 import { createDisplayServices } from './display/create-display-services.ts';
 import { createEditorServices } from './editor/create-editor-services.ts';
@@ -287,26 +288,28 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     ...(options.models?.secretsPath !== undefined && { filePath: options.models.secretsPath }),
     ...(options.models?.cipher !== undefined && { cipher: options.models.cipher }),
   });
+  const models: ModelResolverDeps = {
+    registry,
+    secrets,
+    claude: options.claude ?? {},
+    logger,
+    checkClaudeCodeVersion: createClaudeCodeVersionCheck(),
+    ...(options.models?.bundledClaudeCodePath !== undefined && {
+      bundledClaudeCodePath: options.models.bundledClaudeCodePath,
+    }),
+    ...(options.models?.agentSdk !== undefined && { agentSdk: options.models.agentSdk }),
+  };
   const chat = createChatServices({
     context,
     worktrees,
-    models: {
-      registry,
-      secrets,
-      claude: options.claude ?? {},
-      logger,
-      checkClaudeCodeVersion: createClaudeCodeVersionCheck(),
-      ...(options.models?.bundledClaudeCodePath !== undefined && {
-        bundledClaudeCodePath: options.models.bundledClaudeCodePath,
-      }),
-      ...(options.models?.agentSdk !== undefined && { agentSdk: options.models.agentSdk }),
-    },
+    models,
     ...(options.claude !== undefined && { claude: options.claude }),
     intentFor: (sessionId) => {
       return gh.services?.intentFor(sessionId);
     },
   });
   heads.chat = chat;
+  const drafting = createDraftingServices({ context, models });
   const ura = createUraServices({ context });
   heads.ura = ura;
   const terminal = createTerminalServices({
@@ -407,6 +410,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     display,
     chat,
     ura,
+    drafting,
     terminal,
     setup,
     github,
@@ -439,6 +443,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
       queue.dispose();
       terminal.dispose();
       await chat.dispose();
+      await drafting.dispose();
       await multiplexer.dispose();
       await worktrees.settled();
       await caches[Symbol.asyncDispose]();
