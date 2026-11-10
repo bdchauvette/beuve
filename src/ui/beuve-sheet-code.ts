@@ -58,8 +58,8 @@ export class BeuveSheetCode extends LitElement {
       --diffs-bg-buffer-override: var(--beuve-code-bg);
       --diffs-bg-context-gutter-override: var(--beuve-code-bg);
       --diffs-fg-number-override: var(--beuve-text-muted);
-      --diffs-bg-selection-override: var(--beuve-accent-soft);
-      --diffs-bg-selection-number-override: var(--beuve-accent-soft);
+      --diffs-bg-selection-override: var(--beuve-diff-selection-bg);
+      --diffs-bg-selection-number-override: var(--beuve-diff-selection-number-bg);
       --diffs-selection-color-override: var(--beuve-accent);
       --diffs-bg-hover-override: var(--beuve-surface-sunken);
     }
@@ -170,14 +170,16 @@ export class BeuveSheetCode extends LitElement {
     }
     const sheet = this.sheet ?? new CSSStyleSheet();
     this.sheet = sheet;
-    sheet.replaceSync(
-      sheetGutterCssFrom({
-        marks: this.marks,
-        notes: this.notes,
-        matchLines: this.matchLines,
-        currentMatchLine: this.currentMatchLine,
-      }),
-    );
+    // The library blends a selection into the line at 18% (25% dark); the tokens are the colours shown (ADR 0114).
+    const unblendedSelection =
+      '[data-selected-line] { --mix-selection-light: 0%; --mix-selection-dark: 0%; }';
+    const gutter = sheetGutterCssFrom({
+      marks: this.marks,
+      notes: this.notes,
+      matchLines: this.matchLines,
+      currentMatchLine: this.currentMatchLine,
+    });
+    sheet.replaceSync(`${unblendedSelection}\n${gutter}`);
     if (!root.adoptedStyleSheets.includes(sheet)) {
       root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
     }

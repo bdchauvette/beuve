@@ -131,6 +131,8 @@
   --beuve-scale-indigo-11: light-dark(#3a5bc7, #9eb1ff);
   --beuve-scale-indigo-a3: light-dark(#0047f112, #2f62ff3c);
   --beuve-scale-violet-11: light-dark(#6550b9, #baa7ff);
+  --beuve-scale-purple-a4: light-dark(#8d00e51d, #bb53fd42);
+  --beuve-scale-purple-a6: light-dark(#7a01d03b, #c16dfd61);
 
   --beuve-scale-green-9: #30a46c;
   --beuve-scale-green-11: light-dark(#218358, #3dd68c);
@@ -371,6 +373,9 @@
   --beuve-diff-removed-text: var(--beuve-scale-yellow-11);
   --beuve-diff-removed-number-text: var(--beuve-scale-yellow-11);
   --beuve-diff-hunk-bg: var(--beuve-scale-indigo-a3);
+  /* Selected lines and their numbers: purple, a hue apart from the blue and yellow of changes. */
+  --beuve-diff-selection-bg: var(--beuve-scale-purple-a4);
+  --beuve-diff-selection-number-bg: var(--beuve-scale-purple-a6);
   --beuve-diff-hunk-text: var(--beuve-accent);
 }
 
