@@ -603,6 +603,14 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Show New Co&mmits",
       },
       {
+        "id": "run-setup",
+        "label": "R&un Setup",
+      },
+      {
+        "id": "edit-setup-command",
+        "label": "E&dit Setup Command…",
+      },
+      {
         "id": "restart-language-servers",
         "label": "Restart &Language Servers",
       },
@@ -1372,6 +1380,14 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       {
         "id": "show-new-commits",
         "label": "Show New Commits",
+      },
+      {
+        "id": "run-setup",
+        "label": "Run Setup",
+      },
+      {
+        "id": "edit-setup-command",
+        "label": "Edit Setup Command…",
       },
       {
         "id": "restart-language-servers",

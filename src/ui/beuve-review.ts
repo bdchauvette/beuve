@@ -37,6 +37,10 @@ import './beuve-status-bar.ts';
 import './beuve-titlebar.ts';
 import './beuve-workspace.ts';
 import type { TerminalFocusDetail } from './beuve-terminal-panel.ts';
+import './beuve-setup-command-dialog.ts';
+import type { SetupCommandSaveDetail } from './beuve-setup-command-dialog.ts';
+import { SetupController } from './setup-controller.ts';
+import type { SetupTarget } from './setup-controller.ts';
 import './beuve-ura-dock.ts';
 import { planDiffDeferrals } from './plan-diff-deferrals.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
@@ -609,6 +613,24 @@ export class BeuveReview extends LitElement {
       this.showNotice(notice);
     },
   });
+  /** Run Setup and Edit Setup Command… (ADR 0130). */
+  private readonly setup = new SetupController(this, {
+    bridge: beuveBridge,
+    target: (): SetupTarget | undefined => {
+      if (this.review === undefined) {
+        return undefined;
+      }
+      return { sessionId: this.review.session.id, headSha: this.review.headSha };
+    },
+    notify: (notice): void => {
+      this.showNotice(notice);
+    },
+    startRun: (): void => {
+      this.terminalShown = true;
+      this.setupPending = true;
+      void import('./beuve-terminal-panel.ts');
+    },
+  });
   /** The language servers' diagnostics for the files on screen (ADR 0111). */
   private readonly fileDiagnostics = new DiagnosticsController(this, {
     bridge: beuveBridge,
@@ -646,6 +668,9 @@ export class BeuveReview extends LitElement {
   @state() accessor terminalShown = false;
 
   @state() accessor isTerminalFocused = false;
+
+  /** Run Setup asked the terminal panel for a setup terminal it has not opened yet (ADR 0130). */
+  @state() accessor setupPending = false;
 
   /** The sidebar tab on show: intent and files, the review or the chat. */
   @state() accessor sidebarTab: SidebarZone = 'files';
@@ -1300,6 +1325,10 @@ export class BeuveReview extends LitElement {
         .api=${beuveBridge()}
         .sessionId=${review.session.id}
         .headSha=${review.headSha}
+        ?setupPending=${this.setupPending}
+        @beuve-terminal-setup-taken=${(): void => {
+          this.setupPending = false;
+        }}
         @beuve-terminal-focus=${(event: CustomEvent<TerminalFocusDetail>): void => {
           this.onTerminalFocus(event);
         }}
@@ -1308,6 +1337,25 @@ export class BeuveReview extends LitElement {
         }}
       ></beuve-terminal-panel>`,
     )}`;
+  }
+
+  private renderSetupDialog(): TemplateResult | typeof nothing {
+    const { dialog } = this.setup;
+    if (dialog === undefined) {
+      return nothing;
+    }
+    return html`<beuve-setup-command-dialog
+      .repository=${dialog.repository}
+      .command=${dialog.command}
+      .error=${dialog.error}
+      ?runsAfterSave=${dialog.runsAfterSave}
+      @beuve-setup-command-save=${(event: CustomEvent<SetupCommandSaveDetail>): void => {
+        void this.setup.save(event.detail.command);
+      }}
+      @beuve-setup-command-cancel=${(): void => {
+        this.setup.cancel();
+      }}
+    ></beuve-setup-command-dialog>`;
   }
 
   private requireModel(): AppModel {
@@ -1633,6 +1681,14 @@ export class BeuveReview extends LitElement {
         void this.restartLanguageServers();
         return true;
       }
+      case 'run-setup': {
+        void this.setup.run();
+        return true;
+      }
+      case 'edit-setup-command': {
+        void this.setup.edit();
+        return true;
+      }
       case 'harvest-review-edits': {
         this.focusSidebar('ura');
         void this.reviewEdits.previewStage();
@@ -1762,6 +1818,7 @@ export class BeuveReview extends LitElement {
               .sha=${this.review.headSha}
             ></beuve-definition-link>`
       }
+      ${this.renderSetupDialog()}
     `;
   }
 
@@ -1776,6 +1833,7 @@ export class BeuveReview extends LitElement {
       this.shownDisplaySide = side;
       this.sidebarSide = side;
     }
+    this.setup.observe();
     const { review } = this;
     if (review === this.shownReview) {
       return;

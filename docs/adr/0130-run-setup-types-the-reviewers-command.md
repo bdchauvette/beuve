@@ -1,0 +1,30 @@
+# 0130. Run Setup types the reviewer's own setup command into a terminal
+
+- Status: Accepted
+- Date: 2026-11-10
+
+## Context
+
+ADR 0095 replaced automatic installs with a terminal panel: "beuve installs nothing itself". In daily use that means opening the panel after every checkout and typing the same install and build line again, because each head has its own fresh checkout (ADR 0020) with no install output in it. The reviewer wants the routine steps one click away.
+
+Two constraints shape it. beuve is a personal tool, and the branches under review are not the reviewer's: a configuration file in the repository (ADR 0092's `.beuve/config.json`, or any other) would be missing from most branches, and when present would let the branch under review choose what runs. And an install runs code from the branch (lifecycle scripts, build scripts, `go generate` hooks), so whatever runs it must be a deliberate act by the reviewer, every time.
+
+## Decision
+
+Amends ADR 0095's "beuve installs nothing itself". beuve still decides nothing on its own: it types the reviewer's own stored command into the reviewer's terminal when the reviewer asks.
+
+- **A setup command per repository, in beuve's database.** One shell command line (`npm ci && npm run build`), stored in `setup_commands` by the new `setup` domain (`src/internal/setup`, its own migration, a `DatabaseSync` parameter, ADR 0006). It is never read from, or written to, the repository.
+- **Keyed by the repository's remote, `host/owner/repo` in lowercase**, as the review queue matches sessions (ADR 0113), so one command serves every session and pull request of the repository, local sessions and clones included. A pull-request or remote-branch session names its repository (a fork's pull request uses the base repository); a local session uses the remote permalinks use (`choosePrimaryRemote`: `origin`, else the first remote `parseGithubRemoteUrl` reads). A repository without such a remote has no setup: Run Setup says why, rather than falling back to the clone's path, which would split one repository's command across its clones.
+- **Click to run, never automatic.** Review › Run Setup (`run-setup`), Review › Edit Setup Command… (`edit-setup-command`) and a Run Setup button in the terminal panel's bar. The status bar offers Run Setup, once per head, when the repository has a command and no setup has succeeded in that head's checkout; the offer is a button, and nothing runs until it is clicked. A repository without a command gets no offer: the reviewer starts with Run Setup or the panel's button. Both commands are menu items, so neither is in the Settings window (ADR 0068 amendment).
+- **Asking for the command.** Run Setup on a repository without a command, and Edit Setup Command…, open a small dialog prefilled with the stored command or a guess from the files at the top of the head (`package-lock.json` → `npm ci`, `pnpm-lock.yaml` → `pnpm install --frozen-lockfile`, `yarn.lock` → `yarn install --frozen-lockfile`, `go.mod` → `go mod download`, and a few more; one per ecosystem, joined with `&&`). The guess is only text in an input. The files are looked up with `findTreeBlob` on the repository's object reader (ADR 0087). `parseSetupCommand` refuses an empty line, control characters (so one line), a `#` comment and a line ending in `&`, `|` or `\`.
+- **Typed into a new terminal, visibly.** `setup:run` (per head, ADR 0078) opens a new terminal tab titled `setup` in the checkout of the session's head, as `terminal:open` does (the user's login shell, the head lease, ADR 0095), and writes one line to it as if typed: `{ <command>; } && printf '\033]7703;beuve-setup;<nonce>\007'`, or `begin; <command>; end; and printf …` for fish. The reviewer watches it, can stop it with Ctrl-C and keeps the shell afterwards. A new terminal, rather than the focused one, means the line never lands in a shell where the reviewer has changed directory or is running something.
+- **Success is the shell's own answer.** The `printf` runs only when the command succeeds, and prints an OSC sequence no terminal assigns, which xterm ignores. The line spells it with octal escapes, so the shell's echo of the line never matches; a random nonce per run means output that merely looks like a marker does not. Main watches the terminal's output for it and records the run in `setup_runs` (the session, its head and the checkout; cascading from `sessions`), then pushes `setup:finished`. The window then offers Restart Language Servers, since tsserver does not notice a `node_modules` that appeared after it started (ADR 0095). A checkout that is checked out afresh or removed (`onCheckoutReset`) forgets its runs.
+- **No lockfile comparison.** Checkouts are per commit (ADR 0020), so a new head's checkout never has the previous head's install output, whatever its lockfiles say. Comparing manifest blob ids between heads could never make a setup unnecessary, so the offer is simply "no successful setup in this head's checkout".
+
+## Consequences
+
+The routine steps after a checkout are a click, in the reviewer's own shell with their own version managers and environment, and work for any ecosystem without beuve knowing it. Install scripts still run only when the reviewer asks, now for each head rather than once, which is the cost of not trusting a branch by default.
+
+The marker relies on `printf` with octal escapes and on `{ …; }` or fish's `begin; …; end`. A shell with other syntax (nushell, xonsh, elvish) gets a line it cannot parse; its reviewer can still type commands themselves. A command that leaves something running in the background, or whose last step fails on purpose, does not count as a success, so the offer comes back. The typed line, marker included, is in the shell's history.
+
+The command is stored per repository, not per branch or per clone; a branch that needs a different setup is run by hand in the terminal. The setup command is one more channel from the renderer to the shell, no wider than `terminal:write` (ADR 0095).

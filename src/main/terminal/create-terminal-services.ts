@@ -39,6 +39,14 @@ export interface TerminalServices {
     request: TerminalOpenRequest,
     options?: RequestOptions,
   ) => Promise<IpcResult<TerminalView>>;
+  /**
+   * Starts a shell like `open`, then types what `script` says into it and tells `script` its
+   * output (ADR 0130). The reviewer sees and can interrupt it like any terminal.
+   */
+  readonly openScripted: (
+    request: ScriptedTerminalRequest,
+    options?: RequestOptions,
+  ) => Promise<IpcResult<TerminalView>>;
   readonly list: (request: TerminalListRequest) => IpcResult<TerminalListView>;
   readonly write: (request: TerminalWriteRequest) => IpcResult<TerminalAckView>;
   readonly resize: (request: TerminalResizeRequest) => IpcResult<TerminalAckView>;
@@ -64,6 +72,33 @@ export interface TerminalServicesOptions {
   readonly scrollbackLimit?: number;
   /** How long output waits to be batched. Defaults to 8 ms. */
   readonly outputDelay?: Temporal.Duration;
+}
+
+/** `terminal:open`'s request, with the tab's title and what to type. */
+export interface ScriptedTerminalRequest extends TerminalOpenRequest {
+  readonly title: string;
+  readonly script: TerminalScript;
+}
+
+/** Decides, once the shell has started, what to type into it and who reads its output. */
+export type TerminalScript = (started: ScriptedTerminalStart) => ScriptedTerminalRun;
+
+/** The shell a script runs in. */
+export interface ScriptedTerminalStart {
+  readonly terminalId: string;
+  readonly sessionId: string;
+  readonly headSha: string;
+  /** The checkout the shell started in. */
+  readonly checkout: string;
+  /** The shell's program, e.g. `/bin/zsh`. */
+  readonly shell: string;
+}
+
+/** The keystrokes to send and the listener for what the terminal prints. */
+export interface ScriptedTerminalRun {
+  readonly input: string;
+  /** Told each chunk of output, in order, until the shell ends. */
+  readonly onOutput: (text: string) => void;
 }
 
 interface Terminal {
@@ -144,7 +179,7 @@ export function createTerminalServices(options: TerminalServicesOptions): Termin
   };
 
   const start = async (request: StartRequest): Promise<IpcResult<Terminal>> => {
-    const { session, repositoryPath, checkout, size } = request;
+    const { session, repositoryPath, checkout, size, script } = request;
     const shell = terminalShellFrom({
       shell: options.environment['SHELL'],
       platform: options.platform,
@@ -180,7 +215,7 @@ export function createTerminalServices(options: TerminalServicesOptions): Termin
       id: randomUUID(),
       sessionId: session.id,
       headSha: session.headSha,
-      title: path.basename(shell.file),
+      title: request.title ?? path.basename(shell.file),
       process,
       scrollback: new ScrollbackBuffer(options.scrollbackLimit ?? defaultScrollbackLimit),
       output: new OutputCoalescer({
@@ -193,9 +228,17 @@ export function createTerminalServices(options: TerminalServicesOptions): Termin
       resources: request.resources,
       isRunning: true,
     };
+    const run = script?.({
+      terminalId: terminal.id,
+      sessionId: session.id,
+      headSha: session.headSha,
+      checkout,
+      shell: shell.file,
+    });
     terminal.resources.defer(
       process.onData((data) => {
         terminal.output.write(data);
+        run?.onOutput(data);
       }),
     );
     terminal.resources.defer(
@@ -203,46 +246,61 @@ export function createTerminalServices(options: TerminalServicesOptions): Termin
         markEnded(terminal, exit);
       }),
     );
+    if (run !== undefined) {
+      process.write(run.input);
+    }
     return ok(terminal);
+  };
+
+  const openIn = async (
+    request: TerminalOpenRequest,
+    scripted: TerminalScripting,
+    signal: AbortSignal | undefined,
+  ): Promise<IpcResult<TerminalView>> => {
+    const loaded = loadSession(context, request.sessionId);
+    if (!loaded.ok) {
+      return loaded;
+    }
+    const refreshed = await refreshSession(context, loaded.value, { signal });
+    if (!refreshed.ok) {
+      return refreshed;
+    }
+    const { repository, session } = refreshed.value;
+    if (session.headSha !== request.expectedHeadSha) {
+      return err(staleHead());
+    }
+    using resources = new DisposableStack();
+    const leased = await worktrees.acquire(
+      repository,
+      { kind: 'session-head', sessionId: session.id, headSha: session.headSha },
+      { signal },
+    );
+    if (!leased.ok) {
+      return worktreeFailure(context.logger, leased.error);
+    }
+    resources.use(leased.value);
+    const started = await start({
+      session,
+      repositoryPath: session.source.repoPath,
+      checkout: leased.value.path,
+      size: { cols: request.cols, rows: request.rows },
+      resources: resources.move(),
+      ...scripted,
+    });
+    if (!started.ok) {
+      return started;
+    }
+    terminals.set(started.value.id, started.value);
+    return ok(viewOf(started.value));
   };
 
   return {
     open: async (request, requestOptions = {}): Promise<IpcResult<TerminalView>> => {
-      const { signal } = requestOptions;
-      const loaded = loadSession(context, request.sessionId);
-      if (!loaded.ok) {
-        return loaded;
-      }
-      const refreshed = await refreshSession(context, loaded.value, { signal });
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-      const { repository, session } = refreshed.value;
-      if (session.headSha !== request.expectedHeadSha) {
-        return err(staleHead());
-      }
-      using resources = new DisposableStack();
-      const leased = await worktrees.acquire(
-        repository,
-        { kind: 'session-head', sessionId: session.id, headSha: session.headSha },
-        { signal },
-      );
-      if (!leased.ok) {
-        return worktreeFailure(context.logger, leased.error);
-      }
-      resources.use(leased.value);
-      const started = await start({
-        session,
-        repositoryPath: session.source.repoPath,
-        checkout: leased.value.path,
-        size: { cols: request.cols, rows: request.rows },
-        resources: resources.move(),
-      });
-      if (!started.ok) {
-        return started;
-      }
-      terminals.set(started.value.id, started.value);
-      return ok(viewOf(started.value));
+      return openIn(request, {}, requestOptions.signal);
+    },
+    openScripted: async (request, requestOptions = {}): Promise<IpcResult<TerminalView>> => {
+      const { title, script, ...open } = request;
+      return openIn(open, { title, script }, requestOptions.signal);
     },
     list: ({ sessionId }): IpcResult<TerminalListView> => {
       const own: TerminalBacklogView[] = [];
@@ -301,8 +359,14 @@ export function createTerminalServices(options: TerminalServicesOptions): Termin
   };
 }
 
+/** A scripted terminal's title and script; neither for a plain one. */
+interface TerminalScripting {
+  readonly title?: string;
+  readonly script?: TerminalScript;
+}
+
 /** What `start` needs besides the options: the session head, its checkout and the held lease. */
-interface StartRequest {
+interface StartRequest extends TerminalScripting {
   readonly session: { readonly id: string; readonly headSha: string };
   readonly repositoryPath: string;
   readonly checkout: string;

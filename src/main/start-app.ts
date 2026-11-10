@@ -139,6 +139,11 @@ export function startApp(app: App, options: StartAppOptions): void {
       sendEvent(contents, 'terminal:exit', event);
     }
   });
+  services.setup.onFinished((event) => {
+    for (const contents of mainWindowContents) {
+      sendEvent(contents, 'setup:finished', event);
+    }
+  });
   services.ura.onChanged((sessionId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       sendEvent(window.webContents, 'ura:changed', { sessionId });

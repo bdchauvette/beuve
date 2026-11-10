@@ -884,6 +884,57 @@ export interface TerminalExitEvent {
   readonly signal: number | undefined;
 }
 
+/** `setup:status`: what Run Setup would do for the checkout of the session's head (ADR 0130). */
+export interface SetupStatusRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha: string;
+}
+
+/**
+ * `setup:status`'s answer. `no-remote`: the repository has no GitHub-style remote, which is what
+ * a setup command is stored under, so there is no setup. `ready`: the repository (`host/owner/repo`),
+ * its stored command if any, a suggestion from the head's files, and whether a setup already
+ * succeeded in this head's checkout.
+ */
+export type SetupStatusView =
+  | { readonly kind: 'no-remote'; readonly sessionId: string; readonly headSha: string }
+  | {
+      readonly kind: 'ready';
+      readonly sessionId: string;
+      readonly headSha: string;
+      readonly repository: string;
+      readonly command?: string;
+      readonly suggestion: string;
+      readonly isSetUp: boolean;
+    };
+
+/** `setup:set-command`: stores the setup command of the session's repository. */
+export interface SetupSetCommandRequest {
+  readonly sessionId: string;
+  readonly command: string;
+}
+
+/** The setup command now stored for a repository. */
+export interface SetupCommandView {
+  readonly repository: string;
+  readonly command: string;
+}
+
+/** `setup:run`: types the stored setup command into a new terminal at the session's head. */
+export interface SetupRunRequest {
+  readonly sessionId: string;
+  readonly expectedHeadSha: string;
+  readonly cols: number;
+  readonly rows: number;
+}
+
+/** `setup:finished`: the setup command succeeded in a terminal, so its checkout is set up. */
+export interface SetupFinishedEvent {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly terminalId: string;
+}
+
 /** How hard Claude Code thinks during `/review` (`--effort`, ADR 0019). */
 export type ReviewEffort = 'low' | 'medium' | 'high';
 
@@ -2483,6 +2534,18 @@ export interface InvokeChannelMap {
     readonly request: TerminalCloseRequest;
     readonly response: IpcResult<TerminalAckView>;
   };
+  'setup:status': {
+    readonly request: SetupStatusRequest;
+    readonly response: IpcResult<SetupStatusView>;
+  };
+  'setup:set-command': {
+    readonly request: SetupSetCommandRequest;
+    readonly response: IpcResult<SetupCommandView>;
+  };
+  'setup:run': {
+    readonly request: SetupRunRequest;
+    readonly response: IpcResult<TerminalView>;
+  };
   'ura:list': { readonly request: ListUraItemsRequest; readonly response: IpcResult<UraListView> };
   'ura:create': {
     readonly request: CreateUraItemRequest;
@@ -2698,6 +2761,8 @@ export interface EventChannelMap {
   'terminal:data': TerminalDataEvent;
   /** A terminal's shell ended. */
   'terminal:exit': TerminalExitEvent;
+  /** A setup command succeeded in its terminal (ADR 0130). */
+  'setup:finished': SetupFinishedEvent;
   /** Run a menu, shortcut or context menu command in this window (ADR 0068). */
   'menu:run': MenuRunView;
   /** Open a pull request a `beuve://` link asked for and the reviewer confirmed (ADR 0098). */

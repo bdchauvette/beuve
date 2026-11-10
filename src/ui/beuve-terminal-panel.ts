@@ -60,6 +60,11 @@ const fontSize = 13;
  * none, sends keystrokes with `terminal:write` and shows `terminal:data`. Closing the panel (the
  * window just stops rendering it) leaves the shells running; closing a tab ends its shell.
  * Emits `beuve-terminal-focus` ({@link TerminalFocusDetail}) and `beuve-terminal-hide`.
+ *
+ * Run Setup (ADR 0130): while `setupPending` is set, the panel asks main for `setup:run`, a new
+ * shell with the repository's setup command typed into it, instead of a plain one, and emits
+ * `beuve-terminal-setup-taken` so the owner clears the flag. Its Run Setup button emits
+ * `beuve-status-action` for the `run-setup` command, which may first ask for the command.
  */
 @customElement('beuve-terminal-panel')
 export class BeuveTerminalPanel extends LitElement {
@@ -154,6 +159,9 @@ export class BeuveTerminalPanel extends LitElement {
   /** Watches the root's style, where Settings › Fonts sets the preferred code font (ADR 0122). */
   private fontObserver: MutationObserver | undefined;
   private colorScheme: MediaQueryList | undefined;
+  /** The session's shells are listed and adopted, so a setup terminal can join them. */
+  private isAttached = false;
+  private isStartingSetup = false;
 
   private readonly colorSchemeListener = (): void => {
     for (const pane of this.panes.values()) {
@@ -173,6 +181,8 @@ export class BeuveTerminalPanel extends LitElement {
   @property() accessor sessionId = '';
   /** The session's current head: a new shell starts in its checkout. */
   @property() accessor headSha = '';
+  /** Run Setup asked for a terminal; the panel opens it once it has listed the session's shells. */
+  @property({ type: Boolean }) accessor setupPending = false;
   /** The tab labels, in order. */
   @state() accessor tabs: readonly TerminalView[] = [];
   @state() accessor activeId = '';
@@ -191,6 +201,15 @@ export class BeuveTerminalPanel extends LitElement {
           },
           new: (): void => {
             void this.openTab();
+          },
+          setup: (): void => {
+            this.dispatchEvent(
+              new CustomEvent('beuve-status-action', {
+                detail: { command: 'run-setup' },
+                bubbles: true,
+                composed: true,
+              }),
+            );
           },
           hide: (): void => {
             this.dispatchEvent(
@@ -261,8 +280,40 @@ export class BeuveTerminalPanel extends LitElement {
     for (const terminal of listed.value.terminals) {
       await this.adopt(terminal);
     }
-    if (listed.value.terminals.length === 0) {
+    this.isAttached = true;
+    if (this.setupPending) {
+      await this.openSetup();
+    } else if (listed.value.terminals.length === 0) {
       await this.openTab();
+    }
+  }
+
+  /** A new shell at the head with the setup command typed into it (`setup:run`). */
+  private async openSetup(): Promise<void> {
+    const bridge = this.api;
+    if (bridge === undefined || this.headSha === '' || this.isStartingSetup) {
+      return;
+    }
+    this.isStartingSetup = true;
+    this.dispatchEvent(
+      new CustomEvent('beuve-terminal-setup-taken', { bubbles: true, composed: true }),
+    );
+    try {
+      const size = this.proposedSize();
+      const opened = await bridge.invoke('setup:run', {
+        sessionId: this.sessionId,
+        expectedHeadSha: this.headSha,
+        cols: size.cols,
+        rows: size.rows,
+      });
+      if (!opened.ok) {
+        this.failure = opened.error.message;
+        return;
+      }
+      this.failure = '';
+      await this.adopt({ ...opened.value, backlog: '', backlogEnd: 0 });
+    } finally {
+      this.isStartingSetup = false;
     }
   }
 
@@ -492,6 +543,9 @@ export class BeuveTerminalPanel extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has('setupPending') && this.setupPending && this.isAttached) {
+      void this.openSetup();
+    }
     if (!changed.has('activeId')) {
       return;
     }
@@ -516,6 +570,13 @@ export class BeuveTerminalPanel extends LitElement {
           +
         </button>
         <span class="spacer"></span>
+        <button
+          class="button quiet"
+          data-action="setup"
+          title="Type this repository’s setup command into a new terminal"
+        >
+          Run Setup
+        </button>
         <button
           class="button icon"
           data-action="hide"
