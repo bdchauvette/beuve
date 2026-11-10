@@ -736,6 +736,7 @@ export class BeuveUraDock extends LitElement {
         <button
           class="button"
           type="button"
+          name="blocking"
           data-action="toggle-blocking"
           aria-pressed=${String(this.editingBlocking)}
           title="Blocking: must be resolved before merging"

@@ -233,6 +233,7 @@ export class BeuveUraComposer extends LitElement {
         <button
           class="button"
           type="button"
+          name="blocking"
           aria-pressed=${String(this.blocking)}
           title="Blocking: must be resolved before merging"
           @click=${(): void => {

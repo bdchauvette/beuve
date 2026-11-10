@@ -1155,7 +1155,7 @@ describe('ura:expand-note', () => {
       sessionId: 's1',
       headSha: sha(),
       anchor: { kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 4 },
-      severity: 'nit',
+      severity: 'nitpick',
       title: '',
       body: 'rename',
     };

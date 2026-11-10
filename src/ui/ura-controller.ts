@@ -286,6 +286,7 @@ export class UraController implements ReactiveController {
       headSha: draft.headSha ?? review.headSha,
       anchor: draft.anchor,
       severity: draft.severity,
+      blocking: draft.blocking,
       title: draft.title,
       body: draft.body,
       requestId,
