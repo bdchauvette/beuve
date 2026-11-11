@@ -46,7 +46,10 @@ export class BeuveUraComposer extends LitElement {
         color: var(--beuve-text);
       }
 
+      /* The whole form keeps the note measure, so the fields and actions line up with the body. */
       form {
+        box-sizing: border-box;
+        max-inline-size: var(--beuve-size-note-measure);
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         gap: var(--beuve-space-1);
@@ -92,8 +95,7 @@ export class BeuveUraComposer extends LitElement {
       textarea {
         field-sizing: content;
         inline-size: 100%;
-        max-inline-size: var(--beuve-size-note-measure);
-        min-block-size: var(--beuve-size-editor-small);
+        min-block-size: var(--beuve-size-note-editor-min);
         max-block-size: var(--beuve-size-note-editor-max);
         resize: block;
         font: var(--beuve-font-code);
@@ -124,6 +126,12 @@ export class BeuveUraComposer extends LitElement {
 
       .error {
         color: var(--beuve-danger);
+      }
+
+      /* The form's own actions, apart from the body's tools above them. */
+      .footer {
+        padding-block-start: var(--beuve-space-1);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .row > .button {
@@ -251,6 +259,9 @@ export class BeuveUraComposer extends LitElement {
         />
       </div>
       <textarea aria-label="Body" placeholder="Details (Markdown, optional)"></textarea>
+      <div class="row tools">
+        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
+      </div>
       ${
         this.patch === ''
           ? nothing
@@ -259,10 +270,9 @@ export class BeuveUraComposer extends LitElement {
               <beuve-patch-preview .patch=${this.patch}></beuve-patch-preview>
             </div>`
       }
-      <div class="row">
+      <div class="row footer">
         <span class="where">${pathText(this.where)}</span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
-        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
         <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>
           Cancel
         </button>

@@ -36,10 +36,11 @@ export interface NoteExpandRequestDetail {
 }
 
 /**
- * The Expand button of a note form (ADR 0125), placed inside the `<form>` whose Title input, Body
+ * The Expand button of a note form (ADR 0125), on its own row under the body rather than among the
+ * form's Cancel and Stage or Save, placed inside the `<form>` whose Title input, Body
  * textarea and Label select it reads (by their `aria-label`), and its Blocking toggle (`name`). Enabled while the title or body
  * has text. It asks with a composed `beuve-note-expand-request` ({@link NoteExpandRequestDetail})
- * and never calls the bridge; while it waits it shows Expanding… and a Cancel. The answer replaces
+ * and never calls the bridge; while it waits it shows Expanding… and a Stop, never a second Cancel beside the form's. The answer replaces
  * the body's text as one edit the reviewer can undo (⌘/Ctrl+Z); a failure shows beside the button.
  */
 @customElement('beuve-note-expand')
@@ -78,7 +79,7 @@ export class BeuveNoteExpand extends LitElement {
     void this.expand();
   };
 
-  private readonly onCancel = (): void => {
+  private readonly onStop = (): void => {
     this.controller?.abort();
   };
 
@@ -221,11 +222,18 @@ export class BeuveNoteExpand extends LitElement {
   override render(): TemplateResult {
     if (this.isExpanding) {
       return html`<span class="status" role="status">Expanding…</span>
-        <button class="button link" type="button" @click=${this.onCancel}>Cancel</button>`;
+        <button
+          class="button link"
+          type="button"
+          title="Stop expanding; the draft stays as it is"
+          @click=${this.onStop}
+        >
+          Stop
+        </button>`;
     }
     return html`${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
       <button
-        class="button"
+        class="button quiet"
         type="button"
         title="Expand on this: write the note out for the author from the draft and the diff"
         ?disabled=${!this.hasText || this.anchor === undefined}
