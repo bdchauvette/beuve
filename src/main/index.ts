@@ -44,7 +44,7 @@ app.on('open-url', (event, url) => {
 });
 
 if (app.requestSingleInstanceLock()) {
-  // A launch from Finder or the Dock has no terminal: the file is where Help › Show Log File points.
+  // A launch from Finder or the Dock has no terminal: the file is where Help › Troubleshooting › Show Log File points.
   logFile = openLogFile(logFilePaths());
   // Elsewhere a link starts beuve, or reaches the running one, as an argument.
   app.on('second-instance', (_event, argv): void => {

@@ -140,14 +140,16 @@ describe('menuTemplateFrom', () => {
   });
 
   test.for(['mac', 'linux'] as const)(
-    'puts developer tools in the %s Help › Troubleshooting, without a key',
+    'puts the log file and developer tools in the %s Help › Troubleshooting',
     (platform, { expect }) => {
       const help = menuTemplateFrom({ catalog: commandCatalog, platform }).at(-1);
       const troubleshooting = help?.submenu?.find((item) => {
         return item.label?.replace('&', '') === 'Troubleshooting';
       });
-      expect(troubleshooting?.submenu?.map((item) => item.role)).toStrictEqual(['toggleDevTools']);
-      expect(troubleshooting?.submenu?.[0]?.accelerator).toBe('');
+      expect(
+        troubleshooting?.submenu?.map((item) => item.id ?? item.role ?? item.type),
+      ).toStrictEqual(['show-log', 'separator', 'toggleDevTools']);
+      expect(troubleshooting?.submenu?.at(-1)?.accelerator).toBe('');
     },
   );
 

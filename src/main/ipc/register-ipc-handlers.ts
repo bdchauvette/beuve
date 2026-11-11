@@ -53,7 +53,7 @@ export function registerIpcHandlers(
           logger.error('ipc handler failed', { channel, error });
           return err({
             code: 'internal',
-            message: 'Internal error; Help › Show Log File has the details.',
+            message: 'Internal error; Help › Troubleshooting › Show Log File has the details.',
           });
         }
       },

@@ -49,6 +49,15 @@ const roleAccelerators = {
   },
 } as const satisfies Readonly<Record<KeyPlatform, Readonly<Record<string, string>>>>;
 
+/** Role items each catalog submenu ends with, after its commands. */
+const submenuRoles: Readonly<Record<string, readonly MenuTemplateItem[]>> = {
+  Troubleshooting: [
+    // An empty accelerator, because a role without one takes Electron's default
+    // (Ctrl+Shift+I, which is Show Control Flow on Linux).
+    { role: 'toggleDevTools', label: 'Toggle Developer Tools', accelerator: '' },
+  ],
+};
+
 const topMenus: readonly TopMenu[] = [
   'app',
   'file',
@@ -145,15 +154,14 @@ function itemsOf(entries: readonly PlacedCommand[], platform: KeyPlatform): Menu
         return left - right;
       },
     );
+    const sections = subgroups.map((subgroup) => {
+      return members
+        .filter((entry) => (entry.place.subgroup ?? 0) === subgroup)
+        .flatMap((entry) => commandItems(entry.command, platform));
+    });
     items.push({
       label: place.submenu,
-      submenu: joinMenuSections(
-        subgroups.map((subgroup) => {
-          return members
-            .filter((entry) => (entry.place.subgroup ?? 0) === subgroup)
-            .flatMap((entry) => commandItems(entry.command, platform));
-        }),
-      ),
+      submenu: joinMenuSections([...sections, [...(submenuRoles[place.submenu] ?? [])]]),
     });
   }
   return items;
@@ -241,16 +249,6 @@ function roleItemsFor(
   platform: KeyPlatform,
 ): Partial<Record<TopMenu, Readonly<Record<number, readonly MenuTemplateItem[]>>>> {
   const keys = roleAccelerators[platform];
-  const help: Record<number, readonly MenuTemplateItem[]> = {
-    3: [
-      {
-        label: 'Troubleshooting',
-        // An empty accelerator, because a role without one takes Electron's default
-        // (Ctrl+Shift+I, which is Show Control Flow on Linux).
-        submenu: [{ role: 'toggleDevTools', label: 'Toggle Developer Tools', accelerator: '' }],
-      },
-    ],
-  };
   const edit: Record<number, readonly MenuTemplateItem[]> = {
     0: [
       { role: 'undo', label: 'Undo', accelerator: keys.undo },
@@ -292,7 +290,6 @@ function roleItemsFor(
       file: { 2: [closeWindow] },
       edit,
       view,
-      help,
     };
   }
   return {
@@ -300,6 +297,5 @@ function roleItemsFor(
     edit,
     view,
     window: { 0: [{ role: 'minimize', label: 'Minimize' }] },
-    help,
   };
 }
