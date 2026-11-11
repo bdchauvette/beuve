@@ -115,7 +115,7 @@ export function createFlowServices(options: FlowServicesOptions): FlowServices {
             return ok(unsupported(path));
           }
           case 'too-large': {
-            return failed('file-unavailable', `${path} is too large to analyse`);
+            return failed('file-unavailable', `${path} is too large to analyze`);
           }
           case 'load-failed': {
             context.logger.error('flow parse failed', { error: built.error });

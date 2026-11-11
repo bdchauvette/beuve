@@ -11,7 +11,7 @@ import { githubPath } from './github-path.ts';
 import type { PullRequest } from './pull-request.ts';
 import { pullRequestSchema } from './pull-request-schema.ts';
 
-/** The direct neighbours of a pull request in a stack of branches within one repository. */
+/** The direct neighbors of a pull request in a stack of branches within one repository. */
 export interface PullRequestStack {
   /** Open pull requests whose head is this one's base branch (normally zero or one). */
   readonly parents: readonly PullRequest[];
@@ -25,7 +25,7 @@ const pageSchema = z.array(pullRequestSchema);
  * GitHub stack navigation (spec 1): `GET /pulls?state=open&head=<owner>:<base>` for the parent and
  * `?state=open&base=<head>` for the children, both in the base repository and both keeping only
  * pull requests whose head lives there too. A pull request from a fork has no children, because
- * its head branch isn't in the base repository. Only direct neighbours; walk further by calling
+ * its head branch isn't in the base repository. Only direct neighbors; walk further by calling
  * this again.
  */
 export async function findPullRequestStack<E>(

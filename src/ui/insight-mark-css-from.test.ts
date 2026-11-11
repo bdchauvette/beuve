@@ -20,7 +20,7 @@ describe('insightMarkCssFrom', () => {
     expect(inline).toContain(":not([data-line-type='change-deletion'])");
   });
 
-  test('colours each severity differently', ({ expect }) => {
+  test('colors each severity differently', ({ expect }) => {
     const css = insightMarkCssFrom('split', [
       { line: 1, severity: 'risk' },
       { line: 2, severity: 'warning' },

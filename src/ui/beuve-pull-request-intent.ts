@@ -16,7 +16,7 @@ import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /**
  * The intent of a pull request session (spec Zone 1, top): its title, state, author and branches,
- * the body rendered as Markdown (ADR 0073) in text nodes, and the stack neighbours as chips.
+ * the body rendered as Markdown (ADR 0073) in text nodes, and the stack neighbors as chips.
  * Links never navigate: they emit `beuve-open-link` with `{ url }`, and main opens GitHub links in
  * the browser (ADR 0040), and only `http(s)` links are links. A chip emits `beuve-open-stack` with `{ ref }`,
  * and Open in Sheet emits `beuve-description-sheet-request` for the description's own window (ADR 0135).

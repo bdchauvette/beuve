@@ -27,7 +27,7 @@ function roomy(): NoteDiffBudget {
 }
 
 describe('selectNoteHunks', () => {
-  test('a line note gets the hunks that touch or neighbour its lines, in diff order', ({
+  test('a line note gets the hunks that touch or neighbor its lines, in diff order', ({
     expect,
   }) => {
     const files = [fileWithHunks('a.ts', [1, 30, 50, 200]), fileWithHunks('b.ts', [40])];

@@ -1,6 +1,6 @@
 import type { UraVerdict } from './ura-artifact.ts';
 
-/** Why a stored choice was dropped: it became impossible to honour. */
+/** Why a stored choice was dropped: it became impossible to honor. */
 export type VerdictClearReason = 'blocking-staged' | 'head-moved';
 
 /**

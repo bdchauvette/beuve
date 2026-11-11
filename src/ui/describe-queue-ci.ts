@@ -1,6 +1,6 @@
 import type { QueueCiView } from '#contract/ipc-contract.ts';
 
-/** A queue row's CI dot: its colour and what it says on hover. */
+/** A queue row's CI dot: its color and what it says on hover. */
 export interface QueueCiDot {
   readonly tone: 'ok' | 'warn' | 'danger' | 'muted';
   readonly title: string;

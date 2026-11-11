@@ -3,7 +3,7 @@ import type { TemplateResult } from 'lit';
 
 /**
  * The glyphs of icon-only toggles (the review header's display controls, a note's Blocking): 14px
- * outlines that follow the text colour.
+ * outlines that follow the text color.
  */
 export type DisplayIconName =
   'split' | 'inline' | 'whitespace' | 'sort' | 'chevron' | 'check' | 'blocking';

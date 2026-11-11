@@ -6,7 +6,7 @@ import type { IcnsEntry } from './lib/image/encode-icns.ts';
 import { encodePng } from './lib/image/encode-png.ts';
 import type { RgbaImage } from './lib/image/encode-png.ts';
 
-/** A colour layer: a signed distance (negative inside) in 1024-unit icon space. */
+/** A color layer: a signed distance (negative inside) in 1024-unit icon space. */
 interface Layer {
   readonly color: readonly [number, number, number];
   readonly distance: (x: number, y: number) => number;
@@ -94,7 +94,7 @@ function iconLayers(): readonly Layer[] {
   ];
 }
 
-/** An axis-aligned box centred at (cx, cy), with half sizes and a corner radius. */
+/** An axis-aligned box centered at (cx, cy), with half sizes and a corner radius. */
 interface RoundedBox {
   readonly cx: number;
   readonly cy: number;
@@ -115,7 +115,7 @@ function roundedBox(box: RoundedBox): (x: number, y: number) => number {
 
 /**
  * Composites the layers over transparency at `size` pixels. Coverage comes from each layer's
- * distance at the pixel centre, in pixels, clamped to one pixel of antialiasing.
+ * distance at the pixel center, in pixels, clamped to one pixel of antialiasing.
  */
 function render(layers: readonly Layer[], size: number): RgbaImage {
   const scale = canvas / size;

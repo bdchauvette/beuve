@@ -12,7 +12,7 @@ export interface ElementColumns {
 
 /**
  * The part of `link` that lies inside the element, as offsets into its text, or `undefined` when
- * they share no text. The highlighter merges neighbouring text of one color into one element, so
+ * they share no text. The highlighter merges neighboring text of one color into one element, so
  * the language server's identifier is usually a slice of it, and may run past its ends.
  */
 export function linkOffsetsIn(link: LinkColumns, element: ElementColumns): LinkColumns | undefined {

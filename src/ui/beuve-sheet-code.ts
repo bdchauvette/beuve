@@ -235,7 +235,7 @@ export class BeuveSheetCode extends LitElement {
     return this.renderRoot.querySelector('diffs-container')?.shadowRoot ?? undefined;
   }
 
-  /** Scrolls line `line` (1-based) into view, centred unless it is already visible, keeping the horizontal scroll. */
+  /** Scrolls line `line` (1-based) into view, centered unless it is already visible, keeping the horizontal scroll. */
   async reveal(line: number): Promise<void> {
     const row = await waitFor(() => this.row(line));
     // scrollIntoView also scrolls sideways to fit a long line's end; only the rows move.

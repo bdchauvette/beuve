@@ -3,7 +3,7 @@ import { positionEncodings } from './position-encodings.ts';
 
 /**
  * Reads the `initialize` result. `undefined` when it has no `capabilities` object. A missing or
- * unrecognised `positionEncoding` means UTF-16, the protocol default.
+ * unrecognized `positionEncoding` means UTF-16, the protocol default.
  */
 export function parseServerCapabilities(result: unknown): LspServerCapabilities | undefined {
   if (typeof result !== 'object' || result === null || !('capabilities' in result)) {

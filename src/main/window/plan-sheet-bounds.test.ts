@@ -6,7 +6,7 @@ import { planSheetBounds } from './plan-sheet-bounds.ts';
 import type { WindowBounds } from './plan-sheet-bounds.ts';
 
 describe('planSheetBounds', () => {
-  test('centres the first sheet and steps the next ones down and right', ({ expect }) => {
+  test('centers the first sheet and steps the next ones down and right', ({ expect }) => {
     expect(
       planSheetBounds({ workArea: workArea(), remembered: undefined, openCount: 0 }),
     ).toStrictEqual({

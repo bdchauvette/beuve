@@ -1,6 +1,6 @@
 /**
  * Global options that make git's output predictable and keep repository-controlled config from
- * running programs: no pager, literal pathspecs, unquoted UTF-8 paths, no colour, no fsmonitor
+ * running programs: no pager, literal pathspecs, unquoted UTF-8 paths, no color, no fsmonitor
  * or hooks, and standard `a/` `b/` diff prefixes. Every git process beuve starts gets them.
  */
 export const gitHardeningArgs: readonly string[] = [

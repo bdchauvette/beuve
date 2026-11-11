@@ -244,7 +244,7 @@ export class BeuveReview extends LitElement {
     void this.copyText(event.detail.text);
   };
 
-  /** A stack chip: the neighbour lives in the same repository, so it uses the same clone. */
+  /** A stack chip: the neighbor lives in the same repository, so it uses the same clone. */
   private readonly onOpenStack = (event: CustomEvent<StackRefDetail>): void => {
     const source = this.review?.session.source;
     void this.github.open({

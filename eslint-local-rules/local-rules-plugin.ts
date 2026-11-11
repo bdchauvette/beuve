@@ -1,3 +1,4 @@
+import { americanSpelling } from './american-spelling.ts';
 import { arrowBodyBraces } from './arrow-body-braces.ts';
 import { litCssProcessor } from './lit-css-processor.ts';
 import { cssDesignTokens } from './css-design-tokens.ts';
@@ -40,6 +41,7 @@ const plugin = {
   meta: { name: 'local' },
   processors: { 'lit-css': litCssProcessor },
   rules: {
+    'american-spelling': americanSpelling,
     'arrow-body-braces': arrowBodyBraces,
     'css-design-tokens': cssDesignTokens,
     'css-logical-properties': cssLogicalProperties,

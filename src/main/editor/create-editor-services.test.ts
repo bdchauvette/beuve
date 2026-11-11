@@ -100,7 +100,7 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     });
   });
 
-  test('falls back to an installed editor, and honours the preference', async ({
+  test('falls back to an installed editor, and honors the preference', async ({
     expect,
     openInEditor,
     editorState,

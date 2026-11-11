@@ -33,7 +33,7 @@ export function planReviewStream(
   );
   const files: DiffFileView[] = [];
   const groupLabels = new Map<number, string>();
-  const labelled = new Set<string>();
+  const labeled = new Set<string>();
   for (const { file, group } of ordered) {
     let shown: DiffFileView | undefined = file;
     if (pairId !== undefined) {
@@ -42,8 +42,8 @@ export function planReviewStream(
     if (shown === undefined) {
       continue;
     }
-    if (group !== undefined && !labelled.has(group)) {
-      labelled.add(group);
+    if (group !== undefined && !labeled.has(group)) {
+      labeled.add(group);
       groupLabels.set(files.length, group);
     }
     files.push(shown);

@@ -39,7 +39,7 @@ const fixed: Readonly<Record<string, string>> = {
 
 /**
  * The environment `gh` runs in: what it needs to find its stored login (`HOME`, `GH_CONFIG_DIR`,
- * XDG and keyring variables) and the network, with prompts, colour and update checks off. Token
+ * XDG and keyring variables) and the network, with prompts, color and update checks off. Token
  * variables (`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, …) and `GH_HOST` are dropped, so
  * the answer is always the login `gh auth login` stored, never whatever the launching shell held.
  */

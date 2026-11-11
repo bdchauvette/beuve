@@ -54,7 +54,7 @@ const markers: Readonly<Record<string, string | undefined>> = {
 
 /**
  * A small control-flow chart of one function (Show Control Flow, spec 5D): plain text in thin outlines, lines
- * the review changed in the diff "added" colour. Nodes are focusable; arrow keys walk the flow and
+ * the review changed in the diff "added" color. Nodes are focusable; arrow keys walk the flow and
  * Enter fires `flow-node-activate` so Zone 2 can jump to the code.
  */
 /** Kinds drawn as rounded pills rather than boxes. */
@@ -344,7 +344,7 @@ export class FlowGraphView extends LitElement {
       this.activate(node);
       return;
     }
-    const target = this.neighbour(event.key, node.id);
+    const target = this.neighbor(event.key, node.id);
     if (target === undefined) {
       return;
     }
@@ -353,7 +353,7 @@ export class FlowGraphView extends LitElement {
   }
 
   /** Down and up follow the flow; left and right step between the branches of the same decision. */
-  private neighbour(key: string, id: number): number | undefined {
+  private neighbor(key: string, id: number): number | undefined {
     const nodes = new Map(
       (this.layout?.nodes ?? []).map((node) => {
         return [node.id, node];

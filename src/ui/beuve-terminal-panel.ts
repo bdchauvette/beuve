@@ -38,14 +38,14 @@ interface TerminalCells {
   readonly rows: number;
 }
 
-/** The colours xterm needs, read from the window's tokens. */
+/** The colors xterm needs, read from the window's tokens. */
 interface TerminalColors {
   background: string;
   foreground: string;
   cursor: string;
 }
 
-/** A design token and the colour to use when the page does not define it. */
+/** A design token and the color to use when the page does not define it. */
 interface ColorVariable {
   readonly name: string;
   readonly fallback: string;

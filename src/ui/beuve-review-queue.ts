@@ -965,7 +965,7 @@ function filtersToggled(
   }
 }
 
-/** The labelled id `value` names, if any. */
+/** The labeled id `value` names, if any. */
 function known<T extends string>(
   labels: readonly (readonly [T, string])[],
   value: string,

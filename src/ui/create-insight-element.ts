@@ -6,7 +6,7 @@ import { parseInlineTitle } from './parse-inline-title.ts';
 import { setInsightOpen } from './set-insight-open.ts';
 
 /**
- * A `/review` finding as a quiet note under its line: one line (category and title, ellipsised),
+ * A `/review` finding as a quiet note under its line: one line (category and title, ellipsized),
  * which a click, Enter or Space, or keyboard focus, expands in place to the full body with Stage
  * and Show in chat ({@link setInsightOpen}). Escape collapses it. Built from text nodes only: the
  * finding is untrusted model output, so nothing here reaches `innerHTML`. It has no listeners:

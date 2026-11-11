@@ -10,7 +10,7 @@ import { commandRegistry } from './command-registry.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('commandRegistry', () => {
-  test('gives every catalog command, and only those, a behaviour, in catalog order', ({
+  test('gives every catalog command, and only those, a behavior, in catalog order', ({
     expect,
   }) => {
     expect(commandRegistry.map((command) => command.id)).toStrictEqual(

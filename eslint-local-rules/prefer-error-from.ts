@@ -16,7 +16,7 @@ type MessageIds = 'conditional' | 'caught';
 export const preferErrorFrom = ESLintUtils.RuleCreator.withoutDocs<[], MessageIds>({
   meta: {
     type: 'suggestion',
-    docs: { description: 'Use errorFrom to normalise an unknown error' },
+    docs: { description: 'Use errorFrom to normalize an unknown error' },
     schema: [],
     messages: {
       conditional:

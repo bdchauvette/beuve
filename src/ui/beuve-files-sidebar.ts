@@ -89,7 +89,7 @@ export class BeuveFilesSidebar extends LitElement {
         <span class="segmented" role="group" aria-label="Files shown">
           ${this.renderMode('neighborhood', {
             label: 'All',
-            title: 'Show the changed files with their neighbours',
+            title: 'Show the changed files with their neighbors',
           })}
           ${this.renderMode('diff-only', { label: 'Changed', title: 'Show changed files only' })}
         </span>

@@ -21,7 +21,7 @@ describe('textmateThemeFrom', () => {
 });
 
 describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => {
-  test('bolds definitions and numbers, italicises types and mutes keywords in TypeScript', ({
+  test('bolds definitions and numbers, italicizes types and mutes keywords in TypeScript', ({
     expect,
     stylesOf,
   }) => {
@@ -32,7 +32,7 @@ describe('textmateThemeFrom through Shiki (as the diff view highlights)', () => 
       '  «if» «(»«w» «||» «!»«items»«)» «{» «return» «w».«render»«(»`«a»«${»«items».«length» «+» «1»«}»`«)»«;» «}»',
       '«}»',
       '«type» «Kind» «=» «A» «|» «B»;',
-      '«class» «Widget» «extends» «Base» «implements» «Labelled» {}',
+      '«class» «Widget» «extends» «Base» «implements» «Labeled» {}',
       '«interface» «Item» { «id»«:» «string» }',
       'const «handler» = «async» «(»«)»«:» «void» «=>» {};',
     ].join('\n');

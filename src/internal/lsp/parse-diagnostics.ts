@@ -5,7 +5,7 @@ import type {
   LspRelatedInformation,
 } from './lsp-protocol.ts';
 
-/** Keeps the well-formed diagnostics in a server array, normalising optional fields. */
+/** Keeps the well-formed diagnostics in a server array, normalizing optional fields. */
 export function parseDiagnostics(value: unknown): LspDiagnostic[] {
   if (!Array.isArray(value)) {
     return [];

@@ -42,7 +42,7 @@ interface ShownHover {
 const dwellMs = 300;
 /** The rest required while a card is already open, so moving between tokens feels immediate. */
 const warmDwellMs = 40;
-/** How long the card outlives the pointer leaving a token, so crossing to its neighbour or the card doesn't flicker. */
+/** How long the card outlives the pointer leaving a token, so crossing to its neighbor or the card doesn't flicker. */
 const graceMs = 150;
 
 /**

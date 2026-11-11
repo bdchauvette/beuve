@@ -22,7 +22,7 @@ const steps = 8;
 
 /**
  * Where a new sheet (ADR 0067) opens: at the size and place the reviewer last left one of the
- * session's sheets, else a tall page centred on the work area, stepped down and right by the
+ * session's sheets, else a tall page centered on the work area, stepped down and right by the
  * number of sheets already open (wrapping after eight) so new sheets never hide each other
  * exactly, and kept inside the work area. Pure.
  */

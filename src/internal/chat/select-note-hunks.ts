@@ -31,13 +31,13 @@ export interface NoteDiffSelection {
   readonly omittedPaths: readonly string[];
 }
 
-/** Hunks this many head lines from the anchored ones still count as its neighbours. */
-const neighbourLines = 20;
+/** Hunks this many head lines from the anchored ones still count as its neighbors. */
+const neighborLines = 20;
 const afterNewline = /(?<=\n)/u;
 
 /**
  * The hunks a note's draft needs (ADR 0125): for a line note, the anchored file's hunks that
- * touch or neighbour the anchored lines (the nearest one when none do), nearest first while they
+ * touch or neighbor the anchored lines (the nearest one when none do), nearest first while they
  * fit; for a file note, the file's hunks in order; for a whole-change note, each file's leading
  * hunks in diff order while they fit. Binary files are never shown. Pure.
  */
@@ -161,7 +161,7 @@ function nearbyHunks(
     return { index, distance: distanceOf(range, anchor) };
   });
   const byDistance = distances.toSorted((a, b) => a.distance - b.distance);
-  const near = byDistance.filter((entry) => entry.distance <= neighbourLines);
+  const near = byDistance.filter((entry) => entry.distance <= neighborLines);
   if (near.length > 0) {
     return near.map((entry) => entry.index);
   }
