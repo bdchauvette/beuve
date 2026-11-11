@@ -229,6 +229,8 @@ export class BeuveUraDock extends LitElement {
       }
 
       .editor {
+        box-sizing: border-box;
+        max-inline-size: var(--beuve-size-note-measure);
         display: grid;
         gap: var(--beuve-space-1);
         margin-block-start: var(--beuve-space-1);
@@ -251,8 +253,7 @@ export class BeuveUraDock extends LitElement {
       textarea {
         field-sizing: content;
         inline-size: 100%;
-        max-inline-size: var(--beuve-size-note-measure);
-        min-block-size: var(--beuve-size-editor);
+        min-block-size: var(--beuve-size-note-editor-min);
         max-block-size: var(--beuve-size-note-editor-max);
         resize: block;
         font: var(--beuve-font-code);
@@ -753,14 +754,16 @@ export class BeuveUraDock extends LitElement {
         />
       </div>
       <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
-      ${this.renderSuggestionActions(item)}
       <div class="row">
-        <span class="spacer"></span>
         <beuve-note-expand
           .anchor=${item.anchor}
           .headSha=${item.headSha}
           .noteKey=${item.id}
         ></beuve-note-expand>
+      </div>
+      ${this.renderSuggestionActions(item)}
+      <div class="row">
+        <span class="spacer"></span>
         <button class="button" type="button" title="Cancel (Esc)" data-action="cancel-edit">
           Cancel
         </button>
