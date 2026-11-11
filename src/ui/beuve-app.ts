@@ -118,10 +118,6 @@ export class BeuveApp extends LitElement {
         margin-block-end: var(--beuve-space-6);
       }
 
-      beuve-open-panel[slot='empty'] {
-        max-inline-size: var(--beuve-size-reading);
-      }
-
       beuve-dialog beuve-review-queue {
         block-size: var(--beuve-size-window-block-70);
       }
