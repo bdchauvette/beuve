@@ -4,7 +4,7 @@ import process from 'node:process';
 
 import { existsSync } from 'node:fs';
 
-import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, safeStorage, shell } from 'electron';
 
 import { checkServerTrust } from '#internal/lsp/check-server-trust.ts';
 import { createLogger } from '#x/log/create-logger.ts';
@@ -16,7 +16,6 @@ import { LinkInbox } from './links/link-inbox.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
-import type { MovedDatabase } from './database/open-app-database.ts';
 import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
 import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
@@ -74,13 +73,7 @@ async function launch(): Promise<void> {
     const userData = app.getPath('userData');
     await secureUserData(userData, logger);
     const worktreeRoot = path.join(userData, 'worktrees');
-    let movedDatabase: MovedDatabase | undefined;
-    const db = openAppDatabase(path.join(userData, 'beuve.db'), {
-      onMovedAside: (moved) => {
-        logger.warn('database schema drifted; set it aside and started a new one', { ...moved });
-        movedDatabase = moved;
-      },
-    });
+    const db = openAppDatabase(path.join(userData, 'beuve.db'));
     const settingsPath = path.join(userData, 'settings.json');
     // Fakes for development (ADR 0040); a packaged app applies none of them (ADR 0048).
     const { githubApiBase, editorLaunchLog, ignored } = readDevelopmentOverrides(
@@ -209,9 +202,6 @@ async function launch(): Promise<void> {
       logPath: logFilePaths().path,
       logger,
     });
-    if (movedDatabase !== undefined) {
-      void showMovedDatabaseNotice(movedDatabase);
-    }
   } catch (error: unknown) {
     logger.error('startup failed', { error });
     app.exit(1);
@@ -225,20 +215,6 @@ function logFilePaths(): LogFileOptions {
     path: path.join(directory, 'main.log'),
     previousPath: path.join(directory, 'main.previous.log'),
   };
-}
-
-/** Says once why the reviews are gone and where the old database went (ADR 0006 amendment). */
-async function showMovedDatabaseNotice(moved: MovedDatabase): Promise<void> {
-  const { response } = await dialog.showMessageBox({
-    type: 'warning',
-    message: 'beuve started a new database',
-    detail: `The old one was made by an earlier build whose schema this build doesn’t match (${moved.objects.join(', ')}), so beuve moved it to ${moved.path} and started over. Staged notes and chat in it are not lost, but this build can’t read them.`,
-    buttons: ['Show Old Database', 'OK'],
-    defaultId: 1,
-  });
-  if (response === 0) {
-    shell.showItemInFolder(moved.path);
-  }
 }
 
 /**

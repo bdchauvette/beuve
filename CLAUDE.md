@@ -57,7 +57,7 @@ Electron + Node + TypeScript + Lit code-review workbench. Read `docs/architectur
 - Modern APIs (ADR 0080, `lib` is `es2025` plus `esnext.*`): `Error.isError`, `getOrInsertComputed`, `URL.parse`, `tailOf` (never `string.slice(-n)`), `RegExp.escape`, `Uint8Array` base64/hex; stream-decode child output with `setEncoding('utf8')`. Anything a test runs must exist on Node 26 (no `Iterator.zip`, `Math.sumPrecise`).
 - No enums, namespaces or parameter properties (`erasableSyntaxOnly`).
 - No comments that restate code. Brief doc comments on exported API.
-- Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#sqlite/`.
+- Persistence: domains own their migrations and take a `DatabaseSync` parameter; only `src/main` opens the database (ADR 0006), via `#sqlite/`. Migrations are append-only: never edit one, add a new one and its fingerprint in `src/main/database/app-migrations.test.ts` (ADR 0006 amendment 2026-11-11).
 - Files (ADR 0082): replace a file only through `writeFileAtomic` (`#x/fs/write-file-atomic.ts`), with an explicit mode. Anything in `userData` is created 0600 (directories 0700), and a new file there that older installs may hold goes on `secureUserData`'s list. Open a path once and ask the handle (`handle.stat()`), never `stat`/`access`/`existsSync` and then open by path (`local/no-check-then-open`).
 
 ## Tests

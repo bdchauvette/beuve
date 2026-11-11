@@ -1,12 +1,4 @@
-import { readdirSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe } from 'vitest';
-
-import { findSchemaDrift } from '#sqlite/find-schema-drift.ts';
-import type { Migration } from '#sqlite/run-migrations.ts';
-
-import type { MovedDatabase } from './open-app-database.ts';
 
 import { appMigrations } from './app-migrations.ts';
 import { openAppDatabase } from './open-app-database.ts';
@@ -45,49 +37,7 @@ describe('openAppDatabase', () => {
 
   test('closes the database and rethrows when a migration fails', ({ expect }) => {
     expect(() => {
-      return openAppDatabase(':memory:', {
-        migrations: [...appMigrations, { id: 'broken', up: 'NOT SQL;' }],
-      });
+      return openAppDatabase(':memory:', [...appMigrations, { id: 'broken', up: 'NOT SQL;' }]);
     }).toThrow('syntax error');
   });
-
-  test('the app migrations leave no drift behind in a file database', ({ expect, tempDir }) => {
-    using db = openAppDatabase(path.join(tempDir, 'beuve.db'));
-    expect(findSchemaDrift(db, appMigrations)).toStrictEqual([]);
-  });
-
-  test('sets a drifted file aside and starts a new database in its place', ({
-    expect,
-    tempDir,
-  }) => {
-    const location = path.join(tempDir, 'beuve.db');
-    {
-      using old = openAppDatabase(location, { migrations: notes('title TEXT NOT NULL') });
-      old.exec("INSERT INTO notes VALUES ('kept');");
-    }
-    const movedAside: MovedDatabase[] = [];
-    using db = openAppDatabase(location, {
-      migrations: notes('title TEXT NOT NULL, blocking INTEGER'),
-      onMovedAside: (moved) => {
-        movedAside.push(moved);
-      },
-    });
-    expect(movedAside).toHaveLength(1);
-    const [moved] = movedAside;
-    expect(moved?.path).toMatch(/beuve\.db\.drifted-\d{4}-\d\d-\d\dT\d{6}Z$/u);
-    expect(moved?.objects).toStrictEqual(['notes']);
-    expect(db.prepare('SELECT count(*) AS n FROM notes;').get()).toMatchObject({ n: 0 });
-    db.exec("INSERT INTO notes VALUES ('new', 1);");
-    expect(readdirSync(tempDir).filter((name) => name.includes('drifted'))).toStrictEqual([
-      path.basename(moved?.path ?? ''),
-    ]);
-    using kept = openAppDatabase(moved?.path ?? '', {
-      migrations: notes('title TEXT NOT NULL'),
-    });
-    expect(kept.prepare('SELECT title FROM notes;').all()).toMatchObject([{ title: 'kept' }]);
-  });
 });
-
-function notes(columns: string): Migration[] {
-  return [{ id: 'notes-0001-initial', up: `CREATE TABLE notes (${columns}) STRICT;` }];
-}

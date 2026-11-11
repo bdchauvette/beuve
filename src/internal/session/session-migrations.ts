@@ -1,8 +1,8 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * The session domain's schema (ADR 0006, 0009, 0012, 0037, 0064, 0112); squashed until the first
- * release. The review state is derived from `checkpoints`, so `sessions` has no denormalized
+ * The session domain's schema (ADR 0006, 0009, 0012, 0037, 0064, 0112). Append-only: a schema
+ * change is a new migration, never an edit (ADR 0006 amendment 2026-11-11). The review state is derived from `checkpoints`, so `sessions` has no denormalized
  * last-checkpoint column. A row's kind is checked row by row, so a remote branch can become a
  * pull request in place (`promoteSession`) and keep its id.
  */
