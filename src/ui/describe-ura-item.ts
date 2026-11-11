@@ -32,9 +32,6 @@ const severities: Readonly<Record<UraSeverityView, string>> = {
   note: 'Note',
   todo: 'Todo',
   chore: 'Chore',
-  typo: 'Typo',
-  polish: 'Polish',
-  quibble: 'Quibble',
 };
 
 const origins: Readonly<Record<UraOriginView['kind'], string>> = {

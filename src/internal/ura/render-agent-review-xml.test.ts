@@ -14,7 +14,7 @@ describe('renderAgentReviewXml', () => {
         <change scope="interdiff" base-sha="cccccccccccccccccccccccccccccccccccccccc" head-sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" from-head-sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
           <repository kind="github-pull-request" path="/work/beuve" base-ref="main" owner="acme" repo="widgets" number="42"/>
         </change>
-        <counts issue="2" suggestion="0" question="1" nitpick="1" thought="0" smell="0" praise="1" note="0" todo="0" chore="0" typo="0" polish="0" quibble="0" blocking="1"/>
+        <counts issue="2" suggestion="0" question="1" nitpick="1" thought="0" smell="0" praise="1" note="0" todo="0" chore="0" blocking="1"/>
         <items>
           <item id="00000000-0000-4000-8000-000000000001" severity="issue" blocking="true" origin="human">
             <anchor kind="lines" path="src/app.ts" start-line="10" end-line="12"/>

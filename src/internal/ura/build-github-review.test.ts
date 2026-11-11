@@ -40,7 +40,7 @@ describe('buildGithubReview', () => {
        Notes
       \`\`\`
 
-      #### ✨ praise: Clear commit history
+      #### 👏 praise: Clear commit history
 
       On the whole change.
 
@@ -188,13 +188,13 @@ describe('buildGithubReview', () => {
     expect,
   }) => {
     const { comments } = buildGithubReview(withItem({ severity: 'praise', title: '' }));
-    expect(comments[0]?.body.startsWith('✨ **praise**\n\n')).toBe(true);
+    expect(comments[0]?.body.startsWith('👏 **praise**\n\n')).toBe(true);
     const titled = buildGithubReview(withItem({ severity: 'suggestion', blocking: true }));
     expect(
       titled.comments[0]?.body.startsWith('💡 **suggestion (blocking):** Handle the empty list'),
     ).toBe(true);
-    const untitled = buildGithubReview(withItem({ severity: 'typo', blocking: true, title: '' }));
-    expect(untitled.comments[0]?.body.startsWith('🔤 **typo (blocking)**\n\n')).toBe(true);
+    const untitled = buildGithubReview(withItem({ severity: 'chore', blocking: true, title: '' }));
+    expect(untitled.comments[0]?.body.startsWith('🧹 **chore (blocking)**\n\n')).toBe(true);
   });
 
   test("puts the reviewer's own summary above the items", ({ expect }) => {

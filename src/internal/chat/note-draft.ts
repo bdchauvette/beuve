@@ -24,10 +24,7 @@ export type NoteSeverity =
   | 'praise'
   | 'note'
   | 'todo'
-  | 'chore'
-  | 'typo'
-  | 'polish'
-  | 'quibble';
+  | 'chore';
 
 /** Where a note points on its head: lines are 1-based and inclusive, on the head side. */
 export type NoteAnchor =

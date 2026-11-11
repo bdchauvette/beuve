@@ -81,9 +81,6 @@ const severityMeanings: Readonly<Record<NoteSeverity, string>> = {
   note: 'something to be aware of, asking for nothing',
   todo: 'a small, necessary change',
   chore: 'a task to do before the change is accepted',
-  typo: 'a misspelling',
-  polish: 'nothing is wrong, but the quality could be raised',
-  quibble: 'a trivial preference',
 };
 
 /** Says the note blocks the merge, when it does (ADR 0131). */

@@ -7,13 +7,10 @@ const emoji: Readonly<Record<UraSeverityView, string>> = {
   nitpick: '⛏️',
   thought: '💭',
   smell: '👃',
-  praise: '✨',
+  praise: '👏',
   note: 'ℹ️',
   todo: '☑️',
   chore: '🧹',
-  typo: '🔤',
-  polish: '💅',
-  quibble: '🤏',
 };
 
 /** The emoji that marks a note's label at a glance (ADR 0131). */

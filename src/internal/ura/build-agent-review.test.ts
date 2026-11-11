@@ -36,15 +36,12 @@ describe('buildAgentReview', () => {
           "issue": 2,
           "nitpick": 1,
           "note": 0,
-          "polish": 0,
           "praise": 1,
           "question": 1,
-          "quibble": 0,
           "smell": 0,
           "suggestion": 0,
           "thought": 0,
           "todo": 0,
-          "typo": 0,
         },
         "items": [
           {

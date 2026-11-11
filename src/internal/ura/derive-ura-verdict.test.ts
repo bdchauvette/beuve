@@ -9,14 +9,14 @@ describe('deriveUraVerdict', () => {
   test.for<[UraItemLabel[], string]>([
     [[], 'approve'],
     [[note('praise')], 'approve'],
-    [[note('nitpick'), note('quibble'), note('praise'), note('smell'), note('thought')], 'approve'],
-    [[note('note'), note('polish')], 'approve'],
+    [[note('nitpick'), note('praise'), note('smell'), note('thought')], 'approve'],
+    [[note('note')], 'approve'],
     [[note('nitpick'), note('question')], 'comment'],
     [[note('issue')], 'comment'],
     [[note('suggestion')], 'comment'],
     [[note('todo')], 'comment'],
     [[note('chore')], 'comment'],
-    [[note('typo')], 'comment'],
+    [[note('chore')], 'comment'],
     [[note('issue'), { severity: 'issue', blocking: true }, note('praise')], 'request-changes'],
     [[{ severity: 'nitpick', blocking: true }], 'request-changes'],
   ])('%j → %s', ([items, verdict], { expect }) => {

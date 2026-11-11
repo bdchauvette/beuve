@@ -125,7 +125,7 @@ function commentFrom(
 
 /**
  * The emoji and the Conventional Comments label with its decoration, then the title when there is
- * one: `✨ **praise:** Nice.`, `⚠️ **issue (blocking):** Guard it.` (ADR 0131).
+ * one: `👏 **praise:** Nice.`, `⚠️ **issue (blocking):** Guard it.` (ADR 0131).
  */
 function headline(item: UraItem, style: 'comment' | 'section'): string {
   let label: string = item.severity;

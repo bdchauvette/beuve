@@ -7,8 +7,8 @@
  * rather than a change. `nitpick`: a trivial, preference-based request. `thought`: an idea that
  * came up, asking for nothing. `smell`: nothing is actually wrong, but it feels off. `praise`:
  * something done well. `note`: something to be aware of. `todo`: a small, necessary change.
- * `chore`: a task to do before the change is accepted. `typo`: a misspelling. `polish`: nothing
- * is wrong, but the quality could be raised. `quibble`: a trivial preference, like a nitpick.
+ * `chore`: a task to do before the change is accepted. The optional labels the spec lists
+ * (`typo`, `polish`, `quibble`) are left out: they overlap the others and crowd the menu.
  */
 export const uraSeverities = [
   'issue',
@@ -21,9 +21,6 @@ export const uraSeverities = [
   'note',
   'todo',
   'chore',
-  'typo',
-  'polish',
-  'quibble',
 ] as const;
 
 export type UraSeverity = (typeof uraSeverities)[number];
