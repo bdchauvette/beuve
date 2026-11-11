@@ -3,8 +3,10 @@ import type { Migration } from '#sqlite/run-migrations.ts';
 import { uraSeverities } from './ura-severities.ts';
 
 /**
- * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102, 0131, 0132; squashed until the first
- * release).
+ * The URA domain's schema (ADR 0006, 0023, 0039, 0045, 0055, 0102, 0131, 0132, 0134). Append-only:
+ * a schema change is a new migration, never an edit (ADR 0006 amendment 2026-11-11). The `severity`
+ * CHECK is built from `uraSeverities`, so changing the labels needs a migration that rebuilds the
+ * table.
  * `ura_items` references `sessions`, so main runs the session domain's migrations first. Table
  * CHECKs mirror the anchor, origin and status unions. `chat_message_id` deliberately has no foreign
  * key: the chat domain owns that table, and `/clear` must not delete staged items.
