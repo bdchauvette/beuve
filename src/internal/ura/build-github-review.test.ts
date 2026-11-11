@@ -40,7 +40,7 @@ describe('buildGithubReview', () => {
        Notes
       \`\`\`
 
-      #### 👏 praise: Clear commit history
+      #### 🎉 praise: Clear commit history
 
       On the whole change.
 
@@ -188,7 +188,7 @@ describe('buildGithubReview', () => {
     expect,
   }) => {
     const { comments } = buildGithubReview(withItem({ severity: 'praise', title: '' }));
-    expect(comments[0]?.body.startsWith('👏 **praise**\n\n')).toBe(true);
+    expect(comments[0]?.body.startsWith('🎉 **praise**\n\n')).toBe(true);
     const titled = buildGithubReview(withItem({ severity: 'suggestion', blocking: true }));
     expect(
       titled.comments[0]?.body.startsWith('💡 **suggestion (blocking):** Handle the empty list'),

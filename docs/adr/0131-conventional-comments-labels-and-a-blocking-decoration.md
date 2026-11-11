@@ -25,8 +25,8 @@ A review note (a URA item, ADR 0023) had one of five severities: blocker, issue,
 - The code keeps the name `severity` for the label (`UraSeverity`, `UraSeverityView`, `uraSeverities`), now a misnomer; renaming it is mechanical and can come separately.
 - The diff marker and the dock row now say `patch`, not `suggestion`, for a note carrying a suggested patch, so a `suggestion` note with one does not say it twice.
 
-## Amendment 2026-11-11: the core labels only, and praise is 👏
+## Amendment 2026-11-11: the core labels only, and praise is 🎉
 
 Thirteen labels made the menu a list to read rather than a choice. `typo`, `polish` and `quibble` are not Conventional Comments' core labels but the optional ones it lists as useful to some teams, and each overlaps a core one (`typo` is a small `todo` or `nitpick`, `polish` a `suggestion`, `quibble` a `nitpick`). They are gone from `uraSeverities`, the contract, the IPC schema, the emoji tables, the verdict table, the drafting prompt and the table's `severity` CHECK. The labels are issue, suggestion, question, nitpick, thought, smell, praise, note, todo and chore.
 
-`praise` is 👏 instead of ✨, because ✨ now marks the composer's model-drafting button (ADR 0125 amendment) and the two sit in the same form.
+`praise` is 🎉 instead of ✨, because ✨ now marks the composer's model-drafting button (ADR 0125 amendment) and the two sit in the same form.

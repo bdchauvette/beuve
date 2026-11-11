@@ -7,7 +7,7 @@ const emoji: Readonly<Record<UraSeverityView, string>> = {
   nitpick: '⛏️',
   thought: '💭',
   smell: '👃',
-  praise: '👏',
+  praise: '🎉',
   note: 'ℹ️',
   todo: '☑️',
   chore: '🧹',
