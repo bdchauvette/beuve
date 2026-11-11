@@ -1,6 +1,6 @@
 import type { CiStatusView } from '#contract/ipc-contract.ts';
 
-/** How the status bar shows a pull request's CI: a coloured dot, counts, and the failing checks. */
+/** How the status bar shows a pull request's CI: a colored dot, counts, and the failing checks. */
 export interface CiStatusLine {
   readonly tone: 'ok' | 'warn' | 'danger' | 'muted';
   readonly text: string;

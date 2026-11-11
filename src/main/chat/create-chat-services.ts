@@ -1131,7 +1131,7 @@ export function createChatServices(options: ChatServicesOptions): ChatServices {
 
 /** Statuses of an answer whose request has not ended. */
 /**
- * What an ordinary answer may propose (ADR 0132): notes labelled with the URA's severities, which
+ * What an ordinary answer may propose (ADR 0132): notes labeled with the URA's severities, which
  * the reviewer stages one by one. Ten is enough for an answer that is mostly notes.
  */
 const noteProposalRules: ProposalRules = { labels: uraSeverities, maxProposals: 10 };

@@ -12,7 +12,7 @@ export type MessageBlock =
 
 /**
  * How the drawer lays out a message's parts (ADR 0072): in order, with each run of reasoning and
- * tool calls as one `steps` block labelled `Thought · 3 tool calls (1 failed)`, so a finished
+ * tool calls as one `steps` block labeled `Thought · 3 tool calls (1 failed)`, so a finished
  * answer can fold what the model did into one line. Pure.
  */
 export function planMessageParts(parts: readonly ChatPartView[]): MessageBlock[] {

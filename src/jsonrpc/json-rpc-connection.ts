@@ -57,7 +57,7 @@ export interface JsonRpcConnectionOptions {
   readonly onClose?: (reason: JsonRpcCloseReason) => void;
   /**
    * Notification sent with `{ id }` when an outgoing request times out or is aborted, and
-   * honoured for incoming requests (`$/cancelRequest` in LSP). Without one, nothing is sent.
+   * honored for incoming requests (`$/cancelRequest` in LSP). Without one, nothing is sent.
    */
   readonly cancelMethod?: string;
   /** Applies to requests that don't pass their own. Defaults to 30 s. */

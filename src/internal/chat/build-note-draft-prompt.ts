@@ -111,7 +111,7 @@ function describeAnchor(anchor: NoteAnchor): string {
   }
 }
 
-/** One field of the draft, labelled, fenced as `language`. */
+/** One field of the draft, labeled, fenced as `language`. */
 interface DraftField {
   readonly label: string;
   readonly text: string;

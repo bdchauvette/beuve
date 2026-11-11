@@ -4,7 +4,7 @@ import path from 'node:path';
 /**
  * Writes a scripted stand-in for the `claude` CLI (plain JavaScript, run with `process.execPath`)
  * into `directory` and returns its path. It speaks the stream-json shapes of the real capture in
- * `claude-code-stream-fixture.ts`. Its first argument picks the behaviour, the second is an
+ * `claude-code-stream-fixture.ts`. Its first argument picks the behavior, the second is an
  * optional file for its own and a child's pid; Claude Code's argv follows.
  * - `echo`: succeeds with `{ args, stdin, cwd, envKeys }` as structured output.
  * - `chat`: the second argument names a JSON file `{ preamble?, chunks, delayMs?, findings?,

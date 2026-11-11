@@ -4,7 +4,7 @@ import type { TemplateResult } from 'lit';
 /** The review queue's glyphs: an item's kind and the header's controls. */
 export type QueueIconName = 'pull-request' | 'branch' | 'refresh' | 'filter' | 'group' | 'warning';
 
-/** One 14px outline glyph that follows the text colour, hidden from assistive technology. */
+/** One 14px outline glyph that follows the text color, hidden from assistive technology. */
 export function queueIcon(name: QueueIconName): TemplateResult {
   return svg`<svg
     viewBox="0 0 16 16"

@@ -45,7 +45,7 @@ export interface PositionedFlowEdge {
   readonly points: readonly FlowPoint[];
   /** Where to write the edge's label: beside its first bend, clear of the line itself. */
   readonly labelAt: FlowPoint;
-  /** Which side of `labelAt` the text grows towards, so it never sits on the line. */
+  /** Which side of `labelAt` the text grows toward, so it never sits on the line. */
   readonly labelAnchor: 'start' | 'end';
 }
 
@@ -73,7 +73,7 @@ const markedKinds = new Set(['condition', 'loop', 'switch']);
 /**
  * A deterministic layered layout for small control-flow graphs (ADR 0028), with no dependencies:
  * back edges are set aside, layers come from the longest path from the entry, barycenter sweeps
- * order each layer, nodes are spread to sit under their neighbours, and back edges run down a
+ * order each layer, nodes are spread to sit under their neighbors, and back edges run down a
  * lane on the right. The same input always gives the same output.
  */
 export function flowLayout(input: FlowLayoutInput): FlowLayout {
@@ -288,22 +288,22 @@ function orderLayers(graph: LayeredGraph): void {
       for (const [at, node] of layer.entries()) {
         positions.set(node, at);
       }
-      let neighbourLayer = graph.layers[value + 1];
+      let neighborLayer = graph.layers[value + 1];
       if (isDownward) {
-        neighbourLayer = graph.layers[value - 1];
+        neighborLayer = graph.layers[value - 1];
       }
-      if (neighbourLayer === undefined) {
+      if (neighborLayer === undefined) {
         continue;
       }
-      const neighbourPosition = new Map(
-        neighbourLayer.map((node, at) => {
+      const neighborPosition = new Map(
+        neighborLayer.map((node, at) => {
           return [node, at];
         }),
       );
       const links = sweepLinks(graph, isDownward);
       const keyed = layer.map((node) => {
         const at = (links[node] ?? [])
-          .map((other) => neighbourPosition.get(other))
+          .map((other) => neighborPosition.get(other))
           .filter((found) => found !== undefined);
         let mean = positions.get(node) ?? 0;
         if (at.length > 0) {
@@ -348,7 +348,7 @@ function sweepLinks(graph: LayeredGraph, isDownward: boolean): readonly (readonl
   return graph.down;
 }
 
-/** Moves each node of a layer towards its neighbours, then removes overlaps from both sides. */
+/** Moves each node of a layer toward its neighbors, then removes overlaps from both sides. */
 function spreadLayer(
   graph: LayeredGraph,
   layer: readonly number[],
@@ -409,7 +409,7 @@ function buildResult({ nodes, edges, back, graph, layerOf }: LayoutParts): FlowL
     graph,
     boxes,
   );
-  const scene: NeighbourScene = { forward: forward.map(({ edge }) => edge), boxes, nodes };
+  const scene: NeighborScene = { forward: forward.map(({ edge }) => edge), boxes, nodes };
   const positioned = nodes.map((node, position) => {
     const box = boxes[position] ?? { x: 0, y: 0, width: 0 };
     return {
@@ -419,8 +419,8 @@ function buildResult({ nodes, edges, back, graph, layerOf }: LayoutParts): FlowL
       width: box.width,
       height: nodeHeight,
       layer: layerOf[position] ?? 0,
-      successors: neighbours(position, 'to', scene),
-      predecessors: neighbours(position, 'from', scene),
+      successors: neighbors(position, 'to', scene),
+      predecessors: neighbors(position, 'from', scene),
     };
   });
   const maxRight = Math.max(...boxes.slice(0, graph.count).map((box) => box.x + box.width));
@@ -489,14 +489,14 @@ function assignPorts(
 
 function spreadPorts(
   slotsByNode: ReadonlyMap<number, readonly number[]>,
-  towards: ReadonlyMap<number, number>,
+  toward: ReadonlyMap<number, number>,
   boxes: readonly Box[],
 ): Map<number, number> {
   const ports = new Map<number, number>();
   for (const [node, slots] of slotsByNode) {
     const box = boxes[node] ?? { x: 0, y: 0, width: 0 };
     const ordered = slots.toSorted((left, right) => {
-      return (towards.get(left) ?? 0) - (towards.get(right) ?? 0) || left - right;
+      return (toward.get(left) ?? 0) - (toward.get(right) ?? 0) || left - right;
     });
     let step = 0;
     if (ordered.length > 1) {
@@ -673,8 +673,8 @@ function laneOrder(
   );
 }
 
-/** What finding a node's neighbours needs: the forward edges, the boxes and the nodes. */
-interface NeighbourScene {
+/** What finding a node's neighbors needs: the forward edges, the boxes and the nodes. */
+interface NeighborScene {
   readonly forward: readonly IndexedEdge[];
   readonly boxes: readonly Box[];
   readonly nodes: readonly FlowLayoutNode[];
@@ -682,7 +682,7 @@ interface NeighbourScene {
 
 const oppositeEnds = { from: 'to', to: 'from' } as const;
 
-function neighbours(node: number, side: 'from' | 'to', scene: NeighbourScene): number[] {
+function neighbors(node: number, side: 'from' | 'to', scene: NeighborScene): number[] {
   const { forward, boxes, nodes } = scene;
   const other = oppositeEnds[side];
   const found = forward.filter((edge) => edge[other] === node).map((edge) => edge[side]);

@@ -16,7 +16,7 @@ export interface FileAttribution {
  * lines are carried forward to head coordinates through the zero-context diffs of the commits
  * after it (renames followed; lines a later commit rewrote belong to that commit), then matched
  * against the hunk's added lines and deletion points, a deletion point also meeting its
- * neighbouring lines. Lines the range didn't produce (e.g. a change the author reverted) are
+ * neighboring lines. Lines the range didn't produce (e.g. a change the author reverted) are
  * attributed to nobody.
  */
 export function attributeHunks(

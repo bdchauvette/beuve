@@ -701,7 +701,7 @@ export class BeuveFileCard extends LitElement {
   private markSheet: CSSStyleSheet | undefined;
   private tintSheet: CSSStyleSheet | undefined;
   /** Whether this diff's gutter button already shows the chat icon. */
-  private isGutterLabelled = false;
+  private isGutterLabeled = false;
   /** Bumped to give the diff a fresh container: after an edit, or a layout change. */
   private codeGeneration = 0;
   /** This card's diagnostic underlines in the document's shared highlights. */
@@ -937,7 +937,7 @@ export class BeuveFileCard extends LitElement {
    * stream decides, from `deferral`, the generated-files preference and Expand or Collapse File.
    */
   @property({ type: Boolean, reflect: true }) accessor collapsed = false;
-  /** Generated or `-diff` (ADR 0052): labelled, and dimmed while collapsed. */
+  /** Generated or `-diff` (ADR 0052): labeled, and dimmed while collapsed. */
   @property({ type: Boolean, reflect: true }) accessor generated = false;
   /**
    * The file's reviewed mark (ADR 0064): a check when `yes` (the stream collapses the card), a
@@ -1140,7 +1140,7 @@ export class BeuveFileCard extends LitElement {
   }
 
   private createDiff(library: typeof Diffs): FileDiff<PlacedSlot> {
-    this.isGutterLabelled = false;
+    this.isGutterLabeled = false;
     const loader = this.loadFilePair;
     return new library.FileDiff<PlacedSlot>(
       {
@@ -1197,7 +1197,7 @@ export class BeuveFileCard extends LitElement {
     if (button === undefined || button === null) {
       return;
     }
-    this.isGutterLabelled = true;
+    this.isGutterLabeled = true;
     button.title = `Add Note (${shortcutOf('stage', keyPlatformOf(navigator.platform))}); drag to take more lines. Add to Chat: ${shortcutOf('add-to-chat', keyPlatformOf(navigator.platform))}`;
     button.setAttribute('aria-label', 'Add a review note on these lines');
     button.replaceChildren(createUraNoteIcon());
@@ -1335,10 +1335,10 @@ export class BeuveFileCard extends LitElement {
   }
 
   /**
-   * The diff library blends a changed line's colour into the background (12% light, 20% dark) but
-   * paints a changed word's colour as given, so the tokens' line < number < word steps came out as
+   * The diff library blends a changed line's color into the background (12% light, 20% dark) but
+   * paints a changed word's color as given, so the tokens' line < number < word steps came out as
    * a near-invisible line under a strong word. Turning that blend off makes the line, gutter and
-   * word colours the `--beuve-diff-*` tokens themselves; a selection layers over them
+   * word colors the `--beuve-diff-*` tokens themselves; a selection layers over them
    * ({@link diffSelectionCss}, ADR 0114 amendments).
    */
   private adoptDiffTints(): void {
@@ -1911,9 +1911,9 @@ ${splitPatch(file.patch).map((line) => {
     dispatchAction(event, this.renderRoot, handlers as ActionHandlers<Event> | undefined);
   }
 
-  /** A pointer moved over the card: the library attaches its gutter button on hover, labelled once per diff. */
+  /** A pointer moved over the card: the library attaches its gutter button on hover, labeled once per diff. */
   notePointerMove(): void {
-    if (!this.isGutterLabelled) {
+    if (!this.isGutterLabeled) {
       this.labelGutterButton();
     }
   }

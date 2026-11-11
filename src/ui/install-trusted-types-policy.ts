@@ -48,7 +48,7 @@ const selfTestHtml = '<b>b</b><script>0</script><a href="#">a</a>';
  * has no `'allow-duplicates'`, so nothing can create either name again. The one script URL
  * allowed is the highlighting worker's; any other throws.
  *
- * It fails closed: without Trusted Types or a Sanitizer API that honours a configuration, it
+ * It fails closed: without Trusted Types or a Sanitizer API that honors a configuration, it
  * claims `default` with a policy that throws, replaces the page with the error, and throws.
  */
 export function installTrustedTypesPolicy(): void {
@@ -97,7 +97,7 @@ function failClosed(factory: TrustedTypePolicyFactory | undefined, reason: strin
 
 /**
  * Parses through `beuve-sanitizer-input`, which only the returned closure holds, with the library
- * sanitizer, after a self-test parse shows the sanitizer is honoured. Fails closed if any of it
+ * sanitizer, after a self-test parse shows the sanitizer is honored. Fails closed if any of it
  * throws or the self-test fails.
  */
 function sanitizingParser(

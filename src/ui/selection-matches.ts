@@ -88,7 +88,7 @@ export class SelectionMatches implements ReactiveController {
   }
 }
 
-/** The document's selection, when it lies inside one code row of `roots`, with its neighbours. */
+/** The document's selection, when it lies inside one code row of `roots`, with its neighbors. */
 function selectedLine(roots: readonly ShadowRoot[]): LineSelection | undefined {
   const selection = document.getSelection();
   if (selection === null || roots.length === 0) {

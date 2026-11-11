@@ -2,7 +2,7 @@ import { css } from 'lit';
 
 /**
  * How `pathText` shows an escaped invisible or bidi character (ADR 0082): a small boxed
- * `⟨U+202E⟩` in the warning colour, so it reads as a marker and not as part of the name. Add it to
+ * `⟨U+202E⟩` in the warning color, so it reads as a marker and not as part of the name. Add it to
  * the `styles` of every element that renders `pathText`.
  */
 export const formatControlStyles = css`

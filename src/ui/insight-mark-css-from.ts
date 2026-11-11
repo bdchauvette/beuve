@@ -16,7 +16,7 @@ const columns: Readonly<Record<DiffLayoutView, string>> = {
 
 /**
  * The style rules that draw the gutter marks inside one `@pierre/diffs` shadow root (ADR 0061): a
- * small dot at the inline-start edge of each marked head line's number cell, in the severity's colour.
+ * small dot at the inline-start edge of each marked head line's number cell, in the severity's color.
  * Inline, the one column holds every line and deleted lines carry base numbers, so those are
  * excluded; split, the head side is its own column. Empty when there is nothing to mark.
  */

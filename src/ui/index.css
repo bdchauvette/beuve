@@ -363,8 +363,8 @@
    * Line, gutter number and changed-word tints step up like Primer's diffBlob tokens
    * (line < number < word). The line and number tints are a fraction of a Radix alpha step, so a
    * changed line reads clearly against unchanged ones while a changed word, painted over its line,
-   * stays light; the diff's own blending is turned off so these are the colours shown (ADR 0114
-   * amendment). Orange, yellow and grey sit lower and
+   * stays light; the diff's own blending is turned off so these are the colors shown (ADR 0114
+   * amendment). Orange, yellow and gray sit lower and
    * higher on their scales so each pair reads at a similar weight. Text colors are for +/− counts
    * and labels; bars for gutter marks; number text for the line numbers on changed lines, which
    * the library otherwise draws in the bar color. Yellow 9 is invisible on the yellow number cell in

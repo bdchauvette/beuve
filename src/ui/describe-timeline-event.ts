@@ -1,6 +1,6 @@
 import type { TimelineEventView } from '#contract/ipc-contract.ts';
 
-/** How the Overview's activity list words an event, and the colour of its dot. */
+/** How the Overview's activity list words an event, and the color of its dot. */
 export interface TimelineEventLine {
   /** What the author did, after their name: `approved`, `pushed a commit`. */
   readonly verb: string;

@@ -9,7 +9,7 @@ function all(): Set<string> {
 }
 
 describe('moveUraItem', () => {
-  test('swaps an item with its neighbour in either direction', ({ expect }) => {
+  test('swaps an item with its neighbor in either direction', ({ expect }) => {
     expect(moveUraItem(['a', 'b', 'c'], { id: 'b', step: 1, movable: all() })).toStrictEqual([
       'a',
       'c',

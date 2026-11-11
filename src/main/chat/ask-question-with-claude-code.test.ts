@@ -110,7 +110,7 @@ describe('askQuestion with the Claude Code adapter (fake claude)', { timeout: 30
   });
 });
 
-/** A run of the fake `claude` script: `mode` picks its behaviour, `chat` its scripted turn. */
+/** A run of the fake `claude` script: `mode` picks its behavior, `chat` its scripted turn. */
 interface FakeModelRun {
   readonly script: string;
   readonly directory: string;

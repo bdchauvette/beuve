@@ -6,7 +6,7 @@ export interface PointerPoint {
 
 /**
  * The UTF-16 offset into `element`'s text of the character under the pointer, 0 when it is over
- * none. The highlighter merges neighbouring text of one color into a single token span, so a click
+ * none. The highlighter merges neighboring text of one color into a single token span, so a click
  * only tells which span it landed in; this finds the character inside it.
  */
 export function characterOffsetAt(element: HTMLElement, point: PointerPoint): number {

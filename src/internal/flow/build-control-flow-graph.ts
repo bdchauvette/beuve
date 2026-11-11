@@ -61,7 +61,7 @@ interface JumpRequest {
   readonly label: string | undefined;
 }
 
-/** Something `break` or `continue` can leave: a loop, a switch or a labelled statement. */
+/** Something `break` or `continue` can leave: a loop, a switch or a labeled statement. */
 interface JumpScope {
   readonly kind: 'loop' | 'switch' | 'label';
   readonly labels: readonly string[];

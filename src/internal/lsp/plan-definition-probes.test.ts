@@ -45,7 +45,7 @@ describe('planDefinitionProbes', () => {
     expect(textsOf('a b c d e f g h')).toHaveLength(6);
   });
 
-  test('plans a link probe for the identifier the pointer is on, never a keyword or a neighbour', ({
+  test('plans a link probe for the identifier the pointer is on, never a keyword or a neighbor', ({
     expect,
   }) => {
     const line = '  return validate(token) ? 200 : 401;';

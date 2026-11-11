@@ -13,7 +13,7 @@ export interface ShellServicesOptions {
 }
 
 /**
- * `shell:open-url` opens an absolute `https:` or `http:` URL, as the URL parser normalises it, in
+ * `shell:open-url` opens an absolute `https:` or `http:` URL, as the URL parser normalizes it, in
  * the default browser; anything else (`file:`, `javascript:`, `data:`, other schemes, relative or
  * unparsable text) is `invalid-request` and never reaches the shell (ADR 0040, amended).
  */

@@ -9,7 +9,7 @@ export type ServerSource = 'builtin' | 'path' | 'project';
 export type DefinitionOrigin = 'builtin' | 'reviewer';
 
 /**
- * How to run one language server: registry data, no behaviour. One process serves every file
+ * How to run one language server: registry data, no behavior. One process serves every file
  * whose extension appears in `languageIds`, per workspace root.
  */
 export interface ServerDefinition {

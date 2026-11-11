@@ -29,7 +29,7 @@ describe('createShellServices', () => {
     ['HTTPS://Example.COM:8443/x?q=1#h', 'https://example.com:8443/x?q=1#h'],
     ['https://github.com/bdchauvette/beuve', 'https://github.com/bdchauvette/beuve'],
   ] as const)(
-    'opens %s in the browser, as the URL parser normalises it',
+    'opens %s in the browser, as the URL parser normalizes it',
     async ([url, href], { expect }) => {
       const { opened, shell } = recordingShell();
       await expect(shell.openUrl({ url })).resolves.toStrictEqual({

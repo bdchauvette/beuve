@@ -230,6 +230,16 @@ const config = defineConfig(
   },
 
   {
+    name: 'beuve/american-spelling',
+    // The product is written in American English: strings, template text and comments.
+    files: ['src/**/*.ts'],
+    plugins: { local: localRulesPlugin },
+    rules: {
+      'local/american-spelling': 'error',
+    },
+  },
+
+  {
     name: 'beuve/no-git-push',
     // ADR 0088: beuve never pushes, and review-edits branches stay local. The runner's
     // allow-list refuses a push at run time; this keeps one from being written. Tests may push

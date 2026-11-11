@@ -134,7 +134,7 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
         anchor: { kind: 'lines', path: 'src/a.ts', startLine: 3, endLine: 4 },
         severity: 'issue',
         title: 'These names',
-        body: 'Capitalise?',
+        body: 'Capitalize?',
       }),
     );
     const opened = okValueFrom(await services.reviewEdits.open({ sessionId, path: 'src/a.ts' }));
@@ -158,7 +158,7 @@ describe('createReviewEditsServices (integration: git + SQLite, no Electron)', (
       value: { created: 0, attached: 1, updated: 0, unchanged: 0 },
     });
     const [item] = okValueFrom(await services.ura.list({ sessionId })).items;
-    expect(item).toMatchObject({ id: note.id, title: 'These names', body: 'Capitalise?' });
+    expect(item).toMatchObject({ id: note.id, title: 'These names', body: 'Capitalize?' });
     expect(item?.suggestedPatch).toContain('-three\n-four\n+Three\n+FOUR\n');
   });
 

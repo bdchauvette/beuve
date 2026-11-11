@@ -3,7 +3,7 @@ import path from 'node:path';
 
 /**
  * Writes a scripted language server (plain JavaScript, run with `process.execPath`) into
- * `directory` and returns its path. Behaviour, chosen by its first argument:
+ * `directory` and returns its path. Behavior, chosen by its first argument:
  * - `normal`: negotiates UTF-8 positions, asks the client to apply an edit and for configuration
  *   after `initialized`, publishes diagnostics on open/change, echoes `prepareCallHierarchy` and
  *   answers `test/clientAnswers` with what the client replied.

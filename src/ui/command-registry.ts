@@ -23,7 +23,7 @@ export type CommandRun =
   | { readonly kind: 'none' };
 
 /** What the main window adds to a catalog command. */
-interface CommandBehaviour {
+interface CommandBehavior {
   readonly run: CommandRun;
   /** The chat command and its usage, e.g. `/editor zed|vscode|cursor`. */
   readonly slash?: string;
@@ -32,29 +32,29 @@ interface CommandBehaviour {
 }
 
 /** A catalog command (ADR 0068) with what running it does in the main window. */
-export type CommandDefinition = CatalogCommand & CommandBehaviour & { readonly id: CommandId };
+export type CommandDefinition = CatalogCommand & CommandBehavior & { readonly id: CommandId };
 
 /**
- * Every catalog command with its behaviour in the main window, in catalog order. The palette, the
+ * Every catalog command with its behavior in the main window, in catalog order. The palette, the
  * Keyboard Shortcuts window and `/help` read this list, and `menu:run` dispatches through it, so
  * no command can be in one and not the others. Titles and keys live in the catalog only.
  */
 export const commandRegistry: readonly CommandDefinition[] = Object.freeze(registered());
 
 function registered(): CommandDefinition[] {
-  const table = behaviours();
+  const table = behaviors();
   return commandCatalog.map((command): CommandDefinition => {
     return { ...command, ...table[command.id] };
   });
 }
 
-function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
-  const app: CommandBehaviour = { run: { kind: 'app' } };
-  const main: CommandBehaviour = { run: { kind: 'main' } };
-  const none: CommandBehaviour = { run: { kind: 'none' } };
-  const diff: CommandBehaviour = { run: { kind: 'zone', zone: 'diff' } };
-  const dock: CommandBehaviour = { run: { kind: 'zone', zone: 'ura' } };
-  const chatZone: CommandBehaviour = { run: { kind: 'zone', zone: 'chat' } };
+function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
+  const app: CommandBehavior = { run: { kind: 'app' } };
+  const main: CommandBehavior = { run: { kind: 'main' } };
+  const none: CommandBehavior = { run: { kind: 'none' } };
+  const diff: CommandBehavior = { run: { kind: 'zone', zone: 'diff' } };
+  const dock: CommandBehavior = { run: { kind: 'zone', zone: 'ura' } };
+  const chatZone: CommandBehavior = { run: { kind: 'zone', zone: 'chat' } };
   return {
     about: main,
     settings: main,

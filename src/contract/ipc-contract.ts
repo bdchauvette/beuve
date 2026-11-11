@@ -1876,7 +1876,7 @@ export interface PullRequestTimelineView {
   readonly isTruncated: boolean;
 }
 
-/** A neighbour in a stack of pull requests, opened with `github:open-pr` and the same clone. */
+/** A neighbor in a stack of pull requests, opened with `github:open-pr` and the same clone. */
 export interface PullRequestStackEntryView {
   readonly ref: string;
   readonly number: number;
@@ -2042,7 +2042,7 @@ export type OpenPullRequestResponse =
     };
 
 /**
- * What the UI shows of a pull request session: stored metadata, its stack neighbours and the last
+ * What the UI shows of a pull request session: stored metadata, its stack neighbors and the last
  * CI status. Asking also makes it the session main polls (ADR 0038).
  */
 export interface PullRequestSessionView {

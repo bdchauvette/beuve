@@ -131,7 +131,7 @@ describe('JsonRpcConnection', () => {
     await expect(throwing.nextSent()).resolves.toMatchObject({ id: 2, error: { code: -32_603 } });
   });
 
-  test('honours $/cancelRequest for peer requests', async ({ expect, closing }) => {
+  test('honors $/cancelRequest for peer requests', async ({ expect, closing }) => {
     let wasAborted = false;
     const peer = closing(
       createFakePeer({

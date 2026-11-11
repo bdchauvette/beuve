@@ -12,7 +12,7 @@ import { zoneStyles } from './zone-styles.ts';
 
 /**
  * The Overview tab of a pull request session (ADR 0109): the pull request's title, state, author,
- * branches, description and stack neighbours, then its CI checks and its activity (ADR 0110). It
+ * branches, description and stack neighbors, then its CI checks and its activity (ADR 0110). It
  * emits what they emit: `beuve-open-link`, `beuve-open-stack`, `beuve-open-url` and
  * `beuve-description-sheet-request`.
  */

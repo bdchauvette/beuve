@@ -122,7 +122,7 @@ export interface AcquireWorktreeOptions {
 export interface SessionWorktrees {
   /**
    * A lease on the checkout `claim` names, created on first need. Creating and removing a path
-   * are serialised, so a lease never gets a checkout that is being removed: it waits for the
+   * are serialized, so a lease never gets a checkout that is being removed: it waits for the
    * removal and checks the commit out again. A checkout is removed only when no lease holds it
    * and it is no session's current checkout or a sheet's pinned one.
    */
