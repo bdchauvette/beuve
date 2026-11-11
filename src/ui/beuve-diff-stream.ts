@@ -68,6 +68,7 @@ import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
 import type { ReviewStops } from './step-review-position-skipping.ts';
+import { cardIndexAtLine } from './card-index-at-line.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
@@ -570,6 +571,34 @@ export class BeuveDiffStream extends LitElement {
     this.setCollapsed(event.detail.path, !event.detail.expand);
   };
 
+  /** A press on the body itself (not a card in it) is a grab of its scrollbar. */
+  private readonly onBodyPointerDown = (event: PointerEvent): void => {
+    if (event.target === event.currentTarget) {
+      this.isReaderScrolling = true;
+    }
+  };
+
+  /**
+   * Once the reviewer's own scroll settles, the card whose header is pinned at the top becomes the
+   * active one, so File Reviewed and the other active-card commands act on the file being read.
+   * Reveals scroll the active card into view themselves, so they leave it alone.
+   */
+  private readonly onScrollEnd = (event: Event): void => {
+    if (!this.isReaderScrolling) {
+      return;
+    }
+    this.isReaderScrolling = false;
+    const body = event.currentTarget as HTMLElement;
+    const spans = Array.from(this.cards(), (card) => {
+      const rect = card.getBoundingClientRect();
+      return { blockStart: rect.top, blockEnd: rect.bottom };
+    });
+    const index = cardIndexAtLine(spans, body.getBoundingClientRect().top);
+    if (index !== -1) {
+      this.activate(index);
+    }
+  };
+
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries.at(-1)?.contentRect.width;
     if (width !== undefined && width > 0) {
@@ -626,6 +655,17 @@ export class BeuveDiffStream extends LitElement {
         readonly far: IntersectionObserver;
       }
     | undefined;
+
+  /** Whether the reviewer scrolled the stream since it last settled, rather than a reveal. */
+  private isReaderScrolling = false;
+
+  /** Wheel, touch and scrollbar input: the scroll that follows is the reviewer's own. */
+  private readonly scrollIntent = {
+    handleEvent: (): void => {
+      this.isReaderScrolling = true;
+    },
+    passive: true,
+  };
 
   @property({ type: Boolean, reflect: true }) accessor focused = false;
 
@@ -1389,7 +1429,13 @@ export class BeuveDiffStream extends LitElement {
             ></beuve-find-bar>`
           : nothing
       }
-      <div class="body">
+      <div
+        class="body"
+        @wheel=${this.scrollIntent}
+        @touchmove=${this.scrollIntent}
+        @pointerdown=${this.onBodyPointerDown}
+        @scrollend=${this.onScrollEnd}
+      >
         ${
           isUpToDate
             ? html`<p class="empty">Everything up to the head has been reviewed.</p>`
