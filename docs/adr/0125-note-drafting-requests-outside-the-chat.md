@@ -34,4 +34,4 @@ That is the wrong home for drafting. A note is written for the author of the cha
 
 ## Amendment 2026-11-11: "✨ Flesh out", at the start of the last row
 
-"Expand" read as making the form bigger. The button is "✨ Flesh out" (the menu item Review ▸ Note ▸ Flesh Out Draft, the model role "Flesh out note"); ✨ marks it as the model's help, so `praise` became 👏 (ADR 0131 amendment). It sits at the start of the form's last row, apart from Cancel and Stage or Save at the end, and while it runs it shows "Fleshing out…" and Stop, never a second Cancel. The code keeps the names `expand-note`, `ura:expand-note` and `beuve-note-expand`.
+"Expand" read as making the form bigger. The button is "✨ Flesh out" (the menu item Review ▸ Note ▸ Flesh Out Draft, the model role "Flesh out note"); ✨ marks it as the model's help, so `praise` became 🎉 (ADR 0131 amendment). It sits at the start of the form's last row, apart from Cancel and Stage or Save at the end, and while it runs it shows "Fleshing out…" and Stop, never a second Cancel. The code keeps the names `expand-note`, `ura:expand-note` and `beuve-note-expand`.
