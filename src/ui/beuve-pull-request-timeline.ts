@@ -105,6 +105,7 @@ export class BeuvePullRequestTimeline extends LitElement {
       .body {
         max-block-size: var(--beuve-size-scroll-short);
         overflow: auto;
+        font: var(--beuve-font-body);
         color: var(--beuve-text);
         overflow-wrap: anywhere;
       }

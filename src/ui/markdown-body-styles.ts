@@ -2,8 +2,9 @@ import { css } from 'lit';
 
 /**
  * How rendered Markdown (ADR 0073) looks inside a `.body` element of a sidebar card: compact
- * blocks, tables that scroll sideways, code in the mono font. Share it, add the card's own
- * `.body` size and font beside it.
+ * blocks, tables that scroll sideways, code in the mono font: code blocks at the code size,
+ * inline code relative to the text around it. Share it, add the card's own `.body` size and
+ * font (the body font) beside it.
  */
 export const markdownBodyStyles = css`
   .body :is(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6, .table) {
@@ -62,11 +63,14 @@ export const markdownBodyStyles = css`
     border-radius: var(--beuve-radius);
     background: var(--beuve-surface-sunken);
     font: var(--beuve-font-code);
-    font-size: var(--beuve-font-size-caption);
   }
 
   code {
     font: var(--beuve-font-code);
-    font-size: var(--beuve-font-size-caption);
+    font-size: var(--beuve-font-size-mark);
+  }
+
+  .body pre code {
+    font-size: inherit;
   }
 `;
