@@ -1102,7 +1102,7 @@ const entries = Object.freeze([
   {
     id: 'reset-database',
     title: 'Reset Database…',
-    menu: { menu: 'help', group: 2 },
+    menu: { menu: 'help', group: 2, submenu: 'Troubleshooting' },
     windows: everywhere(),
     handler: 'main',
   },

@@ -140,7 +140,7 @@ describe('menuTemplateFrom', () => {
   });
 
   test.for(['mac', 'linux'] as const)(
-    'puts the log file and developer tools in the %s Help › Troubleshooting',
+    'puts the log file, the reset and developer tools in the %s Help › Troubleshooting',
     (platform, { expect }) => {
       const help = menuTemplateFrom({ catalog: commandCatalog, platform }).at(-1);
       const troubleshooting = help?.submenu?.find((item) => {
@@ -148,7 +148,7 @@ describe('menuTemplateFrom', () => {
       });
       expect(
         troubleshooting?.submenu?.map((item) => item.id ?? item.role ?? item.type),
-      ).toStrictEqual(['show-log', 'separator', 'toggleDevTools']);
+      ).toStrictEqual(['show-log', 'reset-database', 'separator', 'toggleDevTools']);
       expect(troubleshooting?.submenu?.at(-1)?.accelerator).toBe('');
     },
   );
