@@ -18,3 +18,7 @@ ADR 0123 renders Markdown files in their cards and sheets. They first used the i
 ## Consequences
 
 Documents read the same on every machine and look distinct from the interface. Plex Sans and the system sans differ in detail (Plex's angled terminals and squarer curves), which is the point at the document's edge, and shows only where the two meet inside it: the notes and findings slotted under regions keep the interface font. The app is about 265 KB larger. A file with Cyrillic, Greek or other scripts the faces lack falls back, glyph by glyph, to the interface font.
+
+## Amendment 2026-11-11: rendered files read at 16 px
+
+At the 14 px body size a rendered file read as small as the panels around it, which undercut the point of treating it as a document. `--beuve-font-prose` now uses its own size, `--beuve-font-size-prose` (16 px, GitHub's Markdown size), rather than `--beuve-font-size-body`. Headings scale from it (`--beuve-font-size-prose-h1` to `-h3`, 1.75, 1.375 and 1.125 em; h4 to h6 at the prose size), and inline code is `--beuve-font-size-mark` of the text around it. Code blocks stay at the code size, as diffs and sheets do. Interface text is unchanged.

@@ -193,6 +193,12 @@
   --beuve-font-size-large: 1rem; /* 16px: section titles */
   --beuve-font-size-title: 1.25rem; /* 20px: page and dialog titles */
   --beuve-font-size-code: 0.8125rem; /* 13px: diffs, sheets, inline code blocks */
+  /* Rendered files are read at length, so they take GitHub's reading size, not the panels' (ADR 0124). */
+  --beuve-font-size-prose: 1rem; /* 16px: rendered files */
+  /* A rendered file's headings, relative to its prose size. */
+  --beuve-font-size-prose-h1: 1.75em;
+  --beuve-font-size-prose-h2: 1.375em;
+  --beuve-font-size-prose-h3: 1.125em;
 
   --beuve-line-height-tight: 1.25;
   --beuve-line-height-normal: 1.5;
@@ -301,7 +307,7 @@
     var(--beuve-line-height-tight) var(--beuve-font-family-sans);
   --beuve-font-code: var(--beuve-font-weight-normal) var(--beuve-font-size-code) /
     var(--beuve-line-height-normal) var(--beuve-font-family-code);
-  --beuve-font-prose: var(--beuve-font-weight-normal) var(--beuve-font-size-body) /
+  --beuve-font-prose: var(--beuve-font-weight-normal) var(--beuve-font-size-prose) /
     var(--beuve-line-height-relaxed) var(--beuve-font-family-prose);
 
   --beuve-titlebar-height: 2.5rem;
