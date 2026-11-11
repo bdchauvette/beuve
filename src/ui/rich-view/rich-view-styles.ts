@@ -49,17 +49,21 @@ export const richViewStyles = [
     .document h1 {
       padding-block-end: var(--beuve-space-1);
       border-block-end: var(--beuve-border-width) solid var(--beuve-border);
-      font-size: var(--beuve-font-size-title);
+      font-size: var(--beuve-font-size-prose-h1);
     }
 
     .document h2 {
       padding-block-end: var(--beuve-space-1);
       border-block-end: var(--beuve-border-width) solid var(--beuve-border);
-      font-size: var(--beuve-font-size-large);
+      font-size: var(--beuve-font-size-prose-h2);
     }
 
-    .document :is(h3, h4, h5, h6) {
-      font-size: var(--beuve-font-size-body);
+    .document h3 {
+      font-size: var(--beuve-font-size-prose-h3);
+    }
+
+    .document :is(h4, h5, h6) {
+      font-size: inherit;
     }
 
     .document :is(ul, ol) {
@@ -174,7 +178,7 @@ export const richViewStyles = [
       border-radius: var(--beuve-radius-small);
       background: var(--beuve-surface-sunken);
       font: var(--beuve-font-code);
-      font-size: var(--beuve-font-size-code);
+      font-size: var(--beuve-font-size-mark);
     }
 
     .document kbd {
@@ -193,6 +197,7 @@ export const richViewStyles = [
     .document pre code {
       padding: 0;
       background: none;
+      font-size: inherit;
     }
 
     .document pre.highlighted,
