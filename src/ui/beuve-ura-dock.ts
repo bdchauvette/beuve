@@ -751,15 +751,13 @@ export class BeuveUraDock extends LitElement {
         />
       </div>
       <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
+      ${this.renderSuggestionActions(item)}
       <div class="row">
         <beuve-note-expand
           .anchor=${item.anchor}
           .headSha=${item.headSha}
           .noteKey=${item.id}
         ></beuve-note-expand>
-      </div>
-      ${this.renderSuggestionActions(item)}
-      <div class="row">
         <span class="spacer"></span>
         <button class="button" type="button" title="Cancel (Esc)" data-action="cancel-edit">
           Cancel

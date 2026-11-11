@@ -36,11 +36,11 @@ export interface NoteExpandRequestDetail {
 }
 
 /**
- * The Expand button of a note form (ADR 0125), on its own row under the body rather than among the
- * form's Cancel and Stage or Save, placed inside the `<form>` whose Title input, Body
+ * The ✨ Flesh out button of a note form (ADR 0125; "expand on this" in the code), at the start of
+ * the form's last row, away from its Cancel and Stage or Save at the end, placed inside the `<form>` whose Title input, Body
  * textarea and Label select it reads (by their `aria-label`), and its Blocking toggle (`name`). Enabled while the title or body
  * has text. It asks with a composed `beuve-note-expand-request` ({@link NoteExpandRequestDetail})
- * and never calls the bridge; while it waits it shows Expanding… and a Stop, never a second Cancel beside the form's. The answer replaces
+ * and never calls the bridge; while it waits it shows Fleshing out… and a Stop, never a second Cancel beside the form's. The answer replaces
  * the body's text as one edit the reviewer can undo (⌘/Ctrl+Z); a failure shows beside the button.
  */
 @customElement('beuve-note-expand')
@@ -191,7 +191,7 @@ export class BeuveNoteExpand extends LitElement {
       new CustomEvent('beuve-note-expand-request', { detail, bubbles: true, composed: true }),
     );
     if (answer === undefined) {
-      this.error = 'Expanding needs an open review.';
+      this.error = 'Fleshing out needs an open review.';
       return;
     }
     this.error = '';
@@ -221,11 +221,11 @@ export class BeuveNoteExpand extends LitElement {
 
   override render(): TemplateResult {
     if (this.isExpanding) {
-      return html`<span class="status" role="status">Expanding…</span>
+      return html`<span class="status" role="status">Fleshing out…</span>
         <button
           class="button link"
           type="button"
-          title="Stop expanding; the draft stays as it is"
+          title="Stop fleshing out; the draft stays as it is"
           @click=${this.onStop}
         >
           Stop
@@ -235,11 +235,11 @@ export class BeuveNoteExpand extends LitElement {
       <button
         class="button quiet"
         type="button"
-        title="Expand on this: write the note out for the author from the draft and the diff"
+        title="Flesh out this note: Claude writes it up for the author from your draft and the diff"
         ?disabled=${!this.hasText || this.anchor === undefined}
         @click=${this.onExpand}
       >
-        Expand
+        ✨ Flesh out
       </button>`;
   }
 }

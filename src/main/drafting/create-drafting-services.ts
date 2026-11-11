@@ -129,7 +129,7 @@ export function createDraftingServices(options: DraftingServicesOptions): Drafti
         return await expand(request, signal);
       } catch (error: unknown) {
         logger.error('note drafting failed unexpectedly', { error: errorFrom(error) });
-        return err({ code: 'internal', message: 'Expanding the note failed unexpectedly.' });
+        return err({ code: 'internal', message: 'Fleshing out the note failed unexpectedly.' });
       } finally {
         running.delete(entry);
         settled.resolve(undefined);
