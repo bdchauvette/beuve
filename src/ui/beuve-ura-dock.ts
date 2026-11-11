@@ -165,8 +165,7 @@ export class BeuveUraDock extends LitElement {
 
       .severity.issue,
       .severity.todo,
-      .severity.chore,
-      .severity.typo {
+      .severity.chore {
         color: var(--beuve-warn);
       }
 
@@ -178,9 +177,7 @@ export class BeuveUraDock extends LitElement {
       .severity.nitpick,
       .severity.thought,
       .severity.smell,
-      .severity.note,
-      .severity.polish,
-      .severity.quibble {
+      .severity.note {
         color: var(--beuve-text-muted);
       }
 

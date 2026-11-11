@@ -1275,10 +1275,7 @@ export type UraSeverityView =
   | 'praise'
   | 'note'
   | 'todo'
-  | 'chore'
-  | 'typo'
-  | 'polish'
-  | 'quibble';
+  | 'chore';
 
 /** Where a URA item points on a head: lines are 1-based and inclusive. */
 export type UraAnchorView =

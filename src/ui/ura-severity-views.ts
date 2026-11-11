@@ -15,7 +15,4 @@ export const uraSeverityViews: readonly UraSeverityView[] = [
   'note',
   'todo',
   'chore',
-  'typo',
-  'polish',
-  'quibble',
 ];

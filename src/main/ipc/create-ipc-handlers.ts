@@ -361,9 +361,6 @@ const uraSeverity = z.enum([
   'note',
   'todo',
   'chore',
-  'typo',
-  'polish',
-  'quibble',
 ] satisfies readonly UraSeverityView[]);
 const uraVerdict = z.enum(['approve', 'request-changes', 'comment']);
 const uraTitle = z.string().max(1000);

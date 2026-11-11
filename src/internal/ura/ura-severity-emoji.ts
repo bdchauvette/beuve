@@ -7,13 +7,10 @@ const emoji: Readonly<Record<UraSeverity, string>> = {
   nitpick: '⛏️',
   thought: '💭',
   smell: '👃',
-  praise: '✨',
+  praise: '👏',
   note: 'ℹ️',
   todo: '☑️',
   chore: '🧹',
-  typo: '🔤',
-  polish: '💅',
-  quibble: '🤏',
 };
 
 /** The emoji that marks a label at a glance, in the dock, the diff and posted reviews (ADR 0131). */
