@@ -23,7 +23,7 @@ export interface RegisterIpcOptions {
  * Registers every contract channel on `ipcMain`. Calls from frames other than the top-level
  * frame of one of beuve's own pages, for a channel that page may not call (a sheet calls only the
  * sheet channels, ADR 0067, and the Settings window only its own, ADR 0068), or with more than one argument, are refused before reaching a
- * handler; unexpected exceptions become `internal` errors so the renderer never sees a stack.
+ * handler; unexpected exceptions are logged and become `internal` errors that point at the log, so the renderer never sees a stack.
  * Returns an unregister function.
  */
 export function registerIpcHandlers(
@@ -51,7 +51,10 @@ export function registerIpcHandlers(
           return await handler(args[0], { webContentsId: event.sender.id });
         } catch (error: unknown) {
           logger.error('ipc handler failed', { channel, error });
-          return err({ code: 'internal', message: 'internal error' });
+          return err({
+            code: 'internal',
+            message: 'Internal error; Help › Show Log File has the details.',
+          });
         }
       },
     );

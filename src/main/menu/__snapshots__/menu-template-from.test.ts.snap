@@ -741,6 +741,13 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
+        "id": "show-log",
+        "label": "&Show Log File",
+      },
+      {
+        "type": "separator",
+      },
+      {
         "id": "about",
         "label": "&About beuve",
       },
@@ -1516,6 +1523,13 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       {
         "id": "github-home",
         "label": "beuve on GitHub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "show-log",
+        "label": "Show Log File",
       },
     ],
   },
