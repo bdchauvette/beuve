@@ -105,7 +105,6 @@ export function startApp(app: App, options: StartAppOptions): void {
   };
   const menus = createAppMenus({
     platform: keyPlatform(),
-    isPackaged: app.isPackaged,
     runMain: handleMainCommand,
     openMainWindow: (): BrowserWindow => {
       return openWindow();

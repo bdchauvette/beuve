@@ -22,7 +22,6 @@ import { yieldToTerminal } from './yield-to-terminal.ts';
 
 export interface AppMenusOptions {
   readonly platform: KeyPlatform;
-  readonly isPackaged: boolean;
   /** Runs a command whose catalog `handler` is `main` (Settings, About, …). */
   readonly runMain: (id: CommandId, window: BrowserWindow | undefined) => void;
   /** Opens and tracks a new main window, for commands that `opensMainWindow`. */
@@ -62,11 +61,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   const kinds = new Map<number, WindowKind>();
   const states = new Map<number, MenuStateRequest>();
   const menus = new Map<number, Menu>();
-  const template = menuTemplateFrom({
-    catalog: commandCatalog,
-    platform,
-    isPackaged: options.isPackaged,
-  });
+  const template = menuTemplateFrom({ catalog: commandCatalog, platform });
 
   const dispatch = (id: string, window: BrowserWindow | undefined): void => {
     const command = byId.get(id);
