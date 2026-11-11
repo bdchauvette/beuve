@@ -13,9 +13,7 @@ import { placeOfCommand } from './place-of-command.ts';
 
 describe('menuTemplateFrom', () => {
   test.for(['mac', 'linux'] as const)('lays out the %s menu bar', (platform, { expect }) => {
-    expect(
-      menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }),
-    ).toMatchSnapshot();
+    expect(menuTemplateFrom({ catalog: commandCatalog, platform })).toMatchSnapshot();
   });
 
   test('has the app menu on macOS only, and mnemonics on Linux', ({ expect }) => {
@@ -45,9 +43,7 @@ describe('menuTemplateFrom', () => {
   test.for(['mac', 'linux'] as const)(
     'gives every %s command with a key exactly one menu item',
     (platform, { expect }) => {
-      const items = flatten(
-        menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }),
-      );
+      const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform }));
       const keyed = commandCatalog.filter((command) => {
         return acceleratorsFor(command, platform).length > 0;
       });
@@ -64,13 +60,12 @@ describe('menuTemplateFrom', () => {
   );
 
   test.for(['mac', 'linux'] as const)(
-    'uses no %s accelerator twice and never a bare key',
+    'uses no %s accelerator twice and never a bare key (an empty one is no key)',
     (platform, { expect }) => {
-      const accelerators = flatten(
-        menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: false }),
-      )
+      const accelerators = flatten(menuTemplateFrom({ catalog: commandCatalog, platform }))
         .map((item) => item.accelerator)
         .filter((key) => key !== undefined)
+        .filter((key) => key !== '')
         .map((key) => normalized(key));
       expect(
         accelerators.filter((key, index) => accelerators.indexOf(key) !== index),
@@ -110,7 +105,6 @@ describe('menuTemplateFrom', () => {
     const menus = menuTemplateFrom({
       catalog: commandCatalog,
       platform: 'linux',
-      isPackaged: false,
     });
     const clashes: string[] = [];
     const check = (items: readonly MenuTemplateItem[]): void => {
@@ -133,24 +127,29 @@ describe('menuTemplateFrom', () => {
     const catalog: readonly CatalogCommand[] = [
       { ...command('fish', { menu: 'go', group: 0 }), title: 'Fish & Chips' },
     ];
-    const items = flatten(menuTemplateFrom({ catalog, platform: 'linux', isPackaged: true }));
+    const items = flatten(menuTemplateFrom({ catalog, platform: 'linux' }));
     expect(items.find((item) => item.id === 'fish')?.label).toBe('&Fish && Chips');
   });
 
   test('hides alternate keys behind the visible item', ({ expect }) => {
-    const items = flatten(
-      menuTemplateFrom({ catalog: commandCatalog, platform: 'mac', isPackaged: true }),
-    );
+    const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform: 'mac' }));
     expect(items.filter((item) => item.id?.startsWith('next-hunk') === true)).toStrictEqual([
       { id: 'next-hunk', label: 'Next Change', accelerator: 'Cmd+Down' },
       { id: 'next-hunk~1', label: 'Next Change', accelerator: 'F7', visible: false },
     ]);
   });
 
-  test('adds developer tools to development builds only', ({ expect }) => {
-    expect(linuxRoles(false)).toContain('toggleDevTools');
-    expect(linuxRoles(true)).not.toContain('toggleDevTools');
-  });
+  test.for(['mac', 'linux'] as const)(
+    'puts developer tools in the %s Help › Troubleshooting, without a key',
+    (platform, { expect }) => {
+      const help = menuTemplateFrom({ catalog: commandCatalog, platform }).at(-1);
+      const troubleshooting = help?.submenu?.find((item) => {
+        return item.label?.replace('&', '') === 'Troubleshooting';
+      });
+      expect(troubleshooting?.submenu?.map((item) => item.role)).toStrictEqual(['toggleDevTools']);
+      expect(troubleshooting?.submenu?.[0]?.accelerator).toBe('');
+    },
+  );
 
   test('sorts by group with separators, and builds submenus where they first appear', ({
     expect,
@@ -161,7 +160,7 @@ describe('menuTemplateFrom', () => {
       command('c', { menu: 'go', group: 1, submenu: 'More' }),
       command('d', { menu: 'go', group: 1, submenu: 'More', subgroup: 2 }),
     ];
-    const go = menuTemplateFrom({ catalog, platform: 'mac', isPackaged: true }).find((item) => {
+    const go = menuTemplateFrom({ catalog, platform: 'mac' }).find((item) => {
       return item.label === 'Go';
     });
     expect(go?.submenu).toStrictEqual([
@@ -242,17 +241,9 @@ describe('contextMenuTemplateFrom', () => {
 });
 
 function topLabels(platform: KeyPlatform): (string | undefined)[] {
-  return menuTemplateFrom({ catalog: commandCatalog, platform, isPackaged: true }).map((item) => {
+  return menuTemplateFrom({ catalog: commandCatalog, platform }).map((item) => {
     return item.label ?? item.role;
   });
-}
-
-function linuxRoles(isPackaged: boolean): (string | undefined)[] {
-  return flatten(menuTemplateFrom({ catalog: commandCatalog, platform: 'linux', isPackaged })).map(
-    (item) => {
-      return item.role;
-    },
-  );
 }
 
 function catalogKeys(platform: KeyPlatform): string[] {

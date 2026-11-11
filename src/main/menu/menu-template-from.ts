@@ -9,8 +9,6 @@ import { placeOfCommand } from './place-of-command.ts';
 export interface MenuTemplateOptions {
   readonly catalog: readonly CatalogCommand[];
   readonly platform: KeyPlatform;
-  /** Development builds add Toggle Developer Tools to View. */
-  readonly isPackaged: boolean;
 }
 
 const letter = /^[\p{L}\p{N}]$/u;
@@ -24,7 +22,6 @@ interface PlacedCommand {
 /** The accelerators of the roles both platforms show. */
 const roleAccelerators = {
   mac: {
-    toggleDevTools: 'Alt+Cmd+J',
     undo: 'Cmd+Z',
     redo: 'Shift+Cmd+Z',
     cut: 'Cmd+X',
@@ -38,7 +35,6 @@ const roleAccelerators = {
     close: 'Cmd+W',
   },
   linux: {
-    toggleDevTools: 'Ctrl+Shift+J',
     undo: 'Ctrl+Z',
     redo: 'Ctrl+Shift+Z',
     cut: 'Ctrl+X',
@@ -87,7 +83,7 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
 export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTemplateItem[] {
   const { catalog, platform } = options;
   const isMac = platform === 'mac';
-  const roles = roleItemsFor(platform, options.isPackaged);
+  const roles = roleItemsFor(platform);
   const placed = catalog
     .map((command) => {
       return { command, place: placeOfCommand(command, platform) };
@@ -243,15 +239,18 @@ function isLetter(character: string): boolean {
 /** The roles each menu holds per group, before that group's catalog commands. */
 function roleItemsFor(
   platform: KeyPlatform,
-  isPackaged: boolean,
 ): Partial<Record<TopMenu, Readonly<Record<number, readonly MenuTemplateItem[]>>>> {
   const keys = roleAccelerators[platform];
-  const developer: Record<number, readonly MenuTemplateItem[]> = {};
-  if (!isPackaged) {
-    developer[8] = [
-      { role: 'toggleDevTools', label: 'Toggle Developer Tools', accelerator: keys.toggleDevTools },
-    ];
-  }
+  const help: Record<number, readonly MenuTemplateItem[]> = {
+    3: [
+      {
+        label: 'Troubleshooting',
+        // An empty accelerator, because a role without one takes Electron's default
+        // (Ctrl+Shift+I, which is Show Control Flow on Linux).
+        submenu: [{ role: 'toggleDevTools', label: 'Toggle Developer Tools', accelerator: '' }],
+      },
+    ],
+  };
   const edit: Record<number, readonly MenuTemplateItem[]> = {
     0: [
       { role: 'undo', label: 'Undo', accelerator: keys.undo },
@@ -273,7 +272,6 @@ function roleItemsFor(
     6: [
       { role: 'togglefullscreen', label: 'Toggle Full Screen', accelerator: keys.togglefullscreen },
     ],
-    ...developer,
   };
   const closeWindow: MenuTemplateItem = {
     role: 'close',
@@ -294,6 +292,7 @@ function roleItemsFor(
       file: { 2: [closeWindow] },
       edit,
       view,
+      help,
     };
   }
   return {
@@ -301,5 +300,6 @@ function roleItemsFor(
     edit,
     view,
     window: { 0: [{ role: 'minimize', label: 'Minimize' }] },
+    help,
   };
 }

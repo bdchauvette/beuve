@@ -756,6 +756,19 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
+        "label": "&Troubleshooting",
+        "submenu": [
+          {
+            "accelerator": "",
+            "label": "&Toggle Developer Tools",
+            "role": "toggleDevTools",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
         "id": "about",
         "label": "&About beuve",
       },
@@ -1546,6 +1559,19 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       {
         "id": "reset-database",
         "label": "Reset Database…",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Troubleshooting",
+        "submenu": [
+          {
+            "accelerator": "",
+            "label": "Toggle Developer Tools",
+            "role": "toggleDevTools",
+          },
+        ],
       },
     ],
   },
