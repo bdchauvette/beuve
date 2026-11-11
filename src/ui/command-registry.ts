@@ -245,5 +245,6 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'list-move': none,
     shortcuts: app,
     'github-home': main,
+    'show-log': main,
   };
 }

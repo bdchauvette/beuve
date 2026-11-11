@@ -43,6 +43,8 @@ export interface StartAppOptions {
   readonly settingsHtmlPath: string;
   /** `beuve://` links to open pull requests with (ADR 0098). */
   readonly links: LinkInbox;
+  /** This run's log file, which Help › Show Log File reveals. */
+  readonly logPath: string;
   readonly logger: Logger;
 }
 
@@ -71,6 +73,10 @@ export function startApp(app: App, options: StartAppOptions): void {
       }
       case 'github-home': {
         void shell.openExternal(projectUrl);
+        return;
+      }
+      case 'show-log': {
+        shell.showItemInFolder(options.logPath);
         return;
       }
       default: {

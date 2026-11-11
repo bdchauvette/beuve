@@ -1092,6 +1092,13 @@ const entries = Object.freeze([
     windows: everywhere(),
     handler: 'main',
   },
+  {
+    id: 'show-log',
+    title: 'Show Log File',
+    menu: { menu: 'help', group: 2 },
+    windows: everywhere(),
+    handler: 'main',
+  },
 ] as const satisfies readonly CatalogCommand[]);
 
 /** Every catalog command id. */
