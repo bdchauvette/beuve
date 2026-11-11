@@ -97,7 +97,6 @@ import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import { mergeReviewInsights } from './merge-review-insights.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
-import { planChatStage } from './plan-chat-stage.ts';
 import { withoutStagedInsights } from './without-staged-insights.ts';
 import type { GithubDockState } from './github-post-state.ts';
 import { lineFromTarget } from './line-from-target.ts';
@@ -425,10 +424,6 @@ export class BeuveReview extends LitElement {
     void beuveBridge()?.invoke('chat:cancel', { messageId: event.detail.messageId });
   };
 
-  private readonly onChatStage = (event: CustomEvent<MessageIdDetail>): void => {
-    void this.stageChatAnswer(event.detail.messageId);
-  };
-
   private readonly onChatStageFinding = (event: CustomEvent<FindingRefDetail>): void => {
     void this.ura.stageReviewFinding(event.detail.messageId, event.detail.finding);
   };
@@ -609,7 +604,6 @@ export class BeuveReview extends LitElement {
   };
 
   /** The chat answer a context menu was opened on, for Stage Answer as a Note. */
-  private contextAnswerId: string | undefined;
   /**
    * The file a chat answer names that the last context menu was opened on (ADR 0128), for Open in
    * Sheet and Copy Relative Path; taken by the first of them that runs, and dropped by any other
@@ -892,15 +886,6 @@ export class BeuveReview extends LitElement {
     } else {
       this.showNotice({ tone: 'error', text: `Could not copy: ${copied.error.message}` });
     }
-  }
-
-  /** Stages an answer in the review dock as a question note (spec Zone 4). */
-  private async stageChatAnswer(messageId: string): Promise<void> {
-    const plan = planChatStage(this.chat.entries, messageId, this.diffPaths());
-    if (plan === undefined) {
-      return;
-    }
-    await this.ura.stageChatAnswer(plan, messageId);
   }
 
   private selectionTarget(palette: PaletteSelection | undefined): MentionTarget | string {
@@ -1270,7 +1255,6 @@ export class BeuveReview extends LitElement {
       .transcript=${this.chat.entries}
       .diffPaths=${this.diffPaths()}
       .references=${this.fileReferences()}
-      .stagedMessageIds=${this.ura.stagedMessageIds()}
       .stagedFindings=${this.ura.stagedFindings()}
       .stagedProposals=${this.ura.stagedProposals()}
       .subscribeChatStream=${this.subscribeChatStream}
@@ -1279,7 +1263,6 @@ export class BeuveReview extends LitElement {
       @beuve-chat-submit=${this.onChatSubmit}
       @beuve-chat-escape=${this.onChatEscape}
       @beuve-chat-cancel=${this.onChatCancel}
-      @beuve-chat-stage=${this.onChatStage}
       @beuve-chat-stage-finding=${this.onChatStageFinding}
       @beuve-chat-stage-proposal=${this.onChatStageProposal}
       @beuve-chat-clear-queue=${this.onChatClearQueue}
@@ -1493,7 +1476,7 @@ export class BeuveReview extends LitElement {
   /** What a right-click landed on, recording the reference, answer, note or tree row it chose. */
   contextKindAt(
     event: MouseEvent,
-  ): 'line' | 'file' | 'tree' | 'note' | 'answer' | 'reference' | 'text' | undefined {
+  ): 'line' | 'file' | 'tree' | 'note' | 'reference' | 'text' | undefined {
     const path = event.composedPath().filter((target) => target instanceof HTMLElement);
     this.contextReference = undefined;
     if (path.some((element) => isEditableElement(element))) {
@@ -1503,11 +1486,6 @@ export class BeuveReview extends LitElement {
     if (reference !== undefined) {
       this.contextReference = referenceFrom(reference.dataset);
       return 'reference';
-    }
-    const answer = path.find((element) => element.dataset['messageId'] !== undefined);
-    if (answer !== undefined) {
-      this.contextAnswerId = answer.dataset['messageId'];
-      return 'answer';
     }
     const note = path.find((element) => element.dataset['itemId'] !== undefined);
     if (note !== undefined) {
@@ -1745,13 +1723,6 @@ export class BeuveReview extends LitElement {
       case 'post-review': {
         this.focusSidebar('ura');
         void this.github.previewReview();
-        return true;
-      }
-      case 'stage-answer': {
-        const messageId = this.contextAnswerId;
-        if (messageId !== undefined) {
-          void this.stageChatAnswer(messageId);
-        }
         return true;
       }
       default: {

@@ -51,7 +51,8 @@ describe('validateUraItem', () => {
         path: 'a',
       },
     ],
-    ['empty chat message id', { kind: 'chat-answer', messageId: ' ' }],
+    ['empty chat message id', { kind: 'chat-answer', messageId: ' ', finding: 0 }],
+    ['whole answer, neither finding nor proposal', { kind: 'chat-answer', messageId: 'm1' }],
     ['negative proposal index', { kind: 'chat-answer', messageId: 'm1', proposal: -1 }],
     ['finding and proposal', { kind: 'chat-answer', messageId: 'm1', finding: 0, proposal: 0 }],
     [
@@ -67,7 +68,6 @@ describe('validateUraItem', () => {
     expect(
       errorOf({ origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 3 } }),
     ).toBeUndefined();
-    expect(errorOf({ origin: { kind: 'chat-answer', messageId: 'm1' } })).toBeUndefined();
     expect(
       errorOf({ origin: { kind: 'chat-answer', messageId: 'm1', proposal: 0 } }),
     ).toBeUndefined();

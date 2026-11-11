@@ -13,31 +13,6 @@ import { appLines } from './testing/app-lines.ts';
 import { test } from './testing/test.ts';
 
 describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_000 }, () => {
-  test('stages a chat answer as a note that remembers its message', async ({
-    expect,
-    services,
-    sessionId,
-  }) => {
-    const messageId = '00000000-0000-4000-8000-0000000000aa';
-    const staged = okValueFrom(
-      await services.ura.create({
-        sessionId,
-        anchor: { kind: 'change' },
-        severity: 'question',
-        title: 'From the chat',
-        body: 'An answer',
-        origin: { kind: 'chat-answer', messageId },
-      }),
-    );
-    expect(staged).toMatchObject({
-      origin: { kind: 'chat-answer', messageId },
-      status: { kind: 'staged' },
-    });
-    expect(
-      okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.origin),
-    ).toStrictEqual([{ kind: 'chat-answer', messageId }]);
-  });
-
   test('creates, lists, edits, withdraws, restages and reorders human notes', async ({
     expect,
     services,

@@ -27,3 +27,7 @@ ADR 0031 left some questions of the main and UI wiring open: what happens to a q
 ## Amendment 2026-10-30: queued, not refused
 
 ADR 0057 replaces "one answer per session, refused, not queued": a question asked while another runs is stored `queued` and runs in its turn, and Cancel stops only that one. The persistence, staging, pill and renderer-state rules stand; a `queued` row with no job is settled as `cancelled` like a `streaming` one.
+
+## Amendment 2026-11-11: no whole-answer staging
+
+ADR 0134 removes the Staging rule: an answer is never staged whole, and `ura:create` has no `origin`. The chat stages `/review` findings (ADR 0055) and proposed notes (ADR 0132) instead.

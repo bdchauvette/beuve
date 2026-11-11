@@ -104,7 +104,7 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
       }
       const index = origin.finding ?? origin.proposal;
       if (index === undefined) {
-        return undefined;
+        return 'a chat item is a review finding or a proposed note';
       }
       if (!Number.isSafeInteger(index) || index < 0) {
         return 'the finding or proposal index is not a non-negative integer';

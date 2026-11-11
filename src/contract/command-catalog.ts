@@ -6,7 +6,7 @@ export type TopMenu =
  * What a right-click lands on: a diff line or selection, a file header, a tree row, a file a chat
  * answer names (`reference`, ADR 0128), …
  */
-export type ContextKind = 'line' | 'file' | 'tree' | 'note' | 'answer' | 'reference' | 'sheet';
+export type ContextKind = 'line' | 'file' | 'tree' | 'note' | 'reference' | 'sheet';
 
 /** The windows beuve opens; a command runs only in the kinds it lists. */
 export type WindowKind = 'main' | 'sheet' | 'settings';
@@ -872,14 +872,6 @@ const entries = Object.freeze([
     menu: { menu: 'chat', group: 0 },
     keys: { mac: 'Cmd+>', linux: 'Ctrl+>' },
     context: ['line', 'file', 'tree', 'note'],
-    when: ['session'],
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
-    id: 'stage-answer',
-    title: 'Stage Answer as a Note',
-    context: ['answer'],
     when: ['session'],
     windows: ['main'],
     handler: 'window',
