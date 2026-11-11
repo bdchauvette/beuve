@@ -16,6 +16,7 @@ import { LinkInbox } from './links/link-inbox.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
+import { resetDatabase } from './database/reset-database.ts';
 import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
 import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
 import { readDevelopmentOverrides } from './read-development-overrides.ts';
@@ -73,7 +74,8 @@ async function launch(): Promise<void> {
     const userData = app.getPath('userData');
     await secureUserData(userData, logger);
     const worktreeRoot = path.join(userData, 'worktrees');
-    const db = openAppDatabase(path.join(userData, 'beuve.db'));
+    const databasePath = path.join(userData, 'beuve.db');
+    const db = openAppDatabase(databasePath);
     const settingsPath = path.join(userData, 'settings.json');
     // Fakes for development (ADR 0040); a packaged app applies none of them (ADR 0048).
     const { githubApiBase, editorLaunchLog, ignored } = readDevelopmentOverrides(
@@ -87,7 +89,10 @@ async function launch(): Promise<void> {
       logger.warn('using a development GitHub API', { url: githubApiBase.href });
     }
     app.once('quit', () => {
-      db.close();
+      // Help › Reset Database… closes it before relaunching.
+      if (db.isOpen) {
+        db.close();
+      }
     });
     const nodeRuntime = await resolveNodeRuntime({
       packaged: app.isPackaged,
@@ -200,6 +205,9 @@ async function launch(): Promise<void> {
       settingsHtmlPath: path.join(import.meta.dirname, '../ui/settings.html'),
       links,
       logPath: logFilePaths().path,
+      resetDatabase: async () => {
+        return resetDatabase({ db, location: databasePath, worktreeRoot, logger });
+      },
       logger,
     });
   } catch (error: unknown) {

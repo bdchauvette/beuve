@@ -246,5 +246,6 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     shortcuts: app,
     'github-home': main,
     'show-log': main,
+    'reset-database': main,
   };
 }

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
 import type { App, WebContents } from 'electron';
 
+import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
@@ -18,6 +19,7 @@ import { registerIpcHandlers } from './ipc/register-ipc-handlers.ts';
 import { RequestScopes } from './ipc/request-scopes.ts';
 import { sendEvent } from './ipc/send-event.ts';
 import { withSettingsBroadcast } from './ipc/with-settings-broadcast.ts';
+import type { DatabaseReset } from './database/reset-database.ts';
 import type { MainServices } from './main-services.ts';
 import { handleGithubLink } from './links/handle-github-link.ts';
 import type { GithubLinkTarget } from './links/handle-github-link.ts';
@@ -45,6 +47,11 @@ export interface StartAppOptions {
   readonly links: LinkInbox;
   /** This run's log file, which Help › Show Log File reveals. */
   readonly logPath: string;
+  /**
+   * Help › Reset Database… (ADR 0136): closes the database, sets it aside and removes the
+   * checkouts. Called once the services are disposed; beuve relaunches after it.
+   */
+  readonly resetDatabase: () => Promise<DatabaseReset>;
   readonly logger: Logger;
 }
 
@@ -57,6 +64,7 @@ export interface StartAppOptions {
  */
 export function startApp(app: App, options: StartAppOptions): void {
   const { logger, services } = options;
+  let isResetting = false;
   const handleMainCommand = (id: CommandId): void => {
     switch (id) {
       case 'settings': {
@@ -77,6 +85,17 @@ export function startApp(app: App, options: StartAppOptions): void {
       }
       case 'show-log': {
         shell.showItemInFolder(options.logPath);
+        return;
+      }
+      case 'reset-database': {
+        if (isResetting) {
+          return;
+        }
+        isResetting = true;
+        void (async (): Promise<void> => {
+          const outcome = await resetAndRelaunch(app, options);
+          isResetting = outcome === 'relaunching';
+        })();
         return;
       }
       default: {
@@ -276,6 +295,59 @@ export function startApp(app: App, options: StartAppOptions): void {
   stopBeforeQuit(app, async (): Promise<void> => {
     await services.dispose();
   });
+}
+
+/**
+ * Asks before resetting, then stops every service (language servers, terminals, chat, git
+ * work in the checkouts), resets the database and relaunches beuve, also when the reset failed:
+ * the database is closed by then. Answers `cancelled` when the reviewer said no.
+ */
+async function resetAndRelaunch(
+  app: App,
+  options: StartAppOptions,
+): Promise<'cancelled' | 'relaunching'> {
+  const { logger } = options;
+  if (!(await isResetConfirmed())) {
+    return 'cancelled';
+  }
+  logger.warn('resetting the database at the reviewer’s request');
+  try {
+    await options.services.dispose();
+    const reset = await options.resetDatabase();
+    logger.info('reset the database; relaunching', {
+      movedTo: reset.moved?.path,
+      prunedRepositories: reset.prunedRepositories,
+    });
+  } catch (error: unknown) {
+    logger.error('could not reset the database; relaunching', { error: errorFrom(error) });
+    dialog.showErrorBox(
+      'beuve couldn’t reset the database',
+      `${errorFrom(error).message}\n\nHelp › Show Log File has the details. beuve will restart.`,
+    );
+  }
+  app.relaunch();
+  app.exit(0);
+  return 'relaunching';
+}
+
+/** Asks, as a sheet of the focused window when there is one, before the database is reset. */
+async function isResetConfirmed(): Promise<boolean> {
+  const options: Electron.MessageBoxOptions = {
+    type: 'warning',
+    message: 'Reset the database?',
+    detail:
+      'beuve will clear its sessions, review notes, review progress and chat history, remove its own checkouts of your repositories, and restart. A copy of the old database is kept beside it in beuve’s data folder. Your repositories, review-edits branches and their worktrees, and your settings stay as they are.',
+    buttons: ['Reset and Restart', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+  };
+  const owner = BrowserWindow.getFocusedWindow();
+  if (owner === null) {
+    const answer = await dialog.showMessageBox(options);
+    return answer.response === 0;
+  }
+  const answer = await dialog.showMessageBox(owner, options);
+  return answer.response === 0;
 }
 
 /** Sheets and Settings alone don't count as the app being open: the dock icon brings the main window back. */

@@ -749,6 +749,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Show Log File",
       },
       {
+        "id": "reset-database",
+        "label": "&Reset Database…",
+      },
+      {
         "type": "separator",
       },
       {
@@ -1538,6 +1542,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       {
         "id": "show-log",
         "label": "Show Log File",
+      },
+      {
+        "id": "reset-database",
+        "label": "Reset Database…",
       },
     ],
   },

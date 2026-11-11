@@ -1099,6 +1099,13 @@ const entries = Object.freeze([
     windows: everywhere(),
     handler: 'main',
   },
+  {
+    id: 'reset-database',
+    title: 'Reset Database…',
+    menu: { menu: 'help', group: 2 },
+    windows: everywhere(),
+    handler: 'main',
+  },
 ] as const satisfies readonly CatalogCommand[]);
 
 /** Every catalog command id. */
