@@ -598,7 +598,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           },
           {
             "id": "expand-note",
-            "label": "E&xpand Draft",
+            "label": "&Flesh Out Draft",
           },
         ],
       },
@@ -1391,7 +1391,7 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           },
           {
             "id": "expand-note",
-            "label": "Expand Draft",
+            "label": "Flesh Out Draft",
           },
         ],
       },

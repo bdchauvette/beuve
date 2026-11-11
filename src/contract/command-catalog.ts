@@ -810,8 +810,8 @@ const entries = Object.freeze([
   },
   {
     id: 'expand-note',
-    title: 'Expand Note Draft',
-    label: 'Expand Draft',
+    title: 'Flesh Out Note Draft',
+    label: 'Flesh Out Draft',
     menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 2 },
     when: ['session'],
     windows: ['main'],

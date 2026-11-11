@@ -66,13 +66,31 @@ export class BeuveUraComposer extends LitElement {
         gap: var(--beuve-space-2);
       }
 
+      /* The form's header: the directory gives way first, so the file and lines stay readable. */
       .where {
-        flex: 1;
+        display: flex;
         min-inline-size: 0;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
         font: var(--beuve-font-code);
         font-size: var(--beuve-font-size-caption);
         color: var(--beuve-text-muted);
+      }
+
+      .where .directory {
+        min-inline-size: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .where .file {
+        flex: none;
+        max-inline-size: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .spacer {
+        flex: 1;
       }
 
       input,
@@ -126,12 +144,6 @@ export class BeuveUraComposer extends LitElement {
 
       .error {
         color: var(--beuve-danger);
-      }
-
-      /* The form's own actions, apart from the body's tools above them. */
-      .footer {
-        padding-block-start: var(--beuve-space-1);
-        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
       }
 
       .row > .button {
@@ -216,6 +228,15 @@ export class BeuveUraComposer extends LitElement {
     );
   }
 
+  /** `src/dir/file.ts:12-14`, the directory cut short with an ellipsis when it doesn't fit. */
+  private renderWhere(): TemplateResult {
+    const cut = this.where.lastIndexOf('/') + 1;
+    return html`<div class="where" title=${this.where}>
+      <span class="directory">${pathText(this.where.slice(0, cut))}</span>
+      <span class="file">${pathText(this.where.slice(cut))}</span>
+    </div>`;
+  }
+
   /** Focuses the title, for when the composer opens. */
   override focus(): void {
     this.titleInput()?.focus({ preventScroll: true });
@@ -224,6 +245,7 @@ export class BeuveUraComposer extends LitElement {
   override render(): TemplateResult {
     const labels = submitLabels(this.draft !== undefined);
     return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
+      ${this.renderWhere()}
       <div class="row">
         <select
           aria-label="Label"
@@ -259,9 +281,6 @@ export class BeuveUraComposer extends LitElement {
         />
       </div>
       <textarea aria-label="Body" placeholder="Details (Markdown, optional)"></textarea>
-      <div class="row tools">
-        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
-      </div>
       ${
         this.patch === ''
           ? nothing
@@ -270,8 +289,9 @@ export class BeuveUraComposer extends LitElement {
               <beuve-patch-preview .patch=${this.patch}></beuve-patch-preview>
             </div>`
       }
-      <div class="row footer">
-        <span class="where">${pathText(this.where)}</span>
+      <div class="row">
+        <beuve-note-expand .anchor=${this.anchor}></beuve-note-expand>
+        <span class="spacer"></span>
         ${this.error === '' ? nothing : html`<span class="error" role="alert">${this.error}</span>`}
         <button class="button" type="button" title="Cancel (Esc)" @click=${this.onCancel}>
           Cancel

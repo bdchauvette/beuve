@@ -206,7 +206,7 @@ export class BeuveReview extends LitElement {
     this.scheduleMenuSync();
   };
 
-  /** The Expand of the note form the reviewer last typed in, for Expand Note Draft (ADR 0125). */
+  /** The Flesh out of the note form the reviewer last typed in, for Flesh Out Note Draft (ADR 0125). */
   private noteExpander: BeuveNoteExpand | undefined;
 
   /** Commits read for commit hashes' cards (ADR 0116), per session and hash. */
@@ -1410,14 +1410,14 @@ export class BeuveReview extends LitElement {
     return this.session.review;
   }
 
-  /** Expand Note Draft: the Expand of the open note form the reviewer last focused. */
+  /** Flesh Out Note Draft: the Flesh out of the open note form the reviewer last focused. */
   private expandNoteDraft(): void {
     const expander = this.noteExpander;
     if (expander?.isConnected !== true) {
       this.noteExpander = undefined;
       this.showNotice({
         tone: 'info',
-        text: 'Open a note’s composer or editor to expand its draft.',
+        text: 'Open a note’s composer or editor to flesh out its draft.',
       });
       return;
     }
