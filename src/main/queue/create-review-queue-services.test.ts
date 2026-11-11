@@ -360,6 +360,27 @@ describe('the review queue (integration: fake GitHub, fake gh, a session databas
     expect(asked).not.toContain(`/commits/${'d'.repeat(40)}`);
   });
 
+  test('a signed-out host names its sign-in command once, in the message', async ({
+    expect,
+    services,
+    world,
+  }) => {
+    queueWorld(world.api, world.firstHead);
+    world.writeScenario({ hosts: {}, callsFile: world.callsFile });
+
+    const queue = okValueFrom(await services.queue.refresh());
+    const failures = queue.problems.filter(({ kind }) => kind === 'failed');
+    expect(failures.length).toBeGreaterThan(0);
+    expect(
+      failures.map(({ message, remedy }) => {
+        return { message, remedy };
+      }),
+    ).toContainEqual({
+      message: 'Not signed in to github.com. Run `gh auth login --hostname github.com`.',
+      remedy: undefined,
+    });
+  });
+
   test('pushes the snapshot as it starts and finishes refreshing', async ({
     expect,
     services,

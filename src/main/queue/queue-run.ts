@@ -83,7 +83,9 @@ export class QueueRun {
   /** Records that `source` failed; its items stay as the last refresh left them. */
   report(source: string, error: QueueCallError): void {
     const { message, remedy } = failureFromGithubError(error, source);
-    this.warn({ kind: 'failed', source, message, ...(remedy !== undefined && { remedy }) });
+    // The sign-in messages already name their remedy; the queue would show it twice.
+    const isUnsaid = remedy !== undefined && !message.includes(remedy);
+    this.warn({ kind: 'failed', source, message, ...(isUnsaid && { remedy }) });
   }
 
   /** Records why the queue may be incomplete, once per kind and source. */
