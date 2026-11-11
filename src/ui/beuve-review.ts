@@ -322,6 +322,10 @@ export class BeuveReview extends LitElement {
     void this.navigation.openPeek(event.detail.path, event.detail.line);
   };
 
+  private readonly onDescriptionSheetRequest = (): void => {
+    void this.openDescriptionInSheet();
+  };
+
   private readonly onSheetRequest = (event: CustomEvent<SheetOpenDetail>): void => {
     void this.sheetAction({ kind: 'open', ...event.detail });
   };
@@ -868,6 +872,19 @@ export class BeuveReview extends LitElement {
     void this.sheetAction({ kind: 'open', ...place });
   }
 
+  /** The pull request's description in a sheet window of its own (ADR 0135). */
+  private async openDescriptionInSheet(): Promise<void> {
+    const bridge = beuveBridge();
+    const sessionId = this.review?.session.id;
+    if (bridge === undefined || sessionId === undefined) {
+      return;
+    }
+    const opened = await bridge.invoke('sheet:open-description', { sessionId });
+    if (!opened.ok) {
+      this.showNotice({ tone: 'error', text: opened.error.message });
+    }
+  }
+
   private takeContextReference(): FileReference | undefined {
     const reference = this.contextReference;
     this.contextReference = undefined;
@@ -1128,6 +1145,7 @@ export class BeuveReview extends LitElement {
       @beuve-open-stack=${this.onOpenStack}
       @beuve-open-link=${this.onOpenLink}
       @beuve-open-url=${this.onOpenUrl}
+      @beuve-description-sheet-request=${this.onDescriptionSheetRequest}
     ></beuve-overview-sidebar>`;
   }
 
@@ -1669,6 +1687,10 @@ export class BeuveReview extends LitElement {
       }
       case 'open-in-sheet': {
         this.openInSheet();
+        return true;
+      }
+      case 'open-description-in-sheet': {
+        void this.openDescriptionInSheet();
         return true;
       }
       case 'open-definition':

@@ -2122,6 +2122,20 @@ export interface SheetHeadRequest {
   readonly sessionId: string;
 }
 
+/**
+ * `sheet:open-description` and `sheet:get-description` (ADR 0135): the pull request session whose
+ * description a sheet shows.
+ */
+export interface DescriptionSheetRequest {
+  readonly sessionId: string;
+}
+
+/** A pull request's description as a sheet prints it: its title, state and Markdown body. */
+export interface DescriptionSheetView {
+  readonly sessionId: string;
+  readonly pullRequest: PullRequestView;
+}
+
 /** The answer of a request that opened something outside beuve. */
 export interface OpenedView {
   readonly opened: true;
@@ -2586,6 +2600,14 @@ export interface InvokeChannelMap {
     readonly request: SheetHeadRequest;
     readonly response: IpcResult<SheetHeadView>;
   };
+  'sheet:open-description': {
+    readonly request: DescriptionSheetRequest;
+    readonly response: IpcResult<OpenedView>;
+  };
+  'sheet:get-description': {
+    readonly request: DescriptionSheetRequest;
+    readonly response: IpcResult<DescriptionSheetView>;
+  };
   'media:get-image': {
     readonly request: ImageFileRequest;
     readonly response: IpcResult<ImageFileView>;
@@ -2897,6 +2919,7 @@ export type SheetInvokeChannel =
   | 'sheet:open'
   | 'sheet:get-file'
   | 'sheet:get-head'
+  | 'sheet:get-description'
   | 'media:get-image'
   | 'remote:permalink'
   | 'remote:open-permalink'

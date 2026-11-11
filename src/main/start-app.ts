@@ -212,6 +212,7 @@ export function startApp(app: App, options: StartAppOptions): void {
   const handlers = createIpcHandlers(services, readAppInfo(app), {
     ...platform,
     openSheet: sheets.open,
+    openDescriptionSheet: sheets.openDescription,
     menus,
     scopes,
   });

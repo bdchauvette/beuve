@@ -3,10 +3,13 @@ import type { ExpectStatic } from 'vitest';
 
 import type {
   AppInfo,
+  DescriptionSheetView,
   ExpandedNoteView,
   IpcError,
   IpcResult,
   OpenedView,
+  PullRequestSessionView,
+  PullRequestView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
 import { perHeadInvokeChannels } from '#contract/per-head-invoke-channels.ts';
@@ -79,6 +82,26 @@ async function sheetChecked(): Promise<Ok<OpenedView>> {
 async function notFound(): Promise<Err<IpcError>> {
   await Promise.resolve();
   return err({ code: 'not-found', message: 'no such file' });
+}
+
+function pullRequestView(): PullRequestView {
+  return {
+    host: 'github.com',
+    owner: 'octo',
+    repo: 'app',
+    number: 7,
+    title: 'Make the answer right',
+    body: 'It was **wrong**.',
+    state: 'open',
+    isDraft: false,
+    author: 'octocat',
+    htmlUrl: 'https://github.com/octo/app/pull/7',
+    baseBranch: 'main',
+    headBranch: 'fix',
+    headSha: sha(),
+    isCrossRepository: false,
+    updatedAt: '2026-11-11T09:00:00Z',
+  };
 }
 
 async function opening(): Promise<Ok<SessionSummary>> {
@@ -468,6 +491,57 @@ describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => 
         sessionId: 's1',
         sha,
         path: 'src/a.ts',
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
+  });
+
+  test('opens a description sheet only for a pull request main has read', async ({ expect }) => {
+    const opened: DescriptionSheetView[] = [];
+    const handlers = createIpcHandlers(
+      stubServices(
+        {},
+        {
+          getPullRequest: async (sessionId): Promise<IpcResult<PullRequestSessionView>> => {
+            if (sessionId === 's1') {
+              return ok({
+                sessionId,
+                pullRequest: pullRequestView(),
+                stack: { parents: [], children: [] },
+              });
+            }
+            return notFound();
+          },
+        },
+      ),
+      appInfo(),
+      {
+        openDescriptionSheet: (view): void => {
+          opened.push(view);
+        },
+      },
+    );
+    await expectInvalid(expect, handlers['sheet:open-description']({ sessionId: '' }));
+    await expectInvalid(
+      expect,
+      handlers['sheet:open-description']({ sessionId: 's1', extra: true }),
+    );
+    await expect(handlers['sheet:open-description']({ sessionId: 's2' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+    await expect(handlers['sheet:open-description']({ sessionId: 's1' })).resolves.toStrictEqual({
+      ok: true,
+      value: { opened: true },
+    });
+    const description = { sessionId: 's1', pullRequest: pullRequestView() };
+    expect(opened).toStrictEqual([description]);
+    await expect(handlers['sheet:get-description']({ sessionId: 's1' })).resolves.toStrictEqual({
+      ok: true,
+      value: description,
+    });
+    await expect(
+      createIpcHandlers(stubServices({}), appInfo())['sheet:open-description']({
+        sessionId: 's1',
       }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'not-wired' } });
   });

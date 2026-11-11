@@ -18,7 +18,8 @@ import { emptyStateStyles } from './primitives/empty-state-styles.ts';
  * The intent of a pull request session (spec Zone 1, top): its title, state, author and branches,
  * the body rendered as Markdown (ADR 0073) in text nodes, and the stack neighbours as chips.
  * Links never navigate: they emit `beuve-open-link` with `{ url }`, and main opens GitHub links in
- * the browser (ADR 0040), and only `http(s)` links are links. A chip emits `beuve-open-stack` with `{ ref }`.
+ * the browser (ADR 0040), and only `http(s)` links are links. A chip emits `beuve-open-stack` with `{ ref }`,
+ * and Open in Sheet emits `beuve-description-sheet-request` for the description's own window (ADR 0135).
  */
 @customElement('beuve-pull-request-intent')
 export class BeuvePullRequestIntent extends LitElement {
@@ -47,6 +48,10 @@ export class BeuvePullRequestIntent extends LitElement {
         gap: var(--beuve-space-1) var(--beuve-space-2);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
+      }
+
+      .meta .sheet {
+        margin-inline-start: auto;
       }
 
       .branches {
@@ -103,6 +108,9 @@ export class BeuvePullRequestIntent extends LitElement {
           },
           stack: ({ ref = '' }): void => {
             this.emit('beuve-open-stack', { ref });
+          },
+          'description-sheet': (): void => {
+            this.emit('beuve-description-sheet-request', {});
           },
         },
       }),
@@ -163,6 +171,14 @@ export class BeuvePullRequestIntent extends LitElement {
           ${pullRequest.owner}/${pullRequest.repo}#${pullRequest.number}
         </button>
         <span>@${pullRequest.author}</span>
+        <button
+          type="button"
+          class="button link sheet"
+          title="Open the description in a sheet"
+          data-action="description-sheet"
+        >
+          Open in Sheet
+        </button>
       </div>
       <div class="branches" title="base ← head">
         ${pullRequest.baseBranch} ← ${pullRequest.headBranch}

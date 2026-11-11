@@ -672,6 +672,14 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'open-description-in-sheet',
+    title: 'Open Description in Sheet',
+    menu: { menu: 'review', group: 3 },
+    when: ['session', 'pull-request'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'editor-zed',
     title: 'Open in Zed',
     label: 'Zed',

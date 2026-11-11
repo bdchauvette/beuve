@@ -61,6 +61,8 @@ function headFreeSessionChannels(): Readonly<
     'sheet:open': 'opens a window pinned to its own `sha`',
     'sheet:get-file': 'a read pinned to its own `sha`',
     'sheet:get-head': read,
+    'sheet:open-description': 'opens a window of the description, which belongs to no head',
+    'sheet:get-description': 'a read of the stored pull request, which belongs to no head',
     'media:get-image': 'a read pinned to its own `sha`',
     'remote:permalink': 'a link pinned to its own `sha`',
     'remote:open-permalink': 'a link pinned to its own `sha`',
