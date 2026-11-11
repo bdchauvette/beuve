@@ -45,7 +45,7 @@ export interface StartAppOptions {
   readonly settingsHtmlPath: string;
   /** `beuve://` links to open pull requests with (ADR 0098). */
   readonly links: LinkInbox;
-  /** This run's log file, which Help › Show Log File reveals. */
+  /** This run's log file, which Help › Troubleshooting › Show Log File reveals. */
   readonly logPath: string;
   /**
    * Help › Reset Database… (ADR 0136): closes the database, sets it aside and removes the

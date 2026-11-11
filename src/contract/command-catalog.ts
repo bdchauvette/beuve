@@ -1095,7 +1095,7 @@ const entries = Object.freeze([
   {
     id: 'show-log',
     title: 'Show Log File',
-    menu: { menu: 'help', group: 2 },
+    menu: { menu: 'help', group: 2, submenu: 'Troubleshooting' },
     windows: everywhere(),
     handler: 'main',
   },

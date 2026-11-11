@@ -11,8 +11,8 @@ The main process logged JSON lines to stderr only. Launched from a terminal that
 
 - The main logger writes each line to stderr and to `main.log` in Electron's `logs` directory (`~/Library/Logs/beuve` on macOS, where Console.app also lists it). `openLogFile` (`#x/log/open-log-file.ts`) creates the directory 0700 and the file 0600, since lines name repositories and paths, and never throws.
 - Each run starts its own file: the previous one moves to `main.previous.log`, so the logs hold two runs at most and need no rotation policy. Only the instance that holds the single-instance lock opens the file, so a second launch that hands over never rotates a running instance's log.
-- Help › Show Log File (`show-log`, a main-process command) reveals the file in the file manager.
-- An `internal` IPC error says "Internal error; Help › Show Log File has the details." The renderer still never sees a stack.
+- Help › Troubleshooting › Show Log File (`show-log`, a main-process command) reveals the file in the file manager.
+- An `internal` IPC error says "Internal error; Help › Troubleshooting › Show Log File has the details." The renderer still never sees a stack.
 
 ## Consequences
 
