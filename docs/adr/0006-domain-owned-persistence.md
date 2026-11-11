@@ -23,3 +23,11 @@ Domains can be tested against an in-memory database in isolation. Migration orde
 ## Amendment 2026-10-29: migrations squashed
 
 Migrations are squashed until the first tagged release; after that, append-only. Until then each domain has one initial migration holding its final schema (`session-0001-initial`, `review-0001-initial`, `ura-0001-initial`, `chat-0001-initial`, `github-0001-initial`), and a schema change edits it. No release or database exists yet, so nothing upgrades. Once a version is tagged, a migration that shipped is never edited and every schema change is a new migration.
+
+## Amendment 2026-11-11: a drifted database is set aside
+
+"No database exists yet" was wrong: development builds keep `beuve.db`, and `runMigrations` never runs an applied id again, so editing a squashed migration left those databases on the old schema. The first symptom was staging a note failing with a bare "internal error" after `ura-0001-initial` gained `blocking` (ADR 0131): the insert names a column the table doesn't have.
+
+On every start, after migrating, `openAppDatabase` compares the file's `sqlite_schema` with what the same migrations build in memory (`findSchemaDrift`, `#sqlite/find-schema-drift.ts`). If any table, index, view or trigger differs, it renames the file (with its `-wal` and `-shm`) to `beuve.db.drifted-<UTC time>`, starts a new database, and tells the reviewer once in a dialog that offers to show the old file. Nothing tries to convert the old data: before the first release there is no supported upgrade path, and the moved file keeps it for anyone who wants it.
+
+The check stays after the first release. Then append-only migrations make drift impossible unless a shipped migration was edited, which is a bug the check surfaces instead of hiding behind failing queries.
