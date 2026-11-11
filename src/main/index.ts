@@ -89,7 +89,7 @@ async function launch(): Promise<void> {
       logger.warn('using a development GitHub API', { url: githubApiBase.href });
     }
     app.once('quit', () => {
-      // Help › Reset Database… closes it before relaunching.
+      // Help › Troubleshooting › Reset Database… closes it before relaunching.
       if (db.isOpen) {
         db.close();
       }

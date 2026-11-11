@@ -48,7 +48,7 @@ export interface StartAppOptions {
   /** This run's log file, which Help › Troubleshooting › Show Log File reveals. */
   readonly logPath: string;
   /**
-   * Help › Reset Database… (ADR 0136): closes the database, sets it aside and removes the
+   * Help › Troubleshooting › Reset Database… (ADR 0136): closes the database, sets it aside and removes the
    * checkouts. Called once the services are disposed; beuve relaunches after it.
    */
   readonly resetDatabase: () => Promise<DatabaseReset>;
