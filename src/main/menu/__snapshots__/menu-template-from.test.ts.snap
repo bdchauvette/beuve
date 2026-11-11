@@ -509,6 +509,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Open &in Sheet",
       },
       {
+        "id": "open-description-in-sheet",
+        "label": "Open &Description in Sheet",
+      },
+      {
         "label": "Open &With",
         "submenu": [
           {
@@ -615,7 +619,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "edit-setup-command",
-        "label": "E&dit Setup Command…",
+        "label": "Edit Setu&p Command…",
       },
       {
         "id": "restart-language-servers",
@@ -1300,6 +1304,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+Return",
         "id": "open-in-sheet",
         "label": "Open in Sheet",
+      },
+      {
+        "id": "open-description-in-sheet",
+        "label": "Open Description in Sheet",
       },
       {
         "label": "Open With",

@@ -144,6 +144,7 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     stop: app,
     'open-in-editor': app,
     'open-in-sheet': app,
+    'open-description-in-sheet': app,
     'editor-zed': {
       ...app,
       slash: '/editor zed|vscode|cursor',

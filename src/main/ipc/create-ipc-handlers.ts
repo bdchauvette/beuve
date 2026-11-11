@@ -28,6 +28,7 @@ import type {
   ContextMenuShownView,
   DefinitionRequest,
   DefinitionView,
+  DescriptionSheetView,
   DiagnosticsRequest,
   DiagnosticsView,
   DiffDisplayView,
@@ -131,6 +132,11 @@ export interface IpcPlatform {
    * Electron, where `sheet:open` answers `not-wired`.
    */
   readonly openSheet?: (request: OpenSheetRequest) => void;
+  /**
+   * Opens a sheet of a pull request's description (ADR 0135) once main has read it; absent outside
+   * Electron, where `sheet:open-description` answers `not-wired`.
+   */
+  readonly openDescriptionSheet?: (view: DescriptionSheetView) => void;
   /** Menu state, context menus and main-run commands (ADR 0068); absent outside Electron. */
   readonly menus?: {
     readonly setState: (webContentsId: number, state: MenuStateRequest) => void;
@@ -768,6 +774,28 @@ export function createIpcHandlers(
         return scoped({ sender, kind: 'sheet-file' }, async (options) => {
           return services.sheets.getFile(parsed.data, options);
         });
+      }
+      return invalid(parsed.error);
+    },
+    'sheet:open-description': async (request): Promise<IpcResult<OpenedView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (!parsed.success) {
+        return invalid(parsed.error);
+      }
+      if (platform.openDescriptionSheet === undefined) {
+        return err({ code: 'not-wired', message: 'no sheet windows outside Electron' });
+      }
+      const description = await readDescription(services, parsed.data.sessionId);
+      if (!description.ok) {
+        return description;
+      }
+      platform.openDescriptionSheet(description.value);
+      return ok({ opened: true });
+    },
+    'sheet:get-description': async (request): Promise<IpcResult<DescriptionSheetView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return readDescription(services, parsed.data.sessionId);
       }
       return invalid(parsed.error);
     },
@@ -1418,6 +1446,18 @@ export function createIpcHandlers(
       return ok({ length: parsed.data.text.length });
     },
   };
+}
+
+/** The description a sheet prints (ADR 0135): what main last read of the session's pull request. */
+async function readDescription(
+  services: MainServices,
+  sessionId: string,
+): Promise<IpcResult<DescriptionSheetView>> {
+  const session = await services.github.getPullRequest(sessionId);
+  if (!session.ok) {
+    return session;
+  }
+  return ok({ sessionId: session.value.sessionId, pullRequest: session.value.pullRequest });
 }
 
 function permalinkRequestFrom(request: z.infer<typeof permalinkRequest>): PermalinkRequest {
