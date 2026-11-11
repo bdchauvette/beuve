@@ -216,8 +216,27 @@ describe('contextMenuTemplateFrom', () => {
   });
 
   test('puts commands without a menu item last', ({ expect }) => {
-    expect(contextMenuTemplateFrom(commandCatalog, 'answer', 'linux')).toStrictEqual([
-      { id: 'stage-answer', label: 'Stage Answer as a Note' },
+    const catalog: CatalogCommand[] = [
+      {
+        id: 'unplaced',
+        title: 'Unplaced',
+        context: ['note'],
+        windows: ['main'],
+        handler: 'window',
+      },
+      {
+        id: 'placed',
+        title: 'Placed',
+        menu: { menu: 'review', group: 0 },
+        context: ['note'],
+        windows: ['main'],
+        handler: 'window',
+      },
+    ];
+    expect(contextMenuTemplateFrom(catalog, 'note', 'linux')).toStrictEqual([
+      { id: 'placed', label: 'Placed' },
+      { type: 'separator' },
+      { id: 'unplaced', label: 'Unplaced' },
     ]);
   });
 });

@@ -391,7 +391,6 @@ const uraCreateRequest = z.strictObject({
   title: uraTitle,
   body: uraBody,
   suggestedPatch: uraPatch.optional(),
-  origin: z.strictObject({ kind: z.literal('chat-answer'), messageId: uuid }).optional(),
 });
 
 const uraUpdateRequest = z.strictObject({
@@ -525,7 +524,7 @@ const menuStateRequest = z.strictObject({
   checked: z.array(commandId).max(commandCatalog.length),
 });
 const menuContextRequest = z.strictObject({
-  kind: z.enum(['line', 'file', 'tree', 'note', 'answer', 'reference', 'sheet', 'text']),
+  kind: z.enum(['line', 'file', 'tree', 'note', 'reference', 'sheet', 'text']),
   x: z.number().min(0).max(100_000).optional(),
   y: z.number().min(0).max(100_000).optional(),
 });
@@ -905,12 +904,11 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { headSha, blocking, suggestedPatch, origin, ...required } = parsed.data;
+      const { headSha, blocking, suggestedPatch, ...required } = parsed.data;
       return services.ura.create({
         ...required,
         ...(headSha !== undefined && { headSha }),
         ...(blocking !== undefined && { blocking }),
-        ...(origin !== undefined && { origin }),
         ...(suggestedPatch !== undefined && { suggestedPatch }),
       });
     },

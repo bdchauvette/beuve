@@ -25,12 +25,11 @@ function sampleItems(): [UraItem, UraItem, UraItem, UraItem, UraItem] {
     createTestUraItem({
       id: testUraIds.itemId(3),
       anchor: { kind: 'lines', path: 'src/p.ts', startLine: 5, endLine: 40 },
-      origin: { kind: 'chat-answer', messageId: 'msg-2' },
+      origin: { kind: 'chat-answer', messageId: 'msg-2', proposal: 0 },
     }),
     createTestUraItem({
       id: testUraIds.itemId(4),
       anchor: { kind: 'change' },
-      origin: { kind: 'chat-answer', messageId: 'msg-1' },
       severity: 'praise',
       status: { kind: 'withdrawn' },
     }),

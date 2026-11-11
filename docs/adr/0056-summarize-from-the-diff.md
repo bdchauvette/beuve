@@ -16,3 +16,7 @@ A reviewer's first question about a change is "what does it do, and where should
 ## Consequences
 
 The summary can be wrong, and "Inferred:" says so; it costs one model call like a question. Because it never sees the description, it can't be steered by instructions planted there, but it also can't use a genuinely helpful description; the reviewer has both side by side.
+
+## Amendment 2026-11-11: no stage button
+
+The summary block has no "Stage as URA comment" any more (ADR 0134).

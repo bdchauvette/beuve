@@ -40,10 +40,10 @@ describe('findUraItemByOrigin', () => {
       origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 2 },
     });
     expect(findUraItemByOrigin(db, otherFinding)).toStrictEqual({ ok: true, value: undefined });
-    const wholeAnswer = createTestUraItem({
+    const sameProposal = createTestUraItem({
       id: testUraIds.itemId(4),
-      origin: { kind: 'chat-answer', messageId: testUraIds.messageId },
+      origin: { kind: 'chat-answer', messageId: testUraIds.messageId, proposal: 1 },
     });
-    expect(findUraItemByOrigin(db, wholeAnswer)).toStrictEqual({ ok: true, value: undefined });
+    expect(findUraItemByOrigin(db, sameProposal)).toStrictEqual({ ok: true, value: undefined });
   });
 });

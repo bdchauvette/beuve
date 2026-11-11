@@ -26,7 +26,6 @@ describe('uraMigrations', () => {
       { ...valid(), anchor_kind: "'file'", line_start: 'NULL', line_end: 'NULL', patch: "'p'" },
       { ...valid(), anchor_kind: "'change'", path: 'NULL', line_start: 'NULL', line_end: 'NULL' },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'", chat_finding: '0' },
-      { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
       { ...valid(), origin_kind: "'chat-answer'", chat_message_id: "'m2'", chat_proposal: '0' },
       { ...valid(), status: "'withdrawn'" },
       { ...valid(), blocking: '1' },
@@ -121,6 +120,10 @@ describe('uraMigrations', () => {
     ],
     ['a line anchor without lines', { line_start: 'NULL', line_end: 'NULL' }],
     ['a chat answer without its message id', { origin_kind: "'chat-answer'" }],
+    [
+      'a whole chat answer, neither a finding nor a proposal',
+      { origin_kind: "'chat-answer'", chat_message_id: "'m1'" },
+    ],
     ['an unknown origin', { origin_kind: "'impact-finding'" }],
     ['an addressed item without a head', { status: "'addressed'", addressed_by: "'agent'" }],
     [
@@ -153,8 +156,6 @@ describe('uraMigrations', () => {
       insertRow(db, { ...answer, chat_finding: '0' }, 2);
     }).toThrow(/UNIQUE/u);
     insertRow(db, { ...answer, chat_finding: '1' }, 7);
-    insertRow(db, answer, 8);
-    insertRow(db, answer, 9);
   });
 
   test('stages a proposed note once, apart from the findings', ({ expect, db }) => {

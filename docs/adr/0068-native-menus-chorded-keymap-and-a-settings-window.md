@@ -37,3 +37,7 @@ The sidebar has four tabs for a pull request: ⌘1 Overview, ⌘2 Files, ⌘3 Re
 ## Amendment 2026-11-06: Settings holds only what no menu sets
 
 A preference with a menu toggle is set from the menu, and only there: diff layout, whitespace, generated files, insights, diagnostics, review order, skipping reviewed files, sidebar side and the preferred editor (Review › Open With) leave the Settings window. The menu items, their chat commands and `settings.json` keep them; Settings showed the same state a second time and had to be kept in step with the menus. Settings now holds the review-edits and review-queue branch prefixes (Branches), the accounts, the language server configuration and the models. `display:set` and `editor:set-preferred` stay on the Settings window's channels, the first for the queue prefixes. A new preference that gets a menu toggle does not get a Settings row, and one without a menu item may.
+
+## Amendment 2026-11-11: no chat answer context menu
+
+Stage Answer as a Note was the only command on a chat answer's context menu; ADR 0134 removes it, and the `answer` context kind with it.

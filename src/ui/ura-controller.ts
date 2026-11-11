@@ -14,7 +14,6 @@ import type { UraCreateRequest } from './beuve-diff-stream.ts';
 import type { NoteExpandDraft, NoteExpandOutcome } from './beuve-note-expand.ts';
 import type { DockNotice } from './beuve-ura-dock.ts';
 import { countNoun } from './count-noun.ts';
-import type { ChatStagePlan } from './plan-chat-stage.ts';
 import type { ReviewRef } from './review-ref.ts';
 
 /** The fields of a staged item the dock edited. */
@@ -147,23 +146,6 @@ export class UraController implements ReactiveController {
   /** How many items are staged now. */
   get stagedCount(): number {
     return this.snapshot.items.filter((item) => item.status.kind === 'staged').length;
-  }
-
-  /** Answers staged in the dock and still staged. */
-  stagedMessageIds(): ReadonlySet<string> {
-    return new Set(
-      this.snapshot.items.flatMap((item) => {
-        if (
-          item.origin.kind === 'chat-answer' &&
-          item.origin.finding === undefined &&
-          item.origin.proposal === undefined &&
-          item.status.kind === 'staged'
-        ) {
-          return item.origin.messageId;
-        }
-        return [];
-      }),
-    );
   }
 
   /** `/review` findings staged and still staged, as `messageId:index`. */
@@ -333,29 +315,6 @@ export class UraController implements ReactiveController {
         expectedHeadSha: review.headSha,
         ...(verdict !== undefined && { verdict }),
       });
-    });
-  }
-
-  /** Stages an answer in the review dock as a question note (spec Zone 4). */
-  async stageChatAnswer(plan: ChatStagePlan, messageId: string): Promise<void> {
-    const review = this.environment.review();
-    if (review === undefined || this.stagedMessageIds().has(messageId)) {
-      return;
-    }
-    await this.call(async (bridge) => {
-      const created = await bridge.invoke('ura:create', {
-        sessionId: review.sessionId,
-        headSha: plan.headSha,
-        anchor: plan.anchor,
-        severity: plan.severity,
-        title: plan.title,
-        body: plan.body,
-        origin: { kind: 'chat-answer', messageId },
-      });
-      if (created.ok) {
-        this.patch({ notice: { tone: 'info', text: `Staged “${created.value.title}”.` } });
-      }
-      return created;
     });
   }
 

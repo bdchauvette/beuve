@@ -458,7 +458,7 @@ export function createUraServices(options: UraServicesOptions): UraServices {
           anchor: request.anchor,
           severity: request.severity,
           blocking: request.blocking ?? false,
-          origin: request.origin ?? { kind: 'human' },
+          origin: { kind: 'human' },
           title: request.title,
           body: request.body,
           ...(patch.trim() !== '' && { suggestion: patch }),

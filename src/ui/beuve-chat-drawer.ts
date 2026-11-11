@@ -83,7 +83,7 @@ const messageSelector = ':is(.transcript, .compacted) > :is(.you, .answer, .abst
  * summaries with everything before the latest folded under a divider, and the commands' results. Nothing typed here can change the worktree. Presentational: emits
  * `beuve-chat-submit { text, mentions }`, `beuve-chat-escape`,
  * `beuve-chat-cancel`, `beuve-chat-cancel-compaction`, `beuve-chat-clear-queue`,
- * `beuve-chat-stage`, `beuve-chat-stage-finding`, `beuve-chat-stage-proposal`, `beuve-chat-cite`,
+ * `beuve-chat-stage-finding`, `beuve-chat-stage-proposal`, `beuve-chat-cite`,
  * `beuve-chat-mention` (a chip),
  * `beuve-open-editor` (Open in Editor on a pill) and `beuve-sheet-request` (a file an answer names,
  * ADR 0128); `beuve-app` parses commands and does the IPC. Focusing the drawer focuses its input; the
@@ -788,9 +788,6 @@ export class BeuveChatDrawer extends LitElement {
       'toggle-compacted': (): void => {
         this.showsCompacted = !this.showsCompacted;
       },
-      stage: ({ messageId = '' }): void => {
-        this.emit('beuve-chat-stage', { messageId });
-      },
       'stage-finding': ({ messageId = '', finding }): void => {
         this.emit('beuve-chat-stage-finding', { messageId, finding: Number(finding) });
       },
@@ -850,8 +847,6 @@ export class BeuveChatDrawer extends LitElement {
   );
   /** `chat:stream` (ADR 0072), from which a running answer's text parts stream; absent, they re-render. */
   @property({ attribute: false }) accessor subscribeChatStream: ChatStreamSubscribe | undefined;
-  /** Ids of answers already staged in the review dock. */
-  @property({ attribute: false }) accessor stagedMessageIds: ReadonlySet<string> = new Set();
   /** `/review` findings already staged, as `messageId:index`. */
   @property({ attribute: false }) accessor stagedFindings: ReadonlySet<string> = new Set();
   /** Notes answers proposed that are already staged, as `messageId:index` (ADR 0132). */
@@ -1444,7 +1439,8 @@ export class BeuveChatDrawer extends LitElement {
   private renderMessageStatus(message: ChatMessageView, activity?: string): TemplateResult {
     switch (message.status) {
       case 'queued':
-      case 'error': {
+      case 'error':
+      case 'done': {
         return html``;
       }
       case 'submitted':
@@ -1469,34 +1465,7 @@ export class BeuveChatDrawer extends LitElement {
           ${message.parts.length === 0 ? 'Not asked.' : 'Stopped.'}
         </div>`;
       }
-      case 'done': {
-        if (chatTextFrom(message.parts).trim() === '') {
-          return html``;
-        }
-        return this.renderStageButton(
-          message,
-          'Stage this answer as a question in the review dock',
-        );
-      }
     }
-  }
-
-  private renderStageButton(message: ChatMessageView, title: string): TemplateResult {
-    const messageId = message.id;
-    const isStaged = this.stagedMessageIds.has(messageId);
-    return html`<div class="status">
-      <button
-        type="button"
-        class="button action"
-        data-nav
-        data-action="stage"
-        data-message-id=${messageId}
-        aria-disabled=${isStaged ? 'true' : 'false'}
-        title=${title}
-      >
-        ${isStaged ? 'Staged in the dock' : 'Stage as URA comment'}
-      </button>
-    </div>`;
   }
 
   private renderSummary(message: ChatMessageView): TemplateResult {
@@ -1848,7 +1817,7 @@ export class BeuveChatDrawer extends LitElement {
     </div>`;
   }
 
-  /** A `/summarize` answer (ADR 0056): a calm block, stageable like any answer. */
+  /** A `/summarize` answer (ADR 0056): a calm block. */
   private renderAbstract(message: ChatMessageView): TemplateResult {
     const text = this.markdownFor(`${message.id}:abstract`, {
       source: chatTextFrom(message.parts),
@@ -1862,7 +1831,6 @@ export class BeuveChatDrawer extends LitElement {
         Summary of the change · from the diff
       </div>
       ${text}
-      ${this.renderStageButton(message, 'Stage this summary as a comment in the review dock')}
     </div>`;
   }
 

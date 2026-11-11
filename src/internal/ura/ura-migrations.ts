@@ -55,8 +55,8 @@ export const uraMigrations: readonly Migration[] = [
             AND chat_proposal IS NULL)
           OR (origin_kind = 'chat-answer' AND chat_message_id IS NOT NULL
             AND trim(chat_message_id) <> ''
-            AND (chat_finding IS NULL OR chat_proposal IS NULL)
-            AND ((chat_finding IS NULL AND chat_proposal IS NULL) OR anchor_kind = 'lines'))
+            AND (chat_finding IS NULL) <> (chat_proposal IS NULL)
+            AND anchor_kind = 'lines')
         ),
         CHECK (
           (status = 'addressed') = (addressed_sha IS NOT NULL)

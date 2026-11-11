@@ -1406,8 +1406,6 @@ export interface CreateUraItemRequest {
   readonly title: string;
   readonly body: string;
   readonly suggestedPatch?: string;
-  /** Defaults to a note the reviewer wrote (`human`); `chat-answer` stages a chat answer. */
-  readonly origin?: { readonly kind: 'chat-answer'; readonly messageId: string };
 }
 
 /** Edits an item's text, label, blocking or patch; an empty `suggestedPatch` removes the patch. */

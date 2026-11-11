@@ -170,7 +170,6 @@ function behaviours(): Readonly<Record<CommandId, CommandBehaviour>> {
     'restart-language-servers': app,
     chat: app,
     'add-to-chat': app,
-    'stage-answer': app,
     'previous-message': chatZone,
     'next-message': chatZone,
     summarize: {

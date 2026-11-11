@@ -32,10 +32,7 @@ function failed(error: FailureOptions): Reply {
   return { ok: false, error };
 }
 
-function chatItem(finding?: number): ReturnType<typeof createUraItemView> {
-  if (finding === undefined) {
-    return createUraItemView({ origin: { kind: 'chat-answer', messageId: 'm1' } });
-  }
+function chatItem(finding: number): ReturnType<typeof createUraItemView> {
   return createUraItemView({ origin: { kind: 'chat-answer', messageId: 'm1', finding } });
 }
 
@@ -105,30 +102,26 @@ describe('UraController', () => {
     expect(ura.stagedCount).toBe(1);
   });
 
-  test('knows which answers and findings are staged', async ({ expect }) => {
+  test('knows which findings are staged', async ({ expect }) => {
     const { ura } = createUraHarness({
       review: reviewOf(),
-      replies: {
-        'ura:list': ok({ items: [chatItem(), chatItem(2)], derivedVerdict: 'approve' }),
-      },
+      replies: { 'ura:list': ok({ items: [chatItem(2)], derivedVerdict: 'approve' }) },
     });
     await ura.refresh('s1');
-    expect([...ura.stagedMessageIds()]).toStrictEqual(['m1']);
     expect([...ura.stagedFindings()]).toStrictEqual(['m1:2']);
   });
 
-  test('knows which proposed notes are staged, apart from the answers', async ({ expect }) => {
+  test('knows which proposed notes are staged, apart from the findings', async ({ expect }) => {
     const proposed = createUraItemView({
       origin: { kind: 'chat-answer', messageId: 'm2', proposal: 1 },
     });
     const { ura } = createUraHarness({
       review: reviewOf(),
-      replies: { 'ura:list': ok({ items: [chatItem(), proposed], derivedVerdict: 'approve' }) },
+      replies: { 'ura:list': ok({ items: [chatItem(0), proposed], derivedVerdict: 'approve' }) },
     });
     await ura.refresh('s1');
-    expect([...ura.stagedMessageIds()]).toStrictEqual(['m1']);
     expect([...ura.stagedProposals()]).toStrictEqual(['m2:1']);
-    expect([...ura.stagedFindings()]).toStrictEqual([]);
+    expect([...ura.stagedFindings()]).toStrictEqual(['m1:0']);
   });
 
   test('stages a proposed note once and names an untitled one', async ({ expect }) => {

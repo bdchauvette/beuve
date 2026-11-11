@@ -881,7 +881,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(expect, handlers['ura:list']({}));
 
     await handlers['ura:create'](note);
-    await handlers['ura:create']({ ...note, origin: { kind: 'chat-answer', messageId: id } });
     await handlers['ura:update']({ itemId: id, title: 'New' });
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
@@ -900,7 +899,6 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:set-verdict']({ sessionId: 's1', expectedHeadSha: sha() });
     expect(calls).toStrictEqual([
       note,
-      { ...note, origin: { kind: 'chat-answer', messageId: id } },
       { itemId: id, title: 'New' },
       { itemId: id, to: 'withdrawn' },
       { sessionId: 's1', itemIds: [id] },
