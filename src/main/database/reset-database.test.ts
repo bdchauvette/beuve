@@ -37,7 +37,7 @@ describe('resetDatabase', () => {
     const edits = path.join(userData, 'review-edits', 'repo-1234', 'review-feature');
     await repo.git('worktree', 'add', '--quiet', '--detach', checkout, head);
     await repo.git('worktree', 'add', '--quiet', '-b', 'review/feature', edits, head);
-    const db = openAppDatabase(location);
+    const db = okValueFrom(openAppDatabase({ location, logger: logger.logger }));
     const source: SessionSource = {
       kind: 'local',
       repoPath: repo.directory,
@@ -71,7 +71,9 @@ describe('resetDatabase', () => {
     await expect(
       readFile(path.join(repo.directory, 'app.ts'), { encoding: 'utf8', signal }),
     ).resolves.toBe('export const answer = 1;\n');
-    using kept = openAppDatabase(reset.moved?.path ?? '');
+    using kept = okValueFrom(
+      openAppDatabase({ location: reset.moved?.path ?? '', logger: logger.logger }),
+    );
     expect(okValueFrom(listSessions(kept)).map(({ id }) => id)).toStrictEqual([session.id]);
   });
 

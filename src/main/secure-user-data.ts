@@ -42,11 +42,11 @@ export async function secureUserData(userData: string, logger: Logger): Promise<
 }
 
 /**
- * Directories beuve creates in `userData`: session checkouts, plus `deps` (install caches and
- * logs from before the terminal, ADR 0095) and `trace` (probe scratch space, removed by ADR 0096),
- * which older installs may still have on disk.
+ * Directories beuve creates in `userData`: session checkouts and database backups (ADR 0137), plus
+ * `deps` (install caches and logs from before the terminal, ADR 0095) and `trace` (probe scratch
+ * space, removed by ADR 0096), which older installs may still have on disk.
  */
-const ownedDirectories = ['worktrees', 'trace', 'deps'];
+const ownedDirectories = ['worktrees', 'backups', 'trace', 'deps'];
 
 /**
  * Files beuve keeps in `userData`, which hold reviews, chat, settings and keys, plus `mcp-token`

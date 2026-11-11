@@ -4,7 +4,7 @@ import process from 'node:process';
 
 import { existsSync } from 'node:fs';
 
-import { app, BrowserWindow, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
 
 import { checkServerTrust } from '#internal/lsp/check-server-trust.ts';
 import { createLogger } from '#x/log/create-logger.ts';
@@ -15,7 +15,10 @@ import type { LogFileOptions } from '#x/log/open-log-file.ts';
 import { LinkInbox } from './links/link-inbox.ts';
 import { createMainServices } from './create-main-services.ts';
 import { createSystemEditorPlatform } from './editor/create-system-editor-platform.ts';
+import { describeOpenAppDatabaseError } from './database/describe-open-app-database-error.ts';
 import { openAppDatabase } from './database/open-app-database.ts';
+import type { OpenAppDatabaseError } from './database/open-app-database.ts';
+import { moveDatabaseAside } from './database/move-database-aside.ts';
 import { resetDatabase } from './database/reset-database.ts';
 import { describeNodeRuntimeError } from './node-runtime/describe-node-runtime-error.ts';
 import { resolveNodeRuntime } from './node-runtime/resolve-node-runtime.ts';
@@ -75,7 +78,18 @@ async function launch(): Promise<void> {
     await secureUserData(userData, logger);
     const worktreeRoot = path.join(userData, 'worktrees');
     const databasePath = path.join(userData, 'beuve.db');
-    const db = openAppDatabase(databasePath);
+    const opened = openAppDatabase({ location: databasePath, logger });
+    if (!opened.ok) {
+      logger.error('cannot open the database', { ...opened.error });
+      const choice = await showDatabaseRefusal(opened.error);
+      if (choice === 'set-aside') {
+        await setRefusedDatabaseAside(opened.error.location);
+        return;
+      }
+      app.quit();
+      return;
+    }
+    const db = opened.value;
     const settingsPath = path.join(userData, 'settings.json');
     // Fakes for development (ADR 0040); a packaged app applies none of them (ADR 0048).
     const { githubApiBase, editorLaunchLog, ignored } = readDevelopmentOverrides(
@@ -214,6 +228,57 @@ async function launch(): Promise<void> {
     logger.error('startup failed', { error });
     app.exit(1);
   }
+}
+
+/** A dialog button that reveals a file, so the reviewer can find what to keep or report. */
+interface RevealButton {
+  readonly label: string;
+  readonly path: string;
+}
+
+/**
+ * Explains why beuve won't start on its database (ADR 0137) and answers the reviewer's choice: Quit
+ * (also Return and Escape), or setting the database aside to start afresh (ADR 0136). The other
+ * buttons reveal a file and show the dialog again.
+ */
+async function showDatabaseRefusal(error: OpenAppDatabaseError): Promise<'quit' | 'set-aside'> {
+  const { message, detail } = describeOpenAppDatabaseError(error);
+  const reveals: readonly RevealButton[] = [
+    { label: 'Show Log File', path: logFilePaths().path },
+    { label: 'Show Database', path: error.location },
+  ];
+  const asideLabel = 'Set Database Aside and Restart';
+  for (;;) {
+    const { response } = await dialog.showMessageBox({
+      type: 'error',
+      message,
+      detail: `${detail}\n\n${asideLabel} keeps the database as a copy beside it and starts beuve with an empty one.`,
+      buttons: ['Quit', asideLabel, ...reveals.map(({ label }) => label)],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (response === 1) {
+      return 'set-aside';
+    }
+    const reveal = reveals[response - 2];
+    if (reveal === undefined) {
+      return 'quit';
+    }
+    shell.showItemInFolder(reveal.path);
+  }
+}
+
+/**
+ * Moves a database this build refused aside (ADR 0136), keeping every file, and relaunches on a
+ * fresh one. Nothing else is cleared: no session was opened, and the newer build that wrote it can
+ * use it again once it is renamed back.
+ */
+async function setRefusedDatabaseAside(location: string): Promise<void> {
+  const moved = await moveDatabaseAside(location);
+  logger.info('set a refused database aside; relaunching', { moved });
+  app.relaunch();
+  app.exit(0);
 }
 
 /** `main.log` in the platform's log directory (`~/Library/Logs/beuve` on macOS), and the last run's. */
