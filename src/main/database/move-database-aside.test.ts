@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe } from 'vitest';
 
 import { moveDatabaseAside } from './move-database-aside.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 import { openAppDatabase } from './open-app-database.ts';
 import { test } from '../testing/test.ts';
 
@@ -11,17 +12,20 @@ describe('moveDatabaseAside', () => {
   test('moves the database to a timestamped name that still opens with its rows', async ({
     expect,
     tempDir,
+    logger,
   }) => {
     const location = path.join(tempDir, 'beuve.db');
     {
-      using db = openAppDatabase(location);
+      using db = okValueFrom(openAppDatabase({ location, logger: logger.logger }));
       db.exec("CREATE TABLE kept (title TEXT NOT NULL) STRICT; INSERT INTO kept VALUES ('old');");
     }
     const moved = await moveDatabaseAside(location);
     expect(moved?.path).toMatch(/beuve\.db\.reset-\d{4}-\d\d-\d\dT\d{6}Z$/u);
     expect(moved?.files).toStrictEqual([{ from: location, to: moved?.path }]);
     await expect(entriesOf(tempDir)).resolves.toStrictEqual([path.basename(moved?.path ?? '')]);
-    using kept = openAppDatabase(moved?.path ?? '');
+    using kept = okValueFrom(
+      openAppDatabase({ location: moved?.path ?? '', logger: logger.logger }),
+    );
     expect(kept.prepare('SELECT title FROM kept;').all()).toMatchObject([{ title: 'old' }]);
   });
 

@@ -21,6 +21,16 @@ function migrationList(): Migration[] {
   ];
 }
 
+function cascadingMigrationList(): Migration[] {
+  return [
+    { id: '0001-parents', up: 'CREATE TABLE parents (id TEXT PRIMARY KEY) STRICT;' },
+    {
+      id: '0002-children',
+      up: 'CREATE TABLE children (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES parents (id) ON DELETE CASCADE) STRICT;',
+    },
+  ];
+}
+
 describe('openDatabase', () => {
   test('enforces foreign keys', ({ expect, db }) => {
     runMigrations(db, migrationList());
@@ -120,6 +130,98 @@ describe('runMigrations', () => {
     expect(() => {
       return runMigrations(db, [...first, ...first]);
     }).toThrow('Duplicate migration id');
+  });
+});
+
+describe('runMigrations with foreign keys (ADR 0137)', () => {
+  test('rebuilds a parent table without cascading into its children', ({ expect, db }) => {
+    runMigrations(db, cascadingMigrationList());
+    db.exec("INSERT INTO parents VALUES ('p'); INSERT INTO children VALUES ('c', 'p');");
+    const rebuild: Migration = {
+      id: '0003-rebuild-parents',
+      up: `
+        CREATE TABLE parents_new (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '') STRICT;
+        INSERT INTO parents_new (id) SELECT id FROM parents;
+        DROP TABLE parents;
+        ALTER TABLE parents_new RENAME TO parents;
+      `,
+    };
+
+    expect(runMigrations(db, [...cascadingMigrationList(), rebuild])).toStrictEqual([
+      '0003-rebuild-parents',
+    ]);
+
+    expect(db.prepare('SELECT id, parent_id FROM children;').all()).toMatchObject([
+      { id: 'c', parent_id: 'p' },
+    ]);
+    expect(db.prepare('PRAGMA foreign_keys;').get()).toMatchObject({ foreign_keys: 1 });
+    expect(() => {
+      db.exec("INSERT INTO children VALUES ('d', 'missing');");
+    }).toThrow('FOREIGN KEY');
+    db.exec('DELETE FROM parents;');
+    expect(db.prepare('SELECT count(*) AS n FROM children;').get()).toMatchObject({ n: 0 });
+  });
+
+  test('rolls back a migration that leaves a row referencing a missing parent', ({
+    expect,
+    db,
+  }) => {
+    runMigrations(db, cascadingMigrationList());
+    db.exec("INSERT INTO parents VALUES ('p'); INSERT INTO children VALUES ('c', 'p');");
+    const orphaning: Migration = { id: '0003-orphan', up: 'DELETE FROM parents;' };
+
+    expect(() => {
+      return runMigrations(db, [...cascadingMigrationList(), orphaning]);
+    }).toThrow(
+      'Migration "0003-orphan" leaves 1 rows referencing missing parents (children → parents)',
+    );
+
+    expect(db.prepare('SELECT id FROM parents;').all()).toMatchObject([{ id: 'p' }]);
+    expect(db.prepare('SELECT id FROM children;').all()).toMatchObject([{ id: 'c' }]);
+    expect(
+      db.prepare("SELECT id FROM schema_migrations WHERE id = '0003-orphan';").all(),
+    ).toStrictEqual([]);
+    expect(db.prepare('PRAGMA foreign_keys;').get()).toMatchObject({ foreign_keys: 1 });
+  });
+
+  test('rolls back a rebuild that renames the old table first, which moves its children’s keys', ({
+    expect,
+    db,
+  }) => {
+    runMigrations(db, cascadingMigrationList());
+    db.exec("INSERT INTO parents VALUES ('p'); INSERT INTO children VALUES ('c', 'p');");
+    const renameFirst: Migration = {
+      id: '0003-rename-first',
+      up: `
+        ALTER TABLE parents RENAME TO parents_old;
+        CREATE TABLE parents (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '') STRICT;
+        INSERT INTO parents (id) SELECT id FROM parents_old;
+        DROP TABLE parents_old;
+      `,
+    };
+
+    expect(() => {
+      return runMigrations(db, [...cascadingMigrationList(), renameFirst]);
+    }).toThrow('foreign keys naming missing tables (children → parents_old)');
+
+    expect(
+      db.prepare("SELECT sql FROM sqlite_schema WHERE name = 'children';").get()?.['sql'],
+    ).toContain('REFERENCES parents (id)');
+  });
+
+  test('leaves foreign keys off when they were off', ({ expect, db }) => {
+    db.exec('PRAGMA foreign_keys = OFF;');
+    runMigrations(db, migrationList());
+    expect(db.prepare('PRAGMA foreign_keys;').get()).toMatchObject({ foreign_keys: 0 });
+  });
+
+  test('refuses to run pending migrations inside a transaction', ({ expect, db }) => {
+    expect(() => {
+      return withTransaction(db, () => runMigrations(db, migrationList()));
+    }).toThrow('outside a transaction');
+    expect(
+      db.prepare("SELECT name FROM sqlite_schema WHERE name = 'parents';").all(),
+    ).toStrictEqual([]);
   });
 });
 

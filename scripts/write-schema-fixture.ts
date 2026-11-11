@@ -4,7 +4,8 @@ import process from 'node:process';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 
 import { appMigrations } from '../src/main/database/app-migrations.ts';
-import { openAppDatabase } from '../src/main/database/open-app-database.ts';
+import { openDatabase } from '../src/sqlite/open-database.ts';
+import { runMigrations } from '../src/sqlite/run-migrations.ts';
 
 await writeSchemaFixture();
 
@@ -19,7 +20,8 @@ async function writeSchemaFixture(): Promise<void> {
   const lastId = appMigrations.at(-1)?.id ?? 'empty';
   const directory = path.join(import.meta.dirname, '../src/main/database/testing/schema-fixtures');
   const target = path.join(directory, `${lastId}.sql`);
-  using db = openAppDatabase(':memory:');
+  using db = openDatabase(':memory:');
+  runMigrations(db, appMigrations);
   db.exec(seedRows());
   db.exec(`UPDATE schema_migrations SET applied_at = '${at(0)}';`);
   await mkdir(directory, { recursive: true, mode: 0o755 });

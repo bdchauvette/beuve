@@ -27,13 +27,19 @@ describe('secureUserData (ADR 0082)', () => {
     expect(secured.tightened).toStrictEqual(['.', 'worktrees', 'beuve.db', 'settings.json']);
     await expect(
       Promise.all(
-        ['.', 'worktrees', 'trace', 'beuve.db', 'settings.json', 'model-secrets.json'].map(
-          async (name) => {
-            return permissionsOf(userData, name);
-          },
-        ),
+        [
+          '.',
+          'worktrees',
+          'backups',
+          'trace',
+          'beuve.db',
+          'settings.json',
+          'model-secrets.json',
+        ].map(async (name) => {
+          return permissionsOf(userData, name);
+        }),
       ),
-    ).resolves.toStrictEqual([0o700, 0o700, 0o700, 0o600, 0o600, 0o600]);
+    ).resolves.toStrictEqual([0o700, 0o700, 0o700, 0o700, 0o600, 0o600, 0o600]);
     await expect(permissionsOf(userData, 'unrelated.txt')).resolves.toBe(0o644);
     await expect(secureUserData(userData, logger.logger)).resolves.toStrictEqual({
       tightened: [],

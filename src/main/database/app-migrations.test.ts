@@ -13,6 +13,7 @@ import { runMigrations } from '#sqlite/run-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 import { appMigrations } from './app-migrations.ts';
+import { okValueFrom } from '#testing/ok-value-from.ts';
 import { openAppDatabase } from './open-app-database.ts';
 import { test } from '../testing/test.ts';
 
@@ -28,12 +29,12 @@ test('never edits a migration that has shipped; a schema change is a new one', (
 
 test.for(schemaFixtures())(
   'upgrading %s builds the schema a fresh install builds and keeps every row',
-  (name, { expect }) => {
+  (name, { expect, logger }) => {
     using db = openDatabase(':memory:');
     db.exec(fixtureSql(name));
     const before = rowCounts(db);
     runMigrations(db, appMigrations);
-    using fresh = openAppDatabase(':memory:');
+    using fresh = okValueFrom(openAppDatabase({ location: ':memory:', logger: logger.logger }));
     expect(schemaOf(db)).toStrictEqual(schemaOf(fresh));
     expect(appliedIds(db)).toStrictEqual(appMigrations.map(({ id }) => id));
     expect(db.prepare('PRAGMA foreign_key_check;').all()).toStrictEqual([]);
