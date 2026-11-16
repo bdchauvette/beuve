@@ -27,6 +27,36 @@ describe('orderReviewFiles', () => {
     ]);
   });
 
+  test('by size lists the ordinary changes largest first in one group, config last', ({
+    expect,
+  }) => {
+    const groups = orderReviewFiles(
+      [
+        { path: 'src/small.ts', size: 3 },
+        { path: 'README.md', size: 40 },
+        { path: 'src/big.ts', size: 500 },
+        { path: 'src/tie-b.ts', size: 3 },
+        { path: 'pnpm-lock.yaml', mechanical: 'lockfile', size: 9000 },
+        { path: 'src/none.ts' },
+      ],
+      [],
+      { bySize: true },
+    );
+    expect(groups).toStrictEqual([
+      {
+        id: 'changes',
+        label: 'Changes, largest first',
+        paths: ['src/big.ts', 'README.md', 'src/small.ts', 'src/tie-b.ts', 'src/none.ts'],
+      },
+      {
+        id: 'config-and-mechanical',
+        label: 'Config and mechanical',
+        paths: ['pnpm-lock.yaml'],
+        reasons: ['lockfile'],
+      },
+    ]);
+  });
+
   test('hoists Markdown into a docs group ahead of the code, in path order', ({ expect }) => {
     const groups = orderReviewFiles([
       file('src/a.ts'),

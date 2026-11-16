@@ -140,6 +140,7 @@ const orderModes: readonly { readonly mode: ReviewOrderMode; readonly label: str
   { mode: 'path', label: 'Path' },
   { mode: 'imports', label: 'Imports' },
   { mode: 'calls', label: 'Calls' },
+  { mode: 'size', label: 'Size' },
 ];
 
 /** Cards this far outside the viewport mount their diffs ahead of being scrolled to. */

@@ -498,7 +498,7 @@ const openReviewEditsRequest = z.strictObject({
   line: line.optional(),
 });
 const digestRequest = z.strictObject({ sessionId, digest: z.string().regex(/^[\da-f]{64}$/u) });
-const reviewOrderMode = z.enum(['path', 'imports', 'calls']);
+const reviewOrderMode = z.enum(['path', 'imports', 'calls', 'size']);
 const reviewOrderRequest = z.strictObject({ sessionId, mode: reviewOrderMode.optional() });
 /** The preferred code font, a CSS `font-family` list or empty (ADR 0122). */
 const fontFamily = z.string().max(400).refine(isFontFamilyList, {

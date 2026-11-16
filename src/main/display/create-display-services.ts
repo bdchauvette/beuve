@@ -25,7 +25,7 @@ export interface DisplayServices {
   readonly set: (request: SetDiffDisplayRequest) => Promise<IpcResult<DiffDisplayView>>;
 }
 
-const reviewOrderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls']);
+const reviewOrderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls', 'size']);
 
 const defaults: Required<DiffDisplayView> = {
   layout: 'split',

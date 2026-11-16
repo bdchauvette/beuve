@@ -120,6 +120,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     },
     'order-imports': app,
     'order-calls': app,
+    'order-size': app,
     expand: diff,
     collapse: diff,
     back: none,

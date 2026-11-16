@@ -743,7 +743,8 @@ export class BeuveApp extends LitElement {
       case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':
-      case 'order-calls': {
+      case 'order-calls':
+      case 'order-size': {
         void this.setDisplay(displayChangeFor(id, this.settings.display));
         return;
       }

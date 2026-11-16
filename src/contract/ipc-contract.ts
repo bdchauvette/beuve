@@ -1746,7 +1746,7 @@ export interface SetDiffDisplayRequest {
  * How the review's files are ordered (ADR 0065): `path` alphabetical, `imports` dependencies before
  * the files that import them, `calls` the same over the language server's outgoing calls.
  */
-export type ReviewOrderMode = 'path' | 'imports' | 'calls';
+export type ReviewOrderMode = 'path' | 'imports' | 'calls' | 'size';
 
 /** `session:get-order`; without `mode` the saved preference applies. */
 export interface GetReviewOrderRequest {
