@@ -33,6 +33,7 @@ import type {
 import { findSheetMatches } from './find-sheet-matches.ts';
 import type { SheetMatch } from './find-sheet-matches.ts';
 import { SelectionMatches } from './selection-matches.ts';
+import type { UrlDetail } from './app-event-details.ts';
 import { sheetRequestFrom } from './sheet-request-from.ts';
 import { sheetTitleFrom } from './sheet-title-from.ts';
 import { stepSheetHistory } from './step-sheet-history.ts';
@@ -287,6 +288,11 @@ export class BeuveSheetView extends LitElement {
       return { ok: false, error: { code: 'unsupported', message: 'no bridge' } };
     }
     return bridge.invoke('lsp:hover', request);
+  };
+
+  /** A link in a hover card is copied, as a rendered file's web link is: a sheet opens no URLs (ADR 0067). */
+  private readonly onOpenUrl = (event: CustomEvent<UrlDetail>): void => {
+    void this.copyLink(event.detail.url);
   };
 
   /** A rendered file's images, read at this sheet's commit (ADR 0123). */
@@ -1087,6 +1093,7 @@ export class BeuveSheetView extends LitElement {
         ${this.renderDiagnosticsInfo()}
       </footer>
       <beuve-hover-card
+        @beuve-open-url=${this.onOpenUrl}
         .ask=${this.askHover}
         .diagnosticsFor=${this.diagnosticsFor}
         .sessionId=${this.sessionId}

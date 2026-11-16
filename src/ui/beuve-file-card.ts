@@ -87,6 +87,7 @@ import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { diffSelectionCss } from './diff-selection-css.ts';
+import { displayIcon } from './display-icon.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
@@ -856,6 +857,10 @@ export class BeuveFileCard extends LitElement {
       expand: (_data, event): void => {
         this.expand(event);
       },
+      'open-sheet': (_data, event): void => {
+        event.stopPropagation();
+        this.emitSheetRequest();
+      },
       'reveal-note': ({ uraItemId = '' }, event): void => {
         event.stopPropagation();
         this.revealNote(uraItemId);
@@ -980,6 +985,21 @@ export class BeuveFileCard extends LitElement {
   }
 
   /** A rendered row by head line (base line for deletions), on the head side when split. */
+  /** Open in Sheet from the header (ADR 0128): the file at the session head, from its top. */
+  private emitSheetRequest(): void {
+    const path = this.file?.path;
+    if (path === undefined) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('beuve-sheet-request', {
+        detail: { path },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private findRow(side: 'additions' | 'deletions' | 'context', line: number): Element | undefined {
     const root = this.renderRoot.querySelector('diffs-container')?.shadowRoot;
     return root?.querySelector(headRowSelector(this.diffStyle, side, line)) ?? undefined;
@@ -1517,6 +1537,22 @@ export class BeuveFileCard extends LitElement {
         return this.composerNode();
       }
     }
+  }
+
+  /** Open in Sheet; a deleted or binary file has nothing to show at the head. */
+  private renderSheetButton(file: DiffFileView): TemplateResult | typeof nothing {
+    if (file.status === 'deleted' || file.binary) {
+      return nothing;
+    }
+    return html`<button
+      class="button quiet icon"
+      type="button"
+      aria-label="Open in Sheet"
+      title="Open in Sheet"
+      data-action="open-sheet"
+    >
+      ${displayIcon('sheet')}
+    </button>`;
   }
 
   /** Rendered and Source, for a file with a rich view. */
@@ -2165,6 +2201,7 @@ ${splitPatch(file.patch).map((line) => {
             ><span class="additions">+${file.additions}</span>
             <span class="deletions">−${file.deletions}</span></span
           >
+          ${this.renderSheetButton(file)}
         </div>
         ${this.renderEditBar()}
       </div>
