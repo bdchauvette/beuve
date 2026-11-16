@@ -5,7 +5,7 @@ import { focusRingStyles } from './focus-ring-styles.ts';
 /**
  * A segmented control (ADR 0115): `<span class="segmented" role="radiogroup">` around buttons
  * with `role="radio"` and `aria-checked`, or a `role="group"` of `aria-pressed` toggles. The
- * chosen segment is the one marked true.
+ * chosen segment is the one marked true, filled with the accent and underlined by an accent bar.
  */
 export const segmentedStyles = css`
   ${focusRingStyles}
@@ -34,13 +34,19 @@ export const segmentedStyles = css`
     border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
   }
 
-  .segmented > button:hover {
+  .segmented > button:not([aria-checked='true'], [aria-pressed='true']):hover {
     background: var(--beuve-surface-hover);
     color: var(--beuve-text);
   }
 
+  /*
+   * The chosen segment: the pressed toggle button's accent fill and text, and an accent bar along
+   * its bottom edge, so the state does not rest on color alone. An inset shadow draws the bar, so
+   * the control does not change size. Hovering it changes nothing.
+   */
   .segmented > button:is([aria-checked='true'], [aria-pressed='true']) {
-    background: var(--beuve-surface-sunken);
-    color: var(--beuve-text);
+    background: var(--beuve-accent-soft);
+    box-shadow: inset 0 calc(-1 * var(--beuve-border-width-heavy)) 0 var(--beuve-accent);
+    color: var(--beuve-accent);
   }
 `;
