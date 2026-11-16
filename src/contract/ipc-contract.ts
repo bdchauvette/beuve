@@ -1455,6 +1455,25 @@ export interface TransitionUraItemRequest {
   readonly to: 'staged' | 'withdrawn' | 'addressed';
 }
 
+/** Deletes an item of any status for good, except that main keeps it for {@link RestoreUraItemRequest}. */
+export interface DeleteUraItemRequest {
+  readonly itemId: string;
+}
+
+/** Which item was deleted, and the session it belonged to. */
+export interface UraDeletedView {
+  readonly itemId: string;
+  readonly sessionId: string;
+}
+
+/**
+ * Puts a deleted item back at its old place in the dock. Main remembers only the most recent
+ * deletions of this run, so an older one answers `item-not-found`.
+ */
+export interface RestoreUraItemRequest {
+  readonly itemId: string;
+}
+
 /** Every item of the session (any status), exactly once, in the new dock order. */
 export interface ReorderUraItemsRequest {
   readonly sessionId: string;
@@ -2680,6 +2699,14 @@ export interface InvokeChannelMap {
   };
   'ura:transition': {
     readonly request: TransitionUraItemRequest;
+    readonly response: IpcResult<UraItemView>;
+  };
+  'ura:delete': {
+    readonly request: DeleteUraItemRequest;
+    readonly response: IpcResult<UraDeletedView>;
+  };
+  'ura:restore': {
+    readonly request: RestoreUraItemRequest;
     readonly response: IpcResult<UraItemView>;
   };
   'ura:reorder': {

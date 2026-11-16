@@ -175,6 +175,44 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     });
   });
 
+  test('deletes a note of any status and restores it to its old place', async ({
+    expect,
+    services,
+    sessionId,
+    note,
+  }) => {
+    const first = await note({ startLine: 2, endLine: 3, title: 'First' });
+    const second = await note({ startLine: 2, endLine: 3, title: 'Second' });
+    const third = await note({ startLine: 2, endLine: 3, title: 'Third' });
+    okValueFrom(await services.ura.transition({ itemId: second.id, to: 'withdrawn' }));
+
+    expect(okValueFrom(services.ura.delete({ itemId: second.id }))).toStrictEqual({
+      itemId: second.id,
+      sessionId,
+    });
+    expect(
+      okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.id),
+    ).toStrictEqual([first.id, third.id]);
+    expect(services.ura.delete({ itemId: second.id })).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+
+    const restored = okValueFrom(await services.ura.restore({ itemId: second.id }));
+    expect(restored).toMatchObject({
+      id: second.id,
+      title: 'Second',
+      status: { kind: 'withdrawn' },
+    });
+    expect(
+      okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.id),
+    ).toStrictEqual([first.id, second.id, third.id]);
+    await expect(services.ura.restore({ itemId: second.id })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+  });
+
   test('stages a /review finding from its stored answer, once, restaging a withdrawn one', async ({
     expect,
     services,

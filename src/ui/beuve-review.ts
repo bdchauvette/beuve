@@ -70,7 +70,6 @@ import type { SidebarTabDetail } from './beuve-sidebar-tabs.ts';
 import type { SidebarZone } from './sidebar-zone.ts';
 import { zoneOrderFrom } from './zone-order-from.ts';
 import type { AppActions } from './app-actions.ts';
-import { citationPlace } from './citation-place.ts';
 import { describeOutsideDiff } from './describe-outside-diff.ts';
 import { fileOfMention } from './file-of-mention.ts';
 import { mentionTargetFromItem } from './mention-target-from-item.ts';
@@ -130,6 +129,7 @@ import type {
   UraExportDetail,
   UraItemIdDetail,
   UraJumpDetail,
+  UraDeleteDetail,
   UraReorderDetail,
   UraTransitionDetail,
   UraVerdictDetail,
@@ -577,6 +577,10 @@ export class BeuveReview extends LitElement {
     void this.ura.transition(event.detail.itemId, event.detail.to);
   };
 
+  private readonly onUraDelete = (event: CustomEvent<UraDeleteDetail>): void => {
+    void this.deleteNote(event.detail.itemId);
+  };
+
   private readonly onUraReorder = (event: CustomEvent<UraReorderDetail>): void => {
     void this.ura.reorder(event.detail.itemIds);
   };
@@ -614,6 +618,8 @@ export class BeuveReview extends LitElement {
    * right-click.
    */
   private contextReference: FileReference | undefined;
+  /** The note the latest Delete Note removed, for Undo Delete Note. */
+  private lastDeletedNoteId: string | undefined;
   /** The files chat answers may name, rebuilt when the review or the head's tree changes. */
   private referenceCache:
     | {
@@ -885,6 +891,34 @@ export class BeuveReview extends LitElement {
     }
   }
 
+  /** Deletes a note and says so, with an Undo that puts it back (the latest deletion only). */
+  private async deleteNote(itemId: string): Promise<void> {
+    const title = await this.ura.delete(itemId);
+    if (title === undefined) {
+      return;
+    }
+    this.lastDeletedNoteId = itemId;
+    this.showNotice({
+      tone: 'info',
+      text: `Deleted “${revealFormatControls(title)}”.`,
+      action: { label: 'Undo', command: 'undo-delete-note' },
+    });
+  }
+
+  private async undoDeleteNote(): Promise<void> {
+    const itemId = this.lastDeletedNoteId;
+    if (itemId === undefined) {
+      this.showNotice({ tone: 'info', text: 'No deleted note to bring back.' });
+      return;
+    }
+    this.lastDeletedNoteId = undefined;
+    if (await this.ura.restore(itemId)) {
+      this.showNotice({ tone: 'info', text: 'Note restored.' });
+    } else {
+      this.showNotice({ tone: 'error', text: 'That note can no longer be restored.' });
+    }
+  }
+
   private takeContextReference(): FileReference | undefined {
     const reference = this.contextReference;
     this.contextReference = undefined;
@@ -988,7 +1022,11 @@ export class BeuveReview extends LitElement {
   private openCitation(citation: ChatCitationView): void {
     const { path, startLine } = citation;
     if (!this.diffPaths().has(path)) {
-      this.chat.note('info', describeOutsideDiff(citationPlace(citation)));
+      void this.sheetAction({
+        kind: 'open',
+        path,
+        range: sheetRangeFrom({ start: startLine, end: citation.endLine }),
+      });
       return;
     }
     this.jumpNonce += 1;
@@ -1258,6 +1296,7 @@ export class BeuveReview extends LitElement {
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
       @beuve-ura-transition=${this.onUraTransition}
+      @beuve-ura-delete=${this.onUraDelete}
       @beuve-ura-reorder=${this.onUraReorder}
       @beuve-ura-export=${this.onUraExport}
       @beuve-ura-set-verdict=${this.onUraSetVerdict}
@@ -1500,7 +1539,9 @@ export class BeuveReview extends LitElement {
     if (path.some((element) => isEditableElement(element))) {
       return 'text';
     }
-    const reference = path.find((element) => element.dataset['action'] === 'reference');
+    const reference = path.find((element) => {
+      return element.dataset['action'] === 'reference' || element.dataset['action'] === 'cite';
+    });
     if (reference !== undefined) {
       this.contextReference = referenceFrom(reference.dataset);
       return 'reference';
@@ -1718,6 +1759,10 @@ export class BeuveReview extends LitElement {
       }
       case 'open-review-edits': {
         void this.openReviewEdits();
+        return true;
+      }
+      case 'undo-delete-note': {
+        void this.undoDeleteNote();
         return true;
       }
       case 'restart-language-servers': {

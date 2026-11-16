@@ -186,6 +186,7 @@ describe('contextMenuTemplateFrom', () => {
       'dock-show',
       'dock-edit',
       'dock-withdraw',
+      'dock-delete',
       'dock-addressed',
       'dock-move-up',
       'dock-move-down',

@@ -134,6 +134,11 @@ export interface UraTransitionDetail {
   readonly to: 'staged' | 'withdrawn' | 'addressed';
 }
 
+/** A staged, withdrawn or addressed item to delete. */
+export interface UraDeleteDetail {
+  readonly itemId: string;
+}
+
 /** The verdict the reviewer chose; `undefined` goes back to the derived one. */
 export interface UraVerdictDetail {
   readonly verdict: UraVerdictView | undefined;

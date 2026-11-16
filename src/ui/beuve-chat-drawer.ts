@@ -801,7 +801,12 @@ export class BeuveChatDrawer extends LitElement {
           ...(lines !== undefined && { range: sheetRangeFrom(lines) }),
         });
       },
-      cite: ({ path = '', start, end }): void => {
+      cite: ({ path = '', start, end }, event): void => {
+        const lines = linesOf(start, end);
+        if (lines !== undefined && isModifierClick(event)) {
+          this.emit('beuve-sheet-request', { path, range: sheetRangeFrom(lines) });
+          return;
+        }
         const citation = { path, startLine: Number(start), endLine: Number(end) };
         this.emit('beuve-chat-cite', { citation });
       },
@@ -1657,7 +1662,7 @@ export class BeuveChatDrawer extends LitElement {
       data-line=${citation.startLine}
       data-start=${citation.startLine}
       data-end=${citation.endLine}
-      title=${isOutside ? `${title} (not in this diff)` : `${title} (show in the diff)`}
+      title=${isOutside ? `${title} (not in this diff; open in a sheet)` : `${title} (show in the diff; ⌘/Ctrl-click for a sheet)`}
     >
       ${pathText(label)}
     </button>`;
@@ -2174,6 +2179,11 @@ function linesOf(start: string | undefined, end: string | undefined): LineRange 
     return undefined;
   }
   return { start: Number(start), end: Number(end ?? start) };
+}
+
+/** A click with ⌘ (macOS) or Ctrl held, which asks for a sheet instead of the usual action. */
+function isModifierClick(event: Event): boolean {
+  return event instanceof MouseEvent && (event.metaKey || event.ctrlKey);
 }
 
 /** The caret's offset inside `child`: within a text node, else before (0) or after (1) it. */

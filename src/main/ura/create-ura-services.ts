@@ -1,3 +1,5 @@
+import type { DatabaseSync } from 'node:sqlite';
+
 import type {
   CreateUraItemRequest,
   ExportUraRequest,
@@ -7,11 +9,14 @@ import type {
   SetUraVerdictRequest,
   StageNoteProposalRequest,
   StageReviewFindingRequest,
+  DeleteUraItemRequest,
+  RestoreUraItemRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
   UraExportView,
   UraItemView,
   UraListView,
+  UraDeletedView,
   UraOrderView,
   UraPlacementView,
   UraStagedView,
@@ -26,6 +31,7 @@ import { findChatMessage } from '#internal/chat/find-chat-message.ts';
 import { compileUraArtifact } from '#internal/ura/compile-ura-artifact.ts';
 import { createUraItem } from '#internal/ura/create-ura-item.ts';
 import { deriveUraVerdict } from '#internal/ura/derive-ura-verdict.ts';
+import { deleteUraItem } from '#internal/ura/delete-ura-item.ts';
 import { editUraItem } from '#internal/ura/edit-ura-item.ts';
 import { findUraItem } from '#internal/ura/find-ura-item.ts';
 import { findUraItemByOrigin } from '#internal/ura/find-ura-item-by-origin.ts';
@@ -82,6 +88,10 @@ export interface UraServices {
   readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
+  /** Deletes an item of any status, keeping it in memory for {@link UraServices.restore}. */
+  readonly delete: (request: DeleteUraItemRequest) => IpcResult<UraDeletedView>;
+  /** Puts a recently deleted item back where it was; an older deletion is `item-not-found`. */
+  readonly restore: (request: RestoreUraItemRequest) => Promise<IpcResult<UraItemView>>;
   /** Stages a `/review` finding from its stored answer (ADR 0055); again returns its item. */
   readonly stageReviewFinding: (
     request: StageReviewFindingRequest,
@@ -117,6 +127,15 @@ export interface CompileArtifactOptions {
   /** The base tip the caller resolved for this operation, so the fork point can't move (ADR 0079). */
   readonly baseTip?: CommitSha;
   readonly verdict?: UraVerdictView;
+}
+
+/** How many deletions {@link UraServices.restore} remembers. */
+const deletedItemCapacity = 20;
+
+/** A deleted item and its session's dock order from before the deletion. */
+interface DeletedItem {
+  readonly item: UraItem;
+  readonly order: readonly UraItemId[];
 }
 
 /** A staged item, and whether staging created it or found it already there. */
@@ -156,6 +175,8 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const deps: UraDeps = context.deps;
   const listeners = new Set<(sessionId: string) => void>();
   const mappings = new LruCache<string, Promise<LineMapping | undefined>>(options.cacheSize ?? 64);
+  /** The latest deletions of this run, kept so Undo can put an item back in its place. */
+  const deletedItems = new LruCache<string, DeletedItem>(deletedItemCapacity);
 
   /**
    * The session's verdict choice, dropped first if the head moved since it was made or staged
@@ -525,6 +546,43 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return viewOne(moved.value);
     },
 
+    delete: ({ itemId }): IpcResult<UraDeletedView> => {
+      const found = findUraItem(db, itemId as UraItemId);
+      if (!found.ok) {
+        return uraFailure(logger, found.error);
+      }
+      const { sessionId } = found.value;
+      const listed = listUraItems(db, sessionId);
+      if (!listed.ok) {
+        return uraFailure(logger, listed.error);
+      }
+      const deleted = deleteUraItem(db, found.value.id);
+      if (!deleted.ok) {
+        return uraFailure(logger, deleted.error);
+      }
+      deletedItems.set(found.value.id, {
+        item: found.value,
+        order: listed.value.map((entry) => entry.id),
+      });
+      changed(sessionId);
+      return ok({ itemId, sessionId });
+    },
+
+    restore: async ({ itemId }): Promise<IpcResult<UraItemView>> => {
+      const kept = deletedItems.get(itemId);
+      if (kept === undefined) {
+        return uraFailure(logger, { kind: 'item-not-found', id: itemId as UraItemId });
+      }
+      const inserted = insertUraItem(db, kept.item);
+      if (!inserted.ok) {
+        return uraFailure(logger, inserted.error);
+      }
+      deletedItems.delete(itemId);
+      putBackInOrder(db, kept);
+      changed(kept.item.sessionId);
+      return viewOne(kept.item);
+    },
+
     reorder: ({ sessionId, itemIds }): IpcResult<UraOrderView> => {
       const reordered = reorderUraItems(db, sessionId as SessionId, itemIds as UraItemId[]);
       if (!reordered.ok) {
@@ -654,6 +712,22 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       };
     },
   };
+}
+
+/**
+ * Moves a just-restored item (appended last) back to where it was: the old order, minus items
+ * deleted since, with items added since after it. A refused order leaves it last.
+ */
+function putBackInOrder(db: DatabaseSync, { item, order }: DeletedItem): void {
+  const current = listUraItems(db, item.sessionId);
+  if (!current.ok) {
+    return;
+  }
+  const present = new Set(current.value.map((entry) => entry.id));
+  const wanted = order.filter((id) => present.has(id));
+  const placed = new Set(wanted);
+  const added = current.value.map((entry) => entry.id).filter((id) => !placed.has(id));
+  reorderUraItems(db, item.sessionId, [...wanted, ...added]);
 }
 
 function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {
