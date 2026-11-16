@@ -152,13 +152,16 @@ export const richViewStyles = [
     }
 
     .document :is(th, td) {
+      min-inline-size: calc(8 * var(--beuve-measure-em));
       padding: var(--beuve-space-1) var(--beuve-space-2);
       border: var(--beuve-border-width) solid var(--beuve-border);
       text-align: start;
       vertical-align: top;
+      overflow-wrap: anywhere;
     }
 
     .document th {
+      max-inline-size: calc(24 * var(--beuve-measure-em));
       background: var(--beuve-surface-sunken);
       font-weight: var(--beuve-font-weight-semibold);
     }
