@@ -1884,6 +1884,7 @@ export class BeuveReview extends LitElement {
         this.review === undefined
           ? nothing
           : html`<beuve-hover-card
+              @beuve-open-url=${this.onOpenUrl}
               .ask=${this.askHover}
               .diagnosticsFor=${this.diagnosticsFor}
               .sessionId=${this.review.session.id}

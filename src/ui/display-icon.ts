@@ -6,7 +6,7 @@ import type { TemplateResult } from 'lit';
  * outlines that follow the text color.
  */
 export type DisplayIconName =
-  'split' | 'inline' | 'whitespace' | 'sort' | 'chevron' | 'check' | 'blocking';
+  'split' | 'inline' | 'whitespace' | 'sort' | 'chevron' | 'check' | 'blocking' | 'sheet';
 
 /** One header glyph, hidden from assistive technology (the button carries the label). */
 export function displayIcon(name: DisplayIconName): TemplateResult {
@@ -30,5 +30,6 @@ const shapes: Readonly<Record<DisplayIconName, TemplateResult>> = {
   sort: svg`<path d="M3 4h10M3 8h7M3 12h4" />`,
   chevron: svg`<path d="M4.5 6.5 8 10l3.5-3.5" />`,
   check: svg`<path d="m3.5 8.5 3 3 6-7" />`,
+  sheet: svg`<path d="M9.5 2.5h-5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-7Z" /><path d="M9.5 2.5v3a1 1 0 0 0 1 1h2M6 9h4M6 11.5h4" />`,
   blocking: svg`<path d="M5.6 2h4.8L14 5.6v4.8L10.4 14H5.6L2 10.4V5.6Z" /><path d="M8 5v3.5M8 11h.01" />`,
 };

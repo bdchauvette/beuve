@@ -50,7 +50,9 @@ const graceMs = 150;
  * owner reports tokens with {@link BeuveHoverCard.point} and {@link BeuveHoverCard.leave}; after
  * the pointer rests for a moment the card asks, and shows the Markdown in a top-layer popover
  * below (or above) the token. The server's text is rendered as untrusted Markdown by the same
- * node builder as chat answers: no raw HTML, code as plain blocks, links inert. Answers for a
+ * node builder as chat answers: no raw HTML, code as plain blocks. A link never navigates the
+ * window: a click emits `beuve-open-url { url }`, which the main window opens through main (http(s)
+ * only, ADR 0040) and a sheet copies (ADR 0067). Answers for a
  * pointer that has moved on are dropped, and a failure or an empty answer shows nothing. The card
  * takes no focus and no key, and goes away on a click, a scroll, a wheel turn or a blur.
  */
@@ -139,8 +141,8 @@ export class BeuveHoverCard extends LitElement {
 
     .card a {
       color: inherit;
-      text-decoration: underline dotted;
-      cursor: default;
+      text-decoration: underline;
+      cursor: pointer;
     }
 
     .card .diagnostic {
@@ -351,8 +353,20 @@ export class BeuveHoverCard extends LitElement {
         this.leave();
       }}
       @click=${(event: Event): void => {
-        if ((event.target as Element | null)?.closest('a') !== null) {
-          event.preventDefault();
+        const link = (event.target as Element | null)?.closest('a');
+        if (link === null || link === undefined) {
+          return;
+        }
+        event.preventDefault();
+        const url = link.dataset['url'];
+        if (url !== undefined) {
+          this.dispatchEvent(
+            new CustomEvent('beuve-open-url', {
+              detail: { url },
+              bubbles: true,
+              composed: true,
+            }),
+          );
         }
       }}
     ></div>`;
