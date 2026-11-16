@@ -43,6 +43,8 @@ export const invokeChannels = Object.freeze([
   'ura:create',
   'ura:update',
   'ura:transition',
+  'ura:delete',
+  'ura:restore',
   'ura:reorder',
   'ura:stage-review-finding',
   'ura:stage-note-proposal',

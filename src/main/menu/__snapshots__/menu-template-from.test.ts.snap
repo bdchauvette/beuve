@@ -582,6 +582,10 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "&Withdraw or Restore",
           },
           {
+            "id": "dock-delete",
+            "label": "&Delete Note",
+          },
+          {
             "id": "dock-addressed",
             "label": "&Addressed",
             "type": "checkbox",
@@ -595,7 +599,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           },
           {
             "id": "dock-move-down",
-            "label": "Move &Down",
+            "label": "M&ove Down",
           },
           {
             "type": "separator",
@@ -1394,6 +1398,10 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "dock-withdraw",
             "label": "Withdraw or Restore",
+          },
+          {
+            "id": "dock-delete",
+            "label": "Delete Note",
           },
           {
             "id": "dock-addressed",

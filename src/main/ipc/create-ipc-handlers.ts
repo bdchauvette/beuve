@@ -93,6 +93,7 @@ import type {
   UraExportView,
   UraItemView,
   UraListView,
+  UraDeletedView,
   UraOrderView,
   UraSeverityView,
   UraStagedView,
@@ -412,6 +413,8 @@ const uraTransitionRequest = z.strictObject({
   itemId: uuid,
   to: z.enum(['staged', 'withdrawn', 'addressed']),
 });
+
+const uraItemRequest = z.strictObject({ itemId: uuid });
 
 const uraReorderRequest = z.strictObject({
   sessionId,
@@ -959,6 +962,20 @@ export function createIpcHandlers(
       const parsed = uraTransitionRequest.safeParse(request);
       if (parsed.success) {
         return services.ura.transition(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'ura:delete': (request): IpcResult<UraDeletedView> => {
+      const parsed = uraItemRequest.safeParse(request);
+      if (parsed.success) {
+        return services.ura.delete(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'ura:restore': async (request): Promise<IpcResult<UraItemView>> => {
+      const parsed = uraItemRequest.safeParse(request);
+      if (parsed.success) {
+        return services.ura.restore(parsed.data);
       }
       return invalid(parsed.error);
     },

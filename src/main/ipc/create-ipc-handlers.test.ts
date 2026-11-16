@@ -930,6 +930,8 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(expect, handlers['ura:update']({ itemId: 'x' }));
     await expectInvalid(expect, handlers['ura:transition']({ itemId: id, to: 'deleted' }));
     await expectInvalid(expect, handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
+    await expectInvalid(expect, handlers['ura:delete']({ itemId: 'x' }));
+    await expectInvalid(expect, handlers['ura:restore']({}));
     await expectInvalid(
       expect,
       handlers['ura:stage-review-finding']({ messageId: id, finding: -1 }),
@@ -1347,6 +1349,8 @@ function stubServices(
       create: notWired,
       update: notWired,
       transition: notWired,
+      delete: notWiredError,
+      restore: notWired,
       reorder: notWiredError,
       stageReviewFinding: notWired,
       stageNoteProposal: notWired,

@@ -784,6 +784,23 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'dock-delete',
+    title: 'Delete Note',
+    menu: { menu: 'review', group: 5, submenu: 'Note' },
+    inPlace: { area: 'Review notes', keys: ['Shift+Delete'] },
+    context: ['note'],
+    when: ['dock-item'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'undo-delete-note',
+    title: 'Undo Delete Note',
+    when: ['session'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'dock-addressed',
     title: 'Note Addressed',
     label: 'Addressed',

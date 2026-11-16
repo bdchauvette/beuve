@@ -37,3 +37,7 @@ Squashed into `ura-0001-initial` (ADR 0006); the schema described here is unchan
 ## Amendment 2026-10-30: no agent-insight origin
 
 ADR 0055 removes agent insights. The origin `agent-insight` and `insight_id` are gone; a staged `/review` finding is a `chat-answer` origin with a 0-based `finding` index (`chat_finding`, one item per answer and finding). Agent findings still never block on their own: risk and warning become `issue`, info `nit`.
+
+## Amendment 2026-11-16: items can be deleted
+
+A note of any status can be deleted (`ura:delete`, Review › Note › Delete Note, Shift+Delete in the dock). Deleting removes the row and, by cascade, its postings and review-edit bindings; a `/review` finding or proposed note it came from can be staged again. Withdrawing stays the way to keep a note out of the export without losing it. Main keeps the 20 latest deletions of the run in memory, so Undo (`ura:restore`, offered in the status notice) puts a note back in its old place; nothing is kept across a restart, and a restored note has lost the record that it was posted.

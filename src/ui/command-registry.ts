@@ -161,6 +161,8 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'dock-show': dock,
     'dock-edit': dock,
     'dock-withdraw': dock,
+    'dock-delete': dock,
+    'undo-delete-note': app,
     'dock-addressed': dock,
     'dock-move-up': dock,
     'dock-move-down': dock,

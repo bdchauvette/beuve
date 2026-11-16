@@ -238,6 +238,32 @@ export class UraController implements ReactiveController {
     });
   }
 
+  /** Deletes an item; the deleted item's title, or `undefined` when the call failed. */
+  async delete(itemId: string): Promise<string | undefined> {
+    const bridge = this.environment.bridge();
+    const item = this.snapshot.items.find((entry) => entry.id === itemId);
+    if (bridge === undefined || item === undefined) {
+      return undefined;
+    }
+    const result = await bridge.invoke('ura:delete', { itemId });
+    this.noteFailure(result);
+    if (!result.ok) {
+      return undefined;
+    }
+    return item.title;
+  }
+
+  /** Puts a deleted item back where it was; whether it worked. */
+  async restore(itemId: string): Promise<boolean> {
+    const bridge = this.environment.bridge();
+    if (bridge === undefined) {
+      return false;
+    }
+    const result = await bridge.invoke('ura:restore', { itemId });
+    this.noteFailure(result);
+    return result.ok;
+  }
+
   /** Shows the new order at once; a refused move is put right by the refresh after it. */
   async reorder(itemIds: readonly string[]): Promise<void> {
     const review = this.environment.review();

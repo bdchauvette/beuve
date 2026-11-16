@@ -69,7 +69,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
- * Delete withdraws or restores it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
+ * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
  * too (ADR 0129); Review ▸ Note and the
  * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
  * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
@@ -77,7 +77,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * a suggested patch say `patch` and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
  * `beuve-ura-edit-suggestion`,
- * `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-transition`, `beuve-ura-reorder` and
+ * `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-transition`, `beuve-ura-delete`, `beuve-ura-reorder` and
  * `beuve-ura-export`; `beuve-app` does the IPC.
  */
 @customElement('beuve-ura-dock')
@@ -386,6 +386,8 @@ export class BeuveUraDock extends LitElement {
     let key = event.key;
     if (event.altKey) {
       key = `Alt+${event.key}`;
+    } else if (event.shiftKey) {
+      key = `Shift+${event.key}`;
     }
     const id = inPlaceKeys[key];
     if (id === undefined) {
@@ -1176,6 +1178,12 @@ export class BeuveUraDock extends LitElement {
         }
         return true;
       }
+      case 'dock-delete': {
+        if (current !== undefined) {
+          this.emit('beuve-ura-delete', { itemId: current.id });
+        }
+        return true;
+      }
       case 'dock-addressed': {
         if (current !== undefined) {
           this.toggleStatus(current, 'addressed');
@@ -1244,6 +1252,8 @@ const inPlaceKeys: Readonly<Record<string, CommandId>> = {
   ' ': 'dock-edit',
   Delete: 'dock-withdraw',
   Backspace: 'dock-withdraw',
+  'Shift+Delete': 'dock-delete',
+  'Shift+Backspace': 'dock-delete',
   'Alt+ArrowUp': 'dock-move-up',
   'Alt+ArrowDown': 'dock-move-down',
 };
