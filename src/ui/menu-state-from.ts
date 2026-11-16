@@ -69,6 +69,7 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['order-path', order === 'path'],
     ['order-imports', order === 'imports'],
     ['order-calls', order === 'calls'],
+    ['order-size', order === 'size'],
     ['toggle-skip-reviewed', display.skipReviewed === true],
     ['toggle-reviewed', isFile && input.isActiveReviewed],
     ['editor-zed', input.preferredEditor === 'zed'],

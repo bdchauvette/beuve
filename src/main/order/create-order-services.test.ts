@@ -47,6 +47,33 @@ describe('session:get-order (integration: git + tree-sitter)', { timeout: 30_000
     expect(order.paths).toStrictEqual(order.groups.flatMap((group) => group.paths));
   });
 
+  test('by size puts every ordinary change in one group, config and mechanical files last', async ({
+    expect,
+    services,
+    repo,
+    signal,
+  }) => {
+    const sessionId = await startReview(repo, services);
+    const byPath = okValueFrom(
+      await services.order.getOrder({ sessionId, mode: 'path' }, { signal }),
+    );
+    const bySize = okValueFrom(
+      await services.order.getOrder({ sessionId, mode: 'size' }, { signal }),
+    );
+    expect(bySize).toMatchObject({ requestedMode: 'size', mode: 'size' });
+    expect(bySize.fallback).toBeUndefined();
+    expect(bySize.groups.map((group) => group.id)).toStrictEqual([
+      'changes',
+      'config-and-mechanical',
+    ]);
+    expect(bySize.groups[0]?.label).toBe('Changes, largest first');
+    const ordinary = byPath.groups
+      .filter((group) => group.id !== 'config-and-mechanical')
+      .flatMap((group) => group.paths);
+    expect(new Set(bySize.groups[0]?.paths)).toStrictEqual(new Set(ordinary));
+    expect(bySize.groups[1]).toStrictEqual(byPath.groups.at(-1));
+  });
+
   test('puts changed importers before their dependencies, resolving relative and #alias imports', async ({
     expect,
     services,

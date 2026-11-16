@@ -15,7 +15,7 @@ import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
 
 import { planRadarTree } from './plan-radar-tree.ts';
 import type { RadarTreeMode, RadarTreePlan } from './plan-radar-tree.ts';
-import { reviewedDecorations } from './reviewed-decorations.ts';
+import { rowDecorationsFrom } from './row-decorations-from.ts';
 import type { TreeDecoration } from './tree-decoration.ts';
 
 const trailingSlash = /\/$/u;
@@ -193,7 +193,11 @@ export class BeuveRadarTree extends LitElement {
       },
       this.mode,
     );
-    this.decorations = reviewedDecorations(this.reviewMarks);
+    this.decorations = rowDecorationsFrom({
+      files: this.files,
+      marks: this.reviewMarks,
+      generated: this.generatedPaths,
+    });
     const gitStatus = plan.gitStatus.map((entry) => {
       if (this.generatedPaths.has(entry.path)) {
         return { ...entry, status: 'ignored' as const };
@@ -222,7 +226,7 @@ export class BeuveRadarTree extends LitElement {
       );
       this.fileTree.setGitStatus(shownGitStatus(gitStatus));
     }
-    if (changed.has('reviewMarks')) {
+    if (changed.has('reviewMarks') || changed.has('files') || changed.has('generatedPaths')) {
       // Re-renders the rows, so they ask `renderRowDecoration` again.
       this.fileTree.setComposition(this.fileTree.getComposition());
     }

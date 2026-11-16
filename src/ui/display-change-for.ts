@@ -15,6 +15,7 @@ export type DisplayCommandId = Extract<
   | 'order-path'
   | 'order-imports'
   | 'order-calls'
+  | 'order-size'
 >;
 
 /** The display change a menu, shortcut or palette command asks for, given the current display. Pure. */
@@ -52,6 +53,9 @@ export function displayChangeFor(
     }
     case 'order-calls': {
       return { reviewOrder: 'calls' };
+    }
+    case 'order-size': {
+      return { reviewOrder: 'size' };
     }
   }
 }

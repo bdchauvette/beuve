@@ -439,6 +439,15 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'order-size',
+    title: 'Order Files by Size',
+    label: 'Size',
+    menu: { menu: 'view', group: 3, submenu: 'Order Files By' },
+    toggle: 'radio',
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'expand',
     title: 'Expand File',
     menu: { menu: 'view', group: 4 },

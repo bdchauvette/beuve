@@ -4,6 +4,13 @@ import type { MechanicalReason } from './mechanical-reason.ts';
 export interface OrderableFile {
   readonly path: string;
   readonly mechanical?: MechanicalReason | undefined;
+  /** Lines added plus lines deleted, for {@link OrderOptions.bySize}. */
+  readonly size?: number | undefined;
+}
+
+export interface OrderOptions {
+  /** Orders the ordinary changes largest first, in one group, instead of by `edges` (ADR 0065). */
+  readonly bySize?: boolean;
 }
 
 /** `dependent` uses `dependency`: its imports or calls reach into it. */
@@ -42,8 +49,12 @@ const reasonRank: Readonly<Record<MechanicalReason, number>> = {
 export function orderReviewFiles(
   files: readonly OrderableFile[],
   edges: readonly DependencyEdge[] = [],
+  options: OrderOptions = {},
 ): readonly OrderedGroup[] {
   type MechanicalFile = OrderableFile & { readonly mechanical: MechanicalReason };
+  if (options.bySize === true) {
+    return orderBySize(files);
+  }
   const ordinary = files.filter((file) => file.mechanical === undefined).map((file) => file.path);
   const docs = ordinary
     .filter((path) => {
@@ -80,6 +91,27 @@ export function orderReviewFiles(
     });
   }
   return groups;
+}
+
+/** Ordinary changes in one group, largest first, then the config group as usual. */
+function orderBySize(files: readonly OrderableFile[]): readonly OrderedGroup[] {
+  const sizes = new Map(
+    files.map((file) => {
+      return [file.path, file.size ?? 0];
+    }),
+  );
+  const ordinary = files
+    .filter((file) => file.mechanical === undefined)
+    .map((file) => file.path)
+    .toSorted((a, b) => {
+      return (sizes.get(b) ?? 0) - (sizes.get(a) ?? 0) || comparePaths(a, b);
+    });
+  const rest = orderReviewFiles(files.filter((file) => file.mechanical !== undefined));
+  const groups: OrderedGroup[] = [];
+  if (ordinary.length > 0) {
+    groups.push({ id: 'changes', label: 'Changes, largest first', paths: ordinary });
+  }
+  return [...groups, ...rest];
 }
 
 function changesLabel(edges: readonly DependencyEdge[]): string {

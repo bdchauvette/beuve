@@ -21,3 +21,8 @@ The diff lists files in path order. A reviewer who meets `app.ts` before the hel
 ## Consequences
 
 The reviewer can pick the order that suits the change, and the config noise no longer sits among the code. `calls` costs language-server round trips (and a session checkout) the first time; `imports` costs one tree listing, the config blobs and a parse of each changed source file, cached per head for the resolver. Resolution is textual: it misses aliases that need `extends`, workspaces' package exports and generated paths. Position bias is not removed, only made adjustable; the UI should show where the reviewer is in the list.
+
+## Amendment 2026-11-16: a size order, and sizes in the tree
+
+- **`size`** (`ReviewOrderMode`, View › Order Files By › Size, and the sort menu) lists every ordinary change in one group, largest first (lines added plus lines deleted, ties by path), under the label "Changes, largest first". It does not split out Markdown as the other modes do, because the point is to see the biggest files wherever they are. Config and mechanical files stay last in their own group, so a lockfile bump does not top the list. It needs no language server and never falls back. It has no `/order` argument: chat commands are for the conversation, not for settings.
+- **Tree rows** (ADR 0026, 0052) show how many lines a file changes (added plus deleted, abbreviated: `342`, `1.2K`) after its reviewed mark, and `gen` for a generated file (the same set that takes the dimmed lane), with the exact counts in the tooltip. A file with no changed lines (binary, a pure rename) and nothing else to say gets no text.

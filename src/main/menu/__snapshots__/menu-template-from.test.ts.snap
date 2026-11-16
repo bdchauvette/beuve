@@ -304,6 +304,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "&Calls",
             "type": "radio",
           },
+          {
+            "id": "order-size",
+            "label": "&Size",
+            "type": "radio",
+          },
         ],
       },
       {
@@ -1119,6 +1124,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "order-calls",
             "label": "Calls",
+            "type": "radio",
+          },
+          {
+            "id": "order-size",
+            "label": "Size",
             "type": "radio",
           },
         ],

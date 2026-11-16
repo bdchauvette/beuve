@@ -18,6 +18,7 @@ import { LruCache } from '#x/collections/lru-cache.ts';
 import { ok } from '#x/result/ok.ts';
 
 import type { RequestOptions } from '../request-options.ts';
+import { diffFileViewFrom } from '../sessions/diff-file-view-from.ts';
 import { gitFailure } from '../sessions/git-failure.ts';
 import { headPathOf } from '../sessions/head-path-of.ts';
 import { loadReviewDiff } from '../sessions/load-review-diff.ts';
@@ -73,7 +74,7 @@ interface EdgePlan {
  * patterns). `imports` puts a changed file's changed imports before it; `calls` does the same
  * over the language server's outgoing calls, falling back to `imports` when no server answers,
  * and says so in `fallback`. Either falls back to path order when no changed file is TypeScript
- * or JavaScript.
+ * or JavaScript. `size` lists the ordinary changes largest first (lines added plus deleted).
  */
 export function createOrderServices(options: OrderServicesOptions): OrderServices {
   const { context, parse } = options;
@@ -111,7 +112,7 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
     mode: ReviewOrderMode,
     { sessionId, review, primary }: EdgeSource,
   ): Promise<EdgePlan> => {
-    if (mode === 'path') {
+    if (mode === 'path' || mode === 'size') {
       return { mode, edges: [] };
     }
     const hasSource = review.files.some((file) => {
@@ -169,6 +170,7 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
         return {
           path: headPathOf(file),
           mechanical: classifyReviewFile(headPathOf(file), fileFactsFrom(file, evidence)),
+          size: changedLinesOf(file),
         };
       });
       const primary = new Set(
@@ -179,7 +181,7 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
         review: diff.value,
         primary,
       });
-      const groups = orderReviewFiles(classified, plan.edges);
+      const groups = orderReviewFiles(classified, plan.edges, { bySize: plan.mode === 'size' });
       return ok({
         sessionId: request.sessionId,
         headSha: diff.value.refreshed.session.headSha,
@@ -198,4 +200,10 @@ export function createOrderServices(options: OrderServicesOptions): OrderService
       });
     },
   };
+}
+
+/** Lines added plus lines deleted, as the diff view counts them. */
+function changedLinesOf(file: ReviewDiff['files'][number]): number {
+  const view = diffFileViewFrom(file);
+  return view.additions + view.deletions;
 }
