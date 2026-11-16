@@ -46,7 +46,7 @@ export const segmentedStyles = css`
    */
   .segmented > button:is([aria-checked='true'], [aria-pressed='true']) {
     background: var(--beuve-accent-soft);
-    box-shadow: inset 0 calc(-1 * var(--beuve-border-width-heavy)) 0 var(--beuve-accent);
+    box-shadow: inset 0 calc(-1 * var(--beuve-border-width-thick)) 0 var(--beuve-accent);
     color: var(--beuve-accent);
   }
 `;
