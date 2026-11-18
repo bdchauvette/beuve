@@ -61,18 +61,26 @@ const verdictLabels: Readonly<Record<UraVerdictView, string>> = {
   'request-changes': 'Request changes',
 };
 
-const exports: readonly { target: UraExportTarget; label: string; title: string }[] = [
-  {
-    target: 'agent-xml',
-    label: 'Copy for Claude Code (XML)',
-    title: 'The review as beuve.ura/1 XML, to paste into Claude Code.',
+/** The exports the dock offers as buttons; File › Export Review has all of them. */
+type DockExportTarget = Extract<UraExportTarget, 'agent-xml' | 'github'>;
+
+interface DockExport {
+  readonly label: string;
+  readonly title: string;
+}
+
+const dockExportTargets: readonly DockExportTarget[] = ['agent-xml', 'github'];
+
+const dockExports: Readonly<Record<DockExportTarget, DockExport>> = {
+  'agent-xml': {
+    label: 'Copy as XML',
+    title: 'Copy the review as XML for Claude Code (beuve.ura/1), summary included',
   },
-  {
-    target: 'github',
+  github: {
     label: 'Copy GitHub review (JSON)',
-    title: 'The body of POST /repos/{owner}/{repo}/pulls/{number}/reviews.',
+    title: 'The body of POST /repos/{owner}/{repo}/pulls/{number}/reviews, summary included',
   },
-];
+};
 
 /**
  * Zone 3: the Universal Review Artifact staging dock (ADR 0023, 0027). Lists the session's staged
@@ -336,7 +344,9 @@ export class BeuveUraDock extends LitElement {
       }
 
       .exports {
-        display: grid;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: var(--beuve-space-1);
         margin-block-start: var(--beuve-space-2);
       }
@@ -587,7 +597,7 @@ export class BeuveUraDock extends LitElement {
           ),
           export: withPayload(
             ({ target }) => {
-              return exports.find((entry) => entry.target === target)?.target;
+              return dockExportTargets.find((candidate) => candidate === target);
             },
             (target): void => {
               this.exportTo(target);
@@ -1225,22 +1235,7 @@ export class BeuveUraDock extends LitElement {
       </label>
       ${this.renderVerdictNote()}
       ${this.github === undefined ? nothing : this.renderGithub(this.github)}
-      <div class="exports">
-        ${exports
-          .filter((entry) => entry.target !== 'github' || this.github === undefined)
-          .map((entry) => {
-            return html`<button
-              class="button"
-              type="button"
-              title=${entry.title}
-              ?disabled=${!this.hasSession || this.exporting}
-              data-action="export"
-              data-target=${entry.target}
-            >
-              ${entry.label}
-            </button>`;
-          })}
-      </div>
+      ${this.renderExports()}
       ${
         this.notice === undefined
           ? nothing
@@ -1252,6 +1247,42 @@ export class BeuveUraDock extends LitElement {
           : nothing
       }
     </section>`;
+  }
+
+  /**
+   * The copy buttons: Copy as XML sits beside Post review when posting is offered (in
+   * `renderPostActions`), and here otherwise; the GitHub JSON copy only where posting isn't.
+   */
+  private renderExports(): TemplateResult | typeof nothing {
+    const targets: DockExportTarget[] = [];
+    if (this.github?.isSignedIn !== true) {
+      targets.push('agent-xml');
+    }
+    if (this.github === undefined) {
+      targets.push('github');
+    }
+    if (targets.length === 0) {
+      return nothing;
+    }
+    return html`<div class="exports">
+      ${targets.map((target) => {
+        return this.renderExportButton(target);
+      })}
+    </div>`;
+  }
+
+  private renderExportButton(target: DockExportTarget): TemplateResult {
+    const { label, title } = dockExports[target];
+    return html`<button
+      class="button"
+      type="button"
+      title=${title}
+      ?disabled=${!this.hasSession || this.exporting}
+      data-action="export"
+      data-target=${target}
+    >
+      ${label}
+    </button>`;
   }
 
   /**
@@ -1450,6 +1481,8 @@ export class BeuveUraDock extends LitElement {
     const { post } = github;
     if (post.kind === 'own-pull-request') {
       return html`<div class="actions">
+        ${this.renderExportButton('agent-xml')}
+        <span class="spacer"></span>
         <button
           class="button"
           type="button"
@@ -1476,6 +1509,7 @@ export class BeuveUraDock extends LitElement {
       label = 'Post again';
     }
     return html`<div class="actions">
+      ${this.renderExportButton('agent-xml')}
       <button
         type="button"
         class="button primary"
