@@ -142,6 +142,57 @@ describe('GithubController', () => {
     expect(selected).toStrictEqual([]);
   });
 
+  test('Show New Commits loads the new head without the moved-head note', async ({ expect }) => {
+    const { github, emit, selected } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:get-timeline': emptyTimelineReply() },
+    });
+    github.hostConnected();
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    github.showNewCommits();
+    await expect.poll(() => selected).toStrictEqual(['s1']);
+    github.reviewLoaded({ isNewHead: true });
+    expect(github.post).toStrictEqual({ kind: 'idle' });
+    expect(github.hasNewCommits).toBe(false);
+  });
+
+  test('Reload Review loads the new head without the moved-head note', async ({ expect }) => {
+    const { github, emit } = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:get-timeline': emptyTimelineReply(),
+        'github:open-pr': ok({ kind: 'opened', session: { id: 's1' } }),
+      },
+    });
+    github.hostConnected();
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    await github.reload(createSessionSummary(pullRequestSource()));
+    github.reviewLoaded({ isNewHead: true });
+    expect(github.post).toStrictEqual({ kind: 'idle' });
+  });
+
+  test('a new head the reviewer did not ask for keeps the note', async ({ expect }) => {
+    const { github, emit, selected } = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:get-timeline': emptyTimelineReply(),
+        'github:post-review': ok({ kind: 'failed', failure: 'head-moved', message: 'moved' }),
+      },
+    });
+    github.hostConnected();
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    github.showNewCommits();
+    github.reviewLoaded({ isNewHead: false });
+    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
+    github.reviewLoaded({ isNewHead: true });
+    expect(github.post).toStrictEqual({ kind: 'head-moved' });
+    github.cancelPost();
+    await github.postReview({});
+    await expect.poll(() => selected).toStrictEqual(['s1', 's1']);
+    github.reviewLoaded({ isNewHead: true });
+    expect(github.post).toStrictEqual({ kind: 'head-moved' });
+  });
+
   test('forgets the timeline when another session opens', async ({ expect }) => {
     const { github } = createGithubHarness({
       review: reviewOf(),
