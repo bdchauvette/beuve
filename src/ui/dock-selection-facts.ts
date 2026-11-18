@@ -5,4 +5,6 @@ export interface DockSelectionFacts {
   readonly isAddressed: boolean;
   /** Every one of them is withdrawn: Restore. */
   readonly isWithdrawn: boolean;
+  /** Every one of them blocks the merge: Mark as Not Blocking. */
+  readonly isBlocking: boolean;
 }

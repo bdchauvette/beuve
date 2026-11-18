@@ -9,16 +9,20 @@ import type {
   SetUraVerdictRequest,
   StageNoteProposalRequest,
   StageReviewFindingRequest,
-  DeleteUraItemRequest,
-  RestoreUraItemRequest,
+  DeleteUraItemsRequest,
+  EditUraItemsRequest,
+  RestoreUraItemsRequest,
   TransitionUraItemRequest,
   UpdateUraItemRequest,
   UraExportView,
   UraItemView,
   UraListView,
   UraDeletedView,
+  UraItemsChange,
+  UraItemsEditedView,
   UraOrderView,
   UraPlacementView,
+  UraRestoredView,
   UraStagedView,
   UraVerdictStateView,
   UraVerdictView,
@@ -63,6 +67,7 @@ import type {
 import type { UraPosting } from '#internal/ura/ura-posting.ts';
 import type { UraVerdictChoice } from '#internal/ura/ura-verdict-choice.ts';
 import { LruCache } from '#x/collections/lru-cache.ts';
+import { withResultTransaction } from '#sqlite/with-result-transaction.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -88,10 +93,12 @@ export interface UraServices {
   readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
-  /** Deletes an item of any status, keeping it in memory for {@link UraServices.restore}. */
-  readonly delete: (request: DeleteUraItemRequest) => IpcResult<UraDeletedView>;
-  /** Puts a recently deleted item back where it was; an older deletion is `item-not-found`. */
-  readonly restore: (request: RestoreUraItemRequest) => Promise<IpcResult<UraItemView>>;
+  /** One change to several items of a session, all or none (ADR 0142). */
+  readonly editMany: (request: EditUraItemsRequest) => Promise<IpcResult<UraItemsEditedView>>;
+  /** Deletes items of any status, keeping them in memory for {@link UraServices.restore}. */
+  readonly delete: (request: DeleteUraItemsRequest) => IpcResult<UraDeletedView>;
+  /** Puts a recent deletion's items back where they were; an older one is `not-found`. */
+  readonly restore: (request: RestoreUraItemsRequest) => IpcResult<UraRestoredView>;
   /** Stages a `/review` finding from its stored answer (ADR 0055); again returns its item. */
   readonly stageReviewFinding: (
     request: StageReviewFindingRequest,
@@ -129,13 +136,20 @@ export interface CompileArtifactOptions {
   readonly verdict?: UraVerdictView;
 }
 
-/** How many deletions {@link UraServices.restore} remembers. */
-const deletedItemCapacity = 20;
+/** How many deletions {@link UraServices.restore} remembers; one deletion may hold many items. */
+const deletionCapacity = 20;
 
-/** A deleted item and its session's dock order from before the deletion. */
-interface DeletedItem {
-  readonly item: UraItem;
+/** Deleted items of one session, and its dock order from before the deletion. */
+interface Deletion {
+  readonly sessionId: SessionId;
+  readonly items: readonly UraItem[];
   readonly order: readonly UraItemId[];
+}
+
+/** Items of one session, found by id, in the order asked for. */
+interface SessionItems {
+  readonly sessionId: SessionId;
+  readonly items: readonly UraItem[];
 }
 
 /** A staged item, and whether staging created it or found it already there. */
@@ -175,8 +189,8 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   const deps: UraDeps = context.deps;
   const listeners = new Set<(sessionId: string) => void>();
   const mappings = new LruCache<string, Promise<LineMapping | undefined>>(options.cacheSize ?? 64);
-  /** The latest deletions of this run, kept so Undo can put an item back in its place. */
-  const deletedItems = new LruCache<string, DeletedItem>(deletedItemCapacity);
+  /** The latest deletions of this run, kept so Undo can put their items back in their places. */
+  const deletions = new LruCache<string, Deletion>(deletionCapacity);
 
   /**
    * The session's verdict choice, dropped first if the head moved since it was made or staged
@@ -284,6 +298,45 @@ export function createUraServices(options: UraServicesOptions): UraServices {
     }
     const place = await placer(head.value, [item]);
     return ok(uraItemViewFrom(item, place(item), postingsFor(item.sessionId).get(item.id)));
+  };
+
+  /** The items `itemIds` names, which must all exist and share one session. */
+  const sessionItemsOf = (itemIds: readonly string[]): IpcResult<SessionItems> => {
+    const items: UraItem[] = [];
+    const distinct = new Set(itemIds);
+    for (const itemId of distinct) {
+      const found = findUraItem(db, itemId as UraItemId);
+      if (!found.ok) {
+        return uraFailure(logger, found.error);
+      }
+      items.push(found.value);
+    }
+    const [first] = items;
+    if (first === undefined) {
+      return err({ code: 'invalid-request', message: 'name at least one review item' });
+    }
+    if (items.some((item) => item.sessionId !== first.sessionId)) {
+      return err({ code: 'refused', message: 'the review items belong to different sessions' });
+    }
+    return ok({ sessionId: first.sessionId, items });
+  };
+
+  /** The status a status change asks for; marking addressed reads the session's head. */
+  const statusFor = async (
+    sessionId: SessionId,
+    to: Extract<UraItemsChange, { kind: 'status' }>['to'],
+  ): Promise<IpcResult<UraStatus>> => {
+    if (to === 'staged') {
+      return ok({ kind: 'staged' });
+    }
+    if (to === 'withdrawn') {
+      return ok({ kind: 'withdrawn' });
+    }
+    const head = await headOf(sessionId);
+    if (!head.ok) {
+      return head;
+    }
+    return ok({ kind: 'addressed', atSha: head.value.headSha, by: 'reviewer' });
   };
 
   const stored = <T>(result: StoreResult<T>): IpcResult<T> => {
@@ -546,41 +599,102 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return viewOne(moved.value);
     },
 
-    delete: ({ itemId }): IpcResult<UraDeletedView> => {
-      const found = findUraItem(db, itemId as UraItemId);
+    editMany: async ({ itemIds, change }): Promise<IpcResult<UraItemsEditedView>> => {
+      const found = sessionItemsOf(itemIds);
       if (!found.ok) {
-        return uraFailure(logger, found.error);
+        return found;
       }
-      const { sessionId } = found.value;
+      const { sessionId, items } = found.value;
+      let status: UraStatus | undefined;
+      if (change.kind === 'status') {
+        const asked = await statusFor(sessionId, change.to);
+        if (!asked.ok) {
+          return asked;
+        }
+        status = asked.value;
+      }
+      const now = Temporal.Now.instant();
+      const edited: UraItem[] = [];
+      for (const item of items) {
+        const next = changedItem(item, { change, status, now });
+        if (!next.ok) {
+          return uraFailure(logger, next.error);
+        }
+        if (next.value !== undefined) {
+          edited.push(next.value);
+        }
+      }
+      const saved = withResultTransaction(db, (): Result<void, UraStoreError> => {
+        for (const item of edited) {
+          const updated = updateUraItem(db, item);
+          if (!updated.ok) {
+            return updated;
+          }
+        }
+        return ok(undefined);
+      });
+      if (!saved.ok) {
+        return uraFailure(logger, saved.error);
+      }
+      if (edited.length > 0) {
+        changed(sessionId);
+      }
+      return ok({ sessionId, itemIds: edited.map((item) => item.id) });
+    },
+
+    delete: ({ itemIds }): IpcResult<UraDeletedView> => {
+      const found = sessionItemsOf(itemIds);
+      if (!found.ok) {
+        return found;
+      }
+      const { sessionId, items } = found.value;
       const listed = listUraItems(db, sessionId);
       if (!listed.ok) {
         return uraFailure(logger, listed.error);
       }
-      const deleted = deleteUraItem(db, found.value.id);
+      const deleted = withResultTransaction(db, (): Result<void, UraStoreError> => {
+        for (const item of items) {
+          const removed = deleteUraItem(db, item.id);
+          if (!removed.ok) {
+            return removed;
+          }
+        }
+        return ok(undefined);
+      });
       if (!deleted.ok) {
         return uraFailure(logger, deleted.error);
       }
-      deletedItems.set(found.value.id, {
-        item: found.value,
+      const deletionId = deps.newId();
+      deletions.set(deletionId, {
+        sessionId,
+        items,
         order: listed.value.map((entry) => entry.id),
       });
       changed(sessionId);
-      return ok({ itemId, sessionId });
+      return ok({ deletionId, sessionId, itemIds: items.map((item) => item.id) });
     },
 
-    restore: async ({ itemId }): Promise<IpcResult<UraItemView>> => {
-      const kept = deletedItems.get(itemId);
+    restore: ({ deletionId }): IpcResult<UraRestoredView> => {
+      const kept = deletions.get(deletionId);
       if (kept === undefined) {
-        return uraFailure(logger, { kind: 'item-not-found', id: itemId as UraItemId });
+        return err({ code: 'not-found', message: 'that deletion can no longer be undone' });
       }
-      const inserted = insertUraItem(db, kept.item);
-      if (!inserted.ok) {
-        return uraFailure(logger, inserted.error);
+      const restored = withResultTransaction(db, (): Result<void, UraStoreError> => {
+        for (const item of kept.items) {
+          const inserted = insertUraItem(db, item);
+          if (!inserted.ok) {
+            return inserted;
+          }
+        }
+        putBackInOrder(db, kept);
+        return ok(undefined);
+      });
+      if (!restored.ok) {
+        return uraFailure(logger, restored.error);
       }
-      deletedItems.delete(itemId);
-      putBackInOrder(db, kept);
-      changed(kept.item.sessionId);
-      return viewOne(kept.item);
+      deletions.delete(deletionId);
+      changed(kept.sessionId);
+      return ok({ sessionId: kept.sessionId, itemIds: kept.items.map((item) => item.id) });
     },
 
     reorder: ({ sessionId, itemIds }): IpcResult<UraOrderView> => {
@@ -714,12 +828,46 @@ export function createUraServices(options: UraServicesOptions): UraServices {
   };
 }
 
+/** One item's share of an `ura:edit-many`: the change, the status it asks for, and when. */
+interface ItemChange {
+  readonly change: UraItemsChange;
+  readonly status: UraStatus | undefined;
+  readonly now: Temporal.Instant;
+}
+
+/** The item after the change, or `undefined` when it is in the asked-for state already. */
+function changedItem(
+  item: UraItem,
+  { change, status, now }: ItemChange,
+): Result<UraItem | undefined, UraItemError> {
+  switch (change.kind) {
+    case 'status': {
+      if (status === undefined || item.status.kind === status.kind) {
+        return ok(undefined);
+      }
+      return transitionUraItem(item, status, now);
+    }
+    case 'severity': {
+      if (item.severity === change.severity) {
+        return ok(undefined);
+      }
+      return editUraItem(item, { severity: change.severity }, now);
+    }
+    case 'blocking': {
+      if (item.blocking === change.blocking) {
+        return ok(undefined);
+      }
+      return editUraItem(item, { blocking: change.blocking }, now);
+    }
+  }
+}
+
 /**
- * Moves a just-restored item (appended last) back to where it was: the old order, minus items
- * deleted since, with items added since after it. A refused order leaves it last.
+ * Moves just-restored items (appended last) back to where they were: the old order, minus items
+ * deleted since, with items added since after them. A refused order leaves them last.
  */
-function putBackInOrder(db: DatabaseSync, { item, order }: DeletedItem): void {
-  const current = listUraItems(db, item.sessionId);
+function putBackInOrder(db: DatabaseSync, { sessionId, order }: Deletion): void {
+  const current = listUraItems(db, sessionId);
   if (!current.ok) {
     return;
   }
@@ -727,7 +875,7 @@ function putBackInOrder(db: DatabaseSync, { item, order }: DeletedItem): void {
   const wanted = order.filter((id) => present.has(id));
   const placed = new Set(wanted);
   const added = current.value.map((entry) => entry.id).filter((id) => !placed.has(id));
-  reorderUraItems(db, item.sessionId, [...wanted, ...added]);
+  reorderUraItems(db, sessionId, [...wanted, ...added]);
 }
 
 function deriveStagedVerdict(items: readonly UraItem[]): UraVerdictView {

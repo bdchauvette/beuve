@@ -128,15 +128,9 @@ export interface UraReorderDetail {
   readonly itemIds: readonly string[];
 }
 
-/** A staged item and the status it moves to. */
-export interface UraTransitionDetail {
-  readonly itemId: string;
-  readonly to: 'staged' | 'withdrawn' | 'addressed';
-}
-
-/** A staged, withdrawn or addressed item to delete. */
+/** Staged, withdrawn or addressed notes to delete, as one deletion (ADR 0142). */
 export interface UraDeleteDetail {
-  readonly itemId: string;
+  readonly itemIds: readonly string[];
 }
 
 /** The verdict the reviewer chose; `undefined` goes back to the derived one. */

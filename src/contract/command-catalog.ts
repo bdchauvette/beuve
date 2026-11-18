@@ -53,6 +53,8 @@ export interface CommandKeys {
 export interface InPlaceKeys {
   readonly area: 'Review notes' | 'Chat' | 'Portals' | 'Sheets' | 'Files and lists';
   readonly keys: readonly string[];
+  /** The keys on Linux when they differ (Ctrl where macOS has ⌘). */
+  readonly linuxKeys?: readonly string[];
 }
 
 /** What the palette and a menu call a command in one state (ADR 0142). */
@@ -863,6 +865,27 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'dock-blocking',
+    title: 'Mark Note as Blocking',
+    label: 'Mark as Blocking',
+    checkedNames: { title: 'Mark Note as Not Blocking', label: 'Mark as Not Blocking' },
+    menu: { menu: 'review', group: 5, submenu: 'Note' },
+    context: ['note'],
+    when: ['dock-item'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'dock-change-label',
+    title: 'Change Note Label…',
+    label: 'Change Label…',
+    menu: { menu: 'review', group: 5, submenu: 'Note' },
+    context: ['note'],
+    when: ['dock-item'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'dock-addressed',
     title: 'Mark Note as Addressed',
     label: 'Mark as Addressed',
@@ -907,9 +930,33 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'dock-select-all',
+    title: 'Select All Notes',
+    label: 'Select All',
+    menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 3 },
+    inPlace: { area: 'Review notes', keys: ['Cmd+A'], linuxKeys: ['Ctrl+A'] },
+    when: ['dock-item'],
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'dock-move',
     title: 'Next or Previous Note',
     inPlace: { area: 'Review notes', keys: ['Up', 'Down'] },
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'dock-extend-selection',
+    title: 'Select the Next or Previous Note Too',
+    inPlace: { area: 'Review notes', keys: ['Shift+Up', 'Shift+Down'] },
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
+    id: 'dock-clear-selection',
+    title: 'Clear the Note Selection',
+    inPlace: { area: 'Review notes', keys: ['Escape'] },
     windows: ['main'],
     handler: 'window',
   },

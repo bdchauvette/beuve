@@ -68,12 +68,20 @@ export function shortcutSectionsFor(
         .map((command) => {
           return {
             title: shortcutTitleOf(command),
-            keys: (command.inPlace?.keys ?? []).map((key) => displayAccelerator(key, platform)),
+            keys: inPlaceKeysOf(command, platform).map((key) => displayAccelerator(key, platform)),
           };
         }),
     };
   });
   return [...menus, ...inPlace].filter((section) => section.rows.length > 0);
+}
+
+/** A command's in-place keys on `platform`. */
+function inPlaceKeysOf(command: CatalogCommand, platform: KeyPlatform): readonly string[] {
+  if (platform === 'linux' && command.inPlace?.linuxKeys !== undefined) {
+    return command.inPlace.linuxKeys;
+  }
+  return command.inPlace?.keys ?? [];
 }
 
 /** The title, or both names of a command whose name follows the state (ADR 0142). */

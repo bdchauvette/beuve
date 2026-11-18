@@ -2,6 +2,7 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 import type {
   BeuveApi,
+  EditUraItemsRequest,
   IpcResult,
   UraExportTarget,
   UraItemView,
@@ -25,8 +26,14 @@ export interface UraUpdateDetail {
   readonly suggestedPatch?: string;
 }
 
-/** Where a staged item can move to from the dock. */
-export type UraTransitionTarget = 'staged' | 'withdrawn' | 'addressed';
+/** One change to the dock's selected notes (ADR 0142). */
+export type UraEditManyDetail = EditUraItemsRequest;
+
+/** A deletion Undo can put back, and the titles of the notes it holds. */
+export interface UraDeletion {
+  readonly deletionId: string;
+  readonly titles: readonly string[];
+}
 
 /** What the staged review needs from the window around it. */
 export interface UraEnvironment {
@@ -232,34 +239,33 @@ export class UraController implements ReactiveController {
     await this.call(async (bridge) => bridge.invoke('ura:update', detail));
   }
 
-  async transition(itemId: string, to: UraTransitionTarget): Promise<void> {
-    await this.call(async (bridge) => {
-      return bridge.invoke('ura:transition', { itemId, to });
-    });
+  /** One change to several notes, all or none, in one call (ADR 0142). */
+  async editMany(detail: UraEditManyDetail): Promise<void> {
+    await this.call(async (bridge) => bridge.invoke('ura:edit-many', detail));
   }
 
-  /** Deletes an item; the deleted item's title, or `undefined` when the call failed. */
-  async delete(itemId: string): Promise<string | undefined> {
+  /** Deletes notes as one deletion; it, or `undefined` when the call failed. */
+  async delete(itemIds: readonly string[]): Promise<UraDeletion | undefined> {
     const bridge = this.environment.bridge();
-    const item = this.snapshot.items.find((entry) => entry.id === itemId);
-    if (bridge === undefined || item === undefined) {
+    const items = this.snapshot.items.filter((entry) => itemIds.includes(entry.id));
+    if (bridge === undefined || items.length === 0) {
       return undefined;
     }
-    const result = await bridge.invoke('ura:delete', { itemId });
+    const result = await bridge.invoke('ura:delete', { itemIds: items.map((item) => item.id) });
     this.noteFailure(result);
     if (!result.ok) {
       return undefined;
     }
-    return item.title;
+    return { deletionId: result.value.deletionId, titles: items.map((item) => item.title) };
   }
 
-  /** Puts a deleted item back where it was; whether it worked. */
-  async restore(itemId: string): Promise<boolean> {
+  /** Puts a deletion's notes back where they were; whether it worked. */
+  async restore(deletionId: string): Promise<boolean> {
     const bridge = this.environment.bridge();
     if (bridge === undefined) {
       return false;
     }
-    const result = await bridge.invoke('ura:restore', { itemId });
+    const result = await bridge.invoke('ura:restore', { deletionId });
     this.noteFailure(result);
     return result.ok;
   }

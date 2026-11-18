@@ -92,7 +92,9 @@ import type { SessionController } from './session-controller.ts';
 import type { SettingsController } from './settings-controller.ts';
 import type { UraController } from './ura-controller.ts';
 import type { EditorPlace } from './review-edits-controller.ts';
-import type { UraUpdateDetail } from './ura-controller.ts';
+import type { UraEditManyDetail, UraUpdateDetail } from './ura-controller.ts';
+import { describeNoteDeletion } from './describe-note-deletion.ts';
+import { describeNoteRestore } from './describe-note-restore.ts';
 import type { GithubFetch, GithubPostDetail } from './github-controller.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
@@ -134,7 +136,6 @@ import type {
   UraJumpDetail,
   UraDeleteDetail,
   UraReorderDetail,
-  UraTransitionDetail,
   UraVerdictDetail,
   UrlDetail,
 } from './app-event-details.ts';
@@ -601,12 +602,12 @@ export class BeuveReview extends LitElement {
     void this.setDisplay(event.detail);
   };
 
-  private readonly onUraTransition = (event: CustomEvent<UraTransitionDetail>): void => {
-    void this.ura.transition(event.detail.itemId, event.detail.to);
+  private readonly onUraEditMany = (event: CustomEvent<UraEditManyDetail>): void => {
+    void this.ura.editMany(event.detail);
   };
 
   private readonly onUraDelete = (event: CustomEvent<UraDeleteDetail>): void => {
-    void this.deleteNote(event.detail.itemId);
+    void this.deleteNotes(event.detail.itemIds);
   };
 
   private readonly onUraReorder = (event: CustomEvent<UraReorderDetail>): void => {
@@ -647,7 +648,8 @@ export class BeuveReview extends LitElement {
    */
   private contextReference: FileReference | undefined;
   /** The note the latest Delete Note removed, for Undo Delete Note. */
-  private lastDeletedNoteId: string | undefined;
+  /** The latest deletion of notes, which Undo Delete Note puts back, and how many it holds. */
+  private lastDeletion: { readonly deletionId: string; readonly count: number } | undefined;
   /** The files chat answers may name, rebuilt when the review or the head's tree changes. */
   private referenceCache:
     | {
@@ -919,32 +921,32 @@ export class BeuveReview extends LitElement {
     }
   }
 
-  /** Deletes a note and says so, with an Undo that puts it back (the latest deletion only). */
-  private async deleteNote(itemId: string): Promise<void> {
-    const title = await this.ura.delete(itemId);
-    if (title === undefined) {
+  /**
+   * Deletes notes and says so, with an Undo that puts them all back (the latest deletion only,
+   * ADR 0142).
+   */
+  private async deleteNotes(itemIds: readonly string[]): Promise<void> {
+    const deletion = await this.ura.delete(itemIds);
+    if (deletion === undefined) {
       return;
     }
-    this.lastDeletedNoteId = itemId;
+    this.lastDeletion = { deletionId: deletion.deletionId, count: deletion.titles.length };
     this.showNotice({
       tone: 'info',
-      text: `Deleted “${revealFormatControls(title)}”.`,
+      text: describeNoteDeletion(deletion.titles.map((title) => revealFormatControls(title))),
       action: { label: 'Undo', command: 'undo-delete-note' },
     });
   }
 
   private async undoDeleteNote(): Promise<void> {
-    const itemId = this.lastDeletedNoteId;
-    if (itemId === undefined) {
+    const deletion = this.lastDeletion;
+    if (deletion === undefined) {
       this.showNotice({ tone: 'info', text: 'No deleted note to bring back.' });
       return;
     }
-    this.lastDeletedNoteId = undefined;
-    if (await this.ura.restore(itemId)) {
-      this.showNotice({ tone: 'info', text: 'Note restored.' });
-    } else {
-      this.showNotice({ tone: 'error', text: 'That note can no longer be restored.' });
-    }
+    this.lastDeletion = undefined;
+    const isRestored = await this.ura.restore(deletion.deletionId);
+    this.showNotice(describeNoteRestore({ isRestored, count: deletion.count }));
   }
 
   /** Save Progress, and say so with an Undo while the save recorded a checkpoint (ADR 0140). */
@@ -1390,7 +1392,7 @@ export class BeuveReview extends LitElement {
       @beuve-open-editor=${this.onOpenEditor}
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-ura-edit-suggestion=${this.onUraEditSuggestion}
-      @beuve-ura-transition=${this.onUraTransition}
+      @beuve-ura-edit-many=${this.onUraEditMany}
       @beuve-ura-delete=${this.onUraDelete}
       @beuve-ura-reorder=${this.onUraReorder}
       @beuve-ura-export=${this.onUraExport}

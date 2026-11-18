@@ -2,6 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { describe } from 'vitest';
 
+import type { UraItemView } from '#contract/ipc-contract.ts';
+
 import { appendChatMessage } from '#internal/chat/append-chat-message.ts';
 import type { ChatMessageId, CommitSha, SessionId } from '#internal/chat/chat-message.ts';
 import type { ChatFinding } from '#internal/chat/chat-review.ts';
@@ -186,31 +188,128 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     const third = await note({ startLine: 2, endLine: 3, title: 'Third' });
     okValueFrom(await services.ura.transition({ itemId: second.id, to: 'withdrawn' }));
 
-    expect(okValueFrom(services.ura.delete({ itemId: second.id }))).toStrictEqual({
-      itemId: second.id,
+    const deletion = okValueFrom(services.ura.delete({ itemIds: [second.id] }));
+    expect(deletion).toStrictEqual({
+      deletionId: deletion.deletionId,
       sessionId,
+      itemIds: [second.id],
     });
     expect(
       okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.id),
     ).toStrictEqual([first.id, third.id]);
-    expect(services.ura.delete({ itemId: second.id })).toMatchObject({
+    expect(services.ura.delete({ itemIds: [second.id] })).toMatchObject({
       ok: false,
       error: { code: 'not-found' },
     });
 
-    const restored = okValueFrom(await services.ura.restore({ itemId: second.id }));
-    expect(restored).toMatchObject({
-      id: second.id,
-      title: 'Second',
-      status: { kind: 'withdrawn' },
+    expect(okValueFrom(services.ura.restore({ deletionId: deletion.deletionId }))).toStrictEqual({
+      sessionId,
+      itemIds: [second.id],
     });
-    expect(
-      okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.id),
-    ).toStrictEqual([first.id, second.id, third.id]);
-    await expect(services.ura.restore({ itemId: second.id })).resolves.toMatchObject({
+    const listed = okValueFrom(await services.ura.list({ sessionId })).items;
+    expect(listed.map((item) => item.id)).toStrictEqual([first.id, second.id, third.id]);
+    expect(listed[1]).toMatchObject({ title: 'Second', status: { kind: 'withdrawn' } });
+    expect(services.ura.restore({ deletionId: deletion.deletionId })).toMatchObject({
       ok: false,
       error: { code: 'not-found' },
     });
+  });
+
+  test('deletes several notes as one deletion and puts them all back in place', async ({
+    expect,
+    services,
+    sessionId,
+    note,
+  }) => {
+    const first = await note({ startLine: 2, endLine: 3, title: 'First' });
+    const second = await note({ startLine: 2, endLine: 3, title: 'Second' });
+    const third = await note({ startLine: 2, endLine: 3, title: 'Third' });
+    const fourth = await note({ startLine: 2, endLine: 3, title: 'Fourth' });
+    const ids = async (): Promise<string[]> => {
+      return okValueFrom(await services.ura.list({ sessionId })).items.map((item) => item.id);
+    };
+
+    expect(services.ura.delete({ itemIds: [first.id, reviewMessageId()] })).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+    await expect(ids()).resolves.toStrictEqual([first.id, second.id, third.id, fourth.id]);
+
+    const deletion = okValueFrom(services.ura.delete({ itemIds: [third.id, first.id] }));
+    expect(deletion.itemIds).toStrictEqual([third.id, first.id]);
+    await expect(ids()).resolves.toStrictEqual([second.id, fourth.id]);
+    okValueFrom(services.ura.restore({ deletionId: deletion.deletionId }));
+    await expect(ids()).resolves.toStrictEqual([first.id, second.id, third.id, fourth.id]);
+  });
+
+  test('changes the status, label or Blocking of several notes at once, all or none', async ({
+    expect,
+    services,
+    sessionId,
+    note,
+  }) => {
+    const first = await note({ startLine: 2, endLine: 3, title: 'First' });
+    const second = await note({ startLine: 2, endLine: 3, title: 'Second' });
+    const listed = async (): Promise<readonly UraItemView[]> => {
+      return okValueFrom(await services.ura.list({ sessionId })).items;
+    };
+    const statuses = async (): Promise<string[]> => {
+      const items = await listed();
+      return items.map((item) => item.status.kind);
+    };
+    const labels = async (): Promise<(string | boolean)[][]> => {
+      const items = await listed();
+      return items.map((item) => {
+        return [item.severity, item.blocking];
+      });
+    };
+
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [first.id],
+        change: { kind: 'status', to: 'withdrawn' },
+      }),
+    );
+    expect(
+      okValueFrom(
+        await services.ura.editMany({
+          itemIds: [first.id, second.id],
+          change: { kind: 'status', to: 'withdrawn' },
+        }),
+      ),
+    ).toStrictEqual({ sessionId, itemIds: [second.id] });
+    await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'withdrawn']);
+
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [first.id, second.id],
+        change: { kind: 'severity', severity: 'nitpick' },
+      }),
+    );
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [second.id, first.id],
+        change: { kind: 'blocking', blocking: true },
+      }),
+    );
+    await expect(labels()).resolves.toStrictEqual([
+      ['nitpick', true],
+      ['nitpick', true],
+    ]);
+
+    okValueFrom(
+      await services.ura.editMany({
+        itemIds: [second.id],
+        change: { kind: 'status', to: 'staged' },
+      }),
+    );
+    await expect(
+      services.ura.editMany({
+        itemIds: [second.id, first.id],
+        change: { kind: 'status', to: 'addressed' },
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'refused' } });
+    await expect(statuses()).resolves.toStrictEqual(['withdrawn', 'staged']);
   });
 
   test('stages a /review finding from its stored answer, once, restaging a withdrawn one', async ({

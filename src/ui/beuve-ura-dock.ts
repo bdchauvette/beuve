@@ -27,7 +27,11 @@ import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state
 import { describeHarvest } from './describe-harvest.ts';
 import { describeEditCounts } from './describe-edit-counts.ts';
 import { dropUraItems } from './drop-ura-items.ts';
-import { moveUraItem } from './move-ura-item.ts';
+import { moveUraItems } from './move-ura-items.ts';
+import { noteStatusChange } from './note-status-change.ts';
+import { dockSelectionAfter } from './dock-selection-after.ts';
+import type { DockGesture, DockSelection } from './dock-selection-after.ts';
+import { countNoun } from './count-noun.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
@@ -75,15 +79,16 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
  * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the
  * export order, as dragging a staged note among the staged ones does (ADR 0142); a double-click
- * edits it too (ADR 0129); Review ▸ Note and the
- * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
- * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
+ * edits it too (ADR 0129). ⇧↑/⇧↓, Shift+click and ⌘/Ctrl+click select several notes, ⌘A / Ctrl+A
+ * selects them all and Escape clears the selection; the Note commands but Show and Edit then act
+ * on every selected note, and a bar above the list shows the count and relabels them (ADR 0142).
+ * Review ▸ Note and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
+ * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
  * a suggested patch say `patch` and preview it under the cursor; the editor can re-edit the
  * suggestion in the diff stream or remove it (ADR 0043). Presentational: emits
- * `beuve-ura-edit-suggestion`,
- * `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-transition`, `beuve-ura-delete`, `beuve-ura-reorder` and
- * `beuve-ura-export`; `beuve-app` does the IPC.
+ * `beuve-ura-edit-suggestion`, `beuve-ura-jump`, `beuve-ura-update`, `beuve-ura-edit-many`,
+ * `beuve-ura-delete`, `beuve-ura-reorder` and `beuve-ura-export`; `beuve-app` does the IPC.
  */
 @customElement('beuve-ura-dock')
 export class BeuveUraDock extends LitElement {
@@ -137,6 +142,22 @@ export class BeuveUraDock extends LitElement {
 
       li.done {
         opacity: 0.6;
+      }
+
+      li.selected {
+        background: var(--beuve-accent-soft);
+      }
+
+      .selection {
+        display: flex;
+        align-items: center;
+        gap: var(--beuve-space-2);
+        margin-block-end: var(--beuve-space-1);
+        font: var(--beuve-font-small);
+      }
+
+      .selection-count {
+        color: var(--beuve-text-muted);
       }
 
       li.dragging {
@@ -410,6 +431,10 @@ export class BeuveUraDock extends LitElement {
   private cursorFollows: string | undefined;
 
   private readonly onLabelChange = (event: CustomEvent<UraLabelChange>): void => {
+    if (isInSelectionBar(event)) {
+      this.changeSelectedLabel(event.detail);
+      return;
+    }
     this.editingSeverity = event.detail.severity;
     this.editingBlocking = event.detail.blocking;
   };
@@ -417,19 +442,41 @@ export class BeuveUraDock extends LitElement {
   /** `:shortcode:` emoji in the editor's title and body and the review summary (ADR 0143). */
   private readonly emoji = new EmojiCompletion(this);
 
-  /** The dock's in-place keys (ADR 0068): ↑/↓ move, Return shows, Space edits, Delete withdraws, ⌥↑/⌥↓ reorder. */
+  /**
+   * The dock's in-place keys (ADR 0068, 0142): ↑/↓ move, ⇧↑/⇧↓ extend the selection, ⌘A / Ctrl+A
+   * selects every note and Escape clears the selection, Return shows, Space edits, Delete
+   * withdraws, ⌥↑/⌥↓ reorder.
+   */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.ctrlKey || event.metaKey || event.defaultPrevented) {
+    if (event.defaultPrevented) {
       return;
     }
-    if (isTextEntry(event) || isInEditor(event)) {
+    if (isInSelectionBar(event)) {
+      this.selectionBarKey(event);
+      return;
+    }
+    const isEditing = isTextEntry(event) || isInEditor(event);
+    if (!isEditing && this.isSelectAll(event)) {
+      event.preventDefault();
+      this.runCommand('dock-select-all');
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
+    if (isEditing) {
       this.editorKey(event);
       return;
     }
     const step = ({ ArrowDown: 1, ArrowUp: -1 } as const)[event.key];
-    if (step !== undefined && !event.altKey && !event.shiftKey) {
+    if (step !== undefined && !event.altKey) {
       event.preventDefault();
-      this.moveCursor(step);
+      this.moveCursor(step, event.shiftKey);
+      return;
+    }
+    if (event.key === 'Escape' && this.selection.selected.length > 0) {
+      event.preventDefault();
+      this.selection = { selected: [], anchor: undefined };
       return;
     }
     let key = event.key;
@@ -464,6 +511,8 @@ export class BeuveUraDock extends LitElement {
   @property({ attribute: false }) accessor github: GithubDockState | undefined;
 
   @state() accessor cursor = 0;
+  /** The notes picked besides the cursor (ADR 0142); empty is the cursor's note alone. */
+  @state() accessor selection: DockSelection = { selected: [], anchor: undefined };
   /** Where a note being dragged would land (ADR 0142); absent while nothing is dragged over one. */
   @state() accessor dropTarget: DropTarget | undefined;
   /** The notes being dragged, while a drag from the list runs. */
@@ -498,12 +547,16 @@ export class BeuveUraDock extends LitElement {
             ({ itemId }) => {
               return this.itemOf(itemId);
             },
-            (found): void => {
-              this.cursor = this.ordered().indexOf(found);
+            (found, event): void => {
+              this.clickItem(found, event);
             },
           ),
           editor: (_data, event): void => {
             event.stopPropagation();
+          },
+          'clear-selection': (_data, event): void => {
+            event.stopPropagation();
+            this.selection = { selected: [], anchor: undefined };
           },
           'cancel-edit': (_data, event): void => {
             event.stopPropagation();
@@ -536,6 +589,14 @@ export class BeuveUraDock extends LitElement {
               this.exportTo(target);
             },
           ),
+        },
+        // A Shift+click extends the selection instead of selecting text (ADR 0142).
+        mousedown: {
+          item: (_data, event): void => {
+            if (event.shiftKey) {
+              event.preventDefault();
+            }
+          },
         },
         // ADR 0142: staged notes drag to a new place among the staged ones.
         dragstart: {
@@ -615,11 +676,79 @@ export class BeuveUraDock extends LitElement {
     return this.items.find((item) => item.id === itemId);
   }
 
-  private moveCursor(step: 1 | -1): void {
-    const ordered = this.ordered();
-    this.cursor = Math.min(Math.max(0, this.cursor + step), Math.max(0, ordered.length - 1));
+  /** Moves the cursor a note; with Shift the selection grows or shrinks with it (ADR 0142). */
+  private moveCursor(step: 1 | -1, isExtending: boolean): void {
+    const order = this.ordered().map((item) => item.id);
+    const from = order[this.cursor];
+    this.cursor = Math.min(Math.max(0, this.cursor + step), Math.max(0, order.length - 1));
+    const to = order[this.cursor];
     this.editingId = undefined;
+    if (isExtending && from !== undefined && to !== undefined) {
+      this.select({ kind: 'extend', from, to });
+    } else {
+      this.select({ kind: 'move' });
+    }
     void this.revealCursor();
+  }
+
+  /** A click puts the cursor on the note; Shift extends the selection and ⌘/Ctrl toggles it. */
+  private clickItem(item: UraItemView, event: MouseEvent): void {
+    const order = this.ordered().map((entry) => entry.id);
+    const from = order[this.cursor] ?? item.id;
+    this.cursor = order.indexOf(item.id);
+    if (event.shiftKey) {
+      this.select({ kind: 'extend', from, to: item.id });
+    } else if (this.isToggleClick(event)) {
+      this.select({ kind: 'toggle', from, to: item.id });
+    } else {
+      this.select({ kind: 'move' });
+    }
+  }
+
+  private select(gesture: DockGesture): void {
+    this.selection = dockSelectionAfter(this.selection, {
+      gesture,
+      order: this.ordered().map((item) => item.id),
+    });
+  }
+
+  /** ⌘-click on macOS, Ctrl+click elsewhere (on macOS Ctrl+click opens the context menu). */
+  private isToggleClick(event: MouseEvent): boolean {
+    if (keyPlatformOf(this.platform) === 'mac') {
+      return event.metaKey;
+    }
+    return event.ctrlKey;
+  }
+
+  /** ⌘A on macOS, Ctrl+A elsewhere: the dock's Select All Notes while the list has the focus. */
+  private isSelectAll(event: KeyboardEvent): boolean {
+    const isMac = keyPlatformOf(this.platform) === 'mac';
+    let hasModifier = event.ctrlKey && !event.metaKey;
+    if (isMac) {
+      hasModifier = event.metaKey && !event.ctrlKey;
+    }
+    return hasModifier && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a';
+  }
+
+  /** The selection bar's label menu: a label choice relabels every note, Blocking flips them all. */
+  private changeSelectedLabel(change: UraLabelChange): void {
+    const targets = this.targetItems();
+    const itemIds = targets.map((item) => item.id);
+    if (itemIds.length === 0) {
+      return;
+    }
+    const isBlocking = targets.every((item) => item.blocking);
+    if (change.blocking !== isBlocking) {
+      this.emit('beuve-ura-edit-many', {
+        itemIds,
+        change: { kind: 'blocking', blocking: change.blocking },
+      });
+      return;
+    }
+    this.emit('beuve-ura-edit-many', {
+      itemIds,
+      change: { kind: 'severity', severity: change.severity },
+    });
   }
 
   /** Staged items first, in export order, then withdrawn and addressed ones. */
@@ -654,16 +783,18 @@ export class BeuveUraDock extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
-  private move(item: UraItemView, step: 1 | -1): void {
-    const staged = new Set(
-      this.items.filter((entry) => entry.status.kind === 'staged').map((entry) => entry.id),
-    );
+  /** Moves the notes a step among the staged ones; the cursor stays on its note. */
+  private move(items: readonly UraItemView[], step: 1 | -1): void {
     const order = this.items.map((entry) => entry.id);
-    const moved = moveUraItem(order, { id: item.id, step, movable: staged });
+    const moved = moveUraItems(order, {
+      ids: items.map((item) => item.id),
+      step,
+      movable: this.stagedIds(),
+    });
     if (moved.every((id, index) => id === order[index])) {
       return;
     }
-    this.cursor = Math.min(Math.max(0, this.cursor + step), staged.size - 1);
+    this.cursorFollows = this.cursorItem()?.id;
     this.emit('beuve-ura-reorder', { itemIds: moved });
   }
 
@@ -673,7 +804,11 @@ export class BeuveUraDock extends LitElement {
       event.preventDefault();
       return;
     }
+    const selected = this.targetItems().filter((entry) => entry.status.kind === 'staged');
     this.draggedIds = [item.id];
+    if (selected.some((entry) => entry.id === item.id)) {
+      this.draggedIds = selected.map((entry) => entry.id);
+    }
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(dragType, this.draggedIds.join(' '));
   }
@@ -735,10 +870,6 @@ export class BeuveUraDock extends LitElement {
     );
   }
 
-  private transition(item: UraItemView, to: 'staged' | 'withdrawn' | 'addressed'): void {
-    this.emit('beuve-ura-transition', { itemId: item.id, to });
-  }
-
   private toggleEditor(item: UraItemView): void {
     if (this.editingId === item.id) {
       this.editingId = undefined;
@@ -747,25 +878,67 @@ export class BeuveUraDock extends LitElement {
     this.openEditor(item);
   }
 
-  private openEditor(item: UraItemView): void {
+  private openEditor(item: UraItemView, focus: 'title' | 'label' = 'title'): void {
     this.editingId = item.id;
     this.editingSeverity = item.severity;
     this.editingBlocking = item.blocking;
-    void this.focusEditor();
+    void this.focusEditor(focus);
   }
 
-  /** Withdraw or Mark Addressed, or back to staged when the item is that already. */
-  private toggleStatus(item: UraItemView, status: 'withdrawn' | 'addressed'): void {
-    if (item.status.kind === status) {
-      this.transition(item, 'staged');
+  /** Withdraw or Mark Addressed, or back to staged when every note is that already (ADR 0142). */
+  private toggleStatus(items: readonly UraItemView[], status: 'withdrawn' | 'addressed'): void {
+    const change = noteStatusChange(items, status);
+    if (change !== undefined) {
+      this.emit('beuve-ura-edit-many', change);
+    }
+  }
+
+  /** Mark as Blocking, or Not Blocking when every note blocks already. */
+  private toggleBlocking(items: readonly UraItemView[]): void {
+    if (items.length === 0) {
       return;
     }
-    this.transition(item, status);
+    this.emit('beuve-ura-edit-many', {
+      itemIds: items.map((item) => item.id),
+      change: { kind: 'blocking', blocking: items.some((item) => !item.blocking) },
+    });
   }
 
-  private async focusEditor(): Promise<void> {
+  /**
+   * Change Label…: the selection bar's label menu takes the keyboard; with no selection, the
+   * cursor's note opens in its editor with the keyboard on its label.
+   */
+  private changeLabel(current: UraItemView | undefined): void {
+    if (this.selection.selected.length > 0) {
+      void this.updateComplete.then(() => {
+        this.renderRoot.querySelector<HTMLElement>('.selection beuve-ura-label-menu')?.focus();
+      });
+      return;
+    }
+    if (current === undefined) {
+      return;
+    }
+    this.openEditor(current, 'label');
+  }
+
+  private async focusEditor(focus: 'title' | 'label'): Promise<void> {
     await this.updateComplete;
+    if (focus === 'label') {
+      this.renderRoot.querySelector<HTMLElement>('.editor beuve-ura-label-menu')?.focus();
+      return;
+    }
     this.renderRoot.querySelector<HTMLInputElement>('.editor input')?.focus();
+  }
+
+  /** Escape in the selection bar clears the selection and gives the keyboard back to the list. */
+  private selectionBarKey(event: KeyboardEvent): void {
+    event.stopPropagation();
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    this.selection = { selected: [], anchor: undefined };
+    this.focus();
   }
 
   /** In the editor, ⌘/Ctrl+Enter is handled by the form; Escape closes it, keeping the cursor. */
@@ -836,8 +1009,10 @@ export class BeuveUraDock extends LitElement {
     const labels = describeUraItem(item);
     const isDone = item.status.kind !== 'staged';
     const status = statusText(item);
+    const isSelected = this.selection.selected.includes(item.id);
     const classes = [
       index === this.cursor && 'cursor',
+      isSelected && 'selected',
       isDone && 'done',
       this.draggedIds.includes(item.id) && 'dragging',
       this.dropTarget?.id === item.id && `drop-${this.dropTarget.side}`,
@@ -846,6 +1021,7 @@ export class BeuveUraDock extends LitElement {
       class=${classes.join(' ')}
       data-action="item"
       data-item-id=${item.id}
+      aria-selected=${isSelected ? 'true' : 'false'}
       draggable=${isDone || this.editingId === item.id ? 'false' : 'true'}
     >
       <div class="meta">
@@ -889,6 +1065,41 @@ export class BeuveUraDock extends LitElement {
       }
       ${this.editingId === item.id ? this.renderEditor(item) : nothing}
     </li>`;
+  }
+
+  /**
+   * The selection's count and its label menu (ADR 0142): a label choice relabels every selected
+   * note, and Blocking blocks them all, or none when all of them block already.
+   */
+  private renderSelectionBar(): TemplateResult | typeof nothing {
+    if (this.selection.selected.length === 0) {
+      return nothing;
+    }
+    const targets = this.targetItems();
+    const [first] = targets;
+    let severity: UraSeverityView = 'issue';
+    if (first !== undefined) {
+      severity = first.severity;
+    }
+    const isBlocking = targets.length > 0 && targets.every((item) => item.blocking);
+    return html`<div class="selection" role="group" aria-label="Selected notes">
+      <span class="selection-count" role="status"
+        >${countNoun(targets.length, 'note')} selected</span
+      >
+      <beuve-ura-label-menu
+        .severity=${live(severity)}
+        .blocking=${live(isBlocking)}
+      ></beuve-ura-label-menu>
+      <span class="spacer"></span>
+      <button
+        class="button"
+        type="button"
+        title="Clear the selection (Esc)"
+        data-action="clear-selection"
+      >
+        Clear
+      </button>
+    </div>`;
   }
 
   private renderEditor(item: UraItemView): TemplateResult {
@@ -1298,24 +1509,30 @@ export class BeuveUraDock extends LitElement {
     return html``;
   }
 
-  /** Runs a Review ▸ Note command, or Open in Editor, on the item under the cursor. */
+  /**
+   * Runs a Review ▸ Note command, or Open in Editor: Show, Edit and Open in Editor on the note
+   * under the cursor, the others on every selected note (ADR 0142).
+   */
   runCommand(id: CommandId): boolean {
     const ordered = this.ordered();
     const current = ordered[this.cursor];
+    const targets = this.targetItems();
     switch (id) {
-      case 'dock-move': {
+      case 'dock-move':
+      case 'dock-extend-selection':
+      case 'dock-clear-selection': {
+        return true;
+      }
+      case 'dock-select-all': {
+        this.select({ kind: 'all' });
         return true;
       }
       case 'dock-move-up': {
-        if (current !== undefined) {
-          this.move(current, -1);
-        }
+        this.move(targets, -1);
         return true;
       }
       case 'dock-move-down': {
-        if (current !== undefined) {
-          this.move(current, 1);
-        }
+        this.move(targets, 1);
         return true;
       }
       case 'dock-show': {
@@ -1337,21 +1554,26 @@ export class BeuveUraDock extends LitElement {
         return true;
       }
       case 'dock-withdraw': {
-        if (current !== undefined) {
-          this.toggleStatus(current, 'withdrawn');
-        }
+        this.toggleStatus(targets, 'withdrawn');
         return true;
       }
       case 'dock-delete': {
-        if (current !== undefined) {
-          this.emit('beuve-ura-delete', { itemId: current.id });
+        if (targets.length > 0) {
+          this.emit('beuve-ura-delete', { itemIds: targets.map((item) => item.id) });
+          this.selection = { selected: [], anchor: undefined };
         }
         return true;
       }
       case 'dock-addressed': {
-        if (current !== undefined) {
-          this.toggleStatus(current, 'addressed');
-        }
+        this.toggleStatus(targets, 'addressed');
+        return true;
+      }
+      case 'dock-blocking': {
+        this.toggleBlocking(targets);
+        return true;
+      }
+      case 'dock-change-label': {
+        this.changeLabel(current);
         return true;
       }
       default: {
@@ -1360,11 +1582,17 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  /** Puts the cursor on item `itemId`, for a context menu opened on it. */
+  /**
+   * Puts the cursor on item `itemId`, for a context menu opened on it; a note outside the
+   * selection clears it, so the menu acts on the note it was opened on.
+   */
   selectItem(itemId: string): void {
     const index = this.ordered().findIndex((item) => item.id === itemId);
     if (index !== -1) {
       this.cursor = index;
+    }
+    if (!this.selection.selected.includes(itemId)) {
+      this.selection = { selected: [], anchor: undefined };
     }
   }
 
@@ -1375,8 +1603,12 @@ export class BeuveUraDock extends LitElement {
     });
   }
 
-  /** The notes a Note command acts on: the one under the cursor. */
+  /** The notes a Note command acts on: the selected ones in dock order, else the cursor's. */
   targetItems(): UraItemView[] {
+    const { selected } = this.selection;
+    if (selected.length > 0) {
+      return this.ordered().filter((item) => selected.includes(item.id));
+    }
     const current = this.cursorItem();
     if (current === undefined) {
       return [];
@@ -1404,9 +1636,14 @@ export class BeuveUraDock extends LitElement {
                       : 'Open a review session to stage notes.'
                   }
                 </p>`
-              : html`<ol aria-label="Staged review items" data-action="list">
-                  ${ordered.map((item, index) => this.renderItem(item, index))}
-                </ol>`
+              : html`${this.renderSelectionBar()}
+                  <ol
+                    aria-label="Staged review items"
+                    aria-multiselectable="true"
+                    data-action="list"
+                  >
+                    ${ordered.map((item, index) => this.renderItem(item, index))}
+                  </ol>`
           }
         </section>
         ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
@@ -1418,6 +1655,15 @@ export class BeuveUraDock extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('items')) {
       this.cursor = Math.min(this.cursor, Math.max(0, this.items.length - 1));
+      const present = new Set(this.items.map((item) => item.id));
+      if (this.selection.selected.some((id) => !present.has(id))) {
+        const selected = this.selection.selected.filter((id) => present.has(id));
+        let { anchor } = this.selection;
+        if (anchor === undefined || !present.has(anchor) || selected.length === 0) {
+          anchor = selected[0];
+        }
+        this.selection = { selected, anchor };
+      }
       const followed = this.ordered().findIndex((item) => item.id === this.cursorFollows);
       if (followed !== -1) {
         this.cursor = followed;
@@ -1505,6 +1751,13 @@ function isTextEntry(event: KeyboardEvent): boolean {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
+}
+
+/** A key or label change in the selection bar is the bar's, not the list's or the editor's. */
+function isInSelectionBar(event: Event): boolean {
+  return event.composedPath().some((target) => {
+    return target instanceof Element && target.matches('.selection');
+  });
 }
 
 /** A key in the open editor (its label menu, its buttons) is the editor's, not the dock's. */

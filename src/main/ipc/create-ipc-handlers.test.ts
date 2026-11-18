@@ -952,6 +952,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
           create: record,
           update: record,
           transition: record,
+          editMany: record,
           stageReviewFinding: record,
           stageNoteProposal: record,
           export: record,
@@ -990,7 +991,21 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await expectInvalid(expect, handlers['ura:transition']({ itemId: id, to: 'deleted' }));
     await expectInvalid(expect, handlers['ura:reorder']({ sessionId: 's1', itemIds: ['x'] }));
     await expectInvalid(expect, handlers['ura:delete']({ itemId: 'x' }));
+    await expectInvalid(expect, handlers['ura:delete']({ itemIds: [] }));
     await expectInvalid(expect, handlers['ura:restore']({}));
+    await expectInvalid(expect, handlers['ura:restore']({ itemId: id }));
+    await expectInvalid(
+      expect,
+      handlers['ura:edit-many']({ itemIds: [id], change: { kind: 'status', to: 'deleted' } }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:edit-many']({ itemIds: [id], change: { kind: 'severity', severity: 'meh' } }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['ura:edit-many']({ itemIds: ['x'], change: { kind: 'blocking', blocking: true } }),
+    );
     await expectInvalid(
       expect,
       handlers['ura:stage-review-finding']({ messageId: id, finding: -1 }),
@@ -1018,6 +1033,10 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
     await handlers['ura:create'](note);
     await handlers['ura:update']({ itemId: id, title: 'New' });
     await handlers['ura:transition']({ itemId: id, to: 'withdrawn' });
+    await handlers['ura:edit-many']({
+      itemIds: [id],
+      change: { kind: 'blocking', blocking: true },
+    });
     await handlers['ura:reorder']({ sessionId: 's1', itemIds: [id] });
     await handlers['ura:stage-review-finding']({ messageId: id, finding: 2 });
     await handlers['ura:stage-note-proposal']({ messageId: id, proposal: 1, severity: 'nitpick' });
@@ -1036,6 +1055,7 @@ describe('createIpcHandlers for the review dock and clipboard', () => {
       note,
       { itemId: id, title: 'New' },
       { itemId: id, to: 'withdrawn' },
+      { itemIds: [id], change: { kind: 'blocking', blocking: true } },
       { sessionId: 's1', itemIds: [id] },
       { messageId: id, finding: 2 },
       { messageId: id, proposal: 1, severity: 'nitpick' },
@@ -1415,8 +1435,9 @@ function stubServices(
       create: notWired,
       update: notWired,
       transition: notWired,
+      editMany: notWired,
       delete: notWiredError,
-      restore: notWired,
+      restore: notWiredError,
       reorder: notWiredError,
       stageReviewFinding: notWired,
       stageNoteProposal: notWired,
