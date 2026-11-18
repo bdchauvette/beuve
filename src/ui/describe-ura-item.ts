@@ -71,7 +71,7 @@ function currentAnchor(item: UraItemView): UraAnchorView {
   return item.anchor;
 }
 
-/** `review finding · 80%` when a finding kept its confidence (ADR 0141). */
+/** `review finding · 80%` when a finding kept its confidence (ADR 0142). */
 function originOf({ origin }: UraItemView): string {
   if (origin.kind !== 'chat-answer' || origin.finding === undefined) {
     return origins[origin.kind];

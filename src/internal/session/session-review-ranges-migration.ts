@@ -1,7 +1,7 @@
 import type { Migration } from '#sqlite/run-migrations.ts';
 
 /**
- * Keeps the range a session's review shows, when the reviewer chose one (ADR 0140); no row is the
+ * Keeps the range a session's review shows, when the reviewer chose one (ADR 0141); no row is the
  * default (since the last checkpoint). Undoing a checkpoint deletes a choice that names it. It is a
  * migration of its own, appended after every domain's earlier ones (ADR 0006 amendment
  * 2026-11-18), so every database applies the same sequence.

@@ -35,7 +35,7 @@ Asked again whether buttons could be custom elements rendered into the light DOM
 
 ## Amendment 2026-11-18: a progress bar
 
-`progressStyles` adds `.progress`, an indeterminate bar that holds still under reduced motion (ADR 0144). It came from the diff stream's opening view, which `beuve-opening` now draws wherever a review is on its way.
+`progressStyles` adds `.progress`, an indeterminate bar that holds still under reduced motion (ADR 0145). It came from the diff stream's opening view, which `beuve-opening` now draws wherever a review is on its way.
 
 ## Amendment 2026-11-18: one control height, fields, and a menu separator
 

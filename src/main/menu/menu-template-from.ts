@@ -88,7 +88,7 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
  * (About in Help, Preferences in Edit, Quit in File) and with `&` mnemonics, unique per menu.
  * Items sort by group, then catalog order, with separators between groups; a command's first
  * accelerator is shown, the others are hidden items that still work. A command with
- * `checkedNames` carries both labels, each with its own access key (ADR 0142). Pure.
+ * `checkedNames` carries both labels, each with its own access key (ADR 0143). Pure.
  */
 export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTemplateItem[] {
   const { catalog, platform } = options;

@@ -208,7 +208,7 @@ export class BeuveReview extends LitElement {
     `,
   ];
 
-  /** The fetch whose cover took the focus, so it takes it once (ADR 0144). */
+  /** The fetch whose cover took the focus, so it takes it once (ADR 0145). */
   private focusedOpening: GithubFetch | undefined;
 
   /** Cancel on the cover of a review being fetched to open. */
@@ -924,7 +924,7 @@ export class BeuveReview extends LitElement {
 
   /**
    * Deletes notes and says so, with an Undo that puts them all back (the latest deletion only,
-   * ADR 0142).
+   * ADR 0143).
    */
   private async deleteNotes(itemIds: readonly string[]): Promise<void> {
     const deletion = await this.ura.delete(itemIds);
@@ -950,7 +950,7 @@ export class BeuveReview extends LitElement {
     this.showNotice(describeNoteRestore({ isRestored, count: deletion.count }));
   }
 
-  /** Save Progress, and say so with an Undo while the save recorded a checkpoint (ADR 0140). */
+  /** Save Progress, and say so with an Undo while the save recorded a checkpoint (ADR 0141). */
   private async saveProgress(): Promise<void> {
     const saved = await this.session.markReviewed();
     if (saved?.checkpointId === undefined) {
@@ -1269,7 +1269,7 @@ export class BeuveReview extends LitElement {
   }
 
   /**
-   * The review, or the empty screen, with a review being fetched to open over it (ADR 0144): what
+   * The review, or the empty screen, with a review being fetched to open over it (ADR 0145): what
    * was shown stays under the cover, so a cancelled or failed open leaves it as it was.
    */
   private renderStage(): TemplateResult {
@@ -1963,7 +1963,7 @@ export class BeuveReview extends LitElement {
   }
 
   /**
-   * The commands whose checked names the palette shows (ADR 0142): the dock's Note commands for
+   * The commands whose checked names the palette shows (ADR 0143): the dock's Note commands for
    * its selected notes, which a Note command run from the palette acts on, focused or not.
    */
   paletteChecked(): CommandId[] {

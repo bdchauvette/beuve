@@ -73,7 +73,7 @@ export type ReviewState =
   { readonly kind: 'unreviewed' } | { readonly kind: 'reviewed'; readonly checkpoint: Checkpoint };
 
 /**
- * Which range the review shows (ADR 0140): `since-last` (the default) is what changed since the
+ * Which range the review shows (ADR 0141): `since-last` (the default) is what changed since the
  * latest checkpoint, `whole` the whole change from its fork point regardless of checkpoints, and
  * `since-checkpoint` what changed since an earlier checkpoint the reviewer picked.
  */

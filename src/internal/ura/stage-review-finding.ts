@@ -12,7 +12,7 @@ export interface StageableReviewFinding {
   readonly severity: 'info' | 'warning' | 'risk';
   readonly title: string;
   readonly body: string;
-  /** 0–1, as the model calibrated it; kept on the item's origin (ADR 0141). */
+  /** 0–1, as the model calibrated it; kept on the item's origin (ADR 0142). */
   readonly confidence: number;
 }
 

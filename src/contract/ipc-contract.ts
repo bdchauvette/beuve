@@ -80,7 +80,7 @@ export interface SessionSummary {
   readonly source: SessionSourceView;
   readonly headSha: string;
   readonly lastReviewedSha?: string;
-  /** The last checkpoint's id, absent with it: what Undo Save Progress names (ADR 0140). */
+  /** The last checkpoint's id, absent with it: what Undo Save Progress names (ADR 0141). */
   readonly lastCheckpointId?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -151,7 +151,7 @@ export interface MarkReviewedRequest {
 }
 
 /**
- * Undo Save Progress (ADR 0140): removes the checkpoint `checkpointId`, which must still be the
+ * Undo Save Progress (ADR 0141): removes the checkpoint `checkpointId`, which must still be the
  * session's latest (`refused` once progress was saved again, `not-found` once it is gone).
  */
 export interface UndoMarkReviewedRequest {
@@ -160,7 +160,7 @@ export interface UndoMarkReviewedRequest {
 }
 
 /**
- * Which range a session's review shows (ADR 0140): `since-last` (the default) is what changed
+ * Which range a session's review shows (ADR 0141): `since-last` (the default) is what changed
  * since the last saved progress, `whole` the whole change from its fork point whatever was saved,
  * `since-checkpoint` what changed since an earlier saved progress. Saving progress goes back to
  * `since-last`.
@@ -185,7 +185,7 @@ export interface CheckpointView {
   readonly savedAt: string;
 }
 
-/** The range a review shows and the saved progress it could show since instead (ADR 0140). */
+/** The range a review shows and the saved progress it could show since instead (ADR 0141). */
 export interface ReviewRangeView {
   readonly choice: ReviewRangeChoiceView;
   /** The session's checkpoints, oldest first; the last is the one `since-last` runs from. */
@@ -323,7 +323,7 @@ export interface ReviewView {
   readonly forkPoint?: ForkPointView;
   /** Reviewed counts over `files` (ADR 0064); always set by main. */
   readonly reviewProgress?: FileReviewProgressView;
-  /** The range shown and the saved progress to choose from (ADR 0140); always set by main. */
+  /** The range shown and the saved progress to choose from (ADR 0141); always set by main. */
   readonly range?: ReviewRangeView;
 }
 
@@ -1346,7 +1346,7 @@ export type UraOriginView =
       readonly messageId: string;
       readonly finding?: number;
       readonly proposal?: number;
-      /** Only with `finding`: the model's 0–1 confidence in it, when it was kept (ADR 0141). */
+      /** Only with `finding`: the model's 0–1 confidence in it, when it was kept (ADR 0142). */
       readonly confidence?: number;
     };
 
@@ -1504,7 +1504,7 @@ export interface TransitionUraItemRequest {
 }
 
 /**
- * `ura:edit-many` (ADR 0142): one change to several items of one session, all or none, in one
+ * `ura:edit-many` (ADR 0143): one change to several items of one session, all or none, in one
  * transaction: their status (as {@link TransitionUraItemRequest} does for one), their label or
  * their Blocking decoration. Items already in the asked-for state are left alone.
  */
@@ -1526,7 +1526,7 @@ export interface UraItemsEditedView {
 }
 
 /**
- * Deletes items of one session, of any status, for good, in one transaction (ADR 0142), except
+ * Deletes items of one session, of any status, for good, in one transaction (ADR 0143), except
  * that main keeps them as one deletion for {@link RestoreUraItemsRequest}.
  */
 export interface DeleteUraItemsRequest {
@@ -1632,7 +1632,7 @@ export interface WriteClipboardRequest {
 }
 
 /**
- * An editor beuve can open a file in (ADR 0033, 0139): a built-in (`zed`, `gram`, `vscode`,
+ * An editor beuve can open a file in (ADR 0033, 0140): a built-in (`zed`, `gram`, `vscode`,
  * `cursor`) or one the reviewer defined under `editors` in `settings.json`. Lowercase letters,
  * digits and dashes, starting with a letter.
  */
@@ -1650,7 +1650,7 @@ export interface EditorOpenRequest {
 }
 
 /**
- * Why Open in Editor didn't open (ADR 0139): `no-editor-found` (none installed, none chosen),
+ * Why Open in Editor didn't open (ADR 0140): `no-editor-found` (none installed, none chosen),
  * `editor-not-chosen` (several found, none chosen), `editor-unavailable` (the chosen one is missing
  * or not configured), `file-unavailable` or `launch-failed`.
  */
@@ -1683,7 +1683,7 @@ export type EditorOpenResponse =
 export type EditorFoundView =
   { readonly kind: 'cli'; readonly path: string } | { readonly kind: 'url'; readonly path: string };
 
-/** One built-in or reviewer-defined editor (ADR 0139), and where it was found, if anywhere. */
+/** One built-in or reviewer-defined editor (ADR 0140), and where it was found, if anywhere. */
 export interface EditorChoiceView {
   readonly id: EditorId;
   readonly name: string;
@@ -1695,7 +1695,7 @@ export interface EditorChoiceView {
 
 /**
  * The editor preference, the editors beuve knows (built-ins first, then the reviewer's own) and
- * what is wrong with the `editors` configuration in `settings.json` (ADR 0139).
+ * what is wrong with the `editors` configuration in `settings.json` (ADR 0140).
  */
 export interface EditorSettingsView {
   /**

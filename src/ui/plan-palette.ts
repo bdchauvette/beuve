@@ -28,7 +28,7 @@ export interface PaletteSources {
   readonly trackedPaths?: readonly string[];
   readonly uraItems: readonly UraItemView[];
   /**
-   * The commands whose state shows their checked names (ADR 0142), such as Restore Note for the
+   * The commands whose state shows their checked names (ADR 0143), such as Restore Note for the
    * dock's withdrawn notes; none when absent.
    */
   readonly checked?: readonly CommandId[];

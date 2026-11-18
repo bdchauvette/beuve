@@ -1,4 +1,4 @@
-# 0140. Save Progress can be undone, and the review range is a stored per-session choice
+# 0141. Save Progress can be undone, and the review range is a stored per-session choice
 
 - Status: Accepted
 - Date: 2026-11-18

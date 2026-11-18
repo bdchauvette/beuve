@@ -1,7 +1,7 @@
 import { css } from 'lit';
 
 /**
- * Where a text field's emoji list sits (ADR 0143), on top of `completionListStyles`: a top-layer
+ * Where a text field's emoji list sits (ADR 0144), on top of `completionListStyles`: a top-layer
  * popover that `EmojiCompletion` places at the `:name` being completed, one emoji per row with its
  * `:shortcode:`.
  */

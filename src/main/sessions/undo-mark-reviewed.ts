@@ -10,7 +10,7 @@ import { sessionFailure } from './session-failure.ts';
 import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /**
- * Undo Save Progress (ADR 0140): removes the checkpoint the save recorded while it is still the
+ * Undo Save Progress (ADR 0141): removes the checkpoint the save recorded while it is still the
  * session's latest, so the review shows again what it showed before the save. Refuses once
  * progress was saved again. File marks and notes are untouched: saving never changed them.
  */

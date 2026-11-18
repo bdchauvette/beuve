@@ -10,7 +10,7 @@ export interface TextEdit {
 }
 
 /**
- * What typing a `:` at the caret does (ADR 0143): after `:name` where `name` is a shortcode
+ * What typing a `:` at the caret does (ADR 0144): after `:name` where `name` is a shortcode
  * (any case), the edit that replaces `:name` with its emoji, so the colon is never typed;
  * otherwise `undefined`, and the colon is typed as usual. Pure.
  */

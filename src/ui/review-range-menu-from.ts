@@ -4,7 +4,7 @@ import type {
   ReviewRangeView,
 } from '#contract/ipc-contract.ts';
 
-/** One choice of the review header's range menu (ADR 0140). */
+/** One choice of the review header's range menu (ADR 0141). */
 export interface ReviewRangeOption {
   /** Stable within the menu: the choice's kind, or the checkpoint's id. */
   readonly key: string;
@@ -28,7 +28,7 @@ const help =
   'Which changes the review shows: since your last saved progress, the whole change, or since an earlier save';
 
 /**
- * The review header's range menu (ADR 0140), or `undefined` while nothing was ever saved: the
+ * The review header's range menu (ADR 0141), or `undefined` while nothing was ever saved: the
  * review then shows the whole change and there is nothing to choose.
  */
 export function reviewRangeMenuFrom(

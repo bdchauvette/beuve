@@ -10,10 +10,10 @@ export interface MenuTemplateItem {
   readonly label?: string;
   /**
    * The label while the window reports the command checked, for a command with `checkedNames`
-   * (ADR 0142): `createAppMenus` swaps the two in place and leaves it out of Electron's options.
+   * (ADR 0143): `createAppMenus` swaps the two in place and leaves it out of Electron's options.
    */
   readonly checkedLabel?: string;
-  /** The symbol beside the label (ADR 0142); `createAppMenus` turns it into an image. */
+  /** The symbol beside the label (ADR 0143); `createAppMenus` turns it into an image. */
   readonly icon?: MenuIcon;
   readonly role?: MenuRole;
   readonly type?: 'separator' | 'checkbox' | 'radio';

@@ -47,13 +47,13 @@ export interface ReviewDiffOptions {
 /** The diff a review shows, still in git-domain types, with the refreshed session behind it. */
 export interface ReviewDiff extends RangeDiff {
   readonly refreshed: RefreshedSession;
-  /** The range the reviewer chose (ADR 0140), which `scope` is the outcome of. */
+  /** The range the reviewer chose (ADR 0141), which `scope` is the outcome of. */
   readonly choice: ReviewRangeChoice;
 }
 
 /**
  * What the reviewer should look at now: refreshes the head from git, asks the session domain
- * which range still needs review, or the one the reviewer chose (ADR 0140), and has the git domain
+ * which range still needs review, or the one the reviewer chose (ADR 0141), and has the git domain
  * diff it (full range, or a rebase-aware interdiff from a checkpoint). Main translates between the two domains here. The refs
  * are read for every call; the diff for the commits they name comes from `context.caches`.
  */
@@ -175,7 +175,7 @@ async function diffReviewRange(
   const { context, refreshed } = computing;
   switch (range.kind) {
     case 'full': {
-      // A reviewed session's whole change (ADR 0140) forks where Save Progress would record.
+      // A reviewed session's whole change (ADR 0141) forks where Save Progress would record.
       return diffFull(
         computing,
         {
