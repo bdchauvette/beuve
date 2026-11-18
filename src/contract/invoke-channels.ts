@@ -98,4 +98,5 @@ export const invokeChannels = Object.freeze([
   'models:list-remote',
   'models:test',
   'language-servers:open-config',
+  'editor:open-settings-file',
 ] as const satisfies readonly InvokeChannel[]);

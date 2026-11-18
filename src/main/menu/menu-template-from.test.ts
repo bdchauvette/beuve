@@ -8,6 +8,7 @@ import type { CatalogCommand, KeyPlatform } from '#contract/command-catalog.ts';
 
 import { contextMenuTemplateFrom } from './context-menu-template-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
+import type { MenuListEntry } from './menu-template-from.ts';
 import type { MenuTemplateItem } from './menu-template-item.ts';
 import { placeOfCommand } from './place-of-command.ts';
 
@@ -51,7 +52,7 @@ describe('menuTemplateFrom', () => {
         keyed.filter((command) => placeOfCommand(command, platform) === undefined),
       ).toStrictEqual([]);
       const placed = commandCatalog.filter((command) => {
-        return placeOfCommand(command, platform) !== undefined;
+        return placeOfCommand(command, platform) !== undefined && command.expands === undefined;
       });
       for (const command of placed) {
         expect(items.filter((item) => item.id === command.id)).toHaveLength(1);
@@ -129,6 +130,27 @@ describe('menuTemplateFrom', () => {
     ];
     const items = flatten(menuTemplateFrom({ catalog, platform: 'linux' }));
     expect(items.find((item) => item.id === 'fish')?.label).toBe('&Fish && Chips');
+  });
+
+  test('lists the editors as radio items of Open With, and says when there are none', ({
+    expect,
+  }) => {
+    expect(
+      openWith([
+        { id: 'zed', label: 'Zed' },
+        { id: 'helix', label: 'Helix (Not Found)' },
+      ]),
+    ).toStrictEqual([
+      { id: 'open-with-editor:zed', label: 'Zed', type: 'radio' },
+      { id: 'open-with-editor:helix', label: 'Helix (Not Found)', type: 'radio' },
+      { type: 'separator' },
+      { id: 'editor-settings', label: 'Editor Settings…' },
+    ]);
+    expect(openWith()).toStrictEqual([
+      { label: 'No Editors Found', enabled: false },
+      { type: 'separator' },
+      { id: 'editor-settings', label: 'Editor Settings…' },
+    ]);
   });
 
   test('hides alternate keys behind the visible item', ({ expect }) => {
@@ -264,6 +286,22 @@ function isLinuxReserved(key: string): boolean {
       .map((reserved) => normalized(reserved))
       .includes(key) ||
     /^Alt\+[CEFGHRVW]$/u.test(key)
+  );
+}
+
+/** Review › Open With on macOS, with these editors. */
+function openWith(editors?: readonly MenuListEntry[]): readonly MenuTemplateItem[] {
+  const review = menuTemplateFrom({
+    catalog: commandCatalog,
+    platform: 'mac',
+    ...(editors !== undefined && { editors }),
+  }).find((item) => {
+    return item.label === 'Review';
+  });
+  return (
+    review?.submenu?.find((item) => {
+      return item.label === 'Open With';
+    })?.submenu ?? []
   );
 }
 

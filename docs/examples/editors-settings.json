@@ -1,0 +1,17 @@
+{
+  "preferredEditor": "gram",
+  "editors": {
+    "cursor": { "enabled": false },
+    "zed": { "command": "/opt/zed/bin/zed" },
+    "helix": {
+      "name": "Helix",
+      "command": "kitty",
+      "args": ["--single-instance", "hx", "{file}:{line}:{column}"]
+    },
+    "sublime": {
+      "name": "Sublime Text",
+      "command": "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl",
+      "args": ["{file}:{line}:{column}"]
+    }
+  }
+}

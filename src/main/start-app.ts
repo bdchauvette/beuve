@@ -8,7 +8,7 @@ import { errorFrom } from '#x/error/error-from.ts';
 import type { Logger } from '#x/log/create-logger.ts';
 
 import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
-import type { AppInfo, ChooseFolderRequest } from '#contract/ipc-contract.ts';
+import type { AppInfo, ChooseFolderRequest, EditorSettingsView } from '#contract/ipc-contract.ts';
 import { mainWindowInvokeChannels } from '#contract/main-window-invoke-channels.ts';
 import { settingsInvokeChannels } from '#contract/settings-invoke-channels.ts';
 import { sheetInvokeChannels } from '#contract/sheet-invoke-channels.ts';
@@ -25,6 +25,7 @@ import { handleGithubLink } from './links/handle-github-link.ts';
 import type { GithubLinkTarget } from './links/handle-github-link.ts';
 import type { LinkInbox } from './links/link-inbox.ts';
 import { createAppMenus } from './menu/create-app-menus.ts';
+import type { EditorMenuState } from './menu/create-app-menus.ts';
 import { createMainWindow } from './window/create-main-window.ts';
 import { createSettingsWindow } from './window/create-settings-window.ts';
 import { createSheetWindows } from './window/create-sheet-windows.ts';
@@ -67,7 +68,8 @@ export function startApp(app: App, options: StartAppOptions): void {
   let isResetting = false;
   const handleMainCommand = (id: CommandId): void => {
     switch (id) {
-      case 'settings': {
+      case 'settings':
+      case 'editor-settings': {
         settingsWindow.open();
         return;
       }
@@ -140,6 +142,8 @@ export function startApp(app: App, options: StartAppOptions): void {
     window.on('focus', () => {
       services.github.setForeground(true);
       services.queue.setForeground(true);
+      // Picks up editors added to settings.json by hand, for Review › Open With (ADR 0139).
+      void services.editor.getSettings();
     });
     window.on('blur', () => {
       services.github.setForeground(false);
@@ -147,6 +151,11 @@ export function startApp(app: App, options: StartAppOptions): void {
     });
     return window;
   };
+
+  services.editor.onChanged((view) => {
+    menus.setEditors(editorMenuStateFrom(view));
+  });
+  void services.editor.getSettings();
 
   services.chat.onStream((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -362,6 +371,19 @@ function announceSettingsChanged(sender: IpcSender | undefined): void {
       sendEvent(window.webContents, 'settings:changed', {});
     }
   }
+}
+
+/** Review › Open With: every editor beuve knows, a missing one marked, and the stored choice. */
+function editorMenuStateFrom(view: EditorSettingsView): EditorMenuState {
+  return {
+    entries: view.editors.map((editor) => {
+      if (editor.installed) {
+        return { id: editor.id, label: editor.name };
+      }
+      return { id: editor.id, label: `${editor.name} (Not Found)` };
+    }),
+    checked: view.preferred,
+  };
 }
 
 function keyPlatform(): KeyPlatform {

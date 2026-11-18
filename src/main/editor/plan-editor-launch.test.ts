@@ -34,16 +34,35 @@ describe('planEditorLaunch', () => {
     });
   });
 
+  test('spawns Gram, a fork of Zed, with path:line:column', ({ expect }) => {
+    const found = { kind: 'cli', command: '/Applications/Gram.app/Contents/MacOS/cli' } as const;
+    expect(planEditorLaunch(getEditorDefinition('gram'), found, target())).toStrictEqual({
+      kind: 'spawn',
+      command: '/Applications/Gram.app/Contents/MacOS/cli',
+      args: ['/repo/a.ts:5:2'],
+    });
+  });
+
   test('uses the editor URL when no CLI was found', ({ expect }) => {
-    expect(planEditorLaunch(getEditorDefinition('zed'), { kind: 'url' }, target())).toStrictEqual({
+    expect(
+      planEditorLaunch(
+        getEditorDefinition('zed'),
+        { kind: 'url', bundle: '/Applications/Zed.app', scheme: 'zed' },
+        target(),
+      ),
+    ).toStrictEqual({
       kind: 'url',
       url: 'zed://file/repo/a.ts:5:2',
     });
     expect(
-      planEditorLaunch(getEditorDefinition('vscode'), { kind: 'url' }, target()),
+      planEditorLaunch(
+        getEditorDefinition('gram'),
+        { kind: 'url', bundle: '/Applications/Gram.app', scheme: 'gram' },
+        target(),
+      ),
     ).toStrictEqual({
       kind: 'url',
-      url: 'vscode://file/repo/a.ts:5:2',
+      url: 'gram://file/repo/a.ts:5:2',
     });
   });
 });

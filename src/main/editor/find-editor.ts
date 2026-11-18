@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import type { EditorUrlScheme } from './build-editor-url.ts';
 import type { EditorDefinition } from './editor-definitions.ts';
 
 /** What detection may look at; tests pass a fake file system and environment. */
@@ -10,12 +11,14 @@ export interface EditorProbe {
   readonly exists: (file: string) => boolean;
 }
 
+/** A CLI to run, or the macOS app bundle whose URL scheme opens the file. */
 export type FoundEditor =
-  { readonly kind: 'cli'; readonly command: string } | { readonly kind: 'url' };
+  | { readonly kind: 'cli'; readonly command: string }
+  | { readonly kind: 'url'; readonly bundle: string; readonly scheme: EditorUrlScheme };
 
 /**
  * Looks for the editor's CLI on PATH, then in its well-known locations, and otherwise for its
- * macOS app bundle, which can be opened by URL. Windows isn't supported yet. `undefined` when
+ * macOS app bundle, which can be opened by URL when the editor has a scheme. Windows isn't supported yet. `undefined` when
  * none is found.
  */
 export function findEditor(
@@ -41,13 +44,14 @@ export function findEditor(
       return { kind: 'cli', command: candidate };
     }
   }
-  if (probe.platform === 'darwin') {
+  const scheme = definition.urlScheme;
+  if (scheme !== undefined && probe.platform === 'darwin') {
     const bundles = definition.appBundles.flatMap((file) => {
       return expandHome({ file, home });
     });
     for (const bundle of bundles) {
       if (probe.exists(bundle)) {
-        return { kind: 'url' };
+        return { kind: 'url', bundle, scheme };
       }
     }
   }

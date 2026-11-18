@@ -166,6 +166,9 @@ async function launch(): Promise<void> {
         },
         editor: {
           settingsPath,
+          openPath: async (file) => {
+            return shell.openPath(file);
+          },
           platform: createSystemEditorPlatform({
             openExternal: async (url) => {
               return shell.openExternal(url);

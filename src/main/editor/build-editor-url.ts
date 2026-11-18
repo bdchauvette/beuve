@@ -1,10 +1,10 @@
 import type { EditorLocation } from './editor-location.ts';
 
-export type EditorUrlScheme = 'zed' | 'vscode' | 'cursor';
+export type EditorUrlScheme = 'zed' | 'gram' | 'vscode' | 'cursor';
 
 /**
- * `<scheme>://file/<absolute path>:<line>:<column>`, the form VS Code, Cursor and Zed register on
- * macOS. Each path segment is percent-encoded so a name can't change the URL's shape.
+ * `<scheme>://file/<absolute path>:<line>:<column>`, the form VS Code, Cursor, Zed and Gram register
+ * on macOS. Each path segment is percent-encoded so a name can't change the URL's shape.
  */
 export function buildEditorUrl(
   scheme: EditorUrlScheme,

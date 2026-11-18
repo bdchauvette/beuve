@@ -1,6 +1,7 @@
 import { describe } from 'vitest';
 
 import { editorDefinitions } from './editor-definitions.ts';
+import type { EditorDefinition } from './editor-definitions.ts';
 import { getEditorDefinition } from './testing/get-editor-definition.ts';
 import { findEditor } from './find-editor.ts';
 import type { EditorProbe } from './find-editor.ts';
@@ -22,8 +23,13 @@ function fakeProbe(
 }
 
 describe('editorDefinitions', () => {
-  test('prefers Zed, then VS Code, then Cursor', ({ expect }) => {
-    expect(editorDefinitions.map(({ id }) => id)).toStrictEqual(['zed', 'vscode', 'cursor']);
+  test('lists Zed, Gram, VS Code and Cursor', ({ expect }) => {
+    expect(editorDefinitions.map(({ id }) => id)).toStrictEqual([
+      'zed',
+      'gram',
+      'vscode',
+      'cursor',
+    ]);
   });
 });
 
@@ -74,10 +80,43 @@ describe('findEditor', () => {
       findEditor(getEditorDefinition('cursor'), fakeProbe(['/Applications/Cursor.app'], mac)),
     ).toStrictEqual({
       kind: 'url',
+      bundle: '/Applications/Cursor.app',
+      scheme: 'cursor',
     });
     expect(
       findEditor(getEditorDefinition('cursor'), fakeProbe(['/Applications/Cursor.app'])),
     ).toBeUndefined();
+  });
+
+  test("finds Gram's CLI inside its app bundle, then its app", ({ expect }) => {
+    const mac = { platform: 'darwin', env: { HOME: '/Users/me' } };
+    expect(
+      findEditor(
+        getEditorDefinition('gram'),
+        fakeProbe(['/Applications/Gram.app/Contents/MacOS/cli', '/Applications/Gram.app'], mac),
+      ),
+    ).toStrictEqual({ kind: 'cli', command: '/Applications/Gram.app/Contents/MacOS/cli' });
+    expect(
+      findEditor(getEditorDefinition('gram'), fakeProbe(['/Users/me/Applications/Gram.app'], mac)),
+    ).toStrictEqual({ kind: 'url', bundle: '/Users/me/Applications/Gram.app', scheme: 'gram' });
+  });
+
+  test('never opens an editor without a URL scheme by its app bundle', ({ expect }) => {
+    const mac = { platform: 'darwin', env: { HOME: '/Users/me' } };
+    const withoutScheme: EditorDefinition = {
+      id: 'zed',
+      name: 'Zed',
+      executables: [],
+      knownPaths: ['/opt/zed/bin/zed'],
+      appBundles: ['/Applications/Zed.app'],
+      args: ['{file}:{line}:{column}'],
+      origin: 'custom',
+    };
+    expect(findEditor(withoutScheme, fakeProbe(['/Applications/Zed.app'], mac))).toBeUndefined();
+    expect(findEditor(withoutScheme, fakeProbe(['/opt/zed/bin/zed'], mac))).toStrictEqual({
+      kind: 'cli',
+      command: '/opt/zed/bin/zed',
+    });
   });
 
   test('finds nothing without the editor, and nothing on Windows', ({ expect }) => {

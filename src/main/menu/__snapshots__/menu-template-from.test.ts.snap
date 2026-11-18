@@ -545,19 +545,15 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Open &With",
         "submenu": [
           {
-            "id": "editor-zed",
-            "label": "&Zed",
-            "type": "radio",
+            "enabled": false,
+            "label": "&No Editors Found",
           },
           {
-            "id": "editor-vscode",
-            "label": "&VS Code",
-            "type": "radio",
+            "type": "separator",
           },
           {
-            "id": "editor-cursor",
-            "label": "&Cursor",
-            "type": "radio",
+            "id": "editor-settings",
+            "label": "&Editor Settings…",
           },
         ],
       },
@@ -1397,19 +1393,15 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Open With",
         "submenu": [
           {
-            "id": "editor-zed",
-            "label": "Zed",
-            "type": "radio",
+            "enabled": false,
+            "label": "No Editors Found",
           },
           {
-            "id": "editor-vscode",
-            "label": "VS Code",
-            "type": "radio",
+            "type": "separator",
           },
           {
-            "id": "editor-cursor",
-            "label": "Cursor",
-            "type": "radio",
+            "id": "editor-settings",
+            "label": "Editor Settings…",
           },
         ],
       },

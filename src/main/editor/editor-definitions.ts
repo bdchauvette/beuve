@@ -1,14 +1,13 @@
 import type { EditorId } from '#contract/ipc-contract.ts';
 
-import { buildGotoArgv } from './build-goto-argv.ts';
-import { buildZedArgv } from './build-zed-argv.ts';
 import type { EditorUrlScheme } from './build-editor-url.ts';
-import type { EditorLocation } from './editor-location.ts';
 
 /**
- * How to find an editor and open `file:line:column` in it. `knownPaths` start with `~/` for the
- * home directory; `appBundles` are macOS apps whose `zed://`-style URL scheme is the fallback
- * when no CLI is found. macOS GUI apps don't inherit the shell's PATH, hence `knownPaths`.
+ * How to find an editor and open `file:line:column` in it (ADR 0033, 0139). `executables` are
+ * names looked up on PATH; `knownPaths` are absolute or start with `~/` for the home directory
+ * (macOS GUI apps don't inherit the shell's PATH); `appBundles` are macOS apps whose `urlScheme`
+ * is the fallback when no CLI is found. `args` is a template with `{file}`, `{line}` and
+ * `{column}`. `origin` is `custom` when `settings.json` defines or changes the editor.
  */
 export interface EditorDefinition {
   readonly id: EditorId;
@@ -16,11 +15,21 @@ export interface EditorDefinition {
   readonly executables: readonly string[];
   readonly knownPaths: readonly string[];
   readonly appBundles: readonly string[];
-  readonly urlScheme: EditorUrlScheme;
-  readonly buildArgv: (location: EditorLocation) => string[];
+  readonly urlScheme?: EditorUrlScheme;
+  readonly args: readonly string[];
+  readonly origin: 'built-in' | 'custom';
 }
 
-/** Editors in order of preference (ADR 0033): Zed, VS Code, Cursor. */
+/** Zed's CLI, and Gram's (a fork of it), take `path:line:column` as one argument. */
+const positionArgs: readonly string[] = Object.freeze(['{file}:{line}:{column}']);
+
+/** VS Code and Cursor open a location with `--goto path:line:column`. */
+const gotoArgs: readonly string[] = Object.freeze(['--goto', '{file}:{line}:{column}']);
+
+/**
+ * The editors beuve knows without configuration, in the order Settings lists them (ADR 0139). The
+ * order no longer decides which one opens: the reviewer's choice does.
+ */
 export const editorDefinitions: readonly EditorDefinition[] = Object.freeze([
   {
     id: 'zed',
@@ -35,7 +44,24 @@ export const editorDefinitions: readonly EditorDefinition[] = Object.freeze([
     ],
     appBundles: ['/Applications/Zed.app', '~/Applications/Zed.app'],
     urlScheme: 'zed',
-    buildArgv: buildZedArgv,
+    args: positionArgs,
+    origin: 'built-in',
+  },
+  {
+    id: 'gram',
+    name: 'Gram',
+    executables: ['gram'],
+    knownPaths: [
+      '/Applications/Gram.app/Contents/MacOS/cli',
+      '/usr/local/bin/gram',
+      '/opt/homebrew/bin/gram',
+      '~/.local/bin/gram',
+      '~/Applications/Gram.app/Contents/MacOS/cli',
+    ],
+    appBundles: ['/Applications/Gram.app', '~/Applications/Gram.app'],
+    urlScheme: 'gram',
+    args: positionArgs,
+    origin: 'built-in',
   },
   {
     id: 'vscode',
@@ -49,7 +75,8 @@ export const editorDefinitions: readonly EditorDefinition[] = Object.freeze([
     ],
     appBundles: ['/Applications/Visual Studio Code.app', '~/Applications/Visual Studio Code.app'],
     urlScheme: 'vscode',
-    buildArgv: buildGotoArgv,
+    args: gotoArgs,
+    origin: 'built-in',
   },
   {
     id: 'cursor',
@@ -63,6 +90,7 @@ export const editorDefinitions: readonly EditorDefinition[] = Object.freeze([
     ],
     appBundles: ['/Applications/Cursor.app', '~/Applications/Cursor.app'],
     urlScheme: 'cursor',
-    buildArgv: buildGotoArgv,
+    args: gotoArgs,
+    origin: 'built-in',
   },
-]);
+] satisfies EditorDefinition[]);

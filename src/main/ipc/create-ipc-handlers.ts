@@ -500,7 +500,10 @@ const editorOpenRequest = z.strictObject({
   line,
   column: z.number().int().min(1).max(100_000).optional(),
 });
-const preferredEditorRequest = z.strictObject({ editorId: z.enum(['zed', 'vscode', 'cursor']) });
+/** An editor id (ADR 0139); main checks that it names a configured editor. */
+const preferredEditorRequest = z.strictObject({
+  editorId: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/u),
+});
 const reviewEditsPrefixRequest = z.strictObject({ prefix: z.string().min(1).max(100) });
 const openReviewEditsRequest = z.strictObject({
   sessionId,
@@ -1486,6 +1489,13 @@ export function createIpcHandlers(
     },
     'language-servers:open-config': async (): Promise<IpcResult<OpenedConfigView>> => {
       return services.languageServerConfig.open();
+    },
+    'editor:open-settings-file': async (request): Promise<IpcResult<OpenedConfigView>> => {
+      const parsed = noRequest.safeParse(request);
+      if (parsed.success) {
+        return services.editor.openSettingsFile();
+      }
+      return invalid(parsed.error);
     },
     'clipboard:write-text': async (request): Promise<IpcResult<ClipboardWrittenView>> => {
       const parsed = clipboardRequest.safeParse(request);

@@ -1156,10 +1156,10 @@ describe('createIpcHandlers for the editor', () => {
     expect(calls).toStrictEqual([{ sessionId: 's1', path: 'src/a.ts', line: 3, column: 4 }]);
   });
 
-  test('accepts only known editors for editor:set-preferred', async ({ expect }) => {
+  test('accepts only well-formed editor ids for editor:set-preferred', async ({ expect }) => {
     const handlers = createIpcHandlers(stubServices({}), appInfo());
     const responses = await Promise.all([
-      handlers['editor:set-preferred']({ editorId: 'emacs' }),
+      handlers['editor:set-preferred']({ editorId: '../emacs' }),
       handlers['editor:set-preferred']({}),
       handlers['editor:get-settings']({ x: 1 }),
     ]);
@@ -1385,6 +1385,10 @@ function stubServices(
       getSettings: notWired,
       setPreferred: notWired,
       setReviewEditsPrefix: notWired,
+      openSettingsFile: notWired,
+      onChanged: (): (() => void) => {
+        return doNothingSync;
+      },
     },
     reviewEdits: {
       get: notWired,
