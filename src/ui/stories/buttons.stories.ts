@@ -7,7 +7,7 @@ import { framed } from './framed.ts';
 interface ButtonArgs {
   readonly label: string;
   readonly variant: 'default' | 'primary' | 'quiet' | 'link' | 'icon';
-  readonly size: 'normal' | 'large';
+  readonly size: 'small' | 'normal' | 'large';
   readonly isDisabled: boolean;
   readonly isPressed: boolean;
 }
@@ -20,7 +20,11 @@ const variantClasses: Readonly<Record<ButtonArgs['variant'], string>> = {
   link: 'link',
   icon: 'icon',
 };
-const sizeClasses: Readonly<Record<ButtonArgs['size'], string>> = { normal: '', large: 'large' };
+const sizeClasses: Readonly<Record<ButtonArgs['size'], string>> = {
+  small: 'small',
+  normal: '',
+  large: 'large',
+};
 
 const meta: Meta<ButtonArgs> = {
   title: 'Primitives/Button',
@@ -33,7 +37,7 @@ const meta: Meta<ButtonArgs> = {
   },
   argTypes: {
     variant: { control: 'select', options: ['default', 'primary', 'quiet', 'link', 'icon'] },
-    size: { control: 'inline-radio', options: ['normal', 'large'] },
+    size: { control: 'inline-radio', options: ['small', 'normal', 'large'] },
   },
   render: ({ label, variant, size, isDisabled, isPressed }) => {
     const classes = ['button', variantClasses[variant], sizeClasses[size]]
@@ -64,6 +68,7 @@ export const Variants: StoryObj<ButtonArgs> = {
       <button class="button quiet" type="button">Quiet</button>
       <button class="button link" type="button">Link</button>
       <button class="button icon" type="button" aria-label="Close">×</button>
+      <button class="button small" type="button">Small</button>
       <button class="button primary large" type="button">Large primary</button>
     `);
   },

@@ -3,6 +3,7 @@ import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import './beuve-dialog.ts';
 
 /** The command the reviewer saved. */
@@ -20,6 +21,7 @@ export interface SetupCommandSaveDetail {
 export class BeuveSetupCommandDialog extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     css`
       form {
         display: grid;
@@ -37,18 +39,8 @@ export class BeuveSetupCommandDialog extends LitElement {
         font: var(--beuve-font-small);
       }
 
-      input {
-        padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
+      input.field {
         font: var(--beuve-font-code);
-      }
-
-      input:focus {
-        border-color: var(--beuve-accent);
-        outline: none;
       }
 
       .error {
@@ -121,6 +113,7 @@ export class BeuveSetupCommandDialog extends LitElement {
           runs it only when you choose Run Setup: installs run the branch’s own scripts.
         </p>
         <input
+          class="field"
           aria-label="Setup command"
           spellcheck="false"
           autocomplete="off"

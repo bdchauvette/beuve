@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { withShortcut } from './with-shortcut.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 
 const stepKeys: ReadonlySet<string> = new Set(['Enter', 'F3', 'ArrowDown', 'ArrowUp']);
 
@@ -29,6 +30,7 @@ export interface FindQueryDetail {
 export class BeuveFindBar extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     css`
       :host {
         display: flex;
@@ -40,20 +42,10 @@ export class BeuveFindBar extends LitElement {
         font: var(--beuve-font-small);
       }
 
-      input {
+      input.field {
         flex: 0 1 var(--beuve-size-field-wide);
         min-inline-size: var(--beuve-size-field-narrow);
-        padding: var(--beuve-space-0-5) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
         font: var(--beuve-font-code);
-      }
-
-      input:focus {
-        border-color: var(--beuve-accent);
-        outline: none;
       }
 
       .count {
@@ -140,6 +132,7 @@ export class BeuveFindBar extends LitElement {
   override render(): TemplateResult {
     const label = this.describeCount();
     return html`<input
+        class="field"
         type="search"
         aria-label="Find in all files"
         placeholder="Find in all files"

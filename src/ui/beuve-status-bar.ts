@@ -262,7 +262,7 @@ export class BeuveStatusBar extends LitElement {
           ? nothing
           : html`<button
               type="button"
-              class="button notice-action"
+              class="button small notice-action"
               data-action="notice-action"
               data-command=${action.command}
             >
@@ -286,7 +286,7 @@ export class BeuveStatusBar extends LitElement {
     const line = describeLspStatus(servers);
     return html`<button
         type="button"
-        class="button quiet chip"
+        class="button small quiet chip"
         popovertarget="lsp"
         title=${line.title}
         aria-haspopup="dialog"
@@ -342,7 +342,7 @@ export class BeuveStatusBar extends LitElement {
     });
     return html`<button
         type="button"
-        class="button quiet chip"
+        class="button small quiet chip"
         popovertarget="ci"
         title=${line.title}
         aria-haspopup="dialog"
@@ -431,7 +431,7 @@ export class BeuveStatusBar extends LitElement {
         this.hasNewCommits
           ? html`<button
               type="button"
-              class="button notice-action"
+              class="button small notice-action"
               data-action="notice-action"
               data-command="show-new-commits"
               title="Reload the review with the new commits"

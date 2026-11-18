@@ -20,6 +20,7 @@ import { describeModelEntry } from './describe-model-entry.ts';
 import { describeModelTest } from './describe-model-test.ts';
 import { isRemoteBaseUrl } from './is-remote-base-url.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 
 /** The form's state: an entry being added or edited, with its fields as typed. */
 interface Draft {
@@ -45,6 +46,7 @@ interface Draft {
 export class BeuveModelSettings extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     css`
       :host {
         display: block;
@@ -109,15 +111,6 @@ export class BeuveModelSettings extends LitElement {
 
       .warn {
         color: var(--beuve-warn);
-      }
-
-      input[type='text'],
-      input[type='password'],
-      input[type='number'],
-      select {
-        font: inherit;
-        color: var(--beuve-text);
-        min-inline-size: 0;
       }
 
       input[type='text'],
@@ -382,6 +375,7 @@ export class BeuveModelSettings extends LitElement {
         this.draft === undefined
           ? html`<div class="add">
               <select
+                class="field"
                 aria-label="Kind of model to add"
                 @change=${(event: Event): void => {
                   this.newKind = (event.target as HTMLSelectElement).value as ModelKind;
@@ -415,6 +409,7 @@ export class BeuveModelSettings extends LitElement {
       return html`<div class="row">
         <label>${label} </label>
         <input
+          class="field"
           type="text"
           aria-label=${label}
           .value=${value}
@@ -552,6 +547,7 @@ export class BeuveModelSettings extends LitElement {
         <div class="row">
           <label for="effort">Effort</label>
           <select
+            class="field"
             id="effort"
             @change=${(event: Event): void => {
               this.edit({ effort: (event.target as HTMLSelectElement).value as Draft['effort'] });
@@ -570,6 +566,7 @@ export class BeuveModelSettings extends LitElement {
         <div class="row">
           <label for="context">Context window</label>
           <input
+            class="field"
             id="context"
             type="number"
             min="1024"
@@ -605,6 +602,7 @@ export class BeuveModelSettings extends LitElement {
     return html`<div class="row" data-field="api-key">
         <label for="api-key">API key</label>
         <input
+          class="field"
           id="api-key"
           type="password"
           autocomplete="off"
@@ -657,7 +655,7 @@ export class BeuveModelSettings extends LitElement {
         ${modelRoles.map((role) => {
           return html`<div class="row">
             <label for=${`role-${role}`}>${roleLabels[role]}</label>
-            <select id=${`role-${role}`} data-action="role" data-role=${role}>
+            <select class="field" id=${`role-${role}`} data-action="role" data-role=${role}>
               ${registry.entries.map((entry) => {
                 return html`<option
                   value=${entry.id}

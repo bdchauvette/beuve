@@ -43,6 +43,7 @@ import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import { completionListStyles } from './completion-list-styles.ts';
 import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
@@ -94,6 +95,7 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
 export class BeuveUraDock extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     formatControlStyles,
     zoneStyles,
     completionListStyles,
@@ -293,7 +295,6 @@ export class BeuveUraDock extends LitElement {
         cursor: default;
       }
 
-      input,
       textarea,
       select {
         box-sizing: border-box;
@@ -315,7 +316,6 @@ export class BeuveUraDock extends LitElement {
         font: var(--beuve-font-code);
       }
 
-      input:focus,
       textarea:focus,
       select:focus {
         border-color: var(--beuve-accent);
@@ -1110,6 +1110,7 @@ export class BeuveUraDock extends LitElement {
           ?blocking=${this.editingBlocking}
         ></beuve-ura-label-menu>
         <input
+          class="field"
           name="title"
           aria-label="Title"
           placeholder="Title (optional)"

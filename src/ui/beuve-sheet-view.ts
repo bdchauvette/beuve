@@ -43,6 +43,7 @@ import { formatControlStyles } from './format-control-styles.ts';
 import { applyFonts } from './apply-fonts.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import { segmentedStyles } from './primitives/segmented-styles.ts';
 import './primitives/beuve-time.ts';
 import './rich-view/beuve-rich-view.ts';
@@ -82,6 +83,7 @@ interface FindState {
 export class BeuveSheetView extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     segmentedStyles,
     formatControlStyles,
     css`
@@ -140,11 +142,6 @@ export class BeuveSheetView extends LitElement {
       .find input {
         flex: 1;
         max-inline-size: var(--beuve-size-field-wide);
-        padding: var(--beuve-space-0-5) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-surface);
-        color: var(--beuve-text);
         font: var(--beuve-font-code);
       }
 
@@ -383,6 +380,7 @@ export class BeuveSheetView extends LitElement {
   private renderFind(find: FindState): TemplateResult {
     return html`<div class="find">
       <input
+        class="field"
         type="search"
         aria-label="Find in this file"
         placeholder="Find in this file"

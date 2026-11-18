@@ -21,6 +21,7 @@ import type { OpenQuery } from './parse-open-query.ts';
 import { rankRecentSessions } from './rank-recent-sessions.ts';
 import { shortenPath } from './shorten-path.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import './primitives/beuve-time.ts';
 
 /** Shows the system folder picker; `undefined` when cancelled or unavailable. */
@@ -65,6 +66,7 @@ type Row =
 export class BeuveOpenPanel extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     css`
       :host {
         display: block;
@@ -213,21 +215,15 @@ export class BeuveOpenPanel extends LitElement {
         text-align: end;
       }
 
-      .field {
+      .field-row {
         display: flex;
         gap: var(--beuve-space-2);
         min-inline-size: 0;
       }
 
-      .field input,
+      .field-row input,
       .refs input {
         flex: 1;
-        min-inline-size: 0;
-        padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
         font: var(--beuve-font-code);
       }
 
@@ -692,8 +688,9 @@ export class BeuveOpenPanel extends LitElement {
       ${this.renderBack()}
       <form @submit=${this.onSubmitPull} @keydown=${this.onFormKeyDown}>
         <label for="ref">Pull request or branch</label>
-        <div class="field">
+        <div class="field-row">
           <input
+            class="field large"
             id="ref"
             name="ref"
             required
@@ -705,8 +702,9 @@ export class BeuveOpenPanel extends LitElement {
           />
         </div>
         <label for="clone">Local clone</label>
-        <div class="field">
+        <div class="field-row">
           <input
+            class="field large"
             id="clone"
             name="clone"
             placeholder="Remembered per repository after the first time"
@@ -769,8 +767,9 @@ export class BeuveOpenPanel extends LitElement {
       ${this.renderBack()}
       <form @submit=${this.onSubmitLocal} @keydown=${this.onFormKeyDown}>
         <label for="repo">Repository</label>
-        <div class="field">
+        <div class="field-row">
           <input
+            class="field large"
             id="repo"
             name="repo"
             required
@@ -786,6 +785,7 @@ export class BeuveOpenPanel extends LitElement {
         <label for="head">Review</label>
         <div class="refs">
           <input
+            class="field large"
             id="head"
             name="head"
             required
@@ -800,6 +800,7 @@ export class BeuveOpenPanel extends LitElement {
           />
           <span>against</span>
           <input
+            class="field large"
             name="base"
             required
             list="branches"

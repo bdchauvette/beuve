@@ -24,6 +24,7 @@ import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
 /**
@@ -40,6 +41,7 @@ export class BeuveSettingsView extends LitElement {
     emptyStateStyles,
     badgeStyles,
     buttonStyles,
+    fieldStyles,
     formatControlStyles,
     css`
       :host {
@@ -111,11 +113,7 @@ export class BeuveSettingsView extends LitElement {
       input[type='text'] {
         justify-self: start;
         min-inline-size: var(--beuve-size-field);
-      }
-
-      input[type='text'] {
         font: var(--beuve-font-code);
-        color: var(--beuve-text);
       }
 
       .empty {
@@ -342,6 +340,7 @@ export class BeuveSettingsView extends LitElement {
             Review edits branches start with
           </label>
           <input
+            class="field"
             id="review-edits-prefix"
             type="text"
             spellcheck="false"
@@ -359,6 +358,7 @@ export class BeuveSettingsView extends LitElement {
             Review queue lists branches starting with
           </label>
           <input
+            class="field"
             id="queue-prefixes"
             type="text"
             spellcheck="false"
@@ -388,6 +388,7 @@ export class BeuveSettingsView extends LitElement {
             Code font
           </label>
           <input
+            class="field"
             id="code-font"
             type="text"
             spellcheck="false"
@@ -406,6 +407,7 @@ export class BeuveSettingsView extends LitElement {
             Prose font
           </label>
           <input
+            class="field"
             id="prose-font"
             type="text"
             spellcheck="false"

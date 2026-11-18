@@ -1675,7 +1675,7 @@ export class BeuveChatDrawer extends LitElement {
     return html`<span class="queued muted"
       >queued<button
         type="button"
-        class="button action"
+        class="button small action"
         data-nav
         data-action="cancel"
         data-message-id=${answerId}

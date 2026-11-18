@@ -36,3 +36,11 @@ Asked again whether buttons could be custom elements rendered into the light DOM
 ## Amendment 2026-11-18: a progress bar
 
 `progressStyles` adds `.progress`, an indeterminate bar that holds still under reduced motion (ADR 0144). It came from the diff stream's opening view, which `beuve-opening` now draws wherever a review is on its way.
+
+## Amendment 2026-11-18: one control height, fields, and a menu separator
+
+The note composer put the label menu's trigger (a `.button`, about 22px: its padding around the text) beside the Title `<input>` (about 27px: its own padding), and the dock's editor did the same; the queue's search, the find bar, the open panel and the setup dialog each sized their inputs by their own padding, so no two rows agreed.
+
+- **A control height.** Buttons and single-line fields take their height from tokens, not padding: `.button` and `.field` are at least `--beuve-size-control` tall (1.75rem), `.small` is `--beuve-size-control-small` (1.375rem) and `.large` is `--beuve-size-control-large` (2rem, new). Padding is inline only and the content is centered, so a field and the buttons beside it line up whatever their fonts. The rule is global, not per row: the default grew a button by about 2px, which the titlebar, the queue header and the diff toolbars absorb (checked in screenshots). The status bar, itself one control tall, and a Cancel inside a line of chat text use `.small`. `.button.link` stays as tall as its text, and an inline button such as `beuve-commit` (`display: inline`) is unaffected.
+- **`fieldStyles`** (`src/ui/primitives/field-styles.ts`): `.field` on a native `<input>` or `<select>` (bordered, on the page background, body-size text as inputs take it, the accent border on focus), with `small` and `large` matching the buttons. Components keep width and, where the text is code (find, paths, commands), the font family. Multi-line `<textarea>`s keep their own sizing. The settings window's inputs, which had the browser's default look, now use it too. `field` is reserved like the button classes; the open panel's wrapper became `.field-row`.
+- **`.menu-separator`** in `menuItemStyles`: an `<hr>` (role `separator`, which the menu's arrow keys skip) between two runs of items that need no heading, as Blocking under the labels in the note label menu (ADR 0131).
