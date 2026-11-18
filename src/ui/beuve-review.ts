@@ -85,6 +85,7 @@ import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostic
 import { cycleZone } from './cycle-zone.ts';
 import { dockCheckedCommands } from './dock-checked-commands.ts';
 import { dockItemOf } from './dock-item-of.ts';
+import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
 import type { AppModel } from './app-model.ts';
 import type { ReviewDataController } from './review-data-controller.ts';
@@ -1978,9 +1979,11 @@ export class BeuveReview extends LitElement {
     }
     const treePath = this.treePath();
     const markedPath = treePath ?? this.activePath;
+    const activeFile = this.review?.files.find((file) => file.path === markedPath);
     return {
       activePath: treePath ?? this.activePath,
       isActiveReviewed: markedPath !== undefined && this.reviewData.marks.get(markedPath) === 'yes',
+      isActiveEditable: activeFile !== undefined && uneditableReasonFrom(activeFile) === undefined,
       focusedZone: this.focusedZone,
       dockItem: dockItemOf(dock),
       isSidebarShown: this.review !== undefined && !this.sidebarHidden,
@@ -2090,6 +2093,7 @@ export type ReviewMenuFacts = Pick<
   MenuStateInput,
   | 'activePath'
   | 'isActiveReviewed'
+  | 'isActiveEditable'
   | 'focusedZone'
   | 'dockItem'
   | 'isSidebarShown'

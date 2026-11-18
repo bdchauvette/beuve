@@ -22,6 +22,7 @@ export type MenuCondition =
   | 'session'
   | 'file'
   | 'diff-target'
+  | 'editable-target'
   | 'dock-item'
   | 'busy'
   | 'pull-request'
@@ -691,7 +692,7 @@ const entries = Object.freeze([
     menu: { menu: 'review', group: 1 },
     keys: { mac: 'Alt+Cmd+E', linux: 'Ctrl+Shift+E' },
     context: ['line'],
-    when: ['diff-target'],
+    when: ['diff-target', 'editable-target'],
     windows: ['main'],
     handler: 'window',
   },

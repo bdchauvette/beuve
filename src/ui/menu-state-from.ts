@@ -17,6 +17,8 @@ export interface MenuStateInput {
   readonly activePath: string | undefined;
   /** Whether the reviewer marked the file under the cursor (the tree's, or else the diff's). */
   readonly isActiveReviewed: boolean;
+  /** Whether Suggest Edit can edit the file under the cursor (`uneditableReasonFrom`, ADR 0043). */
+  readonly isActiveEditable: boolean;
   readonly focusedZone: ZoneId;
   /** The dock's selected notes (or the one under its cursor), while the dock has the focus. */
   readonly dockItem: DockSelectionFacts | undefined;
@@ -49,10 +51,12 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
   };
   const { display } = input;
   const isFile = input.hasSession && input.activePath !== undefined;
+  const isDiffTarget = isFile && input.focusedZone === 'diff';
   const conditions: MenuCondition[] = [
     ...has('session', input.hasSession),
     ...has('file', isFile),
-    ...has('diff-target', isFile && input.focusedZone === 'diff'),
+    ...has('diff-target', isDiffTarget),
+    ...has('editable-target', isDiffTarget && input.isActiveEditable),
     ...has('dock-item', input.hasSession && input.dockItem !== undefined),
     ...has('busy', input.isBusy),
     ...has('pull-request', input.isPullRequest),
