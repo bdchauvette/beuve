@@ -2572,8 +2572,6 @@ export interface OpenPullRequestLinkView {
 /** `menu:run` (main to the focused window): run the catalog command `id`. */
 export interface MenuRunView {
   readonly id: CommandId;
-  /** The chosen entry of a command whose menu items are a list (`open-with-editor`: an editor id). */
-  readonly argument?: string;
 }
 
 /**
@@ -3164,6 +3162,7 @@ export type SettingsInvokeChannel =
 export type SettingsOnlyInvokeChannel =
   | 'language-servers:open-config'
   | 'editor:open-settings-file'
+  | 'editor:set-preferred'
   | 'models:list'
   | 'models:save'
   | 'models:remove'

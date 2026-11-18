@@ -19,7 +19,6 @@ import { menuIconImage } from './menu-icon-image.ts';
 import { menuItemStatesFrom } from './menu-item-states-from.ts';
 import type { MenuItemState } from './menu-item-states-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
-import type { MenuListEntry } from './menu-template-from.ts';
 import type { MenuTemplateItem } from './menu-template-item.ts';
 import { yieldToTerminal } from './yield-to-terminal.ts';
 
@@ -42,17 +41,6 @@ export interface AppMenus {
   readonly popup: (webContentsId: number, request: MenuContextRequest) => boolean;
   /** `menu:run-main` from the palette: true when `id` is a main command and ran. */
   readonly runMainCommand: (webContentsId: number, id: string) => boolean;
-  /**
-   * Review › Open With's editors and the chosen one (ADR 0139). The menus are rebuilt when the
-   * list changes; a new choice only moves the check.
-   */
-  readonly setEditors: (editors: EditorMenuState) => void;
-}
-
-/** The editors Open With lists, in order, and the one that is checked. */
-export interface EditorMenuState {
-  readonly entries: readonly MenuListEntry[];
-  readonly checked: string | undefined;
 }
 
 const emptyState: MenuStateRequest = { conditions: [], checked: [] };
@@ -75,16 +63,12 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   const kinds = new Map<number, WindowKind>();
   const states = new Map<number, MenuStateRequest>();
   const menus = new Map<number, Menu>();
-  let editors: EditorMenuState = { entries: [], checked: undefined };
-  let template = menuTemplateFrom({ catalog: commandCatalog, platform });
+  const template = menuTemplateFrom({ catalog: commandCatalog, platform });
 
   const dispatch = (itemId: string, window: BrowserWindow | undefined): void => {
-    const { id, argument } = commandOfItem(itemId);
+    const id = commandIdOfItem(itemId);
     const command = byId.get(id);
     if (command === undefined) {
-      return;
-    }
-    if (argument === undefined && command.expands !== undefined) {
       return;
     }
     if (command.handler === 'main') {
@@ -103,10 +87,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
       logger.debug('menu command not sent', { id });
       return;
     }
-    sendEvent(contents, 'menu:run', {
-      id: command.id as CommandId,
-      ...(argument !== undefined && { argument }),
-    });
+    sendEvent(contents, 'menu:run', { id: command.id as CommandId });
   };
 
   const isEnabled = (contentsId: number, id: string): boolean => {
@@ -162,11 +143,10 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   // eslint-disable-next-line unicorn/no-null -- Electron removes the default menu with null.
   Menu.setApplicationMenu(appMenu ?? null);
 
-  /** Applies `states`, the names that follow them and the editor check to `menu`. */
+  /** Applies `states` and the names that follow them to `menu`. */
   const apply = (menu: Menu, states: ReadonlyMap<string, MenuItemState>): void => {
     applyStates(menu, states);
     applyCheckedLabels(menu, { items: template, states });
-    applyEditorChoice(menu, { states, editors });
   };
 
   const refresh = (contentsId: number): void => {
@@ -181,23 +161,8 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     apply(menu, statesOf(contentsId, kind));
   };
 
-  /** A new template for every menu, after the editors changed. */
+  /** Builds every window's menu again (Linux), with icons drawn for the current theme. */
   const rebuild = (): void => {
-    template = menuTemplateFrom({ catalog: commandCatalog, platform, editors: editors.entries });
-    if (appMenu !== undefined) {
-      appMenu = build();
-      Menu.setApplicationMenu(appMenu);
-      const focused = BrowserWindow.getFocusedWindow();
-      if (focused === null) {
-        apply(
-          appMenu,
-          withWindowOpeners(menuItemStatesFrom(commandCatalog, 'settings', emptyState)),
-        );
-      } else {
-        refresh(focused.webContents.id);
-      }
-      return;
-    }
     for (const contentsId of menus.keys()) {
       const window = windowOfContents(contentsId);
       if (window === undefined) {
@@ -294,34 +259,13 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
       );
       return true;
     },
-    setEditors: (next): void => {
-      const isSameList = JSON.stringify(next.entries) === JSON.stringify(editors.entries);
-      editors = next;
-      if (!isSameList) {
-        rebuild();
-        return;
-      }
-      for (const contentsId of kinds.keys()) {
-        refresh(contentsId);
-      }
-    },
   };
 }
 
-/** A menu item id's command and, for an entry of a command that expands, its argument. */
-interface ItemCommand {
-  readonly id: string;
-  readonly argument?: string;
-}
-
-/** `<id>`, `<id>~<n>` (an alternate key) or `<id>:<argument>` (an entry of a list). */
-function commandOfItem(itemId: string): ItemCommand {
+/** The command of a menu item id: `<id>`, or `<id>~<n>` for an alternate key. */
+function commandIdOfItem(itemId: string): string {
   const [id = itemId] = itemId.split('~', 1);
-  const separator = id.indexOf(':');
-  if (separator === -1) {
-    return { id };
-  }
-  return { id: id.slice(0, separator), argument: id.slice(separator + 1) };
+  return id;
 }
 
 /** The menu item id of a command's `index`th accelerator: `<id>`, then `<id>~1`, `<id>~2`, … */
@@ -424,30 +368,6 @@ function applyCheckedLabels(menu: Menu, { items, states }: CheckedLabelStates): 
       menuItem.label = item.checkedLabel;
     } else {
       menuItem.label = item.label;
-    }
-  }
-}
-
-/** A menu's states, and the editors whose radio items they apply to. */
-interface EditorChoiceStates {
-  readonly states: ReadonlyMap<string, MenuItemState>;
-  readonly editors: EditorMenuState;
-}
-
-/** Enables Open With's editor items as their command is, and checks the chosen one (ADR 0139). */
-function applyEditorChoice(menu: Menu, { states, editors }: EditorChoiceStates): void {
-  for (const command of commandCatalog) {
-    if (command.expands === undefined) {
-      continue;
-    }
-    const isEnabled = states.get(command.id)?.enabled ?? false;
-    for (const entry of editors.entries) {
-      const item = menu.getMenuItemById(`${command.id}:${entry.id}`);
-      if (item === null) {
-        continue;
-      }
-      item.enabled = isEnabled;
-      item.checked = entry.id === editors.checked;
     }
   }
 }

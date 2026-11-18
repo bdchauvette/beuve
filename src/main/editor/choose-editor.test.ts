@@ -59,8 +59,7 @@ describe('chooseEditor', () => {
       ok: false,
       error: {
         failure: 'editor-not-chosen',
-        message:
-          'Several editors were found (Zed, VS Code). Choose one in Review › Open With or in Settings › Editors.',
+        message: 'Several editors were found (Zed, VS Code). Choose one in Settings › Editors.',
       },
     });
   });

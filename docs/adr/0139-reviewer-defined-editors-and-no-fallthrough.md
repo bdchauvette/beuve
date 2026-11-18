@@ -37,3 +37,12 @@ Gram was checked against its source (codeberg.org/GramEditor/gram, `main`, read 
 ## Consequences
 
 The reviewer can use any editor that opens a file from a command line, including a terminal editor wrapped in a terminal command (`"command": "kitty", "args": ["hx", "{file}:{line}:{column}"]`), and can hide built-ins they don't want offered. A reviewer with several editors and no choice now gets a notice instead of an editor on first use; that is one extra step, accepted so beuve never opens a program the reviewer didn't pick. A missing chosen editor is a failure rather than a silent substitute. Adding a built-in is a registry entry with an argument template; a new URL scheme still needs `isEditorUrl`. The menu is rebuilt when the editors change, which Electron allows at any time; only the Open With list depends on it. Editors are global, not per repository, and Windows is still not supported. The documentation for the format is `docs/editors.md`, with an example in `docs/examples/editors-settings.json` that a test parses.
+
+## Amendment (2026-11-18): the editor is a setting only
+
+The reviewer asked that the default editor be set only in Settings, not from the menu, so it is now an ordinary setting with no menu toggle, which ADR 0068's 2026-11-06 rule already permits; the exception recorded above under "Open With, `/editor` and Settings" no longer exists.
+
+- **No Open With list.** `open-with-editor`, the catalog's `expands` field, `menuTemplateFrom`'s editor entries, `MenuRunView.argument`, `AppMenus.setEditors`, `EditorServices.onChanged` and the menu refresh on window focus are removed. Main no longer reads the editors to build menus.
+- **Editor Settings…** stays, now directly in Review beside Open in Editor (the Open With submenu would have held only it), and opens the Settings window, whose Editors section is its first.
+- **No `/editor`.** Chat commands no longer set preferences (ADR 0139, chat commands act on the conversation), so `/editor` is gone with the others; typing it says the editor is chosen in Settings › Editors (Review › Editor Settings…). There is no List Editors command: Settings › Editors lists the editors, the choice and the configuration's problems.
+- **`editor:set-preferred` is Settings-only**: it moves to `settingsOnlyInvokeChannels`, so main refuses it from the main window and sheets, and only Settings › Editors stores `preferredEditor`. The failure messages point to Settings › Editors alone.

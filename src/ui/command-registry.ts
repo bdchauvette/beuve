@@ -126,7 +126,6 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'open-in-editor': app,
     'open-in-sheet': app,
     'open-description-in-sheet': app,
-    'open-with-editor': app,
     'editor-settings': main,
     'open-review-edits': app,
     'harvest-review-edits': app,

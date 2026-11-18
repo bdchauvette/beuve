@@ -44,6 +44,6 @@ Dependency installs (ADR 0089) run `npm ci`, `uv sync --frozen` and the like dir
 
 ## Amendment (2026-11-18, ADR 0139): editors the reviewer defines, and no stand-in editor
 
-- **Registry**: Zed, Gram (a fork of Zed: `gram` or `Gram.app/Contents/MacOS/cli`, and `gram://file` URLs), VS Code and Cursor, each with an argument template (`{file}`, `{line}`, `{column}`) instead of an argv builder. `editors` in `settings.json` adds editors of the reviewer's own and changes or removes built-ins; invalid entries are left out and reported in Settings and by `/editor`.
+- **Registry**: Zed, Gram (a fork of Zed: `gram` or `Gram.app/Contents/MacOS/cli`, and `gram://file` URLs), VS Code and Cursor, each with an argument template (`{file}`, `{line}`, `{column}`) instead of an argv builder. `editors` in `settings.json` adds editors of the reviewer's own and changes or removes built-ins; invalid entries are left out and reported in Settings.
 - **Which editor** replaces "the first installed wins unless the reviewer chose one": the chosen editor only, failing with `editor-unavailable` when it is missing or no longer defined; without a choice, the only installed editor, else `editor-not-chosen` or `no-editor-found`. Nothing else is ever started in its place.
-- **Preference**: `/editor <id>` takes any configured id, Review › Open With lists every known editor, and Settings › Editors shows where each was found.
+- **Preference**: chosen only in Settings › Editors, which lists every known editor and where each was found (Review › Editor Settings… opens it). The chat has no `/editor` (ADR 0139, chat commands act on the conversation) and the menu has no Open With list (ADR 0139's 2026-11-18 amendment).

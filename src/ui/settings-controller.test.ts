@@ -110,33 +110,6 @@ describe('SettingsController', () => {
   test('changes nothing without a bridge', async ({ expect }) => {
     const { settings, invoked } = createSettingsHarness({ hasBridge: false });
     await expect(settings.change({ layout: 'unified' })).resolves.toBeUndefined();
-    await expect(settings.chooseEditor('zed')).resolves.toBeUndefined();
     expect(invoked).toStrictEqual([]);
-  });
-
-  test('reads the editor without an id and stores one with an id', async ({ expect }) => {
-    const { settings, invoked } = createSettingsHarness({
-      replies: {
-        'editor:get-settings': ok({ preferred: 'zed' }),
-        'editor:set-preferred': ok({ preferred: 'vscode' }),
-      },
-    });
-    await settings.chooseEditor();
-    expect(settings.editorSettings).toStrictEqual({ preferred: 'zed' });
-    await settings.chooseEditor('vscode');
-    expect(settings.editorSettings).toStrictEqual({ preferred: 'vscode' });
-    expect(invoked).toStrictEqual([
-      ['editor:get-settings', undefined],
-      ['editor:set-preferred', { editorId: 'vscode' }],
-    ]);
-  });
-
-  test('returns a refused editor choice and keeps the editor', async ({ expect }) => {
-    const { settings } = createSettingsHarness({
-      replies: { 'editor:set-preferred': failed('not installed') },
-    });
-    const result = await settings.chooseEditor('zed');
-    expect(result).toStrictEqual(failed('not installed'));
-    expect(settings.editorSettings).toBeUndefined();
   });
 });

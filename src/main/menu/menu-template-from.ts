@@ -9,20 +9,6 @@ import { placeOfCommand } from './place-of-command.ts';
 export interface MenuTemplateOptions {
   readonly catalog: readonly CatalogCommand[];
   readonly platform: KeyPlatform;
-  /** The entries of an `expands: 'editors'` command (ADR 0139); none when absent. */
-  readonly editors?: readonly MenuListEntry[];
-}
-
-/** One radio item of a command that `expands`: its argument and its label. */
-export interface MenuListEntry {
-  readonly id: string;
-  readonly label: string;
-}
-
-/** What laying out one group needs besides its commands. */
-interface ItemContext {
-  readonly platform: KeyPlatform;
-  readonly editors: readonly MenuListEntry[];
 }
 
 const letter = /^[\p{L}\p{N}]$/u;
@@ -102,13 +88,10 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
  * (About in Help, Preferences in Edit, Quit in File) and with `&` mnemonics, unique per menu.
  * Items sort by group, then catalog order, with separators between groups; a command's first
  * accelerator is shown, the others are hidden items that still work. A command with
- * `checkedNames` carries both labels, each with its own access key (ADR 0142). A command that `expands`
- * becomes one radio item per entry, `<id>:<entry id>` (ADR 0139), or a disabled "No Editors Found"
- * when there are none. Pure.
+ * `checkedNames` carries both labels, each with its own access key (ADR 0142). Pure.
  */
 export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTemplateItem[] {
   const { catalog, platform } = options;
-  const context: ItemContext = { platform, editors: options.editors ?? [] };
   const isMac = platform === 'mac';
   const roles = roleItemsFor(platform);
   const placed = catalog
@@ -133,7 +116,7 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
             ...(extra[group] ?? []),
             ...itemsOf(
               placed.filter(({ place }) => place.menu === menu && place.group === group),
-              context,
+              platform,
             ),
           ];
         });
@@ -154,12 +137,12 @@ export function menuTemplateFrom(options: MenuTemplateOptions): readonly MenuTem
 }
 
 /** One group's items; a submenu gathers the group's commands that name it, at its first one. */
-function itemsOf(entries: readonly PlacedCommand[], context: ItemContext): MenuTemplateItem[] {
+function itemsOf(entries: readonly PlacedCommand[], platform: KeyPlatform): MenuTemplateItem[] {
   const items: MenuTemplateItem[] = [];
   const seen = new Set<string>();
   for (const { command, place } of entries) {
     if (place.submenu === undefined) {
-      items.push(...commandItems(command, context));
+      items.push(...commandItems(command, platform));
       continue;
     }
     if (seen.has(place.submenu)) {
@@ -175,7 +158,7 @@ function itemsOf(entries: readonly PlacedCommand[], context: ItemContext): MenuT
     const sections = subgroups.map((subgroup) => {
       return members
         .filter((entry) => (entry.place.subgroup ?? 0) === subgroup)
-        .flatMap((entry) => commandItems(entry.command, context));
+        .flatMap((entry) => commandItems(entry.command, platform));
     });
     items.push({
       label: place.submenu,
@@ -185,22 +168,8 @@ function itemsOf(entries: readonly PlacedCommand[], context: ItemContext): MenuT
   return items;
 }
 
-/**
- * The visible item with the first accelerator, then a hidden item per alternate; for a command
- * that expands, a radio item per entry.
- */
-function commandItems(
-  command: CatalogCommand,
-  { platform, editors }: ItemContext,
-): MenuTemplateItem[] {
-  if (command.expands !== undefined) {
-    if (editors.length === 0) {
-      return [{ label: 'No Editors Found', enabled: false }];
-    }
-    return editors.map((entry): MenuTemplateItem => {
-      return { id: `${command.id}:${entry.id}`, label: entry.label, type: 'radio' };
-    });
-  }
+/** The visible item with the first accelerator, then a hidden item per alternate. */
+function commandItems(command: CatalogCommand, platform: KeyPlatform): MenuTemplateItem[] {
   const [primary, ...alternates] = acceleratorsFor(command, platform);
   const label = menuLabelOf(command, platform);
   const { checkedNames, icon } = command;

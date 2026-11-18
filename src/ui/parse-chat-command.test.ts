@@ -109,9 +109,15 @@ describe('parseChatCommand', () => {
     });
   });
 
+  test('says /editor is a setting made in Settings › Editors', ({ expect }) => {
+    expect(parseChatCommand('/Editor zed')).toStrictEqual({
+      kind: 'invalid',
+      message:
+        '/Editor sets a preference, which chat commands no longer do. Choose the editor in Settings › Editors (Review › Editor Settings…). Type /help for the chat commands.',
+    });
+  });
+
   test.for([
-    '/editor',
-    '/editor zed',
     '/diff inline',
     '/whitespace ignore',
     '/generated show',

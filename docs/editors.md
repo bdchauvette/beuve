@@ -4,7 +4,7 @@ Open in Editor (⌥⌘O / Ctrl+Shift+O) and Review › Review Edits › Open in 
 
 ## Choosing an editor
 
-Choose in Review › Open With, in Settings › Editors, or with `/editor <id>` in the chat (`/editor` alone lists the editors and says which one opens). The choice is stored as `preferredEditor` in beuve's `settings.json`.
+Choose in Settings › Editors (Review › Editor Settings… opens it). That is the only place: neither the menu nor the chat sets it. The choice is stored as `preferredEditor` in beuve's `settings.json`.
 
 Beuve only opens the editor you chose. If it is not found, or `settings.json` no longer defines it, Open in Editor says so and opens nothing; it never starts another editor instead. Until you choose, beuve uses your editor if exactly one is installed, and asks you to choose if there are several.
 
@@ -35,7 +35,7 @@ A terminal editor (Helix, Vim, Neovim) needs a terminal to run in, because beuve
 
 An entry with a built-in's id (`zed`, `gram`, `vscode`, `cursor`) changes only what it names. Giving it a `command` replaces every place beuve looks for that editor, including the macOS app, so you get that program or a clear "not found". Editors you add have no URL form; on macOS, point `command` at the command-line tool inside the app.
 
-Beuve reads `editors` every time it opens a file, so changes apply at once; the Open With menu catches up when a beuve window regains focus. An entry with a mistake (an unknown key, a wrong type, an unknown `{placeholder}`) is left out, and the reason shows in Settings › Editors, in `/editor` and in the log; the rest keep working. Beuve never rewrites `editors`, and it leaves a `settings.json` that is not valid JSON untouched rather than replace it.
+Beuve reads `editors` every time it opens a file, so changes apply at once; Settings reads them again when its window regains focus. An entry with a mistake (an unknown key, a wrong type, an unknown `{placeholder}`) is left out, and the reason shows in Settings › Editors and in the log; the rest keep working. Beuve never rewrites `editors`, and it leaves a `settings.json` that is not valid JSON untouched rather than replace it.
 
 A fuller example is in [examples/editors-settings.json](examples/editors-settings.json).
 
