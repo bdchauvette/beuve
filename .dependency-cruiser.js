@@ -148,7 +148,7 @@ export default {
       name: 'dom-input-range-only-in-caret-rect-from',
       severity: 'error',
       comment:
-        'Only caret-rect-from imports dom-input-range (ADR 0146), so measuring a caret in a text field has one home.',
+        'Only caret-rect-from imports dom-input-range (ADR 0147), so measuring a caret in a text field has one home.',
       from: { path: '^src/', pathNot: ['^src/ui/caret-rect-from\\.ts$'] },
       to: { path: '^node_modules/dom-input-range/' },
     },

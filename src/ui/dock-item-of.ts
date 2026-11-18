@@ -4,7 +4,7 @@ import type { DockSelectionFacts } from './dock-selection-facts.ts';
 
 /**
  * What the dock's notes under the cursor or in the selection enable in the menus, while the dock
- * has the focus (ADR 0143): a Note command acts on all of them, so it says Restore, Mark as Not
+ * has the focus (ADR 0144): a Note command acts on all of them, so it says Restore, Mark as Not
  * Addressed or Mark as Not Blocking only when every one of them is withdrawn, addressed or
  * blocking. Pure.
  */

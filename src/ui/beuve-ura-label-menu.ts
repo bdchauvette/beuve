@@ -31,7 +31,7 @@ export interface UraLabelChange {
  * Choosing a label closes it and focus goes back to the trigger. Escape inside the open menu only
  * closes the menu, so the form around it stays open. The composer and the dock's editor both use
  * it. It updates `severity` and `blocking` itself and emits a composed `beuve-ura-label-change`
- * ({@link UraLabelChange}). For several notes at once (the dock's selection bar, ADR 0143),
+ * ({@link UraLabelChange}). For several notes at once (the dock's selection bar, ADR 0144),
  * `mixedSeverity` makes the trigger read "Mixed labels" with no label checked, and
  * `mixedBlocking` shows Blocking as mixed (a dash) with no `· blocking` on the trigger; choosing
  * either clears its mixed state, and Blocking from mixed blocks them all.

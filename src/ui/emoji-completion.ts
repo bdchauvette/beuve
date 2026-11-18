@@ -19,7 +19,7 @@ type CompletionField = HTMLInputElement | HTMLTextAreaElement;
 
 /**
  * `:shortcode:` completion for the host's text fields that carry `data-emoji-completion` (ADR
- * 0144). Typing `:` and two characters of a name lists up to eight emoji in a popover just below
+ * 0145). Typing `:` and two characters of a name lists up to eight emoji in a popover just below
  * the line the `:name` starts on, at its `:` (above it near the window's bottom); ↓ ↑ move, Enter
  * and Tab insert, Escape closes the list (and only the list), and a closing `:` after an exact
  * name inserts it as well. The emoji replaces the typed `:name` as one

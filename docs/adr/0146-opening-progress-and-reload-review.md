@@ -1,4 +1,4 @@
-# 0145. A review shows that it is opening from the moment it is picked, and Reload Review fetches it again
+# 0146. A review shows that it is opening from the moment it is picked, and Reload Review fetches it again
 
 - Status: Accepted
 - Date: 2026-11-18

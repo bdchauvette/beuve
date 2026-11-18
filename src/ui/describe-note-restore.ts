@@ -6,7 +6,7 @@ export interface NoteRestore {
   readonly count: number;
 }
 
-/** The notice after Undo Delete Note, in the singular or the plural (ADR 0143). Pure. */
+/** The notice after Undo Delete Note, in the singular or the plural (ADR 0144). Pure. */
 export function describeNoteRestore({ isRestored, count }: NoteRestore): StatusNotice {
   const isPlural = count > 1;
   if (isRestored && isPlural) {

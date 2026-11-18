@@ -1,6 +1,6 @@
 # 0033. Opening the current line in the reviewer's editor
 
-- Status: Accepted (registry, preference and choice amended by [0140](0140-reviewer-defined-editors-and-no-fallthrough.md))
+- Status: Accepted (registry, preference and choice amended by [0141](0141-reviewer-defined-editors-and-no-fallthrough.md))
 - Date: 2026-10-28
 
 ## Context
@@ -42,8 +42,8 @@ Dependency installs (ADR 0089) run `npm ci`, `uv sync --frozen` and the like dir
 - **Open in Editor on beuve's checkout** shows one line instead of "read-only": "beuve's checkout at `<short sha>`; edits here aren't kept, use Review Edits", with an Open Review Edits button (ADR 0088). The `editor:open` answer names the head it opened.
 - The TOCTOU concern of the first amendment stands, as a convention: an edit in the checkout still changes what the language servers and probes read, and a head move still deletes it. The notice says so; Review Edits is the sanctioned place to edit.
 
-## Amendment (2026-11-18, ADR 0140): editors the reviewer defines, and no stand-in editor
+## Amendment (2026-11-18, ADR 0141): editors the reviewer defines, and no stand-in editor
 
 - **Registry**: Zed, Gram (a fork of Zed: `gram` or `Gram.app/Contents/MacOS/cli`, and `gram://file` URLs), VS Code and Cursor, each with an argument template (`{file}`, `{line}`, `{column}`) instead of an argv builder. `editors` in `settings.json` adds editors of the reviewer's own and changes or removes built-ins; invalid entries are left out and reported in Settings.
 - **Which editor** replaces "the first installed wins unless the reviewer chose one": the chosen editor only, failing with `editor-unavailable` when it is missing or no longer defined; without a choice, the only installed editor, else `editor-not-chosen` or `no-editor-found`. Nothing else is ever started in its place.
-- **Preference**: chosen only in Settings › Editors, which lists every known editor and where each was found (Review › Editor Settings… opens it). The chat has no `/editor` (ADR 0139) and the menu has no Open With list (ADR 0140's 2026-11-18 amendment).
+- **Preference**: chosen only in Settings › Editors, which lists every known editor and where each was found (Review › Editor Settings… opens it). The chat has no `/editor` (ADR 0139) and the menu has no Open With list (ADR 0141's 2026-11-18 amendment).

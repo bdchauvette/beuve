@@ -9,7 +9,7 @@ import type { ReviewRangeChoice, SessionError, SessionId } from './session.ts';
 
 type CorruptRow = Extract<SessionError, { kind: 'corrupt-row' }>;
 
-/** The range the reviewer chose for a session's review (ADR 0141); `since-last` when none is stored. */
+/** The range the reviewer chose for a session's review (ADR 0142); `since-last` when none is stored. */
 export function findReviewRangeChoice(
   db: DatabaseSync,
   sessionId: SessionId,

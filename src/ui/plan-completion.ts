@@ -1,4 +1,4 @@
-/** What a key does to a text field's open completion list (ADR 0127, 0144). */
+/** What a key does to a text field's open completion list (ADR 0127, 0145). */
 export type CompletionStep =
   | { readonly kind: 'highlight'; readonly index: number }
   | { readonly kind: 'choose'; readonly index: number }

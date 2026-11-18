@@ -7,7 +7,7 @@ import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
- * Reload beside it while a review is open (ADR 0145), and the command palette's search button.
+ * Reload beside it while a review is open (ADR 0146), and the command palette's search button.
  * The bar drags the window; its buttons do not. Emits `beuve-titlebar-open`, `beuve-titlebar-reload` and
  * `beuve-titlebar-search`.
  */

@@ -1,4 +1,4 @@
-# 0140. Editors the reviewer defines, Gram built in, and no stand-in editor
+# 0141. Editors the reviewer defines, Gram built in, and no stand-in editor
 
 - Status: Accepted; amends [0033](0033-open-in-editor.md) (registry, preference, which editor opens) and [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) (Open With, Settings)
 - Date: 2026-11-18

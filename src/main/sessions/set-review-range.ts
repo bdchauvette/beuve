@@ -11,7 +11,7 @@ import { sessionFailure } from './session-failure.ts';
 import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /**
- * Stores which range the session's review shows (ADR 0141): since the last saved progress, the
+ * Stores which range the session's review shows (ADR 0142): since the last saved progress, the
  * whole change, or since an earlier saved progress of this session. Every review read follows it
  * (the diff, its order, files, notes and chat), so they all describe the same diff.
  */

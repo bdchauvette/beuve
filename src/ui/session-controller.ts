@@ -24,7 +24,7 @@ export interface SavedProgress {
   readonly sessionId: string;
   readonly sha: string;
   readonly at: Temporal.Instant;
-  /** The checkpoint this save recorded, which Undo Save Progress removes (ADR 0141); absent when the head was already saved. */
+  /** The checkpoint this save recorded, which Undo Save Progress removes (ADR 0142); absent when the head was already saved. */
   readonly checkpointId?: string;
 }
 
@@ -284,7 +284,7 @@ export class SessionController implements ReactiveController {
   }
 
   /**
-   * Undo Save Progress (ADR 0141): removes the checkpoint this window's latest save recorded on
+   * Undo Save Progress (ADR 0142): removes the checkpoint this window's latest save recorded on
    * the open session, while it is still the session's latest, then reloads the review, which shows
    * again what it showed before the save. One save is undone once.
    */
@@ -313,7 +313,7 @@ export class SessionController implements ReactiveController {
     return { kind: 'undone' };
   }
 
-  /** Shows the open review over another range (ADR 0141): stores the choice, then reloads. */
+  /** Shows the open review over another range (ADR 0142): stores the choice, then reloads. */
   async setReviewRange(range: ReviewRangeChoiceView): Promise<void> {
     const bridge = this.environment.bridge();
     const { review } = this.snapshot;

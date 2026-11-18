@@ -2,7 +2,7 @@ const allowedProtocols: ReadonlySet<string> = new Set(['zed:', 'gram:', 'vscode:
 
 /**
  * Whether `value` is a `zed://`, `gram://`, `vscode://` or `cursor://` file URL: the only URLs main
- * hands to `shell.openExternal` (ADR 0033, 0140). Reviewer-defined editors have no URL form.
+ * hands to `shell.openExternal` (ADR 0033, 0141). Reviewer-defined editors have no URL form.
  * Anything else, whatever its origin, is refused.
  */
 export function isEditorUrl(value: string): boolean {

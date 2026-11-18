@@ -9,7 +9,7 @@ export interface UraMove {
  * The dock order after moving the `ids` one place (`step` is 1 or -1) among the `movable` items:
  * each swaps with the nearest movable neighbor in that direction that isn't moving too, so staged
  * items reorder around withdrawn ones without disturbing them, and several selected ones move
- * together (ADR 0143). One that reaches an end stays there, and the ones behind it close up. Ids
+ * together (ADR 0144). One that reaches an end stays there, and the ones behind it close up. Ids
  * that aren't movable stay put. Pure.
  */
 export function moveUraItems(order: readonly string[], { ids, step, movable }: UraMove): string[] {

@@ -93,7 +93,7 @@ export interface UraServices {
   readonly update: (request: UpdateUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly transition: (request: TransitionUraItemRequest) => Promise<IpcResult<UraItemView>>;
   readonly reorder: (request: ReorderUraItemsRequest) => IpcResult<UraOrderView>;
-  /** One change to several items of a session, all or none (ADR 0143). */
+  /** One change to several items of a session, all or none (ADR 0144). */
   readonly editMany: (request: EditUraItemsRequest) => Promise<IpcResult<UraItemsEditedView>>;
   /** Deletes items of any status, keeping them in memory for {@link UraServices.restore}. */
   readonly delete: (request: DeleteUraItemsRequest) => IpcResult<UraDeletedView>;

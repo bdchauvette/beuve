@@ -30,4 +30,4 @@ ADR 0054 replaces the merge-base with a stack-aware fork point (a parent already
 
 ## Amendment 2026-11-18: undo and the chosen range
 
-ADR 0141 lets the latest checkpoint be deleted (Undo Save Progress) and makes the range a stored per-session choice: since the last checkpoint (the default described here), the whole change, or since an earlier checkpoint. `computeReviewRange` takes that choice.
+ADR 0142 lets the latest checkpoint be deleted (Undo Save Progress) and makes the range a stored per-session choice: since the last checkpoint (the default described here), the whole change, or since an earlier checkpoint. `computeReviewRange` takes that choice.

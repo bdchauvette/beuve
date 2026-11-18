@@ -16,7 +16,7 @@ import './primitives/beuve-menu.ts';
 import './primitives/beuve-time.ts';
 
 /**
- * Which changes the review shows (ADR 0141), as a menu in its header: since the last saved
+ * Which changes the review shows (ADR 0142), as a menu in its header: since the last saved
  * progress, the whole change, or since an earlier save. Nothing renders until progress was saved.
  * Emits `beuve-review-range` (bubbling, composed) with the {@link ReviewRangeChoiceView} chosen.
  */

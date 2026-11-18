@@ -426,7 +426,7 @@ const uraTransitionRequest = z.strictObject({
   to: z.enum(['staged', 'withdrawn', 'addressed']),
 });
 
-/** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0143). */
+/** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0144). */
 const uraBatchLimit = 1000;
 
 const uraItemIds = z.array(uuid).min(1).max(uraBatchLimit);
@@ -524,7 +524,7 @@ const editorOpenRequest = z.strictObject({
   line,
   column: z.number().int().min(1).max(100_000).optional(),
 });
-/** An editor id (ADR 0140); main checks that it names a configured editor. */
+/** An editor id (ADR 0141); main checks that it names a configured editor. */
 const preferredEditorRequest = z.strictObject({
   editorId: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/u),
 });

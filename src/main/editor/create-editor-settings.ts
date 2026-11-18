@@ -8,7 +8,7 @@ import { isEditorId } from './is-editor-id.ts';
 /**
  * The reviewer's editor choice, their own editors and the review-edits branch prefix, persisted as
  * `{ "preferredEditor": "zed", "editors": { … }, "reviewEditsPrefix": "review/" }` (ADR 0033,
- * 0088, 0140). Beuve writes `preferredEditor` and `reviewEditsPrefix`; `editors` is the
+ * 0088, 0141). Beuve writes `preferredEditor` and `reviewEditsPrefix`; `editors` is the
  * reviewer's to edit by hand, and beuve only reads it.
  */
 export interface EditorSettings {

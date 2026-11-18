@@ -1,5 +1,5 @@
 /**
- * The dock's selection (ADR 0143): the notes picked besides the cursor, and the note a Shift
+ * The dock's selection (ADR 0144): the notes picked besides the cursor, and the note a Shift
  * range grows from. Empty means only the note under the cursor.
  */
 export interface DockSelection {

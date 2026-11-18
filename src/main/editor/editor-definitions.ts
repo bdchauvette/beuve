@@ -3,7 +3,7 @@ import type { EditorId } from '#contract/ipc-contract.ts';
 import type { EditorUrlScheme } from './build-editor-url.ts';
 
 /**
- * How to find an editor and open `file:line:column` in it (ADR 0033, 0140). `executables` are
+ * How to find an editor and open `file:line:column` in it (ADR 0033, 0141). `executables` are
  * names looked up on PATH; `knownPaths` are absolute or start with `~/` for the home directory
  * (macOS GUI apps don't inherit the shell's PATH); `appBundles` are macOS apps whose `urlScheme`
  * is the fallback when no CLI is found. `args` is a template with `{file}`, `{line}` and
@@ -27,7 +27,7 @@ const positionArgs: readonly string[] = Object.freeze(['{file}:{line}:{column}']
 const gotoArgs: readonly string[] = Object.freeze(['--goto', '{file}:{line}:{column}']);
 
 /**
- * The editors beuve knows without configuration, in the order Settings lists them (ADR 0140). The
+ * The editors beuve knows without configuration, in the order Settings lists them (ADR 0141). The
  * order no longer decides which one opens: the reviewer's choice does.
  */
 export const editorDefinitions: readonly EditorDefinition[] = Object.freeze([

@@ -1,4 +1,4 @@
-/** What the dock's selected notes are, for the Note commands' names (ADR 0143). */
+/** What the dock's selected notes are, for the Note commands' names (ADR 0144). */
 export interface DockSelectionFacts {
   readonly count: number;
   /** Every one of them is addressed: Mark as Not Addressed. */

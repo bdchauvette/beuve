@@ -1,4 +1,4 @@
-# 0142. Notes the agent raised say so on GitHub, with a finding's confidence
+# 0143. Notes the agent raised say so on GitHub, with a finding's confidence
 
 - Status: Accepted
 - Date: 2026-11-18

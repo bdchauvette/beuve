@@ -181,7 +181,7 @@ export interface OpenCommitDetail {
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
  * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`,
- * `beuve-review-range` (ADR 0141, also from its `beuve-review-range` header menu), `beuve-peek-request`,
+ * `beuve-review-range` (ADR 0142, also from its `beuve-review-range` header menu), `beuve-peek-request`,
  * `beuve-peek-close`, `beuve-open-commit`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
@@ -414,7 +414,7 @@ export class BeuveDiffStream extends LitElement {
     this.isPairsOpen = (event.currentTarget as HTMLDetailsElement).open;
   };
 
-  /** Up to date: show the whole change again, whatever was saved (ADR 0141). */
+  /** Up to date: show the whole change again, whatever was saved (ADR 0142). */
   private readonly onShowWholeClick = (): void => {
     this.dispatchEvent(
       new CustomEvent('beuve-review-range', {

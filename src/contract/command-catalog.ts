@@ -58,7 +58,7 @@ export interface InPlaceKeys {
   readonly linuxKeys?: readonly string[];
 }
 
-/** What the palette and a menu call a command in one state (ADR 0143). */
+/** What the palette and a menu call a command in one state (ADR 0144). */
 export interface CommandNames {
   readonly title: string;
   /** The menu label when it differs from `title`. */
@@ -66,7 +66,7 @@ export interface CommandNames {
 }
 
 /**
- * A symbol beside a menu item (ADR 0143), drawn by main: an SF Symbol on macOS, a bitmap of its
+ * A symbol beside a menu item (ADR 0144), drawn by main: an SF Symbol on macOS, a bitmap of its
  * own on Linux.
  */
 export type MenuIcon = 'arrow-up' | 'arrow-down';
@@ -99,13 +99,13 @@ export interface CatalogCommand {
   readonly when?: readonly MenuCondition[];
   readonly toggle?: 'checkbox' | 'radio';
   /**
-   * The names the command takes while the window lists it in `checked` (ADR 0143), for a command
+   * The names the command takes while the window lists it in `checked` (ADR 0144), for a command
    * whose action flips with the state of what it acts on: Withdraw Note becomes Restore Note. The
    * menus and the palette show them instead of `title` and `label`, with no check mark; the
    * shortcuts window shows both. Such a command has no `toggle`.
    */
   readonly checkedNames?: CommandNames;
-  /** A symbol the menus show beside the command (ADR 0143). */
+  /** A symbol the menus show beside the command (ADR 0144). */
   readonly icon?: MenuIcon;
   readonly context?: readonly ContextKind[];
   readonly windows: readonly WindowKind[];

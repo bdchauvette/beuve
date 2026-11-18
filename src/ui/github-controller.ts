@@ -45,7 +45,7 @@ export interface StagedReview {
 }
 
 /**
- * A pull request or branch being fetched (ADR 0145): to `open` it, or to `reload` the open
+ * A pull request or branch being fetched (ADR 0146): to `open` it, or to `reload` the open
  * session from GitHub.
  */
 export interface GithubFetch {
@@ -507,7 +507,7 @@ export class GithubController implements ReactiveController {
   /**
    * Fetches a pull request, or a branch to follow (a tree URL or `owner/repo:branch`, ADR 0112),
    * and opens it as a session; one fetch at a time. The fetch stays shown until the session starts
-   * loading, so the window never flashes back to what it showed before (ADR 0145).
+   * loading, so the window never flashes back to what it showed before (ADR 0146).
    */
   async open(request: OpenPullRequestRequest, { label = '' }: OpenOptions = {}): Promise<void> {
     this.patch({ failure: undefined });
@@ -532,7 +532,7 @@ export class GithubController implements ReactiveController {
   }
 
   /**
-   * Reload Review (ADR 0145) for a pull request or followed branch: fetches it again the way
+   * Reload Review (ADR 0146) for a pull request or followed branch: fetches it again the way
    * opening it does (head and base), then reloads the review in place. A failure is a notice; the
    * review stays. Resolves `false` for a local session, which has nothing to fetch.
    */
@@ -582,7 +582,7 @@ export class GithubController implements ReactiveController {
     }
   }
 
-  /** Stops whichever fetch is in flight, opening or reloading (Stop, ADR 0145). */
+  /** Stops whichever fetch is in flight, opening or reloading (Stop, ADR 0146). */
   cancelFetch(): void {
     const { requestId } = this;
     if (requestId !== undefined) {

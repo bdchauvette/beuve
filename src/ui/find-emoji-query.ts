@@ -15,7 +15,7 @@ export interface EmojiQuery {
 }
 
 /**
- * The emoji shortcode being typed just before the caret (ADR 0144): a colon, then two or more of
+ * The emoji shortcode being typed just before the caret (ADR 0145): a colon, then two or more of
  * the characters shortcode names use (`a`–`z`, digits, `_`, `+`, `-`), at the start or after
  * anything but a letter, digit, `_` or another colon, so `10:30`, `a::b` and `https://` never
  * open the list. `undefined` when there is none. Pure.
