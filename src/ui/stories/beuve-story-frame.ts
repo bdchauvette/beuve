@@ -10,6 +10,7 @@ import { buttonStyles } from '../primitives/button-styles.ts';
 import { emptyStateStyles } from '../primitives/empty-state-styles.ts';
 import { kbdStyles } from '../primitives/kbd-styles.ts';
 import { menuItemStyles } from '../primitives/menu-item-styles.ts';
+import { progressStyles } from '../primitives/progress-styles.ts';
 import { segmentedStyles } from '../primitives/segmented-styles.ts';
 import { statusDotStyles } from '../primitives/status-dot-styles.ts';
 
@@ -28,6 +29,7 @@ export class BeuveStoryFrame extends LitElement {
     emptyStateStyles,
     segmentedStyles,
     menuItemStyles,
+    progressStyles,
     css`
       :host {
         display: block;

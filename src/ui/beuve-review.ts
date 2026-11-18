@@ -28,6 +28,7 @@ import type { HoverPoint } from './hover-point.ts';
 import './beuve-command-palette.ts';
 import './beuve-open-panel.ts';
 import './beuve-diff-stream.ts';
+import './beuve-opening.ts';
 import './beuve-files-sidebar.ts';
 import './beuve-overview-sidebar.ts';
 import './beuve-keybinding-overlay.ts';
@@ -90,7 +91,7 @@ import type { SettingsController } from './settings-controller.ts';
 import type { UraController } from './ura-controller.ts';
 import type { EditorPlace } from './review-edits-controller.ts';
 import type { UraUpdateDetail } from './ura-controller.ts';
-import type { GithubPostDetail } from './github-controller.ts';
+import type { GithubFetch, GithubPostDetail } from './github-controller.ts';
 import { describeEditorOpen } from './describe-editor-open.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
@@ -178,13 +179,38 @@ export class BeuveReview extends LitElement {
         --empty-screen-width: var(--beuve-size-dialog-wide);
       }
 
-      .main > beuve-diff-stream,
-      .main > .empty-screen {
+      .main > .stage {
+        position: relative;
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-block-size: 0;
+      }
+
+      .stage > beuve-diff-stream,
+      .stage > .empty-screen {
         flex: 1;
         min-block-size: 0;
       }
+
+      .cover {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        background: var(--beuve-bg);
+      }
     `,
   ];
+
+  /** The fetch whose cover took the focus, so it takes it once (ADR 0144). */
+  private focusedOpening: GithubFetch | undefined;
+
+  /** Cancel on the cover of a review being fetched to open. */
+  private readonly onOpeningCancel = (): void => {
+    this.github.cancelOpening();
+  };
 
   /** The file the diff stream's cursor is on, sent as the question's focus. */
   private activePath: string | undefined;
@@ -1200,6 +1226,38 @@ export class BeuveReview extends LitElement {
     ></beuve-files-sidebar>`;
   }
 
+  /**
+   * The review, or the empty screen, with a review being fetched to open over it (ADR 0144): what
+   * was shown stays under the cover, so a cancelled or failed open leaves it as it was.
+   */
+  private renderStage(): TemplateResult {
+    const fetch = this.shownOpening();
+    return html`<div class="stage">
+      ${this.renderDiff()}
+      ${
+        fetch === undefined
+          ? nothing
+          : html`<div class="cover">
+              <beuve-opening
+                .label=${fetch.label}
+                .stage=${fetch.stage}
+                cancellable
+                @beuve-opening-cancel=${this.onOpeningCancel}
+              ></beuve-opening>
+            </div>`
+      }
+    </div>`;
+  }
+
+  /** The fetch to show over the stage: one opening what the reviewer picked. */
+  private shownOpening(): GithubFetch | undefined {
+    const { fetch } = this.github;
+    if (fetch?.kind !== 'open' || fetch.label === '') {
+      return undefined;
+    }
+    return fetch;
+  }
+
   private renderDiff(): TemplateResult {
     if (this.review === undefined && !this.session.isLoading && this.session.error === '') {
       return html`<div class="empty-screen">
@@ -1877,7 +1935,7 @@ export class BeuveReview extends LitElement {
         ?hasSidebar=${hasSidebar}
         .sidebarWidth=${this.sidebarWidth}
       >
-        <div class="main" slot="main">${this.renderDiff()}${this.renderTerminal()}</div>
+        <div class="main" slot="main">${this.renderStage()}${this.renderTerminal()}</div>
         ${hasSidebar ? this.renderSidebar() : nothing}
       </beuve-workspace>
       ${
@@ -1930,6 +1988,11 @@ export class BeuveReview extends LitElement {
 
   protected override updated(changed: PropertyValues<this>): void {
     this.scheduleMenuSync();
+    const opening = this.shownOpening();
+    if (opening !== this.focusedOpening) {
+      this.focusedOpening = opening;
+      this.renderRoot.querySelector<HTMLElement>('.cover beuve-opening')?.focus();
+    }
     const isRelevant = ['focusedZone', 'sidebarHidden'].some((key) => {
       return changed.has(key as keyof BeuveReview);
     });

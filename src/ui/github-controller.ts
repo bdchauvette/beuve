@@ -11,6 +11,7 @@ import type {
   RemoteBranchUpdatedView,
   RemoteBranchView,
   UraItemView,
+  SessionSummary,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -19,6 +20,7 @@ import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
 import type { GithubPostState, GithubPreviewState } from './github-post-state.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
+import type { OpenQuery } from './parse-open-query.ts';
 import { pullRequestLabelFrom } from './pull-request-label-from.ts';
 import type { ReviewRef } from './review-ref.ts';
 import type { TimelineState } from './timeline-state.ts';
@@ -35,6 +37,27 @@ export interface StagedReview {
   readonly items: readonly UraItemView[];
   /** The verdict the review would post: the chosen one, else the derived one. */
   readonly verdict: UraVerdictView;
+}
+
+/**
+ * A pull request or branch being fetched (ADR 0144): to `open` it, or to `reload` the open
+ * session from GitHub.
+ */
+export interface GithubFetch {
+  readonly kind: 'open' | 'reload';
+  /** What is fetched, as a step: `Fetching pull request #12…`. */
+  readonly stage: string;
+  /**
+   * What the reviewer picked, such as a queue row's name; the window shows the fetch over the
+   * review while it runs. Empty from the Open panel, which shows its own progress.
+   */
+  readonly label: string;
+}
+
+/** How {@link GithubController.open} shows the fetch. */
+export interface OpenOptions {
+  /** Names what is opening, so the window shows the fetch (see {@link GithubFetch.label}). */
+  readonly label?: string;
 }
 
 /** What the GitHub flows need from the window around them. */
@@ -64,7 +87,7 @@ interface GithubSnapshot {
   readonly auth: GithubAuthStatusView | undefined;
   readonly post: GithubPostState;
   readonly preview: GithubPreviewState;
-  readonly isOpening: boolean;
+  readonly fetch: GithubFetch | undefined;
   readonly failure: OpenFailure | undefined;
   /** The open session, when polling found new commits the review doesn't show yet. */
   readonly newCommitsIn: string | undefined;
@@ -92,7 +115,7 @@ const initial: GithubSnapshot = {
   auth: undefined,
   post: { kind: 'idle' },
   preview: { kind: 'none' },
-  isOpening: false,
+  fetch: undefined,
   failure: undefined,
   newCommitsIn: undefined,
 };
@@ -109,7 +132,7 @@ export class GithubController implements ReactiveController {
   private readonly host: ReactiveControllerHost;
   private readonly environment: GithubEnvironment;
   private snapshot: GithubSnapshot = initial;
-  /** The `requestId` of the `github:open-pr` in flight, for `request:cancel`. */
+  /** The `requestId` of the `github:open-pr` or `github:open-branch` in flight, for `request:cancel`. */
   private requestId: string | undefined;
   /** Counts timeline reads, so an older answer never replaces a newer one. */
   private timelineRead = 0;
@@ -210,6 +233,46 @@ export class GithubController implements ReactiveController {
   private patch(change: Partial<GithubSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...change };
     this.host.requestUpdate();
+  }
+
+  /**
+   * Runs `github:open-pr` or `github:open-branch` as the one fetch in flight. Ends the fetch
+   * unless it opened a session, which the caller ends once it has moved on to loading it.
+   */
+  private async fetchSession(
+    request: OpenPullRequestRequest,
+    fetch: Omit<GithubFetch, 'stage'>,
+  ): Promise<FetchOutcome> {
+    const bridge = this.environment.bridge();
+    if (bridge === undefined || this.snapshot.fetch !== undefined) {
+      return { kind: 'busy' };
+    }
+    const requestId = crypto.randomUUID();
+    this.requestId = requestId;
+    const query = parseOpenQuery(request.ref);
+    this.patch({ fetch: { ...fetch, stage: fetchStageFrom(query, request.ref) } });
+    let channel: 'github:open-pr' | 'github:open-branch' = 'github:open-pr';
+    if (query.kind === 'branch') {
+      channel = 'github:open-branch';
+    }
+    const opened = await bridge.invoke(channel, { ...request, requestId });
+    this.requestId = undefined;
+    if (!opened.ok) {
+      this.patch({ fetch: undefined });
+      if (opened.error.code === 'cancelled') {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'failed', failure: { message: opened.error.message } };
+    }
+    if (opened.value.kind === 'opened') {
+      return { kind: 'opened', sessionId: opened.value.session.id };
+    }
+    this.patch({ fetch: undefined });
+    const { message, remedy } = opened.value;
+    return {
+      kind: 'failed',
+      failure: { message, ...(remedy !== undefined && !message.includes(remedy) && { remedy }) },
+    };
   }
 
   hostConnected(): void {
@@ -313,7 +376,17 @@ export class GithubController implements ReactiveController {
 
   /** Whether a pull request is being fetched to open. */
   get isOpening(): boolean {
-    return this.snapshot.isOpening;
+    return this.snapshot.fetch?.kind === 'open';
+  }
+
+  /** Whether the open session is being fetched again from GitHub (Reload Review). */
+  get isReloading(): boolean {
+    return this.snapshot.fetch?.kind === 'reload';
+  }
+
+  /** The fetch in flight, if any. */
+  get fetch(): GithubFetch | undefined {
+    return this.snapshot.fetch;
   }
 
   /** Why the last pull request failed to open, for the open dialog. */
@@ -425,49 +498,83 @@ export class GithubController implements ReactiveController {
 
   /**
    * Fetches a pull request, or a branch to follow (a tree URL or `owner/repo:branch`, ADR 0112),
-   * and opens it as a session; one at a time.
+   * and opens it as a session; one fetch at a time. The fetch stays shown until the session starts
+   * loading, so the window never flashes back to what it showed before (ADR 0144).
    */
-  async open(request: OpenPullRequestRequest): Promise<void> {
-    const bridge = this.environment.bridge();
-    if (bridge === undefined || this.snapshot.isOpening) {
-      return;
+  async open(request: OpenPullRequestRequest, { label = '' }: OpenOptions = {}): Promise<void> {
+    this.patch({ failure: undefined });
+    const outcome = await this.fetchSession(request, { kind: 'open', label });
+    switch (outcome.kind) {
+      case 'busy':
+      case 'cancelled': {
+        return;
+      }
+      case 'failed': {
+        this.patch({ failure: outcome.failure });
+        this.environment.setOpenDialog(this.environment.review() !== undefined);
+        return;
+      }
+      case 'opened': {
+        this.environment.setOpenDialog(false);
+        await this.environment.refreshSessions();
+        this.patch({ fetch: undefined });
+        await this.environment.selectSession(outcome.sessionId);
+      }
     }
-    const requestId = crypto.randomUUID();
-    this.requestId = requestId;
-    this.patch({ isOpening: true, failure: undefined });
-    let channel: 'github:open-pr' | 'github:open-branch' = 'github:open-pr';
-    if (parseOpenQuery(request.ref).kind === 'branch') {
-      channel = 'github:open-branch';
-    }
-    const opened = await bridge.invoke(channel, { ...request, requestId });
-    this.requestId = undefined;
-    this.patch({ isOpening: false });
-    if (!opened.ok && opened.error.code === 'cancelled') {
-      return;
-    }
-    if (!opened.ok) {
-      this.patch({ failure: { message: opened.error.message } });
-      this.environment.setOpenDialog(this.environment.review() !== undefined);
-      return;
-    }
-    if (opened.value.kind === 'failed') {
-      const { message, remedy } = opened.value;
-      this.patch({
-        failure: {
-          message,
-          ...(remedy !== undefined && !message.includes(remedy) && { remedy }),
-        },
-      });
-      this.environment.setOpenDialog(this.environment.review() !== undefined);
-      return;
-    }
-    this.environment.setOpenDialog(false);
-    await this.environment.refreshSessions();
-    await this.environment.selectSession(opened.value.session.id);
   }
 
-  /** Stops the pull request fetch in flight, if any; it then ends without a notice (ADR 0079). */
+  /**
+   * Reload Review (ADR 0144) for a pull request or followed branch: fetches it again the way
+   * opening it does (head and base), then reloads the review in place. A failure is a notice; the
+   * review stays. Resolves `false` for a local session, which has nothing to fetch.
+   */
+  async reload(session: SessionSummary): Promise<boolean> {
+    const { source } = session;
+    let ref: string;
+    if (source.kind === 'github-pull-request') {
+      ref = `${source.host}/${source.owner}/${source.repo}#${String(source.number)}`;
+    } else if (source.kind === 'remote-branch') {
+      ref = `${source.host}/${source.owner}/${source.repo}:${source.branch}`;
+    } else {
+      return false;
+    }
+    const outcome = await this.fetchSession(
+      { ref, repoPath: source.repoPath },
+      { kind: 'reload', label: '' },
+    );
+    switch (outcome.kind) {
+      case 'busy':
+      case 'cancelled': {
+        return true;
+      }
+      case 'failed': {
+        const { message, remedy } = outcome.failure;
+        let text = message;
+        if (remedy !== undefined) {
+          text = `${message} ${remedy}`;
+        }
+        this.environment.notify({ tone: 'error', text });
+        return true;
+      }
+      case 'opened': {
+        this.patch({ newCommitsIn: undefined });
+        await this.environment.refreshSessions();
+        this.patch({ fetch: undefined });
+        await this.environment.selectSession(outcome.sessionId);
+        return true;
+      }
+    }
+  }
+
+  /** Stops the pull request fetch in flight to open, if any; it then ends without a notice (ADR 0079). */
   cancelOpening(): void {
+    if (this.snapshot.fetch?.kind === 'open') {
+      this.cancelFetch();
+    }
+  }
+
+  /** Stops whichever fetch is in flight, opening or reloading (Stop, ADR 0144). */
+  cancelFetch(): void {
     const { requestId } = this;
     if (requestId !== undefined) {
       void this.environment.bridge()?.invoke('request:cancel', { requestId });
@@ -600,4 +707,22 @@ function lastPreviewOf(state: GithubPreviewState): GithubReviewPreviewView | und
     return state.last;
   }
   return undefined;
+}
+
+/** How {@link GithubController}'s fetch ended. */
+type FetchOutcome =
+  | { readonly kind: 'opened'; readonly sessionId: string }
+  | { readonly kind: 'failed'; readonly failure: OpenFailure }
+  | { readonly kind: 'cancelled' }
+  /** Another fetch is in flight, or there is no bridge: nothing was asked. */
+  | { readonly kind: 'busy' };
+
+function fetchStageFrom(query: OpenQuery, ref: string): string {
+  if (query.kind === 'pull-request') {
+    return `Fetching pull request #${String(query.number)}…`;
+  }
+  if (query.kind === 'branch') {
+    return `Fetching branch ${query.branch}…`;
+  }
+  return `Fetching ${ref}…`;
 }
