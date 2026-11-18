@@ -72,6 +72,7 @@ import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeGenerated } from './describe-generated.ts';
 import { describeDiagnosticsSwitch } from './describe-diagnostics-switch.ts';
+import { describeReviewCommentsSwitch } from './describe-review-comments-switch.ts';
 import { describeInsights } from './describe-insights.ts';
 import { describeSkipReviewed } from './describe-skip-reviewed.ts';
 import { describeOrder } from './describe-order.ts';
@@ -180,6 +181,11 @@ export class BeuveApp extends LitElement {
     setOpenDialog: (isOpen): void => {
       this.openDialog = isOpen;
     },
+    pullRequestChanged: (sessionId): void => {
+      if (this.review?.session.id === sessionId) {
+        void this.reviewData.reloadThreads(this.review);
+      }
+    },
   });
   private readonly settings = new SettingsController(this, {
     bridge: beuveBridge,
@@ -197,6 +203,9 @@ export class BeuveApp extends LitElement {
     },
     reviewOrder: (): ReviewOrderMode | undefined => {
       return this.settings.display.reviewOrder;
+    },
+    showReviewComments: (): boolean => {
+      return this.settings.display.showReviewComments === true;
     },
     notify: (notice): void => {
       this.showNotice(notice);
@@ -569,6 +578,11 @@ export class BeuveApp extends LitElement {
     if (isOrderChanged && !isWhitespaceChanged && this.review !== undefined) {
       void this.reviewData.reloadOrder(this.review);
     }
+    const isCommentsChanged =
+      (next.showReviewComments === true) !== (previous.showReviewComments === true);
+    if (isCommentsChanged && this.review !== undefined) {
+      void this.reviewData.reloadThreads(this.review);
+    }
     if (isWhitespaceChanged && this.session.selectedId !== '') {
       void this.session.select(this.session.selectedId);
     }
@@ -588,6 +602,12 @@ export class BeuveApp extends LitElement {
     }
     if (change.showDiagnostics !== undefined) {
       this.showNotice({ tone: 'info', text: describeDiagnosticsSwitch(display.showDiagnostics) });
+    }
+    if (change.showReviewComments !== undefined) {
+      this.showNotice({
+        tone: 'info',
+        text: describeReviewCommentsSwitch(display.showReviewComments === true),
+      });
     }
     if (change.skipReviewed !== undefined) {
       this.showNotice({ tone: 'info', text: describeSkipReviewed(display.skipReviewed) });
@@ -655,6 +675,7 @@ export class BeuveApp extends LitElement {
       case 'toggle-generated':
       case 'toggle-insights':
       case 'toggle-diagnostics':
+      case 'toggle-review-comments':
       case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':

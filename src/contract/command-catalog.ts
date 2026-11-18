@@ -393,6 +393,14 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'toggle-review-comments',
+    title: 'Show Other Reviewers’ Comments',
+    menu: { menu: 'view', group: 2, submenu: 'Diff', subgroup: 1 },
+    toggle: 'checkbox',
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'toggle-terminal',
     title: 'Show Terminal',
     menu: { menu: 'view', group: 3 },

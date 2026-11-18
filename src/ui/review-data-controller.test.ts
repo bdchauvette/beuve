@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import type { ReviewThreadView } from '#contract/ipc-contract.ts';
+
 import { createReviewDataHarness } from './testing/create-review-data-harness.ts';
 import { createReviewView } from './testing/create-review-view.ts';
 import { test } from './testing/test.ts';
@@ -21,6 +23,21 @@ function ok(value: unknown): Reply {
 
 function failed(error: FailureOptions): Reply {
   return { ok: false, error };
+}
+
+function threadAt(line: number): ReviewThreadView {
+  return {
+    id: String(line),
+    path: 'a.ts',
+    side: 'head',
+    startLine: line,
+    endLine: line,
+    sha: 'head',
+    isOutdated: false,
+    comments: [
+      { id: `c${String(line)}`, author: 'rita', body: 'Hm', at: '2026-10-01T10:00:00Z', url: 'u' },
+    ],
+  };
 }
 
 function channelsOf(invoked: readonly (readonly [string, unknown])[]): string[] {
@@ -170,5 +187,90 @@ describe('ReviewDataController', () => {
     await data.setFileReviewed('a.ts', true);
     expect(data.marks.get('a.ts')).toBe('no');
     expect(notices).toStrictEqual([{ tone: 'error', text: 'head moved' }]);
+  });
+
+  test('reads other reviewers’ threads only while they are wanted', async ({ expect }) => {
+    const review = createReviewView();
+    const { data, invoked, chooseComments } = createReviewDataHarness({
+      review,
+      replies: { 'review:get-threads': ok({ kind: 'threads', threads: [threadAt(3)] }) },
+    });
+    await data.reloadThreads(review);
+    expect(channelsOf(invoked)).not.toContain('review:get-threads');
+    expect(data.threads).toStrictEqual([]);
+
+    chooseComments(true);
+    await data.reloadThreads(review);
+    expect(invoked.filter(([channel]) => channel === 'review:get-threads')).toStrictEqual([
+      ['review:get-threads', { sessionId: review.session.id }],
+    ]);
+    expect(data.threads).toStrictEqual([threadAt(3)]);
+
+    chooseComments(false);
+    await data.reloadThreads(review);
+    expect(data.threads).toStrictEqual([]);
+  });
+
+  test('starts the thread read with the other loads when they are wanted', async ({ expect }) => {
+    const review = createReviewView();
+    const { data, invoked } = createReviewDataHarness({
+      review,
+      showReviewComments: true,
+      replies: { 'review:get-threads': ok({ kind: 'threads', threads: [threadAt(1)] }) },
+    });
+    data.open(review);
+    await expect.poll(() => channelsOf(invoked)).toContain('review:get-threads');
+    await expect.poll(() => data.threads).toStrictEqual([threadAt(1)]);
+  });
+
+  test('forgets threads for a source that has none, and keeps them when a read fails', async ({
+    expect,
+  }) => {
+    const review = createReviewView();
+    const harness = createReviewDataHarness({
+      review,
+      showReviewComments: true,
+      replies: { 'review:get-threads': ok({ kind: 'threads', threads: [threadAt(1)] }) },
+    });
+    await harness.data.reloadThreads(review);
+    expect(harness.data.threads).toHaveLength(1);
+
+    const failing = createReviewDataHarness({
+      review,
+      showReviewComments: true,
+      replies: { 'review:get-threads': failed({ code: 'internal', message: 'offline' }) },
+    });
+    await failing.data.reloadThreads(review);
+    expect(failing.notices).toStrictEqual([
+      { tone: 'error', text: 'Other reviewers’ comments: offline' },
+    ]);
+
+    const none = createReviewDataHarness({
+      review,
+      showReviewComments: true,
+      replies: { 'review:get-threads': ok({ kind: 'unsupported' }) },
+    });
+    await none.data.reloadThreads(review);
+    expect(none.data.threads).toStrictEqual([]);
+  });
+
+  test('drops a thread answer once another review is open, or a newer read began', async ({
+    expect,
+  }) => {
+    const review = createReviewView();
+    const { data, showReview } = createReviewDataHarness({
+      review,
+      showReviewComments: true,
+      replies: { 'review:get-threads': ok({ kind: 'threads', threads: [threadAt(1)] }) },
+    });
+    const pending = data.reloadThreads(review);
+    showReview(createReviewView());
+    await pending;
+    expect(data.threads).toStrictEqual([]);
+    showReview(review);
+    const first = data.reloadThreads(review);
+    data.reset();
+    await first;
+    expect(data.threads).toStrictEqual([]);
   });
 });

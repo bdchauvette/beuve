@@ -39,6 +39,8 @@ export interface GithubEnvironment {
   readonly selectSession: (sessionId: string) => Promise<void>;
   /** Shows or closes the open dialog, which carries a pull request's failure. */
   readonly setOpenDialog: (isOpen: boolean) => void;
+  /** Polling found the pull request changed, so other reviewers' comments may have too (ADR 0140). */
+  readonly pullRequestChanged?: (sessionId: string) => void;
 }
 
 interface GithubSnapshot {
@@ -119,6 +121,7 @@ export class GithubController implements ReactiveController {
       },
     });
     void this.loadTimeline(event.sessionId);
+    this.environment.pullRequestChanged?.(event.sessionId);
     if (!event.headMoved) {
       return;
     }

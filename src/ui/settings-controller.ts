@@ -33,6 +33,7 @@ const initialDisplay: DiffDisplayView = {
   showGenerated: false,
   showInsights: true,
   showDiagnostics: true,
+  showReviewComments: false,
   reviewOrder: 'path',
   skipReviewed: false,
 };

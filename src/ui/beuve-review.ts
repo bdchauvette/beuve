@@ -1240,6 +1240,7 @@ export class BeuveReview extends LitElement {
       .loadImage=${this.loadImage}
       .uraItems=${this.ura.items}
       .insights=${this.reviewInsights()}
+      .reviewThreads=${this.reviewData.threads}
       .diagnostics=${this.shownDiagnostics()}
       .display=${this.settings.display}
       .suggestionJump=${this.suggestionJump}

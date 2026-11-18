@@ -1712,6 +1712,8 @@ export interface DiffDisplayView {
   readonly showInsights: boolean;
   /** Whether language-server diagnostics show as underlines and counts (ADR 0111); on by default. */
   readonly showDiagnostics: boolean;
+  /** Whether other reviewers' line comments show on the diff (ADR 0140); off until chosen. Always set by main. */
+  readonly showReviewComments?: boolean;
   /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
   readonly reviewOrder?: ReviewOrderMode;
   /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
@@ -1734,6 +1736,7 @@ export interface SetDiffDisplayRequest {
   readonly showGenerated?: boolean;
   readonly showInsights?: boolean;
   readonly showDiagnostics?: boolean;
+  readonly showReviewComments?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
   readonly reviewQueue?: ReviewQueuePrefsView;
