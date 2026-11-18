@@ -8,6 +8,7 @@ import type {
   UraAnchorView,
   UraExportTarget,
   UraItemView,
+  UraSeverityView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
@@ -19,9 +20,9 @@ import { ActionDelegation } from './action-delegation.ts';
 import { withPayload } from './with-payload.ts';
 import { displayAccelerator } from './display-accelerator.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
-import { describeReviewPreview } from './describe-review-preview.ts';
+import { describePostPreview } from './describe-post-preview.ts';
 import { describeUraItem } from './describe-ura-item.ts';
-import type { GithubDockState } from './github-post-state.ts';
+import type { GithubDockState, GithubPostState } from './github-post-state.ts';
 import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state.ts';
 import { describeHarvest } from './describe-harvest.ts';
 import { describeEditCounts } from './describe-edit-counts.ts';
@@ -29,9 +30,8 @@ import { moveUraItem } from './move-ura-item.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
 import { parseInlineTitle } from './parse-inline-title.ts';
-import { displayIcon } from './display-icon.ts';
-import { uraSeverityEmoji } from './ura-severity-emoji.ts';
-import { uraSeverityViews } from './ura-severity-views.ts';
+import './beuve-ura-label-menu.ts';
+import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
@@ -368,6 +368,11 @@ export class BeuveUraDock extends LitElement {
     `,
   ];
 
+  private readonly onLabelChange = (event: CustomEvent<UraLabelChange>): void => {
+    this.editingSeverity = event.detail.severity;
+    this.editingBlocking = event.detail.blocking;
+  };
+
   /** The dock's in-place keys (ADR 0068): ↑/↓ move, Return shows, Space edits, Delete withdraws, ⌥↑/⌥↓ reorder. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.defaultPrevented) {
@@ -416,9 +421,12 @@ export class BeuveUraDock extends LitElement {
 
   @state() accessor cursor = 0;
   @state() accessor editingId: string | undefined;
-  /** The open editor's Blocking toggle, which starts from the note's own (ADR 0131). */
+  /** The open editor's label and Blocking, which start from the note's own (ADR 0131). */
+  @state() accessor editingSeverity: UraSeverityView = 'issue';
   @state() accessor editingBlocking = false;
   @state() accessor verdictRefusal = '';
+  /** The review summary being written; kept until it is posted or another pull request opens. */
+  @state() accessor summary = '';
 
   /** `process.platform`, for the Save button's tooltip. */
   @property() accessor platform = '';
@@ -429,6 +437,7 @@ export class BeuveUraDock extends LitElement {
   constructor() {
     super();
     this.addEventListener('keydown', this.onKeyDown);
+    this.addEventListener('beuve-ura-label-change', this.onLabelChange as EventListener);
     // ADR 0074: the items, their editor and the export buttons, through one listener per type.
     this.addController(
       new ActionDelegation(this, {
@@ -447,10 +456,6 @@ export class BeuveUraDock extends LitElement {
           ),
           editor: (_data, event): void => {
             event.stopPropagation();
-          },
-          'toggle-blocking': (_data, event): void => {
-            event.stopPropagation();
-            this.editingBlocking = !this.editingBlocking;
           },
           'cancel-edit': (_data, event): void => {
             event.stopPropagation();
@@ -589,6 +594,7 @@ export class BeuveUraDock extends LitElement {
 
   private openEditor(item: UraItemView): void {
     this.editingId = item.id;
+    this.editingSeverity = item.severity;
     this.editingBlocking = item.blocking;
     void this.focusEditor();
   }
@@ -640,7 +646,7 @@ export class BeuveUraDock extends LitElement {
       itemId: item.id,
       title,
       body: field('body'),
-      severity: field('severity') || item.severity,
+      severity: this.editingSeverity,
       blocking: this.editingBlocking,
     });
     this.closeEditor();
@@ -726,24 +732,10 @@ export class BeuveUraDock extends LitElement {
   private renderEditor(item: UraItemView): TemplateResult {
     return html`<form class="editor" data-action="editor" data-item-id=${item.id}>
       <div class="row">
-        <select name="severity" aria-label="Label">
-          ${uraSeverityViews.map((severity) => {
-            return html`<option value=${severity} ?selected=${severity === item.severity}>
-              ${uraSeverityEmoji(severity)} ${severity}
-            </option>`;
-          })}
-        </select>
-        <button
-          class="button quiet"
-          type="button"
-          name="blocking"
-          data-action="toggle-blocking"
-          aria-label="Blocking"
-          aria-pressed=${String(this.editingBlocking)}
-          title=${this.editingBlocking ? 'Blocking: must be resolved before merging' : 'Not blocking; press to block the merge'}
-        >
-          ${displayIcon('blocking')}
-        </button>
+        <beuve-ura-label-menu
+          .severity=${this.editingSeverity}
+          ?blocking=${this.editingBlocking}
+        ></beuve-ura-label-menu>
         <input
           name="title"
           aria-label="Title"
@@ -989,133 +981,128 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
-  /** Post to GitHub: a button, then a confirmation with what goes inline and into the body. */
+  /**
+   * Post to GitHub, in one step (ADR 0039 amendment 2026-11-18): the summary field, then the line
+   * naming the target and what goes inline and into the body, right above the Post button, which
+   * posts at once. GitHub refusing an approval on the reviewer's own pull request offers posting
+   * as a comment in the button's place; after a post the same form posts again.
+   */
   private renderGithub(github: GithubDockState): TemplateResult {
     if (!github.isSignedIn) {
       return html`<p class="note">Post to ${github.target}: ${github.signInHint}</p>`;
     }
     const { post } = github;
+    return html`<div class="github" role="group" aria-label="Post to GitHub">
+      ${
+        post.kind === 'posted'
+          ? html`<p class="note" role="status">
+              ${post.text}
+              <button
+                type="button"
+                class="button link"
+                title=${post.url}
+                @click=${(): void => {
+                  this.emit('beuve-open-link', { url: post.url });
+                }}
+              >
+                View on GitHub
+              </button>
+            </p>`
+          : nothing
+      }
+      <textarea
+        name="summary"
+        aria-label="Review summary"
+        placeholder="Summary (Markdown, optional)"
+        title="The text at the top of the review, above the items that aren't attached to a line"
+        ?readonly=${post.kind === 'busy'}
+        .value=${live(this.summary)}
+        @input=${(event: InputEvent): void => {
+          this.summary = (event.target as HTMLTextAreaElement).value;
+        }}
+      ></textarea>
+      <p class="note" id="github-preview">
+        Post to ${github.target}: ${describePostPreview(github.preview)}
+      </p>
+      ${this.renderPostNote(post)} ${this.renderPostActions(github)}
+    </div>`;
+  }
+
+  /** Why the last post didn't go out, or that it is going out. */
+  private renderPostNote(post: GithubPostState): TemplateResult | typeof nothing {
     switch (post.kind) {
-      case 'idle':
-      case 'failed':
-      case 'head-moved': {
-        return html`<div class="github">
-          <button
-            type="button"
-            class="button primary"
-            ?disabled=${!this.hasSession}
-            title="Post the staged items as one review on ${github.target}"
-            @click=${(): void => {
-              this.emit('beuve-github-preview', {});
-            }}
-          >
-            Post review to GitHub…
-          </button>
-          ${post.kind === 'failed' ? html`<p class="note error" role="alert">${post.text}</p>` : nothing}
-          ${
-            post.kind === 'head-moved'
-              ? html`<p class="note" role="status">
-                  The PR changed since you opened this; review the new commits first.
-                </p>`
-              : nothing
-          }
-        </div>`;
-      }
       case 'busy': {
-        return html`<div class="github"><p class="note" role="status">${post.text}</p></div>`;
+        return html`<p class="note" role="status">${post.text}</p>`;
       }
-      case 'confirm': {
-        return html`<div class="github confirm" role="group" aria-label="Confirm posting">
-          <p class="note">Post to ${github.target}: ${describeReviewPreview(post.preview)}</p>
-          <textarea
-            name="summary"
-            aria-label="Review summary"
-            placeholder="Summary (Markdown, optional)"
-            title="The text at the top of the review, above the items that aren't attached to a line"
-          ></textarea>
-          <div class="actions">
-            <button
-              class="button"
-              type="button"
-              @click=${(): void => {
-                this.emit('beuve-github-cancel', {});
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="button primary"
-              @click=${(): void => {
-                this.emit('beuve-github-post', { summary: this.writtenSummary() });
-              }}
-            >
-              Post
-            </button>
-          </div>
-        </div>`;
+      case 'failed': {
+        return html`<p class="note error" role="alert">${post.text}</p>`;
+      }
+      case 'head-moved': {
+        return html`<p class="note" role="status">
+          The PR changed since you opened this; review the new commits first.
+        </p>`;
       }
       case 'own-pull-request': {
-        return html`<div class="github confirm" role="group" aria-label="Post as comment">
-          <p class="note">${post.message} Post as comment instead?</p>
-          <div class="actions">
-            <button
-              class="button"
-              type="button"
-              @click=${(): void => {
-                this.emit('beuve-github-cancel', {});
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="button primary"
-              @click=${(): void => {
-                this.emit('beuve-github-post', { verdict: 'comment', summary: post.summary });
-              }}
-            >
-              Post as comment
-            </button>
-          </div>
-        </div>`;
+        return html`<p class="note" role="alert">${post.message} Post as comment instead?</p>`;
       }
+      case 'idle':
       case 'posted': {
-        return html`<div class="github">
-          <p class="note" role="status">
-            ${post.text}
-            <button
-              type="button"
-              class="button link"
-              title=${post.url}
-              @click=${(): void => {
-                this.emit('beuve-open-link', { url: post.url });
-              }}
-            >
-              View on GitHub
-            </button>
-          </p>
-          <button
-            class="button"
-            type="button"
-            @click=${(): void => {
-              this.emit('beuve-github-preview', {});
-            }}
-          >
-            Post again…
-          </button>
-        </div>`;
+        return nothing;
       }
     }
   }
 
+  private renderPostActions(github: GithubDockState): TemplateResult {
+    const { post } = github;
+    if (post.kind === 'own-pull-request') {
+      return html`<div class="actions">
+        <button
+          class="button"
+          type="button"
+          @click=${(): void => {
+            this.emit('beuve-github-cancel', {});
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="button primary"
+          aria-describedby="github-preview"
+          @click=${(): void => {
+            this.emit('beuve-github-post', { verdict: 'comment', summary: this.writtenSummary() });
+          }}
+        >
+          Post as comment
+        </button>
+      </div>`;
+    }
+    let label = 'Post review';
+    if (post.kind === 'posted') {
+      label = 'Post again';
+    }
+    return html`<div class="actions">
+      <button
+        type="button"
+        class="button primary"
+        aria-describedby="github-preview"
+        ?disabled=${!this.hasSession || post.kind === 'busy' || github.preview.kind === 'loading'}
+        title="Post the staged items as one review on ${github.target}, now"
+        @click=${(): void => {
+          this.emit('beuve-github-post', { summary: this.writtenSummary() });
+        }}
+      >
+        ${label}
+      </button>
+    </div>`;
+  }
+
   /** The summary the reviewer wrote, or `undefined` when they left it blank. */
   private writtenSummary(): string | undefined {
-    const field = this.renderRoot.querySelector<HTMLTextAreaElement>('textarea[name="summary"]');
-    if (field === null || field.value.trim() === '') {
+    if (this.summary.trim() === '') {
       return undefined;
     }
-    return field.value;
+    return this.summary;
   }
 
   private saveKey(): string {
@@ -1204,6 +1191,13 @@ export class BeuveUraDock extends LitElement {
     }
   }
 
+  /** Puts the keyboard on the GitHub review summary, if posting is offered. */
+  focusPostSummary(): void {
+    void this.updateComplete.then(() => {
+      this.renderRoot.querySelector<HTMLElement>('textarea[name="summary"]')?.focus();
+    });
+  }
+
   /** The item under the dock's cursor, which Add to Chat adds by its anchor (ADR 0046). */
   cursorItem(): UraItemView | undefined {
     return this.ordered()[this.cursor];
@@ -1243,6 +1237,14 @@ export class BeuveUraDock extends LitElement {
     }
     if (changed.has('chosenVerdict') || changed.has('verdictNotice')) {
       this.verdictRefusal = '';
+    }
+    if (!changed.has('github')) {
+      return;
+    }
+    const before = changed.get('github');
+    const isNewlyPosted = this.github?.post.kind === 'posted' && before?.post.kind !== 'posted';
+    if (isNewlyPosted || before?.target !== this.github?.target) {
+      this.summary = '';
     }
   }
 }
@@ -1298,10 +1300,11 @@ function isTextEntry(event: KeyboardEvent): boolean {
   );
 }
 
-/** A key on the open editor's buttons (the Blocking toggle) is theirs, not the dock's. */
+/** A key in the open editor (its label menu, its buttons) is the editor's, not the dock's. */
 function isInEditor(event: KeyboardEvent): boolean {
-  const [target] = event.composedPath();
-  return target instanceof Element && target.closest('.editor') !== null;
+  return event.composedPath().some((target) => {
+    return target instanceof Element && target.matches('.editor');
+  });
 }
 
 const saveAccelerators: Readonly<Record<KeyPlatform, string>> = {

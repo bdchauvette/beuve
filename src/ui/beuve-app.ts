@@ -57,6 +57,7 @@ import { QueueController } from './queue-controller.ts';
 import { defaultReviewQueuePrefs } from '#contract/default-review-queue-prefs.ts';
 import { ChatController } from './chat-controller.ts';
 import { GithubController } from './github-controller.ts';
+import type { StagedReview } from './github-controller.ts';
 import { ReviewEditsController } from './review-edits-controller.ts';
 import { displayChangeFor } from './display-change-for.ts';
 import { ReviewDataController } from './review-data-controller.ts';
@@ -168,6 +169,15 @@ export class BeuveApp extends LitElement {
     bridge: beuveBridge,
     review: (): ReviewRef | undefined => {
       return this.session.reviewRef;
+    },
+    staged: (): StagedReview | undefined => {
+      if (this.review?.session.source.kind !== 'github-pull-request') {
+        return undefined;
+      }
+      return {
+        items: this.ura.items,
+        verdict: this.ura.chosenVerdict ?? this.ura.derivedVerdict,
+      };
     },
     notify: (notice): void => {
       this.showNotice(notice);

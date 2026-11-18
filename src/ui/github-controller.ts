@@ -4,18 +4,20 @@ import type {
   BeuveApi,
   CiStatusView,
   GithubAuthStatusView,
+  GithubReviewPreviewView,
   OpenPullRequestRequest,
   PullRequestSessionView,
   PullRequestUpdatedView,
   RemoteBranchUpdatedView,
   RemoteBranchView,
+  UraItemView,
   UraVerdictView,
 } from '#contract/ipc-contract.ts';
 
 import type { OpenFailure } from './beuve-open-panel.ts';
 import { describeReviewPreview } from './describe-review-preview.ts';
 import type { StatusNotice } from './describe-editor-open.ts';
-import type { GithubPostState } from './github-post-state.ts';
+import type { GithubPostState, GithubPreviewState } from './github-post-state.ts';
 import { parseOpenQuery } from './parse-open-query.ts';
 import { pullRequestLabelFrom } from './pull-request-label-from.ts';
 import type { ReviewRef } from './review-ref.ts';
@@ -28,12 +30,21 @@ export interface GithubPostDetail {
   readonly summary?: string | undefined;
 }
 
+/** The staged review of a pull request session, whose change makes the post preview stale. */
+export interface StagedReview {
+  readonly items: readonly UraItemView[];
+  /** The verdict the review would post: the chosen one, else the derived one. */
+  readonly verdict: UraVerdictView;
+}
+
 /** What the GitHub flows need from the window around them. */
 export interface GithubEnvironment {
   /** The preload bridge, or `undefined` outside Electron. */
   readonly bridge: () => BeuveApi | undefined;
   /** The open review, if there is one. */
   readonly review: () => ReviewRef | undefined;
+  /** The open review's staged items and verdict, when it is a pull request session. */
+  readonly staged: () => StagedReview | undefined;
   readonly notify: (notice: StatusNotice) => void;
   readonly refreshSessions: () => Promise<void>;
   readonly selectSession: (sessionId: string) => Promise<void>;
@@ -52,10 +63,19 @@ interface GithubSnapshot {
   readonly timeline: TimelineState | undefined;
   readonly auth: GithubAuthStatusView | undefined;
   readonly post: GithubPostState;
+  readonly preview: GithubPreviewState;
   readonly isOpening: boolean;
   readonly failure: OpenFailure | undefined;
   /** The open session, when polling found new commits the review doesn't show yet. */
   readonly newCommitsIn: string | undefined;
+}
+
+/** What the shown preview was asked for. */
+interface PreviewKey {
+  readonly sessionId: string;
+  readonly headSha: string;
+  readonly items: readonly UraItemView[];
+  readonly verdict: UraVerdictView;
 }
 
 /** Where polling found new commits: the session, and the pull request or branch it names. */
@@ -71,6 +91,7 @@ const initial: GithubSnapshot = {
   timeline: undefined,
   auth: undefined,
   post: { kind: 'idle' },
+  preview: { kind: 'none' },
   isOpening: false,
   failure: undefined,
   newCommitsIn: undefined,
@@ -79,7 +100,8 @@ const initial: GithubSnapshot = {
 /**
  * The window's GitHub state and flows (ADR 0037 to 0040, 0078): opening a pull request, the open
  * one's metadata, stack and CI (kept fresh by `github:pr-updated` and `github:ci-status` while the
- * host is connected), who beuve posts as, and the confirm-then-post steps of a review. The open
+ * host is connected), who beuve posts as, and posting a review, with a preview of what it sends
+ * kept fresh as the staged items, the verdict and the head change. The open
  * review and the session list come in through the {@link GithubEnvironment}; the host re-renders
  * when a getter's value changes.
  */
@@ -91,6 +113,10 @@ export class GithubController implements ReactiveController {
   private requestId: string | undefined;
   /** Counts timeline reads, so an older answer never replaces a newer one. */
   private timelineRead = 0;
+  /** Counts preview reads, likewise. */
+  private previewRead = 0;
+  /** What the current preview was asked for; `undefined` until one is. */
+  private previewedFor: PreviewKey | undefined;
   private unsubscribes: (() => void)[] = [];
 
   constructor(host: ReactiveControllerHost, environment: GithubEnvironment) {
@@ -245,6 +271,31 @@ export class GithubController implements ReactiveController {
     return this.snapshot.post;
   }
 
+  /** What posting would send now, for the line beside the Post button. */
+  get preview(): GithubPreviewState {
+    return this.snapshot.preview;
+  }
+
+  /** Asks for a fresh preview once the staged items, the verdict or the head changed. */
+  hostUpdated(): void {
+    const review = this.environment.review();
+    const staged = this.environment.staged();
+    if (review === undefined || staged === undefined || this.snapshot.post.kind === 'busy') {
+      return;
+    }
+    const key: PreviewKey = {
+      sessionId: review.sessionId,
+      headSha: review.headSha,
+      items: staged.items,
+      verdict: staged.verdict,
+    };
+    if (this.previewedFor !== undefined && isSamePreviewKey(this.previewedFor, key)) {
+      return;
+    }
+    this.previewedFor = key;
+    void this.refreshPreview();
+  }
+
   /** Whether polling found new commits that the open review doesn't show yet. */
   get hasNewCommits(): boolean {
     return this.snapshot.newCommitsIn !== undefined;
@@ -273,12 +324,15 @@ export class GithubController implements ReactiveController {
   /** Forgets the open session's pull request, CI and post state: another session is opening. */
   reset(): void {
     this.timelineRead += 1;
+    this.previewRead += 1;
+    this.previewedFor = undefined;
     this.patch({
       pullRequest: undefined,
       branch: undefined,
       ci: undefined,
       timeline: undefined,
       post: { kind: 'idle' },
+      preview: { kind: 'none' },
       newCommitsIn: undefined,
     });
   }
@@ -426,72 +480,70 @@ export class GithubController implements ReactiveController {
   }
 
   /**
-   * A confirmation (or the own-PR offer) was about the head the reviewer saw; once the head moves
-   * it would post on commits they haven't read, so it gives way to a quiet note (ADR 0078).
+   * The Post button and its preview (or the own-PR offer) were about the head the reviewer saw;
+   * once the head moves, posting would land on commits they haven't read, so a quiet note says so
+   * (ADR 0078). A post in flight or one just made stays as it is.
    */
   invalidatePost(): void {
     const { kind } = this.snapshot.post;
-    if (kind === 'confirm' || kind === 'own-pull-request') {
+    if (kind === 'idle' || kind === 'failed' || kind === 'own-pull-request') {
       this.patch({ post: { kind: 'head-moved' } });
     }
   }
 
-  /** Dismisses the confirmation, result or failure. */
+  /** Dismisses the own-PR offer, result or failure. */
   cancelPost(): void {
     this.patch({ post: { kind: 'idle' } });
   }
 
-  /** The confirmation step: main compiles the review and says what goes inline and in the body. */
-  async previewReview(): Promise<void> {
+  /**
+   * Main compiles the review without posting it and says what goes inline and in the body, on
+   * the head the reviewer sees. An older answer never replaces a newer one. Main finding the head
+   * moved voids posting quietly; the review reloads only when the reviewer posts or asks.
+   */
+  async refreshPreview(): Promise<void> {
+    const bridge = this.environment.bridge();
+    const review = this.environment.review();
+    if (bridge === undefined || review === undefined) {
+      return;
+    }
+    this.previewRead += 1;
+    const read = this.previewRead;
+    this.patch({ preview: { kind: 'loading', last: lastPreviewOf(this.snapshot.preview) } });
+    const preview = await bridge.invoke('github:preview-review', {
+      sessionId: review.sessionId,
+      expectedHeadSha: review.headSha,
+    });
+    if (read !== this.previewRead || this.environment.review()?.sessionId !== review.sessionId) {
+      return;
+    }
+    if (!preview.ok) {
+      this.patch({ preview: { kind: 'failed', text: preview.error.message } });
+      return;
+    }
+    if ('kind' in preview.value) {
+      if (preview.value.failure === 'head-moved') {
+        this.patch({ preview: { kind: 'none' } });
+        this.invalidatePost();
+        return;
+      }
+      this.patch({ preview: { kind: 'failed', text: preview.value.message } });
+      return;
+    }
+    this.patch({ preview: { kind: 'ready', preview: preview.value } });
+  }
+
+  /** Posts on the head the reviewer sees, which the preview names; one post at a time (ADR 0078). */
+  async postReview({ verdict, summary }: GithubPostDetail): Promise<void> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined || this.snapshot.post.kind === 'busy') {
       return;
     }
-    this.patch({ post: { kind: 'busy', text: 'Compiling the review…' } });
-    const preview = await bridge.invoke('github:preview-review', {
-      sessionId: review.sessionId,
-      expectedHeadSha: review.headSha,
-    });
-    const current = this.environment.review();
-    if (current?.sessionId !== review.sessionId) {
-      return;
-    }
-    if (!preview.ok) {
-      this.patch({ post: { kind: 'failed', text: preview.error.message } });
-      return;
-    }
-    if ('kind' in preview.value) {
-      if (preview.value.failure === 'head-moved') {
-        this.headMoved(review.sessionId);
-        return;
-      }
-      this.patch({ post: { kind: 'failed', text: preview.value.message } });
-      return;
-    }
-    if (current.headSha !== preview.value.headSha) {
-      this.patch({ post: { kind: 'head-moved' } });
-      return;
-    }
-    this.patch({ post: { kind: 'confirm', preview: preview.value } });
-  }
-
-  /** Posts on the head the confirmation showed; one post at a time (ADR 0078). */
-  async postReview({ verdict, summary }: GithubPostDetail): Promise<void> {
-    const bridge = this.environment.bridge();
-    const review = this.environment.review();
-    const { post } = this.snapshot;
-    if (bridge === undefined || review === undefined || post.kind === 'busy') {
-      return;
-    }
-    let expectedHeadSha = review.headSha;
-    if (post.kind === 'confirm') {
-      expectedHeadSha = post.preview.headSha;
-    }
     this.patch({ post: { kind: 'busy', text: 'Posting to GitHub…' } });
     const posted = await bridge.invoke('github:post-review', {
       sessionId: review.sessionId,
-      expectedHeadSha,
+      expectedHeadSha: review.headSha,
       ...(verdict !== undefined && { verdict }),
       ...(summary !== undefined && { summary }),
     });
@@ -509,7 +561,7 @@ export class GithubController implements ReactiveController {
         return;
       }
       if (result.failure === 'own-pull-request') {
-        this.patch({ post: { kind: 'own-pull-request', message: result.message, summary } });
+        this.patch({ post: { kind: 'own-pull-request', message: result.message } });
       } else {
         this.patch({ post: { kind: 'failed', text: result.message } });
       }
@@ -526,5 +578,26 @@ export class GithubController implements ReactiveController {
         text: `Posted: ${describeReviewPreview(result)}${moved}`,
       },
     });
+    await this.refreshPreview();
   }
+}
+
+function isSamePreviewKey(left: PreviewKey, right: PreviewKey): boolean {
+  return (
+    left.sessionId === right.sessionId &&
+    left.headSha === right.headSha &&
+    left.items === right.items &&
+    left.verdict === right.verdict
+  );
+}
+
+/** The preview to keep showing while a fresh one is compiled. */
+function lastPreviewOf(state: GithubPreviewState): GithubReviewPreviewView | undefined {
+  if (state.kind === 'ready') {
+    return state.preview;
+  }
+  if (state.kind === 'loading') {
+    return state.last;
+  }
+  return undefined;
 }

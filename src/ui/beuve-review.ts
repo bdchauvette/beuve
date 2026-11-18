@@ -270,10 +270,6 @@ export class BeuveReview extends LitElement {
     void this.openUrl(event.detail.url);
   };
 
-  private readonly onGithubPreview = (): void => {
-    void this.github.previewReview();
-  };
-
   private readonly onGithubPost = (event: CustomEvent<GithubPostDetail>): void => {
     void this.github.postReview(event.detail);
   };
@@ -1165,6 +1161,7 @@ export class BeuveReview extends LitElement {
       isSignedIn: auth?.kind === 'signed-in' && auth.host === source.host,
       signInHint: signInHintOf(auth),
       post: this.github.post,
+      preview: this.github.preview,
     };
   }
 
@@ -1288,7 +1285,6 @@ export class BeuveReview extends LitElement {
       .github=${this.githubDock()}
       .reviewEdits=${{ view: this.reviewEdits.view, flow: this.reviewEdits.flow }}
       @beuve-review-edits=${this.onReviewEdits}
-      @beuve-github-preview=${this.onGithubPreview}
       @beuve-github-post=${this.onGithubPost}
       @beuve-github-cancel=${this.onGithubCancel}
       @beuve-open-link=${this.onOpenLink}
@@ -1789,8 +1785,11 @@ export class BeuveReview extends LitElement {
         return true;
       }
       case 'post-review': {
+        // The keyboard goes to the dock's summary, above its Post button.
         this.focusSidebar('ura');
-        void this.github.previewReview();
+        void this.updateComplete.then(() => {
+          this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.focusPostSummary();
+        });
         return true;
       }
       default: {
