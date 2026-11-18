@@ -20,3 +20,7 @@ Nothing reloaded a review on request either. Show New Commits reloads only after
 ## Consequences
 
 The window answers a pick at once, and a slow fetch can be stopped. The look of indeterminate progress has one home. Reload Review is the reviewer's way to see a new head without waiting for the poller. Because it moves the head, a pending GitHub post confirmation gives way to the head-moved note, as after Show New Commits (ADR 0078). Reloading with nothing new still reloads the review, which is cheap. A future step shown during opening (cloning, say) adds a stage string, not a new view.
+
+## Amendment 2026-11-18: Reload is an icon
+
+The titlebar's Reload is an icon-only `.button.icon` with the refresh glyph, named "Reload Review" for assistive technology, with the catalog's title and key as its tooltip. While the fetch or the reload runs it is disabled and `aria-busy`, and the glyph spins as the Review Queue's Refresh does; under reduced motion the glyph holds still and the disabled look says it is busy. There is one refresh glyph: it moves from the queue's icons (`queueIcon`) to `displayIcon`, the glyphs of icon-only controls, which both use.
