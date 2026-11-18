@@ -3,6 +3,7 @@ import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
+import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 
@@ -15,6 +16,9 @@ import { retiredMigrations } from './retired-migrations.ts';
  * `github` (pull request metadata, which references nothing, ADR 0037), then `review-edits`
  * (its rows cascade from `sessions` and `ura_items`, ADR 0088), then `setup` (its runs cascade
  * from `sessions`, ADR 0130), then `retired` (drops of tables whose domains are gone, ADR 0096).
+ * Migrations added since then follow, one per file, in the order they were written, so a database
+ * that already ran the lists above applies them in the same order a fresh one does (ADR 0006
+ * amendment 2026-11-18).
  */
 export const appMigrations: readonly Migration[] = Object.freeze([
   ...sessionMigrations,
@@ -24,4 +28,5 @@ export const appMigrations: readonly Migration[] = Object.freeze([
   ...reviewEditsMigrations,
   ...setupMigrations,
   ...retiredMigrations,
+  uraFindingConfidenceMigration,
 ]);

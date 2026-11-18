@@ -71,11 +71,15 @@ function currentAnchor(item: UraItemView): UraAnchorView {
   return item.anchor;
 }
 
-function originOf(item: UraItemView): string {
-  if (item.origin.kind === 'chat-answer' && item.origin.finding !== undefined) {
+/** `review finding · 80%` when a finding kept its confidence (ADR 0141). */
+function originOf({ origin }: UraItemView): string {
+  if (origin.kind !== 'chat-answer' || origin.finding === undefined) {
+    return origins[origin.kind];
+  }
+  if (origin.confidence === undefined) {
     return 'review finding';
   }
-  return origins[item.origin.kind];
+  return `review finding · ${String(Math.round(origin.confidence * 100))}%`;
 }
 
 function formatAnchor(anchor: UraAnchorView): string {

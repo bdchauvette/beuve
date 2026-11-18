@@ -55,6 +55,16 @@ describe('validateUraItem', () => {
     ['whole answer, neither finding nor proposal', { kind: 'chat-answer', messageId: 'm1' }],
     ['negative proposal index', { kind: 'chat-answer', messageId: 'm1', proposal: -1 }],
     ['finding and proposal', { kind: 'chat-answer', messageId: 'm1', finding: 0, proposal: 0 }],
+    ['confidence above 1', { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 1.5 }],
+    ['negative confidence', { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: -0.5 }],
+    [
+      'confidence that is not a number',
+      { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: NaN },
+    ],
+    [
+      'confidence on a proposed note',
+      { kind: 'chat-answer', messageId: 'm1', proposal: 0, confidence: 0.5 },
+    ],
     [
       'proposed note on the whole change',
       { kind: 'chat-answer', messageId: 'm1', proposal: 0 },
@@ -70,6 +80,12 @@ describe('validateUraItem', () => {
     ).toBeUndefined();
     expect(
       errorOf({ origin: { kind: 'chat-answer', messageId: 'm1', proposal: 0 } }),
+    ).toBeUndefined();
+    expect(
+      errorOf({ origin: { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 0 } }),
+    ).toBeUndefined();
+    expect(
+      errorOf({ origin: { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 1 } }),
     ).toBeUndefined();
   });
 

@@ -109,12 +109,30 @@ function checkOrigin(origin: UraOrigin, anchor: UraAnchor): string | undefined {
       if (!Number.isSafeInteger(index) || index < 0) {
         return 'the finding or proposal index is not a non-negative integer';
       }
+      const confidence = checkConfidence(origin);
+      if (confidence !== undefined) {
+        return confidence;
+      }
       if (anchor.kind === 'lines') {
         return undefined;
       }
       return 'a review finding or proposed note is anchored to lines';
     }
   }
+}
+
+function checkConfidence(origin: Extract<UraOrigin, { kind: 'chat-answer' }>): string | undefined {
+  const { confidence } = origin;
+  if (confidence === undefined) {
+    return undefined;
+  }
+  if (origin.finding === undefined) {
+    return 'only a review finding has a confidence';
+  }
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+    return 'the confidence is not between 0 and 1';
+  }
+  return undefined;
 }
 
 function checkTitle(title: string): string | undefined {

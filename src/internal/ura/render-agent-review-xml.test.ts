@@ -30,7 +30,7 @@ describe('renderAgentReviewXml', () => {
        use(first);
       ]]></suggested-patch>
           </item>
-          <item id="00000000-0000-4000-8000-000000000002" severity="issue" blocking="false" origin="chat-answer" message-id="msg-1" finding="0">
+          <item id="00000000-0000-4000-8000-000000000002" severity="issue" blocking="false" origin="chat-answer" message-id="msg-1" finding="0" confidence="0.5">
             <anchor kind="lines" path="src/parse.ts" start-line="30" end-line="30"/>
             <title>parseAll never checks for an empty list</title>
             <body/>

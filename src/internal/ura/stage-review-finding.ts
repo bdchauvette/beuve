@@ -12,6 +12,8 @@ export interface StageableReviewFinding {
   readonly severity: 'info' | 'warning' | 'risk';
   readonly title: string;
   readonly body: string;
+  /** 0–1, as the model calibrated it; kept on the item's origin (ADR 0141). */
+  readonly confidence: number;
 }
 
 /** Which answer the finding belongs to, and where in it. */
@@ -38,7 +40,7 @@ const defaultSeverity: Readonly<Record<StageableReviewFinding['severity'], UraSe
 
 /**
  * Turns a `/review` finding the reviewer staged into an item on its lines, with a `chat-answer`
- * origin naming the answer and the finding. An agent never blocks on its own: the item is not
+ * origin naming the answer and the finding, and keeping the finding's confidence. An agent never blocks on its own: the item is not
  * blocking, `risk` and `warning` become `issue` and `info` becomes `nitpick`, unless the reviewer
  * picked a label.
  */
@@ -59,7 +61,12 @@ export function stageReviewFinding(
       },
       severity,
       blocking: false,
-      origin: { kind: 'chat-answer', messageId: source.messageId, finding: source.finding },
+      origin: {
+        kind: 'chat-answer',
+        messageId: source.messageId,
+        finding: source.finding,
+        confidence: finding.confidence,
+      },
       title: finding.title,
       body: finding.body,
     },

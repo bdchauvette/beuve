@@ -1300,6 +1300,8 @@ export type UraOriginView =
       readonly messageId: string;
       readonly finding?: number;
       readonly proposal?: number;
+      /** Only with `finding`: the model's 0–1 confidence in it, when it was kept (ADR 0141). */
+      readonly confidence?: number;
     };
 
 /** `staged` items are exported; `addressed` records the head at which the issue was fixed. */

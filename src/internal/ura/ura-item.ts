@@ -31,7 +31,7 @@ export type UraAnchor =
 /**
  * Who or what raised an item. A `chat-answer` item stages a chat answer, or with `finding` the
  * n-th (0-based) finding of a `/review` answer (ADR 0055), or with `proposal` the n-th (0-based)
- * note an answer proposed (ADR 0132); never both.
+ * note an answer proposed (ADR 0132); never both. A finding keeps its `confidence` (ADR 0141).
  */
 export type UraOrigin =
   | { readonly kind: 'human' }
@@ -40,6 +40,11 @@ export type UraOrigin =
       readonly messageId: string;
       readonly finding?: number;
       readonly proposal?: number;
+      /**
+       * Only with `finding`: the model's own 0–1 estimate that a careful reviewer would agree it is
+       * a real problem. Absent on findings staged before beuve kept it.
+       */
+      readonly confidence?: number;
     };
 
 /**

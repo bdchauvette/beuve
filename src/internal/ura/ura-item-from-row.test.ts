@@ -14,6 +14,7 @@ function row(overrides: Record<string, SQLOutputValue> = {}): Record<string, SQL
     'chat_message_id',
     'chat_finding',
     'chat_proposal',
+    'chat_confidence',
     'patch',
     'addressed_sha',
     'addressed_by',
@@ -61,6 +62,15 @@ describe('uraItemFromRow', () => {
     ).toStrictEqual({ ok: true, value: proposed });
   });
 
+  test('maps a review finding’s confidence both ways', ({ expect }) => {
+    const finding = createTestUraItem({
+      origin: { kind: 'chat-answer', messageId: 'm1', finding: 0, confidence: 0.75 },
+    });
+    expect(
+      uraItemFromRow({ ...row(), ...(uraItemRowFrom(finding) as Record<string, SQLOutputValue>) }),
+    ).toStrictEqual({ ok: true, value: finding });
+  });
+
   test.for<[string, SQLOutputValue, string]>([
     ['id', 'x', 'id or session_id is not a UUID'],
     ['head_sha', 'ABC', 'head_sha is not a commit id'],
@@ -96,6 +106,30 @@ describe('uraItemFromRow', () => {
         chat_proposal: 0,
       }),
     ).toBe('chat_finding and chat_proposal are both set');
+    expect(
+      reasonOf({
+        origin_kind: 'chat-answer',
+        chat_message_id: 'm',
+        chat_finding: 0,
+        chat_confidence: 'high',
+      }),
+    ).toBe('chat_confidence is not a number');
+    expect(
+      reasonOf({
+        origin_kind: 'chat-answer',
+        chat_message_id: 'm',
+        chat_proposal: 0,
+        chat_confidence: 0.5,
+      }),
+    ).toBe('chat_confidence is set without chat_finding');
+    expect(
+      reasonOf({
+        origin_kind: 'chat-answer',
+        chat_message_id: 'm',
+        chat_finding: 0,
+        chat_confidence: 2,
+      }),
+    ).toBe('invalid-origin: the confidence is not between 0 and 1');
     expect(reasonOf({ origin_kind: 'impact-finding' })).toBe('origin_kind is unknown');
     expect(reasonOf({ status: 'addressed', addressed_sha: 'b'.repeat(40) })).toBe(
       'addressed_sha or addressed_by is invalid',
