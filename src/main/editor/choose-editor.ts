@@ -36,7 +36,7 @@ export interface EditorChoiceFailure {
 const whereToChoose = 'Choose one in Settings › Editors.';
 
 /**
- * Which editor opens a file (ADR 0140). The chosen editor, and only it: when it is missing or no
+ * Which editor opens a file (ADR 0141). The chosen editor, and only it: when it is missing or no
  * longer configured, the answer says so instead of starting another one. With no choice, the
  * one installed editor when there is exactly one; with several, the reviewer is asked to choose,
  * and with none, to install one or add their own to `settings.json`. Pure.

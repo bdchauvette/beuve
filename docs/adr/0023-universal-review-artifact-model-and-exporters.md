@@ -42,6 +42,6 @@ ADR 0055 removes agent insights. The origin `agent-insight` and `insight_id` are
 
 A note of any status can be deleted (`ura:delete`, Review › Note › Delete Note, Shift+Delete in the dock). Deleting removes the row and, by cascade, its postings and review-edit bindings; a `/review` finding or proposed note it came from can be staged again. Withdrawing stays the way to keep a note out of the export without losing it. Main keeps the 20 latest deletions of the run in memory, so Undo (`ura:restore`, offered in the status notice) puts a note back in its old place; nothing is kept across a restart, and a restored note has lost the record that it was posted.
 
-## Amendment 2026-11-18: deletions of several notes, undone together (ADR 0143)
+## Amendment 2026-11-18: deletions of several notes, undone together (ADR 0144)
 
 `ura:delete` takes `itemIds` and deletes them in one transaction as one deletion, whose id `ura:restore` takes to put all of them back in their old places, together. Main still keeps the 20 latest deletions of the run, each of any size, so Undo brings back a whole selection.

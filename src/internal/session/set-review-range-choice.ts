@@ -13,7 +13,7 @@ type SetRangeError = Extract<
 >;
 
 /**
- * Stores which range the session's review shows (ADR 0141). `since-last`, the default, removes
+ * Stores which range the session's review shows (ADR 0142). `since-last`, the default, removes
  * the stored choice; `since-checkpoint` must name one of the session's own checkpoints.
  */
 export function setReviewRangeChoice(

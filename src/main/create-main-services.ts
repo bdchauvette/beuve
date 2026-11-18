@@ -143,7 +143,7 @@ export interface MainServicesOptions {
     readonly agentSdk?: ModelResolverDeps['agentSdk'];
   };
   /**
-   * The editor launcher (ADR 0033, 0140): `settingsPath` is the JSON file holding the preferred
+   * The editor launcher (ADR 0033, 0141): `settingsPath` is the JSON file holding the preferred
    * editor and the reviewer's own editors (in memory without it), `platform` replaces the real
    * machine and `openPath` is Electron's `shell.openPath`, which opens that file. Tests must pass
    * a fake platform.

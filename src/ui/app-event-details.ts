@@ -128,7 +128,7 @@ export interface UraReorderDetail {
   readonly itemIds: readonly string[];
 }
 
-/** Staged, withdrawn or addressed notes to delete, as one deletion (ADR 0143). */
+/** Staged, withdrawn or addressed notes to delete, as one deletion (ADR 0144). */
 export interface UraDeleteDetail {
   readonly itemIds: readonly string[];
 }

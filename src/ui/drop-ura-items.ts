@@ -4,12 +4,12 @@ export interface UraDrop {
   readonly ids: readonly string[];
   readonly targetId: string;
   readonly side: 'before' | 'after';
-  /** The notes that may move and be dropped on: the staged ones (ADR 0143). */
+  /** The notes that may move and be dropped on: the staged ones (ADR 0144). */
   readonly movable: ReadonlySet<string>;
 }
 
 /**
- * The dock order after dropping notes beside another (ADR 0143), as Move Up and Move Down do one
+ * The dock order after dropping notes beside another (ADR 0144), as Move Up and Move Down do one
  * step at a time: the dragged movable notes leave their places and land together, in their old
  * order, before or after the target, and the notes that aren't movable keep their places in
  * `order`. Unchanged when the target isn't movable, is one of the dragged notes, or nothing

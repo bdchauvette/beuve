@@ -84,7 +84,7 @@ function inPlaceKeysOf(command: CatalogCommand, platform: KeyPlatform): readonly
   return command.inPlace?.keys ?? [];
 }
 
-/** The title, or both names of a command whose name follows the state (ADR 0143). */
+/** The title, or both names of a command whose name follows the state (ADR 0144). */
 function shortcutTitleOf(command: CatalogCommand): string {
   if (command.checkedNames === undefined) {
     return command.title;

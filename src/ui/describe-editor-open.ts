@@ -26,7 +26,7 @@ const choiceFailures: ReadonlySet<EditorOpenFailure> = new Set([
  * What the status bar says after Open in Editor. beuve's checkout is writable, but it is
  * read-only by convention (ADR 0033, amended by ADR 0095): edits there aren't kept, so the notice
  * says so in one line and offers Review Edits (ADR 0088). When no editor could be chosen, the
- * notice offers Editor Settings… (ADR 0140).
+ * notice offers Editor Settings… (ADR 0141).
  */
 export function describeEditorOpen(response: EditorOpenResponse): StatusNotice {
   if (response.kind === 'failed') {

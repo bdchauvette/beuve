@@ -3,7 +3,7 @@ import type { Checkpoint, ReviewRange, ReviewRangeChoice, Session } from './sess
 const sinceLast: ReviewRangeChoice = { kind: 'since-last' };
 
 /**
- * What the review shows (ADR 0012, 0141). By default, what still needs review: the whole change if
+ * What the review shows (ADR 0012, 0142). By default, what still needs review: the whole change if
  * never reviewed, nothing if the last checkpoint is the head, otherwise the interdiff from the last
  * reviewed range to the head. `whole` is the whole change whatever was saved, and
  * `since-checkpoint` the interdiff from the chosen checkpoint instead of the last one.

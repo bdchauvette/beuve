@@ -1,4 +1,4 @@
-# 0144. Emoji shortcode completion in note fields
+# 0145. Emoji shortcode completion in note fields
 
 - Status: Accepted; amends [0127](0127-chat-command-completion-and-message-navigation.md) (its completion pieces are shared)
 - Date: 2026-11-18
@@ -24,4 +24,4 @@ Emoji are a keystroke away in every note field, and what the list offers is exac
 
 ## Amendment 2026-11-18: the list follows the caret
 
-Under the whole field, the list sat far from where the reviewer was typing in a long body. It now sits just below the line the `:name` starts on, at its `:`, so it holds still while the name is typed. It flips above that line when there is no room below and stays inside the window (`placeHoverCard`, the hover card's placement). `caretRectFrom` measures the `:` with `dom-input-range` (ADR 0146). CSS anchor positioning is gone: the controller sets the popover's `inset-inline-start` and `inset-block-start` itself (the renderer is horizontal and left to right, as the hover card assumes). It places the list again on every change the list shows, on scrolling in the host's shadow root or the window, and on resize, while the list is open. Keys, insertion and ARIA are unchanged.
+Under the whole field, the list sat far from where the reviewer was typing in a long body. It now sits just below the line the `:name` starts on, at its `:`, so it holds still while the name is typed. It flips above that line when there is no room below and stays inside the window (`placeHoverCard`, the hover card's placement). `caretRectFrom` measures the `:` with `dom-input-range` (ADR 0147). CSS anchor positioning is gone: the controller sets the popover's `inset-inline-start` and `inset-block-start` itself (the renderer is horizontal and left to right, as the hover card assumes). It places the list again on every change the list shows, on scrolling in the host's shadow root or the window, and on resize, while the list is open. Keys, insertion and ARIA are unchanged.

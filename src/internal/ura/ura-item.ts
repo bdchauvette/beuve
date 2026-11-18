@@ -31,7 +31,7 @@ export type UraAnchor =
 /**
  * Who or what raised an item. A `chat-answer` item stages a chat answer, or with `finding` the
  * n-th (0-based) finding of a `/review` answer (ADR 0055), or with `proposal` the n-th (0-based)
- * note an answer proposed (ADR 0132); never both. A finding keeps its `confidence` (ADR 0142).
+ * note an answer proposed (ADR 0132); never both. A finding keeps its `confidence` (ADR 0143).
  */
 export type UraOrigin =
   | { readonly kind: 'human' }

@@ -19,7 +19,7 @@ import { sessionSummaryFrom } from './session-summary-from.ts';
  * Records a checkpoint at the session's current head and the fork point it has from the base
  * branch now (the stack-aware one the review showed, ADR 0054), so the next review is an interdiff from here. Refuses with `stale-review` when the
  * head is no longer `expectedHeadSha`; re-marking an already recorded range records nothing. Either
- * way the review's range goes back to the default, since the last checkpoint (ADR 0141).
+ * way the review's range goes back to the default, since the last checkpoint (ADR 0142).
  */
 export async function markReviewed(
   context: SessionContext,

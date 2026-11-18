@@ -539,7 +539,7 @@ export class BeuveApp extends LitElement {
 
   /**
    * Opens a queue item through the usual open paths, shown over the review from the moment it is
-   * picked (ADR 0145); one that needs a local clone shows the Open dialog's pull request step for
+   * picked (ADR 0146); one that needs a local clone shows the Open dialog's pull request step for
    * it, with the failure. Cancelled, the keyboard goes back where it was.
    */
   private async openQueueItem({ ref, label }: QueueOpenDetail): Promise<void> {
@@ -560,7 +560,7 @@ export class BeuveApp extends LitElement {
   }
 
   /**
-   * Reload Review (ADR 0145): over the queue, or with no review open, refreshes the queue;
+   * Reload Review (ADR 0146): over the queue, or with no review open, refreshes the queue;
    * otherwise fetches the open pull request or branch again and reloads the review in place, or,
    * for a local session, reads its repository again. A review that failed to load loads again.
    */

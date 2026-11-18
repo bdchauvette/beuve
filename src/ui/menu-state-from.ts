@@ -33,13 +33,13 @@ export interface MenuStateInput {
   readonly display: DiffDisplayView;
   readonly treeMode: RadarTreeMode;
   readonly isFindCaseSensitive: boolean;
-  /** The range the open review shows (ADR 0141), for Review ▸ Show. */
+  /** The range the open review shows (ADR 0142), for Review ▸ Show. */
   readonly reviewRange: ReviewRangeChoiceView['kind'] | undefined;
 }
 
 /**
  * The main window's `menu:set-state`: conditions from focus and contents, and the toggles that
- * show checked, or that show their checked names (ADR 0143). A text field suspends the chords it
+ * show checked, or that show their checked names (ADR 0144). A text field suspends the chords it
  * uses itself (main applies `text-focus`). Pure.
  */
 export function menuStateFrom(input: MenuStateInput): MenuStateRequest {

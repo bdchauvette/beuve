@@ -7,7 +7,7 @@ export interface LabeledNote {
 }
 
 /**
- * The label and Blocking a set of notes shares, for the dock's selection bar (ADR 0143): `mixed`
+ * The label and Blocking a set of notes shares, for the dock's selection bar (ADR 0144): `mixed`
  * where the notes differ. No notes read as a new note's (`issue`, not blocking).
  */
 export interface NoteLabelState {

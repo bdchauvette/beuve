@@ -1,7 +1,7 @@
 import { css } from 'lit';
 
 /**
- * An indeterminate progress bar (ADR 0115, 0145): `<span class="progress" aria-hidden="true">`,
+ * An indeterminate progress bar (ADR 0115, 0146): `<span class="progress" aria-hidden="true">`,
  * a thin track in the border color, plainly there on any surface, with an accent segment sliding
  * along it. Put what is in progress in a
  * `role="status"` text beside it; the bar only says that something is. Under reduced motion it

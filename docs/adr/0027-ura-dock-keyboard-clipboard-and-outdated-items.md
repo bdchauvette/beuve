@@ -35,6 +35,6 @@ A note anchored on an unchanged line outside every hunk (one staged from a citat
 
 The diff never expands on its own: expanding is the reviewer's choice everywhere else (separators, Load diff), it loads both full files over IPC (`session:get-file-pair`), which a card far down the stream would otherwise do for every such note as it mounts, and it changes the card's height under the reader. One click on the marker is the same gesture as a separator's. A re-render for new notes no longer passes the parsed patch again, which had replaced the full files an expansion loaded and collapsed every expanded gap (including ones opened from a separator).
 
-## Amendment 2026-11-18: selection, dragging and batch changes (ADR 0143)
+## Amendment 2026-11-18: selection, dragging and batch changes (ADR 0144)
 
 The dock selects several notes (⇧↑/⇧↓, Shift+click, ⌘/Ctrl+click, ⌘A / Ctrl+A, Escape to clear), and the Note commands but Show, Edit and Open in Editor act on all of them; staged notes also drag to a new place among the staged ones. `ura:edit-many` changes the status, label or Blocking of several notes in one transaction, all or none, and the dock sends every status change through it.

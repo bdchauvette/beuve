@@ -41,7 +41,7 @@ const args = z
   }, 'one argument must hold {file}');
 
 /**
- * One entry of `editors` in `settings.json` (ADR 0140), validated strictly: unknown keys and wrong
+ * One entry of `editors` in `settings.json` (ADR 0141), validated strictly: unknown keys and wrong
  * types are errors. Every field is optional because an entry for a built-in editor only changes
  * what it names; a new editor needs `command`, which resolving checks.
  */

@@ -20,6 +20,6 @@ The chat input took seven slash commands that only set a preference: `/editor` (
 - The settings can't be changed from the keyboard without leaving the chat input; the palette is the keyboard route.
 - This supersedes the chat-command parts of ADR 0033, 0042, 0044, 0052, 0061 and 0065; the rest of each stands.
 
-## Amendment 2026-11-18: the editor (ADR 0140)
+## Amendment 2026-11-18: the editor (ADR 0141)
 
-The editor has no palette or menu commands to fall back on: it is chosen only in Settings › Editors (ADR 0140's 2026-11-18 amendment). So `/editor` answers with that place, and Review › Editor Settings… which opens it, instead of the palette and the menus.
+The editor has no palette or menu commands to fall back on: it is chosen only in Settings › Editors (ADR 0141's 2026-11-18 amendment). So `/editor` answers with that place, and Review › Editor Settings… which opens it, instead of the palette and the menus.

@@ -46,9 +46,9 @@ export interface SessionServices {
     options?: RequestOptions,
   ) => Promise<IpcResult<ReviewView>>;
   readonly markReviewed: (request: MarkReviewedRequest) => Promise<IpcResult<SessionSummary>>;
-  /** Undo Save Progress: removes the checkpoint while it is the latest (ADR 0141). */
+  /** Undo Save Progress: removes the checkpoint while it is the latest (ADR 0142). */
   readonly undoMarkReviewed: (request: UndoMarkReviewedRequest) => IpcResult<SessionSummary>;
-  /** Stores which range the session's review shows (ADR 0141). */
+  /** Stores which range the session's review shows (ADR 0142). */
   readonly setReviewRange: (request: SetReviewRangeRequest) => IpcResult<SessionSummary>;
   readonly setFileReviewed: (
     request: SetFileReviewedRequest,

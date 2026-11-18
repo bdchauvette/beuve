@@ -42,7 +42,7 @@ import './primitives/beuve-menu.ts';
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
   readonly ref: string;
-  /** Its name, shown while it is fetched (ADR 0145). */
+  /** Its name, shown while it is fetched (ADR 0146). */
   readonly label: string;
 }
 

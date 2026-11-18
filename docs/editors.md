@@ -1,6 +1,6 @@
 # Editors
 
-Open in Editor (⌥⌘O / Ctrl+Shift+O) and Review › Review Edits › Open in Editor open a file at a line in your editor (ADR 0033, 0088, 0140). Beuve knows Zed, Gram, VS Code and Cursor, and you can add any editor that opens a file from a command line.
+Open in Editor (⌥⌘O / Ctrl+Shift+O) and Review › Review Edits › Open in Editor open a file at a line in your editor (ADR 0033, 0088, 0141). Beuve knows Zed, Gram, VS Code and Cursor, and you can add any editor that opens a file from a command line.
 
 ## Choosing an editor
 
