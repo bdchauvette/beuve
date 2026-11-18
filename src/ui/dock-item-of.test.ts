@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import type { UraItemView } from '#contract/ipc-contract.ts';
+
 import { dockItemOf } from './dock-item-of.ts';
 import { createUraItemView } from './testing/create-ura-item-view.ts';
 import { test } from './testing/test.ts';
@@ -9,21 +11,17 @@ describe('dockItemOf', () => {
     expect(dockItemOf([])).toBeUndefined();
   });
 
-  test('says whether the item is addressed or withdrawn', ({ expect }) => {
+  test('says whether the item is addressed, withdrawn or blocking', ({ expect }) => {
     expect(dockItemOf([createUraItemView()])).toStrictEqual({
       count: 1,
       isAddressed: false,
       isWithdrawn: false,
+      isBlocking: false,
     });
-    expect(dockItemOf([addressed()])).toStrictEqual({
-      count: 1,
-      isAddressed: true,
-      isWithdrawn: false,
-    });
-    expect(dockItemOf([withdrawn()])).toStrictEqual({
-      count: 1,
-      isAddressed: false,
-      isWithdrawn: true,
+    expect(dockItemOf([addressed()])).toMatchObject({ isAddressed: true, isWithdrawn: false });
+    expect(dockItemOf([withdrawn()])).toMatchObject({ isAddressed: false, isWithdrawn: true });
+    expect(dockItemOf([createUraItemView({ blocking: true })])).toMatchObject({
+      isBlocking: true,
     });
   });
 
@@ -32,21 +30,20 @@ describe('dockItemOf', () => {
       count: 2,
       isAddressed: false,
       isWithdrawn: true,
+      isBlocking: false,
     });
-    expect(dockItemOf([withdrawn(), createUraItemView(), addressed()])).toStrictEqual({
-      count: 3,
-      isAddressed: false,
-      isWithdrawn: false,
-    });
+    expect(
+      dockItemOf([withdrawn(), createUraItemView({ blocking: true }), addressed()]),
+    ).toStrictEqual({ count: 3, isAddressed: false, isWithdrawn: false, isBlocking: false });
   });
 });
 
-function addressed(): ReturnType<typeof createUraItemView> {
+function addressed(): UraItemView {
   return createUraItemView({
     status: { kind: 'addressed', atSha: 'a'.repeat(40), by: 'reviewer' },
   });
 }
 
-function withdrawn(): ReturnType<typeof createUraItemView> {
+function withdrawn(): UraItemView {
   return createUraItemView({ status: { kind: 'withdrawn' } });
 }

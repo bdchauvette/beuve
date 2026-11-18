@@ -1503,23 +1503,55 @@ export interface TransitionUraItemRequest {
   readonly to: 'staged' | 'withdrawn' | 'addressed';
 }
 
-/** Deletes an item of any status for good, except that main keeps it for {@link RestoreUraItemRequest}. */
-export interface DeleteUraItemRequest {
-  readonly itemId: string;
+/**
+ * `ura:edit-many` (ADR 0142): one change to several items of one session, all or none, in one
+ * transaction: their status (as {@link TransitionUraItemRequest} does for one), their label or
+ * their Blocking decoration. Items already in the asked-for state are left alone.
+ */
+export interface EditUraItemsRequest {
+  readonly itemIds: readonly string[];
+  readonly change: UraItemsChange;
 }
 
-/** Which item was deleted, and the session it belonged to. */
-export interface UraDeletedView {
-  readonly itemId: string;
+/** What `ura:edit-many` changes on every item it names. */
+export type UraItemsChange =
+  | { readonly kind: 'status'; readonly to: 'staged' | 'withdrawn' | 'addressed' }
+  | { readonly kind: 'severity'; readonly severity: UraSeverityView }
+  | { readonly kind: 'blocking'; readonly blocking: boolean };
+
+/** The items `ura:edit-many` changed, and their session. */
+export interface UraItemsEditedView {
   readonly sessionId: string;
+  readonly itemIds: readonly string[];
 }
 
 /**
- * Puts a deleted item back at its old place in the dock. Main remembers only the most recent
- * deletions of this run, so an older one answers `item-not-found`.
+ * Deletes items of one session, of any status, for good, in one transaction (ADR 0142), except
+ * that main keeps them as one deletion for {@link RestoreUraItemsRequest}.
  */
-export interface RestoreUraItemRequest {
-  readonly itemId: string;
+export interface DeleteUraItemsRequest {
+  readonly itemIds: readonly string[];
+}
+
+/** Which items were deleted, their session, and the deletion that puts them back. */
+export interface UraDeletedView {
+  readonly deletionId: string;
+  readonly sessionId: string;
+  readonly itemIds: readonly string[];
+}
+
+/**
+ * Puts a deletion's items back at their old places in the dock, together. Main remembers only the
+ * most recent deletions of this run, so an older one answers `not-found`.
+ */
+export interface RestoreUraItemsRequest {
+  readonly deletionId: string;
+}
+
+/** The items a restore put back, and their session. */
+export interface UraRestoredView {
+  readonly sessionId: string;
+  readonly itemIds: readonly string[];
 }
 
 /** Every item of the session (any status), exactly once, in the new dock order. */
@@ -2838,13 +2870,17 @@ export interface InvokeChannelMap {
     readonly request: TransitionUraItemRequest;
     readonly response: IpcResult<UraItemView>;
   };
+  'ura:edit-many': {
+    readonly request: EditUraItemsRequest;
+    readonly response: IpcResult<UraItemsEditedView>;
+  };
   'ura:delete': {
-    readonly request: DeleteUraItemRequest;
+    readonly request: DeleteUraItemsRequest;
     readonly response: IpcResult<UraDeletedView>;
   };
   'ura:restore': {
-    readonly request: RestoreUraItemRequest;
-    readonly response: IpcResult<UraItemView>;
+    readonly request: RestoreUraItemsRequest;
+    readonly response: IpcResult<UraRestoredView>;
   };
   'ura:reorder': {
     readonly request: ReorderUraItemsRequest;

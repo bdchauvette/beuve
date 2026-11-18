@@ -75,9 +75,9 @@ describe('planPalette', () => {
     expect(
       planPalette('>restore note', { ...sources(), checked: ['dock-withdraw'] })[0]?.title,
     ).toBe('Restore Note');
-    expect(planPalette('>mark note', { ...sources(), checked: ['dock-addressed'] })[0]?.title).toBe(
-      'Mark Note as Not Addressed',
-    );
+    expect(
+      planPalette('>not addressed', { ...sources(), checked: ['dock-addressed'] })[0]?.title,
+    ).toBe('Mark Note as Not Addressed');
   });
 
   test('shows a chat command’s usage as its key', ({ expect }) => {

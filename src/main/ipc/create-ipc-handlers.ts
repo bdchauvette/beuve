@@ -95,7 +95,9 @@ import type {
   UraListView,
   ReviewThreadsView,
   UraDeletedView,
+  UraItemsEditedView,
   UraOrderView,
+  UraRestoredView,
   UraSeverityView,
   UraStagedView,
   UraVerdictStateView,
@@ -424,7 +426,28 @@ const uraTransitionRequest = z.strictObject({
   to: z.enum(['staged', 'withdrawn', 'addressed']),
 });
 
-const uraItemRequest = z.strictObject({ itemId: uuid });
+/** At most this many items in one `ura:edit-many` or `ura:delete` (ADR 0142). */
+const uraBatchLimit = 1000;
+
+const uraItemIds = z.array(uuid).min(1).max(uraBatchLimit);
+
+const uraStatusChange = z.strictObject({
+  kind: z.literal('status'),
+  to: z.enum(['staged', 'withdrawn', 'addressed']),
+});
+
+const uraSeverityChange = z.strictObject({ kind: z.literal('severity'), severity: uraSeverity });
+
+const uraBlockingChange = z.strictObject({ kind: z.literal('blocking'), blocking: z.boolean() });
+
+const uraEditManyRequest = z.strictObject({
+  itemIds: uraItemIds,
+  change: z.discriminatedUnion('kind', [uraStatusChange, uraSeverityChange, uraBlockingChange]),
+});
+
+const uraDeleteRequest = z.strictObject({ itemIds: uraItemIds });
+
+const uraRestoreRequest = z.strictObject({ deletionId: uuid });
 
 const uraReorderRequest = z.strictObject({
   sessionId,
@@ -993,15 +1016,22 @@ export function createIpcHandlers(
       }
       return invalid(parsed.error);
     },
+    'ura:edit-many': async (request): Promise<IpcResult<UraItemsEditedView>> => {
+      const parsed = uraEditManyRequest.safeParse(request);
+      if (parsed.success) {
+        return services.ura.editMany(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
     'ura:delete': (request): IpcResult<UraDeletedView> => {
-      const parsed = uraItemRequest.safeParse(request);
+      const parsed = uraDeleteRequest.safeParse(request);
       if (parsed.success) {
         return services.ura.delete(parsed.data);
       }
       return invalid(parsed.error);
     },
-    'ura:restore': async (request): Promise<IpcResult<UraItemView>> => {
-      const parsed = uraItemRequest.safeParse(request);
+    'ura:restore': (request): IpcResult<UraRestoredView> => {
+      const parsed = uraRestoreRequest.safeParse(request);
       if (parsed.success) {
         return services.ura.restore(parsed.data);
       }

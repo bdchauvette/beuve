@@ -612,9 +612,18 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "&Delete Note",
           },
           {
-            "checkedLabel": "Mark &as Not Addressed",
+            "checkedLabel": "Mark &as Not Blocking",
+            "id": "dock-blocking",
+            "label": "&Mark as Blocking",
+          },
+          {
+            "id": "dock-change-label",
+            "label": "&Change Label…",
+          },
+          {
+            "checkedLabel": "Mark as &Not Addressed",
             "id": "dock-addressed",
-            "label": "&Mark as Addressed",
+            "label": "Mar&k as Addressed",
           },
           {
             "type": "separator",
@@ -635,6 +644,13 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
           {
             "id": "expand-note",
             "label": "&Flesh Out Draft",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "dock-select-all",
+            "label": "Se&lect All",
           },
         ],
       },
@@ -1463,6 +1479,15 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "label": "Delete Note",
           },
           {
+            "checkedLabel": "Mark as Not Blocking",
+            "id": "dock-blocking",
+            "label": "Mark as Blocking",
+          },
+          {
+            "id": "dock-change-label",
+            "label": "Change Label…",
+          },
+          {
             "checkedLabel": "Mark as Not Addressed",
             "id": "dock-addressed",
             "label": "Mark as Addressed",
@@ -1486,6 +1511,13 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "expand-note",
             "label": "Flesh Out Draft",
+          },
+          {
+            "type": "separator",
+          },
+          {
+            "id": "dock-select-all",
+            "label": "Select All",
           },
         ],
       },

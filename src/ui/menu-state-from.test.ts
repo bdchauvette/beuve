@@ -23,7 +23,10 @@ describe('menuStateFrom', () => {
     [{ focusedZone: 'diff' }, ['session', 'file', 'diff-target']],
     [{ focusedZone: 'chat', isTextFocused: true }, ['session', 'file', 'text-focus']],
     [
-      { focusedZone: 'ura', dockItem: { count: 1, isAddressed: false, isWithdrawn: false } },
+      {
+        focusedZone: 'ura',
+        dockItem: { count: 1, isAddressed: false, isWithdrawn: false, isBlocking: false },
+      },
       ['session', 'file', 'dock-item'],
     ],
     [{ activePath: undefined }, ['session']],
@@ -41,7 +44,7 @@ describe('menuStateFrom', () => {
       ...open(),
       isActiveReviewed: true,
       focusedZone: 'ura',
-      dockItem: { count: 2, isAddressed: true, isWithdrawn: false },
+      dockItem: { count: 2, isAddressed: true, isWithdrawn: false, isBlocking: false },
       isFindCaseSensitive: true,
       reviewRange: 'whole',
       treeMode: 'diff-only',
