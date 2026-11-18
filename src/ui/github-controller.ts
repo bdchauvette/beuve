@@ -25,6 +25,11 @@ import { pullRequestLabelFrom } from './pull-request-label-from.ts';
 import type { ReviewRef } from './review-ref.ts';
 import type { TimelineState } from './timeline-state.ts';
 
+/** What {@link GithubController.reviewLoaded} needs: whether the load showed a different head. */
+export interface LoadedReview {
+  readonly isNewHead: boolean;
+}
+
 /** Post the staged review to GitHub, with this verdict over the derived one. */
 export interface GithubPostDetail {
   readonly verdict?: UraVerdictView | undefined;
@@ -141,6 +146,8 @@ export class GithubController implements ReactiveController {
   /** What the current preview was asked for; `undefined` until one is. */
   private previewedFor: PreviewKey | undefined;
   private unsubscribes: (() => void)[] = [];
+  /** Whether the next load is one the reviewer asked for (Show New Commits, Reload Review). */
+  private isReloadAsked = false;
 
   constructor(host: ReactiveControllerHost, environment: GithubEnvironment) {
     this.host = host;
@@ -371,6 +378,7 @@ export class GithubController implements ReactiveController {
       return;
     }
     this.patch({ newCommitsIn: undefined });
+    this.isReloadAsked = true;
     void this.environment.selectSession(sessionId);
   }
 
@@ -560,6 +568,7 @@ export class GithubController implements ReactiveController {
         this.patch({ newCommitsIn: undefined });
         await this.environment.refreshSessions();
         this.patch({ fetch: undefined });
+        this.isReloadAsked = true;
         await this.environment.selectSession(outcome.sessionId);
         return true;
       }
@@ -595,6 +604,27 @@ export class GithubController implements ReactiveController {
     const { kind } = this.snapshot.post;
     if (kind === 'idle' || kind === 'failed' || kind === 'own-pull-request') {
       this.patch({ post: { kind: 'head-moved' } });
+    }
+  }
+
+  /**
+   * The review loaded. A new head the reviewer asked to see (Show New Commits, Reload Review) is
+   * the head they now read, so the post form is theirs again, without the note; any other new head
+   * (a post main refused because the head had moved) voids posting ({@link invalidatePost}).
+   */
+  reviewLoaded({ isNewHead }: LoadedReview): void {
+    const isAsked = this.isReloadAsked;
+    this.isReloadAsked = false;
+    if (!isNewHead) {
+      return;
+    }
+    if (!isAsked) {
+      this.invalidatePost();
+      return;
+    }
+    const { kind } = this.snapshot.post;
+    if (kind === 'head-moved' || kind === 'failed' || kind === 'own-pull-request') {
+      this.patch({ post: { kind: 'idle' } });
     }
   }
 

@@ -144,9 +144,9 @@ export class BeuveApp extends LitElement {
       this.reviewEdits.clearStatus();
     },
     loaded: ({ review, previousHead }): void => {
-      if (previousHead !== undefined && previousHead !== review.headSha) {
-        this.github.invalidatePost();
-      }
+      this.github.reviewLoaded({
+        isNewHead: previousHead !== undefined && previousHead !== review.headSha,
+      });
       this.reviewData.open(review);
       void this.refreshLspStatus();
       void this.ura.refresh(review.session.id);
