@@ -76,7 +76,7 @@ export function reviewRangeMenuFrom(
 function labelOf(choice: ReviewRangeChoiceView): string {
   switch (choice.kind) {
     case 'since-last': {
-      return 'Since saved progress';
+      return 'Since last saved progress';
     }
     case 'whole': {
       return 'Whole change';
