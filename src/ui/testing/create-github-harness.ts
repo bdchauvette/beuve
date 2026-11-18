@@ -4,6 +4,7 @@ import type { BeuveApi } from '#contract/ipc-contract.ts';
 
 import type { StatusNotice } from '../describe-editor-open.ts';
 import { GithubController } from '../github-controller.ts';
+import type { StagedReview } from '../github-controller.ts';
 import type { ReviewRef } from '../review-ref.ts';
 
 /** A {@link GithubController} wired to fakes, with what the fakes saw. */
@@ -29,6 +30,8 @@ export interface GithubHarness {
 export interface GithubHarnessOptions {
   /** The open review; none by default. */
   readonly review?: ReviewRef;
+  /** The open review's staged items and verdict, for a pull request session; none by default. */
+  readonly staged?: StagedReview;
   /** The whole result each channel's `invoke` answers with; unlisted channels answer `ok`. */
   readonly replies?: Readonly<Record<string, unknown>>;
 }
@@ -68,6 +71,9 @@ export function createGithubHarness(options: GithubHarnessOptions = {}): GithubH
     },
     review: (): ReviewRef | undefined => {
       return options.review;
+    },
+    staged: (): StagedReview | undefined => {
+      return options.staged;
     },
     notify: (notice): void => {
       notices.push(notice);

@@ -38,6 +38,15 @@ function ok(value: unknown): OkReply {
   return { ok: true, value };
 }
 
+function postedReply(): OkReply {
+  return ok({
+    ...createGithubPreview({ sessionId: 's1', headSha: reviewOf().headSha }),
+    kind: 'posted',
+    url: 'https://github.com/o/r/pull/7#review-1',
+    movedToBody: 1,
+  });
+}
+
 function emptyTimelineReply(): OkReply {
   return ok({ kind: 'timeline', events: [], isTruncated: false });
 }
@@ -82,19 +91,12 @@ describe('GithubController', () => {
     expect(selected).toStrictEqual([]);
   });
 
-  test('a moved head voids a confirmation and says so, but leaves the review alone', async ({
-    expect,
-  }) => {
+  test('a moved head voids posting and says so, but leaves the review alone', ({ expect }) => {
     const { github, emit, notices, selected } = createGithubHarness({
       review: reviewOf(),
-      replies: {
-        'github:preview-review': previewReply(reviewOf().headSha),
-        'github:get-timeline': emptyTimelineReply(),
-      },
+      replies: { 'github:get-timeline': emptyTimelineReply() },
     });
     github.hostConnected();
-    await github.previewReview();
-    expect(github.post.kind).toBe('confirm');
     emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
     expect(notices).toStrictEqual([
@@ -108,95 +110,6 @@ describe('GithubController', () => {
     expect(selected).toStrictEqual([]);
   });
 
-  test('shows new commits only when asked, once', async ({ expect }) => {
-    const { github, emit, selected } = createGithubHarness({
-      review: reviewOf(),
-      replies: { 'github:get-timeline': emptyTimelineReply() },
-    });
-    github.hostConnected();
-    github.showNewCommits();
-    expect(selected).toStrictEqual([]);
-    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
-    github.showNewCommits();
-    github.showNewCommits();
-    await expect.poll(() => selected).toStrictEqual(['s1']);
-    expect(github.hasNewCommits).toBe(false);
-  });
-
-  test('forgets new commits when another session opens', ({ expect }) => {
-    const { github, emit } = createGithubHarness({
-      review: reviewOf(),
-      replies: { 'github:get-timeline': emptyTimelineReply() },
-    });
-    github.hostConnected();
-    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: true }));
-    github.reset();
-    expect(github.hasNewCommits).toBe(false);
-  });
-
-  test('reads the open session’s timeline and shows its events', async ({ expect }) => {
-    const events = [
-      {
-        kind: 'comment',
-        author: 'vic',
-        body: 'Thanks',
-        at: '2026-10-01T10:00:00Z',
-        url: 'https://github.com/o/r/pull/1#c1',
-      },
-    ];
-    const { github, invoked } = createGithubHarness({
-      review: reviewOf(),
-      replies: { 'github:get-timeline': ok({ kind: 'timeline', events, isTruncated: true }) },
-    });
-    expect(github.timeline).toBeUndefined();
-    const loading = github.loadTimeline('s1');
-    expect(github.timeline).toStrictEqual({ kind: 'loading' });
-    await loading;
-    expect(invoked).toStrictEqual([['github:get-timeline', { sessionId: 's1' }]]);
-    expect(github.timeline).toStrictEqual({ kind: 'ready', events, isTruncated: true });
-  });
-
-  test('says why the timeline could not be read', async ({ expect }) => {
-    const refused = createGithubHarness({
-      review: reviewOf(),
-      replies: {
-        'github:get-timeline': ok({
-          kind: 'failed',
-          failure: 'not-found',
-          message: 'GitHub says no',
-        }),
-      },
-    });
-    await refused.github.loadTimeline('s1');
-    expect(refused.github.timeline).toStrictEqual({ kind: 'failed', message: 'GitHub says no' });
-
-    const broken = createGithubHarness({
-      review: reviewOf(),
-      replies: {
-        'github:get-timeline': failed({ code: 'refused', message: 'not a pull request' }),
-      },
-    });
-    await broken.github.loadTimeline('s1');
-    expect(broken.github.timeline).toStrictEqual({ kind: 'failed', message: 'not a pull request' });
-  });
-
-  test('keeps the events on screen while an update refreshes them', async ({ expect }) => {
-    const { github, emit, invoked } = createGithubHarness({
-      review: reviewOf(),
-      replies: { 'github:get-timeline': emptyTimelineReply() },
-    });
-    github.hostConnected();
-    await github.loadTimeline('s1');
-    const shown = github.timeline;
-    emit('github:pr-updated', createPullRequestUpdate({ sessionId: 's1', headMoved: false }));
-    expect(github.timeline).toBe(shown);
-    await expect
-      .poll(() => {
-        return invoked.filter(([channel]) => channel === 'github:get-timeline').length;
-      })
-      .toBe(2);
-  });
-
   test('forgets the timeline when another session opens', async ({ expect }) => {
     const { github } = createGithubHarness({
       review: reviewOf(),
@@ -207,54 +120,86 @@ describe('GithubController', () => {
     expect(github.timeline).toBeUndefined();
   });
 
-  test('invalidating leaves an idle or posted state alone', ({ expect }) => {
-    const { github } = createGithubHarness();
+  test('invalidating leaves a review just posted alone', async ({ expect }) => {
+    const { github } = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:preview-review': previewReply(reviewOf().headSha),
+        'github:post-review': postedReply(),
+      },
+    });
+    await github.postReview({});
     github.invalidatePost();
-    expect(github.post).toStrictEqual({ kind: 'idle' });
+    expect(github.post.kind).toBe('posted');
   });
 
   test('previews only with a review open', async ({ expect }) => {
     const { github, invoked } = createGithubHarness();
-    await github.previewReview();
+    await github.refreshPreview();
     expect(invoked).toStrictEqual([]);
-    expect(github.post).toStrictEqual({ kind: 'idle' });
+    expect(github.preview).toStrictEqual({ kind: 'none' });
   });
 
-  test('asks main to preview the head the reviewer sees and then confirms', async ({ expect }) => {
+  test('asks main to preview the head the reviewer sees', async ({ expect }) => {
     const { github, invoked } = createGithubHarness({
       review: reviewOf(),
-      replies: {
-        'github:preview-review': previewReply(reviewOf().headSha),
-      },
+      replies: { 'github:preview-review': previewReply(reviewOf().headSha) },
     });
-    await github.previewReview();
+    await github.refreshPreview();
     expect(invoked).toStrictEqual([
       ['github:preview-review', { sessionId: 's1', expectedHeadSha: reviewOf().headSha }],
     ]);
-    expect(github.post.kind).toBe('confirm');
+    expect(github.preview).toStrictEqual({
+      kind: 'ready',
+      preview: createGithubPreview({ sessionId: 's1', headSha: reviewOf().headSha }),
+    });
+    expect(github.post).toStrictEqual({ kind: 'idle' });
   });
 
-  test('notes a preview for another head quietly', async ({ expect }) => {
+  test('keeps the last preview on screen while a fresh one compiles', async ({ expect }) => {
     const { github } = createGithubHarness({
       review: reviewOf(),
-      replies: {
-        'github:preview-review': previewReply('b'.repeat(40)),
-      },
+      replies: { 'github:preview-review': previewReply(reviewOf().headSha) },
     });
-    await github.previewReview();
-    expect(github.post).toStrictEqual({ kind: 'head-moved' });
+    await github.refreshPreview();
+    const fresh = github.refreshPreview();
+    expect(github.preview).toStrictEqual({
+      kind: 'loading',
+      last: createGithubPreview({ sessionId: 's1', headSha: reviewOf().headSha }),
+    });
+    await fresh;
+    expect(github.preview.kind).toBe('ready');
   });
 
-  test('main refusing a preview because the head moved reloads the review', async ({ expect }) => {
+  test('previews a pull request session once per change, and nothing else', async ({ expect }) => {
+    const staged = createGithubHarness({
+      review: reviewOf(),
+      staged: { items: [], verdict: 'approve' },
+      replies: { 'github:preview-review': previewReply(reviewOf().headSha) },
+    });
+    staged.github.hostUpdated();
+    staged.github.hostUpdated();
+    await expect.poll(() => staged.github.preview.kind).toBe('ready');
+    expect(staged.invoked.map(([channel]) => channel)).toStrictEqual(['github:preview-review']);
+    const local = createGithubHarness({ review: reviewOf() });
+    local.github.hostUpdated();
+    await Promise.resolve();
+    expect(local.invoked).toStrictEqual([]);
+  });
+
+  test('main finding the head moved voids posting without reloading the review', async ({
+    expect,
+  }) => {
     const { github, selected } = createGithubHarness({
       review: reviewOf(),
       replies: {
         'github:preview-review': ok({ kind: 'failed', failure: 'head-moved', message: 'moved' }),
       },
     });
-    await github.previewReview();
+    await github.refreshPreview();
+    expect(github.preview).toStrictEqual({ kind: 'none' });
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
-    await expect.poll(() => selected).toStrictEqual(['s1']);
+    expect(selected).toStrictEqual([]);
   });
 
   test('shows a failed preview', async ({ expect }) => {
@@ -264,44 +209,42 @@ describe('GithubController', () => {
         'github:preview-review': failed({ code: 'invalid-request', message: 'no token' }),
       },
     });
-    await github.previewReview();
-    expect(github.post).toStrictEqual({ kind: 'failed', text: 'no token' });
+    await github.refreshPreview();
+    expect(github.preview).toStrictEqual({ kind: 'failed', text: 'no token' });
+    expect(github.post).toStrictEqual({ kind: 'idle' });
   });
 
-  test('posts on the head the confirmation showed', async ({ expect }) => {
-    const preview = createGithubPreview({ sessionId: 's1', headSha: reviewOf().headSha });
+  test('posts on the head the reviewer sees, then previews what posting again sends', async ({
+    expect,
+  }) => {
     const { github, invoked } = createGithubHarness({
       review: reviewOf(),
       replies: {
         'github:preview-review': previewReply(reviewOf().headSha),
-        'github:post-review': ok({
-          ...preview,
-          kind: 'posted',
-          url: 'https://github.com/o/r/pull/7#review-1',
-          movedToBody: 1,
-        }),
+        'github:post-review': postedReply(),
       },
     });
-    await github.previewReview();
     await github.postReview({ verdict: 'comment', summary: 'Edited.' });
-    expect(invoked.at(-1)).toStrictEqual([
-      'github:post-review',
-      {
-        sessionId: 's1',
-        expectedHeadSha: reviewOf().headSha,
-        verdict: 'comment',
-        summary: 'Edited.',
-      },
+    expect(invoked).toStrictEqual([
+      [
+        'github:post-review',
+        {
+          sessionId: 's1',
+          expectedHeadSha: reviewOf().headSha,
+          verdict: 'comment',
+          summary: 'Edited.',
+        },
+      ],
+      ['github:preview-review', { sessionId: 's1', expectedHeadSha: reviewOf().headSha }],
     ]);
     expect(github.post).toMatchObject({
       kind: 'posted',
       url: 'https://github.com/o/r/pull/7#review-1',
     });
+    expect(github.preview.kind).toBe('ready');
   });
 
-  test('offers a comment after GitHub refuses an own approval, keeping the summary', async ({
-    expect,
-  }) => {
+  test('offers a comment after GitHub refuses an own approval', async ({ expect }) => {
     const { github } = createGithubHarness({
       review: reviewOf(),
       replies: {
@@ -313,11 +256,7 @@ describe('GithubController', () => {
       },
     });
     await github.postReview({ summary: 'Mine.' });
-    expect(github.post).toStrictEqual({
-      kind: 'own-pull-request',
-      message: 'your own',
-      summary: 'Mine.',
-    });
+    expect(github.post).toStrictEqual({ kind: 'own-pull-request', message: 'your own' });
     github.invalidatePost();
     expect(github.post).toStrictEqual({ kind: 'head-moved' });
   });

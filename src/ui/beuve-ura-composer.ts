@@ -10,9 +10,8 @@ import './beuve-patch-preview.ts';
 import { keyPlatformOf } from './key-platform-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
-import { displayIcon } from './display-icon.ts';
-import { uraSeverityEmoji } from './ura-severity-emoji.ts';
-import { uraSeverityViews } from './ura-severity-views.ts';
+import './beuve-ura-label-menu.ts';
+import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 
 /** What the composer submits: a note's label, whether it blocks, one-line title and Markdown body. */
@@ -24,8 +23,9 @@ export interface UraDraft {
 }
 
 /**
- * The compact note composer Add Note opens under the staged lines (ADR 0027): a label (`issue` by
- * default), a Blocking toggle (off by default, ADR 0131), an optional title and a body. Enter in
+ * The compact note composer Add Note opens under the staged lines (ADR 0027): a label menu that
+ * also holds the Blocking toggle (`issue`, not blocking, by default; ADR 0131), an optional title
+ * and a body. Enter in
  * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
  * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
@@ -94,8 +94,7 @@ export class BeuveUraComposer extends LitElement {
       }
 
       input,
-      textarea,
-      select {
+      textarea {
         box-sizing: border-box;
         min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
@@ -120,8 +119,7 @@ export class BeuveUraComposer extends LitElement {
       }
 
       input:focus,
-      textarea:focus,
-      select:focus {
+      textarea:focus {
         border-color: var(--beuve-accent);
         outline: none;
       }
@@ -176,6 +174,11 @@ export class BeuveUraComposer extends LitElement {
   private readonly onSubmit = (event: SubmitEvent): void => {
     event.preventDefault();
     this.submit();
+  };
+
+  private readonly onLabelChange = (event: CustomEvent<UraLabelChange>): void => {
+    this.severity = event.detail.severity;
+    this.blocking = event.detail.blocking;
   };
 
   private readonly onCancel = (): void => {
@@ -247,32 +250,11 @@ export class BeuveUraComposer extends LitElement {
     return html`<form @submit=${this.onSubmit} aria-label=${labels.form}>
       ${this.renderWhere()}
       <div class="row">
-        <select
-          aria-label="Label"
-          .value=${this.severity}
-          @change=${(event: Event): void => {
-            this.severity = (event.target as HTMLSelectElement).value as UraSeverityView;
-          }}
-        >
-          ${uraSeverityViews.map((severity) => {
-            return html`<option value=${severity} ?selected=${severity === this.severity}>
-              ${uraSeverityEmoji(severity)} ${severity}
-            </option>`;
-          })}
-        </select>
-        <button
-          class="button quiet"
-          type="button"
-          name="blocking"
-          aria-label="Blocking"
-          aria-pressed=${String(this.blocking)}
-          title=${this.blocking ? 'Blocking: must be resolved before merging' : 'Not blocking; press to block the merge'}
-          @click=${(): void => {
-            this.blocking = !this.blocking;
-          }}
-        >
-          ${displayIcon('blocking')}
-        </button>
+        <beuve-ura-label-menu
+          .severity=${this.severity}
+          ?blocking=${this.blocking}
+          @beuve-ura-label-change=${this.onLabelChange}
+        ></beuve-ura-label-menu>
         <input
           aria-label="Title"
           placeholder="Title (optional)"

@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { UraAnchorView, UraSeverityView } from '#contract/ipc-contract.ts';
 
+import type { BeuveUraLabelMenu } from './beuve-ura-label-menu.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 
 /** What "Expand on this" sends (ADR 0125): the note's fields as the form holds them now. */
@@ -37,8 +38,8 @@ export interface NoteExpandRequestDetail {
 
 /**
  * The ✨ Flesh out button of a note form (ADR 0125; "expand on this" in the code), at the start of
- * the form's last row, away from its Cancel and Stage or Save at the end, placed inside the `<form>` whose Title input, Body
- * textarea and Label select it reads (by their `aria-label`), and its Blocking toggle (`name`). Enabled while the title or body
+ * the form's last row, away from its Cancel and Stage or Save at the end, placed inside the `<form>` whose Title input and Body
+ * textarea it reads (by their `aria-label`), and its `beuve-ura-label-menu` (label and Blocking). Enabled while the title or body
  * has text. It asks with a composed `beuve-note-expand-request` ({@link NoteExpandRequestDetail})
  * and never calls the bridge; while it waits it shows Fleshing out… and a Stop, never a second Cancel beside the form's. The answer replaces
  * the body's text as one edit the reviewer can undo (⌘/Ctrl+Z); a failure shows beside the button.
@@ -93,14 +94,16 @@ export class BeuveNoteExpand extends LitElement {
   @state() accessor error = '';
   @state() accessor isExpanding = false;
 
-  private field(name: 'title' | 'body' | 'severity' | 'blocking'): HTMLElement | undefined {
+  private field(name: 'title' | 'body'): HTMLElement | undefined {
     const selectors = {
       title: 'input[aria-label="Title"]',
       body: 'textarea[aria-label="Body"]',
-      severity: 'select[aria-label="Label"]',
-      blocking: 'button[name="blocking"]',
     } as const;
     return this.form?.querySelector<HTMLElement>(selectors[name]) ?? undefined;
+  }
+
+  private labelMenu(): BeuveUraLabelMenu | undefined {
+    return this.form?.querySelector('beuve-ura-label-menu') ?? undefined;
   }
 
   private fieldText(name: 'title' | 'body'): string {
@@ -112,15 +115,11 @@ export class BeuveNoteExpand extends LitElement {
   }
 
   private isBlocking(): boolean {
-    return this.field('blocking')?.getAttribute('aria-pressed') === 'true';
+    return this.labelMenu()?.blocking ?? false;
   }
 
   private severity(): UraSeverityView {
-    const element = this.field('severity');
-    if (element instanceof HTMLSelectElement && element.value !== '') {
-      return element.value as UraSeverityView;
-    }
-    return 'issue';
+    return this.labelMenu()?.severity ?? 'issue';
   }
 
   /**
