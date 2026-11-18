@@ -53,10 +53,11 @@ import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { adjacentMessageTop } from './adjacent-message-top.ts';
 import { chatCompletionStyles } from './chat-completion-styles.ts';
+import { completionListStyles } from './completion-list-styles.ts';
 import { matchChatCommands } from './match-chat-commands.ts';
 import type { ChatCommandSuggestion } from './match-chat-commands.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
-import { planChatCompletion } from './plan-chat-completion.ts';
+import { planCompletion } from './plan-completion.ts';
 
 /** Questions carry at most this many mentions (ADR 0046); main refuses more. */
 const maxMentions = 8;
@@ -98,6 +99,7 @@ export class BeuveChatDrawer extends LitElement {
     buttonStyles,
     formatControlStyles,
     zoneStyles,
+    completionListStyles,
     chatCompletionStyles,
     css`
       :host {
@@ -1147,7 +1149,7 @@ export class BeuveChatDrawer extends LitElement {
 
   /** ↑ ↓ Tab Enter and Escape on the open command list; `false` leaves the key to the input. */
   private runCompletionKey(event: KeyboardEvent): boolean {
-    const step = planChatCompletion({
+    const step = planCompletion({
       key: event.key,
       count: this.completions.length,
       highlighted: this.completionIndex,
@@ -1866,7 +1868,7 @@ export class BeuveChatDrawer extends LitElement {
       return nothing;
     }
     return html`<div
-      class="completions"
+      class="completions completion-list"
       id="chat-commands"
       role="listbox"
       aria-label="Chat commands"
