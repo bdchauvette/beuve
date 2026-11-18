@@ -61,6 +61,12 @@ const initial: UraSnapshot = {
   isExporting: false,
 };
 
+/** What {@link UraController.export} copies: which export, and the dock's summary, if written. */
+export interface UraExportChoice {
+  readonly target: UraExportTarget;
+  readonly summary?: string | undefined;
+}
+
 /**
  * The review dock's state and flows (ADR 0027, 0043): the open session's staged items, its
  * derived and chosen verdict, the notice under the export buttons, and every call that changes
@@ -378,15 +384,22 @@ export class UraController implements ReactiveController {
     });
   }
 
-  /** Compiles the review in main and copies it with main's clipboard (ADR 0027). */
-  async export(target: UraExportTarget): Promise<void> {
+  /**
+   * Compiles the review in main and copies it with main's clipboard (ADR 0027), with the review
+   * summary the reviewer typed for posting, if any.
+   */
+  async export({ target, summary }: UraExportChoice): Promise<void> {
     const bridge = this.environment.bridge();
     const review = this.environment.review();
     if (bridge === undefined || review === undefined || this.snapshot.isExporting) {
       return;
     }
     this.patch({ isExporting: true });
-    const compiled = await bridge.invoke('ura:export', { sessionId: review.sessionId, target });
+    const compiled = await bridge.invoke('ura:export', {
+      sessionId: review.sessionId,
+      target,
+      ...(summary !== undefined && { summary }),
+    });
     if (!compiled.ok) {
       this.patch({
         isExporting: false,

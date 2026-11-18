@@ -93,6 +93,18 @@ describe('renderAgentReviewXml', () => {
     expect(xml.split('<![CDATA[')).toHaveLength(3);
   });
 
+  test('puts the review summary after the change, in CDATA, and leaves a blank one out', ({
+    expect,
+  }) => {
+    const xml = renderAgentReviewXml(createSampleArtifact(), { summary: '\nShip it ]]> now.\n' });
+    expect(xml).toContain(
+      '  </change>\n  <summary><![CDATA[Ship it ]]]]><![CDATA[> now.]]></summary>\n  <counts',
+    );
+    expect(renderAgentReviewXml(createSampleArtifact(), { summary: '  ' })).toBe(
+      renderAgentReviewXml(createSampleArtifact()),
+    );
+  });
+
   test('renders an empty review', ({ expect }) => {
     const artifact = {
       ...createSampleArtifact({ value: 'approve', source: 'derived' }),

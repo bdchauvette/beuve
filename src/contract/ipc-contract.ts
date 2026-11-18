@@ -1602,12 +1602,15 @@ export type UraExportTarget = 'agent-json' | 'agent-xml' | 'github';
 
 /**
  * Compiles the staged items on the current head with the session's chosen verdict (else the
- * derived one); `verdict` overrides both for this export only.
+ * derived one); `verdict` overrides both for this export only. `summary` is the review summary
+ * the reviewer typed in the dock for posting: the agent forms' `summary` and the GitHub body's top
+ * (`docs/review-format.md`); blank adds nothing.
  */
 export interface ExportUraRequest {
   readonly sessionId: string;
   readonly target: UraExportTarget;
   readonly verdict?: UraVerdictView;
+  readonly summary?: string;
 }
 
 export interface UraExportView {

@@ -470,6 +470,7 @@ const uraExportRequest = z.strictObject({
   sessionId,
   target: z.enum(['agent-json', 'agent-xml', 'github']),
   verdict: uraVerdict.optional(),
+  summary: z.string().max(65_536).optional(),
 });
 
 const verdictChoiceRequest = z.strictObject({
@@ -1083,8 +1084,12 @@ export function createIpcHandlers(
       if (!parsed.success) {
         return invalid(parsed.error);
       }
-      const { verdict, ...required } = parsed.data;
-      return services.ura.export({ ...required, ...(verdict !== undefined && { verdict }) });
+      const { verdict, summary, ...required } = parsed.data;
+      return services.ura.export({
+        ...required,
+        ...(verdict !== undefined && { verdict }),
+        ...(summary !== undefined && { summary }),
+      });
     },
     'ura:expand-note': async (request, sender): Promise<IpcResult<ExpandedNoteView>> => {
       const parsed = expandNoteRequest.safeParse(request);

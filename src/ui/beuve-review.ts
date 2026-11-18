@@ -616,7 +616,7 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onUraExport = (event: CustomEvent<UraExportDetail>): void => {
-    void this.ura.export(event.detail.target);
+    void this.ura.export({ target: event.detail.target, summary: this.reviewSummary() });
   };
 
   private readonly onUraSetVerdict = (event: CustomEvent<UraVerdictDetail>): void => {
@@ -1972,6 +1972,11 @@ export class BeuveReview extends LitElement {
   }
 
   /** What the review adds to the menu state: the focus, the cursor's file, the panels. */
+  /** The review summary typed in the dock for posting, which the exports carry too; blank is none. */
+  reviewSummary(): string | undefined {
+    return this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.writtenSummary();
+  }
+
   menuFacts(): ReviewMenuFacts {
     let dock: readonly UraItemView[] = [];
     if (this.focusedZone === 'ura') {

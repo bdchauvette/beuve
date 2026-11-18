@@ -28,3 +28,7 @@ A reviewer can stage a `/review` finding (ADR 0055) or a note a chat answer prop
 ## Consequences
 
 The author of a pull request sees which notes an agent raised and how sure it was, and a reviewer can't post an agent's note as their own without rewriting it as a new note. Posted bodies of agent notes are two paragraphs longer. Notes staged before this change post with the footer but no confidence. The schema-fixture script's seed rows don't set `chat_confidence` yet; they gain it when the next release's fixture is written.
+
+## Amendment (2026-11-18): the review summary is in every export
+
+The summary the reviewer types in the dock to post with the review (ADR 0039's 2026-11-18 amendment) also goes into the exports, so an agent reads the reviewer's overall words beside the notes. `ura:export` takes an optional `summary`: `beuve.ura/1` gains an optional `<summary>` element after `<change>` (Markdown in CDATA, like bodies; `summary` in the JSON form), and the GitHub review JSON puts it at the top of `body`, as posting does. A blank summary adds nothing, and the text is trimmed in all three, as GitHub's body already was. An optional child keeps `beuve.ura/1` by the rule above. The summary stays the dock's state: the review asks the dock for it (`writtenSummary`) when an export runs from the dock or from File › Export Review, so nothing moves and the summary is still cleared after a post or when another pull request opens. It is not stored with the review, only passed with each export.

@@ -92,14 +92,26 @@ export interface AgentReview {
   };
   readonly verdict: UraVerdict;
   readonly verdictSource: 'derived' | 'chosen';
+  /** The reviewer's own words on the whole review, Markdown; absent when they wrote none. */
+  readonly summary?: string;
   /** Items per label, and how many of them are blocking. */
   readonly counts: Readonly<UraCounts>;
   readonly items: readonly AgentReviewItem[];
 }
 
+/** What an export adds to the artifact: the review summary the reviewer typed for posting. */
+export interface AgentReviewOptions {
+  /** Left out when blank; otherwise trimmed, as the GitHub review body takes it. */
+  readonly summary?: string;
+}
+
 /** The JSON form of an artifact for agents. Pure and deterministic. */
-export function buildAgentReview(artifact: UraArtifact): AgentReview {
+export function buildAgentReview(
+  artifact: UraArtifact,
+  options: AgentReviewOptions = {},
+): AgentReview {
   const { summary } = artifact;
+  const written = options.summary?.trim() ?? '';
   const { change } = summary;
   return {
     schema: 'beuve.ura/1',
@@ -112,6 +124,7 @@ export function buildAgentReview(artifact: UraArtifact): AgentReview {
     },
     verdict: artifact.verdict.value,
     verdictSource: artifact.verdict.source,
+    ...(written !== '' && { summary: written }),
     counts: countUraSeverities(artifact.entries),
     items: artifact.entries.map((entry) => itemFrom(entry)),
   };

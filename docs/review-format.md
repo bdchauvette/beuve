@@ -19,12 +19,13 @@ The code is `src/internal/ura/build-agent-review.ts` (the structure) and `render
   <change scope="full|interdiff" base-sha="…" head-sha="…" [from-head-sha="…"]>
     <repository kind="…" …/>
   </change>
+  [<summary>…</summary>]
   <counts issue="…" … blocking="…"/>
   <items> <item …>…</item> … </items>
 </beuve-review>
 ```
 
-The JSON form has the same data under camelCase keys (`baseSha`, `startLine`, `verdictSource`, `suggestedPatch`), with optional keys left out rather than `null`. It is exact for text the XML has to normalize (see "Encoding").
+The JSON form has the same data under camelCase keys (`baseSha`, `startLine`, `verdictSource`, `suggestedPatch`, `summary`), with optional keys left out rather than `null`. It is exact for text the XML has to normalize (see "Encoding").
 
 ### `beuve-review`
 
@@ -40,6 +41,10 @@ The JSON form has the same data under camelCase keys (`baseSha`, `startLine`, `v
   - `local`: also `head-ref`.
   - `github-pull-request`: also `owner`, `repo` and `number`.
   - `remote-branch`: also `host`, `owner`, `repo` and `branch`.
+
+### `summary`
+
+The reviewer's own words on the review as a whole: the summary they typed in the dock to post with it, which is also the top of the GitHub review body. Markdown, in a CDATA section, with surrounding whitespace trimmed. Absent when they wrote none. It comes after `change` and before `counts`.
 
 ### `counts`
 
@@ -66,10 +71,10 @@ Children, in this order:
 
 ## Versioning
 
-`schema` names the format, and it changes only when a reader written for the old one could misread the new one: an element or attribute removed or renamed, a value given a new meaning, or a new value in a closed list (a label, an anchor `kind`, an outdated `reason`). Then it becomes `beuve.ura/2`, and this document describes the new format. Adding an optional attribute or child that a reader can ignore keeps `beuve.ura/1` (as `confidence` did, ADR 0141), so a reader should ignore what it doesn't know.
+`schema` names the format, and it changes only when a reader written for the old one could misread the new one: an element or attribute removed or renamed, a value given a new meaning, or a new value in a closed list (a label, an anchor `kind`, an outdated `reason`). Then it becomes `beuve.ura/2`, and this document describes the new format. Adding an optional attribute or child that a reader can ignore keeps `beuve.ura/1` (as `confidence` and `summary` did, ADR 0141), so a reader should ignore what it doesn't know.
 
 ## Encoding
 
-- Titles are XML-escaped text. Bodies and patches are CDATA; a `]]>` inside one is split across two CDATA sections, so reading the text back joins them again.
+- Titles are XML-escaped text. The summary, bodies and patches are CDATA; a `]]>` inside one is split across two CDATA sections, so reading the text back joins them again.
 - Characters XML 1.0 cannot carry, even escaped (most control characters, lone surrogates), become U+FFFD.
 - XML parsers normalize carriage returns, so a patch for a file with CRLF line endings is exact only in the JSON form.
