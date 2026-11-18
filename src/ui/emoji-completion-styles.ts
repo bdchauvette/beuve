@@ -22,7 +22,6 @@ export const emojiCompletionStyles = css`
   .completion-name {
     overflow: hidden;
     font: var(--beuve-font-code);
-    font-size: var(--beuve-font-size-caption);
     color: var(--beuve-text-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
