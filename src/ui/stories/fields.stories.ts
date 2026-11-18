@@ -40,3 +40,16 @@ export const Kinds: StoryObj = {
     `);
   },
 };
+
+/** Radio buttons and a checkbox in `.choice` labels: accent-colored, centered on their text. */
+export const Choices: StoryObj = {
+  render: () => {
+    return framed(html`
+      <span role="radiogroup" aria-label="Open files in">
+        <label class="choice"><input type="radio" name="story-editor" checked /> Zed</label>
+        <label class="choice"><input type="radio" name="story-editor" /> VS Code</label>
+      </span>
+      <label class="choice"><input type="checkbox" checked /> Read-only tools</label>
+    `);
+  },
+};

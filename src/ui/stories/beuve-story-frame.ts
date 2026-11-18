@@ -7,6 +7,7 @@ import type { CommitInfoView } from '#contract/ipc-contract.ts';
 import { badgeStyles } from '../primitives/badge-styles.ts';
 import type { CommitInfoRequestDetail } from '../primitives/beuve-commit.ts';
 import { buttonStyles } from '../primitives/button-styles.ts';
+import { choiceStyles } from '../primitives/choice-styles.ts';
 import { emptyStateStyles } from '../primitives/empty-state-styles.ts';
 import { fieldStyles } from '../primitives/field-styles.ts';
 import { kbdStyles } from '../primitives/kbd-styles.ts';
@@ -25,6 +26,7 @@ export class BeuveStoryFrame extends LitElement {
   static override styles = [
     buttonStyles,
     fieldStyles,
+    choiceStyles,
     kbdStyles,
     statusDotStyles,
     badgeStyles,

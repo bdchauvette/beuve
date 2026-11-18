@@ -20,6 +20,7 @@ import { describeModelEntry } from './describe-model-entry.ts';
 import { describeModelTest } from './describe-model-test.ts';
 import { isRemoteBaseUrl } from './is-remote-base-url.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { choiceStyles } from './primitives/choice-styles.ts';
 import { fieldStyles } from './primitives/field-styles.ts';
 
 /** The form's state: an entry being added or edited, with its fields as typed. */
@@ -46,6 +47,7 @@ interface Draft {
 export class BeuveModelSettings extends LitElement {
   static override styles = [
     buttonStyles,
+    choiceStyles,
     fieldStyles,
     css`
       :host {
@@ -485,7 +487,7 @@ export class BeuveModelSettings extends LitElement {
                   >
                 </div>
                 <div class="row">
-                  <label>
+                  <label class="choice">
                     <input
                       type="checkbox"
                       .checked=${draft.tools}
@@ -516,7 +518,7 @@ export class BeuveModelSettings extends LitElement {
                   <span>Claude Code</span>
                   <span class="choices">
                     ${(['installed', 'bundled'] as const).map((source) => {
-                      return html`<label>
+                      return html`<label class="choice">
                         <input
                           type="radio"
                           name="executable"
