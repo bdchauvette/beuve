@@ -38,6 +38,7 @@ import { parseInlineTitle } from './parse-inline-title.ts';
 import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import type { InlineSpan } from './parse-markdown-subset.ts';
+import { noteLabelStateFrom } from './note-label-state-from.ts';
 import { resolveDockVerdict } from './resolve-dock-verdict.ts';
 import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
@@ -740,8 +741,7 @@ export class BeuveUraDock extends LitElement {
     if (itemIds.length === 0) {
       return;
     }
-    const isBlocking = targets.every((item) => item.blocking);
-    if (change.blocking !== isBlocking) {
+    if (change.changed === 'blocking') {
       this.emit('beuve-ura-edit-many', {
         itemIds,
         change: { kind: 'blocking', blocking: change.blocking },
@@ -1079,19 +1079,20 @@ export class BeuveUraDock extends LitElement {
       return nothing;
     }
     const targets = this.targetItems();
-    const [first] = targets;
+    const state = noteLabelStateFrom(targets);
     let severity: UraSeverityView = 'issue';
-    if (first !== undefined) {
-      severity = first.severity;
+    if (state.severity !== 'mixed') {
+      severity = state.severity;
     }
-    const isBlocking = targets.length > 0 && targets.every((item) => item.blocking);
     return html`<div class="selection" role="group" aria-label="Selected notes">
       <span class="selection-count" role="status"
         >${countNoun(targets.length, 'note')} selected</span
       >
       <beuve-ura-label-menu
         .severity=${live(severity)}
-        .blocking=${live(isBlocking)}
+        .blocking=${live(state.blocking === true)}
+        .mixedSeverity=${live(state.severity === 'mixed')}
+        .mixedBlocking=${live(state.blocking === 'mixed')}
       ></beuve-ura-label-menu>
       <span class="spacer"></span>
       <button

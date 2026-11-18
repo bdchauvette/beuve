@@ -7,15 +7,20 @@ import type { UraSeverityView } from '#contract/ipc-contract.ts';
 import './primitives/beuve-menu.ts';
 import type { BeuveMenu } from './primitives/beuve-menu.ts';
 import { displayIcon } from './display-icon.ts';
+import type { DisplayIconName } from './display-icon.ts';
 import { uraSeverityEmoji } from './ura-severity-emoji.ts';
 import { uraSeverityViews } from './ura-severity-views.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
 
-/** `beuve-ura-label-change`: the note's label and Blocking after the reviewer chose. */
+/**
+ * `beuve-ura-label-change`: the note's label and Blocking after the reviewer chose, and which of
+ * the two they changed (the other may be a placeholder while the menu shows it mixed).
+ */
 export interface UraLabelChange {
   readonly severity: UraSeverityView;
   readonly blocking: boolean;
+  readonly changed: 'severity' | 'blocking';
 }
 
 /**
@@ -26,7 +31,10 @@ export interface UraLabelChange {
  * Choosing a label closes it and focus goes back to the trigger. Escape inside the open menu only
  * closes the menu, so the form around it stays open. The composer and the dock's editor both use
  * it. It updates `severity` and `blocking` itself and emits a composed `beuve-ura-label-change`
- * ({@link UraLabelChange}).
+ * ({@link UraLabelChange}). For several notes at once (the dock's selection bar, ADR 0143),
+ * `mixedSeverity` makes the trigger read "Mixed labels" with no label checked, and
+ * `mixedBlocking` shows Blocking as mixed (a dash) with no `· blocking` on the trigger; choosing
+ * either clears its mixed state, and Blocking from mixed blocks them all.
  */
 @customElement('beuve-ura-label-menu')
 export class BeuveUraLabelMenu extends LitElement {
@@ -54,10 +62,18 @@ export class BeuveUraLabelMenu extends LitElement {
       return;
     }
     if (choice === 'blocking') {
-      this.change({ severity: this.severity, blocking: !this.blocking });
+      this.change({
+        severity: this.severity,
+        blocking: this.mixedBlocking || !this.blocking,
+        changed: 'blocking',
+      });
       return;
     }
-    this.change({ severity: choice as UraSeverityView, blocking: this.blocking });
+    this.change({
+      severity: choice as UraSeverityView,
+      blocking: this.blocking,
+      changed: 'severity',
+    });
   };
 
   /** Escape closes only the open menu, never the form the menu sits in. */
@@ -71,6 +87,10 @@ export class BeuveUraLabelMenu extends LitElement {
   @property() accessor severity: UraSeverityView = 'issue';
   /** Whether the note blocks the merge. */
   @property({ type: Boolean }) accessor blocking = false;
+  /** The notes have different labels: none is checked and the trigger says so. */
+  @property({ type: Boolean, attribute: 'mixed-severity' }) accessor mixedSeverity = false;
+  /** Some of the notes block and some don't. */
+  @property({ type: Boolean, attribute: 'mixed-blocking' }) accessor mixedBlocking = false;
 
   private menu(): BeuveMenu | undefined {
     return this.renderRoot.querySelector('beuve-menu') ?? undefined;
@@ -79,6 +99,11 @@ export class BeuveUraLabelMenu extends LitElement {
   private change(next: UraLabelChange): void {
     this.severity = next.severity;
     this.blocking = next.blocking;
+    if (next.changed === 'severity') {
+      this.mixedSeverity = false;
+    } else {
+      this.mixedBlocking = false;
+    }
     this.dispatchEvent(
       new CustomEvent<UraLabelChange>('beuve-ura-label-change', {
         detail: next,
@@ -88,35 +113,66 @@ export class BeuveUraLabelMenu extends LitElement {
     );
   }
 
+  private triggerLabel(): string {
+    let label = `Label: ${this.severity}`;
+    if (this.mixedSeverity) {
+      label = 'Label: mixed labels';
+    }
+    if (this.mixedBlocking) {
+      return `${label}, some blocking`;
+    }
+    if (this.blocking) {
+      return `${label}, blocking`;
+    }
+    return label;
+  }
+
+  private renderTriggerLabel(): TemplateResult {
+    if (this.mixedSeverity) {
+      return html`<span>Mixed labels</span>`;
+    }
+    return html`<span aria-hidden="true">${uraSeverityEmoji(this.severity)}</span
+      ><span>${this.severity}</span>`;
+  }
+
+  private blockingChecked(): 'true' | 'false' | 'mixed' {
+    if (this.mixedBlocking) {
+      return 'mixed';
+    }
+    if (this.blocking) {
+      return 'true';
+    }
+    return 'false';
+  }
+
   /** Puts the keyboard on the trigger. */
   override focus(options?: FocusOptions): void {
     this.renderRoot.querySelector<HTMLElement>('[slot="trigger"]')?.focus(options);
   }
 
   override render(): TemplateResult {
-    let blockingText = '';
-    if (this.blocking) {
-      blockingText = ', blocking';
+    const isBlocking = this.blocking && !this.mixedBlocking;
+    let blockingIcon: DisplayIconName = 'check';
+    if (this.mixedBlocking) {
+      blockingIcon = 'dash';
     }
     return html`<beuve-menu label="Label" @click=${this.onMenuClick} @keydown=${this.onMenuKeyDown}>
       <button
         slot="trigger"
         class="button"
         type="button"
-        aria-label="Label: ${this.severity}${blockingText}"
+        aria-label=${this.triggerLabel()}
         title="The note's label, and whether it blocks the merge"
       >
-        <span aria-hidden="true">${uraSeverityEmoji(this.severity)}</span
-        ><span>${this.severity}</span
-        >${this.blocking ? html`<span class="blocking">· blocking</span>` : nothing}${displayIcon(
-          'chevron',
-        )}
+        ${this.renderTriggerLabel()}${
+          isBlocking ? html`<span class="blocking">· blocking</span>` : nothing
+        }${displayIcon('chevron')}
       </button>
       ${uraSeverityViews.map((severity) => {
         return html`<button
           type="button"
           role="menuitemradio"
-          aria-checked=${severity === this.severity ? 'true' : 'false'}
+          aria-checked=${!this.mixedSeverity && severity === this.severity ? 'true' : 'false'}
           data-choice=${severity}
         >
           ${displayIcon('check')}<span aria-hidden="true">${uraSeverityEmoji(severity)}</span
@@ -127,11 +183,11 @@ export class BeuveUraLabelMenu extends LitElement {
       <button
         type="button"
         role="menuitemcheckbox"
-        aria-checked=${this.blocking ? 'true' : 'false'}
+        aria-checked=${this.blockingChecked()}
         title="A blocking note must be resolved before merging"
         data-choice="blocking"
       >
-        ${displayIcon('check')}${displayIcon('blocking')}Blocking
+        ${displayIcon(blockingIcon)}${displayIcon('blocking')}Blocking
       </button>
     </beuve-menu>`;
   }
