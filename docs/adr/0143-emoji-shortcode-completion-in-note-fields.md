@@ -21,3 +21,7 @@ Reviewers asked for a shortcode emoji picker where they write notes. Notes alrea
 ## Consequences
 
 Emoji are a keystroke away in every note field, and what the list offers is exactly what the rendered view renders. A new text field gets completion by carrying the marker and the ARIA attributes in a host that has the controller. Enter inserts while the list is open, which is one more keystroke for a reviewer who wanted a new line after `:ok`, and Escape then reopens nothing until the name starts over. The undo path depends on `execCommand`, which is deprecated but is still the only way to edit a field undoably.
+
+## Amendment 2026-11-18: the list follows the caret
+
+Under the whole field, the list sat far from where the reviewer was typing in a long body. It now sits just below the line the `:name` starts on, at its `:`, so it holds still while the name is typed. It flips above that line when there is no room below and stays inside the window (`placeHoverCard`, the hover card's placement). `caretRectFrom` measures the `:` with `dom-input-range` (ADR 0145). CSS anchor positioning is gone: the controller sets the popover's `inset-inline-start` and `inset-block-start` itself (the renderer is horizontal and left to right, as the hover card assumes). It places the list again on every change the list shows, on scrolling in the host's shadow root or the window, and on resize, while the list is open. Keys, insertion and ARIA are unchanged.

@@ -1,12 +1,14 @@
 import { html, nothing } from 'lit';
 import type { ReactiveController, ReactiveControllerHost, TemplateResult } from 'lit';
 
+import { caretRectFrom } from './caret-rect-from.ts';
 import { findEmojiQuery } from './find-emoji-query.ts';
 import type { EmojiQuery, TextCaret } from './find-emoji-query.ts';
 import { matchEmojiShortcodes } from './match-emoji-shortcodes.ts';
 import type { EmojiSuggestion } from './match-emoji-shortcodes.ts';
 import { planClosingColon } from './plan-closing-colon.ts';
 import type { TextEdit } from './plan-closing-colon.ts';
+import { placeHoverCard } from './place-hover-card.ts';
 import { planCompletion } from './plan-completion.ts';
 
 /** A Lit element whose shadow root holds the fields and the list. */
@@ -17,9 +19,10 @@ type CompletionField = HTMLInputElement | HTMLTextAreaElement;
 
 /**
  * `:shortcode:` completion for the host's text fields that carry `data-emoji-completion` (ADR
- * 0143). Typing `:` and two characters of a name lists up to eight emoji in a popover under the
- * field; ↓ ↑ move, Enter and Tab insert, Escape closes the list (and only the list), and a
- * closing `:` after an exact name inserts it as well. The emoji replaces the typed `:name` as one
+ * 0143). Typing `:` and two characters of a name lists up to eight emoji in a popover just below
+ * the line the `:name` starts on, at its `:` (above it near the window's bottom); ↓ ↑ move, Enter
+ * and Tab insert, Escape closes the list (and only the list), and a closing `:` after an exact
+ * name inserts it as well. The emoji replaces the typed `:name` as one
  * undoable edit and fires the field's `input`. The keys it takes never reach the host's own
  * listeners; every other key, and every key while the list is closed, does.
  *
@@ -97,6 +100,13 @@ export class EmojiCompletion implements ReactiveController {
     }
     this.field = field;
     this.sync(field);
+  };
+
+  /** The field, the host's scrolling or the window moved the `:name` under the open list. */
+  private readonly onMove = (): void => {
+    if (this.isOpen()) {
+      this.place();
+    }
   };
 
   private readonly onFocusOut = (event: Event): void => {
@@ -194,6 +204,27 @@ export class EmojiCompletion implements ReactiveController {
     this.suggestions = [];
   }
 
+  /**
+   * Puts the open list just below the line the `:name` starts on, at its `:`, so it stays put
+   * while the name is typed; above the line when there is no room below, and inside the window.
+   */
+  private place(): void {
+    const list = this.host.renderRoot.querySelector<HTMLElement>(`#${this.listId}`);
+    const { field, query } = this;
+    if (list === null || field === undefined || query === undefined) {
+      return;
+    }
+    const { width, height } = list.getBoundingClientRect();
+    const { left, top } = placeHoverCard(
+      caretRectFrom(field, query.start),
+      { width, height },
+      { width: innerWidth, height: innerHeight },
+    );
+    // The renderer is horizontal and left to right, so the viewport's x is the inline start.
+    list.style.setProperty('inset-inline-start', `${String(left)}px`);
+    list.style.setProperty('inset-block-start', `${String(top)}px`);
+  }
+
   hostConnected(): void {
     this.controller?.abort();
     this.controller = new AbortController();
@@ -205,6 +236,10 @@ export class EmojiCompletion implements ReactiveController {
     root.addEventListener('selectionchange', this.onChange, { signal });
     root.addEventListener('focusin', this.onChange, { signal });
     root.addEventListener('focusout', this.onFocusOut, { signal });
+    // Scrolling does not bubble; capture sees the field's and every scroller's in the root.
+    root.addEventListener('scroll', this.onMove, { capture: true, passive: true, signal });
+    addEventListener('scroll', this.onMove, { capture: true, passive: true, signal });
+    addEventListener('resize', this.onMove, { signal });
   }
 
   hostDisconnected(): void {
@@ -213,7 +248,7 @@ export class EmojiCompletion implements ReactiveController {
     this.close();
   }
 
-  /** Shows or hides the popover under its field, and points the field at the highlight. */
+  /** Shows or hides the popover at the `:name`, and points the field at the highlight. */
   hostUpdated(): void {
     // A field the host stopped rendering never reports losing focus.
     if (this.field?.isConnected === false) {
@@ -243,6 +278,7 @@ export class EmojiCompletion implements ReactiveController {
     if (!isShown) {
       list.showPopover({ source: field });
     }
+    this.place();
     list
       .querySelector(`#${optionId(this.listId, this.highlighted)}`)
       ?.scrollIntoView({ block: 'nearest' });
