@@ -6,7 +6,7 @@ import { buttonStyles } from './primitives/button-styles.ts';
 import { progressStyles } from './primitives/progress-styles.ts';
 
 /**
- * A review on its way (ADR 0144): what is opening, a progress bar, and the step it is on
+ * A review on its way (ADR 0145): what is opening, a progress bar, and the step it is on
  * (`Fetching pull request #12…`, then `Opening review…`). With `cancellable` it offers Cancel, and
  * Escape while it has the focus does the same; both emit `beuve-opening-cancel`. It takes the
  * focus itself (`tabindex="-1"`), so a second Enter from the list it was opened from does nothing.

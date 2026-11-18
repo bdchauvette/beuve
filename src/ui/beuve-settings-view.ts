@@ -30,7 +30,7 @@ import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 /**
  * The Settings window (ADR 0068): only what no menu item sets (the review-edits and review-queue
  * branch prefixes, the code font, the language server configuration, the models), the editors and
- * where each was found (ADR 0139: the one exception, since the menu can't show that), and the
+ * where each was found (ADR 0140: the one exception, since the menu can't show that), and the
  * accounts beuve uses (read-only). Every toggle the menus have lives only there. Every change is saved at once through the
  * settings channels, which also tell the main window; the window is read again when it regains
  * focus.
@@ -249,7 +249,7 @@ export class BeuveSettingsView extends LitElement {
     }
   }
 
-  /** Stores the editor Open in Editor and Open Review Edits use (ADR 0139). */
+  /** Stores the editor Open in Editor and Open Review Edits use (ADR 0140). */
   private async choosePreferredEditor(editorId: string): Promise<void> {
     const { api: bridge } = this;
     if (bridge === undefined) {
@@ -264,7 +264,7 @@ export class BeuveSettingsView extends LitElement {
     }
   }
 
-  /** Opens `settings.json`, where the reviewer adds editors of their own (ADR 0139). */
+  /** Opens `settings.json`, where the reviewer adds editors of their own (ADR 0140). */
   private async openSettingsFile(): Promise<void> {
     const { api: bridge } = this;
     if (bridge === undefined) {
@@ -281,7 +281,7 @@ export class BeuveSettingsView extends LitElement {
 
   /**
    * Every editor beuve knows, built-in or from `editors` in `settings.json`, where it was found
-   * and which one opens files (ADR 0139). This is the only place the editor is chosen;
+   * and which one opens files (ADR 0140). This is the only place the editor is chosen;
    * editors of the reviewer's own are added in the file, which this window reads again on focus.
    */
   private renderEditors(editors: EditorSettingsView): TemplateResult {
@@ -558,7 +558,7 @@ function renderFound(editor: EditorChoiceView): TemplateResult {
   >`;
 }
 
-/** What opens files without a choice, or why the choice can't open them (ADR 0139). */
+/** What opens files without a choice, or why the choice can't open them (ADR 0140). */
 function renderEditorChoiceNote(editors: EditorSettingsView): TemplateResult | typeof nothing {
   const preferred = editors.editors.find((editor) => editor.id === editors.preferred);
   if (preferred === undefined && editors.preferred !== undefined) {

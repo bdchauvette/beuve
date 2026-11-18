@@ -449,7 +449,7 @@ describe('GithubController', () => {
     await expect.poll(() => selected).toStrictEqual(reloads);
   });
 
-  test('shows a picked item’s fetch until its session starts loading (ADR 0144)', async ({
+  test('shows a picked item’s fetch until its session starts loading (ADR 0145)', async ({
     expect,
   }) => {
     const { github, selected } = createGithubHarness({

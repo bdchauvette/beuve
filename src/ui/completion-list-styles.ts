@@ -1,7 +1,7 @@
 import { css } from 'lit';
 
 /**
- * A text field's completion list (ADR 0127, 0143): the `.completion-list` surface and its
+ * A text field's completion list (ADR 0127, 0144): the `.completion-list` surface and its
  * `.completion` rows. The highlight is the menu items' (`menuItemStyles`), since focus stays in
  * the field. Where the list sits is the field's own.
  */

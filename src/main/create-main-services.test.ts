@@ -131,7 +131,7 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect(fileSummary(review)).toStrictEqual([['notes.md', 'added', 1, 0]]);
   });
 
-  test('undoes a save and shows the whole change or since an earlier save (ADR 0140)', async ({
+  test('undoes a save and shows the whole change or since an earlier save (ADR 0141)', async ({
     expect,
     services: { sessions },
     repositories,

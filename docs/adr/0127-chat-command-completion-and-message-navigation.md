@@ -22,4 +22,4 @@ Commands are discoverable where they are typed, and adding one to the registry a
 
 ## Amendment 2026-11-18: the completion pieces are shared
 
-The note fields' emoji completion (ADR 0143) reuses this list. `planChatCompletion` is now `planCompletion` (`src/ui/plan-completion.ts`), with the same keys. The list's surface and rows are `completionListStyles` (`.completion-list`, `.completion`); `chatCompletionStyles` keeps where the chat's list sits and its usage and description columns.
+The note fields' emoji completion (ADR 0144) reuses this list. `planChatCompletion` is now `planCompletion` (`src/ui/plan-completion.ts`), with the same keys. The list's surface and rows are `completionListStyles` (`.completion-list`, `.completion`); `chatCompletionStyles` keeps where the chat's list sits and its usage and description columns.

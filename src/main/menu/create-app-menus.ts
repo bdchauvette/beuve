@@ -126,7 +126,7 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     return opened;
   };
 
-  /** The images of the catalog's icons, drawn once per theme (ADR 0142). */
+  /** The images of the catalog's icons, drawn once per theme (ADR 0143). */
   let icons = new Map<MenuIcon, NativeImage>();
   const iconOf = (icon: MenuIcon): NativeImage => {
     return icons.getOrInsertComputed(icon, () => menuIconImage(icon, platform));
@@ -350,7 +350,7 @@ interface CheckedLabelStates {
 
 /**
  * Shows the checked label of every item that has one while its command is checked, and its own
- * label otherwise (ADR 0142): Withdraw becomes Restore. Electron documents `label` as dynamic.
+ * label otherwise (ADR 0143): Withdraw becomes Restore. Electron documents `label` as dynamic.
  */
 function applyCheckedLabels(menu: Menu, { items, states }: CheckedLabelStates): void {
   for (const item of items) {

@@ -79,10 +79,10 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
  * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the
- * export order, as dragging a staged note among the staged ones does (ADR 0142); a double-click
+ * export order, as dragging a staged note among the staged ones does (ADR 0143); a double-click
  * edits it too (ADR 0129). ⇧↑/⇧↓, Shift+click and ⌘/Ctrl+click select several notes, ⌘A / Ctrl+A
  * selects them all and Escape clears the selection; the Note commands but Show and Edit then act
- * on every selected note, and a bar above the list shows the count and relabels them (ADR 0142).
+ * on every selected note, and a bar above the list shows the count and relabels them (ADR 0143).
  * Review ▸ Note and the context menu run the same commands (`runCommand`, ADR 0068), and Open in
  * Editor opens it (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
@@ -166,7 +166,7 @@ export class BeuveUraDock extends LitElement {
         opacity: 0.5;
       }
 
-      /* ADR 0142: where dropped notes land, a bar in the gap before or after a staged note. */
+      /* ADR 0143: where dropped notes land, a bar in the gap before or after a staged note. */
       li.drop-before::before,
       li.drop-after::after {
         content: '';
@@ -439,11 +439,11 @@ export class BeuveUraDock extends LitElement {
     this.editingBlocking = event.detail.blocking;
   };
 
-  /** `:shortcode:` emoji in the editor's title and body and the review summary (ADR 0143). */
+  /** `:shortcode:` emoji in the editor's title and body and the review summary (ADR 0144). */
   private readonly emoji = new EmojiCompletion(this);
 
   /**
-   * The dock's in-place keys (ADR 0068, 0142): ↑/↓ move, ⇧↑/⇧↓ extend the selection, ⌘A / Ctrl+A
+   * The dock's in-place keys (ADR 0068, 0143): ↑/↓ move, ⇧↑/⇧↓ extend the selection, ⌘A / Ctrl+A
    * selects every note and Escape clears the selection, Return shows, Space edits, Delete
    * withdraws, ⌥↑/⌥↓ reorder.
    */
@@ -511,9 +511,9 @@ export class BeuveUraDock extends LitElement {
   @property({ attribute: false }) accessor github: GithubDockState | undefined;
 
   @state() accessor cursor = 0;
-  /** The notes picked besides the cursor (ADR 0142); empty is the cursor's note alone. */
+  /** The notes picked besides the cursor (ADR 0143); empty is the cursor's note alone. */
   @state() accessor selection: DockSelection = { selected: [], anchor: undefined };
-  /** Where a note being dragged would land (ADR 0142); absent while nothing is dragged over one. */
+  /** Where a note being dragged would land (ADR 0143); absent while nothing is dragged over one. */
   @state() accessor dropTarget: DropTarget | undefined;
   /** The notes being dragged, while a drag from the list runs. */
   @state() accessor draggedIds: readonly string[] = [];
@@ -590,7 +590,7 @@ export class BeuveUraDock extends LitElement {
             },
           ),
         },
-        // A Shift+click extends the selection instead of selecting text (ADR 0142).
+        // A Shift+click extends the selection instead of selecting text (ADR 0143).
         mousedown: {
           item: (_data, event): void => {
             if (event.shiftKey) {
@@ -598,7 +598,7 @@ export class BeuveUraDock extends LitElement {
             }
           },
         },
-        // ADR 0142: staged notes drag to a new place among the staged ones.
+        // ADR 0143: staged notes drag to a new place among the staged ones.
         dragstart: {
           item: withPayload(
             ({ itemId }) => {
@@ -676,7 +676,7 @@ export class BeuveUraDock extends LitElement {
     return this.items.find((item) => item.id === itemId);
   }
 
-  /** Moves the cursor a note; with Shift the selection grows or shrinks with it (ADR 0142). */
+  /** Moves the cursor a note; with Shift the selection grows or shrinks with it (ADR 0143). */
   private moveCursor(step: 1 | -1, isExtending: boolean): void {
     const order = this.ordered().map((item) => item.id);
     const from = order[this.cursor];
@@ -885,7 +885,7 @@ export class BeuveUraDock extends LitElement {
     void this.focusEditor(focus);
   }
 
-  /** Withdraw or Mark Addressed, or back to staged when every note is that already (ADR 0142). */
+  /** Withdraw or Mark Addressed, or back to staged when every note is that already (ADR 0143). */
   private toggleStatus(items: readonly UraItemView[], status: 'withdrawn' | 'addressed'): void {
     const change = noteStatusChange(items, status);
     if (change !== undefined) {
@@ -1068,7 +1068,7 @@ export class BeuveUraDock extends LitElement {
   }
 
   /**
-   * The selection's count and its label menu (ADR 0142): a label choice relabels every selected
+   * The selection's count and its label menu (ADR 0143): a label choice relabels every selected
    * note, and Blocking blocks them all, or none when all of them block already.
    */
   private renderSelectionBar(): TemplateResult | typeof nothing {
@@ -1504,7 +1504,7 @@ export class BeuveUraDock extends LitElement {
 
   /**
    * Runs a Review ▸ Note command, or Open in Editor: Show, Edit and Open in Editor on the note
-   * under the cursor, the others on every selected note (ADR 0142).
+   * under the cursor, the others on every selected note (ADR 0143).
    */
   runCommand(id: CommandId): boolean {
     const ordered = this.ordered();

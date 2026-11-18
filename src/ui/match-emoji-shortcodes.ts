@@ -1,6 +1,6 @@
 import emojiByName from 'markdown-it-emoji/lib/data/full.mjs';
 
-/** One emoji a `:name` can complete to (ADR 0143). */
+/** One emoji a `:name` can complete to (ADR 0144). */
 export interface EmojiSuggestion {
   /** The shortcode without colons: `tada`. */
   readonly name: string;
@@ -13,7 +13,7 @@ const maxSuggestions = 8;
 
 /**
  * The emoji whose shortcode contains `name` (lowercase, without colons), for a text field's
- * completion list (ADR 0143), from the `full` table the rendered Markdown view uses (ADR 0123),
+ * completion list (ADR 0144), from the `full` table the rendered Markdown view uses (ADR 0123),
  * so a note's `:tada:` and its completion agree. The exact name comes first, then names that
  * start with it, then names with a word (after `_`) that does, then the rest; shorter names first
  * within each, then the table's order. An emoji with several names is listed once, under the

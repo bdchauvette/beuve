@@ -3,7 +3,7 @@ import type { EditorLocation } from './editor-location.ts';
 const placeholder = /\{(?<name>file|line|column)\}/gu;
 
 /**
- * An editor's argument template with `{file}`, `{line}` and `{column}` filled in (ADR 0139). Each
+ * An editor's argument template with `{file}`, `{line}` and `{column}` filled in (ADR 0140). Each
  * template entry stays one argument whatever the path holds: nothing is split or run by a shell.
  */
 export function buildEditorArgv(

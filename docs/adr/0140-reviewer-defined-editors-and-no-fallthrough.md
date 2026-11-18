@@ -1,4 +1,4 @@
-# 0139. Editors the reviewer defines, Gram built in, and no stand-in editor
+# 0140. Editors the reviewer defines, Gram built in, and no stand-in editor
 
 - Status: Accepted; amends [0033](0033-open-in-editor.md) (registry, preference, which editor opens) and [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) (Open With, Settings)
 - Date: 2026-11-18
@@ -44,5 +44,5 @@ The reviewer asked that the default editor be set only in Settings, not from the
 
 - **No Open With list.** `open-with-editor`, the catalog's `expands` field, `menuTemplateFrom`'s editor entries, `MenuRunView.argument`, `AppMenus.setEditors`, `EditorServices.onChanged` and the menu refresh on window focus are removed. Main no longer reads the editors to build menus.
 - **Editor Settings…** stays, now directly in Review beside Open in Editor (the Open With submenu would have held only it), and opens the Settings window, whose Editors section is its first.
-- **No `/editor`.** Chat commands no longer set preferences (ADR 0139, chat commands act on the conversation), so `/editor` is gone with the others; typing it says the editor is chosen in Settings › Editors (Review › Editor Settings…). There is no List Editors command: Settings › Editors lists the editors, the choice and the configuration's problems.
+- **No `/editor`.** Chat commands no longer set preferences (ADR 0139), so `/editor` is gone with the others; typing it says the editor is chosen in Settings › Editors (Review › Editor Settings…). There is no List Editors command: Settings › Editors lists the editors, the choice and the configuration's problems.
 - **`editor:set-preferred` is Settings-only**: it moves to `settingsOnlyInvokeChannels`, so main refuses it from the main window and sheets, and only Settings › Editors stores `preferredEditor`. The failure messages point to Settings › Editors alone.

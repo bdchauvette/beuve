@@ -26,7 +26,7 @@ export interface UraUpdateDetail {
   readonly suggestedPatch?: string;
 }
 
-/** One change to the dock's selected notes (ADR 0142). */
+/** One change to the dock's selected notes (ADR 0143). */
 export type UraEditManyDetail = EditUraItemsRequest;
 
 /** A deletion Undo can put back, and the titles of the notes it holds. */
@@ -245,7 +245,7 @@ export class UraController implements ReactiveController {
     await this.call(async (bridge) => bridge.invoke('ura:update', detail));
   }
 
-  /** One change to several notes, all or none, in one call (ADR 0142). */
+  /** One change to several notes, all or none, in one call (ADR 0143). */
   async editMany(detail: UraEditManyDetail): Promise<void> {
     await this.call(async (bridge) => bridge.invoke('ura:edit-many', detail));
   }

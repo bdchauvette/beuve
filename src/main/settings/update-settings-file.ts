@@ -9,7 +9,7 @@ const queues = new Map<string, Promise<void>>();
  * Rewrites the settings file with `update` applied to its current contents, atomically and
  * owner-only (0600, `writeFileAtomic`). Updates to one file run one after another, so two writers
  * (the editor preference, remembered clone paths) never drop each other's keys. The reviewer edits
- * the file by hand too (`editors`, ADR 0139), so a file that exists but is not a JSON object is
+ * the file by hand too (`editors`, ADR 0140), so a file that exists but is not a JSON object is
  * never replaced: the update throws instead, and the reviewer's text stays as it is.
  */
 export async function updateSettingsFile(

@@ -53,6 +53,6 @@ Reviewers can edit with their own tools without endangering what beuve reviews, 
 
 A "done" or "failed" line (`clearReviewEditsStatus`) clears when the session is selected or reloaded again and when Open, Turn into Suggestions… or Discard… starts; the branch's summary and an action still waiting on main stay, and so does a preview or discard confirmation, which main checks against its digest anyway.
 
-## Amendment 2026-11-18: the chosen editor, or none (ADR 0139)
+## Amendment 2026-11-18: the chosen editor, or none (ADR 0140)
 
 Open Review Edits opens the editor the reviewer chose, or the only one installed when there is no choice. It no longer falls through to another editor ("Zed first" above): a missing chosen editor, or several and no choice, fails with a message that points to Settings › Editors.

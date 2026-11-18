@@ -25,7 +25,7 @@ export type AgentReviewOrigin =
       readonly messageId: string;
       readonly finding?: number;
       readonly proposal?: number;
-      /** Only with `finding`: the model's 0–1 confidence in it, when beuve kept it (ADR 0141). */
+      /** Only with `finding`: the model's 0–1 confidence in it, when beuve kept it (ADR 0142). */
       readonly confidence?: number;
     };
 

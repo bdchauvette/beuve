@@ -13,7 +13,7 @@ const foreignKeyViolation = 787;
 /**
  * Persists a checkpoint from {@link recordCheckpoint} and bumps its session's `updated_at`,
  * atomically. The session's review state follows, since it is derived from checkpoints. A range
- * choice goes back to the default (ADR 0140): the next review shows what changes after this one.
+ * choice goes back to the default (ADR 0141): the next review shows what changes after this one.
  */
 export function insertCheckpoint(
   db: DatabaseSync,

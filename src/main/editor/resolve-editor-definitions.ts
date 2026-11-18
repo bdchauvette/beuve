@@ -19,7 +19,7 @@ export interface ResolvedEditorDefinitions {
 const defaultArgs: readonly string[] = Object.freeze(['{file}']);
 
 /**
- * Merges the reviewer's `editors` map (ADR 0139) over the built-ins: an entry with a built-in id
+ * Merges the reviewer's `editors` map (ADR 0140) over the built-ins: an entry with a built-in id
  * changes the fields it names (`enabled: false` removes it, `command` replaces where beuve looks
  * for it, including the macOS app fallback), and a new id adds an editor, which needs `command`.
  * Built-ins keep their order and new editors follow in the file's order. An invalid entry is left

@@ -36,7 +36,7 @@ const upArrow: readonly Stroke[] = [
 
 /**
  * Draws `icon` in a 16-point square at `ink.scale` pixels per point, with round-capped strokes
- * antialiased by 4×4 supersampling (ADR 0142). The down arrow is the up arrow flipped. Pure.
+ * antialiased by 4×4 supersampling (ADR 0143). The down arrow is the up arrow flipped. Pure.
  */
 export function drawMenuIcon(icon: MenuIcon, ink: MenuIconInk): MenuIconBitmap {
   const side = size * ink.scale;

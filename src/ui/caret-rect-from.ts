@@ -5,7 +5,7 @@ import type { HoverAnchor } from './place-hover-card.ts';
 
 /**
  * Where character `offset` of `field` sits, in viewport coordinates: its start and its line's top
- * and bottom (ADR 0143, 0145). Text fields have no range API, so `dom-input-range` lays the
+ * and bottom (ADR 0144, 0146). Text fields have no range API, so `dom-input-range` lays the
  * field's text out in a hidden clone that copies its styles, size and scroll, and measures the
  * character there. The clone lives only for the measurement. The one importer of
  * `dom-input-range`.

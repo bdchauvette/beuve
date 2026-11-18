@@ -13,7 +13,7 @@ type DeleteCheckpointError = Extract<
 >;
 
 /**
- * Undoes a Save Progress (ADR 0140): deletes the checkpoint if it is still the session's latest,
+ * Undoes a Save Progress (ADR 0141): deletes the checkpoint if it is still the session's latest,
  * so the review state falls back to the one before it. Nothing references a checkpoint but a
  * range choice naming it, which goes with it. A later checkpoint makes it `checkpoint-superseded`.
  */

@@ -1,4 +1,4 @@
-# 0142. Note commands named by their state, menu icons, dragging notes, and changing several at once
+# 0143. Note commands named by their state, menu icons, dragging notes, and changing several at once
 
 - Status: Accepted; amends [0068](0068-native-menus-chorded-keymap-and-a-settings-window.md) (catalog fields), [0023](0023-universal-review-artifact-model-and-exporters.md) (deletion) and [0027](0027-ura-dock-keyboard-clipboard-and-outdated-items.md) (dock keys and channels)
 - Date: 2026-11-18
@@ -7,7 +7,7 @@
 
 Review › Note named two commands by their mechanics rather than what they do: "Withdraw or Restore Note" whatever the note's state, and "Note Addressed", a checkbox that is not a verb. Move Up and Move Down read alike in a menu of short labels. Reordering the review notes took one ⌥↑/⌥↓ step at a time, and every Note command acted on the single note under the cursor, so relabeling, withdrawing or deleting ten agent findings took ten rounds, and Undo only brought back the last one deleted.
 
-The catalog (ADR 0068) had no way to name a command by the state of what it acts on: `toggle` shows a check mark under a fixed label, and the only dynamic menu was Open With's list of editors (ADR 0139), which main owned and rebuilt (since removed: ADR 0139's 2026-11-18 amendment; menus are now rebuilt only for the Linux icons' theme). It had no way to put an image beside an item either.
+The catalog (ADR 0068) had no way to name a command by the state of what it acts on: `toggle` shows a check mark under a fixed label, and the only dynamic menu was Open With's list of editors (ADR 0140), which main owned and rebuilt (since removed: ADR 0140's 2026-11-18 amendment; menus are now rebuilt only for the Linux icons' theme). It had no way to put an image beside an item either.
 
 ## Decision
 

@@ -42,7 +42,7 @@ import { isEditorUrl } from './is-editor-url.ts';
 import { planEditorLaunch } from './plan-editor-launch.ts';
 import { resolveEditorDefinitions } from './resolve-editor-definitions.ts';
 
-/** Opening files in the reviewer's editor, and which editor that is (ADR 0033, 0139). */
+/** Opening files in the reviewer's editor, and which editor that is (ADR 0033, 0140). */
 export interface EditorServices {
   readonly open: (request: EditorOpenRequest) => Promise<IpcResult<EditorOpenResponse>>;
   readonly getSettings: () => Promise<IpcResult<EditorSettingsView>>;
@@ -55,12 +55,12 @@ export interface EditorServices {
   ) => Promise<IpcResult<EditorSettingsView>>;
   /**
    * Opens `settings.json` in the reviewer's own program for JSON files, so they can add editors
-   * (ADR 0139). When there is no file yet, an empty object is created first; an existing file is
+   * (ADR 0140). When there is no file yet, an empty object is created first; an existing file is
    * never rewritten for this.
    */
   readonly openSettingsFile: () => Promise<IpcResult<OpenedConfigView>>;
   /**
-   * Opens an absolute path (a file or a directory) at a line in the chosen editor (ADR 0139): the
+   * Opens an absolute path (a file or a directory) at a line in the chosen editor (ADR 0140): the
    * editor's name, or why it couldn't. For review edits (ADR 0088), whose caller has already
    * checked the path.
    */
