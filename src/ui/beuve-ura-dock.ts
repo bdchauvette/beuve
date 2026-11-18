@@ -26,6 +26,7 @@ import type { GithubDockState, GithubPostState } from './github-post-state.ts';
 import type { ReviewEditsDockState, ReviewEditsFlow } from './review-edits-state.ts';
 import { describeHarvest } from './describe-harvest.ts';
 import { describeEditCounts } from './describe-edit-counts.ts';
+import { dropUraItems } from './drop-ura-items.ts';
 import { moveUraItem } from './move-ura-item.ts';
 import { createUraNoteIcon } from './create-ura-note-icon.ts';
 import { headlineOfUraItem } from './headline-of-ura-item.ts';
@@ -72,8 +73,9 @@ const exports: readonly { target: UraExportTarget; label: string; title: string 
  * items in export order (severity, `path:lines` on the current head, title, origin, and an
  * outdated marker), then the withdrawn and addressed ones. While the zone has focus: ↑/↓ move,
  * Return jumps the diff stream to the item, Space opens its editor (label, Blocking, title, body),
- * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the export order; a double-click edits it
- * too (ADR 0129); Review ▸ Note and the
+ * Delete withdraws or restores it, Shift+Delete deletes it and ⌥↑/⌥↓ move it up or down the
+ * export order, as dragging a staged note among the staged ones does (ADR 0142); a double-click
+ * edits it too (ADR 0129); Review ▸ Note and the
  * context menu run the same commands (`runCommand`, ADR 0068), and Open in Editor opens it
  * (`beuve-open-editor`). A verdict selector shows the derived default and refuses
  * approving over a staged blocking note; export buttons copy the compiled review. Items carrying
@@ -113,6 +115,7 @@ export class BeuveUraDock extends LitElement {
       }
 
       li {
+        position: relative;
         padding: var(--beuve-space-1) var(--beuve-space-2);
         border: var(--beuve-border-width) solid transparent;
         border-radius: var(--beuve-radius);
@@ -134,6 +137,36 @@ export class BeuveUraDock extends LitElement {
 
       li.done {
         opacity: 0.6;
+      }
+
+      li.dragging {
+        opacity: 0.5;
+      }
+
+      /* ADR 0142: where dropped notes land, a bar in the gap before or after a staged note. */
+      li.drop-before::before,
+      li.drop-after::after {
+        content: '';
+        position: absolute;
+        inset-inline: 0;
+        block-size: var(--beuve-border-width-thick);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-accent);
+        pointer-events: none;
+      }
+
+      li.drop-before::before {
+        inset-block-start: calc(
+          -0.5 *
+            (var(--beuve-space-0-5) + var(--beuve-border-width-thick)) - var(--beuve-border-width)
+        );
+      }
+
+      li.drop-after::after {
+        inset-block-end: calc(
+          -0.5 *
+            (var(--beuve-space-0-5) + var(--beuve-border-width-thick)) - var(--beuve-border-width)
+        );
       }
 
       li.done .title {
@@ -373,6 +406,9 @@ export class BeuveUraDock extends LitElement {
     `,
   ];
 
+  /** The note the cursor moves to once the items arrive in their new order, after a drop. */
+  private cursorFollows: string | undefined;
+
   private readonly onLabelChange = (event: CustomEvent<UraLabelChange>): void => {
     this.editingSeverity = event.detail.severity;
     this.editingBlocking = event.detail.blocking;
@@ -428,6 +464,10 @@ export class BeuveUraDock extends LitElement {
   @property({ attribute: false }) accessor github: GithubDockState | undefined;
 
   @state() accessor cursor = 0;
+  /** Where a note being dragged would land (ADR 0142); absent while nothing is dragged over one. */
+  @state() accessor dropTarget: DropTarget | undefined;
+  /** The notes being dragged, while a drag from the list runs. */
+  @state() accessor draggedIds: readonly string[] = [];
   @state() accessor editingId: string | undefined;
   /** The open editor's label and Blocking, which start from the note's own (ADR 0131). */
   @state() accessor editingSeverity: UraSeverityView = 'issue';
@@ -496,6 +536,45 @@ export class BeuveUraDock extends LitElement {
               this.exportTo(target);
             },
           ),
+        },
+        // ADR 0142: staged notes drag to a new place among the staged ones.
+        dragstart: {
+          item: withPayload(
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
+            (found, event): void => {
+              this.startDrag(found, event);
+            },
+          ),
+        },
+        dragover: {
+          item: withPayload(
+            ({ itemId }) => {
+              return this.itemOf(itemId);
+            },
+            (found, event, element): void => {
+              this.dragOver(found, { event, element });
+            },
+          ),
+        },
+        drop: {
+          item: (_data, event): void => {
+            event.preventDefault();
+            this.dropDragged();
+          },
+        },
+        dragend: {
+          item: (): void => {
+            this.endDrag();
+          },
+        },
+        dragleave: {
+          list: (_data, event, element): void => {
+            if (!(event.relatedTarget instanceof Node) || !element.contains(event.relatedTarget)) {
+              this.dropTarget = undefined;
+            }
+          },
         },
         // ADR 0129: a double-click edits the note; one in its open editor stays there.
         dblclick: {
@@ -586,6 +665,74 @@ export class BeuveUraDock extends LitElement {
     }
     this.cursor = Math.min(Math.max(0, this.cursor + step), staged.size - 1);
     this.emit('beuve-ura-reorder', { itemIds: moved });
+  }
+
+  /** Starts dragging `item`, which only a staged note can be. */
+  private startDrag(item: UraItemView, event: DragEvent): void {
+    if (item.status.kind !== 'staged' || event.dataTransfer === null) {
+      event.preventDefault();
+      return;
+    }
+    this.draggedIds = [item.id];
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(dragType, this.draggedIds.join(' '));
+  }
+
+  /** Over a staged note, the bar shows on the nearer side of it; elsewhere there is no drop. */
+  private dragOver(item: UraItemView, { event, element }: DragOverPlace): void {
+    if (this.draggedIds.length === 0 || item.status.kind !== 'staged') {
+      this.dropTarget = undefined;
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer !== null) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    const box = element.getBoundingClientRect();
+    let side: DropTarget['side'] = 'after';
+    if (event.clientY < box.top + box.height / 2) {
+      side = 'before';
+    }
+    if (this.draggedIds.includes(item.id)) {
+      this.dropTarget = undefined;
+      return;
+    }
+    if (this.dropTarget?.id !== item.id || this.dropTarget.side !== side) {
+      this.dropTarget = { id: item.id, side };
+    }
+  }
+
+  /** Moves the dragged notes to the drop target, through the same reorder Move Up and Down use. */
+  private dropDragged(): void {
+    const target = this.dropTarget;
+    const ids = this.draggedIds;
+    this.endDrag();
+    if (target === undefined || ids.length === 0) {
+      return;
+    }
+    const order = this.items.map((entry) => entry.id);
+    const dropped = dropUraItems(order, {
+      ids,
+      targetId: target.id,
+      side: target.side,
+      movable: this.stagedIds(),
+    });
+    if (dropped.every((id, index) => id === order[index])) {
+      return;
+    }
+    this.cursorFollows = ids[0];
+    this.emit('beuve-ura-reorder', { itemIds: dropped });
+  }
+
+  private endDrag(): void {
+    this.draggedIds = [];
+    this.dropTarget = undefined;
+  }
+
+  private stagedIds(): ReadonlySet<string> {
+    return new Set(
+      this.items.filter((entry) => entry.status.kind === 'staged').map((entry) => entry.id),
+    );
   }
 
   private transition(item: UraItemView, to: 'staged' | 'withdrawn' | 'addressed'): void {
@@ -689,10 +836,17 @@ export class BeuveUraDock extends LitElement {
     const labels = describeUraItem(item);
     const isDone = item.status.kind !== 'staged';
     const status = statusText(item);
+    const classes = [
+      index === this.cursor && 'cursor',
+      isDone && 'done',
+      this.draggedIds.includes(item.id) && 'dragging',
+      this.dropTarget?.id === item.id && `drop-${this.dropTarget.side}`,
+    ].filter((name) => name !== false);
     return html`<li
-      class="${index === this.cursor ? 'cursor' : ''} ${isDone ? 'done' : ''}"
+      class=${classes.join(' ')}
       data-action="item"
       data-item-id=${item.id}
+      draggable=${isDone || this.editingId === item.id ? 'false' : 'true'}
     >
       <div class="meta">
         ${createUraNoteIcon()}
@@ -1250,7 +1404,7 @@ export class BeuveUraDock extends LitElement {
                       : 'Open a review session to stage notes.'
                   }
                 </p>`
-              : html`<ol aria-label="Staged review items">
+              : html`<ol aria-label="Staged review items" data-action="list">
                   ${ordered.map((item, index) => this.renderItem(item, index))}
                 </ol>`
           }
@@ -1264,6 +1418,11 @@ export class BeuveUraDock extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('items')) {
       this.cursor = Math.min(this.cursor, Math.max(0, this.items.length - 1));
+      const followed = this.ordered().findIndex((item) => item.id === this.cursorFollows);
+      if (followed !== -1) {
+        this.cursor = followed;
+        this.cursorFollows = undefined;
+      }
       if (this.items.every((item) => item.id !== this.editingId)) {
         this.editingId = undefined;
       }
@@ -1281,6 +1440,21 @@ export class BeuveUraDock extends LitElement {
     }
   }
 }
+
+/** Where dragged notes would land: before or after the staged note `id`. */
+interface DropTarget {
+  readonly id: string;
+  readonly side: 'before' | 'after';
+}
+
+/** A `dragover` and the note element it is over. */
+interface DragOverPlace {
+  readonly event: DragEvent;
+  readonly element: Element;
+}
+
+/** The drag data's type: the dragged ids, which no text field takes as a drop. */
+const dragType = 'application/x-beuve-ura-items';
 
 const inPlaceKeys: Readonly<Record<string, CommandId>> = {
   Enter: 'dock-show',
