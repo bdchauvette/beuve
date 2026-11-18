@@ -65,6 +65,7 @@ import { planReviewStream } from './plan-review-stream.ts';
 import type { ReviewStreamPlan } from './plan-review-stream.ts';
 import type { DiffDeferral } from './plan-diff-deferrals.ts';
 import { editTargetFrom } from './edit-target-from.ts';
+import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
 import type { PeekState } from './peek-state.ts';
 import { stepReviewPositionSkipping } from './step-review-position-skipping.ts';
@@ -1089,14 +1090,19 @@ export class BeuveDiffStream extends LitElement {
   /** Suggest Edit: edits the target's lines, or the staged note under them, on the active card. */
   private editActive(): void {
     const { review } = this;
+    const reviewTarget = this.target();
     let target: EditTarget | undefined;
     if (review !== undefined) {
-      target = editTargetFrom(this.target(), this.uraItems, review.headSha);
+      target = editTargetFrom(reviewTarget, this.uraItems, review.headSha);
     }
     if (target === undefined) {
+      let reason: string | undefined;
+      if (reviewTarget.kind !== 'change') {
+        reason = uneditableReasonFrom(reviewTarget.file);
+      }
       this.notify(
         'info',
-        'Pick a hunk with Next Change, or select head lines, to suggest an edit.',
+        reason ?? 'Pick a hunk with Next Change, or select head lines, to suggest an edit.',
       );
       return;
     }
@@ -1121,6 +1127,15 @@ export class BeuveDiffStream extends LitElement {
     }
     if (item.headSha !== this.review?.headSha) {
       this.notify('error', 'That note was written on an older head; stage a new one to suggest.');
+      return;
+    }
+    const file = this.shownFiles()[index];
+    let reason: string | undefined;
+    if (file !== undefined) {
+      reason = uneditableReasonFrom(file);
+    }
+    if (reason !== undefined) {
+      this.notify('error', reason);
       return;
     }
     this.activeIndex = index;

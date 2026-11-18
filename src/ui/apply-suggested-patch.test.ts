@@ -29,6 +29,21 @@ describe('applySuggestedPatch', () => {
     }
   });
 
+  test('reproduces an edit of every line of an added file, its head', ({ expect }) => {
+    const added = 'one\ntwo';
+    for (const edited of ['ONE\nTWO\nthree\n', '', 'one\nTWO']) {
+      const plan = buildSuggestedPatch({
+        path: 'src/new.ts',
+        head: added,
+        edited,
+        range: { startLine: 1, endLine: 2 },
+      });
+      expect(plan.kind === 'patch' && applySuggestedPatch({ head: added, patch: plan.text })).toBe(
+        edited,
+      );
+    }
+  });
+
   test('applies bare hunks from elsewhere, and refuses ones that do not match the head', ({
     expect,
   }) => {
