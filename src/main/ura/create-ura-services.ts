@@ -793,10 +793,12 @@ export function createUraServices(options: UraServicesOptions): UraServices {
       return ok({ sessionId, ...verdictState(sessionId, loaded.value.headSha, items.value) });
     },
 
-    export: async ({ sessionId, target, verdict }): Promise<IpcResult<UraExportView>> => {
+    export: async ({ sessionId, target, verdict, summary }): Promise<IpcResult<UraExportView>> => {
       const artifact = await compile(sessionId, verdict);
       if (artifact.ok) {
-        return ok(renderUraExport(artifact.value, target));
+        return ok(
+          renderUraExport(artifact.value, { target, ...(summary !== undefined && { summary }) }),
+        );
       }
       return artifact;
     },

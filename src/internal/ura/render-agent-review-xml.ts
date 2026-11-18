@@ -1,5 +1,10 @@
 import { buildAgentReview } from './build-agent-review.ts';
-import type { AgentReview, AgentReviewAnchor, AgentReviewItem } from './build-agent-review.ts';
+import type {
+  AgentReview,
+  AgentReviewAnchor,
+  AgentReviewItem,
+  AgentReviewOptions,
+} from './build-agent-review.ts';
 import type { UraArtifact } from './ura-artifact.ts';
 import { uraSeverities } from './ura-severities.ts';
 
@@ -7,15 +12,19 @@ const indent = '  ';
 
 /**
  * The agent payload as an XML document: the same data as {@link buildAgentReview}, with titles
- * escaped and bodies and patches in CDATA sections (any `]]>` split across two). Characters XML
+ * escaped and the summary, bodies and patches in CDATA sections (any `]]>` split across two). Characters XML
  * can't represent become U+FFFD. Pure and deterministic; it carries data, never instructions.
  */
-export function renderAgentReviewXml(artifact: UraArtifact): string {
-  const review = buildAgentReview(artifact);
+export function renderAgentReviewXml(
+  artifact: UraArtifact,
+  options: AgentReviewOptions = {},
+): string {
+  const review = buildAgentReview(artifact, options);
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<beuve-review${attributes({ schema: review.schema, verdict: review.verdict, 'verdict-source': review.verdictSource })}>`,
     ...changeElement(review).map((line) => indent + line),
+    ...summaryElement(review.summary).map((line) => indent + line),
     `${indent}<counts${attributes(
       Object.fromEntries(
         [...uraSeverities, 'blocking' as const].map((key) => {
@@ -36,6 +45,13 @@ function changeElement(review: AgentReview): string[] {
     `${indent}<repository${attributes(repositoryAttributes(change.repository))}/>`,
     '</change>',
   ];
+}
+
+function summaryElement(summary: string | undefined): string[] {
+  if (summary === undefined) {
+    return [];
+  }
+  return [`<summary>${cdata(summary)}</summary>`];
 }
 
 function repositoryAttributes(repository: AgentReview['change']['repository']): Attributes {

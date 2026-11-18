@@ -180,6 +180,15 @@ describe('buildAgentReview', () => {
     expect('fromHeadSha' in buildAgentReview(local).change).toBe(false);
   });
 
+  test('carries the review summary, trimmed, and leaves a blank one out', ({ expect }) => {
+    const artifact = createSampleArtifact();
+    expect(buildAgentReview(artifact, { summary: '  Looks *good*.\n' }).summary).toBe(
+      'Looks *good*.',
+    );
+    expect('summary' in buildAgentReview(artifact, { summary: ' \n' })).toBe(false);
+    expect('summary' in buildAgentReview(artifact)).toBe(false);
+  });
+
   test('describes a followed branch without a pull request (ADR 0112)', ({ expect }) => {
     const artifact = createSampleArtifact();
     const branch = {

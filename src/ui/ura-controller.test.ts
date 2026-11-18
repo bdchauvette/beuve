@@ -273,11 +273,16 @@ describe('UraController', () => {
         'clipboard:write-text': ok(undefined),
       },
     });
-    await ura.export('github');
+    await ura.export({ target: 'github', summary: 'Looks good.' });
     expect(invoked.map(([channel]) => channel)).toStrictEqual([
       'ura:export',
       'clipboard:write-text',
     ]);
+    expect(invoked[0]?.[1]).toStrictEqual({
+      sessionId: reviewOf().sessionId,
+      target: 'github',
+      summary: 'Looks good.',
+    });
     expect(ura.isExporting).toBe(false);
     expect(ura.notice).toStrictEqual({
       tone: 'info',
@@ -293,14 +298,14 @@ describe('UraController', () => {
         'clipboard:write-text': failed({ code: 'invalid-request', message: 'denied' }),
       },
     });
-    await ura.export('agent-json');
+    await ura.export({ target: 'agent-json' });
     expect(ura.isExporting).toBe(false);
     expect(ura.notice).toStrictEqual({ tone: 'error', text: 'Could not copy: denied' });
   });
 
   test('exports nothing without a review', async ({ expect }) => {
     const { ura, invoked } = createUraHarness();
-    await ura.export('agent-xml');
+    await ura.export({ target: 'agent-xml' });
     expect(invoked).toStrictEqual([]);
     expect(ura.isExporting).toBe(false);
   });

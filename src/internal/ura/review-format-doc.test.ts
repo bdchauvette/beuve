@@ -18,7 +18,10 @@ describe('docs/review-format.md', () => {
   }) => {
     const names = /(?<=<)[a-z][a-z-]*|[a-z][a-z-]*(?==")/gu;
     const document = await readDocument();
-    const xml = renderAgentReviewXml(createSampleArtifact()).split('\n').slice(1).join('\n');
+    const xml = renderAgentReviewXml(createSampleArtifact(), { summary: 'Thanks.' })
+      .split('\n')
+      .slice(1)
+      .join('\n');
     const used = new Set([
       ...(xml.match(names) ?? []),
       ...uraSeverities,

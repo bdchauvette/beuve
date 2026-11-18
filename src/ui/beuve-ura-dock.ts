@@ -1485,14 +1485,6 @@ export class BeuveUraDock extends LitElement {
     </div>`;
   }
 
-  /** The summary the reviewer wrote, or `undefined` when they left it blank. */
-  private writtenSummary(): string | undefined {
-    if (this.summary.trim() === '') {
-      return undefined;
-    }
-    return this.summary;
-  }
-
   private saveKey(): string {
     const platform = keyPlatformOf(this.platform);
     return displayAccelerator(saveAccelerators[platform], platform);
@@ -1601,6 +1593,14 @@ export class BeuveUraDock extends LitElement {
     void this.updateComplete.then(() => {
       this.renderRoot.querySelector<HTMLElement>('textarea[name="summary"]')?.focus();
     });
+  }
+
+  /** The summary the reviewer wrote, or `undefined` when they left it blank; exports carry it too. */
+  writtenSummary(): string | undefined {
+    if (this.summary.trim() === '') {
+      return undefined;
+    }
+    return this.summary;
   }
 
   /** The notes a Note command acts on: the selected ones in dock order, else the cursor's. */

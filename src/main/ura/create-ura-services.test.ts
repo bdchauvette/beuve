@@ -448,6 +448,32 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     ).resolves.toMatchObject({ ok: false });
   });
 
+  test('carries the review summary into every export', async ({
+    expect,
+    services,
+    sessionId,
+    note,
+  }) => {
+    await note({ startLine: 5, endLine: 6, title: 'Below the edit' });
+    const exported = async (target: 'agent-json' | 'agent-xml' | 'github'): Promise<string> => {
+      const view = okValueFrom(
+        await services.ura.export({ sessionId, target, summary: '  Mostly **fine**.\n' }),
+      );
+      return view.text;
+    };
+    expect(JSON.parse(await exported('agent-json'))).toMatchObject({
+      summary: 'Mostly **fine**.',
+    });
+    await expect(exported('agent-xml')).resolves.toContain(
+      '  <summary><![CDATA[Mostly **fine**.]]></summary>\n  <counts',
+    );
+    expect(JSON.parse(await exported('github'))).toMatchObject({ body: 'Mostly **fine**.' });
+    const blank = okValueFrom(
+      await services.ura.export({ sessionId, target: 'agent-json', summary: ' \n ' }),
+    );
+    expect('summary' in (JSON.parse(blank.text) as object)).toBe(false);
+  });
+
   test('persists the reviewer-chosen verdict for exports', async ({
     expect,
     services,
