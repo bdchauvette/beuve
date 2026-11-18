@@ -24,6 +24,7 @@ import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { choiceStyles } from './primitives/choice-styles.ts';
 import { fieldStyles } from './primitives/field-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
 
@@ -41,6 +42,7 @@ export class BeuveSettingsView extends LitElement {
     emptyStateStyles,
     badgeStyles,
     buttonStyles,
+    choiceStyles,
     fieldStyles,
     formatControlStyles,
     css`
@@ -123,12 +125,6 @@ export class BeuveSettingsView extends LitElement {
       .error {
         margin: var(--beuve-space-3) 0 0;
         color: var(--beuve-danger);
-      }
-
-      .editor {
-        display: flex;
-        align-items: center;
-        gap: var(--beuve-space-2);
       }
 
       .problem {
@@ -526,7 +522,7 @@ function describeOpenedSettings(file: string): string {
 function renderEditor(editor: EditorChoiceView, preferred: string | undefined): TemplateResult {
   const id = `editor-${editor.id}`;
   return html`<div class="row" data-editor=${editor.id}>
-    <label class="editor" for=${id}>
+    <label class="choice" for=${id}>
       <input
         id=${id}
         type="radio"
