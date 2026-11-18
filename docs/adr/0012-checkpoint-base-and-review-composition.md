@@ -27,3 +27,7 @@ Squashed into `session-0001-initial` (ADR 0006); the schema described here is un
 ## Amendment 2026-10-30: stacks and commit pairs
 
 ADR 0054 replaces the merge-base with a stack-aware fork point (a parent already on the base, or a reviewed base still under the head) for full reviews, interdiffs and checkpoints, and, when the range replay conflicts, retries by replaying the paired reviewed commits one by one before falling back.
+
+## Amendment 2026-11-18: undo and the chosen range
+
+ADR 0140 lets the latest checkpoint be deleted (Undo Save Progress) and makes the range a stored per-session choice: since the last checkpoint (the default described here), the whole change, or since an earlier checkpoint. `computeReviewRange` takes that choice.
