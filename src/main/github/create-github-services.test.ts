@@ -622,6 +622,52 @@ describe('GitHub pull request sessions (integration: fake GitHub, fake gh, local
     });
   });
 
+  test('reads other reviewers’ line comments as host-neutral threads', async ({
+    expect,
+    services,
+    opened,
+    world,
+    signal,
+  }) => {
+    const sessionId = await opened();
+    const { firstHead } = world;
+    world.api.reviewComments.set(7, [
+      {
+        login: 'rita',
+        body: 'Why not a map?',
+        createdAt: '2026-10-28T10:30:00Z',
+        path: 'src/app.ts',
+        line: 3,
+        commitId: firstHead,
+      },
+      {
+        login: 'octocat',
+        body: 'Fair point.',
+        createdAt: '2026-10-28T10:40:00Z',
+        path: 'src/app.ts',
+        line: 3,
+        replyTo: 1,
+        commitId: firstHead,
+      },
+    ]);
+    const threads = okValueFrom(await services.threads.getThreads(sessionId, { signal }));
+    expect(threads).toMatchObject({ kind: 'threads', isTruncated: false });
+    expect('threads' in threads && threads.threads).toMatchObject([
+      {
+        path: 'src/app.ts',
+        side: 'head',
+        startLine: 3,
+        endLine: 3,
+        sha: firstHead,
+        isOutdated: false,
+        comments: [
+          { author: 'rita', body: 'Why not a map?' },
+          { author: 'octocat', body: 'Fair point.' },
+        ],
+      },
+    ]);
+  });
+
   test('answers a failure, not an error, when GitHub cannot be read', async ({
     expect,
     services,

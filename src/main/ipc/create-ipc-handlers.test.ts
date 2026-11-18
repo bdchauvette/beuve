@@ -248,6 +248,28 @@ describe('createIpcHandlers for review order', () => {
   });
 });
 
+describe('createIpcHandlers for review threads', () => {
+  test('validates review:get-threads before delegating', async ({ expect }) => {
+    const calls: unknown[] = [];
+    const handlers = createIpcHandlers(
+      {
+        ...stubServices({}),
+        threads: {
+          getThreads: async (sessionId) => {
+            calls.push(sessionId);
+            return notWired();
+          },
+        },
+      },
+      appInfo(),
+    );
+    await expectInvalid(expect, handlers['review:get-threads']({}));
+    await expectInvalid(expect, handlers['review:get-threads']({ sessionId: 's1', extra: true }));
+    await handlers['review:get-threads']({ sessionId: 's1' });
+    expect(calls).toStrictEqual(['s1']);
+  });
+});
+
 describe('createIpcHandlers for the tree, file pairs and call hierarchy', () => {
   test('validates session:get-tree and session:get-file-pair before delegating', async ({
     expect,
@@ -1305,6 +1327,7 @@ function stubServices(
       getFileAttributes: notWired,
     },
     order: { getOrder: notWired },
+    threads: { getThreads: notWired },
     lsp: {
       callHierarchy: notWired,
       definition: notWired,

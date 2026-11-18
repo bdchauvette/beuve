@@ -1895,6 +1895,50 @@ export interface PullRequestTimelineView {
   readonly isTruncated: boolean;
 }
 
+/** `review:get-threads`: the session whose other reviewers' line comments to read (ADR 0140). */
+export interface GetReviewThreadsRequest {
+  readonly sessionId: string;
+}
+
+/** One comment in a review thread; `body` is untrusted Markdown. */
+export interface ReviewThreadCommentView {
+  readonly id: string;
+  readonly author: string;
+  readonly body: string;
+  /** An ISO 8601 instant. */
+  readonly at: string;
+  /** The comment's page on the host. */
+  readonly url: string;
+}
+
+/**
+ * A discussion on lines of the diff, whatever host it came from (ADR 0140). The lines are 1-based
+ * and inclusive on `side`, numbered as they are at commit `sha`; a thread on a whole file has none.
+ * `isResolved` is absent when the host can't say.
+ */
+export interface ReviewThreadView {
+  readonly id: string;
+  readonly path: string;
+  readonly side: 'head' | 'base';
+  readonly startLine?: number;
+  readonly endLine?: number;
+  readonly sha: string;
+  /** The host no longer shows the thread on its lines: the code under it changed. */
+  readonly isOutdated: boolean;
+  readonly isResolved?: boolean;
+  /** Oldest first. */
+  readonly comments: readonly ReviewThreadCommentView[];
+}
+
+/** A session's line threads, oldest first; `unsupported` for a session whose source has none. */
+export type ReviewThreadsView =
+  | {
+      readonly kind: 'threads';
+      readonly threads: readonly ReviewThreadView[];
+      readonly isTruncated: boolean;
+    }
+  | { readonly kind: 'unsupported' };
+
 /** A neighbor in a stack of pull requests, opened with `github:open-pr` and the same clone. */
 export interface PullRequestStackEntryView {
   readonly ref: string;
@@ -2836,6 +2880,10 @@ export interface InvokeChannelMap {
   'github:get-timeline': {
     readonly request: GetTimelineRequest;
     readonly response: IpcResult<PullRequestTimelineView | GithubFailureView>;
+  };
+  'review:get-threads': {
+    readonly request: GetReviewThreadsRequest;
+    readonly response: IpcResult<ReviewThreadsView | GithubFailureView>;
   };
   'github:preview-review': {
     readonly request: PostGithubReviewRequest;

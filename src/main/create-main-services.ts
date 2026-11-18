@@ -41,8 +41,10 @@ import { createFlowServices } from './flow/create-flow-services.ts';
 import { createClonePathSettings } from './github/create-clone-path-settings.ts';
 import { createGithubClients } from './github/create-github-clients.ts';
 import { createGithubServices } from './github/create-github-services.ts';
+import { createGithubThreadAdapter } from './github/create-github-thread-adapter.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import { createOrderServices } from './order/create-order-services.ts';
+import { createThreadServices } from './threads/create-thread-services.ts';
 import { createReviewQueueServices } from './queue/create-review-queue-services.ts';
 import { createLanguageServerConfigServices } from './language-servers/create-language-server-config-services.ts';
 import type {
@@ -383,6 +385,10 @@ export function createMainServices(options: MainServicesOptions): MainServices {
         }
         return 'path';
       },
+    }),
+    threads: createThreadServices({
+      context,
+      adapters: [createGithubThreadAdapter({ clients: githubClients })],
     }),
     lsp,
     sheets: createSheetServices({ context, ura }),
