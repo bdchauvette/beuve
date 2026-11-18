@@ -742,10 +742,6 @@ export class BeuveApp extends LitElement {
         void this.setPreferredEditor(editorActions[id]);
         return;
       }
-      case 'save-progress': {
-        void this.session.markReviewed();
-        return;
-      }
       case 'show-new-commits': {
         this.github.showNewCommits();
         return;

@@ -41,6 +41,7 @@ describe('menuStateFrom', () => {
       focusedZone: 'ura',
       dockItem: { isAddressed: true },
       isFindCaseSensitive: true,
+      reviewRange: 'whole',
       treeMode: 'diff-only',
       isTerminalShown: true,
       display: { ...open().display, layout: 'unified', reviewOrder: 'calls' },
@@ -58,6 +59,7 @@ describe('menuStateFrom', () => {
       'editor-vscode',
       'dock-addressed',
       'find-match-case',
+      'range-whole',
     ]);
   });
 });
@@ -87,6 +89,7 @@ function idle(): MenuStateInput {
     treeMode: 'neighborhood',
     preferredEditor: undefined,
     isFindCaseSensitive: false,
+    reviewRange: undefined,
   };
 }
 

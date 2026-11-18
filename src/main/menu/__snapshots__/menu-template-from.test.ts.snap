@@ -476,6 +476,25 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "&Save Progress",
       },
       {
+        "id": "undo-save-progress",
+        "label": "&Undo Save Progress",
+      },
+      {
+        "label": "&Review Range",
+        "submenu": [
+          {
+            "id": "range-since-saved",
+            "label": "&Since Last Saved Progress",
+            "type": "radio",
+          },
+          {
+            "id": "range-whole",
+            "label": "&Whole Change",
+            "type": "radio",
+          },
+        ],
+      },
+      {
         "type": "separator",
       },
       {
@@ -543,7 +562,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         ],
       },
       {
-        "label": "&Review Edits",
+        "label": "Re&view Edits",
         "submenu": [
           {
             "id": "open-review-edits",
@@ -634,15 +653,15 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "run-setup",
-        "label": "R&un Setup",
+        "label": "Run Setu&p",
       },
       {
         "id": "edit-setup-command",
-        "label": "Edit Setu&p Command…",
+        "label": "Edit Setup Command…",
       },
       {
         "id": "restart-language-servers",
-        "label": "Restart Language Ser&vers",
+        "label": "Restart Language Servers",
       },
     ],
   },
@@ -1306,6 +1325,25 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "accelerator": "Cmd+S",
         "id": "save-progress",
         "label": "Save Progress",
+      },
+      {
+        "id": "undo-save-progress",
+        "label": "Undo Save Progress",
+      },
+      {
+        "label": "Review Range",
+        "submenu": [
+          {
+            "id": "range-since-saved",
+            "label": "Since Last Saved Progress",
+            "type": "radio",
+          },
+          {
+            "id": "range-whole",
+            "label": "Whole Change",
+            "type": "radio",
+          },
+        ],
       },
       {
         "type": "separator",
