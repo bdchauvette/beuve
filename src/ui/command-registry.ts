@@ -218,6 +218,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'chat-pills': none,
     'chat-chips': none,
     'chat-complete': none,
+    'emoji-complete': none,
     'close-portal': none,
     'portal-walk': none,
     'sheet-cursor': none,
