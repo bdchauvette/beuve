@@ -5,6 +5,8 @@ import type {
   ReviewRangeChoiceView,
 } from '#contract/ipc-contract.ts';
 
+import { dockCheckedCommands } from './dock-checked-commands.ts';
+import type { DockSelectionFacts } from './dock-selection-facts.ts';
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import type { ZoneId } from './zones.ts';
 
@@ -16,8 +18,8 @@ export interface MenuStateInput {
   /** Whether the reviewer marked the file under the cursor (the tree's, or else the diff's). */
   readonly isActiveReviewed: boolean;
   readonly focusedZone: ZoneId;
-  /** The dock item under its cursor, while the dock has the focus. */
-  readonly dockItem: { readonly isAddressed: boolean } | undefined;
+  /** The dock's selected notes (or the one under its cursor), while the dock has the focus. */
+  readonly dockItem: DockSelectionFacts | undefined;
   readonly isTextFocused: boolean;
   readonly isBusy: boolean;
   readonly isPullRequest: boolean;
@@ -35,7 +37,7 @@ export interface MenuStateInput {
 
 /**
  * The main window's `menu:set-state`: conditions from focus and contents, and the toggles that
- * show checked. A text field suspends the chords it uses itself (main applies `text-focus`).
+ * show checked, or that show their checked names (ADR 0142). A text field suspends the chords it uses itself (main applies `text-focus`).
  * Review › Open With's check is main's own: it knows the editors (ADR 0139). Pure.
  */
 export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
@@ -78,13 +80,15 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['order-size', order === 'size'],
     ['toggle-skip-reviewed', display.skipReviewed === true],
     ['toggle-reviewed', isFile && input.isActiveReviewed],
-    ['dock-addressed', input.dockItem?.isAddressed === true],
     ['find-match-case', input.isFindCaseSensitive],
     ['range-since-saved', input.reviewRange === 'since-last'],
     ['range-whole', input.reviewRange === 'whole'],
   ];
   return {
     conditions,
-    checked: checks.filter(([, isChecked]) => isChecked).map(([id]) => id),
+    checked: [
+      ...checks.filter(([, isChecked]) => isChecked).map(([id]) => id),
+      ...dockCheckedCommands(input.dockItem),
+    ],
   };
 }

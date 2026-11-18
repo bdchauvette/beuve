@@ -1,7 +1,7 @@
 import type { DiffFileView, SessionSummary, UraItemView } from '#contract/ipc-contract.ts';
 
 import { acceleratorsFor } from '#contract/accelerators-for.ts';
-import type { KeyPlatform } from '#contract/command-catalog.ts';
+import type { CommandId, KeyPlatform } from '#contract/command-catalog.ts';
 
 import type { CommandDefinition } from './command-registry.ts';
 import { displayAccelerator } from './display-accelerator.ts';
@@ -27,6 +27,11 @@ export interface PaletteSources {
   /** Every tracked path at the head (`session:get-tree`). */
   readonly trackedPaths?: readonly string[];
   readonly uraItems: readonly UraItemView[];
+  /**
+   * The commands whose state shows their checked names (ADR 0142), such as Restore Note for the
+   * dock's withdrawn notes; none when absent.
+   */
+  readonly checked?: readonly CommandId[];
 }
 
 export type PaletteAction =
@@ -128,7 +133,7 @@ function rank(candidates: readonly Candidate[], text: string, limit: number): Pa
 function candidates(group: PaletteGroup, text: string, sources: PaletteSources): Candidate[] {
   switch (group) {
     case 'commands': {
-      return commandCandidates(sources.commands, sources.platform);
+      return commandCandidates(sources);
     }
     case 'open': {
       return openCandidates(text, sources.sessions);
@@ -142,20 +147,21 @@ function candidates(group: PaletteGroup, text: string, sources: PaletteSources):
   }
 }
 
-function commandCandidates(
-  commands: readonly CommandDefinition[],
-  platform: KeyPlatform,
-): Candidate[] {
+function commandCandidates({ commands, platform, checked = [] }: PaletteSources): Candidate[] {
   return commands
     .filter((command) => command.run.kind !== 'none' && command.id !== 'palette')
     .map((command) => {
       const keys = commandKeys(command, platform);
       const menu = command.menu?.menu;
+      let title = command.title;
+      if (command.checkedNames !== undefined && checked.includes(command.id)) {
+        title = command.checkedNames.title;
+      }
       return {
         entry: {
           id: `command:${command.id}`,
           group: 'commands',
-          title: command.title,
+          title,
           ...(menu !== undefined && menu !== 'app' && { detail: menuNames[menu] }),
           keys,
           action: { kind: 'command', command },

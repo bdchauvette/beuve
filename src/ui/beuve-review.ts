@@ -83,6 +83,7 @@ import { DiagnosticsController } from './diagnostics-controller.ts';
 import type { DiagnosticsTarget } from './diagnostics-controller.ts';
 import type { DiagnosticsWantedDetail, FileDiagnostics } from './file-diagnostics.ts';
 import { cycleZone } from './cycle-zone.ts';
+import { dockCheckedCommands } from './dock-checked-commands.ts';
 import { dockItemOf } from './dock-item-of.ts';
 import type { MenuStateInput } from './menu-state-from.ts';
 import type { AppModel } from './app-model.ts';
@@ -1958,11 +1959,20 @@ export class BeuveReview extends LitElement {
     });
   }
 
+  /**
+   * The commands whose checked names the palette shows (ADR 0142): the dock's Note commands for
+   * its selected notes, which a Note command run from the palette acts on, focused or not.
+   */
+  paletteChecked(): CommandId[] {
+    const notes = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.targetItems();
+    return dockCheckedCommands(dockItemOf(notes ?? []));
+  }
+
   /** What the review adds to the menu state: the focus, the cursor's file, the panels. */
   menuFacts(): ReviewMenuFacts {
-    let dock: UraItemView | undefined;
+    let dock: readonly UraItemView[] = [];
     if (this.focusedZone === 'ura') {
-      dock = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.cursorItem();
+      dock = this.renderRoot.querySelector<BeuveUraDock>('beuve-ura-dock')?.targetItems() ?? [];
     }
     const treePath = this.treePath();
     const markedPath = treePath ?? this.activePath;

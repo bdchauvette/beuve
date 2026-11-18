@@ -1221,6 +1221,15 @@ export class BeuveUraDock extends LitElement {
     });
   }
 
+  /** The notes a Note command acts on: the one under the cursor. */
+  targetItems(): UraItemView[] {
+    const current = this.cursorItem();
+    if (current === undefined) {
+      return [];
+    }
+    return [current];
+  }
+
   /** The item under the dock's cursor, which Add to Chat adds by its anchor (ADR 0046). */
   cursorItem(): UraItemView | undefined {
     return this.ordered()[this.cursor];

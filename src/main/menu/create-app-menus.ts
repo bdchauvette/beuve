@@ -1,5 +1,5 @@
-import { BrowserWindow, Menu, webContents } from 'electron';
-import type { MenuItemConstructorOptions } from 'electron';
+import { BrowserWindow, Menu, nativeTheme, webContents } from 'electron';
+import type { MenuItemConstructorOptions, NativeImage } from 'electron';
 
 import type { Logger } from '#x/log/create-logger.ts';
 
@@ -8,12 +8,14 @@ import type {
   CatalogCommand,
   CommandId,
   KeyPlatform,
+  MenuIcon,
   WindowKind,
 } from '#contract/command-catalog.ts';
 import type { MenuContextRequest, MenuStateRequest } from '#contract/ipc-contract.ts';
 
 import { sendEvent } from '../ipc/send-event.ts';
 import { contextMenuTemplateFrom } from './context-menu-template-from.ts';
+import { menuIconImage } from './menu-icon-image.ts';
 import { menuItemStatesFrom } from './menu-item-states-from.ts';
 import type { MenuItemState } from './menu-item-states-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
@@ -143,7 +145,15 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
     return opened;
   };
 
-  const build = (): Menu => Menu.buildFromTemplate(withClicks(template, dispatch));
+  /** The images of the catalog's icons, drawn once per theme (ADR 0142). */
+  let icons = new Map<MenuIcon, NativeImage>();
+  const iconOf = (icon: MenuIcon): NativeImage => {
+    return icons.getOrInsertComputed(icon, () => menuIconImage(icon, platform));
+  };
+
+  const build = (): Menu => {
+    return Menu.buildFromTemplate(withClicks(template, { dispatch, iconOf }));
+  };
 
   let appMenu: Menu | undefined;
   if (platform === 'mac') {
@@ -152,9 +162,10 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
   // eslint-disable-next-line unicorn/no-null -- Electron removes the default menu with null.
   Menu.setApplicationMenu(appMenu ?? null);
 
-  /** Applies `states` and the editor check to `menu`. */
+  /** Applies `states`, the names that follow them and the editor check to `menu`. */
   const apply = (menu: Menu, states: ReadonlyMap<string, MenuItemState>): void => {
     applyStates(menu, states);
+    applyCheckedLabels(menu, { items: template, states });
     applyEditorChoice(menu, { states, editors });
   };
 
@@ -198,6 +209,14 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
       refresh(contentsId);
     }
   };
+
+  if (appMenu === undefined) {
+    // Linux icons are inked for the theme, so a theme change draws them again.
+    nativeTheme.on('updated', () => {
+      icons = new Map();
+      rebuild();
+    });
+  }
 
   return {
     track: (window, kind): void => {
@@ -246,11 +265,16 @@ export function createAppMenus(options: AppMenusOptions): AppMenus {
         return false;
       }
       const menu = Menu.buildFromTemplate(
-        withClicks(items, (id) => {
-          dispatch(id, window);
+        withClicks(items, {
+          dispatch: (id): void => {
+            dispatch(id, window);
+          },
+          iconOf,
         }),
       );
-      apply(menu, statesOf(contentsId, kind));
+      const states = statesOf(contentsId, kind);
+      applyStates(menu, states);
+      applyCheckedLabels(menu, { items, states });
       menu.popup({
         window,
         ...(request.x !== undefined && { x: Math.round(request.x) }),
@@ -308,22 +332,33 @@ function itemIdAt(id: string, index: number): string {
   return `${id}~${String(index)}`;
 }
 
-/** Electron's options with a click on every item that names a command (`<id>~n` runs `<id>`). */
+/** What turns template items into Electron's: the click's dispatch and the icons' images. */
+interface ItemWiring {
+  readonly dispatch: (id: string, window: BrowserWindow | undefined) => void;
+  readonly iconOf: (icon: MenuIcon) => NativeImage;
+}
+
+/**
+ * Electron's options with a click on every item that names a command (`<id>~n` runs `<id>`) and
+ * the image of its icon; the checked label stays behind for {@link applyCheckedLabels}.
+ */
 function withClicks(
   items: readonly MenuTemplateItem[],
-  dispatch: (id: string, window: BrowserWindow | undefined) => void,
+  wiring: ItemWiring,
 ): MenuItemConstructorOptions[] {
   return items.map((item): MenuItemConstructorOptions => {
-    const { submenu, id, ...rest } = item;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Electron has no checked label; applyCheckedLabels reads it from the template.
+    const { submenu, id, icon, checkedLabel, ...rest } = item;
     return {
       ...rest,
+      ...(icon !== undefined && { icon: wiring.iconOf(icon) }),
       ...(id !== undefined && {
         id,
         click: (_menuItem, window): void => {
-          dispatch(id, browserWindowOf(window));
+          wiring.dispatch(id, browserWindowOf(window));
         },
       }),
-      ...(submenu !== undefined && { submenu: withClicks(submenu, dispatch) }),
+      ...(submenu !== undefined && { submenu: withClicks(submenu, wiring) }),
     };
   });
 }
@@ -359,6 +394,36 @@ function applyStates(menu: Menu, states: ReadonlyMap<string, MenuItemState>): vo
       if (index === 0 && command?.toggle !== undefined) {
         item.checked = state.checked;
       }
+    }
+  }
+}
+
+/** A menu's template items, and the states whose checks pick their labels. */
+interface CheckedLabelStates {
+  readonly items: readonly MenuTemplateItem[];
+  readonly states: ReadonlyMap<string, MenuItemState>;
+}
+
+/**
+ * Shows the checked label of every item that has one while its command is checked, and its own
+ * label otherwise (ADR 0142): Withdraw becomes Restore. Electron documents `label` as dynamic.
+ */
+function applyCheckedLabels(menu: Menu, { items, states }: CheckedLabelStates): void {
+  for (const item of items) {
+    if (item.submenu !== undefined) {
+      applyCheckedLabels(menu, { items: item.submenu, states });
+    }
+    if (item.id === undefined || item.checkedLabel === undefined || item.label === undefined) {
+      continue;
+    }
+    const menuItem = menu.getMenuItemById(item.id);
+    if (menuItem === null) {
+      continue;
+    }
+    if (states.get(item.id)?.checked === true) {
+      menuItem.label = item.checkedLabel;
+    } else {
+      menuItem.label = item.label;
     }
   }
 }

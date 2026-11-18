@@ -55,6 +55,19 @@ export interface InPlaceKeys {
   readonly keys: readonly string[];
 }
 
+/** What the palette and a menu call a command in one state (ADR 0142). */
+export interface CommandNames {
+  readonly title: string;
+  /** The menu label when it differs from `title`. */
+  readonly label?: string;
+}
+
+/**
+ * A symbol beside a menu item (ADR 0142), drawn by main: an SF Symbol on macOS, a bitmap of its
+ * own on Linux.
+ */
+export type MenuIcon = 'arrow-up' | 'arrow-down';
+
 export interface CatalogCommand {
   readonly id: string;
   /** What the palette and the shortcuts window call it. */
@@ -82,6 +95,15 @@ export interface CatalogCommand {
   readonly opensMainWindow?: true;
   readonly when?: readonly MenuCondition[];
   readonly toggle?: 'checkbox' | 'radio';
+  /**
+   * The names the command takes while the window lists it in `checked` (ADR 0142), for a command
+   * whose action flips with the state of what it acts on: Withdraw Note becomes Restore Note. The
+   * menus and the palette show them instead of `title` and `label`, with no check mark; the
+   * shortcuts window shows both. Such a command has no `toggle`.
+   */
+  readonly checkedNames?: CommandNames;
+  /** A symbol the menus show beside the command (ADR 0142). */
+  readonly icon?: MenuIcon;
   /**
    * The menu shows one radio item per entry of a list main keeps, instead of one item: `editors`
    * is every editor beuve knows (ADR 0139). Choosing one sends `menu:run` with the entry's id as
@@ -813,8 +835,9 @@ const entries = Object.freeze([
   },
   {
     id: 'dock-withdraw',
-    title: 'Withdraw or Restore Note',
-    label: 'Withdraw or Restore',
+    title: 'Withdraw Note',
+    label: 'Withdraw',
+    checkedNames: { title: 'Restore Note', label: 'Restore' },
     menu: { menu: 'review', group: 5, submenu: 'Note' },
     inPlace: { area: 'Review notes', keys: ['Delete'] },
     context: ['note'],
@@ -841,10 +864,10 @@ const entries = Object.freeze([
   },
   {
     id: 'dock-addressed',
-    title: 'Note Addressed',
-    label: 'Addressed',
+    title: 'Mark Note as Addressed',
+    label: 'Mark as Addressed',
+    checkedNames: { title: 'Mark Note as Not Addressed', label: 'Mark as Not Addressed' },
     menu: { menu: 'review', group: 5, submenu: 'Note' },
-    toggle: 'checkbox',
     context: ['note'],
     when: ['dock-item'],
     windows: ['main'],
@@ -855,6 +878,7 @@ const entries = Object.freeze([
     title: 'Move Note Up',
     label: 'Move Up',
     menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 1 },
+    icon: 'arrow-up',
     inPlace: { area: 'Review notes', keys: ['Alt+Up'] },
     context: ['note'],
     when: ['dock-item'],
@@ -866,6 +890,7 @@ const entries = Object.freeze([
     title: 'Move Note Down',
     label: 'Move Down',
     menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 1 },
+    icon: 'arrow-down',
     inPlace: { area: 'Review notes', keys: ['Alt+Down'] },
     context: ['note'],
     when: ['dock-item'],

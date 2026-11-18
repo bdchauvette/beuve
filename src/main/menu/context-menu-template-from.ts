@@ -62,7 +62,9 @@ function contextItem(command: CatalogCommand, platform: KeyPlatform): MenuTempla
   return {
     id: command.id,
     label: command.title,
+    ...(command.checkedNames !== undefined && { checkedLabel: command.checkedNames.title }),
     ...(command.toggle !== undefined && { type: command.toggle }),
+    ...(command.icon !== undefined && { icon: command.icon }),
     ...(accelerator !== undefined && { accelerator, registerAccelerator: false }),
   };
 }
