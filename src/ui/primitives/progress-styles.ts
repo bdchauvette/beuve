@@ -2,7 +2,8 @@ import { css } from 'lit';
 
 /**
  * An indeterminate progress bar (ADR 0115, 0145): `<span class="progress" aria-hidden="true">`,
- * a thin track with an accent segment sliding along it. Put what is in progress in a
+ * a thin track in the border color, plainly there on any surface, with an accent segment sliding
+ * along it. Put what is in progress in a
  * `role="status"` text beside it; the bar only says that something is. Under reduced motion it
  * holds still, half lit.
  */
@@ -14,7 +15,7 @@ export const progressStyles = css`
     block-size: var(--beuve-border-width-heavy);
     overflow: hidden;
     border-radius: var(--beuve-radius-tiny);
-    background: var(--beuve-accent-soft);
+    background: var(--beuve-border);
   }
 
   .progress::after {
