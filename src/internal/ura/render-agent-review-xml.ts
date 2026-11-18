@@ -117,12 +117,20 @@ function bodyElement(body: string): string {
   return `<body>${cdata(body)}</body>`;
 }
 
-/** The answer, and the finding or proposed note, a `chat-answer` item came from. */
+/**
+ * The answer, and the finding or proposed note, a `chat-answer` item came from, and a finding's
+ * confidence.
+ */
 function provenanceOf(origin: AgentReviewItem['origin']): Attributes {
   if (origin.kind !== 'chat-answer') {
     return {};
   }
-  return { 'message-id': origin.messageId, finding: origin.finding, proposal: origin.proposal };
+  return {
+    'message-id': origin.messageId,
+    finding: origin.finding,
+    proposal: origin.proposal,
+    confidence: origin.confidence,
+  };
 }
 
 function anchorElement(name: string, anchor: AgentReviewAnchor): string {

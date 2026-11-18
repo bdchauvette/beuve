@@ -6,7 +6,10 @@ import { testUraIds } from './testing/test-ura-ids.ts';
 import { test } from './testing/test.ts';
 
 describe('stageReviewFinding', () => {
-  test('stages the finding on its lines, naming its answer and index', ({ expect, deps }) => {
+  test('stages the finding on its lines, naming its answer and index and keeping its confidence', ({
+    expect,
+    deps,
+  }) => {
     expect(stageReviewFinding(finding(), source(), { deps })).toMatchObject({
       ok: true,
       value: {
@@ -14,7 +17,12 @@ describe('stageReviewFinding', () => {
         headSha: source().headSha,
         anchor: { kind: 'lines', path: 'src/a.ts', startLine: 4, endLine: 6 },
         severity: 'issue',
-        origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 2 },
+        origin: {
+          kind: 'chat-answer',
+          messageId: testUraIds.messageId,
+          finding: 2,
+          confidence: 0.5,
+        },
         title: 'Unchecked input',
         body: finding().body,
         status: { kind: 'staged' },
@@ -49,6 +57,7 @@ function finding(): StageableReviewFinding {
     severity: 'risk',
     title: 'Unchecked input',
     body: 'The value reaches `exec` unchecked.',
+    confidence: 0.5,
   };
 }
 

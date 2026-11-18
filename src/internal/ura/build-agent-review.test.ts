@@ -80,6 +80,7 @@ describe('buildAgentReview', () => {
             "body": "",
             "id": "00000000-0000-4000-8000-000000000002",
             "origin": {
+              "confidence": 0.5,
               "finding": 0,
               "kind": "chat-answer",
               "messageId": "msg-1",

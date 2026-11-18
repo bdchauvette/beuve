@@ -106,7 +106,7 @@ function anchorFrom(row: Row): UraAnchor | string {
 }
 
 function originFrom(row: Row): UraOrigin | string {
-  const { origin_kind, chat_message_id, chat_finding, chat_proposal } = row;
+  const { origin_kind, chat_message_id, chat_finding, chat_proposal, chat_confidence } = row;
   switch (origin_kind) {
     case 'human': {
       return { kind: 'human' };
@@ -120,10 +120,19 @@ function originFrom(row: Row): UraOrigin | string {
       }
       const answer = { kind: 'chat-answer', messageId: chat_message_id } as const;
       if (chat_finding !== null) {
-        if (isIndex(chat_finding)) {
+        if (!isIndex(chat_finding)) {
+          return 'chat_finding is not a finding index';
+        }
+        if (chat_confidence === null) {
           return { ...answer, finding: Number(chat_finding) };
         }
-        return 'chat_finding is not a finding index';
+        if (typeof chat_confidence === 'number') {
+          return { ...answer, finding: Number(chat_finding), confidence: chat_confidence };
+        }
+        return 'chat_confidence is not a number';
+      }
+      if (chat_confidence !== null) {
+        return 'chat_confidence is set without chat_finding';
       }
       if (chat_proposal !== null) {
         if (isIndex(chat_proposal)) {

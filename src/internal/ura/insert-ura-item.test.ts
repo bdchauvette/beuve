@@ -19,7 +19,12 @@ function sampleItems(): [UraItem, UraItem, UraItem, UraItem, UraItem] {
     createTestUraItem({ id: testUraIds.itemId(1), suggestion: '@@ -11 +11 @@\n-a\n+b\n' }),
     createTestUraItem({
       id: testUraIds.itemId(2),
-      origin: { kind: 'chat-answer', messageId: testUraIds.messageId, finding: 0 },
+      origin: {
+        kind: 'chat-answer',
+        messageId: testUraIds.messageId,
+        finding: 0,
+        confidence: 0.25,
+      },
       severity: 'question',
     }),
     createTestUraItem({

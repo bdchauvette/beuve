@@ -25,6 +25,8 @@ export type AgentReviewOrigin =
       readonly messageId: string;
       readonly finding?: number;
       readonly proposal?: number;
+      /** Only with `finding`: the model's 0–1 confidence in it, when beuve kept it (ADR 0141). */
+      readonly confidence?: number;
     };
 
 export interface AgentReviewItem {
@@ -203,6 +205,7 @@ function originFrom(origin: UraOrigin): AgentReviewOrigin {
         messageId: origin.messageId,
         ...(origin.finding !== undefined && { finding: origin.finding }),
         ...(origin.proposal !== undefined && { proposal: origin.proposal }),
+        ...(origin.confidence !== undefined && { confidence: origin.confidence }),
       };
     }
   }

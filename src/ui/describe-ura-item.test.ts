@@ -48,6 +48,17 @@ describe('describeUraItem', () => {
     expect(describeUraItem(change).anchor).toBe('whole change');
   });
 
+  test('gives a review finding’s confidence, and a proposed note’s origin', ({ expect }) => {
+    const finding = createUraItemView({
+      origin: { kind: 'chat-answer', messageId: 'm', finding: 0, confidence: 0.504 },
+    });
+    expect(describeUraItem(finding).origin).toBe('review finding · 50%');
+    const proposal = createUraItemView({
+      origin: { kind: 'chat-answer', messageId: 'm', proposal: 0 },
+    });
+    expect(describeUraItem(proposal).origin).toBe('chat');
+  });
+
   test('keeps the original anchor of an outdated item and says why', ({ expect }) => {
     const item = createUraItemView({ placement: { kind: 'outdated', reason: 'lines-changed' } });
     expect(describeUraItem(item)).toMatchObject({

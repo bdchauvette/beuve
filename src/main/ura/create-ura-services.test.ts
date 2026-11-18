@@ -234,7 +234,7 @@ describe('URA services (integration: SQLite + git, no Electron)', { timeout: 30_
     expect(staged.item).toMatchObject({
       headSha: head,
       severity: 'issue',
-      origin: { kind: 'chat-answer', messageId: reviewMessageId(), finding: 0 },
+      origin: { kind: 'chat-answer', messageId: reviewMessageId(), finding: 0, confidence: 0.8 },
       anchor: { kind: 'lines', path: 'src/app.ts', startLine: 2, endLine: 2 },
       title: 'Unchecked answer',
       body: 'Check it.',

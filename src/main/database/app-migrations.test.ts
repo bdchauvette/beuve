@@ -7,6 +7,7 @@ import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
+import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
 import { openDatabase } from '#sqlite/open-database.ts';
 import { runMigrations } from '#sqlite/run-migrations.ts';
@@ -110,6 +111,7 @@ function shippedMigrations(): Record<string, string> {
     'setup-0001-initial': 'c35af3cb07ed9eb1',
     'trust-0002-drop-grants': 'c63f49d2490a652d',
     'ura-0002-drop-impact-findings': 'e98b3a255e786eda',
+    'ura-0003-finding-confidence': 'b0c3ded2d62506b8',
   };
 }
 
@@ -211,7 +213,7 @@ function keptTableCounts(
 function domainMigrations(): Record<string, readonly Migration[]> {
   return {
     session: sessionMigrations,
-    ura: uraMigrations,
+    ura: [...uraMigrations, uraFindingConfidenceMigration],
     chat: chatMigrations,
     github: githubMigrations,
     'review-edits': reviewEditsMigrations,
