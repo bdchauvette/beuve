@@ -10,6 +10,7 @@ import type {
   FileReviewStateView,
   ReviewOrderMode,
   ReviewOrderView,
+  ReviewThreadView,
   ReviewView,
   UpdateUraItemRequest,
   UraAnchorView,
@@ -127,6 +128,7 @@ const defaultDisplay: DiffDisplayView = {
 
 const noUraItems: readonly UraItemView[] = [];
 const noInsights: readonly ReviewInsight[] = [];
+const noThreads: readonly ReviewThreadView[] = [];
 const noDiagnostics: ReadonlyMap<string, FileDiagnostics> = new Map();
 const noPaths: ReadonlySet<string> = new Set();
 /** {@link findInReview}'s default cap. */
@@ -633,11 +635,15 @@ export class BeuveDiffStream extends LitElement {
     readonly uraItemsByPath: ReadonlyMap<string, readonly UraItemView[]>;
     readonly insights: readonly ReviewInsight[];
     readonly insightsByPath: ReadonlyMap<string, readonly ReviewInsight[]>;
+    readonly reviewThreads: readonly ReviewThreadView[];
+    readonly threadsByPath: ReadonlyMap<string, readonly ReviewThreadView[]>;
   } = {
     uraItems: noUraItems,
     uraItemsByPath: new Map(),
     insights: noInsights,
     insightsByPath: new Map(),
+    reviewThreads: noThreads,
+    threadsByPath: new Map(),
   };
 
   private planCache:
@@ -695,6 +701,8 @@ export class BeuveDiffStream extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings to show as notes under their lines, not yet staged (ADR 0061). */
   @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
+  /** Other reviewers' line threads, which the cards show when they are wanted (ADR 0140). */
+  @property({ attribute: false }) accessor reviewThreads: readonly ReviewThreadView[] = noThreads;
   /** The language servers' diagnostics per file path, for the head on screen (ADR 0111). */
   @property({ attribute: false }) accessor diagnostics: ReadonlyMap<string, FileDiagnostics> =
     noDiagnostics;
@@ -1339,15 +1347,25 @@ export class BeuveDiffStream extends LitElement {
   }
 
   private refreshSlices(): void {
-    const { slices, uraItems, insights } = this;
-    let { insightsByPath, uraItemsByPath } = slices;
+    const { slices, uraItems, insights, reviewThreads } = this;
+    let { insightsByPath, uraItemsByPath, threadsByPath } = slices;
     if (slices.insights !== insights) {
       insightsByPath = groupStable(insights, insightPaths, slices.insightsByPath);
     }
     if (slices.uraItems !== uraItems) {
       uraItemsByPath = groupStable(uraItems, uraItemPaths, slices.uraItemsByPath);
     }
-    this.slices = { insights, insightsByPath, uraItems, uraItemsByPath };
+    if (slices.reviewThreads !== reviewThreads) {
+      threadsByPath = groupStable(reviewThreads, threadPaths, slices.threadsByPath);
+    }
+    this.slices = {
+      insights,
+      insightsByPath,
+      uraItems,
+      uraItemsByPath,
+      reviewThreads,
+      threadsByPath,
+    };
   }
 
   /**
@@ -1389,7 +1407,7 @@ export class BeuveDiffStream extends LitElement {
 
   private renderReview(review: ReviewView): TemplateResult {
     this.refreshSlices();
-    const { uraItemsByPath, insightsByPath } = this.slices;
+    const { uraItemsByPath, insightsByPath, threadsByPath } = this.slices;
     const plan = this.plan();
     const additions = review.files.reduce((sum, file) => {
       return sum + file.additions;
@@ -1458,6 +1476,8 @@ export class BeuveDiffStream extends LitElement {
                           .flow=${this.flow?.path === file.path ? this.flow : undefined}
                           .uraItems=${uraItemsByPath.get(file.path) ?? noUraItems}
                           .insights=${insightsByPath.get(file.path) ?? noInsights}
+                          .reviewThreads=${threadsByPath.get(file.path) ?? noThreads}
+                          .headSha=${review.headSha}
                           .diagnostics=${this.diagnostics.get(file.path)}
                           .composer=${this.composer?.path === file.path ? this.composer : undefined}
                           .deferral=${this.deferrals.get(file.path)}
@@ -1888,6 +1908,10 @@ function uraItemPaths(item: UraItemView): string[] {
     }
   }
   return paths;
+}
+
+function threadPaths(thread: ReviewThreadView): string[] {
+  return [thread.path];
 }
 
 function insightPaths(insight: ReviewInsight): string[] {

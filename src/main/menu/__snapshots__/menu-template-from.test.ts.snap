@@ -263,12 +263,17 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "type": "checkbox",
           },
           {
+            "id": "toggle-review-comments",
+            "label": "Show &Other Reviewers’ Comments",
+            "type": "checkbox",
+          },
+          {
             "type": "separator",
           },
           {
             "accelerator": "Ctrl+Shift+M",
             "id": "toggle-rendered",
-            "label": "Rendered &or Source",
+            "label": "R&endered or Source",
           },
         ],
       },
@@ -1082,6 +1087,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
           {
             "id": "toggle-diagnostics",
             "label": "Show Diagnostics",
+            "type": "checkbox",
+          },
+          {
+            "id": "toggle-review-comments",
+            "label": "Show Other Reviewers’ Comments",
             "type": "checkbox",
           },
           {

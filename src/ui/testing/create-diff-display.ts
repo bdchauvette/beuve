@@ -9,6 +9,7 @@ export function createDiffDisplay(overrides: Partial<DiffDisplayView> = {}): Dif
     showGenerated: false,
     showInsights: true,
     showDiagnostics: true,
+    showReviewComments: false,
     reviewOrder: 'path',
     skipReviewed: false,
     ...overrides,

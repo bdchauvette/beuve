@@ -21,6 +21,7 @@ import type {
   FileReviewStateView,
   FilePairView,
   UraAnchorView,
+  ReviewThreadView,
   UraItemView,
 } from '#contract/ipc-contract.ts';
 import { revealFormatControls } from '#x/text/reveal-format-controls.ts';
@@ -87,8 +88,12 @@ import { keyPlatformOf } from './key-platform-of.ts';
 import { shortcutOf } from './shortcut-of.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { diffSelectionCss } from './diff-selection-css.ts';
+import { countNoun } from './count-noun.ts';
+import { createThreadElement } from './create-thread-element.ts';
 import { displayIcon } from './display-icon.ts';
 import { pathText } from './path-text.ts';
+import { placeReviewThreads } from './place-review-threads.ts';
+import type { ThreadPlacement } from './place-review-threads.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
@@ -173,6 +178,7 @@ export interface SuggestionSaveDetail {
 type CardNote =
   | { readonly kind: 'ura'; readonly item: UraItemView }
   | { readonly kind: 'insight'; readonly insight: ReviewInsight }
+  | { readonly kind: 'thread'; readonly thread: ReviewThreadView }
   | { readonly kind: 'composer' };
 
 /** A note with the head lines it is about; one interface, so the library's metadata type stays whole. */
@@ -192,6 +198,7 @@ interface RevealedRange {
 }
 
 const noInsights: readonly ReviewInsight[] = [];
+const noThreads: readonly ReviewThreadView[] = [];
 
 /** The `@pierre/diffs` side that holds each side's lines. */
 const librarySides = { head: 'additions', base: 'deletions' } as const;
@@ -624,6 +631,90 @@ export class BeuveFileCard extends LitElement {
         text-align: end;
       }
 
+      .thread {
+        margin: var(--beuve-space-1) var(--beuve-space-3);
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border-inline-start: var(--beuve-border-width-thick) solid var(--beuve-border);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface-sunken);
+        font: var(--beuve-font-small);
+        white-space: normal;
+        color: var(--beuve-text);
+      }
+
+      .thread.outdated {
+        color: var(--beuve-text-muted);
+      }
+
+      .thread-place {
+        display: block;
+        margin-block-end: var(--beuve-space-0-5);
+        font-weight: var(--beuve-font-weight-semibold);
+        color: var(--beuve-text-muted);
+      }
+
+      .thread-comment + .thread-comment {
+        margin-block-start: var(--beuve-space-2);
+        padding-block-start: var(--beuve-space-1);
+        border-block-start: var(--beuve-border-width) solid var(--beuve-border);
+      }
+
+      .thread-header {
+        display: flex;
+        align-items: baseline;
+        gap: var(--beuve-space-2);
+        color: var(--beuve-text-muted);
+      }
+
+      .thread-author {
+        font-weight: var(--beuve-font-weight-semibold);
+        color: var(--beuve-text);
+      }
+
+      .thread-open {
+        margin-inline-start: auto;
+        padding: 0 var(--beuve-space-1);
+        border: none;
+        border-radius: var(--beuve-radius-small);
+        background: none;
+        font: inherit;
+        color: var(--beuve-accent);
+        cursor: pointer;
+      }
+
+      .thread-open:hover {
+        background: var(--beuve-surface-hover);
+      }
+
+      .thread-body :is(p, ul, ol, blockquote, pre) {
+        margin: 0 0 var(--beuve-space-1);
+      }
+
+      .thread-body :is(ul, ol) {
+        padding-inline-start: var(--beuve-space-4);
+      }
+
+      .thread-body pre {
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-surface);
+        overflow-inline: auto;
+      }
+
+      .thread-body a {
+        color: var(--beuve-accent);
+      }
+
+      .threads-aside {
+        margin: var(--beuve-space-1) var(--beuve-space-3);
+        font: var(--beuve-font-small);
+        color: var(--beuve-text-muted);
+      }
+
+      .threads-aside > summary {
+        cursor: pointer;
+      }
+
       .insight-text pre {
         margin: 0 0 var(--beuve-space-1);
         padding: var(--beuve-space-1) var(--beuve-space-2);
@@ -861,6 +952,16 @@ export class BeuveFileCard extends LitElement {
         event.stopPropagation();
         this.emitSheetRequest();
       },
+      'thread-open': ({ url = '' }, event): void => {
+        event.stopPropagation();
+        this.emitOpenUrl(url);
+      },
+      link: ({ url = '' }, event): void => {
+        // A link in a comment never navigates the window; main opens what it allows (ADR 0040).
+        event.preventDefault();
+        event.stopPropagation();
+        this.emitOpenUrl(url);
+      },
       'reveal-note': ({ uraItemId = '' }, event): void => {
         event.stopPropagation();
         this.revealNote(uraItemId);
@@ -929,6 +1030,10 @@ export class BeuveFileCard extends LitElement {
   @property({ attribute: false }) accessor uraItems: readonly UraItemView[] = [];
   /** `/review` findings on this file's lines, not yet staged (ADR 0061); empty when hidden. */
   @property({ attribute: false }) accessor insights: readonly ReviewInsight[] = noInsights;
+  /** Other reviewers' threads on this file (ADR 0140); none while they are off. */
+  @property({ attribute: false }) accessor reviewThreads: readonly ReviewThreadView[] = noThreads;
+  /** The head the card shows, which decides whether a thread's lines are this card's lines. */
+  @property() accessor headSha = '';
   /** The language servers' diagnostics for this file at the head (ADR 0111); absent until asked. */
   @property({ attribute: false }) accessor diagnostics: FileDiagnostics | undefined;
   /** The Add Note composer, when it is open on this file. */
@@ -985,6 +1090,13 @@ export class BeuveFileCard extends LitElement {
   }
 
   /** A rendered row by head line (base line for deletions), on the head side when split. */
+  /** Asks the window to open a web page through main (ADR 0040). */
+  private emitOpenUrl(url: string): void {
+    this.dispatchEvent(
+      new CustomEvent('beuve-open-url', { detail: { url }, bubbles: true, composed: true }),
+    );
+  }
+
   /** Open in Sheet from the header (ADR 0128): the file at the session head, from its top. */
   private emitSheetRequest(): void {
     const path = this.file?.path;
@@ -1041,6 +1153,8 @@ export class BeuveFileCard extends LitElement {
       'library',
       'uraItems',
       'insights',
+      'reviewThreads',
+      'headSha',
       'composer',
       'revealed',
     ].some((key) => {
@@ -1143,6 +1257,13 @@ export class BeuveFileCard extends LitElement {
           lineStart: insight.finding.startLine,
           lineEnd: insight.finding.endLine,
           note: { kind: 'insight', insight },
+        };
+      }),
+      ...this.threadPlacement().inline.map((thread): CardSlot => {
+        return {
+          lineStart: thread.startLine ?? 0,
+          lineEnd: thread.endLine ?? 0,
+          note: { kind: 'thread', thread },
         };
       }),
     ];
@@ -1291,10 +1412,18 @@ export class BeuveFileCard extends LitElement {
       case 'insight': {
         return this.insightNode(note.insight);
       }
+      case 'thread': {
+        return createThreadElement(note.thread, { showsPlace: false });
+      }
       case 'composer': {
         return this.composerNode();
       }
     }
+  }
+
+  /** Other reviewers' threads split between the diff and the card's list (ADR 0140). */
+  private threadPlacement(): ThreadPlacement {
+    return placeReviewThreads(this.reviewThreads, this.headSha);
   }
 
   /** A `/review` finding's note; it stays expanded across re-renders until the reviewer collapses it. */
@@ -1533,10 +1662,32 @@ export class BeuveFileCard extends LitElement {
       case 'insight': {
         return this.insightNode(note.insight);
       }
+      case 'thread': {
+        return createThreadElement(note.thread, { showsPlace: false });
+      }
       case 'composer': {
         return this.composerNode();
       }
     }
+  }
+
+  /**
+   * Comments of other reviewers that are not on lines this card shows (another side or commit,
+   * outdated, or on the whole file): collapsed, so nothing is placed where it may not belong.
+   */
+  private renderAsideThreads(): TemplateResult | typeof nothing {
+    const { aside } = this.threadPlacement();
+    if (aside.length === 0) {
+      return nothing;
+    }
+    return html`<details class="threads-aside">
+      <summary>
+        ${countNoun(aside.length, 'comment thread')} from other reviewers, not on these lines
+      </summary>
+      ${aside.map((thread) => {
+        return createThreadElement(thread, { showsPlace: true });
+      })}
+    </details>`;
   }
 
   /** Open in Sheet; a deleted or binary file has nothing to show at the head. */
@@ -2205,6 +2356,7 @@ ${splitPatch(file.patch).map((line) => {
         </div>
         ${this.renderEditBar()}
       </div>
+      ${this.renderAsideThreads()}
       ${this.peek === undefined ? nothing : html`<beuve-peek-portal .peek=${this.peek}></beuve-peek-portal>`}
       ${
         this.flow === undefined

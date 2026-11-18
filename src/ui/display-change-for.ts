@@ -11,6 +11,7 @@ export type DisplayCommandId = Extract<
   | 'toggle-generated'
   | 'toggle-insights'
   | 'toggle-diagnostics'
+  | 'toggle-review-comments'
   | 'toggle-skip-reviewed'
   | 'order-path'
   | 'order-imports'
@@ -41,6 +42,9 @@ export function displayChangeFor(
     }
     case 'toggle-diagnostics': {
       return { showDiagnostics: !display.showDiagnostics };
+    }
+    case 'toggle-review-comments': {
+      return { showReviewComments: display.showReviewComments !== true };
     }
     case 'toggle-skip-reviewed': {
       return { skipReviewed: display.skipReviewed !== true };

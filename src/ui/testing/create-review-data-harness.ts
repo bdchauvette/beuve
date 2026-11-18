@@ -15,12 +15,16 @@ export interface ReviewDataHarness extends FakeBridge {
   readonly showReview: (review: ReviewView | undefined) => void;
   /** Chooses another file order. */
   readonly chooseOrder: (mode: ReviewOrderMode) => void;
+  /** Turns other reviewers' comments on or off, as the display preference does. */
+  readonly chooseComments: (isShown: boolean) => void;
 }
 
 /** Options of {@link createReviewDataHarness}. */
 export interface ReviewDataHarnessOptions {
   /** The open review at the start; none by default. */
   readonly review?: ReviewView;
+  /** Whether other reviewers' comments are wanted at the start; off by default. */
+  readonly showReviewComments?: boolean;
   /** The whole result each channel answers with; unlisted channels answer `ok`. */
   readonly replies?: Readonly<Record<string, unknown>>;
 }
@@ -33,6 +37,7 @@ export function createReviewDataHarness(options: ReviewDataHarnessOptions = {}):
   const notices: StatusNotice[] = [];
   let review = options.review;
   let order: ReviewOrderMode = 'path';
+  let isCommentsShown = options.showReviewComments === true;
   const data = new ReviewDataController(host, {
     bridge: (): BeuveApi => {
       return fake.bridge;
@@ -42,6 +47,9 @@ export function createReviewDataHarness(options: ReviewDataHarnessOptions = {}):
     },
     reviewOrder: (): ReviewOrderMode => {
       return order;
+    },
+    showReviewComments: (): boolean => {
+      return isCommentsShown;
     },
     notify: (notice): void => {
       notices.push(notice);
@@ -57,6 +65,9 @@ export function createReviewDataHarness(options: ReviewDataHarnessOptions = {}):
     },
     chooseOrder: (mode): void => {
       order = mode;
+    },
+    chooseComments: (isShown): void => {
+      isCommentsShown = isShown;
     },
   };
 }

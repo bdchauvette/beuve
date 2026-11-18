@@ -8,6 +8,7 @@ import type {
   RepositoryTreeView,
   ReviewOrderMode,
   ReviewOrderView,
+  ReviewThreadView,
   ReviewView,
 } from '#contract/ipc-contract.ts';
 
@@ -21,6 +22,8 @@ export interface ReviewDataEnvironment {
   readonly review: () => ReviewView | undefined;
   /** The file order the reviewer chose, which a late `calls` order must still match. */
   readonly reviewOrder: () => ReviewOrderMode | undefined;
+  /** Whether other reviewers' line comments are wanted (ADR 0140); nothing is read while not. */
+  readonly showReviewComments: () => boolean;
   readonly notify: (notice: StatusNotice) => void;
 }
 
@@ -30,6 +33,8 @@ interface ReviewDataSnapshot {
   readonly order: ReviewOrderView | undefined;
   readonly tree: RepositoryTreeView | undefined;
   readonly fileAttributes: FileAttributesView | undefined;
+  /** Other reviewers' line threads (ADR 0140); empty while the setting is off. */
+  readonly threads: readonly ReviewThreadView[];
 }
 
 const initial: ReviewDataSnapshot = {
@@ -38,19 +43,22 @@ const initial: ReviewDataSnapshot = {
   order: undefined,
   tree: undefined,
   fileAttributes: undefined,
+  threads: [],
 };
 
 /**
  * What the window learns about the open review after `session:get-review` answers: the reviewed
  * marks and counts (ADR 0064), the reading order (ADR 0065), the head's tracked paths for the
  * radar tree, and which files `.gitattributes` marks generated
- * (ADR 0052). `open` starts every load; each drops its answer when another review is open by
+ * (ADR 0052), and other reviewers' line threads when wanted (ADR 0140). `open` starts every load; each drops its answer when another review is open by
  * then. The host re-renders when a getter's value changes.
  */
 export class ReviewDataController {
   private readonly host: ReactiveControllerHost;
   private readonly environment: ReviewDataEnvironment;
   private snapshot: ReviewDataSnapshot = initial;
+  /** Counts thread reads, so an older answer never replaces a newer one. */
+  private threadsRead = 0;
 
   constructor(host: ReactiveControllerHost, environment: ReviewDataEnvironment) {
     this.host = host;
@@ -126,9 +134,15 @@ export class ReviewDataController {
     return this.snapshot.fileAttributes;
   }
 
-  /** Forgets the order, tree and file attributes: another session is opening. */
+  /** Other reviewers' line threads for the open review (ADR 0140); none while they are off. */
+  get threads(): readonly ReviewThreadView[] {
+    return this.snapshot.threads;
+  }
+
+  /** Forgets the order, tree, file attributes and threads: another session is opening. */
   reset(): void {
-    this.patch({ order: undefined, tree: undefined, fileAttributes: undefined });
+    this.threadsRead += 1;
+    this.patch({ order: undefined, tree: undefined, fileAttributes: undefined, threads: [] });
   }
 
   /** A review arrived: show its marks and start every load that follows it. */
@@ -137,6 +151,47 @@ export class ReviewDataController {
     void this.loadTree(review);
     void this.reloadOrder(review);
     void this.loadFileAttributes(review);
+    void this.reloadThreads(review);
+  }
+
+  /**
+   * Reads other reviewers' line threads (ADR 0140), when they are wanted: the threads stay on
+   * screen while they are read again, an answer that is not the latest or for another review is
+   * dropped, and turning them off forgets them.
+   */
+  async reloadThreads(review: ReviewView): Promise<void> {
+    const bridge = this.environment.bridge();
+    this.threadsRead += 1;
+    if (bridge === undefined || !this.environment.showReviewComments()) {
+      if (this.snapshot.threads.length > 0) {
+        this.patch({ threads: [] });
+      }
+      return;
+    }
+    const read = this.threadsRead;
+    const loaded = await bridge.invoke('review:get-threads', { sessionId: review.session.id });
+    if (read !== this.threadsRead || this.environment.review() !== review) {
+      return;
+    }
+    if (!loaded.ok) {
+      this.environment.notify({
+        tone: 'error',
+        text: `Other reviewers’ comments: ${loaded.error.message}`,
+      });
+      return;
+    }
+    if (loaded.value.kind === 'failed') {
+      this.environment.notify({
+        tone: 'error',
+        text: `Other reviewers’ comments: ${loaded.value.message}`,
+      });
+      return;
+    }
+    if (loaded.value.kind === 'unsupported') {
+      this.patch({ threads: [] });
+      return;
+    }
+    this.patch({ threads: loaded.value.threads });
   }
 
   /** The files' reading order (ADR 0065) in the saved mode; `calls` may take a moment. */

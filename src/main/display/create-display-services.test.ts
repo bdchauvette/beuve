@@ -25,6 +25,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         showDiagnostics: true,
+        showReviewComments: false,
         reviewOrder: 'path',
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
@@ -42,6 +43,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         showDiagnostics: true,
+        showReviewComments: false,
         reviewOrder: 'path',
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
@@ -54,6 +56,7 @@ describe('createDisplayServices', () => {
     await display.set({ sidebarSide: 'left' });
     await display.set({ showGenerated: true });
     await display.set({ showInsights: false });
+    await display.set({ showReviewComments: true });
     await display.set({ reviewOrder: 'imports' });
     await display.set({ skipReviewed: true });
     await display.set({ codeFont: ' "JetBrains Mono", monospace ' });
@@ -66,6 +69,7 @@ describe('createDisplayServices', () => {
       showGenerated: true,
       showInsights: false,
       showDiagnostics: true,
+      showReviewComments: true,
       reviewOrder: 'imports',
       skipReviewed: true,
       reviewQueue: defaultReviewQueuePrefs,
@@ -82,6 +86,7 @@ describe('createDisplayServices', () => {
         showGenerated: true,
         showInsights: false,
         showDiagnostics: true,
+        showReviewComments: true,
         reviewOrder: 'imports',
         skipReviewed: true,
         reviewQueue: defaultReviewQueuePrefs,
@@ -104,6 +109,7 @@ describe('createDisplayServices', () => {
         showGenerated: false,
         showInsights: true,
         showDiagnostics: true,
+        showReviewComments: false,
         reviewOrder: 'path',
         skipReviewed: false,
         reviewQueue: defaultReviewQueuePrefs,
