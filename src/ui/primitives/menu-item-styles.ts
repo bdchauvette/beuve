@@ -3,7 +3,8 @@ import { css } from 'lit';
 /**
  * The items of a `beuve-menu` (ADR 0115), which stay in the owner's tree: buttons with
  * `role="menuitem"`, `menuitemradio` or `menuitemcheckbox`. A radio or checkbox item's leading
- * icon shows only while `aria-checked='true'`. `.menu-heading` labels a run of items, and an
+ * icon shows only while `aria-checked='true'`, or `'mixed'` on a checkbox standing for several
+ * things that differ (lead with a dash then). `.menu-heading` labels a run of items, and an
  * `<hr class="menu-separator">` (role `separator`) parts two runs that need no name. Focus and
  * hover are a highlight, as menus show them, not the focus ring.
  */
@@ -40,7 +41,8 @@ export const menuItemStyles = css`
     visibility: hidden;
   }
 
-  :is([role='menuitemradio'], [role='menuitemcheckbox'])[aria-checked='true'] > svg:first-child {
+  :is([role='menuitemradio'], [role='menuitemcheckbox'])[aria-checked='true'] > svg:first-child,
+  [role='menuitemcheckbox'][aria-checked='mixed'] > svg:first-child {
     visibility: visible;
   }
 
