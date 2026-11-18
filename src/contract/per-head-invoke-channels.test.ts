@@ -50,6 +50,9 @@ function headFreeSessionChannels(): Readonly<
   const read = 'a read: its answer names the head it describes';
   return {
     'session:get-review': read,
+    'session:undo-mark-reviewed':
+      'removes the checkpoint it names, which must still be the latest; it records no head',
+    'session:set-review-range': 'the choice belongs to the session; the review it picks is a read',
     'session:get-order': read,
     'session:get-file-pair': read,
     'session:get-tree': read,

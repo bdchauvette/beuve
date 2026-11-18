@@ -131,6 +131,74 @@ describe('createMainServices (integration: SQLite + git, no Electron)', { timeou
     expect(fileSummary(review)).toStrictEqual([['notes.md', 'added', 1, 0]]);
   });
 
+  test('undoes a save and shows the whole change or since an earlier save (ADR 0140)', async ({
+    expect,
+    services: { sessions },
+    repositories,
+    signal,
+  }) => {
+    const { repo } = await repositories.fromTemplate(featureBranchTemplate());
+    const { id } = okValueFrom(
+      await sessions.createLocal({ repoPath: repo.directory, baseRef: 'main', headRef: 'feature' }),
+    );
+    const firstHead = await repo.git('rev-parse', 'feature');
+    const first = okValueFrom(
+      await sessions.markReviewed({ sessionId: id, expectedHeadSha: firstHead }),
+    );
+    const saved = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
+    expect(saved).toMatchObject({ scope: { kind: 'up-to-date' }, files: [] });
+    expect(saved.range).toMatchObject({
+      choice: { kind: 'since-last' },
+      checkpoints: [{ id: first.lastCheckpointId, headSha: firstHead }],
+    });
+
+    okValueFrom(sessions.setReviewRange({ sessionId: id, range: { kind: 'whole' } }));
+    const whole = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
+    expect(whole.scope).toStrictEqual({ kind: 'full' });
+    expect(whole.range?.choice).toStrictEqual({ kind: 'whole' });
+    expect(fileSummary(whole)).toStrictEqual([
+      ['app.rs', 'modified', 1, 1],
+      ['feature.rs', 'added', 3, 0],
+    ]);
+
+    await repo.git('switch', '--quiet', 'feature');
+    repo.write('notes.md', 'follow-up\n');
+    await repo.commit('follow-up');
+    const secondHead = await repo.git('rev-parse', 'feature');
+    const second = okValueFrom(
+      await sessions.markReviewed({ sessionId: id, expectedHeadSha: secondHead }),
+    );
+    const reset = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
+    expect(reset).toMatchObject({
+      scope: { kind: 'up-to-date' },
+      range: { choice: { kind: 'since-last' } },
+    });
+    expect(
+      sessions.undoMarkReviewed({ sessionId: id, checkpointId: first.lastCheckpointId ?? '' }),
+    ).toMatchObject({ ok: false, error: { code: 'refused' } });
+
+    okValueFrom(
+      sessions.setReviewRange({
+        sessionId: id,
+        range: { kind: 'since-checkpoint', checkpointId: first.lastCheckpointId ?? '' },
+      }),
+    );
+    const sinceFirst = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
+    expect(sinceFirst.scope).toMatchObject({ kind: 'interdiff', fromHeadSha: firstHead });
+    expect(fileSummary(sinceFirst)).toStrictEqual([['notes.md', 'added', 1, 0]]);
+
+    const undone = okValueFrom(
+      sessions.undoMarkReviewed({ sessionId: id, checkpointId: second.lastCheckpointId ?? '' }),
+    );
+    expect(undone.lastReviewedSha).toBe(firstHead);
+    const back = okValueFrom(await sessions.getReview({ sessionId: id }, { signal }));
+    expect(back.scope).toMatchObject({ kind: 'interdiff', fromHeadSha: firstHead });
+    expect(back.range?.checkpoints.map(({ headSha }) => headSha)).toStrictEqual([firstHead]);
+    expect(
+      sessions.undoMarkReviewed({ sessionId: id, checkpointId: second.lastCheckpointId ?? '' }),
+    ).toMatchObject({ ok: false, error: { code: 'not-found' } });
+  });
+
   test('diffs a separately cached whitespace-ignoring variant with the same head lines', async ({
     expect,
     services,

@@ -19,6 +19,15 @@ export function ipcErrorFromSessionError(error: SessionError): IpcError {
     case 'duplicate-session': {
       return { code: 'internal', message: 'a session for this change already exists' };
     }
+    case 'checkpoint-not-found': {
+      return { code: 'not-found', message: 'that saved progress is gone' };
+    }
+    case 'checkpoint-superseded': {
+      return {
+        code: 'refused',
+        message: 'progress was saved again since; only the latest save can be undone',
+      };
+    }
     case 'corrupt-row': {
       return { code: 'internal', message: 'stored session data is corrupt' };
     }

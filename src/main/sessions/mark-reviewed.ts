@@ -1,6 +1,7 @@
 import type { IpcError, MarkReviewedRequest, SessionSummary } from '#contract/ipc-contract.ts';
 import { insertCheckpoint } from '#internal/session/insert-checkpoint.ts';
 import { recordCheckpoint } from '#internal/session/record-checkpoint.ts';
+import { setReviewRangeChoice } from '#internal/session/set-review-range-choice.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -17,7 +18,8 @@ import { sessionSummaryFrom } from './session-summary-from.ts';
 /**
  * Records a checkpoint at the session's current head and the fork point it has from the base
  * branch now (the stack-aware one the review showed, ADR 0054), so the next review is an interdiff from here. Refuses with `stale-review` when the
- * head is no longer `expectedHeadSha`; re-marking an already recorded range changes nothing.
+ * head is no longer `expectedHeadSha`; re-marking an already recorded range records nothing. Either
+ * way the review's range goes back to the default, since the last checkpoint (ADR 0140).
  */
 export async function markReviewed(
   context: SessionContext,
@@ -53,6 +55,10 @@ export async function markReviewed(
     review.checkpoint.headSha === session.headSha &&
     review.checkpoint.baseSha === baseSha
   ) {
+    const reset = setReviewRangeChoice(context.db, session.id, { kind: 'since-last' });
+    if (!reset.ok) {
+      return sessionFailure(context.logger, reset.error);
+    }
     return ok(sessionSummaryFrom(session));
   }
   const recorded = recordCheckpoint(session, { baseSha, headSha: session.headSha }, context.deps);

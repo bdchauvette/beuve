@@ -24,6 +24,8 @@ import { loadReview } from './load-review.ts';
 import { createGitCaches } from './create-git-caches.ts';
 import type { GitCaches } from './create-git-caches.ts';
 import { markReviewed } from './mark-reviewed.ts';
+import { setReviewRange } from './set-review-range.ts';
+import { undoMarkReviewed } from './undo-mark-reviewed.ts';
 import { setFileReviewed } from './set-file-reviewed.ts';
 import type { SessionContext } from './session-context.ts';
 import { sessionFailure } from './session-failure.ts';
@@ -73,6 +75,12 @@ export function createSessionServices(options: SessionServicesOptions): SessionS
     },
     markReviewed: async (request): Promise<IpcResult<SessionSummary>> => {
       return markReviewed(context, request);
+    },
+    undoMarkReviewed: (request): IpcResult<SessionSummary> => {
+      return undoMarkReviewed(context, request);
+    },
+    setReviewRange: (request): IpcResult<SessionSummary> => {
+      return setReviewRange(context, request);
     },
     setFileReviewed: async (request): Promise<IpcResult<SetFileReviewedResponse>> => {
       return setFileReviewed(context, request);

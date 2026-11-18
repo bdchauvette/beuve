@@ -9,6 +9,8 @@ export const invokeChannels = Object.freeze([
   'dialog:choose-folder',
   'session:get-review',
   'session:mark-reviewed',
+  'session:undo-mark-reviewed',
+  'session:set-review-range',
   'review:set-file-reviewed',
   'session:get-order',
   'session:get-file-pair',

@@ -12,7 +12,8 @@ const foreignKeyViolation = 787;
 
 /**
  * Persists a checkpoint from {@link recordCheckpoint} and bumps its session's `updated_at`,
- * atomically. The session's review state follows, since it is derived from checkpoints.
+ * atomically. The session's review state follows, since it is derived from checkpoints. A range
+ * choice goes back to the default (ADR 0140): the next review shows what changes after this one.
  */
 export function insertCheckpoint(
   db: DatabaseSync,
@@ -34,6 +35,7 @@ export function insertCheckpoint(
         checkpoint.createdAt,
         checkpoint.sessionId,
       );
+      db.prepare('DELETE FROM review_ranges WHERE session_id = ?;').run(checkpoint.sessionId);
     });
   } catch (error: unknown) {
     if (sqliteErrorCode(error) === foreignKeyViolation) {

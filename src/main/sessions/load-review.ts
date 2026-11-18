@@ -1,9 +1,16 @@
-import type { FileAttributionView, IpcError, ReviewView } from '#contract/ipc-contract.ts';
+import type {
+  FileAttributionView,
+  IpcError,
+  ReviewRangeChoiceView,
+  ReviewView,
+} from '#contract/ipc-contract.ts';
 import type { FileAttribution } from '#internal/git/attribute-hunks.ts';
 import type { CommitPairs } from '#internal/git/compute-commit-pairs.ts';
 import type { StackForkPoint } from '#internal/git/find-stack-fork-point.ts';
 import type { DiffFile } from '#internal/git/diff-model.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
+import { listCheckpoints } from '#internal/session/list-checkpoints.ts';
+import type { ReviewRangeChoice } from '#internal/session/session.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
 
@@ -15,6 +22,7 @@ import type { ReviewDiff, ReviewDiffOptions } from './load-review-diff.ts';
 import type { SessionContext } from './session-context.ts';
 import { commitPairViewFrom } from './commit-pair-view-from.ts';
 import { diffFileViewFrom } from './diff-file-view-from.ts';
+import { sessionFailure } from './session-failure.ts';
 import { sessionSummaryFrom } from './session-summary-from.ts';
 
 /** The review as the renderer sees it: {@link loadReviewDiff} mapped to contract views, with each file's reviewed state (ADR 0064). */
@@ -27,7 +35,8 @@ export async function loadReview(
   if (!diff.ok) {
     return diff;
   }
-  const { refreshed, scope, baseSha, files, forkPoint, commitPairs, attribution } = diff.value;
+  const { refreshed, scope, baseSha, files, forkPoint, commitPairs, attribution, choice } =
+    diff.value;
   let plain: Result<ReviewDiff, IpcError> = diff;
   if (options.ignoreWhitespace === true) {
     plain = await loadReviewDiff(context, sessionId, { ...options, ignoreWhitespace: false });
@@ -41,6 +50,10 @@ export async function loadReview(
   });
   if (!carried.ok) {
     return carried;
+  }
+  const checkpoints = listCheckpoints(context.db, refreshed.session.id);
+  if (!checkpoints.ok) {
+    return sessionFailure(context.logger, checkpoints.error);
   }
   const shebangs = await shebangsOf(context, refreshed.repository, files);
   return ok({
@@ -63,6 +76,12 @@ export async function loadReview(
       unreviewed: carried.value.counts.unreviewed,
     },
     whitespace: whitespaceOf(options),
+    range: {
+      choice: rangeChoiceViewFrom(choice),
+      checkpoints: checkpoints.value.map(({ id, baseSha: base, headSha, createdAt }) => {
+        return { id, baseSha: base, headSha, savedAt: createdAt };
+      }),
+    },
     ...forkPointViewFrom(forkPoint),
     ...pairingViewsFrom(files, commitPairs, attribution),
   });
@@ -80,6 +99,13 @@ async function shebangsOf(
     return new Map();
   }
   return shebangs.value;
+}
+
+function rangeChoiceViewFrom(choice: ReviewRangeChoice): ReviewRangeChoiceView {
+  if (choice.kind === 'since-checkpoint') {
+    return { kind: 'since-checkpoint', checkpointId: choice.checkpoint.id };
+  }
+  return choice;
 }
 
 function forkPointViewFrom(forkPoint: StackForkPoint | undefined): Pick<ReviewView, 'forkPoint'> {
