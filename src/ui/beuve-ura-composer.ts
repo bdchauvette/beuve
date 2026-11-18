@@ -13,6 +13,7 @@ import { pathText } from './path-text.ts';
 import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import { completionListStyles } from './completion-list-styles.ts';
 import { EmojiCompletion } from './emoji-completion.ts';
 import { emojiCompletionStyles } from './emoji-completion-styles.ts';
@@ -40,6 +41,7 @@ export interface UraDraft {
 export class BeuveUraComposer extends LitElement {
   static override styles = [
     buttonStyles,
+    fieldStyles,
     formatControlStyles,
     completionListStyles,
     emojiCompletionStyles,
@@ -99,23 +101,17 @@ export class BeuveUraComposer extends LitElement {
         flex: 1;
       }
 
-      input,
-      textarea {
-        box-sizing: border-box;
-        min-inline-size: 0;
-        padding: var(--beuve-space-1) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
-        font: inherit;
-      }
-
       input {
         flex: 1;
       }
 
       textarea {
+        box-sizing: border-box;
+        padding: var(--beuve-space-1) var(--beuve-space-2);
+        border: var(--beuve-border-width) solid var(--beuve-border);
+        border-radius: var(--beuve-radius-small);
+        background: var(--beuve-bg);
+        color: var(--beuve-text);
         field-sizing: content;
         inline-size: 100%;
         min-block-size: var(--beuve-size-note-editor-min);
@@ -124,7 +120,6 @@ export class BeuveUraComposer extends LitElement {
         font: var(--beuve-font-code);
       }
 
-      input:focus,
       textarea:focus {
         border-color: var(--beuve-accent);
         outline: none;
@@ -264,6 +259,7 @@ export class BeuveUraComposer extends LitElement {
           @beuve-ura-label-change=${this.onLabelChange}
         ></beuve-ura-label-menu>
         <input
+          class="field"
           aria-label="Title"
           placeholder="Title (optional)"
           maxlength="200"

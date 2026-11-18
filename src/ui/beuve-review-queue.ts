@@ -34,6 +34,7 @@ import { buttonStyles } from './primitives/button-styles.ts';
 import { statusDotStyles } from './primitives/status-dot-styles.ts';
 import { badgeStyles } from './primitives/badge-styles.ts';
 import { emptyStateStyles } from './primitives/empty-state-styles.ts';
+import { fieldStyles } from './primitives/field-styles.ts';
 import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
@@ -62,6 +63,7 @@ export interface QueueOpenUrlDetail {
 @customElement('beuve-review-queue')
 export class BeuveReviewQueue extends LitElement {
   static override styles = [
+    fieldStyles,
     menuItemStyles,
     emptyStateStyles,
     badgeStyles,
@@ -122,12 +124,6 @@ export class BeuveReviewQueue extends LitElement {
 
       input[type='search'] {
         inline-size: calc(14 * var(--beuve-measure-em));
-        padding: var(--beuve-space-0-5) var(--beuve-space-2);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius-small);
-        background: var(--beuve-bg);
-        color: var(--beuve-text);
-        font: var(--beuve-font-small);
       }
 
       .problems {
@@ -750,6 +746,7 @@ export class BeuveReviewQueue extends LitElement {
           >
         </h2>
         <input
+          class="field"
           type="search"
           placeholder="Filter by text"
           aria-label="Filter by text"
