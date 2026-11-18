@@ -6,69 +6,6 @@ import { chatHelp } from './chat-help.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
 
 describe('parseChatCommand', () => {
-  test('parses /diff and /whitespace with and without a choice', ({ expect }) => {
-    expect(parseChatCommand('/diff')).toStrictEqual({ kind: 'diff' });
-    expect(parseChatCommand('/diff Inline')).toStrictEqual({ kind: 'diff', layout: 'unified' });
-    expect(parseChatCommand('/diff split')).toStrictEqual({ kind: 'diff', layout: 'split' });
-    expect(parseChatCommand('/diff wide')).toMatchObject({ kind: 'invalid' });
-    expect(parseChatCommand('/whitespace')).toStrictEqual({ kind: 'whitespace' });
-    expect(parseChatCommand('/whitespace ignore')).toStrictEqual({
-      kind: 'whitespace',
-      ignoreWhitespace: true,
-    });
-    expect(parseChatCommand('/whitespace show')).toStrictEqual({
-      kind: 'whitespace',
-      ignoreWhitespace: false,
-    });
-    expect(parseChatCommand('/whitespace ignore show')).toMatchObject({ kind: 'invalid' });
-  });
-
-  test('parses /generated with and without a choice', ({ expect }) => {
-    expect(parseChatCommand('/generated')).toStrictEqual({ kind: 'generated' });
-    expect(parseChatCommand('/generated Show')).toStrictEqual({
-      kind: 'generated',
-      showGenerated: true,
-    });
-    expect(parseChatCommand('/generated hide')).toStrictEqual({
-      kind: 'generated',
-      showGenerated: false,
-    });
-    expect(parseChatCommand('/generated maybe')).toMatchObject({ kind: 'invalid' });
-  });
-
-  test('parses /insights with and without a choice', ({ expect }) => {
-    expect(parseChatCommand('/insights')).toStrictEqual({ kind: 'insights' });
-    expect(parseChatCommand('/insights HIDE')).toStrictEqual({
-      kind: 'insights',
-      showInsights: false,
-    });
-    expect(parseChatCommand('/insights show')).toStrictEqual({
-      kind: 'insights',
-      showInsights: true,
-    });
-    expect(parseChatCommand('/insights maybe')).toMatchObject({ kind: 'invalid' });
-  });
-
-  test('parses /order with and without a mode', ({ expect }) => {
-    expect(parseChatCommand('/order')).toStrictEqual({ kind: 'order' });
-    expect(parseChatCommand('/order Imports')).toStrictEqual({ kind: 'order', mode: 'imports' });
-    expect(parseChatCommand('/order calls')).toStrictEqual({ kind: 'order', mode: 'calls' });
-    expect(parseChatCommand('/order tests-first')).toMatchObject({ kind: 'invalid' });
-    expect(parseChatCommand('/order path imports')).toMatchObject({ kind: 'invalid' });
-  });
-
-  test('parses /editor with and without a choice', ({ expect }) => {
-    expect(parseChatCommand('/editor')).toStrictEqual({ kind: 'editor' });
-    expect(parseChatCommand('/editor Zed')).toStrictEqual({ kind: 'editor', editorId: 'zed' });
-    expect(parseChatCommand('/editor code')).toStrictEqual({ kind: 'editor', editorId: 'vscode' });
-    expect(parseChatCommand('/editor cursor')).toStrictEqual({
-      kind: 'editor',
-      editorId: 'cursor',
-    });
-    expect(parseChatCommand('/editor emacs')).toMatchObject({ kind: 'invalid' });
-    expect(parseChatCommand('/editor zed cursor')).toMatchObject({ kind: 'invalid' });
-  });
-
   test('parses /review for the whole session', ({ expect }) => {
     expect(parseChatCommand('  /review ')).toStrictEqual({
       kind: 'review',
@@ -172,9 +109,25 @@ describe('parseChatCommand', () => {
     });
   });
 
-  test('parses /sidebar', ({ expect }) => {
-    expect(parseChatCommand('/sidebar left')).toStrictEqual({ kind: 'sidebar', side: 'left' });
-    expect(parseChatCommand('/layout a').kind).toBe('invalid');
-    expect(parseChatCommand('/sidebar').kind).toBe('invalid');
+  test.for([
+    '/editor',
+    '/editor zed',
+    '/diff inline',
+    '/whitespace ignore',
+    '/generated show',
+    '/insights hide',
+    '/Order imports',
+    '/sidebar left',
+  ])('says %s is a setting, not a chat command, and where to set it', (input, { expect }) => {
+    const command = parseChatCommand(input);
+    expect(command).toMatchObject({ kind: 'invalid' });
+    expect(JSON.stringify(command)).toContain('command palette');
+  });
+
+  test('still calls an unknown command unknown', ({ expect }) => {
+    expect(parseChatCommand('/layout a')).toMatchObject({
+      kind: 'invalid',
+      message: 'Unknown command /layout. Type /help for the commands.',
+    });
   });
 });

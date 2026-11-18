@@ -1504,7 +1504,7 @@ export class BeuveDiffStream extends LitElement {
       order = undefined;
     }
     const fallback = describeOrderFallback(order);
-    const help = 'The order files are listed in; config and mechanical files go last (/order)';
+    const help = 'The order files are listed in; config and mechanical files go last';
     const current = orderModes.find(({ mode }) => mode === requested)?.label ?? 'Path';
     return html`<span class="order ${fallback === undefined ? '' : 'fell-back'}"
       ><beuve-menu label="File order">

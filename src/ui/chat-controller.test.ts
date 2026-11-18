@@ -74,11 +74,13 @@ describe('ChatController', () => {
     expect(chat.entries.map(({ kind }) => kind)).toStrictEqual(['input', 'note']);
   });
 
-  test('hands a preference command to the app after echoing it', ({ expect }) => {
-    const { chat, appCommands } = createChatHarness();
+  test('answers a former preference command without changing anything', ({ expect }) => {
+    const { chat, invoked } = createChatHarness();
     chat.submit('/diff split');
-    expect(chat.entries).toStrictEqual([{ id: 1, kind: 'input', text: '/diff split' }]);
-    expect(appCommands).toStrictEqual([{ kind: 'diff', layout: 'split' }]);
+    expect(chat.entries.map(({ kind }) => kind)).toStrictEqual(['input', 'note']);
+    expect(chat.entries[0]).toMatchObject({ kind: 'input', text: '/diff split' });
+    expect(chat.entries[1]).toMatchObject({ kind: 'note', tone: 'error' });
+    expect(invoked).toStrictEqual([]);
   });
 
   test('ignores an empty line', ({ expect }) => {

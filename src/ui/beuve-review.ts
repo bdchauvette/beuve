@@ -1584,7 +1584,7 @@ export class BeuveReview extends LitElement {
     this.focusedZone = zone;
   }
 
-  /** `/sidebar left|right`: moves the sidebar now and stores the side in `settings.json`. */
+  /** Moves the sidebar now and stores the side in `settings.json`. */
   async setSidebarSide(side: SidebarSideView): Promise<void> {
     this.sidebarSide = side;
     if ((await this.setDisplay({ sidebarSide: side })) !== undefined) {

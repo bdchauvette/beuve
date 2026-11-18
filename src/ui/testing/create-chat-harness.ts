@@ -8,7 +8,6 @@ import type {
 } from '#contract/ipc-contract.ts';
 
 import { ChatController } from '../chat-controller.ts';
-import type { ChatAppCommand } from '../chat-controller.ts';
 
 /** A {@link ChatController} wired to fakes, with what the fakes saw. */
 export interface ChatHarness {
@@ -16,7 +15,6 @@ export interface ChatHarness {
   /** `[channel, request]` of each `invoke`, in order. */
   readonly invoked: readonly (readonly [string, unknown])[];
   readonly drafts: readonly string[];
-  readonly appCommands: readonly ChatAppCommand[];
   readonly updates: () => number;
   /** Delivers a `chat:stream` event to the listener, if one is subscribed. */
   readonly emit: (event: ChatStreamEvent) => void;
@@ -39,7 +37,6 @@ export interface ChatHarnessOptions {
 export function createChatHarness(options: ChatHarnessOptions = {}): ChatHarness {
   const invoked: (readonly [string, unknown])[] = [];
   const drafts: string[] = [];
-  const appCommands: ChatAppCommand[] = [];
   let updates = 0;
   let listener: ((event: ChatStreamEvent) => void) | undefined;
   const bridge = {
@@ -92,15 +89,11 @@ export function createChatHarness(options: ChatHarnessOptions = {}): ChatHarness
     restoreDraft: (text: string): void => {
       drafts.push(text);
     },
-    runAppCommand: (command): void => {
-      appCommands.push(command);
-    },
   });
   return {
     chat,
     invoked,
     drafts,
-    appCommands,
     updates: (): number => {
       return updates;
     },
