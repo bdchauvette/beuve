@@ -26,15 +26,16 @@ export type ChatCommand =
 
 const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 const whitespace = /\s+/u;
-/** Former preference commands: the palette and the menus set these now. */
-const settingCommands: ReadonlySet<string> = new Set([
-  '/editor',
-  '/diff',
-  '/whitespace',
-  '/generated',
-  '/insights',
-  '/order',
-  '/sidebar',
+const paletteAndMenus = 'Use the command palette or the menus.';
+/** Former preference commands, and where each is set now (ADR 0139). */
+const settingCommands: ReadonlyMap<string, string> = new Map([
+  ['/editor', 'Choose the editor in Settings › Editors (Review › Editor Settings…).'],
+  ['/diff', paletteAndMenus],
+  ['/whitespace', paletteAndMenus],
+  ['/generated', paletteAndMenus],
+  ['/insights', paletteAndMenus],
+  ['/order', paletteAndMenus],
+  ['/sidebar', paletteAndMenus],
 ]);
 
 /**
@@ -87,9 +88,10 @@ export function parseChatCommand(input: string): ChatCommand {
       return parseReview(args);
     }
     default: {
-      if (settingCommands.has(name.toLowerCase())) {
+      const where = settingCommands.get(name.toLowerCase());
+      if (where !== undefined) {
         return invalid(
-          `${name} sets a preference, which chat commands no longer do. Use the command palette or the menus. Type /help for the chat commands.`,
+          `${name} sets a preference, which chat commands no longer do. ${where} Type /help for the chat commands.`,
         );
       }
       return invalid(`Unknown command ${name}. Type /help for the commands.`);

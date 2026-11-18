@@ -203,25 +203,6 @@ describe('createEditorServices (integration: git + fake platform, no Electron)',
     });
   });
 
-  test('tells listeners when the editors change, once per change', async ({
-    expect,
-    editorState,
-    services,
-  }) => {
-    const seen: (string | undefined)[] = [];
-    const unsubscribe = services.editor.onChanged((view) => {
-      seen.push(view.current);
-    });
-    await services.editor.getSettings();
-    await services.editor.getSettings();
-    editorState.installed = [];
-    await services.editor.getSettings();
-    unsubscribe();
-    editorState.installed = ['/bin/zed'];
-    await services.editor.getSettings();
-    expect(seen).toStrictEqual(['zed', undefined]);
-  });
-
   test('opens settings.json, creating it only when missing', async ({
     expect,
     editorState,

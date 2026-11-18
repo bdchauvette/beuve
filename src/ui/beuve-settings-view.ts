@@ -283,7 +283,7 @@ export class BeuveSettingsView extends LitElement {
 
   /**
    * Every editor beuve knows, built-in or from `editors` in `settings.json`, where it was found
-   * and which one opens files (ADR 0139). Choosing one here is the same as Review › Open With;
+   * and which one opens files (ADR 0139). This is the only place the editor is chosen;
    * editors of the reviewer's own are added in the file, which this window reads again on focus.
    */
   private renderEditors(editors: EditorSettingsView): TemplateResult {

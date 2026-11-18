@@ -33,7 +33,7 @@ export interface EditorChoiceFailure {
   readonly message: string;
 }
 
-const whereToChoose = 'Choose one in Review › Open With or in Settings › Editors.';
+const whereToChoose = 'Choose one in Settings › Editors.';
 
 /**
  * Which editor opens a file (ADR 0139). The chosen editor, and only it: when it is missing or no

@@ -6,7 +6,6 @@ export const settingsInvokeChannels = Object.freeze([
   'display:get',
   'display:set',
   'editor:get-settings',
-  'editor:set-preferred',
   'editor:set-review-edits-prefix',
   'github:auth-status',
   'claude:status',

@@ -542,20 +542,8 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "label": "Open &Description in Sheet",
       },
       {
-        "label": "Open &With",
-        "submenu": [
-          {
-            "enabled": false,
-            "label": "&No Editors Found",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "id": "editor-settings",
-            "label": "&Editor Settings…",
-          },
-        ],
+        "id": "editor-settings",
+        "label": "Editor Setti&ngs…",
       },
       {
         "label": "Re&view Edits",
@@ -592,7 +580,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
-        "label": "&Note",
+        "label": "Note",
         "submenu": [
           {
             "id": "dock-show",
@@ -664,7 +652,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "show-new-commits",
-        "label": "Show New Co&mmits",
+        "label": "Sho&w New Commits",
       },
       {
         "id": "run-setup",
@@ -672,7 +660,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "edit-setup-command",
-        "label": "Edit Setup Command…",
+        "label": "Edit Setup Co&mmand…",
       },
       {
         "id": "restart-language-servers",
@@ -1409,20 +1397,8 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "label": "Open Description in Sheet",
       },
       {
-        "label": "Open With",
-        "submenu": [
-          {
-            "enabled": false,
-            "label": "No Editors Found",
-          },
-          {
-            "type": "separator",
-          },
-          {
-            "id": "editor-settings",
-            "label": "Editor Settings…",
-          },
-        ],
+        "id": "editor-settings",
+        "label": "Editor Settings…",
       },
       {
         "label": "Review Edits",

@@ -65,11 +65,6 @@ export interface EditorServices {
    * checked the path.
    */
   readonly launchFile: (location: EditorLocation) => Promise<Result<string, string>>;
-  /**
-   * Calls `listener` with the settings each time a read of them differs from the last one, so the
-   * menu's Open With list follows hand edits of `settings.json`. Returns the unsubscribe.
-   */
-  readonly onChanged: (listener: (view: EditorSettingsView) => void) => () => void;
 }
 
 export interface EditorServicesOptions {
@@ -114,8 +109,6 @@ interface Located {
  */
 export function createEditorServices(options: EditorServicesOptions): EditorServices {
   const { context, worktrees, settings, platform } = options;
-  const listeners = new Set<(view: EditorSettingsView) => void>();
-  let lastView = '';
   let lastProblems = '';
 
   const snapshot = async (): Promise<EditorSnapshot> => {
@@ -149,21 +142,13 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
       };
     });
     const chosen = chooseEditor({ preferred, detected });
-    const view: EditorSettingsView = {
+    return {
       ...(preferred !== undefined && { preferred }),
       ...(chosen.ok && { current: chosen.value.definition.id }),
       editors,
       problems,
       reviewEditsPrefix: await settings.readReviewEditsPrefix(),
     };
-    const key = JSON.stringify(view);
-    if (key !== lastView) {
-      lastView = key;
-      for (const listener of listeners) {
-        listener(view);
-      }
-    }
-    return view;
   };
 
   const choose = async (): Promise<Result<ChosenEditor, EditorChoiceFailure>> => {
@@ -308,12 +293,6 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         return err({ code: 'internal', message: `Could not open ${filePath}: ${failure}` });
       }
       return ok({ path: filePath, created: created.value });
-    },
-    onChanged: (listener): (() => void) => {
-      listeners.add(listener);
-      return (): void => {
-        listeners.delete(listener);
-      };
     },
   };
 }

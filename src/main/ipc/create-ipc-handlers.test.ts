@@ -1406,9 +1406,6 @@ function stubServices(
       setPreferred: notWired,
       setReviewEditsPrefix: notWired,
       openSettingsFile: notWired,
-      onChanged: (): (() => void) => {
-        return doNothingSync;
-      },
     },
     reviewEdits: {
       get: notWired,

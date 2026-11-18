@@ -3,7 +3,7 @@ import type { MenuIcon } from '#contract/command-catalog.ts';
 /**
  * A menu item as plain data, shaped like Electron's `MenuItemConstructorOptions` without `click`:
  * `createAppMenus` adds the clicks. Ids are catalog ids; a hidden alternate key's item is
- * `<id>~<n>`, and an entry of a command that expands is `<id>:<entry id>`.
+ * `<id>~<n>`.
  */
 export interface MenuTemplateItem {
   readonly id?: string;
@@ -19,7 +19,6 @@ export interface MenuTemplateItem {
   readonly type?: 'separator' | 'checkbox' | 'radio';
   readonly accelerator?: string;
   readonly visible?: false;
-  readonly enabled?: false;
   readonly registerAccelerator?: false;
   readonly submenu?: readonly MenuTemplateItem[];
 }

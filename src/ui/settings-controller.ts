@@ -3,7 +3,6 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
 import type {
   BeuveApi,
   DiffDisplayView,
-  EditorId,
   EditorSettingsView,
   IpcResult,
   SetDiffDisplayRequest,
@@ -145,23 +144,5 @@ export class SettingsController implements ReactiveController {
     }
     this.applyDisplay(result.value);
     return result.value;
-  }
-
-  /** Reads the editor, or with an id stores it; `undefined` without a bridge. */
-  async chooseEditor(editorId?: EditorId): Promise<IpcResult<EditorSettingsView> | undefined> {
-    const bridge = this.environment.bridge();
-    if (bridge === undefined) {
-      return undefined;
-    }
-    let result: IpcResult<EditorSettingsView>;
-    if (editorId === undefined) {
-      result = await bridge.invoke('editor:get-settings');
-    } else {
-      result = await bridge.invoke('editor:set-preferred', { editorId });
-    }
-    if (result.ok) {
-      this.applyEditor(result.value);
-    }
-    return result;
   }
 }

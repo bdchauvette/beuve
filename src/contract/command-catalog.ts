@@ -107,12 +107,6 @@ export interface CatalogCommand {
   readonly checkedNames?: CommandNames;
   /** A symbol the menus show beside the command (ADR 0142). */
   readonly icon?: MenuIcon;
-  /**
-   * The menu shows one radio item per entry of a list main keeps, instead of one item: `editors`
-   * is every editor beuve knows (ADR 0139). Choosing one sends `menu:run` with the entry's id as
-   * `argument`; main checks the stored choice. Such a command has no keys.
-   */
-  readonly expands?: 'editors';
   readonly context?: readonly ContextKind[];
   readonly windows: readonly WindowKind[];
   /** `main` runs it in the main process; `window` sends `menu:run` to the focused window. */
@@ -756,17 +750,9 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'open-with-editor',
-    title: 'Choose Editor…',
-    menu: { menu: 'review', group: 3, submenu: 'Open With' },
-    expands: 'editors',
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
     id: 'editor-settings',
     title: 'Editor Settings…',
-    menu: { menu: 'review', group: 3, submenu: 'Open With', subgroup: 1 },
+    menu: { menu: 'review', group: 3 },
     windows: everywhere(),
     handler: 'main',
   },

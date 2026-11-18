@@ -39,8 +39,8 @@ export interface MenuStateInput {
 
 /**
  * The main window's `menu:set-state`: conditions from focus and contents, and the toggles that
- * show checked, or that show their checked names (ADR 0142). A text field suspends the chords it uses itself (main applies `text-focus`).
- * Review › Open With's check is main's own: it knows the editors (ADR 0139). Pure.
+ * show checked, or that show their checked names (ADR 0142). A text field suspends the chords it
+ * uses itself (main applies `text-focus`). Pure.
  */
 export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
   const has = (condition: MenuCondition, isOn: boolean): MenuCondition[] => {

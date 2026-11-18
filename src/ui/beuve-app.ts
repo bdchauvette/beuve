@@ -6,7 +6,6 @@ import type {
   AppInfo,
   CreateLocalSessionRequest,
   DiffDisplayView,
-  EditorId,
   LspServerView,
   OpenPullRequestRequest,
   ReviewOrderMode,
@@ -67,7 +66,6 @@ import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
 import type { ReviewRef } from './review-ref.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
-import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
 import type { StatusNotice, StatusNoticeAction } from './describe-editor-open.ts';
 import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
@@ -478,11 +476,7 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.unsubscribes = [
-      bridge.on('menu:run', ({ id, argument }) => {
-        if (id === 'open-with-editor' && argument !== undefined) {
-          void this.setPreferredEditor(argument);
-          return;
-        }
+      bridge.on('menu:run', ({ id }) => {
         this.runCommandId(id);
       }),
       bridge.on('link:open-pr', ({ ref }) => {
@@ -766,19 +760,6 @@ export class BeuveApp extends LitElement {
       default: {
         return;
       }
-    }
-  }
-
-  /** Review ▸ Open With: stores the editor Open in Editor uses (ADR 0139). */
-  private async setPreferredEditor(editorId: EditorId): Promise<void> {
-    const result = await this.settings.chooseEditor(editorId);
-    if (result === undefined) {
-      return;
-    }
-    if (result.ok) {
-      this.showNotice({ tone: 'info', text: describeEditorSettings(result.value).join(' ') });
-    } else {
-      this.showNotice({ tone: 'error', text: result.error.message });
     }
   }
 
