@@ -295,8 +295,7 @@ export class BeuveUraDock extends LitElement {
         cursor: default;
       }
 
-      textarea,
-      select {
+      textarea {
         box-sizing: border-box;
         min-inline-size: 0;
         padding: var(--beuve-space-1) var(--beuve-space-2);
@@ -316,8 +315,7 @@ export class BeuveUraDock extends LitElement {
         font: var(--beuve-font-code);
       }
 
-      textarea:focus,
-      select:focus {
+      textarea:focus {
         border-color: var(--beuve-accent);
         outline: none;
       }
@@ -326,6 +324,10 @@ export class BeuveUraDock extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
+      }
+
+      .row > .field {
+        flex: 1;
       }
 
       .spacer {
@@ -409,6 +411,7 @@ export class BeuveUraDock extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--beuve-space-2);
+        font: var(--beuve-font-small);
       }
 
       .verdict select {
@@ -1200,6 +1203,7 @@ export class BeuveUraDock extends LitElement {
       <label class="verdict">
         <span>Verdict</span>
         <select
+          class="field"
           aria-label="Verdict"
           .value=${live(verdict.source === 'chosen' ? verdict.value : '')}
           @change=${(event: Event): void => {
