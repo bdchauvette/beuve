@@ -43,3 +43,7 @@ When a release is tagged, add a fixture for its schema (after extending the scri
 ## Amendment 2026-11-11: migration safety
 
 ADR 0137 makes `runMigrations` run migrations with foreign keys off and checked before each commits, has `openAppDatabase` back the database up to `userData/backups` before migrating it, and refuses a database that has applied migrations this build doesn't know.
+
+## Amendment 2026-11-18: where a later migration goes
+
+`appMigrations` runs the domains' lists in a fixed order, and `app-migrations.test.ts` requires an upgraded database to have applied the migrations in that same order. A new migration appended to a domain's list would sit before the later domains' initial migrations, so a fresh database would run it earlier than one that already ran those. A migration added after the initial ones therefore lives in a file of its own in its domain (for example `src/internal/ura/ura-finding-confidence-migration.ts`, ADR 0141), exporting one `Migration`, and is appended to the end of `appMigrations` in the order it was written. Its id keeps its domain's prefix and the next number for that prefix.
