@@ -1,6 +1,6 @@
 # The review format (`beuve.ura/1`)
 
-What beuve hands a coding agent when the reviewer copies their staged notes out: **Copy as XML** in the review dock (beside Post review on a pull request), File › Export Review › Copy for Claude Code (XML), or File › Export Review › Copy for Agents (JSON) for the same data as JSON. It is data only. It carries no instructions, so whatever reads it decides what to do with it. Paste it into a Claude Code session, or point a project's `CLAUDE.md` at this file and say that pasted `<beuve-review>` blocks are the reviewer's feedback on the current change.
+What beuve hands a coding agent when the reviewer copies their staged notes out: **Copy as XML** in the review dock (beside Post review on a pull request) or File › Export Review › Copy as XML, or **Copy as JSON** in either place for the same data as JSON. It is data only. It carries no instructions, so whatever reads it decides what to do with it. Paste it into a Claude Code session, or point a project's `CLAUDE.md` at this file and say that pasted `<beuve-review>` blocks are the reviewer's feedback on the current change.
 
 The code is `src/internal/ura/build-agent-review.ts` (the structure) and `render-agent-review-xml.ts` (the XML). ADR 0023 and ADR 0131 give the reasons.
 
