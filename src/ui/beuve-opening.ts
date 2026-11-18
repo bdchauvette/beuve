@@ -34,11 +34,6 @@ export class BeuveOpening extends LitElement {
       }
 
       .stage {
-        display: inline-block;
-        padding: var(--beuve-space-1) var(--beuve-space-3);
-        border: var(--beuve-border-width) solid var(--beuve-border);
-        border-radius: var(--beuve-radius);
-        background: var(--beuve-surface);
         font: var(--beuve-font-small);
         color: var(--beuve-text-muted);
       }
