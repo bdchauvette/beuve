@@ -4,6 +4,7 @@ import type {
   BeuveApi,
   CreateLocalSessionRequest,
   IpcResult,
+  ReviewRangeChoiceView,
   ReviewView,
   SessionSummary,
 } from '#contract/ipc-contract.ts';
@@ -23,7 +24,15 @@ export interface SavedProgress {
   readonly sessionId: string;
   readonly sha: string;
   readonly at: Temporal.Instant;
+  /** The checkpoint this save recorded, which Undo Save Progress removes (ADR 0140); absent when the head was already saved. */
+  readonly checkpointId?: string;
 }
+
+/** What Undo Save Progress did: nothing to undo here, the save is undone, or why it can't be. */
+export type UndoSaveOutcome =
+  | { readonly kind: 'nothing' }
+  | { readonly kind: 'undone' }
+  | { readonly kind: 'failed'; readonly message: string };
 
 /** What the sessions need from the window around them. */
 export interface SessionEnvironment {
@@ -240,12 +249,15 @@ export class SessionController implements ReactiveController {
     this.environment.loaded({ review: review.value, previousHead });
   }
 
-  /** Save Progress: records the head as reviewed, then shows what changed since. */
-  async markReviewed(): Promise<void> {
+  /**
+   * Save Progress: records the head as reviewed, then shows what changed since. Answers the save
+   * once main has it, with the checkpoint it recorded if it recorded one.
+   */
+  async markReviewed(): Promise<SavedProgress | undefined> {
     const bridge = this.environment.bridge();
     const { review } = this.snapshot;
     if (bridge === undefined || review === undefined || this.snapshot.isMarking) {
-      return;
+      return undefined;
     }
     this.patch({ isMarking: true, error: '' });
     const marked = await bridge.invoke('session:mark-reviewed', {
@@ -255,16 +267,67 @@ export class SessionController implements ReactiveController {
     this.patch({ isMarking: false });
     if (!marked.ok) {
       this.patch({ error: marked.error.message });
+      return undefined;
+    }
+    const recorded = marked.value.lastCheckpointId;
+    const savedProgress: SavedProgress = {
+      sessionId: review.session.id,
+      sha: review.headSha,
+      at: Temporal.Now.instant(),
+      ...(recorded !== undefined &&
+        recorded !== review.session.lastCheckpointId && { checkpointId: recorded }),
+    };
+    this.patch({ savedProgress });
+    await this.refresh();
+    await this.select(review.session.id);
+    return savedProgress;
+  }
+
+  /**
+   * Undo Save Progress (ADR 0140): removes the checkpoint this window's latest save recorded on
+   * the open session, while it is still the session's latest, then reloads the review, which shows
+   * again what it showed before the save. One save is undone once.
+   */
+  async undoSaveProgress(): Promise<UndoSaveOutcome> {
+    const bridge = this.environment.bridge();
+    const { review, savedProgress } = this.snapshot;
+    const checkpointId = savedProgress?.checkpointId;
+    if (
+      bridge === undefined ||
+      review === undefined ||
+      checkpointId === undefined ||
+      savedProgress?.sessionId !== review.session.id
+    ) {
+      return { kind: 'nothing' };
+    }
+    this.patch({ savedProgress: undefined });
+    const undone = await bridge.invoke('session:undo-mark-reviewed', {
+      sessionId: review.session.id,
+      checkpointId,
+    });
+    if (!undone.ok) {
+      return { kind: 'failed', message: undone.error.message };
+    }
+    await this.refresh();
+    await this.select(review.session.id);
+    return { kind: 'undone' };
+  }
+
+  /** Shows the open review over another range (ADR 0140): stores the choice, then reloads. */
+  async setReviewRange(range: ReviewRangeChoiceView): Promise<void> {
+    const bridge = this.environment.bridge();
+    const { review } = this.snapshot;
+    if (bridge === undefined || review === undefined) {
       return;
     }
-    this.patch({
-      savedProgress: {
-        sessionId: review.session.id,
-        sha: review.headSha,
-        at: Temporal.Now.instant(),
-      },
+    const chosen = await bridge.invoke('session:set-review-range', {
+      sessionId: review.session.id,
+      range,
     });
-    await this.refresh();
+    if (!chosen.ok) {
+      this.patch({ error: chosen.error.message });
+      return;
+    }
     await this.select(review.session.id);
   }
 }

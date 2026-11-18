@@ -1,5 +1,10 @@
 import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
-import type { DiffDisplayView, EditorId, MenuStateRequest } from '#contract/ipc-contract.ts';
+import type {
+  DiffDisplayView,
+  EditorId,
+  MenuStateRequest,
+  ReviewRangeChoiceView,
+} from '#contract/ipc-contract.ts';
 
 import type { RadarTreeMode } from './plan-radar-tree.ts';
 import type { ZoneId } from './zones.ts';
@@ -26,6 +31,8 @@ export interface MenuStateInput {
   readonly treeMode: RadarTreeMode;
   readonly preferredEditor: EditorId | undefined;
   readonly isFindCaseSensitive: boolean;
+  /** The range the open review shows (ADR 0140), for Review ▸ Show. */
+  readonly reviewRange: ReviewRangeChoiceView['kind'] | undefined;
 }
 
 /**
@@ -78,6 +85,8 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['editor-cursor', input.preferredEditor === 'cursor'],
     ['dock-addressed', input.dockItem?.isAddressed === true],
     ['find-match-case', input.isFindCaseSensitive],
+    ['range-since-saved', input.reviewRange === 'since-last'],
+    ['range-whole', input.reviewRange === 'whole'],
   ];
   return {
     conditions,

@@ -13,6 +13,7 @@ import type {
   FileAttributesView,
   FilePairView,
   RepositoryTreeView,
+  ReviewRangeChoiceView,
   ReviewView,
   SetDiffDisplayRequest,
   SidebarSideView,
@@ -337,7 +338,11 @@ export class BeuveReview extends LitElement {
   };
 
   private readonly onMarkReviewed = (): void => {
-    void this.session.markReviewed();
+    void this.saveProgress();
+  };
+
+  private readonly onReviewRange = (event: CustomEvent<ReviewRangeChoiceView>): void => {
+    void this.session.setReviewRange(event.detail);
   };
 
   private readonly onPeekRequest = (event: CustomEvent<LineRequestDetail>): void => {
@@ -941,6 +946,39 @@ export class BeuveReview extends LitElement {
     }
   }
 
+  /** Save Progress, and say so with an Undo while the save recorded a checkpoint (ADR 0140). */
+  private async saveProgress(): Promise<void> {
+    const saved = await this.session.markReviewed();
+    if (saved?.checkpointId === undefined) {
+      return;
+    }
+    this.showNotice({
+      tone: 'info',
+      text: 'Progress saved: next time, only what changes after this is shown.',
+      action: { label: 'Undo', command: 'undo-save-progress' },
+    });
+  }
+
+  private async undoSaveProgress(): Promise<void> {
+    const outcome = await this.session.undoSaveProgress();
+    switch (outcome.kind) {
+      case 'nothing': {
+        this.showNotice({ tone: 'info', text: 'No saved progress to undo in this review.' });
+        return;
+      }
+      case 'undone': {
+        this.showNotice({
+          tone: 'info',
+          text: 'Save undone: the review shows again what it showed before you saved.',
+        });
+        return;
+      }
+      case 'failed': {
+        this.showNotice({ tone: 'error', text: `Could not undo the save: ${outcome.message}` });
+      }
+    }
+  }
+
   private takeContextReference(): FileReference | undefined {
     const reference = this.contextReference;
     this.contextReference = undefined;
@@ -1305,6 +1343,7 @@ export class BeuveReview extends LitElement {
       @beuve-ura-update=${this.onUraUpdate}
       @beuve-open-commit=${this.onOpenCommit}
       @beuve-mark-reviewed=${this.onMarkReviewed}
+      @beuve-review-range=${this.onReviewRange}
       @beuve-peek-request=${this.onPeekRequest}
       @beuve-peek-expand=${this.onPeekExpand}
       @beuve-peek-close=${this.onPeekClose}
@@ -1820,6 +1859,22 @@ export class BeuveReview extends LitElement {
         void this.undoDeleteNote();
         return true;
       }
+      case 'save-progress': {
+        void this.saveProgress();
+        return true;
+      }
+      case 'undo-save-progress': {
+        void this.undoSaveProgress();
+        return true;
+      }
+      case 'range-since-saved': {
+        void this.session.setReviewRange({ kind: 'since-last' });
+        return true;
+      }
+      case 'range-whole': {
+        void this.session.setReviewRange({ kind: 'whole' });
+        return true;
+      }
       case 'restart-language-servers': {
         void this.restartLanguageServers();
         return true;
@@ -1921,6 +1976,7 @@ export class BeuveReview extends LitElement {
       isTerminalFocused: this.isTerminalFocused,
       treeMode: this.treeMode,
       isFindCaseSensitive: this.stream()?.isFindCaseSensitive === true,
+      reviewRange: this.review?.range?.choice.kind,
     };
   }
 
@@ -2029,6 +2085,7 @@ export type ReviewMenuFacts = Pick<
   | 'isTerminalFocused'
   | 'treeMode'
   | 'isFindCaseSensitive'
+  | 'reviewRange'
 >;
 
 /** What the open command palette points at, when Add to Chat runs from it. */

@@ -79,6 +79,7 @@ import { menuItemStyles } from './primitives/menu-item-styles.ts';
 import './primitives/beuve-commit.ts';
 import './primitives/beuve-time.ts';
 import './primitives/beuve-menu.ts';
+import './beuve-review-range.ts';
 
 /**
  * A request to show a file's card from outside (the radar tree, the review dock), optionally at a
@@ -179,7 +180,8 @@ export interface OpenCommitDetail {
  * and Next/Previous Change can skip them. Files show in the order main computed (ADR 0065), with a divider
  * above the config and mechanical group, and an interdiff's commit pairs can narrow the stream
  * to what one commit produced (ADR 0054).
- * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`, `beuve-peek-request`,
+ * Emits `beuve-display-change`, `beuve-ura-update`, `beuve-status-notice`, `beuve-mark-reviewed`,
+ * `beuve-review-range` (ADR 0140, also from its `beuve-review-range` header menu), `beuve-peek-request`,
  * `beuve-peek-close`, `beuve-open-commit`, `beuve-ura-create`, `beuve-file-reviewed` and `beuve-active-file` (the
  * file the card cursor is on); `beuve-app` does the IPC.
  */
@@ -257,6 +259,18 @@ export class BeuveDiffStream extends LitElement {
 
       .spacer {
         flex: 1;
+      }
+
+      .up-to-date {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--beuve-space-3);
+      }
+
+      .up-to-date p {
+        margin: 0;
+        color: var(--beuve-text-muted);
       }
 
       .saved {
@@ -398,6 +412,17 @@ export class BeuveDiffStream extends LitElement {
 
   private readonly onPairsToggle = (event: Event): void => {
     this.isPairsOpen = (event.currentTarget as HTMLDetailsElement).open;
+  };
+
+  /** Up to date: show the whole change again, whatever was saved (ADR 0140). */
+  private readonly onShowWholeClick = (): void => {
+    this.dispatchEvent(
+      new CustomEvent('beuve-review-range', {
+        detail: { kind: 'whole' },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   };
 
   private readonly onMarkClick = (): void => {
@@ -1370,6 +1395,7 @@ export class BeuveDiffStream extends LitElement {
     return html`
       <div class="summary">
         <span class="scope ${review.scope.kind}">${describeReviewScope(review.scope)}</span>
+        <beuve-review-range .range=${review.range}></beuve-review-range>
         <span class="range" title=${rangeTitle(review)}>
           ${this.renderCommit(rangeStartOf(review))}..${this.renderCommit(review.headSha)}
         </span>
@@ -1408,7 +1434,12 @@ export class BeuveDiffStream extends LitElement {
       >
         ${
           isUpToDate
-            ? html`<p class="empty">Everything up to the head has been reviewed.</p>`
+            ? html`<div class="up-to-date">
+                <p>Everything up to the head has been reviewed.</p>
+                <button type="button" class="button" @click=${this.onShowWholeClick}>
+                  Show the Whole Change
+                </button>
+              </div>`
             : html`${this.renderPairs(review)}
                 <div class="cards">
                   ${repeat(

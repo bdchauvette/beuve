@@ -186,11 +186,11 @@ describe('SessionController', () => {
       replies: {
         'session:get-review': ok(review),
         'session:list': listed('s1'),
-        'session:mark-reviewed': ok(undefined),
+        'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c1' }),
       },
     });
     await session.select('s1');
-    await session.markReviewed();
+    await expect(session.markReviewed()).resolves.toMatchObject({ checkpointId: 'c1' });
     expect(invoked.find(([channel]) => channel === 'session:mark-reviewed')).toStrictEqual([
       'session:mark-reviewed',
       { sessionId: 's1', expectedHeadSha: review.headSha },
@@ -211,6 +211,82 @@ describe('SessionController', () => {
     await session.markReviewed();
     expect(session.error).toBe('head moved');
     expect(session.savedProgress).toBeUndefined();
+  });
+
+  test('records no checkpoint to undo when the head was already saved', async ({ expect }) => {
+    const review = createReviewView({ sessionId: 's1' });
+    const { session, invoked } = createSessionHarness({
+      replies: {
+        'session:get-review': ok({ ...review, session: { id: 's1', lastCheckpointId: 'c1' } }),
+        'session:list': listed('s1'),
+        'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c1' }),
+      },
+    });
+    await session.select('s1');
+    const saved = await session.markReviewed();
+    expect(saved?.checkpointId).toBeUndefined();
+    await expect(session.undoSaveProgress()).resolves.toStrictEqual({ kind: 'nothing' });
+    expect(invoked.some(([channel]) => channel === 'session:undo-mark-reviewed')).toBe(false);
+  });
+
+  test('undoes the save this window made, once, and reloads the review', async ({ expect }) => {
+    const review = createReviewView({ sessionId: 's1' });
+    const { session, invoked } = createSessionHarness({
+      replies: {
+        'session:get-review': ok(review),
+        'session:list': listed('s1'),
+        'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c1' }),
+        'session:undo-mark-reviewed': ok({ id: 's1' }),
+      },
+    });
+    await session.select('s1');
+    await session.markReviewed();
+    const loads = invoked.filter(([channel]) => channel === 'session:get-review').length;
+    await expect(session.undoSaveProgress()).resolves.toStrictEqual({ kind: 'undone' });
+    expect(invoked.find(([channel]) => channel === 'session:undo-mark-reviewed')).toStrictEqual([
+      'session:undo-mark-reviewed',
+      { sessionId: 's1', checkpointId: 'c1' },
+    ]);
+    expect(invoked.filter(([channel]) => channel === 'session:get-review')).toHaveLength(loads + 1);
+    expect(session.savedProgress).toBeUndefined();
+    await expect(session.undoSaveProgress()).resolves.toStrictEqual({ kind: 'nothing' });
+  });
+
+  test('says why a save can no longer be undone', async ({ expect }) => {
+    const { session } = createSessionHarness({
+      replies: {
+        'session:get-review': ok(createReviewView()),
+        'session:list': listed('s1'),
+        'session:mark-reviewed': ok({ id: 's1', lastCheckpointId: 'c1' }),
+        'session:undo-mark-reviewed': failed({ code: 'refused', message: 'saved again' }),
+      },
+    });
+    await session.select('s1');
+    await session.markReviewed();
+    await expect(session.undoSaveProgress()).resolves.toStrictEqual({
+      kind: 'failed',
+      message: 'saved again',
+    });
+  });
+
+  test('stores a range choice and reloads the review over it', async ({ expect }) => {
+    const { session, invoked } = createSessionHarness({
+      replies: {
+        'session:get-review': ok(createReviewView()),
+        'session:list': listed('s1'),
+        'session:set-review-range': ok({ id: 's1' }),
+      },
+    });
+    await session.select('s1');
+    await session.setReviewRange({ kind: 'whole' });
+    expect(invoked.map(([channel]) => channel).slice(-2)).toStrictEqual([
+      'session:set-review-range',
+      'session:get-review',
+    ]);
+    expect(invoked.find(([channel]) => channel === 'session:set-review-range')).toStrictEqual([
+      'session:set-review-range',
+      { sessionId: 's1', range: { kind: 'whole' } },
+    ]);
   });
 
   test('saves no progress without a review', async ({ expect }) => {
