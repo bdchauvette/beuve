@@ -1,5 +1,7 @@
 import { describe } from 'vitest';
 
+import type { SessionSourceView, SessionSummary } from '#contract/ipc-contract.ts';
+
 import { createCiStatus } from './testing/create-ci-status.ts';
 import { createGithubHarness } from './testing/create-github-harness.ts';
 import { createGithubPreview } from './testing/create-github-preview.ts';
@@ -14,6 +16,10 @@ interface OkReply {
 interface FailedReply {
   readonly ok: false;
   readonly error: { readonly code: string; readonly message: string };
+}
+
+interface RequestIdOf {
+  readonly requestId: string;
 }
 
 interface FailedOptions {
@@ -53,6 +59,32 @@ function emptyTimelineReply(): OkReply {
 
 function failed(error: FailedOptions): FailedReply {
   return { ok: false, error };
+}
+
+function cancelled(): FailedReply {
+  return failed({ code: 'cancelled', message: 'cancelled' });
+}
+
+function pullRequestSource(): SessionSourceView {
+  return {
+    kind: 'github-pull-request',
+    repoPath: '/clone',
+    baseRef: 'refs/beuve/pr/7/base',
+    host: 'github.com',
+    owner: 'o',
+    repo: 'r',
+    number: 7,
+  };
+}
+
+function createSessionSummary(source: SessionSourceView): SessionSummary {
+  return {
+    id: 's1',
+    source,
+    headSha: 'a'.repeat(40),
+    createdAt: '2026-11-01T00:00:00Z',
+    updatedAt: '2026-11-01T00:00:00Z',
+  };
 }
 
 describe('GithubController', () => {
@@ -364,6 +396,132 @@ describe('GithubController', () => {
     expect(github.branch).toMatchObject({ branch: 'claude/x' });
     expect(notices.at(-1)?.text).toContain(text);
     await expect.poll(() => selected).toStrictEqual(reloads);
+  });
+
+  test('shows a picked item’s fetch until its session starts loading (ADR 0144)', async ({
+    expect,
+  }) => {
+    const { github, selected } = createGithubHarness({
+      replies: { 'github:open-pr': ok({ kind: 'opened', session: { id: 's9' } }) },
+    });
+    const opening = github.open({ ref: 'github.com/o/r#12' }, { label: 'o/r#12 Fix it' });
+    expect(github.fetch).toStrictEqual({
+      kind: 'open',
+      label: 'o/r#12 Fix it',
+      stage: 'Fetching pull request #12…',
+    });
+    expect(github.isOpening).toBe(true);
+    await opening;
+    expect(github.fetch).toBeUndefined();
+    expect(selected).toStrictEqual(['s9']);
+  });
+
+  test('names a branch being fetched by its branch', async ({ expect }) => {
+    const { github } = createGithubHarness({ replies: { 'github:open-branch': cancelled() } });
+    const opening = github.open({ ref: 'github.com/o/r:claude/x' }, { label: 'o/r:claude/x' });
+    expect(github.fetch?.stage).toBe('Fetching branch claude/x…');
+    await opening;
+    expect(github.fetch).toBeUndefined();
+  });
+
+  test('ends the fetch when the open fails', async ({ expect }) => {
+    const { github } = createGithubHarness({
+      replies: { 'github:open-pr': failed({ code: 'network', message: 'Offline.' }) },
+    });
+    await github.open({ ref: 'o/r#9' }, { label: 'o/r#9' });
+    expect(github.fetch).toBeUndefined();
+    expect(github.failure).toStrictEqual({ message: 'Offline.' });
+  });
+
+  test('cancelling a fetch to open asks main to cancel its request', async ({ expect }) => {
+    const { github, invoked } = createGithubHarness({ replies: { 'github:open-pr': cancelled() } });
+    const opening = github.open({ ref: 'o/r#9' }, { label: 'o/r#9' });
+    github.cancelOpening();
+    await opening;
+    const [opened, cancel] = invoked;
+    expect(cancel?.[0]).toBe('request:cancel');
+    expect(opened?.[0]).toBe('github:open-pr');
+    expect(cancel?.[1]).toStrictEqual({ requestId: (opened?.[1] as RequestIdOf).requestId });
+  });
+
+  test('opens one at a time', async ({ expect }) => {
+    const { github, invoked } = createGithubHarness({ replies: { 'github:open-pr': cancelled() } });
+    const first = github.open({ ref: 'o/r#1' }, { label: 'o/r#1' });
+    await github.open({ ref: 'o/r#2' }, { label: 'o/r#2' });
+    await first;
+    expect(invoked.map(([channel]) => channel)).toStrictEqual(['github:open-pr']);
+  });
+
+  test('reloads a pull request session the way it opened, in place', async ({ expect }) => {
+    const { github, invoked, selected } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:open-pr': ok({ kind: 'opened', session: { id: 's1' } }) },
+    });
+    const reloading = github.reload(createSessionSummary(pullRequestSource()));
+    expect(github.isReloading).toBe(true);
+    expect(github.isOpening).toBe(false);
+    await expect(reloading).resolves.toBe(true);
+    expect(invoked[0]?.[1]).toMatchObject({ ref: 'github.com/o/r#7', repoPath: '/clone' });
+    expect(selected).toStrictEqual(['s1']);
+    expect(github.isReloading).toBe(false);
+  });
+
+  test('reloads a followed branch through github:open-branch', async ({ expect }) => {
+    const { github, invoked } = createGithubHarness({
+      review: reviewOf(),
+      replies: { 'github:open-branch': ok({ kind: 'opened', session: { id: 's1' } }) },
+    });
+    await github.reload(
+      createSessionSummary({
+        kind: 'remote-branch',
+        repoPath: '/clone',
+        baseRef: 'refs/beuve/branch/x/base',
+        forge: 'github',
+        host: 'github.com',
+        owner: 'o',
+        repo: 'r',
+        branch: 'claude/x',
+      }),
+    );
+    expect(invoked[0]).toMatchObject([
+      'github:open-branch',
+      { ref: 'github.com/o/r:claude/x', repoPath: '/clone' },
+    ]);
+  });
+
+  test('leaves a local session to its own reload', async ({ expect }) => {
+    const { github, invoked } = createGithubHarness({ review: reviewOf() });
+    const local = createSessionSummary({
+      kind: 'local',
+      repoPath: '/repo',
+      baseRef: 'main',
+      headRef: 'feature',
+    });
+    await expect(github.reload(local)).resolves.toBe(false);
+    expect(invoked).toStrictEqual([]);
+  });
+
+  test('a failed reload is a notice and leaves the review and the dialog alone', async ({
+    expect,
+  }) => {
+    const { github, notices, selected, dialogs } = createGithubHarness({
+      review: reviewOf(),
+      replies: {
+        'github:open-pr': ok({
+          kind: 'failed',
+          failure: 'auth',
+          message: 'GitHub refused the token.',
+          remedy: 'Run gh auth login.',
+        }),
+      },
+    });
+    await github.reload(createSessionSummary(pullRequestSource()));
+    expect(notices).toStrictEqual([
+      { tone: 'error', text: 'GitHub refused the token. Run gh auth login.' },
+    ]);
+    expect(selected).toStrictEqual([]);
+    expect(dialogs).toStrictEqual([]);
+    expect(github.failure).toBeUndefined();
   });
 
   test('closes the dialog and selects the opened session', async ({ expect }) => {

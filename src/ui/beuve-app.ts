@@ -335,7 +335,7 @@ export class BeuveApp extends LitElement {
 
   /** Enter on a queue row: the queue closes and the item opens as a session (ADR 0113). */
   private readonly onQueueOpen = (event: CustomEvent<QueueOpenDetail>): void => {
-    void this.openQueueItem(event.detail.ref);
+    void this.openQueueItem(event.detail);
   };
 
   private readonly onQueuePrefs = (event: CustomEvent<ReviewQueuePrefsView>): void => {
@@ -368,6 +368,10 @@ export class BeuveApp extends LitElement {
 
   private readonly onTitlebarSearch = (): void => {
     this.runAppCommand('palette');
+  };
+
+  private readonly onTitlebarReload = (): void => {
+    this.runAppCommand('reload-review');
   };
 
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
@@ -535,18 +539,56 @@ export class BeuveApp extends LitElement {
   }
 
   /**
-   * Opens a queue item through the usual open paths; one that needs a local clone shows the Open
-   * dialog's pull request step for it, with the failure.
+   * Opens a queue item through the usual open paths, shown over the review from the moment it is
+   * picked (ADR 0144); one that needs a local clone shows the Open dialog's pull request step for
+   * it, with the failure. Cancelled, the keyboard goes back where it was.
    */
-  private async openQueueItem(ref: string): Promise<void> {
+  private async openQueueItem({ ref, label }: QueueOpenDetail): Promise<void> {
     this.queueOpen = false;
-    await this.github.open({ ref });
+    await this.github.open({ ref }, { label });
     if (this.github.failure === undefined) {
+      await this.updateComplete;
+      if (this.showsEmptyPanel()) {
+        this.renderRoot.querySelector<BeuveReviewQueue>('beuve-review-queue')?.focusList();
+      } else {
+        this.reviewElement()?.refocusZone();
+      }
       return;
     }
     this.showOpenDialog();
     await this.updateComplete;
     this.openPanel()?.showPullStep(ref);
+  }
+
+  /**
+   * Reload Review (ADR 0144): over the queue, or with no review open, refreshes the queue;
+   * otherwise fetches the open pull request or branch again and reloads the review in place, or,
+   * for a local session, reads its repository again. A review that failed to load loads again.
+   */
+  private async reloadReview(): Promise<void> {
+    const { review } = this;
+    if (this.queueOpen || this.showsEmptyPanel()) {
+      await this.queue.refresh();
+      return;
+    }
+    if (this.github.fetch !== undefined || this.session.isLoading) {
+      return;
+    }
+    if (review === undefined) {
+      if (this.session.selectedId !== '') {
+        await this.session.select(this.session.selectedId);
+      }
+      return;
+    }
+    if (await this.github.reload(review.session)) {
+      return;
+    }
+    await this.session.select(review.session.id);
+  }
+
+  /** Whether the open review is being fetched or read again, for the titlebar's Reload. */
+  private isReloading(): boolean {
+    return this.github.isReloading || (this.session.isLoading && this.review !== undefined);
   }
 
   /** Main opens GitHub links in the browser and refuses anything else (ADR 0040). */
@@ -708,7 +750,15 @@ export class BeuveApp extends LitElement {
         this.github.showNewCommits();
         return;
       }
+      case 'reload-review': {
+        void this.reloadReview();
+        return;
+      }
       case 'stop': {
+        if (this.github.fetch !== undefined) {
+          this.github.cancelFetch();
+          return;
+        }
         this.chat.cancelRunning();
         return;
       }
@@ -768,7 +818,7 @@ export class BeuveApp extends LitElement {
       hasSession: this.review !== undefined,
       isTextFocused:
         isTextFocused() || this.paletteText !== undefined || this.openDialog || this.queueOpen,
-      isBusy: this.chat.isBusy,
+      isBusy: this.chat.isBusy || this.github.fetch !== undefined,
       isPullRequest: this.github.pullRequest !== undefined,
       stagedCount: this.ura.stagedCount,
       display: this.settings.display,
@@ -824,7 +874,10 @@ export class BeuveApp extends LitElement {
       }
       case 'open-pull': {
         if (action.repoPath !== undefined) {
-          await this.github.open({ ref: action.ref, repoPath: action.repoPath });
+          await this.github.open(
+            { ref: action.ref, repoPath: action.repoPath },
+            { label: action.ref },
+          );
           return;
         }
         this.showOpenDialog();
@@ -923,9 +976,13 @@ export class BeuveApp extends LitElement {
       .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
       .searchTitle=${`Command Palette (${this.shortcut('palette')})`}
+      .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
+      ?canReload=${this.review !== undefined}
+      ?reloading=${this.isReloading()}
       .platform=${this.appInfo?.platform ?? ''}
       @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-search=${this.onTitlebarSearch}
+      @beuve-titlebar-reload=${this.onTitlebarReload}
     ></beuve-titlebar>`;
   }
 

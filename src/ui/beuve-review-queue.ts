@@ -25,6 +25,7 @@ import { displayIcon } from './display-icon.ts';
 import { filterQueueItems } from './filter-queue-items.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { groupQueueItems } from './group-queue-items.ts';
+import { queueItemLabelFrom } from './queue-item-label-from.ts';
 import { pathText } from './path-text.ts';
 import { queueIcon } from './queue-icon.ts';
 import { sortQueueItems } from './sort-queue-items.ts';
@@ -40,6 +41,8 @@ import './primitives/beuve-menu.ts';
 /** Open a queue item: `ref` is its key, which `GithubController.open` takes. */
 export interface QueueOpenDetail {
   readonly ref: string;
+  /** Its name, shown while it is fetched (ADR 0144). */
+  readonly label: string;
 }
 
 /** Open a link from a queue row (the agent session) in the browser. */
@@ -399,7 +402,12 @@ export class BeuveReviewQueue extends LitElement {
   }
 
   private open(ref: string): void {
-    this.emit('beuve-queue-open', { ref });
+    const item = this.queue?.items.find(({ key }) => key === ref);
+    let label = ref;
+    if (item !== undefined) {
+      label = queueItemLabelFrom(item);
+    }
+    this.emit('beuve-queue-open', { ref, label });
   }
 
   private emit(type: string, detail: object): void {

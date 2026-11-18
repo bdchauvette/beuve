@@ -1,13 +1,14 @@
-import { css, html, LitElement } from 'lit';
+import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
- * The window's top bar: the name of the open review, which opens the Open dialog, and the
- * command palette's search button. The bar drags the window; its buttons do not. Emits
- * `beuve-titlebar-open` and `beuve-titlebar-search`.
+ * The window's top bar: the name of the open review, which opens the Open dialog, Reload beside
+ * it while a review is open (ADR 0144), and the command palette's search button. The bar drags
+ * the window; its buttons do not. Emits `beuve-titlebar-open`, `beuve-titlebar-reload` and
+ * `beuve-titlebar-search`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
@@ -40,6 +41,10 @@ export class BeuveTitlebar extends LitElement {
         -webkit-app-region: no-drag;
       }
 
+      .reload {
+        flex: none;
+      }
+
       .spacer {
         flex: 1;
       }
@@ -48,6 +53,10 @@ export class BeuveTitlebar extends LitElement {
 
   private readonly open = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-open', { bubbles: true, composed: true }));
+  };
+
+  private readonly reload = (): void => {
+    this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
 
   private readonly search = (): void => {
@@ -60,17 +69,40 @@ export class BeuveTitlebar extends LitElement {
   /** The tooltip of the name button, with its shortcut. */
   @property() accessor openTitle = '';
 
+  /** The tooltip of the reload button, with its shortcut. */
+  @property() accessor reloadTitle = '';
+
+  /** Whether a review is open, so Reload shows. */
+  @property({ type: Boolean }) accessor canReload = false;
+
+  /** Whether the review is reloading: Reload shows it and waits. */
+  @property({ type: Boolean }) accessor reloading = false;
+
   /** The tooltip of the search button, with its shortcut. */
   @property() accessor searchTitle = '';
 
   /** `process.platform`; on macOS the bar leaves room for the window buttons. */
   @property({ reflect: true }) accessor platform = '';
 
+  private renderReload(): TemplateResult {
+    return html`<button
+      type="button"
+      class="button quiet reload"
+      title=${this.reloadTitle}
+      aria-busy=${this.reloading ? 'true' : 'false'}
+      ?disabled=${this.reloading}
+      @click=${this.reload}
+    >
+      ${this.reloading ? 'Reloading…' : 'Reload'}
+    </button>`;
+  }
+
   protected override render(): TemplateResult {
     return html`<span class="brand">beuve</span>
       <button class="button quiet" type="button" title=${this.openTitle} @click=${this.open}>
         ${this.label}
       </button>
+      ${this.canReload ? this.renderReload() : nothing}
       <span class="spacer"></span>
       <button
         type="button"

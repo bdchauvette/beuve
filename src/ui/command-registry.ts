@@ -131,6 +131,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'discard-review-edits': app,
     'open-permalink': app,
     'commit-pairs': app,
+    'reload-review': app,
     'show-new-commits': app,
     'dock-show': dock,
     'dock-edit': dock,

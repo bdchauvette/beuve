@@ -867,6 +867,14 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'reload-review',
+    title: 'Reload Review',
+    menu: { menu: 'review', group: 7 },
+    keys: { mac: 'Cmd+R', linux: 'Ctrl+R' },
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'show-new-commits',
     title: 'Show New Commits',
     menu: { menu: 'review', group: 7 },

@@ -23,6 +23,7 @@ import './beuve-commit-pairing.ts';
 import type { CommitPairFilterDetail } from './beuve-commit-pairing.ts';
 import './beuve-file-card.ts';
 import './beuve-find-bar.ts';
+import './beuve-opening.ts';
 import type { FileDiagnostics } from './file-diagnostics.ts';
 import type { ReviewInsight } from './merge-review-insights.ts';
 import type { ImageLoader } from './rich-view/beuve-rich-view.ts';
@@ -228,67 +229,6 @@ export class BeuveDiffStream extends LitElement {
 
       .note.error {
         color: var(--beuve-danger);
-      }
-
-      .welcome > .opening {
-        display: grid;
-        justify-items: center;
-        gap: var(--beuve-space-3);
-        animation: opening-in 160ms ease-out both;
-      }
-
-      .opening-label {
-        font-size: var(--beuve-font-size-large);
-        font-weight: var(--beuve-font-weight-semibold);
-        overflow-wrap: anywhere;
-      }
-
-      .opening-bar {
-        position: relative;
-        inline-size: var(--beuve-size-field);
-        block-size: var(--beuve-border-width-heavy);
-        overflow: hidden;
-        border-radius: var(--beuve-radius-tiny);
-        background: var(--beuve-accent-soft);
-      }
-
-      .opening-bar::after {
-        position: absolute;
-        inset-block: 0;
-        inset-inline: 0 auto;
-        inline-size: 40%;
-        border-radius: inherit;
-        background: var(--beuve-accent);
-        content: '';
-        animation: opening-slide 1.1s ease-in-out infinite;
-      }
-
-      @keyframes opening-in {
-        from {
-          opacity: 0;
-          transform: translateY(var(--beuve-space-1)) scale(0.98);
-        }
-      }
-
-      @keyframes opening-slide {
-        from {
-          transform: translateX(-100%);
-        }
-        to {
-          transform: translateX(250%);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .welcome > .opening {
-          animation: none;
-        }
-
-        .opening-bar::after {
-          inline-size: 100%;
-          animation: none;
-          opacity: 0.6;
-        }
       }
 
       .summary {
@@ -1340,11 +1280,7 @@ export class BeuveDiffStream extends LitElement {
     if (this.loading && this.error === '') {
       return html`
         <div class="body welcome">
-          <div class="opening" role="status" aria-live="polite">
-            <span class="opening-label">${this.loadingLabel}</span>
-            <span class="opening-bar" aria-hidden="true"></span>
-            <span class="note">Opening review…</span>
-          </div>
+          <beuve-opening .label=${this.loadingLabel} stage="Opening review…"></beuve-opening>
         </div>
       `;
     }

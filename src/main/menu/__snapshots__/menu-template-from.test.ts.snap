@@ -624,6 +624,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "type": "separator",
       },
       {
+        "accelerator": "Ctrl+R",
+        "id": "reload-review",
+        "label": "Re&load Review",
+      },
+      {
         "id": "show-new-commits",
         "label": "Show New Co&mmits",
       },
@@ -637,7 +642,7 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
       },
       {
         "id": "restart-language-servers",
-        "label": "Restart &Language Servers",
+        "label": "Restart Language Ser&vers",
       },
     ],
   },
@@ -1450,6 +1455,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
       },
       {
         "type": "separator",
+      },
+      {
+        "accelerator": "Cmd+R",
+        "id": "reload-review",
+        "label": "Reload Review",
       },
       {
         "id": "show-new-commits",
