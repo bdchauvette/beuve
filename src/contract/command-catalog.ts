@@ -154,8 +154,8 @@ const entries = Object.freeze([
   },
   {
     id: 'export-agent-xml',
-    title: 'Copy Review for Claude Code (XML)',
-    label: 'Copy for Claude Code (XML)',
+    title: 'Copy Review as XML',
+    label: 'Copy as XML',
     menu: { menu: 'file', group: 1, submenu: 'Export Review' },
     when: ['session'],
     windows: ['main'],
@@ -163,8 +163,8 @@ const entries = Object.freeze([
   },
   {
     id: 'export-agent-json',
-    title: 'Copy Review for Agents (JSON)',
-    label: 'Copy for Agents (JSON)',
+    title: 'Copy Review as JSON',
+    label: 'Copy as JSON',
     menu: { menu: 'file', group: 1, submenu: 'Export Review' },
     when: ['session'],
     windows: ['main'],

@@ -23,11 +23,11 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
         "submenu": [
           {
             "id": "export-agent-xml",
-            "label": "&Copy for Claude Code (XML)",
+            "label": "&Copy as XML",
           },
           {
             "id": "export-agent-json",
-            "label": "Copy &for Agents (JSON)",
+            "label": "Copy &as JSON",
           },
           {
             "id": "export-github",
@@ -890,11 +890,11 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
         "submenu": [
           {
             "id": "export-agent-xml",
-            "label": "Copy for Claude Code (XML)",
+            "label": "Copy as XML",
           },
           {
             "id": "export-agent-json",
-            "label": "Copy for Agents (JSON)",
+            "label": "Copy as JSON",
           },
           {
             "id": "export-github",
