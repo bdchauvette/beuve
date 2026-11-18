@@ -2,12 +2,13 @@ import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { displayIcon } from './display-icon.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
- * The window's top bar: the name of the open review, which opens the Open dialog, Reload beside
- * it while a review is open (ADR 0144), and the command palette's search button. The bar drags
- * the window; its buttons do not. Emits `beuve-titlebar-open`, `beuve-titlebar-reload` and
+ * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
+ * Reload beside it while a review is open (ADR 0144), and the command palette's search button.
+ * The bar drags the window; its buttons do not. Emits `beuve-titlebar-open`, `beuve-titlebar-reload` and
  * `beuve-titlebar-search`.
  */
 @customElement('beuve-titlebar')
@@ -45,6 +46,22 @@ export class BeuveTitlebar extends LitElement {
         flex: none;
       }
 
+      .reload[aria-busy='true'] svg {
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          rotate: 1turn;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reload[aria-busy='true'] svg {
+          animation: none;
+        }
+      }
+
       .spacer {
         flex: 1;
       }
@@ -75,7 +92,7 @@ export class BeuveTitlebar extends LitElement {
   /** Whether a review is open, so Reload shows. */
   @property({ type: Boolean }) accessor canReload = false;
 
-  /** Whether the review is reloading: Reload shows it and waits. */
+  /** Whether the review is reloading: Reload spins its glyph and waits. */
   @property({ type: Boolean }) accessor reloading = false;
 
   /** The tooltip of the search button, with its shortcut. */
@@ -87,13 +104,14 @@ export class BeuveTitlebar extends LitElement {
   private renderReload(): TemplateResult {
     return html`<button
       type="button"
-      class="button quiet reload"
+      class="button icon reload"
+      aria-label="Reload Review"
       title=${this.reloadTitle}
       aria-busy=${this.reloading ? 'true' : 'false'}
       ?disabled=${this.reloading}
       @click=${this.reload}
     >
-      ${this.reloading ? 'Reloading…' : 'Reload'}
+      ${displayIcon('refresh')}
     </button>`;
   }
 

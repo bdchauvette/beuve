@@ -769,7 +769,7 @@ export class BeuveReviewQueue extends LitElement {
           title="Refresh now"
           aria-busy=${this.queue?.isRefreshing === true ? 'true' : 'false'}
         >
-          ${queueIcon('refresh')}
+          ${displayIcon('refresh')}
         </button>
       </header>
       ${this.renderProblems()}
