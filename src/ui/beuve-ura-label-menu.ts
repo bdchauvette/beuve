@@ -22,7 +22,7 @@ export interface UraLabelChange {
  * A note's label and Blocking decoration as one menu button (ADR 0131 amendment 2026-11-18), the
  * same `beuve-menu` the review queue's Sort, Group and Filter use: the trigger shows the label's
  * emoji and name, `· blocking` when the note blocks, and a chevron; the menu lists the labels as
- * radio items and, under a heading, Blocking as a checkbox item, which leaves the menu open.
+ * radio items and, after a separator, Blocking as a checkbox item, which leaves the menu open.
  * Choosing a label closes it and focus goes back to the trigger. Escape inside the open menu only
  * closes the menu, so the form around it stays open. The composer and the dock's editor both use
  * it. It updates `severity` and `blocking` itself and emits a composed `beuve-ura-label-change`
@@ -123,7 +123,7 @@ export class BeuveUraLabelMenu extends LitElement {
           >${severity}
         </button>`;
       })}
-      <h3 class="menu-heading">Merge</h3>
+      <hr class="menu-separator" />
       <button
         type="button"
         role="menuitemcheckbox"

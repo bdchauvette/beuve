@@ -46,6 +46,7 @@ export const Menu: StoryObj = {
         <button type="button" role="menuitemcheckbox" aria-checked="true">
           ${displayIcon('check')}Hide drafts
         </button>
+        <hr class="menu-separator" />
         <button type="button" role="menuitem">Clear filters</button>
       </beuve-menu>
     `);
