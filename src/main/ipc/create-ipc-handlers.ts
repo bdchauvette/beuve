@@ -93,6 +93,7 @@ import type {
   UraExportView,
   UraItemView,
   UraListView,
+  ReviewThreadsView,
   UraDeletedView,
   UraOrderView,
   UraSeverityView,
@@ -1295,6 +1296,15 @@ export function createIpcHandlers(
       const parsed = sessionRequest.safeParse(request);
       if (parsed.success) {
         return services.github.getTimeline(parsed.data.sessionId);
+      }
+      return invalid(parsed.error);
+    },
+    'review:get-threads': async (
+      request,
+    ): Promise<IpcResult<ReviewThreadsView | GithubFailureView>> => {
+      const parsed = sessionRequest.safeParse(request);
+      if (parsed.success) {
+        return services.threads.getThreads(parsed.data.sessionId);
       }
       return invalid(parsed.error);
     },

@@ -68,6 +68,8 @@ function headFreeSessionChannels(): Readonly<
     'remote:open-permalink': 'a link pinned to its own `sha`',
     'remote:open-commit': 'a link pinned to its own `sha`',
     'session:get-commit': 'a read pinned to its own `sha`',
+    'review:get-threads':
+      'a read of the host’s threads, which belong to the pull request, not a head',
     'flow:get-graph': read,
     'terminal:list': 'a read: each terminal names the head whose checkout it runs in',
     'setup:set-command': 'the command belongs to the repository, not a head (ADR 0130)',

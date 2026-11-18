@@ -23,6 +23,7 @@ import type { FlowServices } from './flow/create-flow-services.ts';
 import type { GithubServices } from './github/create-github-services.ts';
 import type { LspServices } from './lsp/create-lsp-services.ts';
 import type { OrderServices } from './order/create-order-services.ts';
+import type { ThreadServices } from './threads/create-thread-services.ts';
 import type { ReviewQueueServices } from './queue/create-review-queue-services.ts';
 import type { LanguageServerConfigServices } from './language-servers/create-language-server-config-services.ts';
 import type { ModelServices } from './models/create-model-services.ts';
@@ -60,6 +61,7 @@ export interface MainServices {
   readonly sessions: SessionServices;
   readonly files: FileServices;
   readonly order: OrderServices;
+  readonly threads: ThreadServices;
   readonly lsp: Pick<
     LspServices,
     'callHierarchy' | 'definition' | 'diagnostics' | 'hover' | 'restart' | 'status'

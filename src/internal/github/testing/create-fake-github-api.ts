@@ -96,6 +96,20 @@ export interface FakeConversationComment {
   readonly createdAt: string;
 }
 
+/** A comment on lines of a pull request's diff, as `GET …/pulls/{n}/comments` lists it. */
+export interface FakeReviewComment {
+  readonly login: string;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly path: string;
+  /** The line at the pull request's head; `undefined` for an outdated comment. */
+  readonly line: number | undefined;
+  readonly side?: 'LEFT' | 'RIGHT';
+  /** The comment this one replies to, by its 1-based position in the list. */
+  readonly replyTo?: number;
+  readonly commitId: string;
+}
+
 export interface FakeReviewRequest {
   readonly number: number;
   readonly token: string | undefined;
@@ -145,6 +159,8 @@ export interface FakeGithubApi {
   readonly pullCommits: Map<number, FakePullCommit[]>;
   /** Conversation comments, by pull request number. */
   readonly conversation: Map<number, FakeConversationComment[]>;
+  /** Comments on lines of each pull request's diff, by pull request number (ADR 0140). */
+  readonly reviewComments: Map<number, FakeReviewComment[]>;
   /** Review requests, by pull request number (ADR 0113). */
   readonly reviewRequestEvents: Map<number, FakeReviewRequestEvent[]>;
   /** The viewer's teams; `undefined` answers 403, as for a token without `read:org`. */
@@ -202,6 +218,7 @@ export function createFakeGithubApi({
     viewerTeams: [],
     pullCommits: new Map(),
     conversation: new Map(),
+    reviewComments: new Map(),
     viewer: 'reviewer',
     validTokens: new Set(['gho_fake_token']),
     rejectCommentPaths: new Set(),
@@ -322,6 +339,27 @@ function handle(api: FakeGithubApi, request: FakeHttpRequest): FakeHttpResponse 
           submitted_at: submittedAtOf(entry),
           body: entry.body ?? '',
           html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(pull.number)}#pullrequestreview-${String(index + 1)}`,
+        };
+      }),
+    );
+  }
+  if (third === 'comments' && pull !== undefined && request.method === 'GET') {
+    return conditional(
+      request,
+      (api.reviewComments.get(pull.number) ?? []).map((entry, index) => {
+        return {
+          id: index + 1,
+          in_reply_to_id: entry.replyTo,
+          path: entry.path,
+          side: entry.side ?? 'RIGHT',
+          line: entry.line,
+          original_line: entry.line ?? 1,
+          commit_id: entry.commitId,
+          original_commit_id: entry.commitId,
+          user: { login: entry.login },
+          body: entry.body,
+          created_at: entry.createdAt,
+          html_url: `https://github.com/${api.owner}/${api.repo}/pull/${String(pull.number)}#discussion_r${String(index + 1)}`,
         };
       }),
     );

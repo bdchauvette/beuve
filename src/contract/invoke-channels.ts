@@ -78,6 +78,7 @@ export const invokeChannels = Object.freeze([
   'github:open-branch',
   'github:get-branch',
   'github:get-timeline',
+  'review:get-threads',
   'github:preview-review',
   'github:post-review',
   'github:open-link',
