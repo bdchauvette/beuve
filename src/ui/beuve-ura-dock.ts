@@ -38,6 +38,9 @@ import { zoneStyles } from './zone-styles.ts';
 import { formatControlStyles } from './format-control-styles.ts';
 import { pathText } from './path-text.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { completionListStyles } from './completion-list-styles.ts';
+import { EmojiCompletion } from './emoji-completion.ts';
+import { emojiCompletionStyles } from './emoji-completion-styles.ts';
 
 /** A status line under the export buttons; `tone` colors it. */
 export interface DockNotice {
@@ -86,6 +89,8 @@ export class BeuveUraDock extends LitElement {
     buttonStyles,
     formatControlStyles,
     zoneStyles,
+    completionListStyles,
+    emojiCompletionStyles,
     css`
       :host {
         border-inline-start: var(--beuve-border-width) solid var(--beuve-border);
@@ -372,6 +377,9 @@ export class BeuveUraDock extends LitElement {
     this.editingSeverity = event.detail.severity;
     this.editingBlocking = event.detail.blocking;
   };
+
+  /** `:shortcode:` emoji in the editor's title and body and the review summary (ADR 0143). */
+  private readonly emoji = new EmojiCompletion(this);
 
   /** The dock's in-place keys (ADR 0068): ↑/↓ move, Return shows, Space edits, Delete withdraws, ⌥↑/⌥↓ reorder. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -741,10 +749,22 @@ export class BeuveUraDock extends LitElement {
           aria-label="Title"
           placeholder="Title (optional)"
           maxlength="200"
+          role="combobox"
+          aria-expanded="false"
+          aria-autocomplete="list"
+          aria-controls="emoji-completions"
+          data-emoji-completion
           .value=${item.title}
         />
       </div>
-      <textarea name="body" aria-label="Body" .value=${item.body}></textarea>
+      <textarea
+        name="body"
+        aria-label="Body"
+        aria-autocomplete="list"
+        aria-controls="emoji-completions"
+        data-emoji-completion
+        .value=${item.body}
+      ></textarea>
       ${this.renderSuggestionActions(item)}
       <div class="row">
         <beuve-note-expand
@@ -1016,6 +1036,9 @@ export class BeuveUraDock extends LitElement {
         placeholder="Summary (Markdown, optional)"
         title="The text at the top of the review, above the items that aren't attached to a line"
         ?readonly=${post.kind === 'busy'}
+        aria-autocomplete="list"
+        aria-controls="emoji-completions"
+        data-emoji-completion
         .value=${live(this.summary)}
         @input=${(event: InputEvent): void => {
           this.summary = (event.target as HTMLTextAreaElement).value;
@@ -1225,6 +1248,7 @@ export class BeuveUraDock extends LitElement {
         </section>
         ${this.renderReviewEdits()} ${this.renderExport(stagedCount)}
       </div>
+      ${this.emoji.render()}
     `;
   }
 

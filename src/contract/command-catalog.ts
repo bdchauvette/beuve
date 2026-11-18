@@ -1113,6 +1113,13 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'emoji-complete',
+    title: 'Choose an Emoji from the List After :name',
+    inPlace: { area: 'Review notes', keys: ['Up', 'Down', 'Tab', 'Return', 'Escape'] },
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'close-portal',
     title: 'Close Callers or Flow',
     inPlace: { area: 'Portals', keys: ['Escape'] },

@@ -13,6 +13,9 @@ import { pathText } from './path-text.ts';
 import './beuve-ura-label-menu.ts';
 import type { UraLabelChange } from './beuve-ura-label-menu.ts';
 import { buttonStyles } from './primitives/button-styles.ts';
+import { completionListStyles } from './completion-list-styles.ts';
+import { EmojiCompletion } from './emoji-completion.ts';
+import { emojiCompletionStyles } from './emoji-completion-styles.ts';
 
 /** What the composer submits: a note's label, whether it blocks, one-line title and Markdown body. */
 export interface UraDraft {
@@ -26,7 +29,8 @@ export interface UraDraft {
  * The compact note composer Add Note opens under the staged lines (ADR 0027): a label menu that
  * also holds the Blocking toggle (`issue`, not blocking, by default; ADR 0131), an optional title
  * and a body. Enter in
- * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels.
+ * the title or ⌘/Ctrl+Enter anywhere saves, Escape cancels. Both fields complete `:shortcode:` emoji
+ * (ADR 0143), whose open list takes Enter and Escape first.
  * With a suggestion from an Suggest Edit edit (ADR 0043) it previews the patch that is staged with the
  * note. Keys typed here never reach the diff stream's or the shell's shortcuts. Given a staged
  * note's {@link draft}, it opens with that note's text and saves it instead (ADR 0129). Emits
@@ -37,6 +41,8 @@ export class BeuveUraComposer extends LitElement {
   static override styles = [
     buttonStyles,
     formatControlStyles,
+    completionListStyles,
+    emojiCompletionStyles,
     css`
       :host {
         display: block;
@@ -150,6 +156,8 @@ export class BeuveUraComposer extends LitElement {
     `,
   ];
 
+  private readonly emoji = new EmojiCompletion(this);
+
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     // Text entry is never a shortcut: nothing typed here reaches the stream or the shell.
     event.stopPropagation();
@@ -260,9 +268,20 @@ export class BeuveUraComposer extends LitElement {
           placeholder="Title (optional)"
           maxlength="200"
           autocomplete="off"
+          role="combobox"
+          aria-expanded="false"
+          aria-autocomplete="list"
+          aria-controls="emoji-completions"
+          data-emoji-completion
         />
       </div>
-      <textarea aria-label="Body" placeholder="Details (Markdown, optional)"></textarea>
+      <textarea
+        aria-label="Body"
+        placeholder="Details (Markdown, optional)"
+        aria-autocomplete="list"
+        aria-controls="emoji-completions"
+        data-emoji-completion
+      ></textarea>
       ${
         this.patch === ''
           ? nothing
@@ -287,6 +306,7 @@ export class BeuveUraComposer extends LitElement {
           ${this.saving ? labels.saving : labels.idle}
         </button>
       </div>
+      ${this.emoji.render()}
     </form>`;
   }
 
