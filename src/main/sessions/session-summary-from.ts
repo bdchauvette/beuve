@@ -11,7 +11,8 @@ export function sessionSummaryFrom(session: Session): SessionSummary {
     updatedAt: session.updatedAt,
   };
   if (session.review.kind === 'reviewed') {
-    return { ...summary, lastReviewedSha: session.review.checkpoint.headSha };
+    const { checkpoint } = session.review;
+    return { ...summary, lastReviewedSha: checkpoint.headSha, lastCheckpointId: checkpoint.id };
   }
   return summary;
 }

@@ -11,7 +11,8 @@ import type { CommitSha } from '#internal/git/object-id.ts';
 import type { GitRepository } from '#internal/git/open-repository.ts';
 import { resolveRevision } from '#internal/git/resolve-revision.ts';
 import { computeReviewRange } from '#internal/session/compute-review-range.ts';
-import type { ReviewRange } from '#internal/session/session.ts';
+import { findReviewRangeChoice } from '#internal/session/find-review-range-choice.ts';
+import type { ReviewRange, ReviewRangeChoice } from '#internal/session/session.ts';
 import { err } from '#x/result/err.ts';
 import { ok } from '#x/result/ok.ts';
 import type { Result } from '#x/result/result.ts';
@@ -26,6 +27,7 @@ import { rebindRepository } from './rebind-repository.ts';
 import { refreshSession } from './refresh-session.ts';
 import type { RefreshedSession } from './refresh-session.ts';
 import type { SessionContext } from './session-context.ts';
+import { sessionFailure } from './session-failure.ts';
 
 /** Display variants of the diff (ADR 0042); the default is the plain diff every service uses. */
 export interface ReviewDiffOptions {
@@ -45,12 +47,14 @@ export interface ReviewDiffOptions {
 /** The diff a review shows, still in git-domain types, with the refreshed session behind it. */
 export interface ReviewDiff extends RangeDiff {
   readonly refreshed: RefreshedSession;
+  /** The range the reviewer chose (ADR 0140), which `scope` is the outcome of. */
+  readonly choice: ReviewRangeChoice;
 }
 
 /**
  * What the reviewer should look at now: refreshes the head from git, asks the session domain
- * which range still needs review, and has the git domain diff it (full range, or a rebase-aware
- * interdiff from the last checkpoint). Main translates between the two domains here. The refs
+ * which range still needs review, or the one the reviewer chose (ADR 0140), and has the git domain
+ * diff it (full range, or a rebase-aware interdiff from a checkpoint). Main translates between the two domains here. The refs
  * are read for every call; the diff for the commits they name comes from `context.caches`.
  */
 export async function loadReviewDiff(
@@ -70,10 +74,14 @@ export async function loadReviewDiff(
   if (!refreshed.ok) {
     return refreshed;
   }
-  const range = computeReviewRange(refreshed.value.session);
+  const choice = findReviewRangeChoice(context.db, refreshed.value.session.id);
+  if (!choice.ok) {
+    return sessionFailure(context.logger, choice.error);
+  }
+  const range = computeReviewRange(refreshed.value.session, choice.value);
   const diff = await sharedRangeDiff(context, { refreshed: refreshed.value, range }, options);
   if (diff.ok) {
-    return ok({ ...diff.value, refreshed: refreshed.value });
+    return ok({ ...diff.value, refreshed: refreshed.value, choice: choice.value });
   }
   return diff;
 }
@@ -144,10 +152,11 @@ interface RangeOfSession {
   readonly range: ReviewRange;
 }
 
-/** The head a full diff runs to, and the scope to report it under. */
+/** The head a full diff runs to, the scope to report it under, and the reviewed bases it may fork from. */
 interface FullDiff {
   readonly headSha: CommitSha;
   readonly scope: ReviewScope;
+  readonly reviewedBases: readonly CommitSha[];
 }
 
 /** One shared diff computation: its own handle and signal, and the refresh it diffs for. */
@@ -166,9 +175,14 @@ async function diffReviewRange(
   const { context, refreshed } = computing;
   switch (range.kind) {
     case 'full': {
+      // A reviewed session's whole change (ADR 0140) forks where Save Progress would record.
       return diffFull(
         computing,
-        { headSha: range.headSha, scope: { kind: 'full' } },
+        {
+          headSha: range.headSha,
+          scope: { kind: 'full' },
+          reviewedBases: reviewedBasesOf(refreshed.session.review),
+        },
         isIgnoringWhitespace,
       );
     }
@@ -205,11 +219,11 @@ async function forkPointOf(
 
 async function diffFull(
   computing: Computing,
-  { headSha, scope }: FullDiff,
+  { headSha, scope, reviewedBases }: FullDiff,
   isIgnoringWhitespace: boolean,
 ): Promise<Result<RangeDiff, IpcError>> {
   const { context, repository } = computing;
-  const fork = await forkPointOf(computing, headSha, []);
+  const fork = await forkPointOf(computing, headSha, reviewedBases);
   if (!fork.ok) {
     return gitFailure(context.logger, fork.error);
   }
@@ -256,6 +270,7 @@ async function diffInterdiff(
           ...from,
           outcome: { kind: 'fallback', reason: { kind: 'reviewed-commits-missing' } },
         },
+        reviewedBases: [],
       },
       isIgnoringWhitespace,
     );

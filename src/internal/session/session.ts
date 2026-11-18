@@ -72,6 +72,22 @@ export interface ReviewedRange {
 export type ReviewState =
   { readonly kind: 'unreviewed' } | { readonly kind: 'reviewed'; readonly checkpoint: Checkpoint };
 
+/**
+ * Which range the review shows (ADR 0140): `since-last` (the default) is what changed since the
+ * latest checkpoint, `whole` the whole change from its fork point regardless of checkpoints, and
+ * `since-checkpoint` what changed since an earlier checkpoint the reviewer picked.
+ */
+export type ReviewRangeChoice =
+  | { readonly kind: 'since-last' }
+  | { readonly kind: 'whole' }
+  | { readonly kind: 'since-checkpoint'; readonly checkpoint: Checkpoint };
+
+/** A {@link ReviewRangeChoice} as it is stored or asked for: the checkpoint by id. */
+export type ReviewRangeSelection =
+  | { readonly kind: 'since-last' }
+  | { readonly kind: 'whole' }
+  | { readonly kind: 'since-checkpoint'; readonly checkpointId: CheckpointId };
+
 /** A reviewer's ongoing review of one change. Timestamps are ISO-8601 UTC. */
 export interface Session {
   readonly id: SessionId;
@@ -113,9 +129,13 @@ export type SessionError =
   | { readonly kind: 'invalid-source'; readonly reason: string }
   | { readonly kind: 'session-not-found'; readonly sessionId: SessionId }
   | { readonly kind: 'duplicate-session'; readonly source: SessionSource }
+  /** The checkpoint is not one of the session's (it was undone, or never existed). */
+  | { readonly kind: 'checkpoint-not-found'; readonly checkpointId: CheckpointId }
+  /** The checkpoint is not the session's latest any more, so it can no longer be undone. */
+  | { readonly kind: 'checkpoint-superseded'; readonly checkpointId: CheckpointId }
   | {
       readonly kind: 'corrupt-row';
-      readonly table: 'sessions' | 'checkpoints' | 'file_marks';
+      readonly table: 'sessions' | 'checkpoints' | 'file_marks' | 'review_ranges';
       readonly id: string;
       readonly reason: string;
     };

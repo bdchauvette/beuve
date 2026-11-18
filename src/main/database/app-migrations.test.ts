@@ -6,6 +6,7 @@ import { chatMigrations } from '#internal/chat/chat-migrations.ts';
 import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
+import { sessionReviewRangesMigration } from '#internal/session/session-review-ranges-migration.ts';
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
@@ -112,6 +113,7 @@ function shippedMigrations(): Record<string, string> {
     'trust-0002-drop-grants': 'c63f49d2490a652d',
     'ura-0002-drop-impact-findings': 'e98b3a255e786eda',
     'ura-0003-finding-confidence': 'b0c3ded2d62506b8',
+    'session-0002-review-ranges': '98797b855283d465',
   };
 }
 
@@ -212,7 +214,7 @@ function keptTableCounts(
 /** Each domain's migrations by the id prefix they carry. Retired ones keep their old prefix. */
 function domainMigrations(): Record<string, readonly Migration[]> {
   return {
-    session: sessionMigrations,
+    session: [...sessionMigrations, sessionReviewRangesMigration],
     ura: [...uraMigrations, uraFindingConfidenceMigration],
     chat: chatMigrations,
     github: githubMigrations,

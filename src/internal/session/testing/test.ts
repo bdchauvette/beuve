@@ -3,15 +3,16 @@ import { test as baseTest } from '#testing/test.ts';
 
 import type { SessionDeps } from '../session.ts';
 import { sessionMigrations } from '../session-migrations.ts';
+import { sessionReviewRangesMigration } from '../session-review-ranges-migration.ts';
 import { countingSessionDeps } from './counting-session-deps.ts';
 
 /**
- * `#testing/test.ts` with session fixtures (ADR 0058): `db` has the session tables, and `deps`
- * is {@link countingSessionDeps}.
+ * `#testing/test.ts` with session fixtures (ADR 0058): `db` has the session tables at their latest
+ * schema, and `deps` is {@link countingSessionDeps}.
  */
 export const test = baseTest
   .extend('db', ({ db }) => {
-    runMigrations(db, sessionMigrations);
+    runMigrations(db, [...sessionMigrations, sessionReviewRangesMigration]);
     return db;
   })
   .extend('deps', (): SessionDeps => countingSessionDeps());

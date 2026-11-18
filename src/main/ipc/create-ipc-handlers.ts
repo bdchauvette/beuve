@@ -210,6 +210,15 @@ const chooseFolderRequest = z.strictObject({
 /** The head the reviewer was shown, which every per-head request carries (ADR 0078). */
 const expectedHeadSha = z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/u);
 const markReviewedRequest = z.strictObject({ sessionId, expectedHeadSha });
+const checkpointId = z.string().min(1).max(200);
+const undoMarkReviewedRequest = z.strictObject({ sessionId, checkpointId });
+const sinceLastRange = z.strictObject({ kind: z.literal('since-last') });
+const wholeRange = z.strictObject({ kind: z.literal('whole') });
+const sinceCheckpointRange = z.strictObject({ kind: z.literal('since-checkpoint'), checkpointId });
+const reviewRangeRequest = z.strictObject({
+  sessionId,
+  range: z.discriminatedUnion('kind', [sinceLastRange, wholeRange, sinceCheckpointRange]),
+});
 
 const fileReviewedRequest = z.strictObject({
   sessionId,
@@ -663,6 +672,20 @@ export function createIpcHandlers(
       const parsed = markReviewedRequest.safeParse(request);
       if (parsed.success) {
         return services.sessions.markReviewed(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'session:undo-mark-reviewed': (request): IpcResult<SessionSummary> => {
+      const parsed = undoMarkReviewedRequest.safeParse(request);
+      if (parsed.success) {
+        return services.sessions.undoMarkReviewed(parsed.data);
+      }
+      return invalid(parsed.error);
+    },
+    'session:set-review-range': (request): IpcResult<SessionSummary> => {
+      const parsed = reviewRangeRequest.safeParse(request);
+      if (parsed.success) {
+        return services.sessions.setReviewRange(parsed.data);
       }
       return invalid(parsed.error);
     },

@@ -2,6 +2,7 @@ import { chatMigrations } from '#internal/chat/chat-migrations.ts';
 import { githubMigrations } from '#internal/github/github-migrations.ts';
 import { reviewEditsMigrations } from '#internal/review-edits/review-edits-migrations.ts';
 import { sessionMigrations } from '#internal/session/session-migrations.ts';
+import { sessionReviewRangesMigration } from '#internal/session/session-review-ranges-migration.ts';
 import { setupMigrations } from '#internal/setup/setup-migrations.ts';
 import { uraFindingConfidenceMigration } from '#internal/ura/ura-finding-confidence-migration.ts';
 import { uraMigrations } from '#internal/ura/ura-migrations.ts';
@@ -29,4 +30,5 @@ export const appMigrations: readonly Migration[] = Object.freeze([
   ...setupMigrations,
   ...retiredMigrations,
   uraFindingConfidenceMigration,
+  sessionReviewRangesMigration,
 ]);

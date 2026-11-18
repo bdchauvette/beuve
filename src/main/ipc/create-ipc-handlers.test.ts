@@ -177,6 +177,43 @@ describe('createIpcHandlers', () => {
     await handlers['session:mark-reviewed']({ sessionId: 's1', expectedHeadSha: 'b'.repeat(40) });
     expect(calls).toStrictEqual([{ sessionId: 's1', expectedHeadSha: 'b'.repeat(40) }]);
   });
+
+  test('validates session:undo-mark-reviewed', async ({ expect }) => {
+    const { calls, services } = recording('undoMarkReviewed');
+    const handlers = createIpcHandlers(services, appInfo());
+    await expectInvalid(expect, handlers['session:undo-mark-reviewed']({ sessionId: 's1' }));
+    await expectInvalid(
+      expect,
+      handlers['session:undo-mark-reviewed']({ sessionId: 's1', checkpointId: '' }),
+    );
+    await handlers['session:undo-mark-reviewed']({ sessionId: 's1', checkpointId: 'c1' });
+    expect(calls).toStrictEqual([{ sessionId: 's1', checkpointId: 'c1' }]);
+  });
+
+  test('validates session:set-review-range', async ({ expect }) => {
+    const { calls, services } = recording('setReviewRange');
+    const handlers = createIpcHandlers(services, appInfo());
+    await expectInvalid(
+      expect,
+      handlers['session:set-review-range']({ sessionId: 's1', range: { kind: 'sideways' } }),
+    );
+    await expectInvalid(
+      expect,
+      handlers['session:set-review-range']({
+        sessionId: 's1',
+        range: { kind: 'since-checkpoint' },
+      }),
+    );
+    await handlers['session:set-review-range']({ sessionId: 's1', range: { kind: 'whole' } });
+    await handlers['session:set-review-range']({
+      sessionId: 's1',
+      range: { kind: 'since-checkpoint', checkpointId: 'c1' },
+    });
+    expect(calls).toStrictEqual([
+      { sessionId: 's1', range: { kind: 'whole' } },
+      { sessionId: 's1', range: { kind: 'since-checkpoint', checkpointId: 'c1' } },
+    ]);
+  });
 });
 
 describe('createIpcHandlers for per-head channels (ADR 0078)', () => {
@@ -1317,6 +1354,8 @@ function stubServices(
       createLocal: notWired,
       getReview: notWired,
       markReviewed: notWired,
+      undoMarkReviewed: notWiredError,
+      setReviewRange: notWiredError,
       setFileReviewed: notWired,
       inspectRepository: notWired,
       ...overrides,
@@ -1491,6 +1530,18 @@ function recording(
       markReviewed: async (request) => {
         calls.push(request);
         return opening();
+      },
+    },
+    undoMarkReviewed: {
+      undoMarkReviewed: (request) => {
+        calls.push(request);
+        return notWiredError();
+      },
+    },
+    setReviewRange: {
+      setReviewRange: (request) => {
+        calls.push(request);
+        return notWiredError();
       },
     },
   };

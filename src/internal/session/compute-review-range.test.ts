@@ -38,6 +38,38 @@ test('computeReviewRange asks for the interdiff once new commits arrive (Rev 1 t
   });
 });
 
+test('computeReviewRange shows the whole change when chosen, even right after a save', ({
+  expect,
+  deps,
+}) => {
+  const reviewed = recordCheckpoint(session(), { baseSha: sha('f'), headSha: sha('1') }, deps);
+  expect(computeReviewRange(reviewed.session, { kind: 'whole' })).toStrictEqual({
+    kind: 'full',
+    baseRef: 'main',
+    headSha: sha('1'),
+  });
+});
+
+test('computeReviewRange runs the interdiff from an earlier checkpoint when chosen', ({
+  expect,
+  deps,
+}) => {
+  const first = recordCheckpoint(session(), { baseSha: sha('f'), headSha: sha('1') }, deps);
+  const pushed = advanceHead(first.session, sha('2'));
+  const second = recordCheckpoint(pushed, { baseSha: sha('f'), headSha: sha('2') }, deps);
+  const choice = { kind: 'since-checkpoint', checkpoint: first.checkpoint } as const;
+  expect(computeReviewRange(second.session, choice)).toStrictEqual({
+    kind: 'interdiff',
+    baseRef: 'main',
+    fromBaseSha: sha('f'),
+    fromHeadSha: sha('1'),
+    toHeadSha: sha('2'),
+  });
+  expect(
+    computeReviewRange(second.session, { kind: 'since-checkpoint', checkpoint: second.checkpoint }),
+  ).toStrictEqual({ kind: 'up-to-date', headSha: sha('2') });
+});
+
 function sha(digit: string): CommitSha {
   return digit.repeat(40) as CommitSha;
 }

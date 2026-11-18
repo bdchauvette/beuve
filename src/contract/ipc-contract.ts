@@ -80,6 +80,8 @@ export interface SessionSummary {
   readonly source: SessionSourceView;
   readonly headSha: string;
   readonly lastReviewedSha?: string;
+  /** The last checkpoint's id, absent with it: what Undo Save Progress names (ADR 0140). */
+  readonly lastCheckpointId?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** Pull request sessions whose metadata main has stored (ADR 0037); `session:list` only. */
@@ -146,6 +148,48 @@ export interface GetReviewRequest {
 export interface MarkReviewedRequest {
   readonly sessionId: string;
   readonly expectedHeadSha: string;
+}
+
+/**
+ * Undo Save Progress (ADR 0140): removes the checkpoint `checkpointId`, which must still be the
+ * session's latest (`refused` once progress was saved again, `not-found` once it is gone).
+ */
+export interface UndoMarkReviewedRequest {
+  readonly sessionId: string;
+  readonly checkpointId: string;
+}
+
+/**
+ * Which range a session's review shows (ADR 0140): `since-last` (the default) is what changed
+ * since the last saved progress, `whole` the whole change from its fork point whatever was saved,
+ * `since-checkpoint` what changed since an earlier saved progress. Saving progress goes back to
+ * `since-last`.
+ */
+export type ReviewRangeChoiceView =
+  | { readonly kind: 'since-last' }
+  | { readonly kind: 'whole' }
+  | { readonly kind: 'since-checkpoint'; readonly checkpointId: string };
+
+/** `session:set-review-range`: stores the choice for the session; the next review shows it. */
+export interface SetReviewRangeRequest {
+  readonly sessionId: string;
+  readonly range: ReviewRangeChoiceView;
+}
+
+/** A saved progress: the head the reviewer signed off on and the fork point it was diffed from. */
+export interface CheckpointView {
+  readonly id: string;
+  readonly baseSha: string;
+  readonly headSha: string;
+  /** ISO-8601 UTC. */
+  readonly savedAt: string;
+}
+
+/** The range a review shows and the saved progress it could show since instead (ADR 0140). */
+export interface ReviewRangeView {
+  readonly choice: ReviewRangeChoiceView;
+  /** The session's checkpoints, oldest first; the last is the one `since-last` runs from. */
+  readonly checkpoints: readonly CheckpointView[];
 }
 
 /**
@@ -279,6 +323,8 @@ export interface ReviewView {
   readonly forkPoint?: ForkPointView;
   /** Reviewed counts over `files` (ADR 0064); always set by main. */
   readonly reviewProgress?: FileReviewProgressView;
+  /** The range shown and the saved progress to choose from (ADR 0140); always set by main. */
+  readonly range?: ReviewRangeView;
 }
 
 /**
@@ -2618,6 +2664,14 @@ export interface InvokeChannelMap {
   };
   'session:mark-reviewed': {
     readonly request: MarkReviewedRequest;
+    readonly response: IpcResult<SessionSummary>;
+  };
+  'session:undo-mark-reviewed': {
+    readonly request: UndoMarkReviewedRequest;
+    readonly response: IpcResult<SessionSummary>;
+  };
+  'session:set-review-range': {
+    readonly request: SetReviewRangeRequest;
     readonly response: IpcResult<SessionSummary>;
   };
   'session:get-order': {

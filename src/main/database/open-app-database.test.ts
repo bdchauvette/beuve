@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { describe } from 'vitest';
 
+import { sessionMigrations } from '#internal/session/session-migrations.ts';
 import type { Migration } from '#sqlite/run-migrations.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
 
@@ -19,21 +20,27 @@ function migrationList(): Migration[] {
 }
 
 describe('openAppDatabase', () => {
-  test('applies every migration in order, session before ura and chat, with foreign keys on', ({
+  test('applies every migration in order, session before ura and chat, later ones last, with foreign keys on', ({
     expect,
     logger,
   }) => {
     using db = okValueFrom(openAppDatabase({ location: ':memory:', logger: logger.logger }));
     const applied = db.prepare('SELECT id FROM schema_migrations ORDER BY rowid;').all();
     expect(applied.map((row) => row['id'])).toStrictEqual(appMigrations.map(({ id }) => id));
-    expect(appMigrations[0]?.id).toMatch(/^session-/u);
     const ids = appMigrations.map(({ id }) => id);
-    expect(ids.findIndex((id) => id.startsWith('ura-'))).toBeGreaterThan(
-      ids.findLastIndex((id) => id.startsWith('session-')),
+    expect(ids.slice(0, sessionMigrations.length)).toStrictEqual(
+      sessionMigrations.map(({ id }) => id),
     );
-    expect(ids.findIndex((id) => id.startsWith('chat-'))).toBeGreaterThan(
-      ids.findLastIndex((id) => id.startsWith('session-')),
+    expect(ids.findIndex((id) => id.startsWith('ura-'))).toBeGreaterThanOrEqual(
+      sessionMigrations.length,
     );
+    expect(ids.findIndex((id) => id.startsWith('chat-'))).toBeGreaterThanOrEqual(
+      sessionMigrations.length,
+    );
+    expect(ids.slice(-2)).toStrictEqual([
+      'ura-0003-finding-confidence',
+      'session-0002-review-ranges',
+    ]);
     expect(
       db.prepare("SELECT name FROM sqlite_schema WHERE name = 'chat_messages';").get(),
     ).toMatchObject({
