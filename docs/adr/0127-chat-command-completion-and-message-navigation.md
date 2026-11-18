@@ -19,3 +19,7 @@ The chat input takes a dozen slash commands (ADR 0022, 0047, 0055–0057) that t
 ## Consequences
 
 Commands are discoverable where they are typed, and adding one to the registry adds it to `/help`, the palette and the completion list together. The usage strings become a small grammar the completion relies on. Two more chords are taken. Previous and Next Message move by element tops, so they skip notes and command echoes, which are short.
+
+## Amendment 2026-11-18: the completion pieces are shared
+
+The note fields' emoji completion (ADR 0143) reuses this list. `planChatCompletion` is now `planCompletion` (`src/ui/plan-completion.ts`), with the same keys. The list's surface and rows are `completionListStyles` (`.completion-list`, `.completion`); `chatCompletionStyles` keeps where the chat's list sits and its usage and description columns.

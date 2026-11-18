@@ -1,27 +1,28 @@
-/** What a key does to the chat input's open completion list (ADR 0127). */
-export type ChatCompletionStep =
+/** What a key does to a text field's open completion list (ADR 0127, 0143). */
+export type CompletionStep =
   | { readonly kind: 'highlight'; readonly index: number }
   | { readonly kind: 'choose'; readonly index: number }
   | { readonly kind: 'dismiss' };
 
-/** A key pressed in the chat input while its completion list shows `count` commands. */
-export interface ChatCompletionKey {
+/** A key pressed in a text field while its completion list shows `count` suggestions. */
+export interface CompletionKey {
   readonly key: string;
   readonly count: number;
-  /** The highlighted command, or `undefined` while none is. */
+  /** The highlighted suggestion, or `undefined` while none is. */
   readonly highlighted: number | undefined;
 }
 
 /**
- * ↓ and ↑ move the highlight, wrapping; Tab chooses the highlighted command, or the first; Enter
- * chooses the highlighted one, and with none highlighted it sends what was typed, as it does with
- * the list closed; Escape closes the list. `undefined`: the key is the input's own. Pure.
+ * ↓ and ↑ move the highlight, wrapping; Tab chooses the highlighted suggestion, or the first;
+ * Enter chooses the highlighted one, and with none highlighted it is the field's own, as it is
+ * with the list closed (the chat input sends); Escape closes the list. `undefined`: the key is
+ * the field's own. Pure.
  */
-export function planChatCompletion({
+export function planCompletion({
   key,
   count,
   highlighted,
-}: ChatCompletionKey): ChatCompletionStep | undefined {
+}: CompletionKey): CompletionStep | undefined {
   if (count === 0) {
     return undefined;
   }
