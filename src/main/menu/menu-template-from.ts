@@ -101,7 +101,8 @@ const topLabels: Readonly<Record<TopMenu, string>> = {
  * File, Edit, View, Go, Review, Chat, Window and Help; on Linux the same without the app menu
  * (About in Help, Preferences in Edit, Quit in File) and with `&` mnemonics, unique per menu.
  * Items sort by group, then catalog order, with separators between groups; a command's first
- * accelerator is shown, the others are hidden items that still work. A command that `expands`
+ * accelerator is shown, the others are hidden items that still work. A command with
+ * `checkedNames` carries both labels, each with its own access key (ADR 0142). A command that `expands`
  * becomes one radio item per entry, `<id>:<entry id>` (ADR 0139), or a disabled "No Editors Found"
  * when there are none. Pure.
  */
@@ -202,11 +203,16 @@ function commandItems(
   }
   const [primary, ...alternates] = acceleratorsFor(command, platform);
   const label = menuLabelOf(command, platform);
+  const { checkedNames, icon } = command;
   return [
     {
       id: command.id,
       label,
+      ...(checkedNames !== undefined && {
+        checkedLabel: checkedNames.label ?? checkedNames.title,
+      }),
       ...(command.toggle !== undefined && { type: command.toggle }),
+      ...(icon !== undefined && { icon }),
       ...(primary !== undefined && { accelerator: primary }),
     },
     ...alternates.map((accelerator, index): MenuTemplateItem => {
@@ -238,7 +244,16 @@ function withMnemonics(items: readonly MenuTemplateItem[]): MenuTemplateItem[] {
       return { ...item, submenu };
     }
     const label = mnemonicLabel(item.label, taken);
-    return { ...item, label, ...(submenu !== undefined && { submenu }) };
+    let checkedLabel: string | undefined;
+    if (item.checkedLabel !== undefined) {
+      checkedLabel = mnemonicLabel(item.checkedLabel, taken);
+    }
+    return {
+      ...item,
+      label,
+      ...(checkedLabel !== undefined && { checkedLabel }),
+      ...(submenu !== undefined && { submenu }),
+    };
   });
 }
 

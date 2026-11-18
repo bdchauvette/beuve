@@ -603,26 +603,29 @@ exports[`menuTemplateFrom > lays out the linux menu bar 1`] = `
             "label": "&Edit Note…",
           },
           {
+            "checkedLabel": "&Restore",
             "id": "dock-withdraw",
-            "label": "&Withdraw or Restore",
+            "label": "&Withdraw",
           },
           {
             "id": "dock-delete",
             "label": "&Delete Note",
           },
           {
+            "checkedLabel": "Mark &as Not Addressed",
             "id": "dock-addressed",
-            "label": "&Addressed",
-            "type": "checkbox",
+            "label": "&Mark as Addressed",
           },
           {
             "type": "separator",
           },
           {
+            "icon": "arrow-up",
             "id": "dock-move-up",
-            "label": "&Move Up",
+            "label": "Move &Up",
           },
           {
+            "icon": "arrow-down",
             "id": "dock-move-down",
             "label": "M&ove Down",
           },
@@ -1451,26 +1454,29 @@ exports[`menuTemplateFrom > lays out the mac menu bar 1`] = `
             "label": "Edit Note…",
           },
           {
+            "checkedLabel": "Restore",
             "id": "dock-withdraw",
-            "label": "Withdraw or Restore",
+            "label": "Withdraw",
           },
           {
             "id": "dock-delete",
             "label": "Delete Note",
           },
           {
+            "checkedLabel": "Mark as Not Addressed",
             "id": "dock-addressed",
-            "label": "Addressed",
-            "type": "checkbox",
+            "label": "Mark as Addressed",
           },
           {
             "type": "separator",
           },
           {
+            "icon": "arrow-up",
             "id": "dock-move-up",
             "label": "Move Up",
           },
           {
+            "icon": "arrow-down",
             "id": "dock-move-down",
             "label": "Move Down",
           },

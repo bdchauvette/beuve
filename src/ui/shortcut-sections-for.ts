@@ -49,7 +49,7 @@ export function shortcutSectionsFor(
       rows: keyed
         .filter(({ command }) => menuOf(command) === menu)
         .map(({ command, keys }) => {
-          return { title: command.title, keys };
+          return { title: shortcutTitleOf(command), keys };
         }),
     };
   });
@@ -67,11 +67,19 @@ export function shortcutSectionsFor(
         .filter((command) => command.inPlace?.area === area)
         .map((command) => {
           return {
-            title: command.title,
+            title: shortcutTitleOf(command),
             keys: (command.inPlace?.keys ?? []).map((key) => displayAccelerator(key, platform)),
           };
         }),
     };
   });
   return [...menus, ...inPlace].filter((section) => section.rows.length > 0);
+}
+
+/** The title, or both names of a command whose name follows the state (ADR 0142). */
+function shortcutTitleOf(command: CatalogCommand): string {
+  if (command.checkedNames === undefined) {
+    return command.title;
+  }
+  return `${command.title} or ${command.checkedNames.title}`;
 }

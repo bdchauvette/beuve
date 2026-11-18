@@ -70,6 +70,16 @@ describe('planPalette', () => {
     ).toStrictEqual(['Ctrl+I']);
   });
 
+  test('names a command whose name follows the state as the state is', ({ expect }) => {
+    expect(planPalette('>withdraw note', sources())[0]?.title).toBe('Withdraw Note');
+    expect(
+      planPalette('>restore note', { ...sources(), checked: ['dock-withdraw'] })[0]?.title,
+    ).toBe('Restore Note');
+    expect(planPalette('>mark note', { ...sources(), checked: ['dock-addressed'] })[0]?.title).toBe(
+      'Mark Note as Not Addressed',
+    );
+  });
+
   test('shows a chat command’s usage as its key', ({ expect }) => {
     const [entry] = planPalette('>clear chat…', sources());
     expect(entry?.keys).toStrictEqual(['/clear']);

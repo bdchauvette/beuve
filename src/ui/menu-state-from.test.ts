@@ -22,7 +22,10 @@ describe('menuStateFrom', () => {
   test.for([
     [{ focusedZone: 'diff' }, ['session', 'file', 'diff-target']],
     [{ focusedZone: 'chat', isTextFocused: true }, ['session', 'file', 'text-focus']],
-    [{ focusedZone: 'ura', dockItem: { isAddressed: false } }, ['session', 'file', 'dock-item']],
+    [
+      { focusedZone: 'ura', dockItem: { count: 1, isAddressed: false, isWithdrawn: false } },
+      ['session', 'file', 'dock-item'],
+    ],
     [{ activePath: undefined }, ['session']],
     [
       { isBusy: true, isPullRequest: true, stagedCount: 2 },
@@ -38,7 +41,7 @@ describe('menuStateFrom', () => {
       ...open(),
       isActiveReviewed: true,
       focusedZone: 'ura',
-      dockItem: { isAddressed: true },
+      dockItem: { count: 2, isAddressed: true, isWithdrawn: false },
       isFindCaseSensitive: true,
       reviewRange: 'whole',
       treeMode: 'diff-only',
@@ -55,9 +58,9 @@ describe('menuStateFrom', () => {
       'tree-mode',
       'order-calls',
       'toggle-reviewed',
-      'dock-addressed',
       'find-match-case',
       'range-whole',
+      'dock-addressed',
     ]);
   });
 });

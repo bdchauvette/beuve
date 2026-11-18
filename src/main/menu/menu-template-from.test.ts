@@ -110,8 +110,13 @@ describe('menuTemplateFrom', () => {
     const clashes: string[] = [];
     const check = (items: readonly MenuTemplateItem[]): void => {
       const keys = items
-        .filter((item) => item.visible !== false)
-        .map((item) => /&([^&])/u.exec((item.label ?? '').replaceAll('&&', ''))?.[1])
+        .flatMap((item) => {
+          if (item.visible === false) {
+            return [];
+          }
+          return [item.label ?? '', item.checkedLabel ?? ''];
+        })
+        .map((label) => /&([^&])/u.exec(label.replaceAll('&&', ''))?.[1])
         .filter((key) => key !== undefined)
         .map((key) => key.toLowerCase());
       clashes.push(...keys.filter((key, index) => keys.indexOf(key) !== index));
@@ -150,6 +155,46 @@ describe('menuTemplateFrom', () => {
       { label: 'No Editors Found', enabled: false },
       { type: 'separator' },
       { id: 'editor-settings', label: 'Editor Settings…' },
+    ]);
+  });
+
+  test.for(['mac', 'linux'] as const)(
+    'gives a %s command whose name follows the state both labels, and no check mark',
+    (platform, { expect }) => {
+      const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform }));
+      const withdraw = items.find((item) => item.id === 'dock-withdraw');
+      const addressed = items.find((item) => item.id === 'dock-addressed');
+      expect([plain(withdraw?.label), plain(withdraw?.checkedLabel)]).toStrictEqual([
+        'Withdraw',
+        'Restore',
+      ]);
+      expect([plain(addressed?.label), plain(addressed?.checkedLabel)]).toStrictEqual([
+        'Mark as Addressed',
+        'Mark as Not Addressed',
+      ]);
+      expect([withdraw?.type, addressed?.type]).toStrictEqual([undefined, undefined]);
+    },
+  );
+
+  test('never gives a command checked names and a check mark', ({ expect }) => {
+    expect(
+      commandCatalog
+        .filter((entry) => entry.checkedNames !== undefined && entry.toggle !== undefined)
+        .map((entry) => entry.id),
+    ).toStrictEqual([]);
+  });
+
+  test('carries the icons the catalog names', ({ expect }) => {
+    const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform: 'mac' }));
+    expect(
+      items
+        .filter((item) => item.icon !== undefined)
+        .map((item) => {
+          return [item.id, item.icon];
+        }),
+    ).toStrictEqual([
+      ['dock-move-up', 'arrow-up'],
+      ['dock-move-down', 'arrow-down'],
     ]);
   });
 
@@ -220,6 +265,20 @@ describe('contextMenuTemplateFrom', () => {
       label: 'Add to Chat',
       accelerator: 'Cmd+>',
       registerAccelerator: false,
+    });
+  });
+
+  test('names a note’s commands for both states, with their icons', ({ expect }) => {
+    const items = contextMenuTemplateFrom(commandCatalog, 'note', 'linux');
+    expect(items.find((item) => item.id === 'dock-withdraw')).toStrictEqual({
+      id: 'dock-withdraw',
+      label: 'Withdraw Note',
+      checkedLabel: 'Restore Note',
+    });
+    expect(items.find((item) => item.id === 'dock-move-up')).toStrictEqual({
+      id: 'dock-move-up',
+      label: 'Move Note Up',
+      icon: 'arrow-up',
     });
   });
 
@@ -303,6 +362,11 @@ function openWith(editors?: readonly MenuListEntry[]): readonly MenuTemplateItem
       return item.label === 'Open With';
     })?.submenu ?? []
   );
+}
+
+/** A Linux label without its access key. */
+function plain(label: string | undefined): string | undefined {
+  return label?.replace('&', '');
 }
 
 function flatten(items: readonly MenuTemplateItem[]): MenuTemplateItem[] {

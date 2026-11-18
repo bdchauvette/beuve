@@ -1,7 +1,10 @@
 import type { CatalogCommand, WindowKind } from '#contract/command-catalog.ts';
 import type { MenuStateRequest } from '#contract/ipc-contract.ts';
 
-/** Whether one menu item can be chosen, and whether its toggle shows checked. */
+/**
+ * Whether one menu item can be chosen, and whether its toggle shows checked (or, for a command
+ * with `checkedNames`, whether it shows those names).
+ */
 export interface MenuItemState {
   readonly enabled: boolean;
   readonly checked: boolean;
@@ -30,7 +33,9 @@ export function menuItemStatesFrom(
             command.windows.includes(kind) &&
             (command.when ?? []).every((condition) => conditions.has(condition)) &&
             !(isTyping && command.textConflict === true),
-          checked: command.toggle !== undefined && checked.has(command.id),
+          checked:
+            (command.toggle !== undefined || command.checkedNames !== undefined) &&
+            checked.has(command.id),
         },
       ];
     }),

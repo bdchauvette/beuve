@@ -962,6 +962,7 @@ export class BeuveApp extends LitElement {
       ...(this.review !== undefined && { files: this.review.files }),
       ...(this.reviewData.tree !== undefined && { trackedPaths: this.reviewData.tree.paths }),
       uraItems: this.ura.items,
+      checked: this.reviewElement()?.paletteChecked() ?? [],
     };
   }
 
