@@ -10,7 +10,7 @@ test('offers no range menu until progress was saved', ({ expect }) => {
 
 test('offers since the last save and the whole change, the default checked', ({ expect }) => {
   const menu = reviewRangeMenuFrom(range({ kind: 'since-last' }, ['c1']));
-  expect(menu?.label).toBe('Since saved progress');
+  expect(menu?.label).toBe('Since last saved progress');
   expect(
     menu?.options.map(({ key, isChecked, checkpoint }) => {
       return [key, isChecked, checkpoint?.id];
