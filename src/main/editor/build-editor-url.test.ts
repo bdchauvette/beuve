@@ -32,6 +32,7 @@ describe('isEditorUrl', () => {
     expect(isEditorUrl('zed://file/a/b.ts:1:1')).toBe(true);
     expect(isEditorUrl('vscode://file/a/b.ts:1:1')).toBe(true);
     expect(isEditorUrl('cursor://file/a/b.ts:1:1')).toBe(true);
+    expect(isEditorUrl('gram://file/a/b.ts:1:1')).toBe(true);
   });
 
   test('refuses everything else', ({ expect }) => {
@@ -40,6 +41,7 @@ describe('isEditorUrl', () => {
       'file:///etc/passwd',
       'javascript:alert(1)',
       'zed://settings',
+      'gram://settings',
       'vscode://vscode.git/clone?url=x',
       'zed://file/a?x=1',
       'zed://user@file/a',

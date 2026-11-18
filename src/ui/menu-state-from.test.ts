@@ -33,11 +33,10 @@ describe('menuStateFrom', () => {
     expect(menuStateFrom({ ...open(), ...change }).conditions).toStrictEqual(conditions);
   });
 
-  test('checks the reviewed mark, the editor, the dock item and find’s case', ({ expect }) => {
+  test('checks the reviewed mark, the dock item and find’s case', ({ expect }) => {
     const { checked } = menuStateFrom({
       ...open(),
       isActiveReviewed: true,
-      preferredEditor: 'vscode',
       focusedZone: 'ura',
       dockItem: { isAddressed: true },
       isFindCaseSensitive: true,
@@ -56,7 +55,6 @@ describe('menuStateFrom', () => {
       'tree-mode',
       'order-calls',
       'toggle-reviewed',
-      'editor-vscode',
       'dock-addressed',
       'find-match-case',
       'range-whole',
@@ -87,7 +85,6 @@ function idle(): MenuStateInput {
       showDiagnostics: true,
     },
     treeMode: 'neighborhood',
-    preferredEditor: undefined,
     isFindCaseSensitive: false,
     reviewRange: undefined,
   };

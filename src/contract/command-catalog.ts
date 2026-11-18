@@ -82,6 +82,12 @@ export interface CatalogCommand {
   readonly opensMainWindow?: true;
   readonly when?: readonly MenuCondition[];
   readonly toggle?: 'checkbox' | 'radio';
+  /**
+   * The menu shows one radio item per entry of a list main keeps, instead of one item: `editors`
+   * is every editor beuve knows (ADR 0139). Choosing one sends `menu:run` with the entry's id as
+   * `argument`; main checks the stored choice. Such a command has no keys.
+   */
+  readonly expands?: 'editors';
   readonly context?: readonly ContextKind[];
   readonly windows: readonly WindowKind[];
   /** `main` runs it in the main process; `window` sends `menu:run` to the focused window. */
@@ -725,31 +731,19 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
-    id: 'editor-zed',
-    title: 'Open in Zed',
-    label: 'Zed',
+    id: 'open-with-editor',
+    title: 'Choose Editor…',
     menu: { menu: 'review', group: 3, submenu: 'Open With' },
-    toggle: 'radio',
+    expands: 'editors',
     windows: ['main'],
     handler: 'window',
   },
   {
-    id: 'editor-vscode',
-    title: 'Open in VS Code',
-    label: 'VS Code',
-    menu: { menu: 'review', group: 3, submenu: 'Open With' },
-    toggle: 'radio',
-    windows: ['main'],
-    handler: 'window',
-  },
-  {
-    id: 'editor-cursor',
-    title: 'Open in Cursor',
-    label: 'Cursor',
-    menu: { menu: 'review', group: 3, submenu: 'Open With' },
-    toggle: 'radio',
-    windows: ['main'],
-    handler: 'window',
+    id: 'editor-settings',
+    title: 'Editor Settings…',
+    menu: { menu: 'review', group: 3, submenu: 'Open With', subgroup: 1 },
+    windows: everywhere(),
+    handler: 'main',
   },
   {
     id: 'open-review-edits',

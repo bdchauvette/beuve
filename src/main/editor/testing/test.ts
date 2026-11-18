@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { EditorOpenResponse } from '#contract/ipc-contract.ts';
 import type { TestRepository } from '#internal/git/testing/test-repository.ts';
 import { okValueFrom } from '#testing/ok-value-from.ts';
@@ -10,10 +12,16 @@ import { test as baseTest } from '../../testing/test.ts';
 import type { EditorPlatform } from '../editor-platform.ts';
 import { editorBranchTemplate } from './editor-branch-template.ts';
 
-/** What the fake editor platform saw and how it behaves; tests change `installed` and `spawnError`. */
+/**
+ * What the fake editor platform saw and how it behaves; tests change `installed` and `spawnError`.
+ * `settingsPath` is the test's `settings.json` (in its temp directory, absent until written) and
+ * `openedPaths` what `shell.openPath` was asked to open.
+ */
 export interface EditorState {
   readonly spawned: { command: string; args: readonly string[] }[];
   readonly opened: string[];
+  readonly openedPaths: string[];
+  readonly settingsPath: string;
   installed: string[];
   spawnError: string | undefined;
 }
@@ -31,10 +39,12 @@ export const test = baseTest
     const { repo } = await repositories.fromTemplate(editorBranchTemplate());
     return repo;
   })
-  .extend('editorState', (): EditorState => {
+  .extend('editorState', ({ tempDir }): EditorState => {
     return {
       spawned: [],
       opened: [],
+      openedPaths: [],
+      settingsPath: path.join(tempDir, 'user-data', 'settings.json'),
       installed: ['/bin/zed'],
       spawnError: undefined,
     };
@@ -59,7 +69,17 @@ export const test = baseTest
         await Promise.resolve();
       },
     };
-    return createServices({ editor: { platform } });
+    return createServices({
+      editor: {
+        platform,
+        settingsPath: editorState.settingsPath,
+        openPath: async (file): Promise<string> => {
+          editorState.openedPaths.push(file);
+          await Promise.resolve();
+          return '';
+        },
+      },
+    });
   })
   .extend('sessionId', async ({ services, repo }): Promise<string> => {
     const created = await services.sessions.createLocal({

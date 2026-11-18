@@ -143,12 +143,15 @@ export interface MainServicesOptions {
     readonly agentSdk?: ModelResolverDeps['agentSdk'];
   };
   /**
-   * The editor launcher (ADR 0033): `settingsPath` is the JSON file holding the preferred editor
-   * (in memory without it), `platform` replaces the real machine. Tests must pass a fake platform.
+   * The editor launcher (ADR 0033, 0139): `settingsPath` is the JSON file holding the preferred
+   * editor and the reviewer's own editors (in memory without it), `platform` replaces the real
+   * machine and `openPath` is Electron's `shell.openPath`, which opens that file. Tests must pass
+   * a fake platform.
    */
   readonly editor?: {
     readonly settingsPath?: string;
     readonly platform?: EditorPlatform;
+    readonly openPath?: (file: string) => Promise<string>;
   };
   /**
    * Terminals (ADR 0095): tests pass a fake `spawn`, a short `outputDelay` and the environment the
@@ -369,6 +372,7 @@ export function createMainServices(options: MainServicesOptions): MainServices {
     worktrees,
     settings: editorSettings,
     platform: options.editor?.platform ?? createSystemEditorPlatform(),
+    ...(options.editor?.openPath !== undefined && { openPath: options.editor.openPath }),
   });
   return {
     sessions,

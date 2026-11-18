@@ -374,9 +374,10 @@ export class BeuveApp extends LitElement {
     this.runAppCommand('reload-review');
   };
 
+  /** A notice's button: any catalog command, Editor Settings… (main's) included. */
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
     this.statusNotice = undefined;
-    this.runAppCommand(event.detail.command);
+    this.runCommandId(event.detail.command);
   };
 
   /** A check's link in the status bar's CI popover. */
@@ -477,7 +478,11 @@ export class BeuveApp extends LitElement {
       return;
     }
     this.unsubscribes = [
-      bridge.on('menu:run', ({ id }) => {
+      bridge.on('menu:run', ({ id, argument }) => {
+        if (id === 'open-with-editor' && argument !== undefined) {
+          void this.setPreferredEditor(argument);
+          return;
+        }
         this.runCommandId(id);
       }),
       bridge.on('link:open-pr', ({ ref }) => {
@@ -736,12 +741,6 @@ export class BeuveApp extends LitElement {
         void this.setDisplay(displayChangeFor(id, this.settings.display));
         return;
       }
-      case 'editor-zed':
-      case 'editor-vscode':
-      case 'editor-cursor': {
-        void this.setPreferredEditor(editorActions[id]);
-        return;
-      }
       case 'show-new-commits': {
         this.github.showNewCommits();
         return;
@@ -770,7 +769,7 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  /** Review ▸ Open With: stores the editor Open in Editor uses. */
+  /** Review ▸ Open With: stores the editor Open in Editor uses (ADR 0139). */
   private async setPreferredEditor(editorId: EditorId): Promise<void> {
     const result = await this.settings.chooseEditor(editorId);
     if (result === undefined) {
@@ -818,7 +817,6 @@ export class BeuveApp extends LitElement {
       isPullRequest: this.github.pullRequest !== undefined,
       stagedCount: this.ura.stagedCount,
       display: this.settings.display,
-      preferredEditor: this.settings.editorSettings?.preferred,
     });
     const key = JSON.stringify(state);
     if (key === this.lastMenuState) {
@@ -1101,12 +1099,6 @@ export class BeuveApp extends LitElement {
 const paletteOpenings: Readonly<Record<'palette' | 'go-to-file', string>> = {
   palette: '',
   'go-to-file': '@',
-};
-
-const editorActions: Readonly<Record<Extract<CommandId, `editor-${string}`>, EditorId>> = {
-  'editor-zed': 'zed',
-  'editor-vscode': 'vscode',
-  'editor-cursor': 'cursor',
 };
 
 const exportActions: Readonly<Record<Extract<CommandId, `export-${string}`>, UraExportTarget>> = {

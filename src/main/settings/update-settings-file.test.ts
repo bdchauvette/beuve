@@ -26,6 +26,24 @@ describe('updateSettingsFile', () => {
     expect(readdirSync(path.dirname(file))).toStrictEqual(['settings.json']);
   });
 
+  test('never replaces a file the reviewer left malformed', async ({ expect, tempDir }) => {
+    const file = path.join(tempDir, 'settings.json');
+    writeFileSync(file, '{ "editors": { "helix": ');
+    await expect(
+      updateSettingsFile(file, (current) => {
+        return { ...current, preferredEditor: 'zed' };
+      }),
+    ).rejects.toThrow(/not valid JSON/u);
+    expect(readFileSync(file, 'utf8')).toBe('{ "editors": { "helix": ');
+    writeFileSync(file, '[]');
+    await expect(
+      updateSettingsFile(file, (current) => {
+        return { ...current, preferredEditor: 'zed' };
+      }),
+    ).rejects.toThrow(/JSON object/u);
+    expect(readFileSync(file, 'utf8')).toBe('[]');
+  });
+
   test('reads a malformed file as empty', async ({ expect, tempDir }) => {
     const file = path.join(tempDir, 'settings.json');
     writeFileSync(file, '[1, 2');

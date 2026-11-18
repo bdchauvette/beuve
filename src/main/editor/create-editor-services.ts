@@ -1,14 +1,15 @@
-import { realpath } from 'node:fs/promises';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
   EditorChoiceView,
-  EditorId,
+  EditorFoundView,
   EditorOpenFailure,
   EditorOpenRequest,
   EditorOpenResponse,
   EditorSettingsView,
   IpcResult,
+  OpenedConfigView,
   SetPreferredEditorRequest,
   SetReviewEditsPrefixRequest,
 } from '#contract/ipc-contract.ts';
@@ -26,19 +27,22 @@ import { refreshSession } from '../sessions/refresh-session.ts';
 import type { SessionContext } from '../sessions/session-context.ts';
 import type { SessionWorktrees, WorktreeLease } from '../worktrees/create-session-worktrees.ts';
 
+import { chooseEditor } from './choose-editor.ts';
+import type { ChosenEditor, DetectedEditor, EditorChoiceFailure } from './choose-editor.ts';
 import { chooseEditorRoot } from './choose-editor-root.ts';
 import type { WorkingFileState } from './choose-editor-root.ts';
 import type { EditorSettings } from './create-editor-settings.ts';
 import { editorDefinitions } from './editor-definitions.ts';
-import type { EditorDefinition } from './editor-definitions.ts';
 import type { EditorLocation } from './editor-location.ts';
 import type { EditorPlatform } from './editor-platform.ts';
 import { findEditor } from './find-editor.ts';
 import type { FoundEditor } from './find-editor.ts';
+import { isEditorId } from './is-editor-id.ts';
 import { isEditorUrl } from './is-editor-url.ts';
 import { planEditorLaunch } from './plan-editor-launch.ts';
+import { resolveEditorDefinitions } from './resolve-editor-definitions.ts';
 
-/** Opening files in the reviewer's editor, and which editor that is (ADR 0033). */
+/** Opening files in the reviewer's editor, and which editor that is (ADR 0033, 0139). */
 export interface EditorServices {
   readonly open: (request: EditorOpenRequest) => Promise<IpcResult<EditorOpenResponse>>;
   readonly getSettings: () => Promise<IpcResult<EditorSettingsView>>;
@@ -50,11 +54,22 @@ export interface EditorServices {
     request: SetReviewEditsPrefixRequest,
   ) => Promise<IpcResult<EditorSettingsView>>;
   /**
-   * Opens an absolute path (a file or a directory) at a line in the preferred, else first
-   * installed, editor: the editor's name, or why it couldn't. For review edits (ADR 0088), whose
-   * caller has already checked the path.
+   * Opens `settings.json` in the reviewer's own program for JSON files, so they can add editors
+   * (ADR 0139). When there is no file yet, an empty object is created first; an existing file is
+   * never rewritten for this.
+   */
+  readonly openSettingsFile: () => Promise<IpcResult<OpenedConfigView>>;
+  /**
+   * Opens an absolute path (a file or a directory) at a line in the chosen editor (ADR 0139): the
+   * editor's name, or why it couldn't. For review edits (ADR 0088), whose caller has already
+   * checked the path.
    */
   readonly launchFile: (location: EditorLocation) => Promise<Result<string, string>>;
+  /**
+   * Calls `listener` with the settings each time a read of them differs from the last one, so the
+   * menu's Open With list follows hand edits of `settings.json`. Returns the unsubscribe.
+   */
+  readonly onChanged: (listener: (view: EditorSettingsView) => void) => () => void;
 }
 
 export interface EditorServicesOptions {
@@ -62,19 +77,17 @@ export interface EditorServicesOptions {
   readonly worktrees: SessionWorktrees;
   readonly settings: EditorSettings;
   readonly platform: EditorPlatform;
+  /** Electron's `shell.openPath`: resolves to `''` on success, else a message. */
+  readonly openPath?: (file: string) => Promise<string>;
 }
 
 const spaceOrControl = /[\s\p{Cc}]/u;
 
-interface DetectedEditor {
-  readonly definition: EditorDefinition;
-  readonly found: FoundEditor | undefined;
-}
-
-/** An installed editor and where it was found. */
-interface ChosenEditor {
-  readonly definition: EditorDefinition;
-  readonly found: FoundEditor;
+/** Every known editor as detected now, the stored choice, and the configuration's problems. */
+interface EditorSnapshot {
+  readonly preferred: string | undefined;
+  readonly detected: readonly DetectedEditor[];
+  readonly problems: readonly string[];
 }
 
 /** A session file to find on disk, as a path relative to the repository root. */
@@ -95,51 +108,67 @@ interface Located {
 /**
  * `editor:open` refreshes the session, picks the working tree or beuve's head checkout
  * ({@link chooseEditorRoot}), checks the file stays inside that root once symlinks are resolved,
- * finds the preferred (else first installed) editor and launches it without a shell.
+ * chooses the editor ({@link chooseEditor}: the reviewer's, never a stand-in) and launches it
+ * without a shell. The editors are the built-ins merged with `editors` in `settings.json`, read
+ * afresh each time, so a hand edit takes effect on the next use.
  */
 export function createEditorServices(options: EditorServicesOptions): EditorServices {
   const { context, worktrees, settings, platform } = options;
+  const listeners = new Set<(view: EditorSettingsView) => void>();
+  let lastView = '';
+  let lastProblems = '';
 
-  const detectAll = (): readonly DetectedEditor[] => {
-    return editorDefinitions.map((definition) => {
-      return {
-        definition,
-        found: findEditor(definition, platform),
-      };
+  const snapshot = async (): Promise<EditorSnapshot> => {
+    const { preferred, editors } = await settings.readEditorConfig();
+    const { definitions, problems } = resolveEditorDefinitions({
+      builtins: editorDefinitions,
+      config: editors,
     });
+    const problemsKey = JSON.stringify(problems);
+    if (problemsKey !== lastProblems) {
+      lastProblems = problemsKey;
+      for (const problem of problems) {
+        context.logger.warn('editor: left out an entry of settings.json', { problem });
+      }
+    }
+    const detected = definitions.map((definition): DetectedEditor => {
+      return { definition, found: findEditor(definition, platform) };
+    });
+    return { preferred, detected, problems };
   };
 
   const settingsView = async (): Promise<EditorSettingsView> => {
-    const preferred = await settings.read();
-    const detected = detectAll();
-    const editors: EditorChoiceView[] = detected.map(({ definition, found }) => {
+    const { preferred, detected, problems } = await snapshot();
+    const editors = detected.map(({ definition, found }): EditorChoiceView => {
       return {
         id: definition.id,
         name: definition.name,
         installed: found !== undefined,
+        origin: definition.origin,
+        ...(found !== undefined && { found: foundViewFrom(found) }),
       };
     });
-    return {
+    const chosen = chooseEditor({ preferred, detected });
+    const view: EditorSettingsView = {
       ...(preferred !== undefined && { preferred }),
+      ...(chosen.ok && { current: chosen.value.definition.id }),
       editors,
+      problems,
       reviewEditsPrefix: await settings.readReviewEditsPrefix(),
     };
-  };
-
-  /** The preferred editor if it is installed, else the first installed one. */
-  const chooseEditor = async (): Promise<ChosenEditor | undefined> => {
-    const preferred = await settings.read();
-    const detected = detectAll();
-    const candidates = [
-      ...detected.filter(({ definition }) => definition.id === preferred),
-      ...detected.filter(({ definition }) => definition.id !== preferred),
-    ];
-    for (const { definition, found } of candidates) {
-      if (found !== undefined) {
-        return { definition, found };
+    const key = JSON.stringify(view);
+    if (key !== lastView) {
+      lastView = key;
+      for (const listener of listeners) {
+        listener(view);
       }
     }
-    return undefined;
+    return view;
+  };
+
+  const choose = async (): Promise<Result<ChosenEditor, EditorChoiceFailure>> => {
+    const { preferred, detected } = await snapshot();
+    return chooseEditor({ preferred, detected });
   };
 
   const locate = async ({
@@ -190,12 +219,9 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         return refreshed;
       }
       const { repository, session } = refreshed.value;
-      const chosen = await chooseEditor();
-      if (chosen === undefined) {
-        return failedOpen(
-          'no-editor-found',
-          'No editor found: install Zed, VS Code or Cursor, or choose one in the command palette.',
-        );
+      const chosen = await choose();
+      if (!chosen.ok) {
+        return failedOpen(chosen.error.failure, chosen.error.message);
       }
       const located = await locate({
         repository,
@@ -210,7 +236,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
         );
       }
       using _checkout = located.checkout;
-      const { definition, found } = chosen;
+      const { definition, found } = chosen.value;
       const plan = planEditorLaunch(definition, found, {
         file: located.file,
         line: request.line,
@@ -242,31 +268,78 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
       return ok(await settingsView());
     },
     launchFile: async (location): Promise<Result<string, string>> => {
-      const chosen = await chooseEditor();
-      if (chosen === undefined) {
-        return err(
-          'No editor found: install Zed, VS Code or Cursor, or choose one in the command palette.',
-        );
+      const chosen = await choose();
+      if (!chosen.ok) {
+        return err(chosen.error.message);
       }
-      const plan = planEditorLaunch(chosen.definition, chosen.found, location);
-      const launched = await launch(platform, plan);
+      const { definition, found } = chosen.value;
+      const launched = await launch(platform, planEditorLaunch(definition, found, location));
       if (launched !== undefined) {
-        return err(`Could not start ${chosen.definition.name}: ${launched}`);
+        context.logger.warn('editor launch failed', { editor: definition.id, reason: launched });
+        return err(`Could not start ${definition.name}: ${launched}`);
       }
-      return ok(chosen.definition.name);
+      return ok(definition.name);
     },
     setPreferred: async ({ editorId }): Promise<IpcResult<EditorSettingsView>> => {
-      if (!isEditorId(editorId)) {
-        return err({ code: 'invalid-request', message: 'unknown editor' });
+      const { detected } = await snapshot();
+      const known = detected.map(({ definition }) => definition.id);
+      if (!isEditorId(editorId) || !known.includes(editorId)) {
+        return err({
+          code: 'invalid-request',
+          message: `There is no editor “${editorId}”. Known editors: ${known.join(', ')}; add your own under "editors" in settings.json.`,
+        });
       }
       await settings.write(editorId);
       return ok(await settingsView());
     },
+    openSettingsFile: async (): Promise<IpcResult<OpenedConfigView>> => {
+      const { filePath } = settings;
+      if (filePath === undefined || options.openPath === undefined) {
+        return err({ code: 'not-wired', message: 'there is no settings file to open' });
+      }
+      const created = await createIfMissing(filePath);
+      if (!created.ok) {
+        context.logger.warn('could not create settings.json', { file: filePath });
+        return err({ code: 'internal', message: `Could not create ${filePath}: ${created.error}` });
+      }
+      const failure = await options.openPath(filePath);
+      if (failure !== '') {
+        context.logger.warn('could not open settings.json', { file: filePath, failure });
+        return err({ code: 'internal', message: `Could not open ${filePath}: ${failure}` });
+      }
+      return ok({ path: filePath, created: created.value });
+    },
+    onChanged: (listener): (() => void) => {
+      listeners.add(listener);
+      return (): void => {
+        listeners.delete(listener);
+      };
+    },
   };
 }
 
-function isEditorId(value: string): value is EditorId {
-  return editorDefinitions.some((definition) => definition.id === value);
+function foundViewFrom(found: FoundEditor): EditorFoundView {
+  if (found.kind === 'cli') {
+    return { kind: 'cli', path: found.command };
+  }
+  return { kind: 'url', path: found.bundle };
+}
+
+/**
+ * Whether the file had to be created: `{}`, owner-only (ADR 0082), never replacing a file that
+ * exists or appeared in the meantime.
+ */
+async function createIfMissing(file: string): Promise<Result<boolean, string>> {
+  try {
+    await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+    await writeFile(file, '{}\n', { flag: 'wx', mode: 0o600 });
+    return ok(true);
+  } catch (error: unknown) {
+    if (Error.isError(error) && 'code' in error && error.code === 'EEXIST') {
+      return ok(false);
+    }
+    return err(errorFrom(error).message);
+  }
 }
 
 /** The failure reason, or `undefined` when the editor started. */

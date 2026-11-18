@@ -30,4 +30,14 @@ describe('describeEditorOpen', () => {
       describeEditorOpen({ kind: 'failed', failure: 'launch-failed', message: 'nope' }),
     ).toStrictEqual({ tone: 'error', text: 'nope' });
   });
+
+  test('offers Editor Settings when no editor could be chosen', ({ expect }) => {
+    for (const failure of ['no-editor-found', 'editor-not-chosen', 'editor-unavailable'] as const) {
+      expect(describeEditorOpen({ kind: 'failed', failure, message: 'choose' })).toStrictEqual({
+        tone: 'error',
+        text: 'choose',
+        action: { label: 'Editor Settings…', command: 'editor-settings' },
+      });
+    }
+  });
 });

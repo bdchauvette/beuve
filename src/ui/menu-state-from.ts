@@ -1,7 +1,6 @@
 import type { CommandId, MenuCondition } from '#contract/command-catalog.ts';
 import type {
   DiffDisplayView,
-  EditorId,
   MenuStateRequest,
   ReviewRangeChoiceView,
 } from '#contract/ipc-contract.ts';
@@ -29,7 +28,6 @@ export interface MenuStateInput {
   readonly isTerminalFocused: boolean;
   readonly display: DiffDisplayView;
   readonly treeMode: RadarTreeMode;
-  readonly preferredEditor: EditorId | undefined;
   readonly isFindCaseSensitive: boolean;
   /** The range the open review shows (ADR 0140), for Review ▸ Show. */
   readonly reviewRange: ReviewRangeChoiceView['kind'] | undefined;
@@ -38,7 +36,7 @@ export interface MenuStateInput {
 /**
  * The main window's `menu:set-state`: conditions from focus and contents, and the toggles that
  * show checked. A text field suspends the chords it uses itself (main applies `text-focus`).
- * Pure.
+ * Review › Open With's check is main's own: it knows the editors (ADR 0139). Pure.
  */
 export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
   const has = (condition: MenuCondition, isOn: boolean): MenuCondition[] => {
@@ -80,9 +78,6 @@ export function menuStateFrom(input: MenuStateInput): MenuStateRequest {
     ['order-size', order === 'size'],
     ['toggle-skip-reviewed', display.skipReviewed === true],
     ['toggle-reviewed', isFile && input.isActiveReviewed],
-    ['editor-zed', input.preferredEditor === 'zed'],
-    ['editor-vscode', input.preferredEditor === 'vscode'],
-    ['editor-cursor', input.preferredEditor === 'cursor'],
     ['dock-addressed', input.dockItem?.isAddressed === true],
     ['find-match-case', input.isFindCaseSensitive],
     ['range-since-saved', input.reviewRange === 'since-last'],

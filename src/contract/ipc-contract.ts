@@ -1596,8 +1596,12 @@ export interface WriteClipboardRequest {
   readonly text: string;
 }
 
-/** Editors beuve can open a file in (ADR 0033). */
-export type EditorId = 'zed' | 'vscode' | 'cursor';
+/**
+ * An editor beuve can open a file in (ADR 0033, 0139): a built-in (`zed`, `gram`, `vscode`,
+ * `cursor`) or one the reviewer defined under `editors` in `settings.json`. Lowercase letters,
+ * digits and dashes, starting with a letter.
+ */
+export type EditorId = string;
 
 /**
  * Opens a head-side file at a line in the reviewer's editor. `path` is repository-relative, with
@@ -1610,7 +1614,17 @@ export interface EditorOpenRequest {
   readonly column?: number;
 }
 
-export type EditorOpenFailure = 'no-editor-found' | 'file-unavailable' | 'launch-failed';
+/**
+ * Why Open in Editor didn't open (ADR 0139): `no-editor-found` (none installed, none chosen),
+ * `editor-not-chosen` (several found, none chosen), `editor-unavailable` (the chosen one is missing
+ * or not configured), `file-unavailable` or `launch-failed`.
+ */
+export type EditorOpenFailure =
+  | 'no-editor-found'
+  | 'editor-not-chosen'
+  | 'editor-unavailable'
+  | 'file-unavailable'
+  | 'launch-failed';
 
 /**
  * `opened` says which editor and which copy of the file: `working-tree` is the reviewer's own
@@ -1630,17 +1644,35 @@ export type EditorOpenResponse =
     }
   | { readonly kind: 'failed'; readonly failure: EditorOpenFailure; readonly message: string };
 
+/** Where an editor was found: its CLI (run with arguments), or a macOS app opened by URL. */
+export type EditorFoundView =
+  { readonly kind: 'cli'; readonly path: string } | { readonly kind: 'url'; readonly path: string };
+
+/** One built-in or reviewer-defined editor (ADR 0139), and where it was found, if anywhere. */
 export interface EditorChoiceView {
   readonly id: EditorId;
   readonly name: string;
   readonly installed: boolean;
+  /** `custom` when `settings.json` defines or changes it. */
+  readonly origin: 'built-in' | 'custom';
+  readonly found?: EditorFoundView;
 }
 
-/** The editor preference and what is installed, in order of preference. */
+/**
+ * The editor preference, the editors beuve knows (built-ins first, then the reviewer's own) and
+ * what is wrong with the `editors` configuration in `settings.json` (ADR 0139).
+ */
 export interface EditorSettingsView {
-  /** Absent until the reviewer chooses; then the first installed editor is used. */
+  /**
+   * Absent until the reviewer chooses; then the only installed editor is used, and with several
+   * Open in Editor asks for a choice. It may name an editor no longer configured.
+   */
   readonly preferred?: EditorId;
+  /** The editor Open in Editor would start now, by the rules above; absent when none. */
+  readonly current?: EditorId;
   readonly editors: readonly EditorChoiceView[];
+  /** One sentence per invalid entry of `editors` in `settings.json`; those entries are left out. */
+  readonly problems: readonly string[];
   /** What review-edits branch names start with (ADR 0088); `review/` by default. */
   readonly reviewEditsPrefix: string;
 }
@@ -2508,6 +2540,8 @@ export interface OpenPullRequestLinkView {
 /** `menu:run` (main to the focused window): run the catalog command `id`. */
 export interface MenuRunView {
   readonly id: CommandId;
+  /** The chosen entry of a command whose menu items are a list (`open-with-editor`: an editor id). */
+  readonly argument?: string;
 }
 
 /**
@@ -2874,6 +2908,10 @@ export interface InvokeChannelMap {
     readonly request: SetReviewEditsPrefixRequest;
     readonly response: IpcResult<EditorSettingsView>;
   };
+  'editor:open-settings-file': {
+    readonly request: undefined;
+    readonly response: IpcResult<OpenedConfigView>;
+  };
   'review-edits:get': {
     readonly request: ReviewEditsRequest;
     readonly response: IpcResult<ReviewEditsView>;
@@ -3089,6 +3127,7 @@ export type SettingsInvokeChannel =
  */
 export type SettingsOnlyInvokeChannel =
   | 'language-servers:open-config'
+  | 'editor:open-settings-file'
   | 'models:list'
   | 'models:save'
   | 'models:remove'
