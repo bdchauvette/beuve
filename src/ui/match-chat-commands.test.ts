@@ -39,10 +39,6 @@ describe('matchChatCommands', () => {
   });
 
   test('offers each choice of an alternative, keeping an option name on each', ({ expect }) => {
-    expect(matchChatCommands('/diff ').map((suggestion) => suggestion.text)).toStrictEqual([
-      '/diff split',
-      '/diff inline',
-    ]);
     expect(matchChatCommands('/review --e').map((suggestion) => suggestion.text)).toStrictEqual([
       '/review --effort=low',
       '/review --effort=medium',
@@ -75,9 +71,12 @@ describe('matchChatCommands', () => {
     expect(refused).toStrictEqual([]);
   });
 
-  test('lists the chat commands before the display ones', ({ expect }) => {
-    const texts = matchChatCommands('/').map((suggestion) => suggestion.text);
-    expect(texts[0]).toBe('/summarize');
-    expect(texts.indexOf('/review')).toBeLessThan(texts.indexOf('/sidebar left'));
+  test('offers only commands that act on the conversation or the model', ({ expect }) => {
+    const names = new Set(
+      matchChatCommands('/').map((suggestion) => suggestion.text.split(' ', 1)[0]),
+    );
+    expect(names).toStrictEqual(
+      new Set(['/summarize', '/abstract', '/review', '/compact', '/clear', '/help']),
+    );
   });
 });

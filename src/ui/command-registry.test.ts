@@ -88,21 +88,7 @@ describe('commandRegistry', () => {
   });
 
   test('has an entry for every chat command the parser knows', ({ expect }) => {
-    const parsed = new Set([
-      '/review',
-      '/summarize',
-      '/abstract',
-      '/editor',
-      '/diff',
-      '/whitespace',
-      '/generated',
-      '/insights',
-      '/order',
-      '/sidebar',
-      '/clear',
-      '/compact',
-      '/help',
-    ]);
+    const parsed = new Set(['/review', '/summarize', '/abstract', '/clear', '/compact', '/help']);
     for (const name of parsed) {
       expect(parseChatCommand(name).kind).not.toBe('question');
       expect(commandRegistry.some((command) => command.slash?.split(' ', 1)[0] === name)).toBe(

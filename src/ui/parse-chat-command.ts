@@ -1,10 +1,4 @@
-import type {
-  DiffLayoutView,
-  EditorId,
-  ReviewEffort,
-  ReviewOrderMode,
-  SidebarSideView,
-} from '#contract/ipc-contract.ts';
+import type { ReviewEffort } from '#contract/ipc-contract.ts';
 import { normalizePathPrefix } from '#contract/normalize-path-prefix.ts';
 
 /** What the reviewer typed into the chat drawer, parsed (ADR 0022). */
@@ -17,18 +11,6 @@ export type ChatCommand =
   | { readonly kind: 'summarize' }
   /** Condenses the conversation so far into a summary later prompts send instead (ADR 0047). */
   | { readonly kind: 'compact' }
-  /** `/editor` shows the preferred editor; `/editor zed` chooses one (ADR 0033). */
-  | { readonly kind: 'editor'; readonly editorId?: EditorId }
-  /** `/diff` shows the diff layout; `/diff split` or `/diff inline` sets it (ADR 0042). */
-  | { readonly kind: 'diff'; readonly layout?: DiffLayoutView }
-  /** `/whitespace` shows whether whitespace is ignored; `ignore` or `show` sets it. */
-  | { readonly kind: 'whitespace'; readonly ignoreWhitespace?: boolean }
-  /** `/generated` shows whether generated files are expanded; `show` or `hide` sets it (ADR 0052). */
-  | { readonly kind: 'generated'; readonly showGenerated?: boolean }
-  /** `/insights` shows whether `/review` findings annotate the diff; `show` or `hide` sets it (ADR 0061). */
-  | { readonly kind: 'insights'; readonly showInsights?: boolean }
-  /** `/order` shows the file order; `/order path|imports|calls` sets it (ADR 0065). */
-  | { readonly kind: 'order'; readonly mode?: ReviewOrderMode }
   /** Findings as a chat answer, verified by a second pass unless `--no-verify` (ADR 0055). */
   | {
       readonly kind: 'review';
@@ -37,8 +19,6 @@ export type ChatCommand =
       readonly verify: boolean;
       readonly effort?: ReviewEffort;
     }
-  /** Puts the sidebar on one side (ADR 0044). */
-  | { readonly kind: 'sidebar'; readonly side: SidebarSideView }
   /** Plain text: a question about the change for the Q&A chat (ADR 0031). */
   | { readonly kind: 'question'; readonly text: string }
   /** An unknown command or a malformed one; `message` says how to fix it. */
@@ -46,16 +26,26 @@ export type ChatCommand =
 
 const efforts: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 const whitespace = /\s+/u;
+/** Former preference commands: the palette and the menus set these now. */
+const settingCommands: ReadonlySet<string> = new Set([
+  '/editor',
+  '/diff',
+  '/whitespace',
+  '/generated',
+  '/insights',
+  '/order',
+  '/sidebar',
+]);
 
 /**
  * Parses one chat input line. Plain text is a question. Grammar: `/help` (or `/?`),
- * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`),
- * `/editor [zed|vscode|cursor]`, `/diff [split|inline]`, `/whitespace [ignore|show]`,
- * `/generated [show|hide]`, `/insights [show|hide]`, `/order [path|imports|calls]`,
- * `/sidebar left|right`, and
+ * `/clear [queue]`, `/compact`, `/summarize` (or `/abstract`), and
  * `/review [--fresh] [--no-verify] [--effort=low|medium|high] [path-prefix…]`, options and
  * prefixes in any order, `--` ending the options. Prefixes are repository-relative (`./` and trailing `/` are
- * dropped); command names are case-insensitive. Pure: the drawer shows the result.
+ * dropped); command names are case-insensitive. Chat commands act on the conversation or the
+ * model; the commands that used to set preferences (`/editor`, `/diff`, `/whitespace`,
+ * `/generated`, `/insights`, `/order`, `/sidebar`) answer with where those settings are now. Pure:
+ * the drawer shows the result.
  */
 export function parseChatCommand(input: string): ChatCommand {
   const text = input.trim();
@@ -93,137 +83,18 @@ export function parseChatCommand(input: string): ChatCommand {
       }
       return invalid('/compact takes no arguments. Type /help for the commands.');
     }
-    case '/editor': {
-      return parseEditor(args);
-    }
-    case '/diff': {
-      return parseDiff(args);
-    }
-    case '/whitespace': {
-      return parseWhitespace(args);
-    }
-    case '/generated': {
-      return parseGenerated(args);
-    }
-    case '/insights': {
-      return parseInsights(args);
-    }
-    case '/order': {
-      return parseOrder(args);
-    }
     case '/review': {
       return parseReview(args);
     }
-    case '/sidebar': {
-      const [side] = args;
-      if (args.length === 1 && (side === 'left' || side === 'right')) {
-        return { kind: 'sidebar', side };
-      }
-      return invalid('/sidebar takes left or right.');
-    }
     default: {
-      return { kind: 'invalid', message: `Unknown command ${name}. Type /help for the commands.` };
+      if (settingCommands.has(name.toLowerCase())) {
+        return invalid(
+          `${name} sets a preference, which chat commands no longer do. Use the command palette or the menus. Type /help for the chat commands.`,
+        );
+      }
+      return invalid(`Unknown command ${name}. Type /help for the commands.`);
     }
   }
-}
-
-const editorAliases: Readonly<Record<string, EditorId>> = {
-  zed: 'zed',
-  vscode: 'vscode',
-  code: 'vscode',
-  cursor: 'cursor',
-};
-
-function parseEditor(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'editor' };
-  }
-  const editorId = editorAliases[soleArgument(args)];
-  if (editorId === undefined) {
-    return invalid('/editor takes zed, vscode or cursor, e.g. /editor zed.');
-  }
-  return { kind: 'editor', editorId };
-}
-
-const layoutAliases: Readonly<Record<string, DiffLayoutView>> = {
-  split: 'split',
-  'side-by-side': 'split',
-  inline: 'unified',
-  unified: 'unified',
-};
-
-function parseDiff(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'diff' };
-  }
-  const layout = layoutAliases[soleArgument(args)];
-  if (layout === undefined) {
-    return invalid('/diff takes split or inline, e.g. /diff inline.');
-  }
-  return { kind: 'diff', layout };
-}
-
-const whitespaceAliases: Readonly<Record<string, boolean>> = {
-  ignore: true,
-  hide: true,
-  show: false,
-};
-
-const generatedAliases: Readonly<Record<string, boolean>> = {
-  show: true,
-  expand: true,
-  hide: false,
-  collapse: false,
-};
-
-function parseGenerated(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'generated' };
-  }
-  const showGenerated = generatedAliases[soleArgument(args)];
-  if (showGenerated === undefined) {
-    return invalid('/generated takes show or hide, e.g. /generated show.');
-  }
-  return { kind: 'generated', showGenerated };
-}
-
-function parseInsights(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'insights' };
-  }
-  const choice = soleArgument(args);
-  if (choice === 'show' || choice === 'hide') {
-    return { kind: 'insights', showInsights: choice === 'show' };
-  }
-  return invalid('/insights takes show or hide, e.g. /insights hide.');
-}
-
-const orderModes: ReadonlySet<string> = new Set(['path', 'imports', 'calls']);
-
-function parseOrder(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'order' };
-  }
-  const mode = soleArgument(args);
-  if (isOrderMode(mode)) {
-    return { kind: 'order', mode };
-  }
-  return invalid('/order takes path, imports or calls, e.g. /order imports.');
-}
-
-function isOrderMode(value: string): value is ReviewOrderMode {
-  return orderModes.has(value);
-}
-
-function parseWhitespace(args: readonly string[]): ChatCommand {
-  if (args.length === 0) {
-    return { kind: 'whitespace' };
-  }
-  const ignore = whitespaceAliases[soleArgument(args)];
-  if (ignore === undefined) {
-    return invalid('/whitespace takes ignore or show, e.g. /whitespace ignore.');
-  }
-  return { kind: 'whitespace', ignoreWhitespace: ignore };
 }
 
 function parseReview(args: readonly string[]): ChatCommand {
@@ -277,15 +148,6 @@ function parseReview(args: readonly string[]): ChatCommand {
 
 function isEffort(value: string): value is ReviewEffort {
   return efforts.has(value);
-}
-
-/** The one argument, lowercased; `''` for none or several. */
-function soleArgument(args: readonly string[]): string {
-  const [only] = args;
-  if (only === undefined || args.length !== 1) {
-    return '';
-  }
-  return only.toLowerCase();
 }
 
 function invalid(message: string): ChatCommand {

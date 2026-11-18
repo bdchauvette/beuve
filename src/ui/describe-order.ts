@@ -7,7 +7,7 @@ const orderDescriptions: Readonly<Record<ReviewOrderMode, string>> = {
   size: 'Files by size: the largest changes first',
 };
 
-/** How the files are ordered, for the notice after `/order`. */
+/** How the files are ordered, for the notice after the order changes. */
 export function describeOrder(mode: ReviewOrderMode = 'path'): string {
   return orderDescriptions[mode];
 }

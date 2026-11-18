@@ -12,18 +12,8 @@ import { chatHelp } from './chat-help.ts';
 import { emptyChatTranscript } from './empty-chat-transcript.ts';
 import { isActiveRequest } from './is-active-request.ts';
 import { parseChatCommand } from './parse-chat-command.ts';
-import type { ChatCommand } from './parse-chat-command.ts';
 import { reduceChatTranscript } from './reduce-chat-transcript.ts';
 import type { ChatTranscriptAction } from './reduce-chat-transcript.ts';
-
-/** The slash commands that change a preference rather than talk to the model; the app runs them. */
-export type ChatAppCommand = Extract<
-  ChatCommand,
-  {
-    readonly kind:
-      'editor' | 'diff' | 'generated' | 'insights' | 'whitespace' | 'order' | 'sidebar';
-  }
->;
 
 /** What the chat needs from the window around it. */
 export interface ChatEnvironment {
@@ -35,8 +25,6 @@ export interface ChatEnvironment {
   readonly focusPath: () => string | undefined;
   /** Puts a rejected question back in the input. */
   readonly restoreDraft: (text: string, mentions: readonly ChatMentionView[]) => void;
-  /** Runs a preference command; the controller has already echoed what was typed. */
-  readonly runAppCommand: (command: ChatAppCommand) => void;
 }
 
 /**
@@ -284,17 +272,6 @@ export class ChatController implements ReactiveController {
       case 'invalid': {
         this.echo(typed);
         this.note('error', command.message);
-        return;
-      }
-      case 'editor':
-      case 'diff':
-      case 'generated':
-      case 'insights':
-      case 'whitespace':
-      case 'order':
-      case 'sidebar': {
-        this.echo(typed);
-        this.environment.runAppCommand(command);
         return;
       }
     }

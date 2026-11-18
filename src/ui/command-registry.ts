@@ -25,7 +25,7 @@ export type CommandRun =
 /** What the main window adds to a catalog command. */
 interface CommandBehavior {
   readonly run: CommandRun;
-  /** The chat command and its usage, e.g. `/editor zed|vscode|cursor`. */
+  /** The chat command and its usage, e.g. `/review --effort=low|medium|high`. */
   readonly slash?: string;
   /** The `/help` line after the usage; defaults to the title. */
   readonly help?: string;
@@ -82,42 +82,18 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'sidebar-chat': app,
     'sidebar-left': app,
     'sidebar-right': app,
-    'flip-sidebar': {
-      ...app,
-      slash: '/sidebar left|right',
-      help: 'put the sidebar on the left or the right (remembered in settings.json)',
-    },
-    'diff-split': {
-      ...app,
-      slash: '/diff split|inline',
-      help: 'side-by-side or inline diffs (just /diff shows the current one)',
-    },
+    'flip-sidebar': app,
+    'diff-split': app,
     'diff-inline': app,
-    whitespace: {
-      ...app,
-      slash: '/whitespace ignore|show',
-      help: 'hide or show whitespace-only changes, computed by git diff -w',
-    },
-    'toggle-generated': {
-      ...app,
-      slash: '/generated show|hide',
-      help: 'expand or collapse files .gitattributes marks linguist-generated (and minified bundles, source maps, protobuf output); remembered in settings.json',
-    },
-    'toggle-insights': {
-      ...app,
-      slash: '/insights show|hide',
-      help: 'show or hide the /review findings as quiet notes on the diff lines; remembered in settings.json',
-    },
+    whitespace: app,
+    'toggle-generated': app,
+    'toggle-insights': app,
     'toggle-diagnostics': {
       ...app,
       help: "show or hide the language servers' underlines and counts on the diff; the servers keep running and the configuration is untouched; remembered in settings.json",
     },
     'tree-mode': app,
-    'order-path': {
-      ...app,
-      slash: '/order path|imports|calls',
-      help: 'the order the diff lists files in: path, imports (what a file uses comes first) or calls (asks the language server); config and mechanical files always go last. Remembered in settings.json; just /order shows the current one',
-    },
+    'order-path': app,
     'order-imports': app,
     'order-calls': app,
     'order-size': app,
@@ -146,11 +122,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'open-in-editor': app,
     'open-in-sheet': app,
     'open-description-in-sheet': app,
-    'editor-zed': {
-      ...app,
-      slash: '/editor zed|vscode|cursor',
-      help: 'choose the editor Open in Editor uses (just /editor shows the current one)',
-    },
+    'editor-zed': app,
     'editor-vscode': app,
     'editor-cursor': app,
     'open-review-edits': app,

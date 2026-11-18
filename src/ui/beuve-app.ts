@@ -65,7 +65,6 @@ import { SettingsController } from './settings-controller.ts';
 import type { DisplayTransition } from './settings-controller.ts';
 import { UraController } from './ura-controller.ts';
 import type { ReviewRef } from './review-ref.ts';
-import type { ChatAppCommand } from './chat-controller.ts';
 import { describeDiffDisplay } from './describe-diff-display.ts';
 import { describeEditorSettings } from './describe-editor-settings.ts';
 import { describeSessionLabel } from './describe-session-label.ts';
@@ -231,9 +230,6 @@ export class BeuveApp extends LitElement {
     },
     restoreDraft: (text, mentions): void => {
       this.reviewElement()?.chatDrawer()?.setDraft(text, mentions);
-    },
-    runAppCommand: (command): void => {
-      this.runChatAppCommand(command);
     },
   });
   private readonly queue = new QueueController(this, { bridge: beuveBridge });
@@ -578,7 +574,7 @@ export class BeuveApp extends LitElement {
     }
   }
 
-  /** Stores a display change; `/diff` and `/whitespace` without arguments only show it. */
+  /** Stores a display change and says what changed. */
   private async setDisplay(change: SetDiffDisplayRequest): Promise<DiffDisplayView | undefined> {
     const display = await this.settings.change(change);
     if (display === undefined) {
@@ -608,87 +604,6 @@ export class BeuveApp extends LitElement {
     return display;
   }
 
-  private async runDisplayCommand(change: SetDiffDisplayRequest): Promise<void> {
-    const display = await this.setDisplay(change);
-    if (display !== undefined) {
-      this.chat.note('info', `Diffs: ${describeDiffDisplay(display, false).text}.`);
-    }
-  }
-
-  /** `/editor [id]`: shows or sets the editor Open in Editor opens. */
-  private async runEditorCommand(editorId: EditorId | undefined): Promise<void> {
-    const result = await this.settings.chooseEditor(editorId);
-    if (result === undefined) {
-      return;
-    }
-    if (!result.ok) {
-      this.chat.note('error', result.error.message);
-      return;
-    }
-    this.chat.note('info', ...describeEditorSettings(result.value));
-  }
-
-  /** The preference slash commands of the chat; the controller has echoed what was typed. */
-  private runChatAppCommand(command: ChatAppCommand): void {
-    switch (command.kind) {
-      case 'editor': {
-        void this.runEditorCommand(command.editorId);
-        return;
-      }
-      case 'diff': {
-        void this.runDisplayCommand({
-          ...(command.layout !== undefined && { layout: command.layout }),
-        });
-        return;
-      }
-      case 'whitespace': {
-        void this.runDisplayCommand({
-          ...(command.ignoreWhitespace !== undefined && {
-            ignoreWhitespace: command.ignoreWhitespace,
-          }),
-        });
-        return;
-      }
-      case 'generated': {
-        void this.setDisplay({
-          ...(command.showGenerated !== undefined && { showGenerated: command.showGenerated }),
-        }).then((display) => {
-          if (display !== undefined) {
-            this.chat.note('info', `${describeGenerated(display.showGenerated)}.`);
-          }
-        });
-        return;
-      }
-      case 'insights': {
-        void this.setDisplay({
-          ...(command.showInsights !== undefined && { showInsights: command.showInsights }),
-        }).then((display) => {
-          if (display !== undefined) {
-            this.chat.note('info', `${describeInsights(display.showInsights)}.`);
-          }
-        });
-        return;
-      }
-      case 'order': {
-        void this.setDisplay({
-          ...(command.mode !== undefined && { reviewOrder: command.mode }),
-        }).then((display) => {
-          if (display !== undefined) {
-            this.chat.note('info', `${describeOrder(display.reviewOrder)}.`);
-          }
-        });
-        return;
-      }
-      case 'sidebar': {
-        void this.reviewElement()
-          ?.setSidebarSide(command.side)
-          .then(() => {
-            this.chat.note('info', `Sidebar on the ${command.side}.`);
-          });
-        return;
-      }
-    }
-  }
   /** Runs a catalog command the app handles itself (ADR 0068): the review's first, then the window's. */
   private runAppCommand(id: CommandId): void {
     if (id === 'find') {

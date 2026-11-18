@@ -194,7 +194,7 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
       if (chosen === undefined) {
         return failedOpen(
           'no-editor-found',
-          'No editor found: install Zed, VS Code or Cursor, or choose one with /editor.',
+          'No editor found: install Zed, VS Code or Cursor, or choose one in the command palette.',
         );
       }
       const located = await locate({
@@ -244,7 +244,9 @@ export function createEditorServices(options: EditorServicesOptions): EditorServ
     launchFile: async (location): Promise<Result<string, string>> => {
       const chosen = await chooseEditor();
       if (chosen === undefined) {
-        return err('No editor found: install Zed, VS Code or Cursor, or choose one with /editor.');
+        return err(
+          'No editor found: install Zed, VS Code or Cursor, or choose one in the command palette.',
+        );
       }
       const plan = planEditorLaunch(chosen.definition, chosen.found, location);
       const launched = await launch(platform, plan);
