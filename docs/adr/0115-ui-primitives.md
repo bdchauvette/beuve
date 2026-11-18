@@ -32,3 +32,7 @@ A component's styles shrink to layout. A control looks and behaves the same ever
 `beuve-menu` opens start-aligned under its trigger, so the options sit under the text that named them; end alignment put them far from it. `align="end"` remains for a trigger at the end of a toolbar. Storybook (ADR 0117) is the catalog of primitives, and commit hashes became a primitive (ADR 0116).
 
 Asked again whether buttons could be custom elements rendered into the light DOM (`createRenderRoot() { return this; }`, so the inner `<button>` keeps its semantics): Lit can render a light-DOM element, but the owner's own children (the label, an icon) are nodes the owner's template manages. Moving them into the element's `<button>` breaks the owner's template parts, and without a slot there is nowhere else for them to go. A label attribute would lose icons. A customized built-in (`<button is="beuve-button">`) works in Chromium, but it adds nothing a class does not: the styles must still live in the owner's shadow root, because a shadow tree is the only place they reach. Buttons stay native elements with a class. An element is worth it only where there is behaviour, as for the menu, the tab list, times, durations and commit hashes.
+
+## Amendment 2026-11-18: a progress bar
+
+`progressStyles` adds `.progress`, an indeterminate bar that holds still under reduced motion (ADR 0144). It came from the diff stream's opening view, which `beuve-opening` now draws wherever a review is on its way.
