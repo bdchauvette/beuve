@@ -48,6 +48,8 @@ import type { ClickedToken } from './run-sheet-action.ts';
 import type { FlowState } from './flow-state.ts';
 import type { PeekState } from './peek-state.ts';
 import { editTargetFrom } from './edit-target-from.ts';
+import { editableDiffFrom } from './editable-diff-from.ts';
+import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 import type { EditTarget } from './edit-target-from.ts';
 import { planHunkSteps } from './plan-hunk-steps.ts';
 import { planStepHighlight } from './plan-step-highlight.ts';
@@ -2018,6 +2020,21 @@ ${splitPatch(file.patch).map((line) => {
   }
 
   /**
+   * Gives the diff the complete file pair when the library cannot hydrate it itself (an added
+   * file, {@link editableDiffFrom}); the card's own parse renders again once the edit ends.
+   */
+  private completeForEditing({ diff, patch, head }: EditedDiff): void {
+    const { library, metadata } = this;
+    if (library === undefined || metadata === undefined) {
+      return;
+    }
+    const editable = editableDiffFrom({ library, shown: metadata, patch, head });
+    if (editable !== metadata) {
+      diff.render({ fileDiff: editable });
+    }
+  }
+
+  /**
    * What the reviewer points at on this card (ADR 0063): the selection, else the line a jump
    * landed on, else the focused hunk, else the file. Every line-taking action starts here.
    */
@@ -2116,6 +2133,11 @@ ${splitPatch(file.patch).map((line) => {
     if (file === undefined || loader === undefined || this.edit !== undefined) {
       return;
     }
+    const reason = uneditableReasonFrom(file);
+    if (reason !== undefined) {
+      this.edit = { target, phase: 'failed', error: reason };
+      return;
+    }
     // Suggest Edit edits the source (ADR 0123): a rendered file shows its diff for it.
     this.view = 'source';
     this.edit = { target, phase: 'loading', error: '' };
@@ -2126,6 +2148,7 @@ ${splitPatch(file.patch).map((line) => {
       if (diff === undefined || pair?.newContents === undefined) {
         throw new Error('beuve could not load this file to edit it.');
       }
+      this.completeForEditing({ diff, patch: file.patch, head: pair.newContents });
       await diff.prepareForEditing();
       if (this.edit.target !== target || this.diff !== diff) {
         return;
@@ -2541,6 +2564,13 @@ async function loadFiles(
     oldFile: { name: fileDiff.prevName ?? fileDiff.name, contents: pair.oldContents },
     newFile,
   };
+}
+
+/** The diff an edit attaches to, the patch the card parsed, and the head file it edits. */
+interface EditedDiff {
+  readonly diff: FileDiff<PlacedSlot>;
+  readonly patch: string;
+  readonly head: string;
 }
 
 /** Where a card's diff renders: the library, the element it fills, and the parsed file. */

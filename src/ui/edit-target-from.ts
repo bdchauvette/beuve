@@ -3,6 +3,7 @@ import type { UraItemView } from '#contract/ipc-contract.ts';
 import { anchorFromTarget } from './anchor-from-target.ts';
 import { lineFromTarget } from './line-from-target.ts';
 import type { ReviewTarget } from './target-from.ts';
+import { uneditableReasonFrom } from './uneditable-reason-from.ts';
 
 /**
  * The head lines Suggest Edit edits (ADR 0043), and the staged item the suggestion attaches to, if any;
@@ -20,8 +21,8 @@ export interface EditTarget {
 /**
  * What Suggest Edit edits for `target` (ADR 0043, 0063): when its head line (as Open in Editor takes it) lies on the
  * anchor of a staged line note written against the head being shown, that note's lines, so the
- * suggestion attaches to it; otherwise the lines Add Note would stage. Nothing for a deleted or binary
- * file, or when the target is a whole file or the whole change. Notes from an older head are
+ * suggestion attaches to it; otherwise the lines Add Note would stage. Nothing for a file
+ * {@link uneditableReasonFrom} rules out (deleted, binary, no hunks), or when the target is a whole file or the whole change. Notes from an older head are
  * skipped: their lines number a different file.
  */
 export function editTargetFrom(
@@ -29,7 +30,7 @@ export function editTargetFrom(
   items: readonly UraItemView[],
   headSha: string,
 ): EditTarget | undefined {
-  if (target.kind === 'change' || target.file.status === 'deleted' || target.file.binary) {
+  if (target.kind === 'change' || uneditableReasonFrom(target.file) !== undefined) {
     return undefined;
   }
   const { path } = target.file;
