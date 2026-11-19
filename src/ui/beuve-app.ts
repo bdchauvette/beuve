@@ -364,10 +364,6 @@ export class BeuveApp extends LitElement {
     this.showOpenDialog();
   };
 
-  private readonly onTitlebarSearch = (): void => {
-    this.runAppCommand('palette');
-  };
-
   private readonly onTitlebarReload = (): void => {
     this.runAppCommand('reload-review');
   };
@@ -954,13 +950,11 @@ export class BeuveApp extends LitElement {
     return html`<beuve-titlebar
       .label=${describeSessionLabel(this.session.sessions, this.session.selectedId, this.review?.session)}
       .openTitle=${`Open a pull request, branch or recent review (${this.shortcut('open')})`}
-      .searchTitle=${`Command Palette (${this.shortcut('palette')})`}
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
       ?canReload=${this.review !== undefined}
       ?reloading=${this.isReloading()}
       .platform=${this.appInfo?.platform ?? ''}
       @beuve-titlebar-open=${this.onTitlebarOpen}
-      @beuve-titlebar-search=${this.onTitlebarSearch}
       @beuve-titlebar-reload=${this.onTitlebarReload}
     ></beuve-titlebar>`;
   }

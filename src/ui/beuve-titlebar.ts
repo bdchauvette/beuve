@@ -7,9 +7,8 @@ import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
- * Reload beside it while a review is open (ADR 0146), and the command palette's search button.
- * The bar drags the window; its buttons do not. Emits `beuve-titlebar-open`, `beuve-titlebar-reload` and
- * `beuve-titlebar-search`.
+ * Reload beside it while a review is open (ADR 0146). The bar drags the window; its buttons do
+ * not. Emits `beuve-titlebar-open` and `beuve-titlebar-reload`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
@@ -61,10 +60,6 @@ export class BeuveTitlebar extends LitElement {
           animation: none;
         }
       }
-
-      .spacer {
-        flex: 1;
-      }
     `,
   ];
 
@@ -74,10 +69,6 @@ export class BeuveTitlebar extends LitElement {
 
   private readonly reload = (): void => {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
-  };
-
-  private readonly search = (): void => {
-    this.dispatchEvent(new CustomEvent('beuve-titlebar-search', { bubbles: true, composed: true }));
   };
 
   /** The open review's name, or the placeholder when none is open. */
@@ -94,9 +85,6 @@ export class BeuveTitlebar extends LitElement {
 
   /** Whether the review is reloading: Reload spins its glyph and waits. */
   @property({ type: Boolean }) accessor reloading = false;
-
-  /** The tooltip of the search button, with its shortcut. */
-  @property() accessor searchTitle = '';
 
   /** `process.platform`; on macOS the bar leaves room for the window buttons. */
   @property({ reflect: true }) accessor platform = '';
@@ -120,15 +108,6 @@ export class BeuveTitlebar extends LitElement {
       <button class="button quiet" type="button" title=${this.openTitle} @click=${this.open}>
         ${this.label}
       </button>
-      ${this.canReload ? this.renderReload() : nothing}
-      <span class="spacer"></span>
-      <button
-        type="button"
-        class="button quiet search"
-        title=${this.searchTitle}
-        @click=${this.search}
-      >
-        Search or run a command
-      </button>`;
+      ${this.canReload ? this.renderReload() : nothing}`;
   }
 }
