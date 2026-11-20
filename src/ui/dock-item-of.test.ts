@@ -17,6 +17,8 @@ describe('dockItemOf', () => {
       isAddressed: false,
       isWithdrawn: false,
       isBlocking: false,
+      status: 'staged',
+      severity: 'issue',
     });
     expect(dockItemOf([addressed()])).toMatchObject({ isAddressed: true, isWithdrawn: false });
     expect(dockItemOf([withdrawn()])).toMatchObject({ isAddressed: false, isWithdrawn: true });
@@ -31,9 +33,15 @@ describe('dockItemOf', () => {
       isAddressed: false,
       isWithdrawn: true,
       isBlocking: false,
+      status: 'withdrawn',
+      severity: 'issue',
     });
     expect(
-      dockItemOf([withdrawn(), createUraItemView({ blocking: true }), addressed()]),
+      dockItemOf([
+        withdrawn(),
+        createUraItemView({ blocking: true, severity: 'nitpick' }),
+        addressed(),
+      ]),
     ).toStrictEqual({ count: 3, isAddressed: false, isWithdrawn: false, isBlocking: false });
   });
 });

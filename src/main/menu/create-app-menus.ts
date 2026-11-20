@@ -1,5 +1,5 @@
 import { BrowserWindow, Menu, nativeTheme, webContents } from 'electron';
-import type { MenuItemConstructorOptions, NativeImage } from 'electron';
+import type { MenuItem, MenuItemConstructorOptions, NativeImage } from 'electron';
 
 import type { Logger } from '#x/log/create-logger.ts';
 
@@ -335,11 +335,16 @@ function applyStates(menu: Menu, states: ReadonlyMap<string, MenuItemState>): vo
         continue;
       }
       item.enabled = state.enabled;
-      if (index === 0 && command?.toggle !== undefined) {
+      if (index === 0 && (command?.toggle !== undefined || isToggleItem(item))) {
         item.checked = state.checked;
       }
     }
   }
+}
+
+/** A context menu may show a command as a checkbox the catalog does not (ADR 0150). */
+function isToggleItem(item: MenuItem): boolean {
+  return item.type === 'checkbox' || item.type === 'radio';
 }
 
 /** A menu's template items, and the states whose checks pick their labels. */

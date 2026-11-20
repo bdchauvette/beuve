@@ -25,3 +25,7 @@ A command whose action flips with its subject now says what it will do, in the m
 ## Amendment 2026-11-20: SF Symbols at menu size
 
 On macOS the arrows rendered far larger than a menu's text. `createFromNamedImage` draws a symbol for general use, and its size options did not bring it down to a menu item's. The macOS icon is now `nativeImage.createMenuSymbol(name)`, which Electron 45 provides for exactly this: the symbol at the size and weight a native menu uses. It is still marked as a template image, and the drawn arrows remain the fallback when the symbol is missing. Linux is unchanged.
+
+## Amendment 2026-11-20: the note's context menu is laid out by hand
+
+ADR 0150 replaces the note's derived context menu with a hand-made layout: Label and Status submenus take the place of Change Label…, Withdraw and Mark as Addressed there, and the arrows show no icons in it. The menu bar's Review › Note keeps them, icons included.

@@ -29,6 +29,8 @@ interface CommandBehavior {
   readonly slash?: string;
   /** The `/help` line after the usage; defaults to the title. */
   readonly help?: string;
+  /** Left out of the palette, where other commands already do the same (ADR 0150). */
+  readonly inPalette?: false;
 }
 
 /** A catalog command (ADR 0068) with what running it does in the main window. */
@@ -54,6 +56,7 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
   const none: CommandBehavior = { run: { kind: 'none' } };
   const diff: CommandBehavior = { run: { kind: 'zone', zone: 'diff' } };
   const dock: CommandBehavior = { run: { kind: 'zone', zone: 'ura' } };
+  const dockMenuOnly: CommandBehavior = { ...dock, inPalette: false };
   const chatZone: CommandBehavior = { run: { kind: 'zone', zone: 'chat' } };
   return {
     about: main,
@@ -142,6 +145,19 @@ function behaviors(): Readonly<Record<CommandId, CommandBehavior>> {
     'dock-blocking': dock,
     'dock-change-label': dock,
     'dock-addressed': dock,
+    'dock-status-open': dockMenuOnly,
+    'dock-status-addressed': dockMenuOnly,
+    'dock-status-withdrawn': dockMenuOnly,
+    'dock-label-issue': dock,
+    'dock-label-suggestion': dock,
+    'dock-label-question': dock,
+    'dock-label-nitpick': dock,
+    'dock-label-thought': dock,
+    'dock-label-smell': dock,
+    'dock-label-praise': dock,
+    'dock-label-note': dock,
+    'dock-label-todo': dock,
+    'dock-label-chore': dock,
     'dock-move-up': dock,
     'dock-move-down': dock,
     'expand-note': app,

@@ -5,6 +5,8 @@ import { test } from '#testing/test.ts';
 import { acceleratorsFor } from '#contract/accelerators-for.ts';
 import { commandCatalog } from '#contract/command-catalog.ts';
 import type { CatalogCommand, KeyPlatform } from '#contract/command-catalog.ts';
+import { contextMenuLayouts } from '#contract/context-menu-layouts.ts';
+import type { ContextMenuLayout, ContextSubmenu } from '#contract/context-menu-layouts.ts';
 
 import { contextMenuTemplateFrom } from './context-menu-template-from.ts';
 import { menuTemplateFrom } from './menu-template-from.ts';
@@ -224,22 +226,7 @@ describe('menuTemplateFrom', () => {
 
 describe('contextMenuTemplateFrom', () => {
   test('lists a kind’s commands by menu, keys shown but not registered', ({ expect }) => {
-    const items = contextMenuTemplateFrom(commandCatalog, 'note', 'mac');
-    expect(items.map((item) => item.id ?? item.type)).toStrictEqual([
-      'open-in-editor',
-      'separator',
-      'dock-show',
-      'dock-edit',
-      'dock-withdraw',
-      'dock-delete',
-      'dock-blocking',
-      'dock-change-label',
-      'dock-addressed',
-      'dock-move-up',
-      'dock-move-down',
-      'separator',
-      'add-to-chat',
-    ]);
+    const items = contextMenuTemplateFrom(commandCatalog, 'line', 'mac');
     expect(items.find((item) => item.id === 'add-to-chat')).toStrictEqual({
       id: 'add-to-chat',
       label: 'Add to Chat',
@@ -248,18 +235,74 @@ describe('contextMenuTemplateFrom', () => {
     });
   });
 
-  test('names a note’s commands for both states, with their icons', ({ expect }) => {
-    const items = contextMenuTemplateFrom(commandCatalog, 'note', 'linux');
-    expect(items.find((item) => item.id === 'dock-withdraw')).toStrictEqual({
-      id: 'dock-withdraw',
-      label: 'Withdraw Note',
-      checkedLabel: 'Restore Note',
+  test('lays out a note’s menu by hand, with Label and Status submenus', ({ expect }) => {
+    const items = contextMenuTemplateFrom(commandCatalog, 'note', 'mac');
+    const shapeOf = (item: MenuTemplateItem): unknown => {
+      if (item.submenu !== undefined) {
+        return { [item.label ?? '']: item.submenu.map((entry) => shapeOf(entry)) };
+      }
+      return item.label ?? item.type;
+    };
+    expect(items.map((item) => shapeOf(item))).toStrictEqual([
+      'Show in Diff',
+      'Open in Editor',
+      'separator',
+      'Edit…',
+      {
+        Label: [
+          'Issue',
+          'Suggestion',
+          'Question',
+          'Nitpick',
+          'Thought',
+          'Smell',
+          'Praise',
+          'Note',
+          'Todo',
+          'Chore',
+          'separator',
+          'Blocking',
+        ],
+      },
+      'separator',
+      { Status: ['Open', 'separator', 'Addressed', 'Withdrawn'] },
+      'separator',
+      'Move Up',
+      'Move Down',
+      'separator',
+      'Add to Chat',
+      'separator',
+      'Delete',
+    ]);
+    const label = items.find((item) => item.label === 'Label')?.submenu ?? [];
+    expect(label.find((item) => item.id === 'dock-blocking')).toStrictEqual({
+      id: 'dock-blocking',
+      label: 'Blocking',
+      type: 'checkbox',
     });
     expect(items.find((item) => item.id === 'dock-move-up')).toStrictEqual({
       id: 'dock-move-up',
-      label: 'Move Note Up',
-      icon: 'arrow-up',
+      label: 'Move Up',
     });
+  });
+
+  test('lays out every command that lists a laid-out kind, and only those', ({ expect }) => {
+    const idsOf = (sections: ContextMenuLayout | ContextSubmenu['sections']): string[] => {
+      return sections.flat().flatMap((entry) => {
+        if ('submenu' in entry) {
+          return idsOf(entry.sections);
+        }
+        return entry.id;
+      });
+    };
+    for (const [kind, layout] of Object.entries(contextMenuLayouts)) {
+      const listed = commandCatalog
+        .filter((command) => {
+          return (command.context as readonly string[] | undefined)?.includes(kind) === true;
+        })
+        .map((command) => command.id);
+      expect(idsOf(layout).toSorted(byName)).toStrictEqual(listed.toSorted(byName));
+    }
   });
 
   test('offers the editing roles in a text field', ({ expect }) => {
@@ -283,7 +326,7 @@ describe('contextMenuTemplateFrom', () => {
       {
         id: 'unplaced',
         title: 'Unplaced',
-        context: ['note'],
+        context: ['line'],
         windows: ['main'],
         handler: 'window',
       },
@@ -291,12 +334,12 @@ describe('contextMenuTemplateFrom', () => {
         id: 'placed',
         title: 'Placed',
         menu: { menu: 'review', group: 0 },
-        context: ['note'],
+        context: ['line'],
         windows: ['main'],
         handler: 'window',
       },
     ];
-    expect(contextMenuTemplateFrom(catalog, 'note', 'linux')).toStrictEqual([
+    expect(contextMenuTemplateFrom(catalog, 'line', 'linux')).toStrictEqual([
       { id: 'placed', label: 'Placed' },
       { type: 'separator' },
       { id: 'unplaced', label: 'Unplaced' },
@@ -362,4 +405,8 @@ function command(id: string, menu: CatalogCommand['menu']): CatalogCommand {
     windows: ['main'],
     handler: 'window',
   };
+}
+
+function byName(left: string, right: string): number {
+  return left.localeCompare(right);
 }

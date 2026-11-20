@@ -1,3 +1,5 @@
+import type { UraSeverityView } from '#contract/ipc-contract.ts';
+
 /** What the dock's selected notes are, for the Note commands' names (ADR 0144). */
 export interface DockSelectionFacts {
   readonly count: number;
@@ -7,4 +9,8 @@ export interface DockSelectionFacts {
   readonly isWithdrawn: boolean;
   /** Every one of them blocks the merge: Mark as Not Blocking. */
   readonly isBlocking: boolean;
+  /** The status every one of them has, which Status checks (ADR 0150); absent when they differ. */
+  readonly status?: 'staged' | 'withdrawn' | 'addressed';
+  /** The label every one of them has, which Label checks (ADR 0150); absent when they differ. */
+  readonly severity?: UraSeverityView;
 }

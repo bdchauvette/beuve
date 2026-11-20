@@ -847,7 +847,15 @@ function changedItem(
       if (status === undefined || item.status.kind === status.kind) {
         return ok(undefined);
       }
-      return transitionUraItem(item, status, now);
+      if (item.status.kind === 'staged' || status.kind === 'staged') {
+        return transitionUraItem(item, status, now);
+      }
+      // Addressed and withdrawn never turn into each other: restore first (ADR 0150).
+      const restored = transitionUraItem(item, { kind: 'staged' }, now);
+      if (!restored.ok) {
+        return restored;
+      }
+      return transitionUraItem(restored.value, status, now);
     }
     case 'severity': {
       if (item.severity === change.severity) {
