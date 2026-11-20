@@ -7,7 +7,16 @@ export interface InlineOptions {
    * renders as what it will most likely become instead of flickering through literal syntax.
    */
   readonly isProvisional?: boolean;
+  /**
+   * What a line break inside the text is (ADR 0148): `hard`, the default, keeps it as a `break`
+   * node, as GitHub renders comments and pull request descriptions; `soft` leaves it as text, which
+   * renders as a space, as CommonMark has it.
+   */
+  readonly lineBreaks?: LineBreaks;
 }
+
+/** Whether a line break inside a paragraph is kept (`hard`) or renders as a space (`soft`). */
+export type LineBreaks = 'hard' | 'soft';
 
 /** A text and the end (exclusive) of the range being parsed in it. */
 interface Scan {
@@ -17,6 +26,7 @@ interface Scan {
 
 interface Context extends Scan {
   readonly isProvisional: boolean;
+  readonly lineBreaks: LineBreaks;
   readonly isInLink: boolean;
 }
 
@@ -53,7 +63,7 @@ const parenDepth: Readonly<Record<string, number>> = { '(': 1, ')': -1 };
  * Parses the inline Markdown of one block (ADR 0073): backslash escapes, code spans, `**strong**`
  * and `*emphasis*` (also with `_`, never inside a word, so `snake_case` stays text), links
  * `[text](url "title")` and `<url>` autolinks, bare `http(s)://` URLs, and `[[path:a-b]]` line
- * citations as `marker`s. Raw HTML is text. A link whose URL is not `http(s)` keeps only its text.
+ * citations as `marker`s, and each line break as a `break` unless `lineBreaks` is `soft`. Raw HTML is text. A link whose URL is not `http(s)` keeps only its text.
  * With `isProvisional`, an unclosed code span or strong run extends to the end, a link still being
  * written shows its text, and a citation still being written is hidden (ADR 0031). Pure.
  */
@@ -62,6 +72,7 @@ export function parseMarkdownInline(text: string, options: InlineOptions = {}): 
     text,
     end: text.length,
     isProvisional: options.isProvisional ?? false,
+    lineBreaks: options.lineBreaks ?? 'hard',
     isInLink: false,
   };
   return parseRange(context, 0);
@@ -253,6 +264,14 @@ function emphasisNode(length: number, children: MarkdownInline[]): MarkdownInlin
   return { kind: 'strong', children: [{ kind: 'emphasis', children }] };
 }
 
+/** A line break: a `break` when breaks are hard, else text. */
+function breakAt(context: Context, at: number): Step | undefined {
+  if (context.lineBreaks === 'soft') {
+    return undefined;
+  }
+  return { nodes: [{ kind: 'break' }], next: at + 1 };
+}
+
 const constructs: Readonly<Partial<Record<string, Construct>>> = Object.freeze({
   '\\': escapeAt,
   '`': codeAt,
@@ -261,6 +280,7 @@ const constructs: Readonly<Partial<Record<string, Construct>>> = Object.freeze({
   h: bareUrlAt,
   '*': emphasisAt,
   _: emphasisAt,
+  '\n': breakAt,
 });
 
 /** How many times the character at `at` repeats from there. */

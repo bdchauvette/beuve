@@ -326,7 +326,10 @@ export class BeuveHoverCard extends LitElement {
     if (rendered !== this.renderedKey) {
       card.replaceChildren(
         ...shown.diagnostics.map((diagnostic) => createDiagnosticNode(diagnostic)),
-        ...createMarkdownNodes(parseMarkdown(shown.markdown), createPlainMarkdownRenderers()),
+        ...createMarkdownNodes(
+          parseMarkdown(shown.markdown, { lineBreaks: 'soft' }),
+          createPlainMarkdownRenderers(),
+        ),
       );
       this.renderedKey = rendered;
     }

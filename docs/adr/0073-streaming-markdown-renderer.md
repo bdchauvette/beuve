@@ -29,3 +29,7 @@ Chat answers were parsed by a small subset (`parseMarkdownSubset` through `parse
 ## Amendment 2026-11-02: pull request bodies and finding bodies use the same parser
 
 A pull request description and an insight note's body now render through `parseMarkdown` and `createMarkdownNodes` (with `createPlainMarkdownRenderers`: markers as text, code as a plain `<pre>`), so they get tables, nested lists, headings and quotes like chat. `parsePullRequestMarkdown` is gone. Links in a pull request body are any `http(s)` link (`safeHrefFrom`); `beuve-open-link` still opens only GitHub ones (ADR 0040). `parseMarkdownSubset` now serves only one-line titles (`parseInlineTitle`).
+
+## Amendment 2026-11-20: line breaks are kept
+
+ADR 0148: a line break inside a paragraph renders as a break, as GitHub renders comments, rather than as a space; hard line breaks are supported in that form. The hover card keeps soft breaks.
