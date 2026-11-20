@@ -18,18 +18,14 @@ const lightMenuInk: MenuIconInk = { scale: 2, red: 64, green: 64, blue: 64 };
 const templateInk: MenuIconInk = { scale: 2, red: 0, green: 0, blue: 0 };
 
 /**
- * The image of a catalog icon beside a menu item (ADR 0144). macOS gets the SF Symbol as a
- * template image, so it follows the menu's appearance and selection; should the symbol be
- * missing, beuve's own drawing serves as the template. Linux gets beuve's drawing, inked for the
- * current light or dark theme.
+ * The image of a catalog icon beside a menu item (ADR 0144). macOS gets the SF Symbol sized for a
+ * menu (`createMenuSymbol`) as a template image, so it follows the menu's appearance and
+ * selection; should the symbol be missing, beuve's own drawing serves as the template. Linux gets
+ * beuve's drawing, inked for the current light or dark theme.
  */
 export function menuIconImage(icon: MenuIcon, platform: KeyPlatform): NativeImage {
   if (platform === 'mac') {
-    const symbol = nativeImage.createFromNamedImage(symbolNames[icon], {
-      pointSize: 13,
-      weight: 'regular',
-      scale: 'small',
-    });
+    const symbol = nativeImage.createMenuSymbol(symbolNames[icon]);
     let image = symbol;
     if (symbol.isEmpty()) {
       image = drawnImage(icon, templateInk);
