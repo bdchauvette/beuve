@@ -1829,6 +1829,8 @@ export interface DiffDisplayView {
   readonly showDiagnostics: boolean;
   /** Whether other reviewers' line comments show on the diff (ADR 0140); off until chosen. Always set by main. */
   readonly showReviewComments?: boolean;
+  /** Whether the review dock lists notes marked addressed (ADR 0149); on until chosen. Always set by main. */
+  readonly showAddressedNotes?: boolean;
   /** The saved `session:get-order` mode (ADR 0065); `path` until chosen. Always set by main. */
   readonly reviewOrder?: ReviewOrderMode;
   /** Whether `j`/`k` pass over files marked reviewed (ADR 0064); off until chosen. Always set by main. */
@@ -1852,6 +1854,7 @@ export interface SetDiffDisplayRequest {
   readonly showInsights?: boolean;
   readonly showDiagnostics?: boolean;
   readonly showReviewComments?: boolean;
+  readonly showAddressedNotes?: boolean;
   readonly reviewOrder?: ReviewOrderMode;
   readonly skipReviewed?: boolean;
   readonly reviewQueue?: ReviewQueuePrefsView;

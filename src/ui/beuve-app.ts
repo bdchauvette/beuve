@@ -72,6 +72,7 @@ import type { PaletteRunDetail, SessionIdDetail } from './app-event-details.ts';
 import { describeGenerated } from './describe-generated.ts';
 import { describeDiagnosticsSwitch } from './describe-diagnostics-switch.ts';
 import { describeReviewCommentsSwitch } from './describe-review-comments-switch.ts';
+import { describeAddressedNotesSwitch } from './describe-addressed-notes-switch.ts';
 import { describeInsights } from './describe-insights.ts';
 import { describeSkipReviewed } from './describe-skip-reviewed.ts';
 import { describeOrder } from './describe-order.ts';
@@ -372,6 +373,11 @@ export class BeuveApp extends LitElement {
     this.runAppCommand('show-new-commits');
   };
 
+  /** The dock's Show beside its count of hidden addressed notes. */
+  private readonly onShowAddressed = (): void => {
+    this.runAppCommand('toggle-addressed-notes');
+  };
+
   /** A notice's button: any catalog command, Editor Settings… (main's) included. */
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
     this.statusNotice = undefined;
@@ -660,6 +666,12 @@ export class BeuveApp extends LitElement {
         text: describeReviewCommentsSwitch(display.showReviewComments === true),
       });
     }
+    if (change.showAddressedNotes !== undefined) {
+      this.showNotice({
+        tone: 'info',
+        text: describeAddressedNotesSwitch(display.showAddressedNotes !== false),
+      });
+    }
     if (change.skipReviewed !== undefined) {
       this.showNotice({ tone: 'info', text: describeSkipReviewed(display.skipReviewed) });
     }
@@ -727,6 +739,7 @@ export class BeuveApp extends LitElement {
       case 'toggle-insights':
       case 'toggle-diagnostics':
       case 'toggle-review-comments':
+      case 'toggle-addressed-notes':
       case 'toggle-skip-reviewed':
       case 'order-path':
       case 'order-imports':
@@ -1011,6 +1024,7 @@ export class BeuveApp extends LitElement {
         .platform=${this.appInfo?.platform ?? ''}
         ?isModalOpen=${this.paletteText !== undefined || this.openDialog || this.queueOpen}
         .revision=${this.revision}
+        @beuve-ura-show-addressed=${this.onShowAddressed}
       >
         ${this.showsEmptyPanel() ? this.renderQueue('queue') : nothing}
         ${this.showsEmptyPanel() ? this.renderOpenPanel(false, 'empty') : nothing}

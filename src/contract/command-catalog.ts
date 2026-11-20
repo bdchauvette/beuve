@@ -927,6 +927,14 @@ const entries = Object.freeze([
     handler: 'window',
   },
   {
+    id: 'toggle-addressed-notes',
+    title: 'Show Addressed Notes',
+    menu: { menu: 'review', group: 5, submenu: 'Note', subgroup: 4 },
+    toggle: 'checkbox',
+    windows: ['main'],
+    handler: 'window',
+  },
+  {
     id: 'dock-move',
     title: 'Next or Previous Note',
     inPlace: { area: 'Review notes', keys: ['Up', 'Down'] },

@@ -12,6 +12,7 @@ export type DisplayCommandId = Extract<
   | 'toggle-insights'
   | 'toggle-diagnostics'
   | 'toggle-review-comments'
+  | 'toggle-addressed-notes'
   | 'toggle-skip-reviewed'
   | 'order-path'
   | 'order-imports'
@@ -45,6 +46,9 @@ export function displayChangeFor(
     }
     case 'toggle-review-comments': {
       return { showReviewComments: display.showReviewComments !== true };
+    }
+    case 'toggle-addressed-notes': {
+      return { showAddressedNotes: display.showAddressedNotes === false };
     }
     case 'toggle-skip-reviewed': {
       return { skipReviewed: display.skipReviewed !== true };
