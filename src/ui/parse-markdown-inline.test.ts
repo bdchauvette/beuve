@@ -124,4 +124,18 @@ describe('parseMarkdownInline', () => {
   ])('provisional: %s', ([source, expected], { expect }) => {
     expect(parseMarkdownInline(source, { isProvisional: true })).toStrictEqual(expected);
   });
+
+  test('keeps a line break, even inside emphasis, and not inside code', ({ expect }) => {
+    expect(parseMarkdownInline('a\n**b\nc** `d\ne`')).toStrictEqual([
+      text('a'),
+      { kind: 'break' },
+      strong(text('b'), { kind: 'break' }, text('c')),
+      text(' '),
+      { kind: 'code', text: 'd e' },
+    ]);
+  });
+
+  test('leaves a soft line break as text', ({ expect }) => {
+    expect(parseMarkdownInline('a\nb', { lineBreaks: 'soft' })).toStrictEqual([text('a\nb')]);
+  });
 });

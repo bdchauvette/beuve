@@ -8,14 +8,21 @@ function text(value: string): MarkdownInline {
   return { kind: 'text', text: value };
 }
 
+/** A paragraph of `value`'s lines, each break kept as GitHub keeps it (ADR 0148). */
 function paragraph(value: string): MarkdownBlock {
-  return { kind: 'paragraph', children: [text(value)] };
+  const children = value.split('\n').flatMap((line, index): MarkdownInline[] => {
+    if (index === 0) {
+      return [text(line)];
+    }
+    return [{ kind: 'break' }, text(line)];
+  });
+  return { kind: 'paragraph', children };
 }
 
 describe('parseMarkdown', () => {
   test.for<[string, string, MarkdownBlock[]]>([
     [
-      'paragraphs, joined lines',
+      'paragraphs, their lines kept apart',
       'one\n  two\n\nthree',
       [paragraph('one\ntwo'), paragraph('three')],
     ],
@@ -244,5 +251,21 @@ describe('parseMarkdown', () => {
     ],
   ])('provisional: %s', ([, source, expected], { expect }) => {
     expect(parseMarkdown(source, { isProvisional: true })).toStrictEqual(expected);
+  });
+
+  test("soft line breaks join a paragraph's lines with a space when rendered", ({ expect }) => {
+    expect(parseMarkdown('one\n  two\n\n- a\n  b', { lineBreaks: 'soft' })).toStrictEqual([
+      { kind: 'paragraph', children: [text('one\ntwo')] },
+      { kind: 'list', items: [[{ kind: 'paragraph', children: [text('a\nb')] }]] },
+    ]);
+  });
+
+  test('keeps the lines of a trailer block apart', ({ expect }) => {
+    const source =
+      'Fixes the bug.\n\nCo-Authored-By: A <a@example.com>\nSigned-off-by: B <b@example.com>';
+    expect(parseMarkdown(source)).toStrictEqual([
+      paragraph('Fixes the bug.'),
+      paragraph('Co-Authored-By: A <a@example.com>\nSigned-off-by: B <b@example.com>'),
+    ]);
   });
 });

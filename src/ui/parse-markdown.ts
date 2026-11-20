@@ -2,6 +2,7 @@ import { classifyMarkdownLine } from './classify-markdown-line.ts';
 import type { MarkdownLine } from './classify-markdown-line.ts';
 import type { MarkdownBlock, MarkdownInline } from './markdown-tree.ts';
 import { parseMarkdownInline } from './parse-markdown-inline.ts';
+import type { LineBreaks } from './parse-markdown-inline.ts';
 import { splitMarkdownBlocks } from './split-markdown-blocks.ts';
 import { tableAlignmentsFrom } from './table-alignments-from.ts';
 import { tableCellsFrom } from './table-cells-from.ts';
@@ -14,6 +15,14 @@ export interface MarkdownOptions {
    * they will most likely become.
    */
   readonly isProvisional?: boolean;
+  /** Whether a line break inside a paragraph is kept (`hard`, the default) or a space (ADR 0148). */
+  readonly lineBreaks?: LineBreaks;
+}
+
+/** What a block's parse needs: whether it is the provisional end, and how breaks render. */
+interface BlockOptions {
+  readonly isProvisional: boolean;
+  readonly lineBreaks: LineBreaks;
 }
 
 type Item = Extract<MarkdownLine, { kind: 'item' }>;
@@ -25,20 +34,25 @@ const syntaxOnly = /^(?:[\s#>*+\-_=`~|:]*|\s*\d{1,9}[.)]?\s*)$/u;
 /**
  * Parses untrusted Markdown into the subset beuve renders (ADR 0073): paragraphs, ATX headings,
  * fenced code, bullet and ordered lists (nested by indentation), block quotes, rules and GFM
- * tables, with the inline syntax of {@link parseMarkdownInline}. Raw HTML is text; setext
+ * tables, with the inline syntax of {@link parseMarkdownInline}; a line break inside a paragraph
+ * is kept unless `lineBreaks` is `soft` (ADR 0148). Raw HTML is text; setext
  * headings, indented code, reference links and images are not supported and stay text. The
  * blocks are {@link splitMarkdownBlocks}'s, so a streaming renderer that parses each finished
  * block once gets the same tree as parsing the whole text. Pure.
  */
 export function parseMarkdown(source: string, options: MarkdownOptions = {}): MarkdownBlock[] {
   const isProvisional = options.isProvisional ?? false;
+  const lineBreaks = options.lineBreaks ?? 'hard';
   let text = source;
   if (isProvisional) {
     text = withoutSyntaxOnlyEnd(source);
   }
   const { blocks } = splitMarkdownBlocks(text, { isFinal: true });
   return blocks.flatMap((block, index) => {
-    return parseBlock(block, isProvisional && index === blocks.length - 1);
+    return parseBlock(block, {
+      isProvisional: isProvisional && index === blocks.length - 1,
+      lineBreaks,
+    });
   });
 }
 
@@ -51,7 +65,8 @@ function withoutSyntaxOnlyEnd(source: string): string {
   return source;
 }
 
-function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
+function parseBlock(source: string, options: BlockOptions): MarkdownBlock[] {
+  const { isProvisional } = options;
   const lines = linesOf(source);
   const first = lines[0];
   if (first === undefined) {
@@ -59,7 +74,7 @@ function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
   }
   const kind = classifyMarkdownLine(first);
   const inline = (text: string): MarkdownInline[] => {
-    return parseMarkdownInline(text, { isProvisional });
+    return parseMarkdownInline(text, options);
   };
   switch (kind.kind) {
     case 'blank': {
@@ -76,17 +91,15 @@ function parseBlock(source: string, isProvisional: boolean): MarkdownBlock[] {
     }
     case 'quote': {
       const inner = lines.map((line) => line.replace(quotePrefix, '')).join('\n');
-      return [{ kind: 'quote', children: parseMarkdown(inner, { isProvisional }) }];
+      return [{ kind: 'quote', children: parseMarkdown(inner, options) }];
     }
     case 'item': {
-      return listsFrom(lines, kind, isProvisional);
+      return listsFrom(lines, kind, options);
     }
     case 'text': {
-      return [tableFrom(lines, isProvisional) ?? paragraphFrom(lines, isProvisional)].flatMap(
-        (block) => {
-          return block ?? [];
-        },
-      );
+      return [tableFrom(lines, isProvisional) ?? paragraphFrom(lines, options)].flatMap((block) => {
+        return block ?? [];
+      });
     }
   }
 }
@@ -160,7 +173,7 @@ function dedent(line: string, columns: number): string {
  * belongs to the current item, dedented by its content column. A change of marker (`-` to `1.`)
  * starts a new list.
  */
-function listsFrom(lines: readonly string[], first: Item, isProvisional: boolean): MarkdownBlock[] {
+function listsFrom(lines: readonly string[], first: Item, options: BlockOptions): MarkdownBlock[] {
   const items: { readonly line: Item; readonly lines: string[] }[] = [];
   for (const line of lines) {
     const kind = classifyMarkdownLine(line);
@@ -174,7 +187,8 @@ function listsFrom(lines: readonly string[], first: Item, isProvisional: boolean
   const lists: { readonly first: Item; readonly items: MarkdownBlock[][] }[] = [];
   for (const [index, item] of items.entries()) {
     const blocks = parseMarkdown(item.lines.join('\n'), {
-      isProvisional: isProvisional && index === items.length - 1,
+      isProvisional: options.isProvisional && index === items.length - 1,
+      lineBreaks: options.lineBreaks,
     });
     const list = lists.at(-1);
     if (list?.first.marker === item.line.marker) {
@@ -218,13 +232,11 @@ function tableFrom(lines: readonly string[], isProvisional: boolean): MarkdownBl
 }
 
 /** A paragraph's lines, trimmed and joined; a lone pipe row still streaming may become a table. */
-function paragraphFrom(
-  lines: readonly string[],
-  isProvisional: boolean,
-): MarkdownBlock | undefined {
+function paragraphFrom(lines: readonly string[], options: BlockOptions): MarkdownBlock | undefined {
+  const { isProvisional } = options;
   if (isProvisional && lines.length === 1 && lines[0]?.trimStart().startsWith('|') === true) {
     return undefined;
   }
   const text = lines.map((line) => line.trim()).join('\n');
-  return { kind: 'paragraph', children: parseMarkdownInline(text, { isProvisional }) };
+  return { kind: 'paragraph', children: parseMarkdownInline(text, options) };
 }

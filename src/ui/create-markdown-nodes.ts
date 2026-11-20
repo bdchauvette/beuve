@@ -143,6 +143,9 @@ function inlineNode(inline: MarkdownInline, renderers: MarkdownRenderers): Node 
     case 'marker': {
       return renderers.marker(inline.text);
     }
+    case 'break': {
+      return document.createElement('br');
+    }
   }
 }
 

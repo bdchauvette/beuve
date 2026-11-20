@@ -16,7 +16,9 @@ export type MarkdownInline =
       readonly children: readonly MarkdownInline[];
     }
   /** A `[[…]]` line citation as written; the renderer decides whether it is a pill (ADR 0031). */
-  | { readonly kind: 'marker'; readonly text: string };
+  | { readonly kind: 'marker'; readonly text: string }
+  /** A line break inside a paragraph, kept as GitHub keeps it in comments (ADR 0148). */
+  | { readonly kind: 'break' };
 
 /** A block of the supported Markdown subset (ADR 0073). */
 export type MarkdownBlock =
