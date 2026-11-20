@@ -27,3 +27,7 @@ The `session:open` channel had no caller and is deleted; opening a session goes 
 ## Amendment (2026-11-10): new commits wait for the reviewer
 
 Reloading the review on `headMoved` threw away a note being written and the place the reviewer was reading, and it read as a glitch. The renderer now only announces new commits, for a pull request (`github:pr-updated`) and for a followed branch (ADR 0112): a notice with a Show button, and a "New commits" button in the status bar that stays until the reviewer chooses Review › Show New Commits, which reloads the review and so offers the interdiff. Main still advances the head at once, so a note staged against the head on screen is re-anchored as usual. Opening another session forgets the announcement. A post that GitHub or main refuses because the head moved still reloads, since the reviewer asked to post.
+
+## Amendment 2026-11-20: New Commits sits in the title bar
+
+The lasting "New commits" button moves from the status bar to the title bar, after Reload, which is the action it is a form of: it shows while polling has found commits the open review does not show yet, and runs Review › Show New Commits. The status bar keeps the passing notice with its Show button, as it does for other announcements.

@@ -7,8 +7,9 @@ import { buttonStyles } from './primitives/button-styles.ts';
 
 /**
  * The window's top bar: the name of the open review, which opens the Open dialog, an icon-only
- * Reload beside it while a review is open (ADR 0146). The bar drags the window; its buttons do
- * not. Emits `beuve-titlebar-open` and `beuve-titlebar-reload`.
+ * Reload beside it while a review is open (ADR 0146), and New Commits after it while polling has
+ * found commits the review does not show yet. The bar drags the window; its buttons do not. Emits
+ * `beuve-titlebar-open`, `beuve-titlebar-reload` and `beuve-titlebar-new-commits`.
  */
 @customElement('beuve-titlebar')
 export class BeuveTitlebar extends LitElement {
@@ -41,7 +42,8 @@ export class BeuveTitlebar extends LitElement {
         -webkit-app-region: no-drag;
       }
 
-      .reload {
+      .reload,
+      .new-commits {
         flex: none;
       }
 
@@ -71,6 +73,12 @@ export class BeuveTitlebar extends LitElement {
     this.dispatchEvent(new CustomEvent('beuve-titlebar-reload', { bubbles: true, composed: true }));
   };
 
+  private readonly showNewCommits = (): void => {
+    this.dispatchEvent(
+      new CustomEvent('beuve-titlebar-new-commits', { bubbles: true, composed: true }),
+    );
+  };
+
   /** The open review's name, or the placeholder when none is open. */
   @property() accessor label = '';
 
@@ -82,6 +90,9 @@ export class BeuveTitlebar extends LitElement {
 
   /** Whether a review is open, so Reload shows. */
   @property({ type: Boolean }) accessor canReload = false;
+
+  /** Polling found commits the open review doesn't show yet; stays until the reviewer shows them. */
+  @property({ type: Boolean }) accessor hasNewCommits = false;
 
   /** Whether the review is reloading: Reload spins its glyph and waits. */
   @property({ type: Boolean }) accessor reloading = false;
@@ -103,11 +114,24 @@ export class BeuveTitlebar extends LitElement {
     </button>`;
   }
 
+  private renderNewCommits(): TemplateResult {
+    return html`<button
+      type="button"
+      class="button small primary new-commits"
+      title="Reload the review with the new commits"
+      ?disabled=${this.reloading}
+      @click=${this.showNewCommits}
+    >
+      New commits
+    </button>`;
+  }
+
   protected override render(): TemplateResult {
     return html`<span class="brand">beuve</span>
       <button class="button quiet" type="button" title=${this.openTitle} @click=${this.open}>
         ${this.label}
       </button>
-      ${this.canReload ? this.renderReload() : nothing}`;
+      ${this.canReload ? this.renderReload() : nothing}
+      ${this.canReload && this.hasNewCommits ? this.renderNewCommits() : nothing}`;
   }
 }

@@ -368,6 +368,10 @@ export class BeuveApp extends LitElement {
     this.runAppCommand('reload-review');
   };
 
+  private readonly onTitlebarNewCommits = (): void => {
+    this.runAppCommand('show-new-commits');
+  };
+
   /** A notice's button: any catalog command, Editor Settings… (main's) included. */
   private readonly onStatusAction = (event: CustomEvent<StatusNoticeAction>): void => {
     this.statusNotice = undefined;
@@ -953,9 +957,11 @@ export class BeuveApp extends LitElement {
       .reloadTitle=${`Reload Review (${this.shortcut('reload-review')})`}
       ?canReload=${this.review !== undefined}
       ?reloading=${this.isReloading()}
+      ?hasNewCommits=${this.github.hasNewCommits}
       .platform=${this.appInfo?.platform ?? ''}
       @beuve-titlebar-open=${this.onTitlebarOpen}
       @beuve-titlebar-reload=${this.onTitlebarReload}
+      @beuve-titlebar-new-commits=${this.onTitlebarNewCommits}
     ></beuve-titlebar>`;
   }
 
@@ -1013,7 +1019,6 @@ export class BeuveApp extends LitElement {
         .lspServers=${this.lspServers}
         .appInfo=${this.appInfo}
         .notice=${this.statusNotice}
-        .hasNewCommits=${this.github.hasNewCommits}
         .ci=${this.github.ci}
         .attention=${this.github.pullRequest?.attention}
         .remoteBranch=${this.github.branch}
