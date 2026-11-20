@@ -21,3 +21,7 @@ The catalog (ADR 0068) had no way to name a command by the state of what it acts
 ## Consequences
 
 A command whose action flips with its subject now says what it will do, in the menus and the palette, from one catalog field, and any command can get an icon by naming one in the list (adding one means drawing it in `drawMenuIcon` and naming its SF Symbol). The menus still do not show counts ("Withdraw 3 Notes"): names are static per state, and the selection bar shows the count. Labels change in place on every state report, which relies on Electron keeping `label` dynamic. The Linux arrows are beuve's drawing, not the desktop's icon theme. Dragging and selection add state to the dock that it must prune when items change (it does, on every `items` update). A batch is all or none: one note that cannot be marked addressed on the head it was written against refuses the batch, with the reason, rather than marking the rest.
+
+## Amendment 2026-11-20: SF Symbols at menu size
+
+On macOS the arrows rendered far larger than a menu's text. `createFromNamedImage` draws a symbol for general use, and its size options did not bring it down to a menu item's. The macOS icon is now `nativeImage.createMenuSymbol(name)`, which Electron 45 provides for exactly this: the symbol at the size and weight a native menu uses. It is still marked as a template image, and the drawn arrows remain the fallback when the symbol is missing. Linux is unchanged.
