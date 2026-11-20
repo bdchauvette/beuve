@@ -14,8 +14,10 @@ const menuTitles: readonly (readonly [TopMenu, string])[] = [
   ['file', 'File'],
   ['edit', 'Edit'],
   ['view', 'View'],
-  ['go', 'Go'],
+  ['navigate', 'Navigate'],
+  ['analyze', 'Analyze'],
   ['review', 'Review'],
+  ['note', 'Note'],
   ['chat', 'Chat'],
   ['help', 'Help'],
 ];

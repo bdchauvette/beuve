@@ -24,8 +24,10 @@ describe('menuTemplateFrom', () => {
       'File',
       'Edit',
       'View',
-      'Go',
+      'Navigate',
+      'Analyze',
       'Review',
+      'Note',
       'Chat',
       'windowMenu',
       'Help',
@@ -34,8 +36,10 @@ describe('menuTemplateFrom', () => {
       '&File',
       '&Edit',
       '&View',
-      '&Go',
+      '&Navigate',
+      '&Analyze',
       '&Review',
+      'N&ote',
       '&Chat',
       '&Window',
       '&Help',
@@ -132,7 +136,7 @@ describe('menuTemplateFrom', () => {
 
   test('escapes a literal ampersand in a label on Linux', ({ expect }) => {
     const catalog: readonly CatalogCommand[] = [
-      { ...command('fish', { menu: 'go', group: 0 }), title: 'Fish & Chips' },
+      { ...command('fish', { menu: 'navigate', group: 0 }), title: 'Fish & Chips' },
     ];
     const items = flatten(menuTemplateFrom({ catalog, platform: 'linux' }));
     expect(items.find((item) => item.id === 'fish')?.label).toBe('&Fish && Chips');
@@ -142,17 +146,12 @@ describe('menuTemplateFrom', () => {
     'gives a %s command whose name follows the state both labels, and no check mark',
     (platform, { expect }) => {
       const items = flatten(menuTemplateFrom({ catalog: commandCatalog, platform }));
-      const withdraw = items.find((item) => item.id === 'dock-withdraw');
-      const addressed = items.find((item) => item.id === 'dock-addressed');
-      expect([plain(withdraw?.label), plain(withdraw?.checkedLabel)]).toStrictEqual([
-        'Withdraw',
-        'Restore',
+      const blocking = items.find((item) => item.id === 'dock-blocking');
+      expect([plain(blocking?.label), plain(blocking?.checkedLabel)]).toStrictEqual([
+        'Mark as Blocking',
+        'Mark as Not Blocking',
       ]);
-      expect([plain(addressed?.label), plain(addressed?.checkedLabel)]).toStrictEqual([
-        'Mark as Addressed',
-        'Mark as Not Addressed',
-      ]);
-      expect([withdraw?.type, addressed?.type]).toStrictEqual([undefined, undefined]);
+      expect(blocking?.type).toBeUndefined();
     },
   );
 
@@ -204,13 +203,13 @@ describe('menuTemplateFrom', () => {
     expect,
   }) => {
     const catalog: readonly CatalogCommand[] = [
-      command('b', { menu: 'go', group: 1 }),
-      command('a', { menu: 'go', group: 0 }),
-      command('c', { menu: 'go', group: 1, submenu: 'More' }),
-      command('d', { menu: 'go', group: 1, submenu: 'More', subgroup: 2 }),
+      command('b', { menu: 'navigate', group: 1 }),
+      command('a', { menu: 'navigate', group: 0 }),
+      command('c', { menu: 'navigate', group: 1, submenu: 'More' }),
+      command('d', { menu: 'navigate', group: 1, submenu: 'More', subgroup: 2 }),
     ];
     const go = menuTemplateFrom({ catalog, platform: 'mac' }).find((item) => {
-      return item.label === 'Go';
+      return item.label === 'Navigate';
     });
     expect(go?.submenu).toStrictEqual([
       { id: 'a', label: 'a' },
@@ -318,7 +317,7 @@ describe('contextMenuTemplateFrom', () => {
       contextMenuTemplateFrom(commandCatalog, 'reference', 'mac').map((item) => {
         return item.id ?? item.type;
       }),
-    ).toStrictEqual(['copy-path', 'separator', 'open-in-sheet']);
+    ).toStrictEqual(['open-in-sheet', 'separator', 'copy-path']);
   });
 
   test('puts commands without a menu item last', ({ expect }) => {

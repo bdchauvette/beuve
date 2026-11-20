@@ -437,7 +437,7 @@ export class BeuveSettingsView extends LitElement {
 
   /**
    * Language servers beyond beuve's own, and changes to them, are configured in a JSON file the
-   * reviewer edits (ADR 0111): the button opens it, and Review › Restart Language Servers reads it
+   * reviewer edits (ADR 0111): the button opens it, and Review › Checkout › Restart Language Servers reads it
    * again.
    */
   private renderLanguageServers(): TemplateResult {

@@ -73,11 +73,11 @@ async function define(
 ): Promise<StatusNotice> {
   const { target, token, kind } = action;
   if (target.kind === 'change') {
-    return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
+    return info('Pick a line on the head side first (Navigate ▸ Next Change, or select lines).');
   }
   const line = token?.line ?? lineFromTarget(target);
   if (line === undefined) {
-    return info('Pick a line on the head side first (Go ▸ Next Change, or select lines).');
+    return info('Pick a line on the head side first (Navigate ▸ Next Change, or select lines).');
   }
   const answer = await context.bridge.invoke('lsp:definition', {
     sessionId: context.sessionId,

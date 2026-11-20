@@ -30,7 +30,7 @@ export const contextMenuLayouts: Readonly<Partial<Record<ContextKind, ContextMen
   note: [
     [{ id: 'dock-show' }, { id: 'open-in-editor' }],
     [
-      { id: 'dock-edit', label: 'Edit…' },
+      { id: 'dock-edit' },
       {
         submenu: 'Label',
         sections: [
@@ -61,6 +61,6 @@ export const contextMenuLayouts: Readonly<Partial<Record<ContextKind, ContextMen
     ],
     [{ id: 'dock-move-up' }, { id: 'dock-move-down' }],
     [{ id: 'add-to-chat' }],
-    [{ id: 'dock-delete', label: 'Delete' }],
+    [{ id: 'dock-delete' }],
   ],
 };
